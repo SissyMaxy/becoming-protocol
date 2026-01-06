@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm create:*)",
+      "Bash(npm install)",
+      "Bash(npm run build:*)",
+      "Bash(npm run dev:*)",
+      "Bash(timeout:*)",
+      "Bash(npm install:*)",
+      "Bash(ping:*)",
+      "Bash(supabase functions deploy:*)",
+      "Bash(npx supabase:*)",
+      "Bash(taskkill:*)",
+      "Bash(ls:*)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)",
+      "Bash(cat:*)",
+      "Bash(start \"\" \"C:\\\\Users\\\\david\\\\Desktop\\\\Coding Projects\\\\Becoming Protocol\\\\supabase-schema-v10-rewards.sql\")",
+      "Bash(npx tsc:*)",
+      "Bash(tasklist:*)",
+      "Bash(netstat:*)",
+      "Bash(xargs ls:*)",
+      "Bash(node -e:*)",
+      "Bash(del \"C:\\\\Users\\\\david\\\\Desktop\\\\Coding Projects\\\\Becoming Protocol\\\\supabase\\\\migrations\\\\006a_repair_session_content.sql\")",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(del \"D:\\\\Projects\\\\Becoming Protocol\\\\supabase\\\\migrations\\\\018_setup_cron_jobs.sql\")",
+      "Bash(curl:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}

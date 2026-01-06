@@ -1,0 +1,60 @@
+# Scheduled Edge Function Triggers
+# Replaces pg_cron for Supabase free/starter plans
+
+name: Scheduled Functions
+
+on:
+  schedule:
+    # Send notifications - every 5 minutes (GitHub minimum)
+    - cron: '*/5 * * * *'
+  workflow_dispatch: # Manual trigger for testing
+
+env:
+  SUPABASE_URL: https://atevwvexapiykchvqvhm.supabase.co
+
+jobs:
+  send-notifications:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger send-notifications
+        run: |
+          curl -X POST "${{ env.SUPABASE_URL }}/functions/v1/send-notifications" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}'
+
+  schedule-notifications:
+    runs-on: ubuntu-latest
+    # Only run every 15 minutes (on :00, :15, :30, :45)
+    if: ${{ github.event.schedule == '*/5 * * * *' && (github.run_number % 3 == 0) }}
+    steps:
+      - name: Trigger schedule-notifications
+        run: |
+          curl -X POST "${{ env.SUPABASE_URL }}/functions/v1/schedule-notifications" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}'
+
+  generate-prescription:
+    runs-on: ubuntu-latest
+    # Only at ~4 AM UTC (GitHub schedules can drift, this approximates)
+    if: ${{ github.event.schedule == '*/5 * * * *' }}
+    steps:
+      - name: Check if 4 AM window
+        id: time_check
+        run: |
+          HOUR=$(date -u +%H)
+          MINUTE=$(date -u +%M)
+          if [ "$HOUR" = "04" ] && [ "$MINUTE" -lt "10" ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Trigger generate-prescription
+        if: steps.time_check.outputs.run == 'true'
+        run: |
+          curl -X POST "${{ env.SUPABASE_URL }}/functions/v1/generate-prescription" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"batch": true}'

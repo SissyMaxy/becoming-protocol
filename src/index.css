@@ -1,0 +1,291 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+body {
+  margin: 0;
+  background-color: #0a0a0f;
+  color: #e4e4eb;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #12121a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2a2a3a;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3a3a4a;
+}
+
+/* Animations */
+@keyframes pulse-soft {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes slide-up {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-10px) rotate(5deg);
+  }
+  50% {
+    transform: translateY(-5px) rotate(-5deg);
+  }
+  75% {
+    transform: translateY(-15px) rotate(3deg);
+  }
+}
+
+@keyframes scale-in {
+  from {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(168, 85, 247, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(168, 85, 247, 0.5);
+  }
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.4s ease-out;
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-down {
+  animation: slide-down 0.3s ease-out;
+}
+
+/* Utility classes */
+@layer utilities {
+  .text-gradient {
+    @apply bg-gradient-to-r from-protocol-accent to-protocol-accent-soft bg-clip-text text-transparent;
+  }
+
+  .glass {
+    @apply bg-protocol-surface/80 backdrop-blur-sm;
+  }
+
+  .card {
+    @apply bg-protocol-surface border border-protocol-border rounded-lg;
+  }
+
+  .btn-primary {
+    @apply bg-protocol-accent hover:bg-protocol-accent-soft text-white font-medium py-2 px-4 rounded-lg transition-colors;
+  }
+
+  .btn-secondary {
+    @apply bg-protocol-surface-light hover:bg-protocol-border text-protocol-text font-medium py-2 px-4 rounded-lg transition-colors border border-protocol-border;
+  }
+
+  /* Bambi Mode utility classes */
+  .bambi-card {
+    @apply bg-white border-2 border-pink-200 rounded-3xl;
+    box-shadow: 0 4px 20px rgba(255, 105, 180, 0.3);
+  }
+
+  .bambi-card-hover {
+    @apply hover:border-pink-300 transition-all;
+  }
+
+  .bambi-card-hover:hover {
+    box-shadow: 0 10px 40px rgba(255, 105, 180, 0.35);
+  }
+
+  .bambi-btn-primary {
+    @apply bg-gradient-to-r from-pink-400 to-pink-600 text-white font-medium py-3 px-6 rounded-full transition-all;
+    box-shadow: 0 4px 20px rgba(255, 105, 180, 0.3);
+  }
+
+  .bambi-btn-primary:hover {
+    box-shadow: 0 10px 40px rgba(255, 105, 180, 0.35);
+  }
+
+  .bambi-btn-secondary {
+    @apply bg-pink-100 text-pink-600 font-medium py-3 px-6 rounded-full hover:bg-pink-200 transition-colors;
+  }
+
+  .bambi-btn-ghost {
+    @apply text-pink-500 hover:text-pink-600 hover:bg-pink-50 rounded-full px-4 py-2 transition-colors;
+  }
+
+  .bambi-text-gradient {
+    @apply bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text text-transparent;
+  }
+
+  .bambi-glass {
+    @apply bg-white/80 backdrop-blur-sm;
+  }
+
+  .bambi-glow {
+    box-shadow: 0 0 20px rgba(255, 105, 180, 0.3);
+  }
+
+  .bambi-input {
+    @apply rounded-2xl border-2 border-pink-200 bg-white px-4 py-3 text-pink-800 placeholder:text-pink-300 focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-pink-400;
+  }
+}
+
+/* Bambi Mode base styles */
+.bambi-mode {
+  font-family: 'Quicksand', 'Nunito', 'Poppins', sans-serif;
+  background: linear-gradient(135deg, #FFF0F5 0%, #FFE4EC 50%, #F3E8FF 100%);
+  color: #5C0439;
+  min-height: 100vh;
+}
+
+.bambi-mode ::-webkit-scrollbar-track {
+  background: #FFE4EC;
+}
+
+.bambi-mode ::-webkit-scrollbar-thumb {
+  background: #FFBCD9;
+  border-radius: 3px;
+}
+
+.bambi-mode ::-webkit-scrollbar-thumb:hover {
+  background: #FF8DC7;
+}
+
+/* Sparkle overlay effect */
+.bambi-sparkle-overlay {
+  position: relative;
+}
+
+.bambi-sparkle-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.8) 1px, transparent 1px),
+                    radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.6) 1px, transparent 1px),
+                    radial-gradient(circle at 40% 70%, rgba(255, 255, 255, 0.7) 1px, transparent 1px),
+                    radial-gradient(circle at 90% 80%, rgba(255, 255, 255, 0.5) 1px, transparent 1px);
+  background-size: 100px 100px;
+  pointer-events: none;
+  animation: sparkle 2s ease-in-out infinite;
+}
+
+/* Floating hearts animation */
+@keyframes float-up {
+  0% {
+    transform: translateY(100%) scale(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+    transform: translateY(80%) scale(1);
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-100%) scale(0.5);
+    opacity: 0;
+  }
+}
+
+.bambi-hearts-container {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 100;
+}
+
+.bambi-heart {
+  position: absolute;
+  bottom: -20px;
+  font-size: 24px;
+  animation: float-up 3s ease-out forwards;
+}
+
+/* Bambi gradient backgrounds */
+.bambi-gradient-primary {
+  background: linear-gradient(135deg, #FF69B4 0%, #FF1493 50%, #C084FC 100%);
+}
+
+.bambi-gradient-soft {
+  background: linear-gradient(135deg, #FFF0F5 0%, #FFE4EC 50%, #F3E8FF 100%);
+}
+
+.bambi-gradient-card {
+  background: linear-gradient(135deg, #FFFFFF 0%, #FFF0F5 50%, #F3E8FF 100%);
+}

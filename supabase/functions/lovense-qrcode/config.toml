@@ -1,0 +1,2 @@
+# Disable automatic JWT verification - we handle it in the function
+verify_jwt = false
