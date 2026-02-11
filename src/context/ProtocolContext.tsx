@@ -320,6 +320,22 @@ export function ProtocolProvider({ children }: { children: React.ReactNode }) {
           await storage.saveProgress(updatedProgress);
           setProgress(updatedProgress);
           effectiveProgress = updatedProgress;
+
+          // Sync streak to v2 user_state on init (gaps #6, #7, #20)
+          try {
+            const { data: { user: authUser } } = await supabase.auth.getUser();
+            if (authUser) {
+              await supabase
+                .from('user_state')
+                .update({
+                  streak_days: calculatedStreak,
+                  longest_streak: Math.max(calculatedStreak, savedProgress.longestStreak),
+                })
+                .eq('user_id', authUser.id);
+            }
+          } catch (err) {
+            console.warn('Failed to sync streak to user_state on init:', err);
+          }
         }
 
         // Check if we should show the name question (day 3-5, no name set)
@@ -516,6 +532,28 @@ export function ProtocolProvider({ children }: { children: React.ReactNode }) {
     await storage.saveProgress(updatedProgress);
     setProgress(updatedProgress);
     setHistory(allEntries);
+
+    // Sync streak to v2 user_state table (gaps #6, #7, #20)
+    if (updatedProgress.overallStreak !== previousProgress.overallStreak) {
+      try {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (authUser) {
+          const updatePayload: Record<string, unknown> = {
+            streak_days: updatedProgress.overallStreak,
+          };
+          // Also sync longest streak
+          if (updatedProgress.longestStreak > previousProgress.longestStreak) {
+            updatePayload.longest_streak = updatedProgress.longestStreak;
+          }
+          await supabase
+            .from('user_state')
+            .update(updatePayload)
+            .eq('user_id', authUser.id);
+        }
+      } catch (err) {
+        console.warn('Failed to sync streak to user_state:', err);
+      }
+    }
 
     // Check for level ups (ratchet principle)
     updatedProgress.domainProgress.forEach(current => {

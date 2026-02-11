@@ -6,11 +6,14 @@ import { RewardProvider, useRewardOptional } from './context/RewardContext';
 import { DebugModeProvider } from './context/DebugContext';
 import { HandlerProvider, useHandlerContext } from './context/HandlerContext';
 import { AmbushProvider } from './components/ambush';
-import { InterventionNotification } from './components/handler/InterventionNotification';
-import { RecoveryPrompt } from './components/handler/RecoveryPrompt';
+import { ModalOrchestratorProvider } from './context/ModalOrchestrator';
+import { useOrchestratedModals } from './hooks/useOrchestratedModals';
 import { useDisassociationRecovery } from './hooks/useDisassociationRecovery';
+import { useCompulsoryGate } from './hooks/useCompulsoryGate';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Auth } from './components/Auth';
 import { MorningFlow } from './components/MorningFlow';
+import { CompulsoryGateScreen } from './components/CompulsoryGateScreen';
 import { TodayView } from './components/today';
 import { ProgressDashboard } from './components/ProgressDashboard';
 import { History } from './components/History';
@@ -18,33 +21,41 @@ import { SealedContentView } from './components/SealedContent';
 import { MenuView } from './components/MenuView';
 import { OnboardingFlow } from './components/Onboarding';
 // DayIncompleteModal removed - navigation is now unrestricted
-import { InvestmentMilestoneModal } from './components/investments';
+// InvestmentMilestoneModal now rendered via useOrchestratedModals
 import { SharedWishlistView } from './components/wishlist';
-import { AchievementModal, RewardLevelUpModal } from './components/rewards';
+// AchievementModal, RewardLevelUpModal now rendered via useOrchestratedModals
 import { SettingsView } from './components/settings';
 import { SessionLauncher } from './components/sessions';
 import { KinkQuizView } from './components/kink-quiz';
 import { MomentLoggerFAB } from './components/moment-logger';
-import { ReminderModal } from './components/reminders';
+// ReminderModal now rendered via useOrchestratedModals
 import { useReminders } from './hooks/useReminders';
+import { usePatternNotifications } from './hooks/usePatternNotifications';
 import { TimelineView } from './components/timeline';
-import { GinaEmergenceView } from './components/gina';
-import { ServiceProgressionView } from './components/service';
+import { GinaEmergenceView, GinaPipelineView } from './components/gina';
+import { ServiceProgressionView, ServiceAnalyticsDashboard } from './components/service';
 import { ContentEscalationView } from './components/content';
+import { DomainEscalationView } from './components/domains';
+import { PatternCatchView } from './components/patterns';
+import { TriggerAuditDashboard } from './components/triggers';
+import { NotificationToastStack } from './components/notifications';
+import { TaskCurationView } from './components/curation';
+import { SeedsView } from './components/seeds';
+import { VectorGridView } from './components/adaptive-feminization';
+import { VoiceAffirmationGame } from './components/voice-game';
+import { Dashboard } from './components/dashboard';
+import { JournalView } from './components/journal';
 import { getTodayDate } from './lib/protocol';
 import { profileStorage, letterStorage } from './lib/storage';
+import { useTaskBank } from './hooks/useTaskBank';
+import { useGoals } from './hooks/useGoals';
 import type { UserProfile, SealedLetter } from './components/Onboarding/types';
 import {
   CheckSquare,
   TrendingUp,
   Loader2,
   Settings,
-  RotateCcw,
-  LogOut,
   Gift,
-  User,
-  Check,
-  X,
   Menu,
   Heart
 } from 'lucide-react';
@@ -137,190 +148,53 @@ function Navigation({
 }
 
 function Header() {
-  const { resetProgress, userName, updateUserName } = useProtocol();
-  const { signOut, user } = useAuth();
+  const { userName } = useProtocol();
   const { isBambiMode, getGreeting } = useBambiMode();
-  const [showSettings, setShowSettings] = useState(false);
-  const [confirmReset, setConfirmReset] = useState(false);
-  const [editingName, setEditingName] = useState(false);
-  const [newName, setNewName] = useState(userName || '');
 
-  const handleReset = async () => {
-    await resetProgress();
-    setConfirmReset(false);
-    setShowSettings(false);
-    window.location.reload();
-  };
-
-  const handleSignOut = async () => {
-    await signOut();
-    setShowSettings(false);
-  };
-
-  const handleSaveName = async () => {
-    if (newName.trim()) {
-      await updateUserName(newName.trim());
-    }
-    setEditingName(false);
-  };
-
-  const handleCancelName = () => {
-    setNewName(userName || '');
-    setEditingName(false);
+  const handleSettingsClick = () => {
+    window.dispatchEvent(new CustomEvent('navigate-to-settings'));
   };
 
   return (
-    <>
-      <header className={`sticky top-0 backdrop-blur-lg border-b z-40 ${
-        isBambiMode
-          ? 'bg-white/95 border-pink-200'
-          : 'bg-protocol-bg/95 border-protocol-border'
-      }`}>
-        <div className="max-w-lg mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-              isBambiMode
-                ? 'bg-gradient-to-br from-pink-400 to-pink-600'
-                : 'bg-gradient-to-br from-protocol-accent to-protocol-accent-soft'
+    <header className={`sticky top-0 backdrop-blur-lg border-b z-40 ${
+      isBambiMode
+        ? 'bg-white/95 border-pink-200'
+        : 'bg-protocol-bg/95 border-protocol-border'
+    }`}>
+      <div className="max-w-lg mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+            isBambiMode
+              ? 'bg-gradient-to-br from-pink-400 to-pink-600'
+              : 'bg-gradient-to-br from-protocol-accent to-protocol-accent-soft'
+          }`}>
+            <span className="text-white text-lg">{isBambiMode ? '💕' : '✨'}</span>
+          </div>
+          <div>
+            <h1 className={`text-lg font-semibold ${
+              isBambiMode ? 'text-pink-700' : 'text-protocol-text'
             }`}>
-              <span className="text-white text-lg">{isBambiMode ? '💕' : '✨'}</span>
-            </div>
-            <div>
-              <h1 className={`text-lg font-semibold ${
-                isBambiMode ? 'text-pink-700' : 'text-protocol-text'
-              }`}>
-                {isBambiMode ? getGreeting() : 'Becoming'}
-              </h1>
-              <p className={`text-xs ${
-                isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'
-              }`}>
-                {isBambiMode && userName ? userName : 'Protocol'}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => setShowSettings(!showSettings)}
-            className={`p-2 rounded-lg transition-colors ${
-              isBambiMode ? 'hover:bg-pink-100' : 'hover:bg-protocol-surface'
-            }`}
-          >
-            <Settings className={`w-5 h-5 ${
-              isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'
-            }`} />
-          </button>
-        </div>
-      </header>
-
-      {/* Settings dropdown */}
-      {showSettings && (
-        <div className="fixed inset-0 z-50" onClick={() => setShowSettings(false)}>
-          <div
-            className="absolute top-16 right-4 w-64 bg-protocol-surface border border-protocol-border rounded-lg shadow-xl overflow-hidden"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="p-3 border-b border-protocol-border">
-              <p className="text-sm font-medium text-protocol-text">Settings</p>
-              <p className="text-xs text-protocol-text-muted truncate mt-1">
-                {user?.email}
-              </p>
-            </div>
-
-            {/* Name editing */}
-            <div className="p-3 border-b border-protocol-border">
-              {!editingName ? (
-                <button
-                  onClick={() => {
-                    setNewName(userName || '');
-                    setEditingName(true);
-                  }}
-                  className="w-full flex items-center gap-3 hover:bg-protocol-surface-light transition-colors text-left rounded-lg p-1 -m-1"
-                >
-                  <User className="w-4 h-4 text-protocol-text-muted" />
-                  <div className="flex-1">
-                    <span className="text-sm text-protocol-text">
-                      {userName || 'Add your name'}
-                    </span>
-                    {!userName && (
-                      <p className="text-xs text-protocol-text-muted">Tap to add</p>
-                    )}
-                  </div>
-                </button>
-              ) : (
-                <div className="space-y-2">
-                  <input
-                    type="text"
-                    value={newName}
-                    onChange={e => setNewName(e.target.value)}
-                    placeholder="Your name..."
-                    autoFocus
-                    className="w-full px-3 py-2 rounded-lg bg-protocol-surface-light border border-protocol-border text-protocol-text text-sm placeholder:text-protocol-text-muted focus:outline-none focus:ring-2 focus:ring-protocol-accent"
-                  />
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleCancelName}
-                      className="flex-1 py-1.5 px-2 text-xs rounded bg-protocol-surface-light text-protocol-text-muted flex items-center justify-center gap-1"
-                    >
-                      <X className="w-3 h-3" />
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleSaveName}
-                      disabled={!newName.trim()}
-                      className={`flex-1 py-1.5 px-2 text-xs rounded flex items-center justify-center gap-1 ${
-                        newName.trim()
-                          ? 'bg-protocol-accent text-white'
-                          : 'bg-protocol-surface-light text-protocol-text-muted'
-                      }`}
-                    >
-                      <Check className="w-3 h-3" />
-                      Save
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={handleSignOut}
-              className="w-full p-3 flex items-center gap-3 hover:bg-protocol-surface-light transition-colors text-left border-b border-protocol-border"
-            >
-              <LogOut className="w-4 h-4 text-protocol-text-muted" />
-              <span className="text-sm text-protocol-text">Sign Out</span>
-            </button>
-
-            {!confirmReset ? (
-              <button
-                onClick={() => setConfirmReset(true)}
-                className="w-full p-3 flex items-center gap-3 hover:bg-protocol-surface-light transition-colors text-left"
-              >
-                <RotateCcw className="w-4 h-4 text-protocol-danger" />
-                <span className="text-sm text-protocol-danger">Reset All Progress</span>
-              </button>
-            ) : (
-              <div className="p-3 space-y-3">
-                <p className="text-xs text-protocol-text-muted">
-                  This will delete all your data. This cannot be undone.
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setConfirmReset(false)}
-                    className="flex-1 py-2 px-3 text-xs font-medium rounded bg-protocol-surface-light text-protocol-text"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleReset}
-                    className="flex-1 py-2 px-3 text-xs font-medium rounded bg-protocol-danger text-white"
-                  >
-                    Delete All
-                  </button>
-                </div>
-              </div>
-            )}
+              {isBambiMode ? getGreeting() : 'Becoming'}
+            </h1>
+            <p className={`text-xs ${
+              isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'
+            }`}>
+              {isBambiMode && userName ? userName : 'Protocol'}
+            </p>
           </div>
         </div>
-      )}
-    </>
+        <button
+          onClick={handleSettingsClick}
+          className={`p-2 rounded-lg transition-colors ${
+            isBambiMode ? 'hover:bg-pink-100' : 'hover:bg-protocol-surface'
+          }`}
+        >
+          <Settings className={`w-5 h-5 ${
+            isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'
+          }`} />
+        </button>
+      </div>
+    </header>
   );
 }
 
@@ -333,13 +207,23 @@ function LoadingScreen() {
   );
 }
 
-type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'service' | 'content' | null;
+type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'dashboard' | 'journal' | null;
 
 function AuthenticatedAppInner() {
-  const { currentEntry, isLoading, investmentMilestone, dismissInvestmentMilestone, userName } = useProtocol();
+  const { currentEntry, isLoading, investmentMilestone, dismissInvestmentMilestone, userName, progress } = useProtocol();
   const { isBambiMode } = useBambiMode();
   const rewardContext = useRewardOptional();
   const { currentIntervention, dismissIntervention, completeIntervention, respondToIntervention } = useHandlerContext();
+
+  // Calculate days on protocol from total days in progress (minimum of 1)
+  const daysOnProtocol = Math.max(1, progress?.totalDays ?? 1);
+
+  // Compulsory gate - locks app until daily requirements are met (Feature 38)
+  const {
+    isLocked: compulsoryLocked,
+    isLoading: compulsoryLoading,
+    refresh: refreshCompulsoryGate,
+  } = useCompulsoryGate(daysOnProtocol);
 
   // Disassociation recovery - detects when you zone out
   const recovery = useDisassociationRecovery({
@@ -362,9 +246,45 @@ function AuthenticatedAppInner() {
     dismissReminder,
   } = useReminders();
 
-  // Task completion tracking for nav badge
-  const completedCount = currentEntry?.tasks.filter(t => t.completed).length ?? 0;
-  const totalCount = currentEntry?.tasks.length ?? 0;
+  // Pattern catch notifications - proactive pattern awareness
+  usePatternNotifications({ enabled: true });
+
+  // Orchestrated modals - prevents modal stacking, shows one at a time
+  useOrchestratedModals({
+    currentReminder,
+    onRespondReminder: respondToReminder,
+    onSkipReminder: skipReminder,
+    onDismissReminder: dismissReminder,
+    currentIntervention,
+    onCompleteIntervention: completeIntervention,
+    onDismissIntervention: dismissIntervention,
+    onRespondIntervention: respondToIntervention,
+    recoveryTriggered: recovery.isTriggered,
+    recoveryPrompt: recovery.currentPrompt,
+    recoveryEscalationLevel: recovery.escalationLevel,
+    recoveryConsecutiveIgnores: recovery.consecutiveIgnores,
+    onCompleteRecovery: recovery.completeRecovery,
+    onDismissRecovery: recovery.dismissRecovery,
+    investmentMilestone,
+    onDismissInvestmentMilestone: dismissInvestmentMilestone,
+    achievementEvent: rewardContext?.achievementUnlockedEvent || null,
+    onDismissAchievement: rewardContext?.dismissAchievementUnlocked || (() => {}),
+    levelUpEvent: rewardContext?.levelUpEvent || null,
+    onDismissLevelUp: rewardContext?.dismissLevelUp || (() => {}),
+  });
+
+  // Task bank and goals for nav badge - same source as TodayView
+  const { todayTasks } = useTaskBank();
+  const { todaysGoals } = useGoals();
+
+  // Task completion tracking for nav badge - combining tasks and goals like TodayView does
+  const taskBankCompleted = todayTasks.filter(t => t.status === 'completed').length;
+  const taskBankTotal = todayTasks.length;
+  const goalsCompleted = todaysGoals.filter(g => g.completedToday).length;
+  const goalsTotal = todaysGoals.length;
+
+  const completedCount = taskBankCompleted + goalsCompleted;
+  const totalCount = taskBankTotal + goalsTotal;
 
   // Listen for navigation events from components
   useEffect(() => {
@@ -376,11 +296,17 @@ function AuthenticatedAppInner() {
       setActiveTab('menu');
       setMenuSubView('wishlist');
     };
+    const handleNavigateToSettings = () => {
+      setActiveTab('menu');
+      setMenuSubView('settings');
+    };
     window.addEventListener('navigate-to-investments', handleNavigateToInvestments);
     window.addEventListener('navigate-to-wishlist', handleNavigateToWishlist);
+    window.addEventListener('navigate-to-settings', handleNavigateToSettings);
     return () => {
       window.removeEventListener('navigate-to-investments', handleNavigateToInvestments);
       window.removeEventListener('navigate-to-wishlist', handleNavigateToWishlist);
+      window.removeEventListener('navigate-to-settings', handleNavigateToSettings);
     };
   }, []);
 
@@ -471,7 +397,7 @@ function AuthenticatedAppInner() {
     }
   };
 
-  if (isLoading || showOnboarding === null) {
+  if (isLoading || showOnboarding === null || compulsoryLoading) {
     return <LoadingScreen />;
   }
 
@@ -495,6 +421,16 @@ function AuthenticatedAppInner() {
   // Show morning flow if no entry for today
   if (showMorningFlow) {
     return <MorningFlow onComplete={() => setShowMorningFlow(false)} />;
+  }
+
+  // Show compulsory gate if app is locked (Feature 38)
+  if (compulsoryLocked) {
+    return (
+      <CompulsoryGateScreen
+        daysOnProtocol={daysOnProtocol}
+        onUnlock={refreshCompulsoryGate}
+      />
+    );
   }
 
   // Render menu sub-view content
@@ -540,14 +476,66 @@ function AuthenticatedAppInner() {
         );
       case 'quiz':
         return <KinkQuizView onBack={handleBackFromSubView} />;
+      case 'voice-game':
+        return <VoiceAffirmationGame onBack={handleBackFromSubView} />;
       case 'timeline':
         return <TimelineView onBack={handleBackFromSubView} userName={userName ?? undefined} />;
       case 'gina':
         return <GinaEmergenceView onBack={handleBackFromSubView} />;
+      case 'gina-pipeline':
+        return <GinaPipelineView onBack={handleBackFromSubView} />;
       case 'service':
         return <ServiceProgressionView onBack={handleBackFromSubView} />;
+      case 'service-analytics':
+        return <ServiceAnalyticsDashboard onBack={handleBackFromSubView} />;
+      case 'trigger-audit':
+        return <TriggerAuditDashboard onBack={handleBackFromSubView} />;
       case 'content':
         return <ContentEscalationView onBack={handleBackFromSubView} />;
+      case 'domains':
+        return <DomainEscalationView onBack={handleBackFromSubView} />;
+      case 'patterns':
+        return <PatternCatchView onBack={handleBackFromSubView} />;
+      case 'curation':
+        return <TaskCurationView onBack={handleBackFromSubView} />;
+      case 'seeds':
+        return <SeedsView onBack={handleBackFromSubView} />;
+      case 'vectors':
+        return (
+          <div>
+            <button
+              onClick={handleBackFromSubView}
+              className="mb-4 text-protocol-text-muted hover:text-protocol-text transition-colors"
+            >
+              &larr; Back to Menu
+            </button>
+            <VectorGridView />
+          </div>
+        );
+      case 'dashboard':
+        return (
+          <div>
+            <button
+              onClick={handleBackFromSubView}
+              className="mb-4 text-protocol-text-muted hover:text-protocol-text transition-colors"
+            >
+              &larr; Back to Menu
+            </button>
+            <Dashboard />
+          </div>
+        );
+      case 'journal':
+        return (
+          <div>
+            <button
+              onClick={handleBackFromSubView}
+              className="mb-4 text-protocol-text-muted hover:text-protocol-text transition-colors"
+            >
+              &larr; Back to Menu
+            </button>
+            <JournalView />
+          </div>
+        );
       case 'settings':
         return <SettingsView onBack={handleBackFromSubView} onEditIntake={handleEditIntake} />;
       case 'help':
@@ -581,14 +569,25 @@ function AuthenticatedAppInner() {
       <Header />
 
       <main className="max-w-lg mx-auto px-4 py-6 pb-24">
-        {activeTab === 'protocol' && <TodayView />}
-        {activeTab === 'progress' && <ProgressDashboard />}
-        {activeTab === 'sealed' && <SealedContentView />}
-        {activeTab === 'menu' && renderMenuSubView()}
+        <ErrorBoundary componentName="TodayView">
+          {activeTab === 'protocol' && <TodayView />}
+        </ErrorBoundary>
+        <ErrorBoundary componentName="ProgressDashboard">
+          {activeTab === 'progress' && <ProgressDashboard />}
+        </ErrorBoundary>
+        <ErrorBoundary componentName="SealedContent">
+          {activeTab === 'sealed' && <SealedContentView />}
+        </ErrorBoundary>
+        <ErrorBoundary componentName="Menu">
+          {activeTab === 'menu' && renderMenuSubView()}
+        </ErrorBoundary>
       </main>
 
       {/* Moment Logger FAB - Quick euphoria/dysphoria logging */}
       <MomentLoggerFAB />
+
+      {/* Unified Notification Toast Stack */}
+      <NotificationToastStack position="top" maxVisible={3} />
 
       <Navigation
         activeTab={activeTab}
@@ -600,76 +599,27 @@ function AuthenticatedAppInner() {
       {/* Floating hearts for Bambi mode celebrations */}
       <FloatingHearts />
 
-      {/* Investment Milestone Celebration */}
-      {investmentMilestone && (
-        <InvestmentMilestoneModal
-          milestone={investmentMilestone}
-          onDismiss={dismissInvestmentMilestone}
-        />
-      )}
-
-      {/* Achievement Unlocked Celebration */}
-      {rewardContext?.achievementUnlockedEvent && (
-        <AchievementModal
-          achievement={rewardContext.achievementUnlockedEvent.achievement}
-          pointsAwarded={rewardContext.achievementUnlockedEvent.pointsAwarded}
-          onDismiss={rewardContext.dismissAchievementUnlocked}
-        />
-      )}
-
-      {/* Level Up Celebration */}
-      {rewardContext?.levelUpEvent && (
-        <RewardLevelUpModal
-          newLevel={rewardContext.levelUpEvent.to}
-          newTitle={rewardContext.levelUpEvent.newTitle}
-          onDismiss={rewardContext.dismissLevelUp}
-        />
-      )}
-
-      {/* Feminization Reminder - All Day Presence */}
-      {currentReminder && (
-        <ReminderModal
-          reminder={currentReminder}
-          onRespond={respondToReminder}
-          onSkip={skipReminder}
-          onDismiss={dismissReminder}
-        />
-      )}
-
-      {/* Handler AI Intervention */}
-      {currentIntervention && (
-        <InterventionNotification
-          intervention={currentIntervention}
-          onComplete={completeIntervention}
-          onDismiss={dismissIntervention}
-          onResponse={respondToIntervention}
-        />
-      )}
-
-      {/* Disassociation Recovery Prompt */}
-      {recovery.isTriggered && recovery.currentPrompt && (
-        <RecoveryPrompt
-          prompt={recovery.currentPrompt}
-          escalationLevel={recovery.escalationLevel}
-          consecutiveIgnores={recovery.consecutiveIgnores}
-          onComplete={recovery.completeRecovery}
-          onDismiss={recovery.dismissRecovery}
-        />
-      )}
+      {/* Modals (Investment, Achievement, LevelUp, Reminder, Intervention, Recovery)
+          are now rendered via useOrchestratedModals - only one shows at a time */}
     </div>
   );
 }
 
-// Wrapper component that provides BambiMode, Reward, Handler, and Debug contexts
+// Wrapper component that provides BambiMode, Reward, Handler, Modal, and Debug contexts
 function AuthenticatedApp() {
   return (
     <DebugModeProvider>
       <BambiModeProvider>
         <RewardProvider>
-          <HandlerProvider>
-            <AmbushProvider>
-              <AuthenticatedAppInner />
-            </AmbushProvider>
+          <HandlerProvider
+            autoGeneratePlan={true}
+            enableBackgroundChecks={true}
+          >
+            <ModalOrchestratorProvider>
+              <AmbushProvider>
+                <AuthenticatedAppInner />
+              </AmbushProvider>
+            </ModalOrchestratorProvider>
           </HandlerProvider>
         </RewardProvider>
       </BambiModeProvider>
@@ -680,11 +630,17 @@ function AuthenticatedApp() {
 export default function App() {
   const { user, isLoading } = useAuth();
   const [wishlistToken, setWishlistToken] = useState<string | null>(() => parseWishlistToken());
+  const [passwordRecovery, setPasswordRecovery] = useState(() =>
+    window.location.hash.includes('type=recovery')
+  );
 
   // Listen for hash changes (for shared wishlist navigation)
   useEffect(() => {
     const handleHashChange = () => {
       setWishlistToken(parseWishlistToken());
+      if (window.location.hash.includes('type=recovery')) {
+        setPasswordRecovery(true);
+      }
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
@@ -707,13 +663,20 @@ export default function App() {
     return <LoadingScreen />;
   }
 
+  // Show password reset form when recovery token is detected
+  if (passwordRecovery) {
+    return <Auth initialMode="reset" />;
+  }
+
   if (!user) {
     return <Auth />;
   }
 
   return (
-    <ProtocolProvider>
-      <AuthenticatedApp />
-    </ProtocolProvider>
+    <ErrorBoundary componentName="App">
+      <ProtocolProvider>
+        <AuthenticatedApp />
+      </ProtocolProvider>
+    </ErrorBoundary>
   );
 }

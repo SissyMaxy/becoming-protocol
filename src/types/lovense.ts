@@ -109,144 +109,180 @@ export interface ToySessionConfig {
 // PATTERNS
 // ============================================
 
+// Pattern name type for type safety
+export type LovensePatternName =
+  | 'gentle_wave'
+  | 'building'
+  | 'edge_tease'
+  | 'denial_pulse'
+  | 'constant_low'
+  | 'constant_medium'
+  | 'constant_high'
+  | 'heartbeat'
+  | 'staircase'
+  | 'random_tease'
+  | 'flutter_gentle';
+
 export const BUILTIN_PATTERNS: LovensePattern[] = [
   {
+    // Gentle Wave: Smooth, medium intensity waves - good for warm-up/cool-down
     id: 'gentle_wave',
     name: 'Gentle Wave',
     steps: [
-      { intensity: 3, duration: 1000 },
-      { intensity: 6, duration: 1000 },
-      { intensity: 9, duration: 1000 },
-      { intensity: 6, duration: 1000 },
-      { intensity: 3, duration: 1000 },
+      { intensity: 4, duration: 1500 },
+      { intensity: 8, duration: 1500 },
+      { intensity: 12, duration: 1500 },
+      { intensity: 8, duration: 1500 },
+      { intensity: 4, duration: 1500 },
     ],
-    totalDuration: 5000,
+    totalDuration: 7500,
   },
   {
+    // Building: Clear progression from low to high - feels like climbing
     id: 'building',
     name: 'Building',
     steps: [
-      { intensity: 2, duration: 2000 },
-      { intensity: 4, duration: 2000 },
+      { intensity: 3, duration: 2000 },
       { intensity: 6, duration: 2000 },
-      { intensity: 8, duration: 2000 },
-      { intensity: 10, duration: 2000 },
+      { intensity: 9, duration: 2000 },
       { intensity: 12, duration: 2000 },
-      { intensity: 10, duration: 1000 },
+      { intensity: 15, duration: 2000 },
+      { intensity: 18, duration: 2000 },
+      { intensity: 12, duration: 1000 },
       { intensity: 6, duration: 1000 },
     ],
     totalDuration: 14000,
   },
   {
+    // Edge Tease: Unpredictable spikes with stops - keeps you guessing
     id: 'edge_tease',
     name: 'Edge Tease',
     steps: [
-      { intensity: 5, duration: 500 },
-      { intensity: 12, duration: 300 },
-      { intensity: 5, duration: 500 },
-      { intensity: 15, duration: 200 },
-      { intensity: 0, duration: 1000 },
+      { intensity: 6, duration: 800 },
+      { intensity: 16, duration: 400 },
+      { intensity: 0, duration: 1500 },
+      { intensity: 10, duration: 600 },
+      { intensity: 20, duration: 300 },
+      { intensity: 0, duration: 2000 },
       { intensity: 8, duration: 500 },
-      { intensity: 18, duration: 100 },
+      { intensity: 18, duration: 200 },
       { intensity: 0, duration: 1500 },
     ],
-    totalDuration: 4600,
+    totalDuration: 7800,
   },
   {
+    // Denial Pulse: Long waits then sudden intense bursts - torturous
     id: 'denial_pulse',
     name: 'Denial Pulse',
     steps: [
-      { intensity: 0, duration: 2000 },
-      { intensity: 15, duration: 500 },
       { intensity: 0, duration: 3000 },
-      { intensity: 18, duration: 300 },
+      { intensity: 18, duration: 600 },
       { intensity: 0, duration: 4000 },
-      { intensity: 20, duration: 200 },
+      { intensity: 20, duration: 400 },
       { intensity: 0, duration: 5000 },
+      { intensity: 20, duration: 300 },
+      { intensity: 0, duration: 4000 },
     ],
-    totalDuration: 15000,
+    totalDuration: 17300,
   },
   {
+    // Constant Low: Steady background buzz - subtle but present
     id: 'constant_low',
     name: 'Constant Low',
     steps: [
-      { intensity: 5, duration: 10000 },
+      { intensity: 6, duration: 10000 },
     ],
     totalDuration: 10000,
   },
   {
+    // Constant Medium: Steady moderate intensity - noticeable
     id: 'constant_medium',
     name: 'Constant Medium',
     steps: [
-      { intensity: 10, duration: 10000 },
+      { intensity: 12, duration: 10000 },
     ],
     totalDuration: 10000,
   },
   {
+    // Constant High: Steady strong intensity - demanding attention
     id: 'constant_high',
     name: 'Constant High',
     steps: [
-      { intensity: 16, duration: 10000 },
+      { intensity: 18, duration: 10000 },
     ],
     totalDuration: 10000,
   },
   {
+    // Heartbeat: Distinct double-pulse like a heartbeat - rhythmic
     id: 'heartbeat',
     name: 'Heartbeat',
     steps: [
-      { intensity: 8, duration: 150 },
-      { intensity: 0, duration: 100 },
-      { intensity: 12, duration: 150 },
-      { intensity: 0, duration: 600 },
+      { intensity: 14, duration: 200 },
+      { intensity: 0, duration: 150 },
+      { intensity: 18, duration: 200 },
+      { intensity: 0, duration: 800 },
     ],
-    totalDuration: 1000,
+    totalDuration: 1350,
   },
   {
+    // Staircase: Clear distinct steps up then drop - like climbing stairs
     id: 'staircase',
     name: 'Staircase',
     steps: [
-      { intensity: 4, duration: 3000 },
-      { intensity: 8, duration: 3000 },
-      { intensity: 12, duration: 3000 },
-      { intensity: 16, duration: 3000 },
-      { intensity: 20, duration: 2000 },
+      { intensity: 5, duration: 3000 },
+      { intensity: 10, duration: 3000 },
+      { intensity: 14, duration: 3000 },
+      { intensity: 18, duration: 3000 },
+      { intensity: 20, duration: 3000 },
       { intensity: 0, duration: 3000 },
     ],
-    totalDuration: 17000,
+    totalDuration: 18000,
   },
   {
+    // Random Tease: Chaotic, unpredictable - never know what's next
     id: 'random_tease',
     name: 'Random Tease',
     steps: [
-      { intensity: 5, duration: 800 },
-      { intensity: 0, duration: 1200 },
-      { intensity: 15, duration: 400 },
-      { intensity: 0, duration: 2000 },
-      { intensity: 10, duration: 600 },
-      { intensity: 0, duration: 1500 },
+      { intensity: 8, duration: 600 },
+      { intensity: 0, duration: 800 },
       { intensity: 18, duration: 300 },
-      { intensity: 0, duration: 2500 },
+      { intensity: 0, duration: 1500 },
+      { intensity: 12, duration: 500 },
+      { intensity: 0, duration: 1000 },
+      { intensity: 20, duration: 200 },
+      { intensity: 0, duration: 2000 },
+      { intensity: 6, duration: 700 },
+      { intensity: 16, duration: 400 },
+      { intensity: 0, duration: 1200 },
     ],
-    totalDuration: 9300,
+    totalDuration: 9200,
   },
   {
+    // Flutter Gentle: Light quick pulses - tickling sensation
     id: 'flutter_gentle',
     name: 'Flutter Gentle',
     steps: [
-      { intensity: 2, duration: 300 },
-      { intensity: 0, duration: 700 },
-      { intensity: 3, duration: 300 },
-      { intensity: 0, duration: 700 },
-      { intensity: 2, duration: 300 },
-      { intensity: 0, duration: 1000 },
-      { intensity: 4, duration: 400 },
-      { intensity: 1, duration: 600 },
-      { intensity: 3, duration: 300 },
-      { intensity: 0, duration: 900 },
+      { intensity: 5, duration: 200 },
+      { intensity: 0, duration: 400 },
+      { intensity: 7, duration: 200 },
+      { intensity: 0, duration: 400 },
+      { intensity: 5, duration: 200 },
+      { intensity: 0, duration: 600 },
+      { intensity: 8, duration: 300 },
+      { intensity: 3, duration: 400 },
+      { intensity: 6, duration: 200 },
+      { intensity: 0, duration: 600 },
     ],
-    totalDuration: 5500,
+    totalDuration: 3500,
   },
 ];
+
+// Alias for BUILTIN_PATTERNS (used by SessionControls)
+export const LOVENSE_PATTERNS: Record<LovensePatternName, LovensePattern> =
+  BUILTIN_PATTERNS.reduce((acc, pattern) => {
+    acc[pattern.id as LovensePatternName] = pattern;
+    return acc;
+  }, {} as Record<LovensePatternName, LovensePattern>);
 
 // ============================================
 // DB TYPES (CLOUD API)

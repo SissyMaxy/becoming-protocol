@@ -1,52 +1,165 @@
 // Escalation System Types
 // Types for the perpetual escalation architecture
+//
+// CORE DESIGN PRINCIPLE:
+// Arousal is the engine that drives all transformation.
+// Identity shifts deeper the more aroused you become.
+//
+// HIERARCHY:
+// 1. DRIVER DOMAINS (arousal-based) - These create the receptive state
+//    - Arousal: The primary engine (edges, gooning, denial, hypno)
+//    - Sissification: Practices reinforced through arousal
+//    - Submission: Obedience deepened during aroused states
+//
+// 2. OUTCOME DOMAINS (shaped by arousal) - These are the results
+//    - Identity: Shifts extracted during peak arousal states
+//    - Feminization: Lowest priority, follows from above
 
 // ============================================
 // ESCALATION DOMAINS
 // ============================================
 
 export type EscalationDomain =
-  | 'identity'
-  | 'presentation'
+  | 'arousal'
   | 'sissification'
-  | 'chastity'
-  | 'denial'
-  | 'hypno'
-  | 'sexual_service'
-  | 'gina_dynamic';
+  | 'submission'
+  | 'identity'
+  | 'feminization';
 
+// Domain tier determines whether it's a driver or outcome
+export type DomainTier = 'driver' | 'outcome';
+
+export const DOMAIN_TIERS: Record<EscalationDomain, DomainTier> = {
+  arousal: 'driver',
+  sissification: 'driver',
+  submission: 'driver',
+  identity: 'outcome',
+  feminization: 'outcome',
+};
+
+// Priority order: lower number = higher priority
+export const DOMAIN_PRIORITY: Record<EscalationDomain, number> = {
+  arousal: 1,        // Highest - the engine
+  sissification: 2,  // Core practice
+  submission: 3,     // Deepening obedience
+  identity: 4,       // Outcome of arousal work
+  feminization: 5,   // Lowest priority
+};
+
+// Domains ordered by priority (for UI display)
 export const ESCALATION_DOMAINS: EscalationDomain[] = [
-  'identity',
-  'presentation',
+  'arousal',
   'sissification',
-  'chastity',
-  'denial',
-  'hypno',
-  'sexual_service',
-  'gina_dynamic',
+  'submission',
+  'identity',
+  'feminization',
+];
+
+// Driver domains only
+export const DRIVER_DOMAINS: EscalationDomain[] = [
+  'arousal',
+  'sissification',
+  'submission',
+];
+
+// Outcome domains only
+export const OUTCOME_DOMAINS: EscalationDomain[] = [
+  'identity',
+  'feminization',
 ];
 
 export const ESCALATION_DOMAIN_LABELS: Record<EscalationDomain, string> = {
-  identity: 'Identity',
-  presentation: 'Presentation',
+  arousal: 'Arousal',
   sissification: 'Sissification',
-  chastity: 'Chastity',
-  denial: 'Denial',
-  hypno: 'Hypno Depth',
-  sexual_service: 'Sexual Service',
-  gina_dynamic: 'Gina Dynamic',
+  submission: 'Submission',
+  identity: 'Identity',
+  feminization: 'Feminization',
+};
+
+export const ESCALATION_DOMAIN_DESCRIPTIONS: Record<EscalationDomain, string> = {
+  arousal: 'The engine - edges, gooning, denial, hypno trance',
+  sissification: 'Sissy practices, training, and lifestyle',
+  submission: 'Service, obedience, chastity, handler dynamics',
+  identity: 'Self-concept shifts extracted during peak arousal',
+  feminization: 'Presentation, voice, movement, appearance',
 };
 
 export const DOMAIN_MAX_LEVELS: Record<EscalationDomain, number> = {
-  identity: 5,
-  presentation: 6,
-  sissification: 7,
-  chastity: 5,
-  denial: 6,
-  hypno: 5,
-  sexual_service: 8,
-  gina_dynamic: 7,
+  arousal: 10,       // Deep progression - the core engine
+  sissification: 8,  // Extensive sissy journey
+  submission: 8,     // Deep service progression
+  identity: 7,       // Identity shifts (gated by arousal)
+  feminization: 5,   // Lower priority, fewer levels
 };
+
+export const ESCALATION_DOMAIN_COLORS: Record<EscalationDomain, string> = {
+  arousal: '#ef4444',        // Red - Heat, desire, the engine
+  sissification: '#f472b6',  // Rose - Sissy pink
+  submission: '#6366f1',     // Indigo - Service, depth
+  identity: '#8b5cf6',       // Purple - Core self
+  feminization: '#ec4899',   // Pink - Feminine appearance
+};
+
+export const ESCALATION_DOMAIN_ICONS: Record<EscalationDomain, string> = {
+  arousal: 'Flame',
+  sissification: 'Sparkles',
+  submission: 'Crown',
+  identity: 'User',
+  feminization: 'Shirt',
+};
+
+// ============================================
+// AROUSAL GATING FOR OUTCOME DOMAINS
+// ============================================
+// Identity and Feminization progression require arousal states
+
+export type ArousalGateLevel = 'building' | 'sweet_spot' | 'overload';
+
+export interface OutcomeDomainGate {
+  domain: EscalationDomain;
+  requiredArousalLevel: ArousalGateLevel;
+  requiredArousalDuration?: number; // minutes at arousal level
+  description: string;
+}
+
+// STRENGTHENED: Identity requires OVERLOAD state for extended duration
+// The deeper the arousal, the deeper the identity shift
+export const OUTCOME_DOMAIN_GATES: OutcomeDomainGate[] = [
+  {
+    domain: 'identity',
+    requiredArousalLevel: 'overload',
+    requiredArousalDuration: 10, // 10 minutes at overload before identity can shift
+    description: 'Identity shifts only when completely overwhelmed by arousal',
+  },
+  {
+    domain: 'feminization',
+    requiredArousalLevel: 'sweet_spot',
+    requiredArousalDuration: 5, // Now requires sweet_spot for 5 min
+    description: 'Feminization requires sustained peak arousal',
+  },
+];
+
+// Helper to check if an outcome domain can progress given current arousal
+export function canOutcomeDomainProgress(
+  domain: EscalationDomain,
+  currentArousalLevel: ArousalGateLevel,
+  minutesAtLevel: number = 0
+): boolean {
+  const tier = DOMAIN_TIERS[domain];
+  if (tier === 'driver') return true; // Drivers always can progress
+
+  const gate = OUTCOME_DOMAIN_GATES.find(g => g.domain === domain);
+  if (!gate) return true;
+
+  const arousalLevels: ArousalGateLevel[] = ['building', 'sweet_spot', 'overload'];
+  const requiredIndex = arousalLevels.indexOf(gate.requiredArousalLevel);
+  const currentIndex = arousalLevels.indexOf(currentArousalLevel);
+
+  if (currentIndex < requiredIndex) return false;
+  if (gate.requiredArousalDuration && minutesAtLevel < gate.requiredArousalDuration) return false;
+
+  return true;
+}
 
 // ============================================
 // ESCALATION STATE
@@ -198,20 +311,134 @@ export interface DbServiceProgression {
 }
 
 // ============================================
+// SERVICE ENCOUNTERS
+// ============================================
+
+export type EncounterType = 'online' | 'anonymous' | 'regular' | 'directed';
+
+export const ENCOUNTER_TYPES: EncounterType[] = [
+  'online',
+  'anonymous',
+  'regular',
+  'directed',
+];
+
+export const ENCOUNTER_TYPE_LABELS: Record<EncounterType, string> = {
+  online: 'Online',
+  anonymous: 'Anonymous',
+  regular: 'Regular',
+  directed: 'Directed by Gina',
+};
+
+export const ENCOUNTER_TYPE_COLORS: Record<EncounterType, string> = {
+  online: '#3b82f6',
+  anonymous: '#6b7280',
+  regular: '#8b5cf6',
+  directed: '#ef4444',
+};
+
+export interface ServiceEncounter {
+  id: string;
+  userId: string;
+  encounterType: EncounterType;
+  date: string;
+  description?: string;
+  ginaAware: boolean;
+  ginaDirected: boolean;
+  activities: string[];
+  psychologicalImpact?: string;
+  escalationEffect?: string;
+  arousalLevel?: number;
+}
+
+export interface DbServiceEncounter {
+  id: string;
+  user_id: string;
+  encounter_type: string;
+  date: string;
+  description: string | null;
+  gina_aware: boolean;
+  gina_directed: boolean;
+  activities: string[] | null;
+  psychological_impact: string | null;
+  escalation_effect: string | null;
+  arousal_level: number | null;
+}
+
+export function mapDbToServiceEncounter(db: DbServiceEncounter): ServiceEncounter {
+  return {
+    id: db.id,
+    userId: db.user_id,
+    encounterType: db.encounter_type as EncounterType,
+    date: db.date,
+    description: db.description || undefined,
+    ginaAware: db.gina_aware,
+    ginaDirected: db.gina_directed,
+    activities: db.activities || [],
+    psychologicalImpact: db.psychological_impact || undefined,
+    escalationEffect: db.escalation_effect || undefined,
+    arousalLevel: db.arousal_level || undefined,
+  };
+}
+
+// Activity templates by stage
+export const STAGE_ACTIVITY_TEMPLATES: Record<ServiceStage, string[]> = {
+  fantasy: ['Fantasized about service', 'Wrote service fantasy', 'Dreamed about serving'],
+  content_consumption: ['Watched sissy service content', 'Read service erotica', 'Listened to service hypno'],
+  online_interaction: ['Chatted with a Dom', 'Cammed for someone', 'Sent photos', 'Received instructions'],
+  first_encounter: ['Met someone IRL', 'First service experience', 'Glory hole visit'],
+  regular_service: ['Regular service session', 'Scheduled meetup', 'On-call service'],
+  organized_availability: ['Available on schedule', 'Multiple partners', 'Structured service'],
+  gina_directed: ['Gina sent me to serve', 'Gina arranged encounter', 'Gina directed service'],
+};
+
+// ============================================
 // CONTENT ESCALATION
 // ============================================
 
+// Content themes aligned with the 5 core domains
+// Primary themes map to driver domains (arousal, sissification, submission)
+// Secondary themes support the primary progression
 export type ContentTheme =
-  | 'feminization'
+  // Arousal domain themes (highest priority)
+  | 'gooning'
+  | 'edging'
+  | 'denial'
+  | 'hypno'
+  // Sissification domain themes
   | 'sissification'
+  | 'sissy_training'
+  | 'turning_out'
+  // Submission domain themes
   | 'service'
+  | 'submission'
+  | 'chastity'
   | 'humiliation'
+  // Service escalation themes
   | 'bbc'
   | 'gangbang'
   | 'gloryhole'
-  | 'submission'
-  | 'hypno'
-  | 'chastity';
+  // Feminization themes (lowest priority)
+  | 'feminization';
+
+// Map content themes to their primary domain
+export const CONTENT_THEME_DOMAINS: Record<ContentTheme, EscalationDomain> = {
+  gooning: 'arousal',
+  edging: 'arousal',
+  denial: 'arousal',
+  hypno: 'arousal',
+  sissification: 'sissification',
+  sissy_training: 'sissification',
+  turning_out: 'sissification',
+  service: 'submission',
+  submission: 'submission',
+  chastity: 'submission',
+  humiliation: 'submission',
+  bbc: 'submission',
+  gangbang: 'submission',
+  gloryhole: 'submission',
+  feminization: 'feminization',
+};
 
 export interface ContentEscalation {
   id: string;

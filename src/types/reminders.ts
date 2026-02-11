@@ -293,14 +293,14 @@ export function getReminderTypeColor(type: ReminderType): string {
   return colors[type];
 }
 
-// Default settings
+// Default settings - disabled by default (too intrusive per user feedback)
 export const DEFAULT_REMINDER_SETTINGS: ReminderSettings = {
-  enabled: true,
+  enabled: false,
   activeHoursStart: 8,  // 8am
   activeHoursEnd: 22,   // 10pm
-  frequencyPerDay: 5,
-  enabledTypes: ['posture', 'voice', 'movement', 'identity'],
-  useNotifications: true,
+  frequencyPerDay: 3,   // reduced from 5
+  enabledTypes: ['posture', 'voice'],  // fewer types
+  useNotifications: false,
 };
 
 // Database types

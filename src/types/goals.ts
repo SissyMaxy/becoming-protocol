@@ -2,8 +2,40 @@
 // Core types for the goal-based training system
 
 export type GoalStatus = 'active' | 'paused' | 'graduated' | 'abandoned';
-export type Domain = 'voice' | 'movement' | 'skincare' | 'style' | 'social' | 'mindset';
+// Domain types for goals - now includes arousal-based domains
+export type Domain =
+  // Arousal domains (highest priority)
+  | 'arousal'
+  | 'conditioning'
+  | 'chastity'
+  // Sissification domains
+  | 'mindset'
+  | 'identity'
+  // Submission domains
+  | 'social'
+  // Feminization domains (lowest priority)
+  | 'movement'
+  | 'voice'
+  | 'style'
+  | 'skincare';
+
 export type Difficulty = 1 | 2 | 3 | 4 | 5;
+export type TimeWindow = 'morning' | 'afternoon' | 'evening' | 'night' | 'any';
+
+// STRENGTHENED: Domain priority for sorting goals
+// Lower number = higher priority = shown first
+export const DOMAIN_PRIORITY: Record<Domain, number> = {
+  arousal: 1,
+  conditioning: 2,
+  chastity: 3,
+  mindset: 4,
+  identity: 5,
+  social: 6,
+  movement: 7,
+  voice: 8,
+  style: 9,
+  skincare: 10, // Lowest priority
+};
 
 // ============================================
 // GOAL
@@ -28,6 +60,7 @@ export interface Goal {
   hasAffirmation: boolean;
   sortOrder: number;
   isSystemAssigned: boolean;
+  suitableTimes: TimeWindow[];
   createdAt: string;
   updatedAt: string;
 }
@@ -155,6 +188,7 @@ export interface DbGoal {
   has_affirmation: boolean;
   sort_order: number;
   is_system_assigned: boolean;
+  suitable_times: string[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -235,6 +269,7 @@ export function dbGoalToGoal(db: DbGoal): Goal {
     hasAffirmation: db.has_affirmation,
     sortOrder: db.sort_order,
     isSystemAssigned: db.is_system_assigned,
+    suitableTimes: (db.suitable_times as TimeWindow[]) || ['any'],
     createdAt: db.created_at,
     updatedAt: db.updated_at,
   };
@@ -311,12 +346,20 @@ export function getGraduationProgress(goal: Goal): number {
 export function getDomainLabel(domain: Domain | null): string {
   if (!domain) return 'General';
   const labels: Record<Domain, string> = {
-    voice: 'Voice',
-    movement: 'Movement',
-    skincare: 'Skincare',
-    style: 'Style',
-    social: 'Social',
+    // Arousal domains (highest priority)
+    arousal: 'Arousal',
+    conditioning: 'Conditioning',
+    chastity: 'Chastity',
+    // Sissification domains
     mindset: 'Mindset',
+    identity: 'Identity',
+    // Submission domains
+    social: 'Social',
+    // Feminization domains (lowest priority)
+    movement: 'Movement',
+    voice: 'Voice',
+    style: 'Style',
+    skincare: 'Skincare',
   };
   return labels[domain];
 }
@@ -324,12 +367,20 @@ export function getDomainLabel(domain: Domain | null): string {
 export function getDomainColor(domain: Domain | null): string {
   if (!domain) return '#8b5cf6';
   const colors: Record<Domain, string> = {
-    voice: '#f472b6',      // pink
-    movement: '#22c55e',   // green
-    skincare: '#06b6d4',   // cyan
-    style: '#a855f7',      // purple
-    social: '#f59e0b',     // amber
-    mindset: '#3b82f6',    // blue
+    // Arousal domains - red/hot colors (highest priority)
+    arousal: '#ef4444',        // red
+    conditioning: '#dc2626',   // darker red
+    chastity: '#f59e0b',       // amber
+    // Sissification domains - purple
+    mindset: '#3b82f6',        // blue
+    identity: '#8b5cf6',       // purple
+    // Submission domains
+    social: '#f59e0b',         // amber
+    // Feminization domains - softer colors (lowest priority)
+    movement: '#22c55e',       // green
+    voice: '#f472b6',          // pink
+    style: '#a855f7',          // purple
+    skincare: '#06b6d4',       // cyan
   };
   return colors[domain];
 }

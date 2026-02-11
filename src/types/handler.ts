@@ -13,15 +13,31 @@ export type InterventionType =
   | 'jackpot'
   | 'commitment_prompt'
   | 'anchor_reminder'
-  | 'escalation_push';
+  | 'escalation_push'
+  // Timing engine intervention types (Feature 2)
+  | 'session_initiation'
+  | 'avoidance_confrontation'
+  | 'streak_protection'
+  | 'support_check_in'
+  | 'momentum_push'
+  | 'integration_prompt'
+  | 'post_session_capture';
+
+export interface InterventionAction {
+  label: string;
+  action: string;
+}
 
 export interface HandlerIntervention {
+  id?: string;                    // Optional ID for tracking
   type: InterventionType;
   content: string;
   targetDomain?: string;
   escalationTarget?: string;
   timing?: string;
   priority?: number;
+  expiresAt?: string;             // ISO timestamp for intervention expiry
+  actions?: InterventionAction[]; // Optional action buttons
 }
 
 // ============================================

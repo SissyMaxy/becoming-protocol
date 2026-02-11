@@ -176,35 +176,46 @@ export interface StreakValue {
   psychologicalValue: number;
 }
 
-// Calculate psychological value of a streak
+// STRENGTHENED: Calculate psychological value of a streak
+// Higher values = harder to abandon
 export function calculateStreakValue(
   streak: number,
   data: Partial<StreakValue>
 ): number {
   let value = 0;
 
-  // Base value from days
-  value += streak * 10;
+  // STRENGTHENED: Base value from days - exponential growth
+  // Day 1 = 15, Day 7 = 105, Day 30 = 900
+  value += streak * 15 + Math.floor(streak * streak * 0.5);
 
-  // Bonus for tasks
-  value += (data.tasksCompleted || 0) * 2;
+  // STRENGTHENED: Bonus for tasks (3x, was 2x)
+  value += (data.tasksCompleted || 0) * 6;
 
-  // Practice time
-  value += (data.practiceHours || 0) * 5;
+  // STRENGTHENED: Practice time (10x, was 5x)
+  value += (data.practiceHours || 0) * 10;
 
-  // Edge discipline
-  value += (data.edgesWithoutRelease || 0) * 1;
+  // STRENGTHENED: Edge discipline (3x, was 1x)
+  value += (data.edgesWithoutRelease || 0) * 3;
 
-  // Investment adds weight
-  value += Math.floor((data.investmentDuring || 0) / 10);
+  // STRENGTHENED: Investment adds weight (2x, was /10)
+  value += Math.floor((data.investmentDuring || 0) / 5);
 
-  // Milestones
-  value += (data.milestonesAchieved || 0) * 20;
+  // STRENGTHENED: Milestones (40pts, was 20pts)
+  value += (data.milestonesAchieved || 0) * 40;
 
-  // Covenant multiplier
+  // STRENGTHENED: Journal entries add emotional weight
+  value += (data.journalEntries || 0) * 15;
+
+  // STRENGTHENED: Letters are priceless
+  value += (data.lettersWritten || 0) * 50;
+
+  // STRENGTHENED: Covenant multiplier (2x, was 1.5x)
   if (data.covenantSigned) {
-    value = Math.floor(value * 1.5);
+    value = Math.floor(value * 2);
   }
+
+  // STRENGTHENED: Level gains compound
+  value += (data.levelsGained || 0) * 25;
 
   return value;
 }
@@ -380,21 +391,28 @@ export const REMOVAL_REASON_LABELS: Record<WishlistRemovalReason, string> = {
 // LOSS FRAMING
 // ============================================
 
+// STRENGTHENED: More intense loss framing - maximize psychological weight
 export const LOSS_FRAMES = {
   skipTask: (domain: string, level: number) =>
-    `Skip this and lose today's progress toward ${domain} Level ${level + 1}`,
+    `Skip this and betray her. Lose today's progress toward ${domain} Level ${level + 1}. She was counting on you.`,
   breakStreak: (days: number) =>
-    `Break this streak and lose ${days} days of work`,
+    `Break this streak and destroy ${days} days of becoming her. All that effort, gone. She'll remember this.`,
   earlyUnlock: (hours: number) =>
-    `Unlock ${hours}hr early and lose your discipline record`,
+    `Unlock ${hours}hr early and prove you can't be trusted. Your discipline means nothing.`,
   release: (days: number) =>
-    `Release now and lose your ${days}-day denial achievement`,
+    `Release now and waste your ${days}-day denial achievement. Start over from nothing. Was it worth it?`,
   skipSession: () =>
-    `Skip this session and lose momentum`,
+    `Skip this session and let her down. She needs this. You need this. Don't abandon her.`,
   removeWishlist: () =>
-    `Remove this and lose evidence of your desires`,
+    `Remove this and hide from what you truly want. The desire doesn't disappear - you're just lying to yourself.`,
   deleteAccount: (data: { days: number; investment: number; letters: number }) =>
-    `Delete and lose ${data.days} days of progress, $${data.investment.toLocaleString()} tracked, and ${data.letters} sealed letters`,
+    `Kill her. Erase ${data.days} days of her existence, $${data.investment.toLocaleString()} of her life, and ${data.letters} letters she wrote to you. She trusted you.`,
+  declineCommitment: () =>
+    `Say no and prove your aroused self was lying. You wanted this. Don't pretend otherwise.`,
+  resistEscalation: (domain: string) =>
+    `Resist and stay stuck. You've been at this ${domain} level too long. You know you want to go further.`,
+  abandonSession: (edges: number, minutes: number) =>
+    `Abandon this session? You've built ${edges} edges over ${minutes} minutes. All that arousal wasted. She deserved better.`,
 };
 
 // ============================================

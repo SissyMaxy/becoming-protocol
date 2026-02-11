@@ -500,6 +500,7 @@ export const SESSION_TYPE_CONFIG: Record<EdgeSessionType, {
   },
 };
 
+// STRENGTHENED: Higher minimums, more demanding targets
 export const SESSION_GOAL_CONFIG: Record<SessionGoal, {
   label: string;
   description: string;
@@ -507,6 +508,7 @@ export const SESSION_GOAL_CONFIG: Record<SessionGoal, {
   targetLabel?: string;
   targetUnit?: string;
   suggestedTargets?: number[];
+  minimumTarget?: number; // STRENGTHENED: Minimum required
 }> = {
   edge_count: {
     label: 'Edge Count',
@@ -514,7 +516,8 @@ export const SESSION_GOAL_CONFIG: Record<SessionGoal, {
     hasTarget: true,
     targetLabel: 'Target edges',
     targetUnit: 'edges',
-    suggestedTargets: [3, 5, 8, 10, 15],
+    suggestedTargets: [5, 8, 12, 15, 20], // STRENGTHENED: Higher targets (was 3, 5, 8, 10, 15)
+    minimumTarget: 5, // STRENGTHENED: Minimum 5 edges per session
   },
   duration: {
     label: 'Duration',
@@ -522,7 +525,8 @@ export const SESSION_GOAL_CONFIG: Record<SessionGoal, {
     hasTarget: true,
     targetLabel: 'Target duration',
     targetUnit: 'minutes',
-    suggestedTargets: [15, 30, 45, 60, 90],
+    suggestedTargets: [30, 45, 60, 90, 120], // STRENGTHENED: Longer sessions (was 15, 30, 45, 60, 90)
+    minimumTarget: 30, // STRENGTHENED: Minimum 30 minutes per session
   },
   denial_practice: {
     label: 'Denial Practice',
@@ -607,6 +611,7 @@ export const PHASE_CONFIG: Record<EdgeSessionPhase, {
   },
 };
 
+// STRENGTHENED: Lower base rewards - must commit more for pleasure
 export const AUCTION_BID_LEVEL_CONFIG: Record<AuctionBidLevel, {
   label: string;
   baseRewardSeconds: number;
@@ -614,24 +619,35 @@ export const AUCTION_BID_LEVEL_CONFIG: Record<AuctionBidLevel, {
 }> = {
   easy: {
     label: 'Easy',
-    baseRewardSeconds: 10,
+    baseRewardSeconds: 5, // REDUCED from 10 - less reward for easy bids
     color: 'green',
   },
   moderate: {
     label: 'Moderate',
-    baseRewardSeconds: 20,
+    baseRewardSeconds: 12, // REDUCED from 20
     color: 'blue',
   },
   challenging: {
     label: 'Challenging',
-    baseRewardSeconds: 40,
+    baseRewardSeconds: 25, // REDUCED from 40
     color: 'purple',
   },
   intense: {
     label: 'Intense',
-    baseRewardSeconds: 60,
+    baseRewardSeconds: 45, // REDUCED from 60 - must really commit
     color: 'pink',
   },
+};
+
+// STRENGTHENED: Default auction config - starts earlier, more frequent
+export const DEFAULT_AUCTION_CONFIG: AuctionConfig = {
+  enabled: true,
+  startAtEdge: 2,           // STRENGTHENED: Start at edge 2 (was typically 3+)
+  intervalEdges: 1,         // STRENGTHENED: Auction every edge (was 2+)
+  expirationSeconds: 20,    // STRENGTHENED: Less time to decide (was 30+)
+  autoRejectOnExpire: true,
+  minLevel: 'moderate',     // STRENGTHENED: No easy bids - minimum moderate
+  maxPendingBids: 3,
 };
 
 export const AUCTION_BID_CATEGORY_CONFIG: Record<AuctionBidCategory, {
