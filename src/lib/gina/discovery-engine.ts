@@ -66,7 +66,7 @@ function determinePhase(score: number): GinaDiscoveryPhase {
 
 function generateRecommendation(
   phase: GinaDiscoveryPhase,
-  factors: Record<string, number>,
+  _factors: Record<string, number>,
   ginaInitiatedRatio: number,
   channelsAtRung2Plus: number,
 ): string {
@@ -99,7 +99,7 @@ function generateRecommendation(
 
 export async function calculateReadinessScore(userId: string): Promise<ReadinessScore> {
   // Parallel queries
-  const [summaryResult, ladderStates, milestonesResult, currentStateResult] = await Promise.all([
+  const [summaryResult, ladderStates, milestonesResult, _currentStateResult] = await Promise.all([
     supabase
       .from('gina_investment_summary')
       .select('*')

@@ -578,7 +578,7 @@ export function mapDbToEscalationEvent(db: DbEscalationEvent): EscalationEvent {
 // INFINITE ESCALATION — DYNAMIC LEVELS
 // ============================================
 
-export interface TaskTemplate {
+export interface DynamicTaskTemplate {
   instructionTemplate: string;
   intensityMin: number;
   intensityMax: number;
@@ -597,7 +597,7 @@ export interface DynamicLevel {
   title: string;
   description: string;
   entry_requirements: Record<string, unknown>;
-  task_templates: TaskTemplate[];
+  task_templates: DynamicTaskTemplate[];
   intensity_floor: number;
   intensity_ceiling: number | null;
   estimated_duration_days: number | null;

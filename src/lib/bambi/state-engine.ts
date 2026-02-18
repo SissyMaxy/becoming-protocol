@@ -396,7 +396,7 @@ export interface SessionContext {
 
 export async function getContentRecommendation(
   userId: string,
-  sessionContext: SessionContext
+  _sessionContext: SessionContext
 ): Promise<ContentRecommendation[]> {
   const { data, error } = await supabase
     .from('content_library_audit')

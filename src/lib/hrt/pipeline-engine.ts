@@ -11,7 +11,6 @@ import { supabase } from '../supabase';
 import type {
   HrtPipeline,
   HrtDailyLog,
-  HrtSoberCheckpoint,
   HrtProgressSummary,
   HrtPhase,
   GinaAwarenessLevel,

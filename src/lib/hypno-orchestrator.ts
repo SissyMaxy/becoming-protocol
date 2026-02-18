@@ -218,7 +218,6 @@ class HypnoPlayerOrchestrator {
     // Log to Bambi state engine for trance tracking (fire-and-forget)
     if (this.state && this.session) {
       const tranceDepth = Math.round(this.state.tranceDepth);
-      const triggersActivated = this.state.triggersActivated;
 
       logBambiSession({
         userId: this.state.sessionId, // Session tracks per-session, userId set by caller

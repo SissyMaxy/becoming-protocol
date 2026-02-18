@@ -10,7 +10,6 @@ import { supabase } from '../supabase';
 import { invokeWithAuth, isHandlerAIDisabled } from '../handler-ai';
 import type {
   DynamicLevel,
-  DomainEscalationState,
   DomainDependency,
   EscalationOverview,
   CrossDomainStatus,

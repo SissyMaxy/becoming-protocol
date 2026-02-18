@@ -8,7 +8,6 @@
  */
 
 import { supabase } from './supabase';
-import type { CoerciveContext } from './handler-v2/coercive-strategies';
 import type {
   ResistanceType,
   DiagnosisFactor,
