@@ -118,10 +118,16 @@ export function TaskCardNew({
     use: 'What did you use?',
   };
 
-  // Detect tasks requiring a text response based on instruction content
-  const TEXT_RESPONSE_PATTERNS = /\b(tell me|write|journal|reflect|describe|note down|record your)\b/i;
-  const needsTextResponse = TEXT_RESPONSE_PATTERNS.test(instruction);
-  const textResponseReady = !needsTextResponse || responseText.trim().length >= 10;
+  // Detect tasks requiring a text response — check raw instruction (not enhanced)
+  // and completionType for text-input types
+  const needsTextInput = (() => {
+    const rawInstruction = task.task.instruction || '';
+    const ct = task.task.completionType || '';
+    const textTypes = ['journal', 'reflection', 'checkin', 'text_response'];
+    if (textTypes.includes(ct)) return true;
+    return /tell me|write|journal|reflect|describe|note down|record your/i.test(rawInstruction);
+  })();
+  const textInputReady = !needsTextInput || responseText.trim().length >= 10;
 
   const handleComplete = () => {
     if (showProgress && task.progress < (targetCount || 0) - 1) {
@@ -437,7 +443,7 @@ export function TaskCardNew({
         )}
 
         {/* Text response input for journal/reflection tasks */}
-        {isPending && needsTextResponse && (
+        {isPending && needsTextInput && (
           <div className="mt-4">
             <textarea
               value={responseText}
@@ -487,9 +493,9 @@ export function TaskCardNew({
               <div className="flex-1 flex gap-2">
                 <button
                   onClick={() => onComplete(false, responseText.trim() || undefined)}
-                  disabled={isCompleting || !textResponseReady}
+                  disabled={isCompleting || !textInputReady}
                   className={`flex-1 py-3 rounded-xl font-semibold transition-all active:scale-[0.98] ${
-                    !textResponseReady ? 'opacity-50 cursor-not-allowed' : ''
+                    !textInputReady ? 'opacity-50 cursor-not-allowed' : ''
                   } ${
                     isBambiMode
                       ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
@@ -504,9 +510,9 @@ export function TaskCardNew({
                 </button>
                 <button
                   onClick={() => onComplete(true, responseText.trim() || undefined)}
-                  disabled={isCompleting || !textResponseReady}
+                  disabled={isCompleting || !textInputReady}
                   className={`flex-1 py-3 rounded-xl font-semibold text-white transition-all active:scale-[0.98] ${
-                    !textResponseReady ? 'opacity-50 cursor-not-allowed' : ''
+                    !textInputReady ? 'opacity-50 cursor-not-allowed' : ''
                   } bg-gradient-to-r ${
                     getIntensityGradient(intensity, isBambiMode)
                   } hover:opacity-90`}
@@ -521,9 +527,9 @@ export function TaskCardNew({
             ) : (
               <button
                 onClick={handleComplete}
-                disabled={isCompleting || !textResponseReady}
+                disabled={isCompleting || !textInputReady}
                 className={`flex-1 py-3 rounded-xl font-semibold text-white transition-all active:scale-[0.98] ${
-                  !textResponseReady ? 'opacity-50 cursor-not-allowed' : ''
+                  !textInputReady ? 'opacity-50 cursor-not-allowed' : ''
                 } bg-gradient-to-r ${
                   getIntensityGradient(intensity, isBambiMode)
                 } hover:opacity-90`}
