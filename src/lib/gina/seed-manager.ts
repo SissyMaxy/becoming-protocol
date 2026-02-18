@@ -12,6 +12,7 @@ import {
   setCooldown,
   isInCooldown,
 } from './ladder-engine';
+import { logGinaInvestment } from './discovery-engine';
 
 // ============================================
 // TYPES
@@ -192,6 +193,22 @@ export async function logSeed(
       const thresholds: Record<number, number> = { 0: 0, 1: 3, 2: 5, 3: 5, 4: 3 };
       rungAdvancementPossible = newPositiveCount >= (thresholds[rung] || 3);
     }
+  }
+
+  // Log positive seeds as Gina investments for discovery tracking (fire-and-forget)
+  if (input.ginaResponse === 'positive') {
+    logGinaInvestment({
+      userId,
+      investmentType: 'unknowing_participation',
+      channel: input.channel,
+      description: input.seedDescription,
+      ginaInitiated: false,
+      ginaAware: false,
+      handlerSeeded: true,
+      notes: input.ginaExactWords || undefined,
+    }).catch(err => {
+      console.warn('[SeedManager] Investment logging failed:', err);
+    });
   }
 
   return {

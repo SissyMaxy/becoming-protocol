@@ -157,3 +157,7 @@ export * from './profile';
 export * from './gina';
 export * from './handler';
 export * from './scheduled-ambush';
+export * from './resistance';
+export * from './gina-discovery';
+export * from './bambi';
+export * from './content-permanence';

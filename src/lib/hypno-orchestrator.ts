@@ -7,6 +7,7 @@
 
 import { getOrchestrator, type HapticOrchestrator } from './haptic-orchestrator';
 import { executeSystemTriggers } from './system-triggers';
+import { logBambiSession } from './bambi/state-engine';
 
 // ============================================
 // TYPES
@@ -211,6 +212,26 @@ class HypnoPlayerOrchestrator {
         sessionId: this.state?.sessionId,
         contentType: this.session?.contentType,
         triggersActivated: this.state?.triggersActivated || 0,
+      });
+    }
+
+    // Log to Bambi state engine for trance tracking (fire-and-forget)
+    if (this.state && this.session) {
+      const tranceDepth = Math.round(this.state.tranceDepth);
+      const triggersActivated = this.state.triggersActivated;
+
+      logBambiSession({
+        userId: this.state.sessionId, // Session tracks per-session, userId set by caller
+        sessionType: 'hypno_listen',
+        entryMethod: 'audio_file',
+        contentRef: this.session.audioUrl || this.session.title,
+        depthEstimate: tranceDepth,
+        triggersUsed: this.session.triggers?.map(t => t.triggerWord) || [],
+        triggersRespondedTo: this.session.triggers
+          ?.filter(t => t.reinforcementCount > 0)
+          .map(t => t.triggerWord) || [],
+      }).catch(err => {
+        console.warn('[HypnoOrchestrator] Bambi session logging failed:', err);
       });
     }
 

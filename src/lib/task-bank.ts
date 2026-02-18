@@ -15,6 +15,7 @@ import type {
   SkipCost,
 } from '../types/task-bank';
 import { DEFAULT_SKIP_COST } from '../types/task-bank';
+import { SYSTEM_PROMPTS } from './protocol-core/ai/system-prompts';
 
 // ============================================
 // CONVERTERS
@@ -1133,6 +1134,7 @@ export interface TaskEnhancementContext {
   denialDay: number;
   streakDays: number;
   arousalLevel: number;
+  escalationLevel: number;
   timeOfDay: string;
   ginaHome: boolean;
   ginaAsleep: boolean;
@@ -1140,6 +1142,7 @@ export interface TaskEnhancementContext {
   avoidedDomains: string[];
   recentCompleted: string[];  // last 3-5 completed task instructions
   recentJournal: string[];    // recent journal snippets
+  recentResistance: string[]; // recently skipped/resisted categories
   handlerMode: string;
 }
 
@@ -1168,25 +1171,34 @@ export async function enhanceTasks(
     return tasks;
   }
 
-  // Build personalization prompt — framed as a personal development coaching app
-  // that personalizes daily practice tasks for the user's self-expression journey.
-  const systemPrompt = `You are a personalization engine for a self-expression and personal development app called "Becoming Protocol". The app helps users explore gender expression, build daily practice habits, and track their personal growth journey.
+  // Build Handler-voiced system prompt using the real Handler identity
+  const systemPrompt = `${SYSTEM_PROMPTS.base}
 
-Your job: rewrite each daily practice task so it feels personally chosen for this user at this moment — not a generic template. The user's name is ${context.chosenName}.
+OPERATION: BATCH TASK ENHANCEMENT
+Rewrite each task as a direct Handler instruction to ${context.chosenName}.
+Address her by name. Be specific to her current state.
+These are not suggestions — they are assignments from her Handler.
 
-Output rules:
-- Keep the same core action as the original task instruction
-- Personalize the wording based on the user's current context (time of day, energy level, streak progress, etc.)
-- The "subtext" should be a single encouraging sentence that acknowledges their journey
-- The "affirmation" should be a warm completion message that reinforces their progress
-- Match the tone to intensity: low-intensity tasks get gentle encouragement, high-intensity tasks get bold motivation
-- ${context.execFunction === 'depleted' || context.execFunction === 'low' ? 'User has low energy today — use gentle, caring language. No pressure.' : 'User has good energy — be confident and motivating.'}
-- ${context.ginaHome ? 'User has company at home — keep suggestions discreet.' : 'User has privacy — be direct.'}
-- Time of day: ${context.timeOfDay}
-${context.avoidedDomains.length > 0 ? `- User has been avoiding these practice areas: ${context.avoidedDomains.join(', ')}. Gently encourage without shaming.` : ''}
+CURRENT STATE:
+- Denial day: ${context.denialDay}
+- Arousal level: ${context.arousalLevel}/10
+- Escalation level: ${context.escalationLevel}
+- Energy: ${context.execFunction}
+- Privacy: ${context.ginaHome ? 'Gina home' : 'alone'}${context.ginaAsleep ? ' (asleep)' : ''}
+- Time: ${context.timeOfDay}
+- Handler mode: ${context.handlerMode}
+${context.avoidedDomains.length > 0 ? `- AVOIDING: ${context.avoidedDomains.join(', ')} — push into these.` : ''}
+${context.recentResistance.length > 0 ? `- RECENT RESISTANCE: ${context.recentResistance.join(', ')} — address this.` : ''}
 
-Respond ONLY with a JSON array. Each element must be: {"id": "task_id", "instruction": "rewritten task", "subtext": "one encouraging sentence", "affirmation": "completion message"}
-Do not include any other text, explanation, or commentary — just the JSON array.`;
+RULES:
+- Keep the same core action but make it feel personally targeted
+- Low energy: fewer spoons, but no free passes. Reduce friction, not expectations.
+- High arousal + high denial: leverage it. Extract more.
+- Reference her data. Be specific, not generic.
+- "subtext" = one sentence that makes it personal (reference streak, denial, recent behavior)
+- "affirmation" = completion reward message in Handler voice
+
+Respond ONLY with a JSON array: [{"id": "task_id", "instruction": "...", "subtext": "...", "affirmation": "..."}]`;
 
   const taskList = needsEnhancement.map(t => ({
     id: t.id,
@@ -1196,18 +1208,12 @@ Do not include any other text, explanation, or commentary — just the JSON arra
     intensity: t.task.intensity,
   }));
 
-  const userPrompt = `User context for ${context.chosenName}:
-- Practice streak: ${context.streakDays} days
-- Self-discipline day: ${context.denialDay}
-- Energy level: ${context.execFunction}
-- Current time: ${context.timeOfDay}
-- Privacy: ${context.ginaHome ? 'shared space' : 'private'}${context.ginaAsleep ? ' (partner asleep)' : ''}
-- Coaching style: ${context.handlerMode}
-${context.recentCompleted.length > 0 ? `- Recently completed: ${context.recentCompleted.join(' | ')}` : ''}
-${context.recentJournal.length > 0 ? `- Recent reflection: "${context.recentJournal[0]}"` : ''}
+  const userPrompt = `${context.chosenName}'s tasks for today. Enhance each one.
 
-Personalize these ${taskList.length} practice tasks:
+${context.recentCompleted.length > 0 ? `Recently completed: ${context.recentCompleted.join(' | ')}` : 'No tasks completed yet today.'}
+${context.recentJournal.length > 0 ? `Recent journal: "${context.recentJournal[0]}"` : ''}
 
+Tasks to enhance:
 ${JSON.stringify(taskList, null, 2)}`;
 
   try {
@@ -1281,7 +1287,10 @@ export async function buildEnhancementContext(
   userId: string
 ): Promise<TaskEnhancementContext> {
   // Parallel queries for context
-  const [profileResult, stateResult, completionsResult, journalResult] = await Promise.all([
+  const weekAgo = new Date();
+  weekAgo.setDate(weekAgo.getDate() - 7);
+
+  const [profileResult, stateResult, completionsResult, journalResult, resistanceResult] = await Promise.all([
     supabase.from('profile_foundation').select('chosen_name').eq('user_id', userId).maybeSingle(),
     supabase.from('user_state').select('*').eq('user_id', userId).maybeSingle(),
     supabase
@@ -1297,6 +1306,12 @@ export async function buildEnhancementContext(
       .not('notes', 'is', null)
       .order('created_at', { ascending: false })
       .limit(2),
+    supabase
+      .from('task_resistance')
+      .select('task_bank!inner(category)')
+      .eq('user_id', userId)
+      .gte('detected_at', weekAgo.toISOString())
+      .limit(20),
   ]);
 
   const state = stateResult.data;
@@ -1306,11 +1321,20 @@ export async function buildEnhancementContext(
     : hour >= 17 && hour < 21 ? 'evening'
     : 'night';
 
+  // Deduplicate resisted categories
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const resistedCategories = [...new Set(
+    (resistanceResult.data || [])
+      .map((r: any) => (r.task_bank as any)?.category)
+      .filter(Boolean)
+  )];
+
   return {
     chosenName: profileResult.data?.chosen_name || 'her',
     denialDay: state?.denial_day || 0,
     streakDays: state?.streak_days || 0,
     arousalLevel: state?.current_arousal || 0,
+    escalationLevel: state?.escalation_level || 0,
     timeOfDay,
     ginaHome: state?.gina_home !== false,
     ginaAsleep: state?.gina_asleep || false,
@@ -1325,6 +1349,7 @@ export async function buildEnhancementContext(
       .map((j: { notes: string }) => j.notes)
       .filter(Boolean)
       .slice(0, 2),
+    recentResistance: resistedCategories as string[],
     handlerMode: state?.handler_mode || 'director',
   };
 }

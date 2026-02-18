@@ -10,6 +10,8 @@ import type { VaultItem, DbVaultItem, VaultTier } from '../../types/vault';
 import { mapDbToVaultItem } from '../../types/vault';
 import { generateCaption } from './caption-generator';
 import type { ContentBeat, CaptionContext } from '../../types/narrative';
+import { registerContent } from './permanence-tracker';
+import type { PermanencePlatform, ContentPermanenceType } from '../../types/content-permanence';
 
 // ============================================
 // Content Selection
@@ -155,6 +157,33 @@ export async function postContent(
         used_as: newUsedAs,
       })
       .eq('id', vaultItem.id);
+
+    // Register content permanence tracking (fire-and-forget)
+    const mediaTypeToContentType: Record<string, ContentPermanenceType> = {
+      image: 'photo',
+      video: 'video',
+      audio: 'voice_clip',
+    };
+    const platformMap: Record<string, PermanencePlatform> = {
+      onlyfans: 'onlyfans',
+      fansly: 'fansly',
+      twitter: 'twitter',
+      reddit: 'reddit',
+      discord: 'discord',
+    };
+
+    registerContent(userId, {
+      contentRef: vaultItem.mediaUrl || vaultItem.id,
+      contentType: mediaTypeToContentType[vaultItem.mediaType] || 'photo',
+      platform: platformMap[platform] || 'other',
+      faceVisible: false, // Conservative default — privacy filter handles this
+      voiceAudible: vaultItem.mediaType === 'audio',
+      identifyingMarksVisible: false,
+      legalNameConnected: false,
+      postedAt: new Date().toISOString(),
+    }).catch(err => {
+      console.warn('[ContentPoster] Permanence registration failed:', err);
+    });
 
     return {
       success: true,

@@ -9,6 +9,7 @@
  */
 
 import { supabase } from './supabase';
+import { logGinaInvestment } from './gina/discovery-engine';
 
 // ============================================================================
 // TYPES
@@ -2598,6 +2599,26 @@ export async function logGinaInteraction(
   // If significant positive interaction, potentially update mommy dom development
   if (interaction.significance && interaction.significance >= 4) {
     await updateMommyDomFromInteraction(userId, interaction);
+  }
+
+  // Log as Gina investment for discovery tracking (fire-and-forget)
+  if (interaction.significance && interaction.significance >= 3) {
+    const isGinaInitiated = interaction.indicatesStance === 'encouraging' ||
+      interaction.indicatesStance === 'directing' ||
+      interaction.indicatesStance === 'invested';
+
+    logGinaInvestment({
+      userId,
+      investmentType: isGinaInitiated ? 'initiated_by_gina' : 'unknowing_participation',
+      description: interaction.description,
+      ginaInitiated: isGinaInitiated,
+      ginaAware: false,
+      handlerSeeded: !!interaction.missionId,
+      arousalContext: (interaction.arousalLevel || 0) >= 4,
+      notes: interaction.ginaSaid || undefined,
+    }).catch(err => {
+      console.warn('[GinaPipeline] Investment logging failed:', err);
+    });
   }
 }
 

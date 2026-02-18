@@ -79,7 +79,7 @@ serve(async (req) => {
 
     // Select model based on action complexity
     const model = action === 'enhance_tasks'
-      ? 'claude-haiku-4-5-20251001'
+      ? 'claude-opus-4-20250514'
       : action === 'analyze_patterns'
         ? 'claude-sonnet-4-20250514'
         : 'claude-sonnet-4-20250514'
@@ -91,7 +91,7 @@ serve(async (req) => {
       'generate_commitment': 500,
       'analyze_patterns': 4000,
       'handle_session_event': 1000,
-      'enhance_tasks': 3000,
+      'enhance_tasks': 4000,
     }[action] || 2000
 
     // Call Claude

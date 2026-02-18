@@ -29,6 +29,7 @@ import {
   calculateStreakValue,
   CONFESSION_PROMPTS,
 } from '../types/ratchets';
+import { getPermanenceRatchetScore } from './content/permanence-tracker';
 
 // ============================================
 // COVENANT FUNCTIONS
@@ -809,4 +810,16 @@ export async function getGoalAbandonmentCost(goalId: string): Promise<{
     hasCovenant: !!goal.covenant_id,
     psychologicalCost: cost,
   };
+}
+
+// ============================================
+// CONTENT PERMANENCE RATCHET
+// ============================================
+
+/**
+ * Get the content permanence contribution to overall irreversibility.
+ * Aggregates ratchet weights from all registered content permanence records.
+ */
+export async function getContentRatchetContribution(userId: string): Promise<number> {
+  return getPermanenceRatchetScore(userId);
 }

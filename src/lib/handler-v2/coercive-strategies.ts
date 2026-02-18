@@ -11,6 +11,8 @@
 
 import { supabase } from '../supabase';
 import { getAuthorityLevel } from '../handler-authority';
+import { classifyResistance, logResistanceEvent } from '../resistance-classifier';
+import type { ResistanceType, ExploitationStrategy } from '../../types/resistance';
 
 // ============================================
 // TYPES
@@ -355,6 +357,24 @@ export function getStreakProtectionMessage(context: CoerciveContext): CoerciveMe
 // STRATEGY SELECTION
 // ============================================
 
+// Map situations to resistance types for classification
+const SITUATION_TO_RESISTANCE: Record<string, ResistanceType> = {
+  task_assignment: 'decline',
+  escalation_opportunity: 'decline',
+  resistance_detected: 'decline',
+  exit_risk: 'exit_attempt',
+  routine_engagement: 'ignore',
+};
+
+// Map coercive strategies to exploitation strategies for logging
+const COERCIVE_TO_EXPLOITATION: Record<CoerciveStrategy, ExploitationStrategy> = {
+  decision_elimination: 'decision_elimination',
+  arousal_gated_compliance: 'arousal_gated_compliance',
+  guilt_leverage: 'guilt_leverage',
+  identity_reframing: 'identity_reframing',
+  manufactured_urgency: 'manufactured_urgency',
+};
+
 /**
  * Selects appropriate coercive strategy for situation.
  */
@@ -363,6 +383,28 @@ export async function selectCoerciveStrategy(
   situation: 'task_assignment' | 'escalation_opportunity' | 'resistance_detected' | 'exit_risk' | 'routine_engagement',
   context: CoerciveContext
 ): Promise<CoerciveMessage[]> {
+  // Classify resistance before selecting strategy
+  const hour = new Date().getHours();
+  const timeOfDay = hour >= 5 && hour < 12 ? 'morning'
+    : hour >= 12 && hour < 17 ? 'afternoon'
+    : hour >= 17 && hour < 21 ? 'evening'
+    : hour >= 21 ? 'late_night'
+    : 'night';
+
+  let classification: Awaited<ReturnType<typeof classifyResistance>> | null = null;
+  try {
+    classification = await classifyResistance({
+      userId,
+      resistanceType: SITUATION_TO_RESISTANCE[situation] || 'decline',
+      currentArousal: context.currentArousal,
+      denialDay: context.denialDay,
+      timeOfDay,
+      handlerMode: context.currentMode,
+    });
+  } catch (err) {
+    console.warn('[CoerciveStrategy] Classification failed, continuing without:', err);
+  }
+
   const messages: CoerciveMessage[] = [];
   const authorityLevel = await getAuthorityLevel(userId);
 
@@ -409,6 +451,25 @@ export async function selectCoerciveStrategy(
         messages.push(getStreakProtectionMessage(context));
       }
       break;
+  }
+
+  // Log resistance event with classification and strategy used (fire-and-forget)
+  if (classification) {
+    const primaryStrategy = messages.length > 0
+      ? COERCIVE_TO_EXPLOITATION[messages[0].strategy] || 'none'
+      : 'none';
+
+    logResistanceEvent({
+      userId,
+      resistanceType: SITUATION_TO_RESISTANCE[situation] || 'decline',
+      diagnosisFactor: classification.diagnosisFactor,
+      arousalAtEvent: context.currentArousal,
+      denialDayAtEvent: context.denialDay,
+      timeOfDay,
+      exploitationStrategyUsed: primaryStrategy,
+      outcome: 'resisted', // Initial state — caller updates on resolution
+      handlerModeAtEvent: context.currentMode,
+    });
   }
 
   return messages;

@@ -336,7 +336,7 @@ export function getSystemPrompt(operation: OperationType): string {
  */
 export const MODEL_PREFERENCES: Record<OperationType, 'haiku' | 'sonnet' | 'opus'> = {
   base: 'sonnet',
-  task_enhancement: 'haiku',
+  task_enhancement: 'opus',
   coercion: 'sonnet',
   vault_threat: 'sonnet',
   brainwashing: 'opus',

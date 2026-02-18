@@ -7,6 +7,8 @@
  */
 
 import { supabase } from './supabase';
+import { getContentRecommendation } from './bambi/state-engine';
+import type { ContentRecommendation } from '../types/bambi';
 
 // ============================================
 // TYPES
@@ -428,6 +430,35 @@ export async function prescribeHypnoSession(userId: string): Promise<HypnoPrescr
     lovenseActive: true,
     suggestedDuration: 20 + (tier * 5), // 25-55 minutes based on tier
   };
+}
+
+/**
+ * Get audited hypno content recommendations filtered by tier context.
+ * Returns Maxy-aligned content with Handler pre/post framing.
+ */
+export async function getAuditedHypnoContent(
+  userId: string,
+  tier: number
+): Promise<ContentRecommendation[]> {
+  const { data: denialState } = await supabase
+    .from('denial_state')
+    .select('current_denial_day')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  const { data: arousalPlan } = await supabase
+    .from('daily_arousal_plans')
+    .select('current_arousal_level')
+    .eq('user_id', userId)
+    .eq('plan_date', new Date().toISOString().split('T')[0])
+    .maybeSingle();
+
+  return getContentRecommendation(userId, {
+    currentDepth: Math.min(tier * 1.5, 10),
+    arousalLevel: arousalPlan?.current_arousal_level || 0,
+    denialDay: denialState?.current_denial_day || 0,
+    handlerGoal: `tier_${tier}_conditioning`,
+  });
 }
 
 // ============================================

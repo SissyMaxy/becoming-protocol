@@ -64,3 +64,14 @@ export {
   generateMasterComposite,
   getDueMeasurements,
 } from './measurement-engine';
+
+// Discovery Engine
+export {
+  type LogInvestmentInput,
+  calculateReadinessScore,
+  logGinaInvestment,
+  checkMilestone,
+  getDiscoveryState,
+  getInvestmentTimeline,
+  suggestParallelSeeds,
+} from './discovery-engine';
