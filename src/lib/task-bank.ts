@@ -16,6 +16,7 @@ import type {
 } from '../types/task-bank';
 import { DEFAULT_SKIP_COST } from '../types/task-bank';
 import { SYSTEM_PROMPTS } from './protocol-core/ai/system-prompts';
+import { recordTaskAtLevel, getEscalationOverview } from './escalation/level-generator';
 
 // ============================================
 // CONVERTERS
@@ -374,7 +375,17 @@ export async function getOrCreateTodayTasks(context: UserTaskContext): Promise<D
     }
   });
 
-  return assignDailyTasks(selectedTasks, context, reasons);
+  const assigned = await assignDailyTasks(selectedTasks, context, reasons);
+
+  // Check escalation readiness across domains (fire-and-forget hook for future dynamic task injection)
+  getEscalationOverview(context.userId).then(overview => {
+    const ready = overview.filter(d => d.advancementReady);
+    if (ready.length > 0) {
+      console.log('[TaskBank] Domains ready for advancement:', ready.map(d => `${d.domain} (level ${d.currentLevel})`).join(', '));
+    }
+  }).catch(() => { /* silent */ });
+
+  return assigned;
 }
 
 // ============================================
@@ -435,6 +446,11 @@ export async function completeTask(
     });
 
   if (logError) throw logError;
+
+  // Record task at domain level for infinite escalation tracking (fire-and-forget)
+  recordTaskAtLevel(dailyTask.user_id, task.domain, task.intensity, true).catch(err => {
+    console.warn('[TaskBank] Escalation tracking failed:', err);
+  });
 
   return {
     success: true,

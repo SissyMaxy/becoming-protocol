@@ -573,3 +573,114 @@ export function mapDbToEscalationEvent(db: DbEscalationEvent): EscalationEvent {
     createdAt: db.created_at,
   };
 }
+
+// ============================================
+// INFINITE ESCALATION — DYNAMIC LEVELS
+// ============================================
+
+export interface TaskTemplate {
+  instructionTemplate: string;
+  intensityMin: number;
+  intensityMax: number;
+  durationMin: number;
+  durationMax: number;
+  completionType: string;
+  pointsMin: number;
+  pointsMax: number;
+}
+
+export interface DynamicLevel {
+  id: string;
+  user_id: string;
+  domain: string;
+  level: number;
+  title: string;
+  description: string;
+  entry_requirements: Record<string, unknown>;
+  task_templates: TaskTemplate[];
+  intensity_floor: number;
+  intensity_ceiling: number | null;
+  estimated_duration_days: number | null;
+  dependency_domains: Array<{ domain: string; min_level: number }>;
+  escalation_triggers: Array<{ condition: string; threshold: number }>;
+  generated_by: 'handler' | 'manual' | 'system';
+  generated_at: string;
+  active: boolean;
+  created_at: string;
+}
+
+export interface DomainEscalationState {
+  id: string;
+  user_id: string;
+  domain: string;
+  current_level: number;
+  tasks_completed_at_current: number;
+  tasks_completed_total: number;
+  current_intensity_avg: number;
+  peak_intensity_reached: number;
+  level_entered_at: string;
+  time_at_current_level: string | null;
+  advancement_blocked_by: Array<{ domain: string; requiredLevel: number; currentLevel: number }>;
+  advancement_ready: boolean;
+  last_assessment_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InfiniteEscalationEvent {
+  id: string;
+  user_id: string;
+  domain: string;
+  from_level: number;
+  to_level: number;
+  trigger_reason: string;
+  tasks_completed_at_previous: number | null;
+  intensity_at_advancement: number | null;
+  arousal_at_advancement: number | null;
+  denial_day_at_advancement: number | null;
+  handler_initiated: boolean;
+  dependency_state: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface DomainDependency {
+  id: string;
+  user_id: string;
+  domain: string;
+  required_level: number;
+  depends_on_domain: string;
+  depends_on_level: number;
+  rationale: string | null;
+  handler_generated: boolean;
+  active: boolean;
+  created_at: string;
+}
+
+export interface EscalationOverview {
+  domain: string;
+  currentLevel: number;
+  tasksCompletedAtCurrent: number;
+  tasksCompletedTotal: number;
+  peakIntensityReached: number;
+  advancementReady: boolean;
+  daysAtCurrentLevel: number;
+  hasDynamicLevels: boolean;
+  nextLevelExists: boolean;
+}
+
+export interface CrossDomainStatus {
+  overallAverageLevel: number;
+  lowestLevel: number;
+  highestLevel: number;
+  domainsAtMax: number;
+  totalDomains: number;
+}
+
+export interface AdvancementAssessment {
+  ready: boolean;
+  currentLevel: number;
+  blockedBy: Array<{ domain: string; requiredLevel: number; currentLevel: number }>;
+  tasksCompleted: number;
+  intensityAvg: number;
+  recommendation: string;
+}

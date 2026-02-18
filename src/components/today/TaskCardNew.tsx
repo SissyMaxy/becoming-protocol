@@ -87,6 +87,7 @@ export function TaskCardNew({
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
   const [showLogInput, setShowLogInput] = useState(false);
   const [logText, setLogText] = useState('');
+  const [responseText, setResponseText] = useState('');
 
   const { instruction, category, intensity, completionType, targetCount, durationMinutes, subtext } = task.task;
   const emoji = CATEGORY_EMOJI[category];
@@ -117,13 +118,18 @@ export function TaskCardNew({
     use: 'What did you use?',
   };
 
+  // Detect tasks requiring a text response based on instruction content
+  const TEXT_RESPONSE_PATTERNS = /\b(tell me|write|journal|reflect|describe|note down|record your)\b/i;
+  const needsTextResponse = TEXT_RESPONSE_PATTERNS.test(instruction);
+  const textResponseReady = !needsTextResponse || responseText.trim().length >= 10;
+
   const handleComplete = () => {
     if (showProgress && task.progress < (targetCount || 0) - 1) {
       onIncrement?.();
     } else if (needsLog && !showLogInput) {
       setShowLogInput(true);
     } else {
-      onComplete(true);
+      onComplete(true, responseText.trim() || undefined);
     }
   };
 
@@ -430,6 +436,36 @@ export function TaskCardNew({
           </div>
         )}
 
+        {/* Text response input for journal/reflection tasks */}
+        {isPending && needsTextResponse && (
+          <div className="mt-4">
+            <textarea
+              value={responseText}
+              onChange={(e) => setResponseText(e.target.value)}
+              placeholder="Share your response here..."
+              rows={3}
+              className={`w-full px-3 py-2.5 rounded-xl border text-sm resize-none transition-colors ${
+                isBambiMode
+                  ? 'border-pink-200 bg-pink-50/50 text-gray-800 placeholder:text-pink-300 focus:border-pink-400 focus:ring-pink-400'
+                  : 'border-protocol-border bg-protocol-bg text-protocol-text placeholder:text-protocol-text-muted focus:border-protocol-accent focus:ring-protocol-accent'
+              } focus:outline-none focus:ring-1`}
+              style={{ minHeight: '4.5rem', height: 'auto', overflow: 'hidden' }}
+              onInput={(e) => {
+                const target = e.target as HTMLTextAreaElement;
+                target.style.height = 'auto';
+                target.style.height = target.scrollHeight + 'px';
+              }}
+            />
+            {responseText.trim().length > 0 && responseText.trim().length < 10 && (
+              <p className={`text-xs mt-1 ${
+                isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'
+              }`}>
+                {10 - responseText.trim().length} more characters needed
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Action buttons */}
         {isPending && (
           <div className="mt-4 flex items-center gap-3">
@@ -450,9 +486,11 @@ export function TaskCardNew({
             {completionType === 'binary' ? (
               <div className="flex-1 flex gap-2">
                 <button
-                  onClick={() => onComplete(false)}
-                  disabled={isCompleting}
+                  onClick={() => onComplete(false, responseText.trim() || undefined)}
+                  disabled={isCompleting || !textResponseReady}
                   className={`flex-1 py-3 rounded-xl font-semibold transition-all active:scale-[0.98] ${
+                    !textResponseReady ? 'opacity-50 cursor-not-allowed' : ''
+                  } ${
                     isBambiMode
                       ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                       : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
@@ -465,9 +503,11 @@ export function TaskCardNew({
                   )}
                 </button>
                 <button
-                  onClick={() => onComplete(true)}
-                  disabled={isCompleting}
-                  className={`flex-1 py-3 rounded-xl font-semibold text-white transition-all active:scale-[0.98] bg-gradient-to-r ${
+                  onClick={() => onComplete(true, responseText.trim() || undefined)}
+                  disabled={isCompleting || !textResponseReady}
+                  className={`flex-1 py-3 rounded-xl font-semibold text-white transition-all active:scale-[0.98] ${
+                    !textResponseReady ? 'opacity-50 cursor-not-allowed' : ''
+                  } bg-gradient-to-r ${
                     getIntensityGradient(intensity, isBambiMode)
                   } hover:opacity-90`}
                 >
@@ -481,8 +521,10 @@ export function TaskCardNew({
             ) : (
               <button
                 onClick={handleComplete}
-                disabled={isCompleting}
-                className={`flex-1 py-3 rounded-xl font-semibold text-white transition-all active:scale-[0.98] bg-gradient-to-r ${
+                disabled={isCompleting || !textResponseReady}
+                className={`flex-1 py-3 rounded-xl font-semibold text-white transition-all active:scale-[0.98] ${
+                  !textResponseReady ? 'opacity-50 cursor-not-allowed' : ''
+                } bg-gradient-to-r ${
                   getIntensityGradient(intensity, isBambiMode)
                 } hover:opacity-90`}
               >

@@ -7,6 +7,7 @@
 
 import { supabase } from '../supabase';
 import { type GinaChannel, GINA_CHANNELS, getAllChannelStates } from './ladder-engine';
+import { updateGinaAwareness } from '../hrt/pipeline-engine';
 import type {
   GinaInvestmentType,
   GinaDiscoveryPhase,
@@ -198,6 +199,13 @@ export async function calculateReadinessScore(userId: string): Promise<Readiness
       highest_channel_rung: highestRung,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id' });
+
+  // Link to HRT pipeline: if readiness crosses 70 (guided_conversation), Gina likely suspects
+  if (score >= 70 && phase === 'guided_conversation') {
+    updateGinaAwareness(userId, 'suspects').catch(err => {
+      console.warn('[DiscoveryEngine] HRT Gina awareness update failed:', err);
+    });
+  }
 
   return { score, factors, phase, recommendation };
 }
