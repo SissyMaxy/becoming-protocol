@@ -17,7 +17,7 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
         </h1>
 
         <p className="text-protocol-text-muted">
-          Before we begin, I'd like to learn about you. This helps me personalize your journey and understand what matters most.
+          I've got a few questions first. They help me figure out what'll actually work for you.
         </p>
       </div>
 
@@ -42,9 +42,9 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
               <Brain className="w-4 h-4 text-protocol-accent" />
             </div>
             <div>
-              <h3 className="font-medium text-protocol-text mb-1">AI That Understands</h3>
+              <h3 className="font-medium text-protocol-text mb-1">Smarter Over Time</h3>
               <p className="text-sm text-protocol-text-muted">
-                The more I know, the better I can guide your practice. Skip anything that feels too personal.
+                The more you share, the more relevant this gets. Skip anything you don't want to answer.
               </p>
             </div>
           </div>
@@ -56,9 +56,9 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
               <Heart className="w-4 h-4 text-pink-500" />
             </div>
             <div>
-              <h3 className="font-medium text-protocol-text mb-1">At Your Pace</h3>
+              <h3 className="font-medium text-protocol-text mb-1">No Rush</h3>
               <p className="text-sm text-protocol-text-muted">
-                Take your time. There are no wrong answers, only your truth.
+                Take your time. There's no wrong way to do this.
               </p>
             </div>
           </div>

@@ -2,7 +2,7 @@
 // Displays A/B tests and experiments for handler strategies
 
 import { useState, useEffect } from 'react';
-import { FlaskConical, Loader2, Plus, Play, Pause, CheckCircle } from 'lucide-react';
+import { FlaskConical, Loader2, Play, Pause, CheckCircle } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../context/AuthContext';
 import { DataCard } from '../shared/DataCard';

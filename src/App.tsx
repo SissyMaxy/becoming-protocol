@@ -45,10 +45,13 @@ import { VectorGridView } from './components/adaptive-feminization';
 import { VoiceAffirmationGame } from './components/voice-game';
 import { Dashboard } from './components/dashboard';
 import { JournalView } from './components/journal';
+import { ProtocolAnalytics } from './components/analytics/ProtocolAnalytics';
+import { HandlerAutonomousView } from './components/autonomous';
 import { getTodayDate } from './lib/protocol';
 import { profileStorage, letterStorage } from './lib/storage';
 import { useTaskBank } from './hooks/useTaskBank';
 import { useGoals } from './hooks/useGoals';
+import { useWeekend } from './hooks/useWeekend';
 import type { UserProfile, SealedLetter } from './components/Onboarding/types';
 import {
   CheckSquare,
@@ -101,7 +104,7 @@ function Navigation({
   ];
 
   return (
-    <nav className={`fixed bottom-0 left-0 right-0 backdrop-blur-lg border-t z-40 ${
+    <nav aria-label="Main navigation" className={`fixed bottom-0 left-0 right-0 backdrop-blur-lg border-t z-40 ${
       isBambiMode
         ? 'bg-white/95 border-pink-200'
         : 'bg-protocol-surface/95 border-protocol-border'
@@ -171,11 +174,11 @@ function Header() {
             <span className="text-white text-lg">{isBambiMode ? '💕' : '✨'}</span>
           </div>
           <div>
-            <h1 className={`text-lg font-semibold ${
+            <span className={`text-lg font-semibold block ${
               isBambiMode ? 'text-pink-700' : 'text-protocol-text'
             }`}>
               {isBambiMode ? getGreeting() : 'Becoming'}
-            </h1>
+            </span>
             <p className={`text-xs ${
               isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'
             }`}>
@@ -185,6 +188,7 @@ function Header() {
         </div>
         <button
           onClick={handleSettingsClick}
+          aria-label="Settings"
           className={`p-2 rounded-lg transition-colors ${
             isBambiMode ? 'hover:bg-pink-100' : 'hover:bg-protocol-surface'
           }`}
@@ -207,7 +211,7 @@ function LoadingScreen() {
   );
 }
 
-type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'dashboard' | 'journal' | null;
+type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | null;
 
 function AuthenticatedAppInner() {
   const { currentEntry, isLoading, investmentMilestone, dismissInvestmentMilestone, userName, progress } = useProtocol();
@@ -273,18 +277,21 @@ function AuthenticatedAppInner() {
     onDismissLevelUp: rewardContext?.dismissLevelUp || (() => {}),
   });
 
-  // Task bank and goals for nav badge - same source as TodayView
+  // Task bank, goals, and weekend for nav badge - same source as TodayView
   const { todayTasks } = useTaskBank();
   const { todaysGoals } = useGoals();
+  const { todaysActivities } = useWeekend();
 
-  // Task completion tracking for nav badge - combining tasks and goals like TodayView does
+  // Task completion tracking for nav badge - combining tasks, goals, and weekend activities like TodayView does
   const taskBankCompleted = todayTasks.filter(t => t.status === 'completed').length;
   const taskBankTotal = todayTasks.length;
   const goalsCompleted = todaysGoals.filter(g => g.completedToday).length;
   const goalsTotal = todaysGoals.length;
+  const weekendCompleted = todaysActivities.filter(a => a.status === 'completed').length;
+  const weekendTotal = todaysActivities.length;
 
-  const completedCount = taskBankCompleted + goalsCompleted;
-  const totalCount = taskBankTotal + goalsTotal;
+  const completedCount = taskBankCompleted + goalsCompleted + weekendCompleted;
+  const totalCount = taskBankTotal + goalsTotal + weekendTotal;
 
   // Listen for navigation events from components
   useEffect(() => {
@@ -300,13 +307,19 @@ function AuthenticatedAppInner() {
       setActiveTab('menu');
       setMenuSubView('settings');
     };
+    const handleNavigateToHandler = () => {
+      setActiveTab('menu');
+      setMenuSubView('handler-autonomous');
+    };
     window.addEventListener('navigate-to-investments', handleNavigateToInvestments);
     window.addEventListener('navigate-to-wishlist', handleNavigateToWishlist);
     window.addEventListener('navigate-to-settings', handleNavigateToSettings);
+    window.addEventListener('navigate-to-handler', handleNavigateToHandler);
     return () => {
       window.removeEventListener('navigate-to-investments', handleNavigateToInvestments);
       window.removeEventListener('navigate-to-wishlist', handleNavigateToWishlist);
       window.removeEventListener('navigate-to-settings', handleNavigateToSettings);
+      window.removeEventListener('navigate-to-handler', handleNavigateToHandler);
     };
   }, []);
 
@@ -512,6 +525,10 @@ function AuthenticatedAppInner() {
             <VectorGridView />
           </div>
         );
+      case 'protocol-analytics':
+        return <ProtocolAnalytics onBack={handleBackFromSubView} />;
+      case 'handler-autonomous':
+        return <HandlerAutonomousView onBack={handleBackFromSubView} />;
       case 'dashboard':
         return (
           <div>

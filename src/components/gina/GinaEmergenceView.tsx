@@ -4,7 +4,6 @@
 import { useState, useEffect } from 'react';
 import {
   ChevronLeft,
-  Heart,
   Crown,
   Clock,
   CheckCircle,
@@ -20,7 +19,6 @@ import {
   GINA_STAGE_LABELS,
   GINA_STAGE_DESCRIPTIONS,
   GINA_CONTROL_DOMAINS,
-  GINA_CONTROL_DOMAIN_LABELS,
   type GinaStage,
   type GinaControlDomain,
   type GinaControlLevel,
@@ -29,6 +27,7 @@ import {
   mapDbToGinaCommand,
   mapDbToGinaOpportunity,
 } from '../../types/gina';
+import { GinaControlDomainViz } from './GinaControlDomainViz';
 
 interface GinaEmergenceViewProps {
   onBack: () => void;
@@ -303,57 +302,9 @@ export function GinaEmergenceView({ onBack }: GinaEmergenceViewProps) {
             </div>
           </section>
 
-          {/* Control Domains */}
+          {/* Control Domains - Enhanced Visualization */}
           <section>
-            <h2
-              className={`text-sm font-medium mb-3 ${
-                isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'
-              }`}
-            >
-              Control Domains
-            </h2>
-            <div className="grid grid-cols-2 gap-2">
-              {GINA_CONTROL_DOMAINS.map(domain => {
-                const level = state.controlDomains[domain];
-                const hasControl = level && level !== 'unaware';
-
-                return (
-                  <div
-                    key={domain}
-                    className={`p-3 rounded-lg ${
-                      hasControl
-                        ? isBambiMode
-                          ? 'bg-pink-50 border border-pink-200'
-                          : 'bg-protocol-surface border border-protocol-border'
-                        : 'bg-protocol-surface/50'
-                    }`}
-                  >
-                    <p
-                      className={`text-sm font-medium ${
-                        hasControl
-                          ? isBambiMode
-                            ? 'text-pink-700'
-                            : 'text-protocol-text'
-                          : 'text-protocol-text-muted'
-                      }`}
-                    >
-                      {GINA_CONTROL_DOMAIN_LABELS[domain]}
-                    </p>
-                    <p
-                      className={`text-xs ${
-                        hasControl
-                          ? isBambiMode
-                            ? 'text-pink-500'
-                            : 'text-protocol-accent'
-                          : 'text-protocol-text-muted'
-                      }`}
-                    >
-                      {level || 'Not started'}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
+            <GinaControlDomainViz showRecommendations />
           </section>
 
           {/* Pending Opportunities */}

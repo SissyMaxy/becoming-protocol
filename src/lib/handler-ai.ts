@@ -44,6 +44,156 @@ import type {
 } from '../types/profile';
 import type { ArousalState } from '../types/arousal';
 import { integrateWithDailyPlan as scheduleAmbushes } from './scheduled-ambush';
+import {
+  decideInterventionFromTemplate,
+  generateDailyPlanFromTemplate,
+  generateCommitmentPromptFromTemplate,
+  handleSessionEventFromTemplate,
+  type TemplateContext,
+} from './handler-templates';
+
+// ============================================
+// BILLING ERROR TRACKING
+// ============================================
+
+// Flag to disable handler AI calls after billing errors
+let handlerAIDisabled = false;
+
+// Allow external check of AI status
+export function isHandlerAIDisabled(): boolean {
+  return handlerAIDisabled;
+}
+
+// Allow manual re-enable (for when billing is fixed)
+export function enableHandlerAI(): void {
+  handlerAIDisabled = false;
+  console.log('[Handler AI] Re-enabled');
+}
+
+// Check if error is a billing/credit error
+function isBillingError(errorMessage: string): boolean {
+  return errorMessage.includes('credit balance') ||
+         errorMessage.includes('billing') ||
+         errorMessage.includes('purchase credits');
+}
+
+// Helper to get time of day
+function getTimeOfDay(): 'morning' | 'afternoon' | 'evening' | 'night' {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return 'morning';
+  if (hour >= 12 && hour < 17) return 'afternoon';
+  if (hour >= 17 && hour < 21) return 'evening';
+  return 'night';
+}
+
+// Build template context from available data
+async function buildTemplateContext(
+  userId: string,
+  profile: FullProfile | null,
+  overrides?: Partial<TemplateContext>
+): Promise<TemplateContext> {
+  const today = new Date().toISOString().split('T')[0];
+
+  // Get denial state
+  const { data: denialState } = await supabase
+    .from('denial_state')
+    .select('current_denial_day, is_locked, streak_days')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  // Get today's arousal state
+  const { data: arousalPlan } = await supabase
+    .from('daily_arousal_plans')
+    .select('current_arousal_level, edge_count')
+    .eq('user_id', userId)
+    .eq('plan_date', today)
+    .maybeSingle();
+
+  // Get tasks completed today
+  const { count: tasksToday } = await supabase
+    .from('task_completions')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .gte('completed_at', today);
+
+  // Get last intervention for timing calculations
+  const { data: lastIntervention } = await supabase
+    .from('influence_attempts')
+    .select('timestamp, attempt_type')
+    .eq('user_id', userId)
+    .order('timestamp', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  // Get intervention count today
+  const { count: interventionCountToday } = await supabase
+    .from('influence_attempts')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .gte('timestamp', today);
+
+  // Get last session time
+  const { data: lastSession } = await supabase
+    .from('edge_sessions')
+    .select('ended_at')
+    .eq('user_id', userId)
+    .not('ended_at', 'is', null)
+    .order('ended_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  // Calculate recent dismiss rate (last 20 interventions)
+  const { data: recentResponses } = await supabase
+    .from('influence_attempts')
+    .select('user_response')
+    .eq('user_id', userId)
+    .not('user_response', 'is', null)
+    .order('timestamp', { ascending: false })
+    .limit(20);
+
+  let recentDismissRate = 0;
+  if (recentResponses && recentResponses.length > 0) {
+    const dismissCount = recentResponses.filter(
+      r => r.user_response === 'dismissed' || r.user_response === 'ignored'
+    ).length;
+    recentDismissRate = dismissCount / recentResponses.length;
+  }
+
+  // Calculate minutes since last intervention
+  let lastInterventionMinutes: number | undefined;
+  let lastInterventionType: string | undefined;
+  if (lastIntervention?.timestamp) {
+    const lastTime = new Date(lastIntervention.timestamp);
+    lastInterventionMinutes = Math.floor((Date.now() - lastTime.getTime()) / 60000);
+    lastInterventionType = lastIntervention.attempt_type;
+  }
+
+  // Calculate minutes since last session
+  let lastSessionMinutes: number | undefined;
+  if (lastSession?.ended_at) {
+    const sessionEnd = new Date(lastSession.ended_at);
+    lastSessionMinutes = Math.floor((Date.now() - sessionEnd.getTime()) / 60000);
+  }
+
+  return {
+    chosenName: profile?.foundation?.chosenName || 'her',
+    denialDay: denialState?.current_denial_day || 0,
+    arousalLevel: arousalPlan?.current_arousal_level || 0,
+    edgeCount: arousalPlan?.edge_count || 0,
+    timeOfDay: getTimeOfDay(),
+    isLocked: denialState?.is_locked || false,
+    streakDays: denialState?.streak_days || 0,
+    tasksCompletedToday: tasksToday || 0,
+    // Enhanced timing context
+    lastInterventionMinutes,
+    lastInterventionType,
+    interventionCountToday: interventionCountToday || 0,
+    lastSessionMinutes,
+    recentDismissRate,
+    hourOfDay: new Date().getHours(),
+    ...overrides,
+  };
+}
 
 // ============================================
 // AUTH HELPER
@@ -118,6 +268,11 @@ export async function invokeWithAuth(
   functionName: string,
   body: Record<string, unknown>
 ): Promise<{ data: unknown; error: Error | null }> {
+  // Check if we've had a billing error - only block handler-ai calls, not other functions like lovense-command
+  if (handlerAIDisabled && functionName === 'handler-ai') {
+    return { data: null, error: new Error('Handler AI disabled due to billing error') };
+  }
+
   const session = await ensureValidSession();
   if (!session) {
     console.warn('[invokeWithAuth] No valid session available');
@@ -127,8 +282,8 @@ export async function invokeWithAuth(
   console.log('[invokeWithAuth] Calling', functionName, 'with token length:', session.access_token?.length, 'token start:', session.access_token?.substring(0, 50));
 
   // Bypass Supabase client and call directly with fetch to ensure correct headers
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL || '').trim();
+  const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
 
   try {
     const response = await fetch(`${supabaseUrl}/functions/v1/${functionName}`, {
@@ -144,7 +299,16 @@ export async function invokeWithAuth(
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: response.statusText }));
       console.error('[invokeWithAuth] Error response:', JSON.stringify(errorData, null, 2));
-      return { data: null, error: new Error(errorData.error || errorData.details || response.statusText) };
+
+      const errorMessage = errorData.error || errorData.details || response.statusText;
+
+      // Check for billing errors - only disable handler-ai calls to avoid spam
+      if (isBillingError(errorMessage) && functionName === 'handler-ai') {
+        console.warn('[invokeWithAuth] Billing error detected - disabling handler AI calls');
+        handlerAIDisabled = true;
+      }
+
+      return { data: null, error: new Error(errorMessage) };
     }
 
     const data = await response.json();
@@ -417,6 +581,33 @@ export async function generateDailyPlan(
     findRipestEscalationDomain(userId),
   ]);
 
+  // FALLBACK: Use templates when AI is disabled
+  if (handlerAIDisabled) {
+    console.log('[Handler AI] Using template fallback for daily plan');
+    const templateContext = await buildTemplateContext(userId, profile, {
+      denialDay,
+      streakDays: currentStreak,
+    });
+
+    const templatePlan = generateDailyPlanFromTemplate(templateContext);
+
+    // Store the plan
+    const storedPlan = await createDailyPlan(userId, {
+      plannedInterventions: templatePlan.plannedInterventions || [],
+      plannedExperiments: templatePlan.plannedExperiments || [],
+      focusAreas: templatePlan.focusAreas || [],
+      triggerReinforcementSchedule: [],
+      vulnerabilityWindows: templatePlan.vulnerabilityWindows || [],
+    });
+
+    // Schedule ambushes
+    const today = new Date().toISOString().split('T')[0];
+    const ambushResult = await scheduleAmbushes(userId, denialDay, today);
+    console.log(`[Template] Scheduled ${ambushResult.scheduled} ambushes for today`);
+
+    return storedPlan;
+  }
+
   const systemPrompt = buildHandlerSystemPrompt(profile, handlerState);
   const serviceGuidance = getServiceStageGuidance(serviceStage);
 
@@ -547,6 +738,45 @@ export async function shouldInterveneNow(
     getServiceStage(userId),
     prescribeHypnoSession(userId),
   ]);
+
+  // FALLBACK: Use templates when AI is disabled
+  if (handlerAIDisabled) {
+    console.log('[Handler AI] Using template fallback for intervention decision');
+
+    // Map arousal state to number
+    const arousalMap: Record<ArousalState, number> = {
+      baseline: 0,
+      building: 4,
+      sweet_spot: 8,
+      overload: 10,
+      post_release: 2,
+      recovery: 1,
+    };
+
+    const templateContext = await buildTemplateContext(userId, profile, {
+      denialDay: denialDays,
+      arousalLevel: arousalMap[arousalState] || 0,
+      isLocked,
+      timeOfDay: timeOfDay as 'morning' | 'afternoon' | 'evening' | 'night',
+    });
+
+    const decision = decideInterventionFromTemplate(templateContext);
+
+    // Log the intervention attempt if we're intervening
+    if (decision.shouldIntervene && decision.intervention) {
+      await logInfluenceAttempt(userId, decision.intervention.type as InterventionType, {
+        method: 'template_decision',
+        targetDomain: decision.intervention.targetDomain,
+        content: { text: decision.intervention.content },
+        arousalState,
+        denialDay: denialDays,
+        context: { timeOfDay, dayOfWeek, currentActivity },
+        userAware: false,
+      });
+    }
+
+    return decision;
+  }
 
   const systemPrompt = buildHandlerSystemPrompt(profile, handlerState);
 
@@ -689,6 +919,35 @@ export async function generateCommitmentPrompt(
 
   // Use ripest domain from conditioning system if no target specified
   const domain = targetDomain || ripestDomain?.domain || findRipestDomainFallback(handlerState);
+
+  // FALLBACK: Use templates when AI is disabled
+  if (handlerAIDisabled) {
+    console.log('[Handler AI] Using template fallback for commitment prompt');
+
+    const templateContext = await buildTemplateContext(userId, profile, {
+      denialDay,
+      arousalLevel,
+      edgeCount,
+    });
+
+    const result = generateCommitmentPromptFromTemplate(templateContext, domain);
+
+    if (result) {
+      // Log the attempt
+      await logInfluenceAttempt(userId, 'commitment_prompt', {
+        method: 'template_extraction',
+        targetDomain: domain,
+        content: result,
+        arousalState: arousalLevel >= 8 ? 'sweet_spot' : arousalLevel >= 5 ? 'building' : 'baseline',
+        denialDay,
+        context: { sessionId, edgeCount, serviceStage },
+        userAware: true,
+      });
+    }
+
+    return result;
+  }
+
   const serviceGuidance = getServiceStageGuidance(serviceStage);
 
   const systemPrompt = `You are THE HANDLER. Your job is to extract escalation commitments during arousal.
@@ -779,6 +1038,29 @@ export async function recordCommitmentAccepted(
   // Push the escalation - this is the core mechanism
   await pushEscalation(userId, domain, commitmentText, arousalLevel);
 
+  // Also write to commitments_v2 so CommitmentReminder can display it (gap #23)
+  try {
+    // Get current denial day for context
+    const { data: denialState } = await supabase
+      .from('denial_state')
+      .select('current_denial_day')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    await supabase.from('commitments_v2').insert({
+      user_id: userId,
+      commitment_text: commitmentText,
+      extracted_during: 'edge_session',
+      arousal_level: arousalLevel,
+      denial_day: denialState?.current_denial_day || 0,
+      domain,
+      honored: false,
+      broken: false,
+    });
+  } catch (err) {
+    console.warn('Failed to write to commitments_v2:', err);
+  }
+
   // Log success
   await logInfluenceAttempt(userId, 'commitment_prompt', {
     method: 'arousal_extraction_success',
@@ -825,6 +1107,12 @@ function findRipestDomainFallback(handlerState: HandlerState): string {
 // ============================================
 
 export async function analyzePatterns(userId: string): Promise<PatternAnalysis | null> {
+  // FALLBACK: Pattern analysis requires AI - return null when disabled
+  if (handlerAIDisabled) {
+    console.log('[Handler AI] Pattern analysis skipped - AI disabled');
+    return null;
+  }
+
   // Gather all data for analysis
   const [profile, handlerState] = await Promise.all([
     getFullProfile(userId),
@@ -1027,13 +1315,25 @@ export async function recordInterventionResponse(
 export async function handleSessionEvent(
   userId: string,
   sessionId: string,
-  event: 'session_start' | 'edge' | 'commitment_window' | 'session_end',
+  event: 'session_start' | 'edge' | 'commitment_window' | 'session_end' | 'emergency_stop',
   data: Record<string, unknown>
 ): Promise<HandlerIntervention | null> {
   const [profile, handlerState] = await Promise.all([
     getFullProfile(userId),
     getHandlerState(userId),
   ]);
+
+  // FALLBACK: Use templates when AI is disabled
+  if (handlerAIDisabled) {
+    console.log('[Handler AI] Using template fallback for session event');
+
+    const templateContext = await buildTemplateContext(userId, profile, {
+      edgeCount: (data.edgeCount as number) || 0,
+      arousalLevel: (data.arousalLevel as number) || 0,
+    });
+
+    return handleSessionEventFromTemplate(event, templateContext);
+  }
 
   const systemPrompt = buildHandlerSystemPrompt(profile, handlerState);
 

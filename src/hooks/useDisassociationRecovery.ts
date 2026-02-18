@@ -35,7 +35,7 @@ const RECOVERY_PROMPTS: RecoveryPrompt[] = [
   {
     id: 'ground-2',
     type: 'momentum_builder',
-    prompt: "You're here. You opened the app. That counts. What's one tiny thing you can do right now?",
+    prompt: "You're here. You opened the app. That counts. Scroll down and tap 'I'm Ready' on your next task.",
     duration: 30,
     escalationLevel: 1,
   },
@@ -144,7 +144,7 @@ export function useDisassociationRecovery(options: UseDisassociationRecoveryOpti
   });
 
   const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const promptTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const retriggerTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Record activity
   const recordActivity = useCallback(() => {
@@ -215,7 +215,10 @@ export function useDisassociationRecovery(options: UseDisassociationRecoveryOpti
     }));
 
     // Re-trigger sooner if ignored
-    setTimeout(() => {
+    if (retriggerTimeoutRef.current) {
+      clearTimeout(retriggerTimeoutRef.current);
+    }
+    retriggerTimeoutRef.current = setTimeout(() => {
       if (enabled && isWithinActiveHours()) {
         const prompt = getPromptForLevel(newLevel);
         setState(prev => ({
@@ -237,6 +240,9 @@ export function useDisassociationRecovery(options: UseDisassociationRecoveryOpti
     return () => {
       if (checkIntervalRef.current) {
         clearInterval(checkIntervalRef.current);
+      }
+      if (retriggerTimeoutRef.current) {
+        clearTimeout(retriggerTimeoutRef.current);
       }
     };
   }, [enabled, checkIntervalMs, checkInactivity]);

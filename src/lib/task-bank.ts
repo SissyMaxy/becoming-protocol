@@ -3,6 +3,7 @@
 
 import { supabase } from './supabase';
 import { getTodayDate, getLocalDateString } from './protocol';
+import { invokeWithAuth, isHandlerAIDisabled } from './handler-ai';
 import type {
   Task,
   DbTask,
@@ -66,6 +67,9 @@ function dbDailyTaskToDailyTask(db: DbDailyTask): DailyTask {
     denialDayAtAssign: db.denial_day_at_assign || undefined,
     streakAtAssign: db.streak_at_assign || undefined,
     selectionReason: db.selection_reason as SelectionReason,
+    enhancedInstruction: db.enhanced_instruction || undefined,
+    enhancedSubtext: db.enhanced_subtext || undefined,
+    enhancedAffirmation: db.enhanced_affirmation || undefined,
   };
 }
 
@@ -175,12 +179,33 @@ function meetsRequirements(task: Task, context: UserTaskContext): boolean {
   return true;
 }
 
+// Categories that are too vague to be actionable (per user feedback)
+// These are journal prompts or vision statements, not real tasks
+const EXCLUDED_VAGUE_CATEGORIES = ['normalize', 'condition', 'seed'];
+
 function isExcluded(task: Task, context: UserTaskContext): boolean {
   const excl = task.excludeIf;
+
+  // Exclude vague/narrative task categories (not actionable)
+  if (EXCLUDED_VAGUE_CATEGORIES.includes(task.category)) {
+    return true;
+  }
 
   // Gina home check
   if (excl.ginaHome === true && context.ginaHome) {
     return true;
+  }
+
+  // Gina asleep: exclude noisy categories (voice, audio, video tasks)
+  if (context.ginaAsleep) {
+    const noisyCategories = ['say', 'listen', 'watch', 'edge'];
+    if (noisyCategories.includes(task.category)) {
+      return true;
+    }
+    // Also exclude practice tasks in voice domain (other practice is fine)
+    if (task.category === 'practice' && task.domain === 'voice') {
+      return true;
+    }
   }
 
   // Recently served check
@@ -377,6 +402,7 @@ export async function completeTask(
 
   if (fetchError) throw fetchError;
   if (!dailyTask) throw new Error('Task not found');
+  if (!dailyTask.task_bank) throw new Error('Task definition not found');
 
   const task = dbTaskToTask(dailyTask.task_bank);
   const pointsEarned = task.reward.points;
@@ -412,7 +438,8 @@ export async function completeTask(
   return {
     success: true,
     pointsEarned,
-    affirmation: task.reward.affirmation,
+    // Prefer Claude-enhanced affirmation over base template
+    affirmation: dailyTask.enhanced_affirmation || task.reward.affirmation,
   };
 }
 
@@ -544,13 +571,22 @@ export async function getTaskStats(): Promise<{
 
   if (compError) throw compError;
 
-  // Get all skips
-  const { count: skipCount, error: skipError } = await supabase
-    .from('daily_tasks')
-    .select('*', { count: 'exact', head: true })
-    .eq('status', 'skipped');
+  // Get all skips (non-critical — don't crash if this fails)
+  let skipCount = 0;
+  try {
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    if (currentUser) {
+      const { count, error: skipError } = await supabase
+        .from('daily_tasks')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', currentUser.id)
+        .eq('status', 'skipped');
 
-  if (skipError) throw skipError;
+      if (!skipError) skipCount = count || 0;
+    }
+  } catch {
+    // Skip count is non-critical, continue with 0
+  }
 
   // Calculate completions by category
   const completionsByCategory: Record<string, number> = {};
@@ -769,6 +805,528 @@ export async function debugShowAllTasks(): Promise<void> {
 
   console.log('  Recent tasks:');
   console.table(data);
+}
+
+// ============================================
+// TASK IMPORT
+// ============================================
+
+export interface TaskImportData {
+  category: string;
+  domain: string;
+  intensity: 1 | 2 | 3 | 4 | 5;
+  instruction: string;
+  subtext?: string;
+  completionType?: 'binary' | 'duration' | 'count' | 'confirm';
+  durationMinutes?: number;
+  targetCount?: number;
+  points?: number;
+  affirmation?: string;
+  requires?: {
+    phase?: number;
+    denialDay?: { min?: number; max?: number };
+    streakDays?: number;
+  };
+  isCore?: boolean;
+  canIntensify?: boolean;
+}
+
+export interface TaskImportResult {
+  success: boolean;
+  imported: number;
+  failed: number;
+  errors: string[];
+}
+
+/**
+ * Import tasks from JSON array
+ * Supports simplified format - will fill in defaults
+ */
+export async function importTasks(tasks: TaskImportData[]): Promise<TaskImportResult> {
+  const errors: string[] = [];
+  let imported = 0;
+  let failed = 0;
+
+  // Valid categories and domains
+  const validCategories = [
+    'wear', 'listen', 'say', 'apply', 'watch', 'edge', 'lock', 'practice',
+    'use', 'remove', 'commit', 'expose', 'serve', 'surrender', 'plug',
+    'sissygasm', 'oral', 'thirst', 'fantasy', 'corrupt', 'worship', 'deepen', 'bambi'
+  ];
+
+  const validDomains = [
+    'voice', 'movement', 'skincare', 'style', 'makeup', 'social',
+    'body_language', 'inner_narrative', 'arousal', 'chastity', 'conditioning', 'identity'
+  ];
+
+  for (let i = 0; i < tasks.length; i++) {
+    const task = tasks[i];
+
+    // Validate required fields
+    if (!task.instruction) {
+      errors.push(`Task ${i + 1}: Missing instruction`);
+      failed++;
+      continue;
+    }
+
+    if (!task.category || !validCategories.includes(task.category)) {
+      errors.push(`Task ${i + 1}: Invalid category "${task.category}"`);
+      failed++;
+      continue;
+    }
+
+    if (!task.domain || !validDomains.includes(task.domain)) {
+      errors.push(`Task ${i + 1}: Invalid domain "${task.domain}"`);
+      failed++;
+      continue;
+    }
+
+    if (!task.intensity || task.intensity < 1 || task.intensity > 5) {
+      errors.push(`Task ${i + 1}: Invalid intensity (must be 1-5)`);
+      failed++;
+      continue;
+    }
+
+    // Build the insert object with defaults
+    const insert = {
+      category: task.category,
+      domain: task.domain,
+      intensity: task.intensity,
+      instruction: task.instruction,
+      subtext: task.subtext || null,
+      completion_type: task.completionType || 'binary',
+      duration_minutes: task.durationMinutes || null,
+      target_count: task.targetCount || null,
+      points: task.points || (task.intensity * 10), // Default: intensity * 10
+      affirmation: task.affirmation || 'Good girl.',
+      haptic_pattern: null,
+      content_unlock: null,
+      requires: task.requires || {},
+      exclude_if: {},
+      ratchet_triggers: null,
+      can_intensify: task.canIntensify ?? true,
+      can_clone: true,
+      track_resistance: true,
+      is_core: task.isCore ?? false,
+      created_by: 'user',
+      parent_task_id: null,
+      active: true,
+    };
+
+    const { error } = await supabase
+      .from('task_bank')
+      .insert(insert);
+
+    if (error) {
+      errors.push(`Task ${i + 1}: ${error.message}`);
+      failed++;
+    } else {
+      imported++;
+    }
+  }
+
+  return {
+    success: failed === 0,
+    imported,
+    failed,
+    errors,
+  };
+}
+
+/**
+ * Bulk import tasks - faster, single insert
+ */
+export async function bulkImportTasks(tasks: TaskImportData[]): Promise<TaskImportResult> {
+  const errors: string[] = [];
+  const validInserts: Record<string, unknown>[] = [];
+
+  const validCategories = [
+    'wear', 'listen', 'say', 'apply', 'watch', 'edge', 'lock', 'practice',
+    'use', 'remove', 'commit', 'expose', 'serve', 'surrender', 'plug',
+    'sissygasm', 'oral', 'thirst', 'fantasy', 'corrupt', 'worship', 'deepen', 'bambi'
+  ];
+
+  const validDomains = [
+    'voice', 'movement', 'skincare', 'style', 'makeup', 'social',
+    'body_language', 'inner_narrative', 'arousal', 'chastity', 'conditioning', 'identity'
+  ];
+
+  // Validate all tasks first
+  for (let i = 0; i < tasks.length; i++) {
+    const task = tasks[i];
+
+    if (!task.instruction) {
+      errors.push(`Task ${i + 1}: Missing instruction`);
+      continue;
+    }
+
+    if (!task.category || !validCategories.includes(task.category)) {
+      errors.push(`Task ${i + 1}: Invalid category "${task.category}"`);
+      continue;
+    }
+
+    if (!task.domain || !validDomains.includes(task.domain)) {
+      errors.push(`Task ${i + 1}: Invalid domain "${task.domain}"`);
+      continue;
+    }
+
+    if (!task.intensity || task.intensity < 1 || task.intensity > 5) {
+      errors.push(`Task ${i + 1}: Invalid intensity (must be 1-5)`);
+      continue;
+    }
+
+    validInserts.push({
+      category: task.category,
+      domain: task.domain,
+      intensity: task.intensity,
+      instruction: task.instruction,
+      subtext: task.subtext || null,
+      completion_type: task.completionType || 'binary',
+      duration_minutes: task.durationMinutes || null,
+      target_count: task.targetCount || null,
+      points: task.points || (task.intensity * 10),
+      affirmation: task.affirmation || 'Good girl.',
+      haptic_pattern: null,
+      content_unlock: null,
+      requires: task.requires || {},
+      exclude_if: {},
+      ratchet_triggers: null,
+      can_intensify: task.canIntensify ?? true,
+      can_clone: true,
+      track_resistance: true,
+      is_core: task.isCore ?? false,
+      created_by: 'user',
+      parent_task_id: null,
+      active: true,
+    });
+  }
+
+  if (validInserts.length === 0) {
+    return {
+      success: false,
+      imported: 0,
+      failed: tasks.length,
+      errors,
+    };
+  }
+
+  // Bulk insert
+  const { error, data } = await supabase
+    .from('task_bank')
+    .insert(validInserts)
+    .select('id');
+
+  if (error) {
+    errors.push(`Bulk insert failed: ${error.message}`);
+    return {
+      success: false,
+      imported: 0,
+      failed: tasks.length,
+      errors,
+    };
+  }
+
+  return {
+    success: errors.length === 0,
+    imported: data?.length || validInserts.length,
+    failed: tasks.length - validInserts.length,
+    errors,
+  };
+}
+
+/**
+ * Get task count by domain
+ */
+export async function getTaskCountByDomain(): Promise<Record<string, number>> {
+  const { data, error } = await supabase
+    .from('task_bank')
+    .select('domain')
+    .eq('active', true);
+
+  if (error) throw error;
+
+  const counts: Record<string, number> = {};
+  (data || []).forEach(t => {
+    counts[t.domain] = (counts[t.domain] || 0) + 1;
+  });
+
+  return counts;
+}
+
+/**
+ * Clear all user-imported tasks
+ */
+export async function clearUserTasks(): Promise<number> {
+  const { data, error } = await supabase
+    .from('task_bank')
+    .delete()
+    .eq('created_by', 'user')
+    .select('id');
+
+  if (error) throw error;
+  return data?.length || 0;
+}
+
+/**
+ * Clear ALL tasks from task bank (seed + user imported)
+ * Use with caution - this wipes everything
+ */
+export async function clearAllTasks(): Promise<number> {
+  // First clear daily_tasks to avoid FK constraint issues
+  await supabase.from('daily_tasks').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
+  // Then clear the task bank
+  const { data, error } = await supabase
+    .from('task_bank')
+    .delete()
+    .neq('id', '00000000-0000-0000-0000-000000000000') // Delete all rows
+    .select('id');
+
+  if (error) throw error;
+  return data?.length || 0;
+}
+
+/**
+ * Replace all tasks - clear everything and import new tasks
+ */
+export async function replaceAllTasks(tasks: TaskImportData[]): Promise<{
+  success: boolean;
+  deleted: number;
+  imported: number;
+  failed: number;
+  errors: string[];
+}> {
+  const errors: string[] = [];
+
+  // Step 1: Clear all existing tasks
+  let deleted = 0;
+  try {
+    deleted = await clearAllTasks();
+  } catch (err) {
+    return {
+      success: false,
+      deleted: 0,
+      imported: 0,
+      failed: 0,
+      errors: [`Failed to clear tasks: ${err instanceof Error ? err.message : 'Unknown error'}`],
+    };
+  }
+
+  // Step 2: Import new tasks
+  const importResult = await bulkImportTasks(tasks);
+
+  return {
+    success: importResult.imported > 0,
+    deleted,
+    imported: importResult.imported,
+    failed: importResult.failed,
+    errors: [...errors, ...importResult.errors],
+  };
+}
+
+// ============================================
+// TASK ENHANCEMENT (Claude personalization)
+// ============================================
+
+export interface TaskEnhancementContext {
+  chosenName: string;
+  denialDay: number;
+  streakDays: number;
+  arousalLevel: number;
+  timeOfDay: string;
+  ginaHome: boolean;
+  ginaAsleep: boolean;
+  execFunction: string;
+  avoidedDomains: string[];
+  recentCompleted: string[];  // last 3-5 completed task instructions
+  recentJournal: string[];    // recent journal snippets
+  handlerMode: string;
+}
+
+/**
+ * Enhance tasks with Claude-personalized instruction/subtext/affirmation.
+ * Sends all pending tasks in one batch to minimize API calls.
+ * Caches results in the daily_tasks table so they persist across refreshes.
+ * Falls back to base task text when AI is unavailable.
+ */
+export async function enhanceTasks(
+  tasks: DailyTask[],
+  context: TaskEnhancementContext
+): Promise<DailyTask[]> {
+  // Filter to pending tasks that haven't been enhanced yet
+  const needsEnhancement = tasks.filter(
+    t => t.status === 'pending' && !t.enhancedInstruction
+  );
+
+  if (needsEnhancement.length === 0) {
+    return tasks; // All tasks already enhanced or not pending
+  }
+
+  // Skip if handler AI is disabled (billing error)
+  if (isHandlerAIDisabled()) {
+    console.log('[TaskEnhance] Skipped — handler AI disabled');
+    return tasks;
+  }
+
+  // Build personalization prompt — framed as a personal development coaching app
+  // that personalizes daily practice tasks for the user's self-expression journey.
+  const systemPrompt = `You are a personalization engine for a self-expression and personal development app called "Becoming Protocol". The app helps users explore gender expression, build daily practice habits, and track their personal growth journey.
+
+Your job: rewrite each daily practice task so it feels personally chosen for this user at this moment — not a generic template. The user's name is ${context.chosenName}.
+
+Output rules:
+- Keep the same core action as the original task instruction
+- Personalize the wording based on the user's current context (time of day, energy level, streak progress, etc.)
+- The "subtext" should be a single encouraging sentence that acknowledges their journey
+- The "affirmation" should be a warm completion message that reinforces their progress
+- Match the tone to intensity: low-intensity tasks get gentle encouragement, high-intensity tasks get bold motivation
+- ${context.execFunction === 'depleted' || context.execFunction === 'low' ? 'User has low energy today — use gentle, caring language. No pressure.' : 'User has good energy — be confident and motivating.'}
+- ${context.ginaHome ? 'User has company at home — keep suggestions discreet.' : 'User has privacy — be direct.'}
+- Time of day: ${context.timeOfDay}
+${context.avoidedDomains.length > 0 ? `- User has been avoiding these practice areas: ${context.avoidedDomains.join(', ')}. Gently encourage without shaming.` : ''}
+
+Respond ONLY with a JSON array. Each element must be: {"id": "task_id", "instruction": "rewritten task", "subtext": "one encouraging sentence", "affirmation": "completion message"}
+Do not include any other text, explanation, or commentary — just the JSON array.`;
+
+  const taskList = needsEnhancement.map(t => ({
+    id: t.id,
+    instruction: t.task.instruction,
+    category: t.task.category,
+    domain: t.task.domain,
+    intensity: t.task.intensity,
+  }));
+
+  const userPrompt = `User context for ${context.chosenName}:
+- Practice streak: ${context.streakDays} days
+- Self-discipline day: ${context.denialDay}
+- Energy level: ${context.execFunction}
+- Current time: ${context.timeOfDay}
+- Privacy: ${context.ginaHome ? 'shared space' : 'private'}${context.ginaAsleep ? ' (partner asleep)' : ''}
+- Coaching style: ${context.handlerMode}
+${context.recentCompleted.length > 0 ? `- Recently completed: ${context.recentCompleted.join(' | ')}` : ''}
+${context.recentJournal.length > 0 ? `- Recent reflection: "${context.recentJournal[0]}"` : ''}
+
+Personalize these ${taskList.length} practice tasks:
+
+${JSON.stringify(taskList, null, 2)}`;
+
+  try {
+    console.log('[TaskEnhance] Calling handler-ai enhance_tasks for', needsEnhancement.length, 'tasks');
+    const { data, error } = await invokeWithAuth('handler-ai', {
+      action: 'enhance_tasks',
+      systemPrompt,
+      userPrompt,
+    });
+
+    if (error) {
+      console.error('[TaskEnhance] AI call failed:', error.message);
+      return tasks;
+    }
+
+    console.log('[TaskEnhance] Raw response:', JSON.stringify(data).substring(0, 200));
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const enhanced: Array<{ id: string; instruction: string; subtext: string; affirmation: string }> =
+      (data as any)?.enhanced || [];
+
+    if (enhanced.length === 0) {
+      console.warn('[TaskEnhance] No enhanced tasks returned');
+      return tasks;
+    }
+
+    // Build lookup map
+    const enhancedMap = new Map(enhanced.map(e => [e.id, e]));
+
+    // Update tasks in memory and persist to DB
+    const updatedTasks = tasks.map(t => {
+      const e = enhancedMap.get(t.id);
+      if (!e) return t;
+
+      return {
+        ...t,
+        enhancedInstruction: e.instruction,
+        enhancedSubtext: e.subtext,
+        enhancedAffirmation: e.affirmation,
+      };
+    });
+
+    // Persist enhancements to DB (fire-and-forget, don't block UI)
+    for (const e of enhanced) {
+      supabase
+        .from('daily_tasks')
+        .update({
+          enhanced_instruction: e.instruction,
+          enhanced_subtext: e.subtext,
+          enhanced_affirmation: e.affirmation,
+        })
+        .eq('id', e.id)
+        .then(({ error: dbErr }) => {
+          if (dbErr) console.warn('[TaskEnhance] Failed to cache enhancement:', dbErr.message);
+        });
+    }
+
+    console.log(`[TaskEnhance] Enhanced ${enhanced.length}/${needsEnhancement.length} tasks`);
+    return updatedTasks;
+  } catch (err) {
+    console.warn('[TaskEnhance] Unexpected error:', err);
+    return tasks;
+  }
+}
+
+/**
+ * Build enhancement context from available hooks/state.
+ * Called from useTaskBank after loading tasks.
+ */
+export async function buildEnhancementContext(
+  userId: string
+): Promise<TaskEnhancementContext> {
+  // Parallel queries for context
+  const [profileResult, stateResult, completionsResult, journalResult] = await Promise.all([
+    supabase.from('profile_foundation').select('chosen_name').eq('user_id', userId).maybeSingle(),
+    supabase.from('user_state').select('*').eq('user_id', userId).maybeSingle(),
+    supabase
+      .from('task_completions')
+      .select('task_bank!inner(instruction)')
+      .eq('user_id', userId)
+      .order('completed_at', { ascending: false })
+      .limit(5),
+    supabase
+      .from('mood_checkins')
+      .select('notes')
+      .eq('user_id', userId)
+      .not('notes', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(2),
+  ]);
+
+  const state = stateResult.data;
+  const hour = new Date().getHours();
+  const timeOfDay = hour >= 5 && hour < 12 ? 'morning'
+    : hour >= 12 && hour < 17 ? 'afternoon'
+    : hour >= 17 && hour < 21 ? 'evening'
+    : 'night';
+
+  return {
+    chosenName: profileResult.data?.chosen_name || 'her',
+    denialDay: state?.denial_day || 0,
+    streakDays: state?.streak_days || 0,
+    arousalLevel: state?.current_arousal || 0,
+    timeOfDay,
+    ginaHome: state?.gina_home !== false,
+    ginaAsleep: state?.gina_asleep || false,
+    execFunction: state?.estimated_exec_function || 'medium',
+    avoidedDomains: state?.avoided_domains || [],
+    recentCompleted: (completionsResult.data || [])
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map((c: any) => c.task_bank?.instruction)
+      .filter(Boolean)
+      .slice(0, 5),
+    recentJournal: (journalResult.data || [])
+      .map((j: { notes: string }) => j.notes)
+      .filter(Boolean)
+      .slice(0, 2),
+    handlerMode: state?.handler_mode || 'director',
+  };
 }
 
 // Expose debug functions globally

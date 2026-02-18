@@ -1,0 +1,147 @@
+# Becoming Protocol — Supabase project configuration
+# Project ref: atevwvexapiykchvqvhm
+
+project_id = "atevwvexapiykchvqvhm"
+
+[api]
+enabled = true
+# Port to use for the API URL.
+port = 54321
+# Schemas to expose in your API. Tables, views and stored procedures in this schema will get API
+# endpoints. `public` is always included.
+schemas = ["public", "graphql_public"]
+# Extra schemas to add to the search_path of every request. `public` is always included.
+extra_search_path = ["public", "extensions"]
+# The maximum number of rows returns from a view, table, or stored procedure. Limits payload size
+# for accidental or malicious requests.
+max_rows = 1000
+
+[db]
+# Port to use for the local database URL.
+port = 54322
+# The database major version to use. This has to be the same as your remote database's. Run
+# `SHOW server_version;` on the remote database to check.
+major_version = 17
+
+[studio]
+enabled = true
+# Port to use for Supabase Studio.
+port = 54323
+
+# Email testing server — only used locally.
+[inbucket]
+enabled = true
+port = 54324
+smtp_port = 54325
+pop3_port = 54326
+
+[storage]
+enabled = true
+# The maximum file size allowed (in bytes).
+file_size_limit = "50MiB"
+
+[auth]
+enabled = true
+# The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
+# in emails.
+site_url = "http://localhost:5173"
+# A list of *exact* URLs that auth providers are permitted to redirect to post-authentication.
+additional_redirect_urls = ["https://localhost:5173"]
+# How long tokens are valid for, in seconds. Defaults to 3600 (1 hour).
+jwt_expiry = 3600
+# If disabled, the refresh token will never expire.
+enable_refresh_token_rotation = true
+# Allows refresh tokens to be reused after expiry, up to the specified interval in seconds.
+# Requires enable_refresh_token_rotation = true.
+refresh_token_reuse_interval = 10
+# Allow/disallow new user signups to your project.
+enable_signup = true
+
+[auth.email]
+# Allow/disallow new user signups via email to your project.
+enable_signup = true
+# If enabled, a user will be required to confirm any email change on both the old and new email
+# addresses. If disabled, only the new email address needs to be confirmed.
+double_confirm_changes = true
+# If enabled, users need to confirm their email address before signing in.
+enable_confirmations = false
+
+[auth.external.apple]
+enabled = false
+
+[auth.external.azure]
+enabled = false
+
+[auth.external.google]
+enabled = false
+
+# ---------------------------------------------------------------------------
+# Edge Functions
+# ---------------------------------------------------------------------------
+
+# AI-powered prescription generator — called by authenticated users.
+[functions.generate-prescription]
+verify_jwt = true
+
+# Handler AI — generates daily plans, interventions, commitments, pattern analysis.
+# Called by authenticated users.
+[functions.handler-ai]
+verify_jwt = true
+
+# Background task processor — processes queued handler tasks using service role key.
+# Invoked by cron / pg_cron, not by end users directly.
+[functions.handler-task-processor]
+verify_jwt = false
+
+# Lovense callback — external webhook endpoint called by Lovense servers.
+# No JWT possible; request is validated inside the function.
+[functions.lovense-callback]
+verify_jwt = false
+
+# Lovense command — sends commands to connected devices on behalf of the user.
+[functions.lovense-command]
+verify_jwt = true
+
+# Lovense QR code — generates pairing QR codes. Handles auth internally.
+[functions.lovense-qrcode]
+verify_jwt = false
+
+# Handler Coach — AI coaching via Claude API with prefill technique.
+# Called by authenticated users for task framing, briefings, check-ins.
+[functions.handler-coach]
+verify_jwt = true
+
+# Schedule notifications — cron job that queues daily notification batches.
+# Invoked by pg_cron with service role key.
+[functions.schedule-notifications]
+verify_jwt = false
+
+# Send notifications — cron job that delivers pending push notifications.
+# Invoked by pg_cron with service role key.
+[functions.send-notifications]
+verify_jwt = false
+
+# Handler Enforcement — autonomous compliance evaluation and escalation.
+# Invoked by pg_cron via handler-task-processor. Service role only.
+[functions.handler-enforcement]
+verify_jwt = false
+
+# Handler Autonomous — main orchestrator for the autonomous system.
+# Invoked by pg_cron at various intervals. Service role only.
+[functions.handler-autonomous]
+verify_jwt = false
+
+# Handler Content — content brief generation and submission processing.
+# Invoked by handler-autonomous cron and by authenticated users (submission).
+[functions.handler-content]
+verify_jwt = false
+
+# Handler Platform — platform posting, analytics sync, engagement.
+# Invoked by cron for posting and analytics. Service role only.
+[functions.handler-platform]
+verify_jwt = false
+
+[analytics]
+enabled = false
+port = 54327
+backend = "postgres"

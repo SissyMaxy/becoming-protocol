@@ -1,7 +1,7 @@
 // Handler Dashboard
 // Debug-only view for monitoring Handler AI system
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   ChevronLeft,
   Brain,
@@ -15,6 +15,7 @@ import {
   FlaskConical,
   RefreshCw,
   Loader2,
+  Settings2,
 } from 'lucide-react';
 import { useHandler } from '../../hooks/useHandler';
 import { StrategiesTab } from './tabs/StrategiesTab';
@@ -25,8 +26,12 @@ import { DailyPlansTab } from './tabs/DailyPlansTab';
 import { ResistanceTab } from './tabs/ResistanceTab';
 import { UserModelTab } from './tabs/UserModelTab';
 import { ExperimentsTab } from './tabs/ExperimentsTab';
+import { LiveControlsTab } from './tabs/LiveControlsTab';
+import { StrategicPriorityTab } from './tabs/StrategicPriorityTab';
 
 type DashboardTab =
+  | 'controls'
+  | 'priorities'
   | 'strategies'
   | 'triggers'
   | 'vulnerabilities'
@@ -37,9 +42,11 @@ type DashboardTab =
   | 'experiments';
 
 const tabs: { id: DashboardTab; icon: typeof Brain; label: string; color: string }[] = [
+  { id: 'controls', icon: Settings2, label: 'Live', color: '#8b5cf6' },
+  { id: 'priorities', icon: Target, label: 'Priority', color: '#ef4444' },
   { id: 'strategies', icon: Brain, label: 'Strategies', color: '#6366f1' },
   { id: 'triggers', icon: Zap, label: 'Triggers', color: '#f59e0b' },
-  { id: 'vulnerabilities', icon: Target, label: 'Vulns', color: '#ef4444' },
+  { id: 'vulnerabilities', icon: AlertTriangle, label: 'Vulns', color: '#ef4444' },
   { id: 'influence', icon: History, label: 'History', color: '#8b5cf6' },
   { id: 'plans', icon: Calendar, label: 'Plans', color: '#22c55e' },
   { id: 'resistance', icon: Shield, label: 'Resist', color: '#f97316' },
@@ -53,7 +60,7 @@ interface HandlerDashboardProps {
 
 export function HandlerDashboard({ onBack }: HandlerDashboardProps) {
   const { handlerState, isLoading, error, loadHandlerState } = useHandler();
-  const [activeTab, setActiveTab] = useState<DashboardTab>('strategies');
+  const [activeTab, setActiveTab] = useState<DashboardTab>('controls');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleRefresh = async () => {
@@ -77,9 +84,16 @@ export function HandlerDashboard({ onBack }: HandlerDashboardProps) {
   } : null;
 
   const renderTabContent = () => {
+    // Live Controls tab works without handler state
+    if (activeTab === 'controls') {
+      return <LiveControlsTab />;
+    }
+
     if (!handlerState) return null;
 
     switch (activeTab) {
+      case 'priorities':
+        return <StrategicPriorityTab handlerState={handlerState} />;
       case 'strategies':
         return <StrategiesTab strategies={handlerState.activeStrategies} />;
       case 'triggers':

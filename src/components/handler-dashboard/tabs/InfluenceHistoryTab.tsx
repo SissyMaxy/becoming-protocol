@@ -50,7 +50,7 @@ export function InfluenceHistoryTab({ attempts }: InfluenceHistoryTabProps) {
 
       {/* Timeline */}
       <div className="space-y-2">
-        {attempts.map((attempt, idx) => {
+        {attempts.map((attempt, _idx) => {
           const isSuccess = attempt.success === true;
           const isFailed = attempt.success === false;
           const isPending = attempt.success === undefined;

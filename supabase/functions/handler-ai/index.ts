@@ -8,7 +8,7 @@ const corsHeaders = {
 }
 
 interface HandlerAIRequest {
-  action: 'generate_daily_plan' | 'decide_intervention' | 'generate_commitment' | 'analyze_patterns' | 'handle_session_event'
+  action: 'generate_daily_plan' | 'decide_intervention' | 'generate_commitment' | 'analyze_patterns' | 'handle_session_event' | 'enhance_tasks'
   systemPrompt: string
   userPrompt: string
 }
@@ -78,10 +78,11 @@ serve(async (req) => {
     })
 
     // Select model based on action complexity
-    // Use Sonnet for most tasks, Opus for complex pattern analysis
-    const model = action === 'analyze_patterns'
-      ? 'claude-sonnet-4-20250514'  // Could upgrade to Opus for deeper analysis
-      : 'claude-sonnet-4-20250514'
+    const model = action === 'enhance_tasks'
+      ? 'claude-haiku-4-5-20251001'
+      : action === 'analyze_patterns'
+        ? 'claude-sonnet-4-20250514'
+        : 'claude-sonnet-4-20250514'
 
     // Adjust max tokens based on action
     const maxTokens = {
@@ -90,6 +91,7 @@ serve(async (req) => {
       'generate_commitment': 500,
       'analyze_patterns': 4000,
       'handle_session_event': 1000,
+      'enhance_tasks': 3000,
     }[action] || 2000
 
     // Call Claude
@@ -111,12 +113,28 @@ serve(async (req) => {
     // Parse JSON from response
     let result
     try {
-      // Find JSON in the response (in case there's additional text)
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/)
-      if (jsonMatch) {
-        result = JSON.parse(jsonMatch[0])
+      // enhance_tasks returns a JSON array; other actions return an object
+      if (action === 'enhance_tasks') {
+        const arrayMatch = responseText.match(/\[[\s\S]*\]/)
+        if (arrayMatch) {
+          result = JSON.parse(arrayMatch[0])
+        } else {
+          // Try object wrapper: { "tasks": [...] }
+          const objMatch = responseText.match(/\{[\s\S]*\}/)
+          if (objMatch) {
+            const parsed = JSON.parse(objMatch[0])
+            result = parsed.tasks || parsed.enhanced || [parsed]
+          } else {
+            throw new Error('No JSON found in response')
+          }
+        }
       } else {
-        throw new Error('No JSON found in response')
+        const jsonMatch = responseText.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          result = JSON.parse(jsonMatch[0])
+        } else {
+          throw new Error('No JSON found in response')
+        }
       }
     } catch (parseError) {
       console.error('Failed to parse Claude response:', parseError)
@@ -214,6 +232,19 @@ function formatResponse(action: string, result: any): any {
           timing: result.timing || 'immediate',
           reasoning: result.reasoning,
         }
+      }
+
+    case 'enhance_tasks':
+      // result is already an array of {id, instruction, subtext, affirmation}
+      return {
+        enhanced: Array.isArray(result)
+          ? result.map((t: any) => ({
+              id: t.id,
+              instruction: t.instruction,
+              subtext: t.subtext,
+              affirmation: t.affirmation,
+            }))
+          : []
       }
 
     default:

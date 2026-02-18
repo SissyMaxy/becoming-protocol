@@ -1,7 +1,7 @@
 // Task Card Component
 // Individual task display with completion/skip actions
 
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { Check, X, Loader2 } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
 import type { DailyTask } from '../../types/task-bank';
@@ -16,7 +16,8 @@ interface TaskCardProps {
   isSkipping: boolean;
 }
 
-export function TaskCard({
+// Memoized to prevent unnecessary re-renders in task lists
+export const TaskCard = memo(function TaskCard({
   task,
   onComplete,
   onIncrement,
@@ -286,4 +287,7 @@ export function TaskCard({
       )}
     </div>
   );
-}
+});
+
+// Display name for React DevTools
+TaskCard.displayName = 'TaskCard';

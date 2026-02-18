@@ -85,11 +85,6 @@ export function ResistanceTab() {
   return (
     <div className="space-y-3">
       {patterns.map(pattern => {
-        const bypassSuccessRate =
-          pattern.bypassStrategiesTested.length > 0
-            ? (pattern.effectiveBypasses.length / pattern.bypassStrategiesTested.length) * 100
-            : 0;
-
         return (
           <DataCard
             key={pattern.id}

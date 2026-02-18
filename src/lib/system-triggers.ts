@@ -4,6 +4,8 @@
 import { checkAndTriggerEscalations, getImminentEscalations } from './escalations';
 import { checkCeremonyAvailability } from './ceremonies';
 import { getAvailableCommitments } from './commitments';
+import { logTriggerExecution } from './trigger-audit';
+import { supabase } from './supabase';
 import type { ArousalState } from '../types/arousal';
 import type { ArousalState as CommitmentsArousalState } from '../types/commitments';
 
@@ -246,8 +248,8 @@ export async function executeSystemTriggers(
     }
   }
 
-  // Log the trigger execution
-  await logTriggerExecution(event, results);
+  // Log the trigger execution to audit trail
+  await logTriggerToAuditTrail(event, results, context);
 
   return results;
 }
@@ -272,16 +274,27 @@ async function executeAction(
   // }
 }
 
-async function logTriggerExecution(
+async function logTriggerToAuditTrail(
   event: SystemEvent,
-  result: TriggerResult
+  result: TriggerResult,
+  context?: Record<string, unknown>
 ): Promise<void> {
-  // Log to a trigger_executions table for debugging/analytics
-  // This is optional but helpful for understanding system behavior
+  // Console log for debugging
   console.log(`[SystemTrigger] Event: ${event}`, {
     executed: result.executed.length,
     failed: result.failed.length,
   });
+
+  // Log to audit trail for analytics
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await logTriggerExecution(user.id, event, result, context);
+    }
+  } catch (error) {
+    // Don't fail the trigger if logging fails
+    console.error('[SystemTrigger] Failed to log to audit trail:', error);
+  }
 }
 
 // ============================================

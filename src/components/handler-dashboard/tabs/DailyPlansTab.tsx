@@ -3,7 +3,7 @@
 
 import { Calendar, Clock, Target, AlertCircle } from 'lucide-react';
 import type { HandlerDailyPlan, HandlerEscalationPlan } from '../../../types/handler';
-import { DataCard, Stat } from '../shared/DataCard';
+import { DataCard } from '../shared/DataCard';
 import { StatusBadge } from '../shared/StatusBadge';
 
 interface DailyPlansTabProps {

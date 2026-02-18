@@ -111,7 +111,7 @@ export function ProgressRing({ completed, total, size = 120 }: ProgressRingProps
             <p className={`text-xs mt-0.5 ${
               isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'
             }`}>
-              {total - completed === 1 ? 'task left' : 'tasks left'}
+              {total - completed === 1 ? 'item left' : 'items left'}
             </p>
           </>
         )}

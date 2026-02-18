@@ -134,6 +134,7 @@ export function useLovense(): UseLovenseReturn {
   const [cloudConnected, setCloudConnected] = useState(false);
 
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const mountedRef = useRef(true);
 
   // Connect to Lovense Connect
   const connect = useCallback(async () => {
@@ -170,7 +171,7 @@ export function useLovense(): UseLovenseReturn {
   }, []);
 
   // Disconnect
-  const disconnect = useCallback(() => {
+  const disconnect = useCallback(async () => {
     stopPolling();
     lovense.stopAll();
     lovense.stopPattern();
@@ -178,7 +179,13 @@ export function useLovense(): UseLovenseReturn {
     lovense.stopTeaseMode();
     lovense.stopDenialTraining();
 
+    // If using cloud API, mark device as disconnected in database
+    if (cloudApiEnabled && activeToy?.id) {
+      await lovense.updateDeviceStatusById(activeToy.id, false);
+    }
+
     setStatus('disconnected');
+    setCloudConnected(false); // Reset cloud connection state
     setToys([]);
     setActiveToy(null);
     setActivePattern(null);
@@ -187,27 +194,37 @@ export function useLovense(): UseLovenseReturn {
     setEdgeCount(0);
     setDenialPhase(null);
     setDenialCycle(0);
-  }, []);
+  }, [cloudApiEnabled, activeToy]);
 
-  // Poll for toys
+  // Poll for toys with proper cleanup
   const startPolling = useCallback(() => {
-    if (pollIntervalRef.current) return;
+    // Always clear existing interval before starting new one
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
 
     pollIntervalRef.current = setInterval(async () => {
-      const connectedToys = await lovense.getToys();
-      setToys(connectedToys);
+      if (!mountedRef.current) return;
+      try {
+        const connectedToys = await lovense.getToys();
+        if (!mountedRef.current) return;
+        setToys(connectedToys);
 
-      // Auto-select first toy if none selected
-      if (!activeToy && connectedToys.length > 0) {
-        setActiveToy(connectedToys[0]);
-      }
-
-      // Update active toy status
-      if (activeToy) {
-        const updated = connectedToys.find(t => t.id === activeToy.id);
-        if (updated) {
-          setActiveToy(updated);
+        // Auto-select first toy if none selected
+        if (!activeToy && connectedToys.length > 0) {
+          setActiveToy(connectedToys[0]);
         }
+
+        // Update active toy status
+        if (activeToy) {
+          const updated = connectedToys.find(t => t.id === activeToy.id);
+          if (updated) {
+            setActiveToy(updated);
+          }
+        }
+      } catch (err) {
+        console.error('[Lovense] Polling error:', err);
       }
     }, 5000);
   }, [activeToy]);
@@ -311,6 +328,9 @@ export function useLovense(): UseLovenseReturn {
     lovense.startTeaseMode({
       toyId: activeToy?.id,
       ...options,
+      onIntensityChange: (intensity) => {
+        setCurrentIntensity(intensity);
+      },
     });
   }, [activeToy]);
 
@@ -331,6 +351,9 @@ export function useLovense(): UseLovenseReturn {
       onPhaseChange: (phase, cycle) => {
         setDenialPhase(phase);
         setDenialCycle(cycle);
+      },
+      onIntensityChange: (intensity) => {
+        setCurrentIntensity(intensity);
       },
     });
   }, [activeToy]);
@@ -450,14 +473,13 @@ export function useLovense(): UseLovenseReturn {
 
   // Check cloud connection status
   const checkCloudConnectionFn = useCallback(async () => {
-    console.log('checkCloudConnectionFn called');
     const { connected, device } = await lovense.checkCloudConnection();
-    console.log('Cloud connection result:', { connected, device });
-    setCloudConnected(connected);
-    if (connected && device) {
-      console.log('Setting status to connected with device:', device);
+
+    // Only update and log if state actually changed
+    if (connected && device && !cloudConnected) {
+      console.log('[Lovense] Cloud connected:', device.name);
+      setCloudConnected(true);
       setStatus('connected');
-      // Update active toy info
       setActiveToy({
         id: device.id,
         name: device.name,
@@ -465,10 +487,11 @@ export function useLovense(): UseLovenseReturn {
         battery: device.battery || 0,
         connected: true,
       });
-    } else {
-      console.log('No connected device found, cloudConnected =', connected);
+    } else if (!connected && cloudConnected) {
+      console.log('[Lovense] Cloud disconnected');
+      setCloudConnected(false);
     }
-  }, []);
+  }, [cloudConnected]);
 
   // Sync cloud mode state with lovense module on mount
   useEffect(() => {
@@ -477,9 +500,7 @@ export function useLovense(): UseLovenseReturn {
 
   // Load cloud patterns when cloud API is enabled
   useEffect(() => {
-    console.log('Cloud API effect running, cloudApiEnabled =', cloudApiEnabled);
     if (cloudApiEnabled) {
-      console.log('Cloud API enabled, checking connection...');
       refreshCloudPatterns();
       refreshHapticStats();
       checkCloudConnectionFn();
@@ -488,21 +509,16 @@ export function useLovense(): UseLovenseReturn {
 
   // Poll for cloud connection status when waiting for connection
   useEffect(() => {
-    console.log('Polling effect check:', { cloudApiEnabled, cloudConnected });
     if (!cloudApiEnabled || cloudConnected) {
-      console.log('Not starting poll:', !cloudApiEnabled ? 'cloud disabled' : 'already connected');
       return;
     }
 
-    console.log('Starting polling for cloud connection...');
     // Poll every 3 seconds until connected
     const pollInterval = setInterval(() => {
-      console.log('Polling for cloud connection...');
       checkCloudConnectionFn();
     }, 3000);
 
     return () => {
-      console.log('Stopping polling');
       clearInterval(pollInterval);
     };
   }, [cloudApiEnabled, cloudConnected, checkCloudConnectionFn]);
@@ -510,6 +526,7 @@ export function useLovense(): UseLovenseReturn {
   // Cleanup on unmount - only call local API if not in cloud mode
   useEffect(() => {
     return () => {
+      mountedRef.current = false;
       stopPolling();
       // Only call local API cleanup if not using cloud API
       if (!cloudApiEnabled) {

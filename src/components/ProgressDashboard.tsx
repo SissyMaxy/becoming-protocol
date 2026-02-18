@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useProtocol } from '../context/ProtocolContext';
 import { getDomainInfo, PHASES } from '../data/constants';
 import { Domain } from '../types';
@@ -250,6 +250,17 @@ type ProgressSubTab = 'overview' | 'investments' | 'escalations' | 'ceremonies' 
 export function ProgressDashboard() {
   const { progress } = useProtocol();
   const [activeSubTab, setActiveSubTab] = useState<ProgressSubTab>('overview');
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to top when sub-tab changes
+  useEffect(() => {
+    if (contentRef.current) {
+      contentRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      // Fallback: scroll window to top
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [activeSubTab]);
 
   const subTabs: { id: ProgressSubTab; label: string; icon: React.ElementType }[] = [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
@@ -263,7 +274,7 @@ export function ProgressDashboard() {
   ];
 
   return (
-    <div className="space-y-6 pb-24">
+    <div ref={contentRef} className="space-y-6 pb-24">
       {/* Header */}
       <div>
         <h2 className="text-xl font-semibold text-protocol-text">Progress</h2>
@@ -328,59 +339,75 @@ export function ProgressDashboard() {
           <GuyModePreview />
 
           {/* Main stats */}
-      <div className="grid grid-cols-2 gap-3">
-        <StatCard
-          icon={<Flame className="w-4 h-4" />}
-          label="Current Streak"
-          value={progress.overallStreak}
-          subtext={progress.overallStreak === 1 ? 'day' : 'days'}
-          color="#f97316"
-        />
-        <StatCard
-          icon={<Trophy className="w-4 h-4" />}
-          label="Longest Streak"
-          value={progress.longestStreak}
-          subtext={progress.longestStreak === 1 ? 'day' : 'days'}
-          color="#fbbf24"
-        />
-        <StatCard
-          icon={<Calendar className="w-4 h-4" />}
-          label="Total Days"
-          value={progress.totalDays}
-          subtext="practiced"
-          color="#22c55e"
-        />
-        <StatCard
-          icon={<TrendingUp className="w-4 h-4" />}
-          label="Avg Level"
-          value={(
-            progress.domainProgress.reduce((sum, d) => sum + d.level, 0) /
-            progress.domainProgress.length
-          ).toFixed(1)}
-          subtext="across domains"
-          color="#a855f7"
-        />
-      </div>
+      {progress.totalDays <= 1 && progress.overallStreak === 0 ? (
+        <div className="p-8 rounded-2xl bg-protocol-surface text-center space-y-4">
+          <div className="text-5xl">🌱</div>
+          <h3 className="text-lg font-semibold text-protocol-text">Your journey begins</h3>
+          <p className="text-sm text-protocol-text-muted max-w-xs mx-auto">
+            Complete your first day of tasks to start building your progress.
+            Every journey starts with a single step.
+          </p>
+          <p className="text-xs text-protocol-text-muted pt-2">
+            Your stats, streaks, and level progression will appear here as you progress.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <StatCard
+              icon={<Flame className="w-4 h-4" />}
+              label="Current Streak"
+              value={progress.overallStreak}
+              subtext={progress.overallStreak === 1 ? 'day' : 'days'}
+              color="#f97316"
+            />
+            <StatCard
+              icon={<Trophy className="w-4 h-4" />}
+              label="Longest Streak"
+              value={progress.longestStreak}
+              subtext={progress.longestStreak === 1 ? 'day' : 'days'}
+              color="#fbbf24"
+            />
+            <StatCard
+              icon={<Calendar className="w-4 h-4" />}
+              label="Total Days"
+              value={progress.totalDays}
+              subtext="practiced"
+              color="#22c55e"
+            />
+            <StatCard
+              icon={<TrendingUp className="w-4 h-4" />}
+              label="Avg Level"
+              value={(
+                progress.domainProgress.reduce((sum, d) => sum + d.level, 0) /
+                progress.domainProgress.length
+              ).toFixed(1)}
+              subtext="across domains"
+              color="#a855f7"
+            />
+          </div>
 
-      {/* Phase progress */}
-      <PhaseProgress />
+          {/* Phase progress */}
+          <PhaseProgress />
 
-      {/* Phase advancement requirements */}
-      <PhaseAdvancement />
+          {/* Phase advancement requirements */}
+          <PhaseAdvancement />
 
-      {/* Domain levels */}
-      <div className="space-y-3">
-        <h3 className="text-lg font-medium text-protocol-text">Domain Levels</h3>
-        {progress.domainProgress.map(dp => (
-          <DomainLevelCard
-            key={dp.domain}
-            domain={dp.domain}
-            level={dp.level}
-            streak={dp.currentStreak}
-            totalDays={dp.totalDays}
-          />
-        ))}
-      </div>
+          {/* Domain levels */}
+          <div className="space-y-3">
+            <h3 className="text-lg font-medium text-protocol-text">Domain Levels</h3>
+            {progress.domainProgress.map(dp => (
+              <DomainLevelCard
+                key={dp.domain}
+                domain={dp.domain}
+                level={dp.level}
+                streak={dp.currentStreak}
+                totalDays={dp.totalDays}
+              />
+            ))}
+          </div>
+        </>
+      )}
         </>
       )}
     </div>

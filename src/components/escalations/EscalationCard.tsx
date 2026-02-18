@@ -3,6 +3,7 @@
  * Individual escalation item showing status, countdown, and actions
  */
 
+import { memo } from 'react';
 import { Clock, AlertTriangle, Check, Pause, ChevronRight } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
 import type { EscalationCalendarItem } from '../../types/escalations';
@@ -58,7 +59,8 @@ const STATUS_CONFIG = {
   },
 };
 
-export function EscalationCard({
+// Memoized to prevent unnecessary re-renders
+export const EscalationCard = memo(function EscalationCard({
   item,
   currentDay: _currentDay,
   onDelay,
@@ -160,4 +162,7 @@ export function EscalationCard({
       )}
     </div>
   );
-}
+});
+
+// Display name for React DevTools
+EscalationCard.displayName = 'EscalationCard';

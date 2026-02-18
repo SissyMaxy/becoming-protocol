@@ -3,6 +3,7 @@
  * Displays an individual commitment with status and actions
  */
 
+import { memo } from 'react';
 import { Link2, Link, Lock, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
 import type { UserCommitment, BindingLevel } from '../../types/commitments';
@@ -38,7 +39,8 @@ const BINDING_COLORS: Record<BindingLevel, { bg: string; text: string; bambi: st
   },
 };
 
-export function CommitmentCard({ commitment, onFulfill, onBreak }: CommitmentCardProps) {
+// Memoized to prevent unnecessary re-renders
+export const CommitmentCard = memo(function CommitmentCard({ commitment, onFulfill, onBreak }: CommitmentCardProps) {
   const { isBambiMode } = useBambiMode();
   const bindingInfo = BINDING_LEVEL_INFO[commitment.bindingLevel];
   const bindingColor = BINDING_COLORS[commitment.bindingLevel];
@@ -176,4 +178,7 @@ export function CommitmentCard({ commitment, onFulfill, onBreak }: CommitmentCar
       </div>
     </div>
   );
-}
+});
+
+// Display name for React DevTools
+CommitmentCard.displayName = 'CommitmentCard';

@@ -1,7 +1,7 @@
 // Triggers Tab
 // Displays planted triggers and their conditioning status
 
-import { Zap, RefreshCw } from 'lucide-react';
+import { Zap } from 'lucide-react';
 import type { PlantedTrigger } from '../../../types/handler';
 import { DataCard } from '../shared/DataCard';
 import { StatusBadge } from '../shared/StatusBadge';

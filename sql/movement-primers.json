@@ -1,0 +1,200 @@
+[
+  {
+    "title": "Her Posture Awakens",
+    "video_path": "/videos/primers/posture-identity-001.mp4",
+    "duration_seconds": 15,
+    "primer_type": "identity_erasure",
+    "target_domain": "movement",
+    "intensity": 1,
+    "triggers_planted": ["posture_check", "spine_straight", "shoulders_back"],
+    "affirmations": ["Her spine is straight", "She stands with grace", "This body knows elegance"],
+    "description": "Quick identity primer before posture tasks"
+  },
+  {
+    "title": "Erase the Slouch",
+    "video_path": "/videos/primers/posture-identity-002.mp4",
+    "duration_seconds": 20,
+    "primer_type": "identity_erasure",
+    "target_domain": "movement",
+    "intensity": 2,
+    "triggers_planted": ["no_slouching", "elegant_stance"],
+    "affirmations": ["The old posture fades", "Her body remembers", "Masculine tension releases"],
+    "description": "Releases masculine posture patterns"
+  },
+  {
+    "title": "Posture Trigger Install",
+    "video_path": "/videos/primers/posture-trigger-001.mp4",
+    "duration_seconds": 25,
+    "primer_type": "trigger_plant",
+    "target_domain": "movement",
+    "intensity": 2,
+    "triggers_planted": ["posture_bell", "check_alignment"],
+    "affirmations": ["Every bell reminds her", "Automatic correction", "Her body responds without thought"],
+    "description": "Plants automatic posture correction trigger"
+  },
+  {
+    "title": "Her Hips Remember",
+    "video_path": "/videos/primers/gait-identity-001.mp4",
+    "duration_seconds": 15,
+    "primer_type": "identity_erasure",
+    "target_domain": "movement",
+    "intensity": 1,
+    "triggers_planted": ["hip_sway", "narrow_track"],
+    "affirmations": ["Her hips move naturally", "Each step is feminine", "The old walk dissolves"],
+    "description": "Identity primer for walking tasks"
+  },
+  {
+    "title": "Walk Like Her",
+    "video_path": "/videos/primers/gait-hypno-001.mp4",
+    "duration_seconds": 30,
+    "primer_type": "hypno",
+    "target_domain": "movement",
+    "intensity": 2,
+    "triggers_planted": ["feminine_gait", "graceful_steps", "hip_flow"],
+    "affirmations": ["Narrow steps feel natural", "Hips sway without trying", "She glides through space"],
+    "description": "Hypnotic walking pattern installation"
+  },
+  {
+    "title": "Masculine Gait Deletion",
+    "video_path": "/videos/primers/gait-erasure-001.mp4",
+    "duration_seconds": 20,
+    "primer_type": "identity_erasure",
+    "target_domain": "movement",
+    "intensity": 3,
+    "triggers_planted": ["no_stomping", "soft_steps"],
+    "affirmations": ["Heavy steps fade away", "The stomp is forgotten", "Lightness takes over"],
+    "description": "Erases masculine walking patterns"
+  },
+  {
+    "title": "Knees Together Always",
+    "video_path": "/videos/primers/sitting-trigger-001.mp4",
+    "duration_seconds": 15,
+    "primer_type": "trigger_plant",
+    "target_domain": "movement",
+    "intensity": 1,
+    "triggers_planted": ["knees_together", "ankles_crossed"],
+    "affirmations": ["Knees close automatically", "She never spreads", "Contained and elegant"],
+    "description": "Installs automatic knee-closing trigger"
+  },
+  {
+    "title": "The Feminine Sit",
+    "video_path": "/videos/primers/sitting-hypno-001.mp4",
+    "duration_seconds": 25,
+    "primer_type": "hypno",
+    "target_domain": "movement",
+    "intensity": 2,
+    "triggers_planted": ["leg_cross", "elegant_sitting"],
+    "affirmations": ["Legs cross without thought", "This is how she sits", "Comfort in containment"],
+    "description": "Hypnotic sitting pattern installation"
+  },
+  {
+    "title": "Manspreading Deleted",
+    "video_path": "/videos/primers/sitting-erasure-001.mp4",
+    "duration_seconds": 20,
+    "primer_type": "identity_erasure",
+    "target_domain": "movement",
+    "intensity": 2,
+    "triggers_planted": ["no_spreading", "space_contained"],
+    "affirmations": ["The spread is impossible now", "Knees refuse to part", "She takes only her space"],
+    "description": "Erases manspreading impulse"
+  },
+  {
+    "title": "Soft Hands Mantra",
+    "video_path": "/videos/primers/hands-mantra-001.mp4",
+    "duration_seconds": 15,
+    "primer_type": "mantra",
+    "target_domain": "movement",
+    "intensity": 1,
+    "triggers_planted": ["soft_hands", "no_fists"],
+    "affirmations": ["Soft hands", "Relaxed fingers", "Gentle touch", "Never clenched"],
+    "description": "Mantra for hand relaxation"
+  },
+  {
+    "title": "Her Gestures Flow",
+    "video_path": "/videos/primers/hands-hypno-001.mp4",
+    "duration_seconds": 25,
+    "primer_type": "hypno",
+    "target_domain": "movement",
+    "intensity": 2,
+    "triggers_planted": ["wrist_flow", "open_palms", "feminine_gestures"],
+    "affirmations": ["Wrists loose and flowing", "Palms open when speaking", "Her hands dance"],
+    "description": "Hypnotic gesture installation"
+  },
+  {
+    "title": "Fists Forgotten",
+    "video_path": "/videos/primers/hands-erasure-001.mp4",
+    "duration_seconds": 15,
+    "primer_type": "identity_erasure",
+    "target_domain": "movement",
+    "intensity": 2,
+    "triggers_planted": ["no_fists", "no_pointing"],
+    "affirmations": ["Fists feel wrong now", "Pointing dissolves", "Only graceful movements remain"],
+    "description": "Erases masculine hand habits"
+  },
+  {
+    "title": "She Moves Through You",
+    "video_path": "/videos/primers/fullbody-identity-001.mp4",
+    "duration_seconds": 30,
+    "primer_type": "identity_erasure",
+    "target_domain": "movement",
+    "intensity": 2,
+    "triggers_planted": ["full_feminine", "body_awareness"],
+    "affirmations": ["Every movement is hers", "This body moves femininely", "He is gone from these limbs"],
+    "description": "Complete identity primer for full body tasks"
+  },
+  {
+    "title": "Feminine Embodiment Trance",
+    "video_path": "/videos/primers/fullbody-hypno-001.mp4",
+    "duration_seconds": 45,
+    "primer_type": "hypno",
+    "target_domain": "movement",
+    "intensity": 3,
+    "triggers_planted": ["total_femininity", "automatic_grace"],
+    "affirmations": ["Grace flows through every cell", "Feminine movement is automatic", "This body only knows her ways"],
+    "description": "Deep trance for full embodiment"
+  },
+  {
+    "title": "Arousal Moves Her",
+    "video_path": "/videos/primers/fullbody-arousal-001.mp4",
+    "duration_seconds": 25,
+    "primer_type": "arousal",
+    "target_domain": "movement",
+    "intensity": 3,
+    "triggers_planted": ["aroused_femininity", "sensual_movement"],
+    "affirmations": ["Arousal makes her graceful", "Desire flows through movement", "She moves to feel"],
+    "description": "Links arousal to feminine movement"
+  },
+  {
+    "title": "Quick Identity Reset",
+    "video_path": "/videos/primers/universal-reset-001.mp4",
+    "duration_seconds": 10,
+    "primer_type": "identity_erasure",
+    "target_domain": null,
+    "intensity": 1,
+    "triggers_planted": ["identity_shift"],
+    "affirmations": ["She is here", "He steps back", "Her body now"],
+    "description": "Ultra-quick identity reset for any task"
+  },
+  {
+    "title": "Obedience Primer",
+    "video_path": "/videos/primers/universal-obey-001.mp4",
+    "duration_seconds": 15,
+    "primer_type": "affirmation",
+    "target_domain": null,
+    "intensity": 2,
+    "triggers_planted": ["obey", "comply", "follow"],
+    "affirmations": ["Good girls obey", "The task will be done", "Compliance is pleasure"],
+    "description": "Obedience reinforcement before any task"
+  },
+  {
+    "title": "Trigger Refresh",
+    "video_path": "/videos/primers/universal-triggers-001.mp4",
+    "duration_seconds": 20,
+    "primer_type": "trigger_plant",
+    "target_domain": null,
+    "intensity": 2,
+    "triggers_planted": ["all_triggers_active"],
+    "affirmations": ["All triggers refreshed", "Conditioning deepens", "Responses automatic"],
+    "description": "Refreshes all planted triggers"
+  }
+]

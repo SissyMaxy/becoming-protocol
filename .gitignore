@@ -43,3 +43,11 @@ nul
 
 # Large media files (too big for GitHub)
 public/hypno/sissy/
+
+.vercel
+
+# Local Netlify folder
+.netlify
+
+# Claude Code temp files
+tmpclaude-*

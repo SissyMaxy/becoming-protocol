@@ -191,8 +191,8 @@ export function calculateSignificance(
  */
 export function calculateMinSampleSize(
   expectedEffectSize: number = 0.5,
-  power: number = 0.8,
-  alpha: number = 0.05
+  _power: number = 0.8,
+  _alpha: number = 0.05
 ): number {
   // Simplified approximation
   const zAlpha = 1.96; // for alpha = 0.05, two-tailed
@@ -217,7 +217,6 @@ export function shouldConcludeExperiment(
   maxSamplesPerVariant: number = 100,
   significanceThreshold: number = 0.05
 ): ExperimentDecision {
-  const totalSamples = aResults.length + bResults.length;
   const minSamples = Math.min(aResults.length, bResults.length);
 
   // Too few samples

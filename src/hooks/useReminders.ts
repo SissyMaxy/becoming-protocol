@@ -111,19 +111,23 @@ export function useReminders(): UseRemindersReturn {
         }
       }
 
-      // Load stats
-      const { data: statsData, error: statsError } = await supabase
-        .rpc('get_reminder_stats', { p_user_id: userId });
+      // Load stats - these RPCs may not exist yet, silently skip if missing
+      try {
+        const { data: statsData, error: statsError } = await supabase
+          .rpc('get_reminder_stats', { p_user_id: userId });
 
-      if (!statsError && statsData) {
-        // Get streak separately
-        const { data: streakData } = await supabase
-          .rpc('get_reminder_streak', { p_user_id: userId });
+        if (!statsError && statsData) {
+          // Get streak separately
+          const { data: streakData } = await supabase
+            .rpc('get_reminder_streak', { p_user_id: userId });
 
-        setStats({
-          ...statsData,
-          streakDays: streakData || 0,
-        });
+          setStats({
+            ...statsData,
+            streakDays: streakData || 0,
+          });
+        }
+      } catch {
+        // RPC functions may not exist - silently ignore
       }
     } catch (err) {
       console.error('Failed to load reminder data:', err);
@@ -180,26 +184,7 @@ export function useReminders(): UseRemindersReturn {
     scheduleNextReminder();
   }, [settings]);
 
-  // Schedule the next reminder
-  const scheduleNextReminder = useCallback(() => {
-    if (reminderTimerRef.current) {
-      clearTimeout(reminderTimerRef.current);
-    }
-
-    const now = new Date();
-    const nextTime = scheduledTimesRef.current.find(t => t > now);
-
-    if (nextTime) {
-      const delay = nextTime.getTime() - now.getTime();
-
-      reminderTimerRef.current = setTimeout(() => {
-        triggerReminderInternal();
-        scheduleNextReminder();
-      }, delay);
-    }
-  }, []);
-
-  // Trigger a reminder
+  // Trigger a reminder (defined before scheduleNextReminder to avoid hoisting issues)
   const triggerReminderInternal = useCallback(() => {
     const reminder = getRandomReminder(settings.enabledTypes);
     if (!reminder) return;
@@ -211,6 +196,30 @@ export function useReminders(): UseRemindersReturn {
       sendNotification(reminder);
     }
   }, [settings, notificationPermission]);
+
+  // Schedule the next reminder with proper cleanup
+  const scheduleNextReminder = useCallback(() => {
+    // Always clear existing timer before setting a new one
+    if (reminderTimerRef.current) {
+      clearTimeout(reminderTimerRef.current);
+      reminderTimerRef.current = null;
+    }
+
+    const now = new Date();
+    const nextTime = scheduledTimesRef.current.find(t => t > now);
+
+    if (nextTime) {
+      const delay = nextTime.getTime() - now.getTime();
+
+      reminderTimerRef.current = setTimeout(() => {
+        // Clear ref after execution
+        reminderTimerRef.current = null;
+        triggerReminderInternal();
+        // Schedule next only after current completes
+        scheduleNextReminder();
+      }, delay);
+    }
+  }, [triggerReminderInternal]);
 
   // Public trigger (for manual testing)
   const triggerReminder = useCallback(() => {

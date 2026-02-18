@@ -4,14 +4,19 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Flame, Sparkles, Clock } from 'lucide-react';
+import { Flame, Sparkles, Clock, Vibrate, Zap, Star } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
+import { useLovense } from '../../hooks/useLovense';
 
 interface TodayHeaderProps {
   userName?: string;
   denialDays: number;
   tasksRemaining: number;
   tasksTotal: number;
+  streakDays?: number;
+  pointsToday?: number;
+  execFunction?: 'high' | 'medium' | 'low' | 'depleted';
+  handlerMode?: string;
 }
 
 // Focus messages - rotated daily based on date
@@ -32,10 +37,28 @@ const FOCUS_MESSAGES = [
   "Obedience today. Freedom tomorrow.",
 ];
 
-// Get deterministic message based on date
-function getDailyMessage(): string {
+// Caretaker-safe messages: no guilt, no pressure, no arousal exploitation (gap #12)
+const CARETAKER_MESSAGES = [
+  "You showed up. That matters more than anything else.",
+  "Be gentle with yourself today. Progress isn't always visible.",
+  "Even small steps count. You're doing enough.",
+  "Take what you need. Leave what you don't.",
+  "Rest is not failure. It's how you recharge.",
+  "You don't have to be perfect today. Just present.",
+  "One thing at a time. That's all anyone can do.",
+  "Your wellbeing comes first. Always.",
+];
+
+// Get deterministic message based on date, filtered by handler mode
+function getDailyMessage(execFunction?: string, handlerMode?: string): string {
   const today = new Date();
   const dayOfYear = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86400000);
+
+  // Use caretaker messages when in caretaker mode or depleted/low
+  if (handlerMode === 'caretaker' || execFunction === 'depleted' || execFunction === 'low') {
+    return CARETAKER_MESSAGES[dayOfYear % CARETAKER_MESSAGES.length];
+  }
+
   return FOCUS_MESSAGES[dayOfYear % FOCUS_MESSAGES.length];
 }
 
@@ -76,9 +99,14 @@ function formatDateTime(date: Date): { dayName: string; dateStr: string; timeStr
   return { dayName, dateStr, timeStr };
 }
 
-export function TodayHeader({ userName, denialDays, tasksRemaining, tasksTotal }: TodayHeaderProps) {
+export function TodayHeader({ userName, denialDays, tasksRemaining, tasksTotal, streakDays = 0, pointsToday = 0, execFunction, handlerMode }: TodayHeaderProps) {
   const { isBambiMode } = useBambiMode();
+  const lovense = useLovense();
   const [currentTime, setCurrentTime] = useState(new Date());
+
+  const isLovenseConnected = lovense.status === 'connected' || lovense.cloudConnected;
+  const isVibrating = lovense.currentIntensity > 0;
+  const intensity = lovense.currentIntensity;
 
   // Update time every minute
   useEffect(() => {
@@ -90,7 +118,7 @@ export function TodayHeader({ userName, denialDays, tasksRemaining, tasksTotal }
   }, []);
 
   const greeting = getGreeting();
-  const focusMessage = getDailyMessage();
+  const focusMessage = getDailyMessage(execFunction, handlerMode);
   const denialMessage = getDenialMessage(denialDays);
   const { dayName, dateStr, timeStr } = formatDateTime(currentTime);
 
@@ -117,30 +145,81 @@ export function TodayHeader({ userName, denialDays, tasksRemaining, tasksTotal }
             <h1 className="text-2xl font-bold text-white">
               {greeting}, {honorific} <Sparkles className="inline w-5 h-5 mb-1" />
             </h1>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              {/* Streak */}
+              {streakDays > 0 && (
+                <div className="flex items-center gap-1.5 text-white/90 text-sm">
+                  <Zap className="w-4 h-4 text-yellow-300" />
+                  <span>{streakDays} day streak</span>
+                </div>
+              )}
+              {streakDays > 0 && denialDays > 0 && <span className="text-white/50 text-sm">•</span>}
+              {/* Denial */}
               {denialDays > 0 && (
                 <div className="flex items-center gap-1.5 text-white/90 text-sm">
                   <Flame className="w-4 h-4 text-orange-300" />
                   <span>Day {denialDays}</span>
                 </div>
               )}
-              <span className="text-white/70 text-sm">•</span>
+              {(streakDays > 0 || denialDays > 0) && <span className="text-white/50 text-sm">•</span>}
+              {/* Points */}
+              {pointsToday > 0 && (
+                <>
+                  <div className="flex items-center gap-1.5 text-white/90 text-sm">
+                    <Star className="w-4 h-4 text-emerald-300" />
+                    <span>{pointsToday} pts</span>
+                  </div>
+                  <span className="text-white/50 text-sm">•</span>
+                </>
+              )}
+              {/* Tasks remaining */}
               <span className="text-white/90 text-sm">
-                {tasksRemaining === 0 ? 'All complete!' : `${tasksRemaining} task${tasksRemaining === 1 ? '' : 's'} remaining`}
+                {tasksRemaining === 0 ? 'All complete!' : `${tasksRemaining} item${tasksRemaining === 1 ? '' : 's'} left`}
               </span>
             </div>
           </div>
 
-          {/* Streak badge if high denial */}
-          {denialDays >= 7 && (
-            <div className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
-              denialDays >= 14
-                ? 'bg-orange-400/30 text-orange-100 border border-orange-300/30'
-                : 'bg-white/20 text-white border border-white/20'
-            }`}>
-              {denialMessage}
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {/* Lovense vibration indicator */}
+            {isLovenseConnected && isVibrating && (
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold ${
+                intensity > 15
+                  ? 'bg-red-500/40 text-red-100 border border-red-300/40'
+                  : intensity > 10
+                    ? 'bg-orange-400/40 text-orange-100 border border-orange-300/40'
+                    : intensity > 5
+                      ? 'bg-purple-400/40 text-purple-100 border border-purple-300/40'
+                      : 'bg-purple-300/30 text-purple-100 border border-purple-200/30'
+              }`}>
+                <Vibrate className="w-3.5 h-3.5 animate-pulse" />
+                <span>{intensity}/20</span>
+                {/* Mini intensity bars */}
+                <div className="flex gap-0.5 ml-1">
+                  {[1, 2, 3, 4, 5].map((level) => (
+                    <div
+                      key={level}
+                      className={`w-1 rounded-full transition-all ${
+                        intensity >= level * 4
+                          ? 'bg-white h-3'
+                          : 'bg-white/30 h-1.5'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Streak badge if high denial */}
+            {denialDays >= 7 && (
+              <div className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
+                denialDays >= 14
+                  ? 'bg-orange-400/30 text-orange-100 border border-orange-300/30'
+                  : 'bg-white/20 text-white border border-white/20'
+              }`}>
+                {denialMessage}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Date and Time */}

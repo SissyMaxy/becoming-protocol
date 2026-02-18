@@ -1,17 +1,17 @@
 // Service Progression View
-// Tracks progression through sexual service stages
+// Tracks progression through sexual service stages with encounter logging
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   ChevronLeft,
   Users,
   Clock,
   CheckCircle,
-  Heart,
   Loader2,
-  TrendingUp,
+  Plus,
+  Sparkles,
+  ArrowRight,
 } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useBambiMode } from '../../context/BambiModeContext';
 import {
@@ -19,7 +19,23 @@ import {
   SERVICE_STAGE_LABELS,
   type ServiceStage,
   type ServiceProgression,
+  type ServiceEncounter,
 } from '../../types/escalation';
+import {
+  getServiceProgressionHistory,
+  getServiceEncounters,
+  getEncounterStats,
+  logEncounter,
+  logActivity,
+  updateComfortLevel,
+  updateArousalAssociation,
+  advanceStage,
+  initializeServiceProgression,
+} from '../../lib/service';
+import { LogEncounterModal } from './LogEncounterModal';
+import { LogActivityModal } from './LogActivityModal';
+import { AdvanceStageModal } from './AdvanceStageModal';
+import { EncounterTimeline } from './EncounterTimeline';
 
 interface ServiceProgressionViewProps {
   onBack: () => void;
@@ -48,59 +64,113 @@ const SERVICE_STAGE_COLORS: Record<ServiceStage, string> = {
 export function ServiceProgressionView({ onBack }: ServiceProgressionViewProps) {
   const { user } = useAuth();
   const { isBambiMode } = useBambiMode();
+
   const [progressions, setProgressions] = useState<ServiceProgression[]>([]);
+  const [encounters, setEncounters] = useState<ServiceEncounter[]>([]);
+  const [stats, setStats] = useState<{
+    total: number;
+    byType: Record<string, number>;
+    ginaAwareCount: number;
+    ginaDirectedCount: number;
+  } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function loadProgressions() {
-      if (!user) return;
+  // Modal states
+  const [showEncounterModal, setShowEncounterModal] = useState(false);
+  const [showActivityModal, setShowActivityModal] = useState(false);
+  const [showAdvanceModal, setShowAdvanceModal] = useState(false);
 
-      try {
-        const { data, error } = await supabase
-          .from('service_progression')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('entered_at', { ascending: false });
+  // Current progression
+  const currentProgression = progressions[0];
+  const currentStage = currentProgression?.stage || 'fantasy';
+  const currentStageIndex = SERVICE_STAGES.indexOf(currentStage);
+  const comfortLevel = currentProgression?.comfortLevel || 1;
+  const arousalAssociation = currentProgression?.arousalAssociation || 1;
 
-        if (error) throw error;
+  // Load data
+  const loadData = useCallback(async () => {
+    if (!user) return;
 
-        const mapped: ServiceProgression[] = (data || []).map(p => ({
-          id: p.id,
-          userId: p.user_id,
-          stage: p.stage as ServiceStage,
-          enteredAt: p.entered_at,
-          activities: p.activities || [],
-          comfortLevel: p.comfort_level || undefined,
-          arousalAssociation: p.arousal_association || undefined,
-          notes: p.notes || undefined,
-        }));
+    try {
+      setIsLoading(true);
+      const [progs, encs, encounterStats] = await Promise.all([
+        getServiceProgressionHistory(user.id),
+        getServiceEncounters(user.id),
+        getEncounterStats(user.id),
+      ]);
 
-        setProgressions(mapped);
-      } catch (err) {
-        console.error('Failed to load service progression:', err);
-        setError('Failed to load service progression data');
-      } finally {
-        setIsLoading(false);
+      // Initialize if no progression exists
+      if (progs.length === 0) {
+        const initial = await initializeServiceProgression(user.id);
+        if (initial) {
+          setProgressions([initial]);
+        }
+      } else {
+        setProgressions(progs);
       }
-    }
 
-    loadProgressions();
+      setEncounters(encs);
+      setStats(encounterStats);
+    } catch (err) {
+      console.error('Failed to load service data:', err);
+      setError('Failed to load service progression data');
+    } finally {
+      setIsLoading(false);
+    }
   }, [user]);
 
-  const currentStage = progressions[0]?.stage || 'fantasy';
-  const currentStageIndex = SERVICE_STAGES.indexOf(currentStage);
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Handlers
+  const handleLogEncounter = async (
+    encounter: Omit<ServiceEncounter, 'id' | 'userId'>
+  ) => {
+    if (!user) return;
+    await logEncounter(user.id, encounter);
+    await loadData();
+  };
+
+  const handleLogActivity = async (activity: string) => {
+    if (!currentProgression) return;
+    await logActivity(currentProgression.id, activity);
+    await loadData();
+  };
+
+  const handleAdvanceStage = async (notes?: string) => {
+    if (!user) return;
+    await advanceStage(user.id, notes);
+    await loadData();
+  };
+
+  const handleUpdateComfort = async (level: number) => {
+    if (!currentProgression) return;
+    await updateComfortLevel(currentProgression.id, level);
+    setProgressions(prev =>
+      prev.map((p, i) => (i === 0 ? { ...p, comfortLevel: level } : p))
+    );
+  };
+
+  const handleUpdateArousal = async (level: number) => {
+    if (!currentProgression) return;
+    await updateArousalAssociation(currentProgression.id, level);
+    setProgressions(prev =>
+      prev.map((p, i) => (i === 0 ? { ...p, arousalAssociation: level } : p))
+    );
+  };
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-protocol-accent animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen pb-24">
+    <div className={`min-h-screen pb-24 ${isBambiMode ? 'bg-pink-50' : 'bg-protocol-bg'}`}>
       {/* Header */}
       <div
         className={`sticky top-0 z-10 p-4 border-b ${
@@ -160,11 +230,11 @@ export function ServiceProgressionView({ onBack }: ServiceProgressionViewProps) 
             <div
               className={`p-4 rounded-xl border ${
                 isBambiMode
-                  ? 'bg-pink-50 border-pink-200'
+                  ? 'bg-white border-pink-200'
                   : 'bg-protocol-surface border-protocol-border'
               }`}
             >
-              <div className="flex items-center gap-3 mb-3">
+              <div className="flex items-center gap-3 mb-4">
                 <div
                   className="w-12 h-12 rounded-full flex items-center justify-center"
                   style={{ backgroundColor: `${SERVICE_STAGE_COLORS[currentStage]}20` }}
@@ -174,7 +244,7 @@ export function ServiceProgressionView({ onBack }: ServiceProgressionViewProps) 
                     style={{ color: SERVICE_STAGE_COLORS[currentStage] }}
                   />
                 </div>
-                <div>
+                <div className="flex-1">
                   <h3
                     className={`text-lg font-semibold ${
                       isBambiMode ? 'text-pink-700' : 'text-protocol-text'
@@ -192,47 +262,156 @@ export function ServiceProgressionView({ onBack }: ServiceProgressionViewProps) 
                 </div>
               </div>
 
-              {/* Current progression details */}
-              {progressions[0] && (
-                <div className="space-y-2 pt-2 border-t border-protocol-border/50">
-                  <div className="flex items-center gap-2 text-xs text-protocol-text-muted">
-                    <Clock className="w-3 h-3" />
-                    Since {new Date(progressions[0].enteredAt).toLocaleDateString()}
-                  </div>
-
-                  {progressions[0].comfortLevel !== undefined && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-protocol-text-muted">Comfort:</span>
-                      <div className="flex-1 h-2 bg-protocol-surface-light rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-green-500 rounded-full"
-                          style={{ width: `${progressions[0].comfortLevel * 10}%` }}
-                        />
-                      </div>
-                      <span className="text-xs text-protocol-text">
-                        {progressions[0].comfortLevel}/10
-                      </span>
-                    </div>
-                  )}
-
-                  {progressions[0].arousalAssociation !== undefined && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-protocol-text-muted">Arousal:</span>
-                      <div className="flex-1 h-2 bg-protocol-surface-light rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-pink-500 rounded-full"
-                          style={{ width: `${progressions[0].arousalAssociation * 10}%` }}
-                        />
-                      </div>
-                      <span className="text-xs text-protocol-text">
-                        {progressions[0].arousalAssociation}/10
-                      </span>
-                    </div>
-                  )}
+              {/* Date entered */}
+              {currentProgression && (
+                <div className="flex items-center gap-2 text-xs text-protocol-text-muted mb-4">
+                  <Clock className="w-3 h-3" />
+                  Since {new Date(currentProgression.enteredAt).toLocaleDateString()}
                 </div>
+              )}
+
+              {/* Comfort Level Slider */}
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-1">
+                  <span
+                    className={`text-xs ${
+                      isBambiMode ? 'text-pink-600' : 'text-protocol-text-muted'
+                    }`}
+                  >
+                    Comfort Level
+                  </span>
+                  <span
+                    className={`text-xs font-medium ${
+                      isBambiMode ? 'text-pink-700' : 'text-protocol-text'
+                    }`}
+                  >
+                    {comfortLevel}/10
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="1"
+                  max="10"
+                  value={comfortLevel}
+                  onChange={e => handleUpdateComfort(parseInt(e.target.value))}
+                  className="w-full accent-green-500"
+                />
+              </div>
+
+              {/* Arousal Association Slider */}
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-1">
+                  <span
+                    className={`text-xs ${
+                      isBambiMode ? 'text-pink-600' : 'text-protocol-text-muted'
+                    }`}
+                  >
+                    Arousal Association
+                  </span>
+                  <span
+                    className={`text-xs font-medium ${
+                      isBambiMode ? 'text-pink-700' : 'text-protocol-text'
+                    }`}
+                  >
+                    {arousalAssociation}/10
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="1"
+                  max="10"
+                  value={arousalAssociation}
+                  onChange={e => handleUpdateArousal(parseInt(e.target.value))}
+                  className="w-full accent-pink-500"
+                />
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowActivityModal(true)}
+                  className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 ${
+                    isBambiMode
+                      ? 'bg-pink-100 text-pink-600 hover:bg-pink-200'
+                      : 'bg-protocol-surface-light text-protocol-text hover:bg-protocol-border'
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Log Activity
+                </button>
+                {currentStageIndex < SERVICE_STAGES.length - 1 && (
+                  <button
+                    onClick={() => setShowAdvanceModal(true)}
+                    disabled={comfortLevel < 6}
+                    className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 ${
+                      comfortLevel < 6
+                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:brightness-110'
+                    }`}
+                  >
+                    <ArrowRight className="w-4 h-4" />
+                    Advance Stage
+                  </button>
+                )}
+              </div>
+              {comfortLevel < 6 && currentStageIndex < SERVICE_STAGES.length - 1 && (
+                <p className="text-xs text-center text-protocol-text-muted mt-2">
+                  Comfort level must be 6+ to advance
+                </p>
               )}
             </div>
           </section>
+
+          {/* Encounter Stats */}
+          {stats && stats.total > 0 && (
+            <section>
+              <h2
+                className={`text-sm font-medium mb-3 ${
+                  isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'
+                }`}
+              >
+                Encounter Stats
+              </h2>
+              <div
+                className={`p-4 rounded-xl border ${
+                  isBambiMode
+                    ? 'bg-white border-pink-200'
+                    : 'bg-protocol-surface border-protocol-border'
+                }`}
+              >
+                <div className="grid grid-cols-4 gap-2 text-center">
+                  <div>
+                    <p
+                      className={`text-lg font-bold ${
+                        isBambiMode ? 'text-pink-700' : 'text-protocol-text'
+                      }`}
+                    >
+                      {stats.total}
+                    </p>
+                    <p className="text-[10px] text-protocol-text-muted">Total</p>
+                  </div>
+                  <div>
+                    <p className="text-lg font-bold text-blue-500">
+                      {stats.byType.online || 0}
+                    </p>
+                    <p className="text-[10px] text-protocol-text-muted">Online</p>
+                  </div>
+                  <div>
+                    <p className="text-lg font-bold text-gray-500">
+                      {stats.byType.anonymous || 0}
+                    </p>
+                    <p className="text-[10px] text-protocol-text-muted">Anon</p>
+                  </div>
+                  <div>
+                    <p className="text-lg font-bold text-pink-500">
+                      {stats.ginaAwareCount}
+                    </p>
+                    <p className="text-[10px] text-protocol-text-muted">Gina</p>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
 
           {/* Stage Timeline */}
           <section>
@@ -262,7 +441,11 @@ export function ServiceProgressionView({ onBack }: ServiceProgressionViewProps) 
                           : 'bg-protocol-surface'
                         : 'bg-protocol-surface/50 opacity-60'
                     }`}
-                    style={isCurrent ? { borderColor: stageColor, backgroundColor: `${stageColor}10` } : {}}
+                    style={
+                      isCurrent
+                        ? { borderColor: stageColor, backgroundColor: `${stageColor}10` }
+                        : {}
+                    }
                   >
                     <div
                       className="w-8 h-8 rounded-full flex items-center justify-center"
@@ -302,6 +485,18 @@ export function ServiceProgressionView({ onBack }: ServiceProgressionViewProps) 
             </div>
           </section>
 
+          {/* Encounter Timeline */}
+          <section>
+            <h2
+              className={`text-sm font-medium mb-3 ${
+                isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'
+              }`}
+            >
+              Encounter History
+            </h2>
+            <EncounterTimeline encounters={encounters} />
+          </section>
+
           {/* Activities History */}
           {progressions.some(p => p.activities && p.activities.length > 0) && (
             <section>
@@ -313,65 +508,93 @@ export function ServiceProgressionView({ onBack }: ServiceProgressionViewProps) 
                 Activities Log
               </h2>
               <div className="space-y-2">
-                {progressions.map(prog => (
-                  prog.activities && prog.activities.length > 0 && (
-                    <div
-                      key={prog.id}
-                      className={`p-3 rounded-lg ${
-                        isBambiMode ? 'bg-pink-50' : 'bg-protocol-surface'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span
-                          className="text-xs px-2 py-0.5 rounded-full"
-                          style={{
-                            backgroundColor: `${SERVICE_STAGE_COLORS[prog.stage]}20`,
-                            color: SERVICE_STAGE_COLORS[prog.stage],
-                          }}
-                        >
-                          {SERVICE_STAGE_LABELS[prog.stage]}
-                        </span>
-                        <span className="text-[10px] text-protocol-text-muted">
-                          {new Date(prog.enteredAt).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {prog.activities.map((activity, idx) => (
+                {progressions.map(
+                  prog =>
+                    prog.activities &&
+                    prog.activities.length > 0 && (
+                      <div
+                        key={prog.id}
+                        className={`p-3 rounded-lg ${
+                          isBambiMode ? 'bg-white border border-pink-200' : 'bg-protocol-surface'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
                           <span
-                            key={idx}
-                            className={`text-xs px-2 py-0.5 rounded ${
-                              isBambiMode
-                                ? 'bg-pink-100 text-pink-600'
-                                : 'bg-protocol-surface-light text-protocol-text-muted'
-                            }`}
+                            className="text-xs px-2 py-0.5 rounded-full"
+                            style={{
+                              backgroundColor: `${SERVICE_STAGE_COLORS[prog.stage]}20`,
+                              color: SERVICE_STAGE_COLORS[prog.stage],
+                            }}
                           >
-                            {activity}
+                            {SERVICE_STAGE_LABELS[prog.stage]}
                           </span>
-                        ))}
+                          <span className="text-[10px] text-protocol-text-muted">
+                            {new Date(prog.enteredAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {prog.activities.map((activity, idx) => (
+                            <span
+                              key={idx}
+                              className={`text-xs px-2 py-0.5 rounded ${
+                                isBambiMode
+                                  ? 'bg-pink-100 text-pink-600'
+                                  : 'bg-protocol-surface-light text-protocol-text-muted'
+                              }`}
+                            >
+                              {activity}
+                            </span>
+                          ))}
+                        </div>
+                        {prog.notes && (
+                          <p className="text-xs text-protocol-text-muted mt-2 italic">
+                            {prog.notes}
+                          </p>
+                        )}
                       </div>
-                      {prog.notes && (
-                        <p className="text-xs text-protocol-text-muted mt-2 italic">
-                          {prog.notes}
-                        </p>
-                      )}
-                    </div>
-                  )
-                ))}
+                    )
+                )}
               </div>
             </section>
           )}
-
-          {/* Empty State */}
-          {progressions.length === 0 && (
-            <div className="text-center py-12">
-              <Users className="w-12 h-12 mx-auto text-protocol-text-muted mb-3" />
-              <p className="text-protocol-text-muted">No service progression recorded</p>
-              <p className="text-xs text-protocol-text-muted mt-1">
-                Your journey will be tracked as you progress
-              </p>
-            </div>
-          )}
         </div>
+      )}
+
+      {/* FAB - Log Encounter */}
+      <button
+        onClick={() => setShowEncounterModal(true)}
+        className={`fixed bottom-24 right-4 w-14 h-14 rounded-full shadow-lg flex items-center justify-center z-30 ${
+          isBambiMode
+            ? 'bg-pink-500 text-white'
+            : 'bg-purple-500 text-white'
+        }`}
+      >
+        <Plus className="w-6 h-6" />
+      </button>
+
+      {/* Modals */}
+      {showEncounterModal && (
+        <LogEncounterModal
+          onSubmit={handleLogEncounter}
+          onClose={() => setShowEncounterModal(false)}
+        />
+      )}
+
+      {showActivityModal && (
+        <LogActivityModal
+          currentStage={currentStage}
+          onSubmit={handleLogActivity}
+          onClose={() => setShowActivityModal(false)}
+        />
+      )}
+
+      {showAdvanceModal && (
+        <AdvanceStageModal
+          currentStage={currentStage}
+          comfortLevel={comfortLevel}
+          onAdvance={handleAdvanceStage}
+          onClose={() => setShowAdvanceModal(false)}
+        />
       )}
     </div>
   );

@@ -3,6 +3,10 @@ import { DOMAINS, PHASES } from '../data/constants';
 import { supabase } from './supabase';
 import { getTodayDate, getYesterdayDate } from './protocol';
 import type { UserProfile, SealedLetter } from '../components/Onboarding/types';
+import { profileStorageV2 } from './profile-storage-v2';
+
+// Re-export v2 profile storage for direct access
+export { profileStorageV2 };
 
 // Storage keys (for localStorage fallback)
 const KEYS = {
@@ -386,6 +390,14 @@ export const profileStorage = {
     if (error) {
       console.error('Error saving profile:', error);
       throw error;
+    }
+
+    // Also save to v2 profile tables (profile_foundation, profile_history, profile_arousal)
+    try {
+      await profileStorageV2.saveProfile(profile);
+    } catch (v2Error) {
+      console.error('Error saving to v2 profile tables:', v2Error);
+      // Don't throw - v1 save succeeded, v2 is additive
     }
   },
 

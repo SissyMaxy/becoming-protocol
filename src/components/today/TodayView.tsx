@@ -4,31 +4,68 @@
  * With weekend Gina integration support and goal-based training
  */
 
-import { useEffect, useState } from 'react';
-import { Loader2, RefreshCw, AlertTriangle, Heart, Target } from 'lucide-react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { Loader2, RefreshCw, AlertTriangle, Heart, Target, Focus, LayoutGrid, Moon, Zap, FileText, ChevronRight, Clock, Star, DollarSign } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
+import { supabase } from '../../lib/supabase';
 import { useTaskBank } from '../../hooks/useTaskBank';
 import { useArousalState } from '../../hooks/useArousalState';
 import { useWeekend } from '../../hooks/useWeekend';
 import { useGoals } from '../../hooks/useGoals';
+import { useLovense } from '../../hooks/useLovense';
 import { TodayHeader } from './TodayHeader';
 import { ProgressRing } from './ProgressRing';
 import { TaskCardNew } from './TaskCardNew';
 import { CompletionCelebration } from './CompletionCelebration';
 import { AllCompleteCelebration } from './AllCompleteCelebration';
+import { FocusedActionCard, getPriorityAction } from './FocusedActionCard';
+import { ContinuationPrompt } from './ContinuationPrompt';
+import { ActiveSessionOverlay } from './ActiveSessionOverlay';
+import { QuickStateUpdate } from './QuickStateUpdate';
+import { CommitmentReminder } from './CommitmentReminder';
+import { DirectiveModeView } from './DirectiveModeView';
+import { Tooltip } from '../ui/Tooltip';
+import { useUserState } from '../../hooks/useUserState';
+import type { PriorityAction } from './FocusedActionCard';
 import { WeekendHeader } from '../weekend/WeekendHeader';
 import { WeekendActivityCard } from '../weekend/WeekendActivityCard';
 import { GinaFramingModal } from '../weekend/GinaFramingModal';
 import { WeekendFeedbackModal } from '../weekend/WeekendFeedbackModal';
-import { GoalCard, GraduationCelebration, GoalAbandonmentGauntlet, StreakRiskBanner, GoalAffirmationModal } from '../goals';
+import { GoalCard, GraduationCelebration, GoalAbandonmentGauntlet, GoalAffirmationModal } from '../goals';
 import { TimeRatchetsDisplay } from '../ratchets/TimeRatchets';
 import { ArousalPlannerSection } from '../arousal-planner';
+// NextBestActionWidget removed - consolidated into FocusedActionCard
+import { StreakWarningsWidget } from '../streak';
+import { HandlerDirective } from '../handler/HandlerDirective';
+import { getActiveBriefs, type ContentBrief } from '../../lib/handler-v2/content-engine';
+import { useAuth } from '../../context/AuthContext';
 import type { WeekendActivity, ActivityFeedback } from '../../types/weekend';
 import type { Goal, GoalCompletionInput } from '../../types/goals';
 
 export function TodayView() {
   const { isBambiMode, triggerHearts } = useBambiMode();
   const { metrics } = useArousalState();
+  const { user } = useAuth();
+
+  // Handler briefs state
+  const [activeBriefs, setActiveBriefs] = useState<ContentBrief[]>([]);
+  const [briefsLoaded, setBriefsLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    getActiveBriefs(user.id).then(briefs => {
+      setActiveBriefs(briefs);
+      setBriefsLoaded(true);
+    }).catch(() => setBriefsLoaded(true));
+  }, [user?.id]);
+
+  // v2 User State - central state tracking
+  const {
+    userState,
+    isLoading: isUserStateLoading,
+    quickUpdate,
+    recordTaskCompletion,
+  } = useUserState();
   const {
     todayTasks,
     isLoading,
@@ -62,7 +99,40 @@ export function TodayView() {
     getPlannedActivity,
   } = useWeekend();
 
+  // Lovense connection status
+  const { status: lovenseStatus, activeToy } = useLovense();
+  const lovenseConnected = lovenseStatus === 'connected';
+
   const [showAllComplete, setShowAllComplete] = useState(false);
+
+  // Focus mode - reduces decision paralysis by showing ONE action at a time
+  const [focusMode, setFocusMode] = useState(true);
+  const [showAllItems, setShowAllItems] = useState(false);
+  const focusedCardRef = useRef<HTMLDivElement>(null);
+  // Directive mode - Handler-led single-card experience (Feature 6)
+  // Auto-enabled when userState.handlerMode is 'directive'
+  const [directiveMode, setDirectiveMode] = useState(false);
+  const [showDirectiveTooltip, setShowDirectiveTooltip] = useState(false);
+
+  // Show directive tooltip once, briefly, then auto-dismiss
+  useEffect(() => {
+    if (localStorage.getItem('directive-mode-seen')) return;
+    // Delay showing so it doesn't flash on mount
+    const showTimer = setTimeout(() => setShowDirectiveTooltip(true), 1500);
+    // Auto-dismiss after 6 seconds
+    const hideTimer = setTimeout(() => {
+      setShowDirectiveTooltip(false);
+      localStorage.setItem('directive-mode-seen', 'true');
+    }, 7500);
+    return () => { clearTimeout(showTimer); clearTimeout(hideTimer); };
+  }, []);
+  // Track dismissed actions for "Not Now" - resets at end of day
+  const [dismissedActionIds, setDismissedActionIds] = useState<string[]>([]);
+  // Continuation prompt - maintains momentum after task completion
+  const [showContinuation, setShowContinuation] = useState(false);
+  const [completedActionName, setCompletedActionName] = useState<string>('');
+  // Active session - shows step-by-step guidance with vibration control
+  const [activeSession, setActiveSession] = useState<PriorityAction | null>(null);
 
   // Goals system
   const {
@@ -99,6 +169,72 @@ export function TodayView() {
 
   // Get denial days from arousal metrics
   const denialDays = metrics?.currentStreakDays || 0;
+
+  // GinaHome: hide intimate content when Gina is home (gap #19)
+  const isGinaHome = userState?.ginaHome ?? false;
+
+  // Evening check-in state (gap #5) - effect is placed after allDone is computed
+  const currentHour = new Date().getHours();
+  const isEvening = currentHour >= 19 && currentHour < 23;
+  const [showEveningCheckin, setShowEveningCheckin] = useState(false);
+  const [eveningMood, setEveningMood] = useState<number | null>(null);
+  const [eveningSubmitted, setEveningSubmitted] = useState(false);
+
+  // Current mood from mood_checkins
+  const [currentMood, setCurrentMood] = useState<number | undefined>(undefined);
+
+  // Fetch latest mood from mood_checkins
+  const fetchLatestMood = useCallback(async () => {
+    if (!userState?.userId) return;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const { data, error } = await supabase
+      .from('mood_checkins')
+      .select('score')
+      .eq('user_id', userState.userId)
+      .gte('recorded_at', today.toISOString())
+      .order('recorded_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error fetching mood:', error);
+      return;
+    }
+
+    if (data?.score) {
+      setCurrentMood(data.score);
+    }
+  }, [userState?.userId]);
+
+  useEffect(() => {
+    fetchLatestMood();
+  }, [fetchLatestMood]);
+
+  const handleEveningCheckin = async (mood: number) => {
+    setEveningMood(mood);
+    await quickUpdate({ mood });
+    setCurrentMood(mood);
+    setEveningSubmitted(true);
+    setTimeout(() => setShowEveningCheckin(false), 2000);
+  };
+
+  // Wrap quickUpdate to also update local mood state (optimistic update)
+  const handleQuickUpdate = (update: Parameters<typeof quickUpdate>[0]) => {
+    // Update UI immediately
+    if (update.mood !== undefined) {
+      setCurrentMood(update.mood);
+    }
+    // Save to database in background
+    quickUpdate(update);
+  };
+
+  // Streak break recovery: show sunk cost prominently (gap #21)
+  const isStreakBreakRecovery = useMemo(() => {
+    return (userState?.streakDays ?? 0) === 0 && (userState?.longestStreak ?? 0) > 3;
+  }, [userState?.streakDays, userState?.longestStreak]);
 
   // Weekend activity handlers
   const handleShowFraming = (activityId: string) => {
@@ -199,12 +335,38 @@ export function TodayView() {
   const allGoalsDone = todaysGoals.length > 0 && completedGoals.length === todaysGoals.length;
   const allDone = (totalCount === 0 || allTasksDone) && (todaysGoals.length === 0 || allGoalsDone);
 
-  // Trigger hearts and celebration on completion in Bambi mode
+  // Show evening check-in prompt if all tasks done and it's evening (gap #5)
   useEffect(() => {
-    if (lastCompletedTask && isBambiMode) {
-      triggerHearts?.();
+    if (isEvening && allDone && !eveningSubmitted) {
+      setShowEveningCheckin(true);
+    }
+  }, [isEvening, allDone, eveningSubmitted]);
+
+  // Trigger hearts on completion in Bambi mode, and show continuation prompt
+  useEffect(() => {
+    if (lastCompletedTask) {
+      if (isBambiMode) {
+        triggerHearts?.();
+      }
+      // Show continuation prompt after a brief delay (let celebration play first)
+      const timer = setTimeout(() => {
+        setCompletedActionName(lastCompletedTask.affirmation || 'Task');
+        setShowContinuation(true);
+      }, 1500);
+      return () => clearTimeout(timer);
     }
   }, [lastCompletedTask, isBambiMode, triggerHearts]);
+
+  // Record task completion to user_state for tracking
+  useEffect(() => {
+    if (lastCompletedTask) {
+      // Find the completed task to get category and domain
+      const completedTask = todayTasks.find(t => t.id === lastCompletedTask.id);
+      if (completedTask?.task) {
+        recordTaskCompletion(completedTask.task.category, completedTask.task.domain);
+      }
+    }
+  }, [lastCompletedTask, todayTasks, recordTaskCompletion]);
 
   // Show all complete celebration when everything is done
   useEffect(() => {
@@ -213,6 +375,15 @@ export function TodayView() {
       return () => clearTimeout(timer);
     }
   }, [allDone, completedCount]);
+
+  // Scroll to focused card area when expanding items (Issue #9)
+  useEffect(() => {
+    if (showAllItems && focusedCardRef.current) {
+      requestAnimationFrame(() => {
+        focusedCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+  }, [showAllItems]);
 
   // Combined loading state
   const isAnyLoading = isLoading || goalsLoading || (isWeekendDay && isWeekendLoading);
@@ -286,6 +457,84 @@ export function TodayView() {
   const combinedCompleted = completedCount + completedGoals.length + completedWeekendActivities.length;
   const combinedTotal = totalCount + todaysGoals.length + todaysActivities.length;
 
+  // Get priority action for focus mode (excluding dismissed actions)
+  const priorityAction = getPriorityAction(
+    todaysGoals,
+    todayTasks,
+    streakRisk?.isAtRisk || false,
+    null, // TODO: Pass scheduled session if available
+    dismissedActionIds
+  );
+
+  // Count of other pending items (excluding the priority action)
+  const otherPendingCount = (pendingGoals.length + pendingTasks.length + pendingWeekendActivities.length) - (priorityAction ? 1 : 0);
+
+  // Handle starting the priority action - open active session overlay with steps
+  const handleStartPriorityAction = () => {
+    if (!priorityAction) return;
+
+    // If action has steps, start active session mode with step-by-step guidance
+    if (priorityAction.steps && priorityAction.steps.length > 0) {
+      setActiveSession(priorityAction);
+    } else {
+      // No steps defined - complete directly
+      handleCompleteAction(priorityAction);
+    }
+  };
+
+  // Complete an action (called when session ends or action has no steps)
+  const handleCompleteAction = (action: PriorityAction) => {
+    if (action.type === 'goal') {
+      const goal = todaysGoals.find(g => g.goalId === action.id);
+      if (goal && goal.drills.length > 0) {
+        handleGoalComplete({
+          goalId: goal.goalId,
+          drillId: goal.drills[0].id, // Use first available drill
+          notes: '',
+          feltGood: true,
+        });
+      }
+    } else if (action.type === 'task') {
+      const task = todayTasks.find(t => t.id === action.id);
+      if (task) {
+        complete(task.id, true);
+      }
+    }
+  };
+
+  // Handle session completion
+  const handleSessionComplete = () => {
+    if (activeSession) {
+      handleCompleteAction(activeSession);
+    }
+    setActiveSession(null);
+  };
+
+  // Handle session cancel
+  const handleSessionCancel = () => {
+    setActiveSession(null);
+  };
+
+  // Handle "Not Now" - dismiss current action and show next
+  const handleDismissAction = () => {
+    if (!priorityAction) return;
+    setDismissedActionIds(prev => [...prev, priorityAction.id]);
+  };
+
+  // Handle "Yes, Keep Going" from continuation prompt
+  const handleContinue = () => {
+    setShowContinuation(false);
+    dismissCompletion();
+    // The next priority action will automatically show
+    // Optional: scroll to the focused action card
+  };
+
+  // Handle "Done" from continuation prompt
+  const handleDoneContinuing = () => {
+    setShowContinuation(false);
+    dismissCompletion();
+  };
+
   // Refresh all data
   const handleRefresh = () => {
     loadTasks();
@@ -295,7 +544,7 @@ export function TodayView() {
   return (
     <div className={`min-h-screen pb-24 ${
       isWeekendDay
-        ? 'bg-gradient-to-b from-rose-50 to-white dark:from-rose-950/20 dark:to-protocol-bg'
+        ? 'bg-gradient-to-b from-rose-950/20 to-protocol-bg'
         : isBambiMode
           ? 'bg-gradient-to-b from-pink-50 to-white'
           : 'bg-protocol-bg'
@@ -313,32 +562,360 @@ export function TodayView() {
         ) : (
           <TodayHeader
             denialDays={denialDays}
-            tasksRemaining={totalCount - completedCount}
-            tasksTotal={totalCount}
+            tasksRemaining={combinedTotal - combinedCompleted}
+            tasksTotal={combinedTotal}
+            streakDays={userState?.streakDays || 0}
+            pointsToday={0}
+            execFunction={userState?.estimatedExecFunction}
+            handlerMode={userState?.handlerMode}
           />
         )}
       </div>
 
-      {/* Progress and refresh row */}
+      {/* Quick State Update - mood, arousal, exec function, Gina home */}
+      {userState && (
+        <div className="px-4 mb-4">
+          <QuickStateUpdate
+            currentMood={currentMood}
+            currentArousal={userState.currentArousal}
+            currentExecFunction={userState.estimatedExecFunction}
+            ginaHome={userState.ginaHome}
+            ginaAsleep={userState.ginaAsleep}
+            onUpdate={handleQuickUpdate}
+            isLoading={isUserStateLoading}
+          />
+        </div>
+      )}
+
+      {/* Commitment Reminders - hidden when Gina is home (gap #19) */}
+      {!isGinaHome && (
+        <div className="px-4 mb-4">
+          <CommitmentReminder maxDisplay={2} />
+        </div>
+      )}
+
+      {/* Handler Authority - hidden when Gina is home (gap #19) */}
+      {!isGinaHome && (
+      <div className="px-4 mb-4">
+        <HandlerDirective
+          onSessionStart={(sessionId, sessionType) => {
+            // Handler-scheduled sessions launch with step-by-step guidance
+            // Create a priority action from the scheduled session
+            setActiveSession({
+              id: sessionId,
+              type: 'session',
+              title: `Handler Session: ${sessionType}`,
+              description: 'Handler has scheduled this session for you.',
+              steps: [
+                { label: 'Find a private space where you won\'t be disturbed.', durationMinutes: 1 },
+                { label: 'Get comfortable and focus on your breathing.', durationMinutes: 1, vibration: 'gentle_wave' },
+                { label: 'Begin the session. Let Handler guide you deeper.', durationMinutes: 5, vibration: 'building' },
+                { label: 'Session complete. Return when you\'re ready.', durationMinutes: 1, vibration: 'gentle_wave' },
+              ],
+            });
+          }}
+        />
+      </div>
+      )}
+
+      {/* Handler Content Briefs — show active assignments on landing */}
+      {!isGinaHome && briefsLoaded && activeBriefs.length > 0 && (
+        <div className="px-4 mb-4">
+          <div className={`rounded-xl border overflow-hidden ${
+            isBambiMode
+              ? 'bg-purple-50 border-purple-200'
+              : 'bg-purple-900/20 border-purple-700/30'
+          }`}>
+            <div className="flex items-center justify-between p-3 pb-2">
+              <div className="flex items-center gap-2">
+                <FileText className={`w-4 h-4 ${isBambiMode ? 'text-purple-500' : 'text-purple-400'}`} />
+                <span className={`text-sm font-semibold ${
+                  isBambiMode ? 'text-purple-700' : 'text-purple-300'
+                }`}>
+                  Handler Briefs
+                </span>
+                <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                  isBambiMode ? 'bg-purple-200 text-purple-600' : 'bg-purple-800 text-purple-300'
+                }`}>
+                  {activeBriefs.length}
+                </span>
+              </div>
+              <button
+                onClick={() => window.dispatchEvent(new CustomEvent('navigate-to-handler'))}
+                className={`text-xs flex items-center gap-1 ${
+                  isBambiMode ? 'text-purple-500 hover:text-purple-700' : 'text-purple-400 hover:text-purple-200'
+                }`}
+              >
+                Command Center <ChevronRight className="w-3 h-3" />
+              </button>
+            </div>
+            <div className="space-y-1 px-3 pb-3">
+              {activeBriefs.slice(0, 3).map((brief) => (
+                <button
+                  key={brief.id}
+                  onClick={() => window.dispatchEvent(new CustomEvent('navigate-to-handler'))}
+                  className={`w-full text-left p-2.5 rounded-lg transition-colors ${
+                    isBambiMode
+                      ? 'bg-white/60 hover:bg-white border border-purple-100'
+                      : 'bg-purple-900/30 hover:bg-purple-900/50 border border-purple-700/20'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className={`text-xs font-medium ${
+                      isBambiMode ? 'text-purple-600' : 'text-purple-300'
+                    }`}>
+                      Brief #{brief.briefNumber} — {brief.contentType}
+                    </span>
+                    {brief.rewardMoney && brief.rewardMoney > 0 && (
+                      <span className={`text-xs flex items-center gap-0.5 ${
+                        isBambiMode ? 'text-green-600' : 'text-green-400'
+                      }`}>
+                        <DollarSign className="w-3 h-3" />
+                        {brief.rewardMoney}
+                      </span>
+                    )}
+                  </div>
+                  <p className={`text-xs line-clamp-1 ${
+                    isBambiMode ? 'text-gray-600' : 'text-gray-400'
+                  }`}>
+                    {brief.instructions?.concept || brief.purpose}
+                  </p>
+                  <div className="flex items-center gap-3 mt-1.5">
+                    {brief.deadline && (
+                      <span className={`text-xs flex items-center gap-1 ${
+                        isBambiMode ? 'text-amber-600' : 'text-amber-400'
+                      }`}>
+                        <Clock className="w-3 h-3" />
+                        {new Date(brief.deadline).toLocaleDateString()}
+                      </span>
+                    )}
+                    <span className={`text-xs flex items-center gap-1 ${
+                      isBambiMode ? 'text-purple-500' : 'text-purple-400'
+                    }`}>
+                      <Star className="w-3 h-3" />
+                      {brief.difficulty || 'standard'}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Streak Break Recovery: show sunk cost prominently (gap #21) */}
+      {isStreakBreakRecovery && (
+        <div className="px-4 mb-4">
+          <div className={`p-4 rounded-xl border ${
+            isBambiMode
+              ? 'bg-amber-50 border-amber-200'
+              : 'bg-amber-900/20 border-amber-700/30'
+          }`}>
+            <p className={`text-sm font-medium mb-2 ${
+              isBambiMode ? 'text-amber-700' : 'text-amber-300'
+            }`}>
+              Welcome back. Your {userState?.longestStreak || 0}-day streak is waiting to be rebuilt.
+            </p>
+            <p className={`text-xs ${
+              isBambiMode ? 'text-amber-600' : 'text-amber-400/70'
+            }`}>
+              Start with just one task. That's all it takes.
+            </p>
+          </div>
+          <div className="mt-2">
+            <TimeRatchetsDisplay compact />
+          </div>
+        </div>
+      )}
+
+      {/* Evening Mood Check-in (gap #5) */}
+      {showEveningCheckin && (
+        <div className="px-4 mb-4">
+          <div className={`p-4 rounded-xl border ${
+            isBambiMode
+              ? 'bg-indigo-50 border-indigo-200'
+              : 'bg-indigo-900/20 border-indigo-700/30'
+          }`}>
+            <div className="flex items-center gap-2 mb-3">
+              <Moon className={`w-4 h-4 ${isBambiMode ? 'text-indigo-500' : 'text-indigo-400'}`} />
+              <span className={`text-sm font-medium ${
+                isBambiMode ? 'text-indigo-700' : 'text-indigo-300'
+              }`}>
+                Evening Check-in
+              </span>
+            </div>
+            {eveningSubmitted ? (
+              <p className={`text-sm ${isBambiMode ? 'text-indigo-600' : 'text-indigo-400'}`}>
+                Mood logged. Rest well.
+              </p>
+            ) : (
+              <>
+                <p className={`text-xs mb-3 ${isBambiMode ? 'text-indigo-500' : 'text-indigo-400/70'}`}>
+                  How are you feeling right now?
+                </p>
+                <div className="flex gap-2">
+                  {[1, 2, 3, 4, 5].map(score => (
+                    <button
+                      key={score}
+                      onClick={() => handleEveningCheckin(score * 2)}
+                      className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        eveningMood === score * 2
+                          ? isBambiMode
+                            ? 'bg-indigo-500 text-white'
+                            : 'bg-indigo-500 text-white'
+                          : isBambiMode
+                            ? 'bg-indigo-100 hover:bg-indigo-200 text-indigo-600'
+                            : 'bg-indigo-900/30 hover:bg-indigo-900/50 text-indigo-300'
+                      }`}
+                    >
+                      {score === 1 ? 'Low' : score === 2 ? 'Meh' : score === 3 ? 'OK' : score === 4 ? 'Good' : 'Great'}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Progress and controls row */}
       <div className="px-4 py-6 flex items-center justify-between">
         <ProgressRing
           completed={combinedCompleted}
           total={combinedTotal}
         />
 
-        <button
-          onClick={handleRefresh}
-          className={`p-3 rounded-xl transition-colors ${
-            isWeekendDay
-              ? 'hover:bg-rose-100 text-rose-500 dark:hover:bg-rose-900/30 dark:text-rose-400'
-              : isBambiMode
-                ? 'hover:bg-pink-100 text-pink-500'
-                : 'hover:bg-protocol-surface text-protocol-text-muted'
-          }`}
-        >
-          <RefreshCw className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Directive mode toggle (Handler-led single-card experience) */}
+          <div className="relative">
+            <Tooltip label={directiveMode ? 'Exit directive mode' : 'Directive mode (Handler-led)'}>
+              <button
+                onClick={() => {
+                  if (showDirectiveTooltip && !directiveMode) {
+                    // First time: dismiss tooltip and activate
+                    localStorage.setItem('directive-mode-seen', 'true');
+                    setShowDirectiveTooltip(false);
+                    setDirectiveMode(true);
+                    setFocusMode(false);
+                    setShowAllItems(false);
+                    return;
+                  }
+                  setDirectiveMode(!directiveMode);
+                  if (!directiveMode) {
+                    setFocusMode(false);
+                    setShowAllItems(false);
+                  }
+                }}
+                className={`p-3 rounded-xl transition-colors flex items-center gap-2 ${
+                  directiveMode
+                    ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-lg shadow-pink-500/25'
+                    : isBambiMode
+                      ? 'hover:bg-pink-50 text-pink-400'
+                      : 'hover:bg-protocol-surface text-protocol-text-muted'
+                }`}
+                aria-label={directiveMode ? 'Exit directive mode' : 'Enter directive mode'}
+              >
+                <Zap className="w-5 h-5" />
+              </button>
+            </Tooltip>
+            {showDirectiveTooltip && !directiveMode && (
+              <div className="absolute z-20 right-0 top-full mt-2 p-3 rounded-xl bg-gray-900 text-white text-sm max-w-[240px] shadow-xl">
+                <p className="font-medium mb-1">Directive Mode</p>
+                <p className="text-xs text-gray-300">Handler takes over. One task at a time, no choices. Tap the bolt again to exit.</p>
+                <button
+                  onClick={() => {
+                    localStorage.setItem('directive-mode-seen', 'true');
+                    setShowDirectiveTooltip(false);
+                    setDirectiveMode(true);
+                    setFocusMode(false);
+                    setShowAllItems(false);
+                  }}
+                  className="mt-2 text-xs text-purple-400 font-medium hover:text-purple-300"
+                >
+                  Got it, activate
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Focus/Full mode toggle (only when not in directive mode) */}
+          {!directiveMode && (
+            <Tooltip label={focusMode ? 'Full view' : 'Focus mode'}>
+              <button
+                onClick={() => {
+                  setFocusMode(!focusMode);
+                  setShowAllItems(false);
+                }}
+                className={`p-3 rounded-xl transition-colors flex items-center gap-2 ${
+                  focusMode
+                    ? isBambiMode
+                      ? 'bg-pink-100 text-pink-600'
+                      : 'bg-protocol-accent/20 text-protocol-accent'
+                    : isBambiMode
+                      ? 'hover:bg-pink-50 text-pink-400'
+                      : 'hover:bg-protocol-surface text-protocol-text-muted'
+                }`}
+                aria-label={focusMode ? 'Switch to full view' : 'Switch to focus mode'}
+              >
+                {focusMode ? <Focus className="w-5 h-5" /> : <LayoutGrid className="w-5 h-5" />}
+              </button>
+            </Tooltip>
+          )}
+
+          <Tooltip label="Refresh tasks">
+            <button
+              onClick={handleRefresh}
+              className={`p-3 rounded-xl transition-colors ${
+                isWeekendDay
+                  ? 'hover:bg-rose-100 text-rose-500 dark:hover:bg-rose-900/30 dark:text-rose-400'
+                  : isBambiMode
+                    ? 'hover:bg-pink-100 text-pink-500'
+                    : 'hover:bg-protocol-surface text-protocol-text-muted'
+              }`}
+              aria-label="Refresh tasks"
+            >
+              <RefreshCw className="w-5 h-5" />
+            </button>
+          </Tooltip>
+        </div>
       </div>
+
+      {/* Directive Mode: Handler-led single-card experience (Feature 6) */}
+      {/* Works on any day — if user toggles directive mode, they want handler-led experience */}
+      {directiveMode && (
+        <div className="mb-6">
+          <DirectiveModeView
+            pendingTasks={pendingTasks}
+            userState={{
+              denialDay: denialDays,
+              arousalLevel: userState?.currentArousal || 0,
+              mood: currentMood || 5,
+              ginaHome: isGinaHome,
+              streakDays: userState?.streakDays || 0,
+              lastTask: userState?.lastTaskCategory || undefined,
+            }}
+            onTaskComplete={(taskId, feltGood) => complete(taskId, feltGood)}
+            onTaskSkip={(taskId) => skip(taskId)}
+            onRefresh={handleRefresh}
+          />
+        </div>
+      )}
+
+      {/* Focus Mode: Single priority action (only when not in directive mode) */}
+      {!directiveMode && focusMode && !isWeekendDay && (
+        <div ref={focusedCardRef} className="mb-6">
+          <FocusedActionCard
+            priorityAction={priorityAction}
+            pendingCount={otherPendingCount}
+            onStartAction={handleStartPriorityAction}
+            onDismiss={handleDismissAction}
+            onShowAll={() => setShowAllItems(!showAllItems)}
+            isExpanded={showAllItems}
+            lovenseConnected={lovenseConnected}
+            lovenseDeviceName={activeToy?.nickName || activeToy?.name}
+          />
+        </div>
+      )}
 
       {/* Skip warning */}
       {showSkipWarning && (
@@ -385,35 +962,31 @@ export function TodayView() {
         </div>
       )}
 
-      {/* Streak Risk Banner - Skip ANY goal = streak breaks */}
-      {streakRisk && streakRisk.isAtRisk && (
+
+      {/* Streak Warnings - Proactive slip prevention (hidden in focus/directive mode unless expanded) */}
+      {!isWeekendDay && !directiveMode && (!focusMode || showAllItems) && (
         <div className="px-4 mb-4">
-          <StreakRiskBanner
-            incompleteGoals={streakRisk.incompleteGoals}
-            totalGoals={streakRisk.totalGoals}
-            currentStreak={streakRisk.currentStreak}
-            pointsAtRisk={streakRisk.pointsAtRisk}
-            hoursRemaining={streakRisk.hoursRemaining}
-          />
+          <StreakWarningsWidget compact />
         </div>
       )}
 
-      {/* Time Anchors - Sunk cost awareness */}
-      {!isWeekendDay && (
+      {/* Time Anchors - Sunk cost awareness (hidden in focus/directive mode unless expanded) */}
+      {!isWeekendDay && !directiveMode && (!focusMode || showAllItems) && (
         <div className="px-4 mb-4">
           <TimeRatchetsDisplay compact />
         </div>
       )}
 
-      {/* Arousal Planner Section */}
-      {!isWeekendDay && (
+      {/* Arousal Planner Section (hidden in focus/directive mode unless expanded, hidden when Gina home) */}
+      {!isWeekendDay && !directiveMode && !isGinaHome && (!focusMode || showAllItems) && (
         <div className="px-4">
           <ArousalPlannerSection />
         </div>
       )}
 
-      {/* Goals Section */}
-      {todaysGoals.length > 0 && (
+
+      {/* Goals Section (hidden in focus/directive mode unless expanded) */}
+      {todaysGoals.length > 0 && !directiveMode && (!focusMode || showAllItems) && (
         <div className="px-4 space-y-4 mb-6">
           {/* Section header */}
           <div className="flex items-center gap-2 px-1">
@@ -474,8 +1047,8 @@ export function TodayView() {
         </div>
       )}
 
-      {/* Task list */}
-      <div className="px-4 space-y-4">
+      {/* Task list (hidden in focus/directive mode unless expanded) */}
+      {!directiveMode && (!focusMode || showAllItems) && <div className="px-4 space-y-4">
         {/* Weekend Activities Section */}
         {isWeekendDay && todaysActivities.length > 0 && (
           <>
@@ -616,7 +1189,7 @@ export function TodayView() {
                   <TaskCardNew
                     key={task.id}
                     task={task}
-                    onComplete={(feltGood) => complete(task.id, feltGood)}
+                    onComplete={(feltGood, notes) => complete(task.id, feltGood, notes)}
                     onIncrement={() => incrementProgress(task.id)}
                     onSkip={() => skip(task.id)}
                     isCompleting={completingTaskId === task.id}
@@ -672,14 +1245,24 @@ export function TodayView() {
             )}
           </>
         )}
-      </div>
+      </div>}
 
       {/* Completion celebration (per-task) */}
-      {lastCompletedTask && (
+      {lastCompletedTask && !showContinuation && (
         <CompletionCelebration
           affirmation={lastCompletedTask.affirmation}
           pointsEarned={lastCompletedTask.pointsEarned}
           onDismiss={dismissCompletion}
+        />
+      )}
+
+      {/* Continuation prompt - maintains momentum after completion */}
+      {showContinuation && (
+        <ContinuationPrompt
+          completedTaskName={completedActionName}
+          nextAction={priorityAction}
+          onContinue={handleContinue}
+          onDone={handleDoneContinuing}
         />
       )}
 
@@ -740,6 +1323,16 @@ export function TodayView() {
             clearAffirmationTrigger();
             refreshGoals();
           }}
+        />
+      )}
+
+      {/* Active Session Overlay - step-by-step guidance with vibration control */}
+      {activeSession && activeSession.steps && (
+        <ActiveSessionOverlay
+          title={activeSession.title}
+          steps={activeSession.steps}
+          onComplete={handleSessionComplete}
+          onCancel={handleSessionCancel}
         />
       )}
     </div>

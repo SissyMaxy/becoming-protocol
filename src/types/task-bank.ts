@@ -212,6 +212,10 @@ export interface DailyTask {
   denialDayAtAssign?: number;
   streakAtAssign?: number;
   selectionReason: SelectionReason;
+  // Claude-personalized text (overrides base task fields when present)
+  enhancedInstruction?: string;
+  enhancedSubtext?: string;
+  enhancedAffirmation?: string;
 }
 
 export interface DbDailyTask {
@@ -228,6 +232,10 @@ export interface DbDailyTask {
   streak_at_assign: number | null;
   selection_reason: string;
   created_at: string;
+  // Claude-personalized text
+  enhanced_instruction: string | null;
+  enhanced_subtext: string | null;
+  enhanced_affirmation: string | null;
   // Joined task data
   task_bank?: DbTask;
 }
@@ -297,6 +305,7 @@ export interface UserTaskContext {
   arousalState?: string;
   timeOfDay: TimeWindow;
   ginaHome: boolean;
+  ginaAsleep: boolean;
   ownedItems: string[];
   completedTaskIds: string[];
   recentlyServedTaskIds: string[]; // Last 7 days

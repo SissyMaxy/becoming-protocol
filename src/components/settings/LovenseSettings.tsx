@@ -70,14 +70,16 @@ export function LovenseSettings({ className = '' }: LovenseSettingsProps) {
 
   // Test buzz
   const handleTestBuzz = async () => {
-    if (lovense.status !== 'connected') return;
+    if (lovense.status !== 'connected' && !lovense.cloudConnected) return;
 
     setTestingBuzz(true);
     await lovense.setIntensity(10);
     setTimeout(async () => {
+      // Try stop first, then force intensity to 0 as fallback
       await lovense.stop();
+      await lovense.setIntensity(0);
       setTestingBuzz(false);
-    }, 1000);
+    }, 5000);
   };
 
   const isConnected = lovense.status === 'connected' || lovense.cloudConnected;

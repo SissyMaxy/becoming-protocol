@@ -16,6 +16,7 @@ import {
   ClipboardEdit,
   Clock,
   Brain,
+  Upload,
 } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
 import { useProtocol } from '../../context/ProtocolContext';
@@ -26,13 +27,17 @@ import { ProfileView } from './ProfileView';
 import { TimeRatchetsSettings } from './TimeRatchetsSettings';
 import { ReminderSettingsPanel } from '../reminders';
 import { HandlerDashboard } from '../handler-dashboard';
+import { TaskUploadSettings } from './TaskUploadSettings';
+import { DataExportView } from './DataExportView';
+import { AppearanceSettings } from './AppearanceSettings';
+import { PrivacySettings } from './PrivacySettings';
 
 interface SettingsViewProps {
   onBack: () => void;
   onEditIntake?: () => void;
 }
 
-type SettingsSection = 'main' | 'profile' | 'lovense' | 'timeratchets' | 'reminders' | 'privacy' | 'appearance' | 'data' | 'handler';
+type SettingsSection = 'main' | 'profile' | 'lovense' | 'timeratchets' | 'reminders' | 'privacy' | 'appearance' | 'data' | 'handler' | 'taskupload';
 
 export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
   const { isBambiMode } = useBambiMode();
@@ -76,7 +81,6 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
       label: 'Privacy',
       description: 'Data and security',
       color: '#22c55e',
-      comingSoon: true,
     },
     {
       id: 'appearance' as const,
@@ -84,7 +88,6 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
       label: 'Appearance',
       description: 'Theme and display',
       color: '#a855f7',
-      comingSoon: true,
     },
     {
       id: 'data' as const,
@@ -92,7 +95,6 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
       label: 'Data',
       description: 'Export and backup',
       color: '#3b82f6',
-      comingSoon: true,
     },
   ];
 
@@ -110,6 +112,10 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
     if (activeSection === 'timeratchets') return 'Time Anchors';
     if (activeSection === 'reminders') return 'Feminization Reminders';
     if (activeSection === 'handler') return 'Handler Dashboard';
+    if (activeSection === 'taskupload') return 'Task Upload';
+    if (activeSection === 'privacy') return 'Privacy & Security';
+    if (activeSection === 'appearance') return 'Appearance';
+    if (activeSection === 'data') return 'Data Export';
     const section = sections.find(s => s.id === activeSection);
     return section?.label || 'Settings';
   };
@@ -259,13 +265,8 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
                   return (
                     <button
                       key={section.id}
-                      onClick={() => !section.comingSoon && setActiveSection(section.id)}
-                      disabled={section.comingSoon}
+                      onClick={() => setActiveSection(section.id)}
                       className={`w-full p-4 rounded-xl border flex items-center gap-4 text-left transition-all ${
-                        section.comingSoon
-                          ? 'opacity-50 cursor-not-allowed'
-                          : ''
-                      } ${
                         isBambiMode
                           ? 'bg-pink-50 border-pink-200 hover:border-pink-300'
                           : 'bg-protocol-surface border-protocol-border hover:border-protocol-accent/30'
@@ -286,17 +287,6 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
                           >
                             {section.label}
                           </p>
-                          {section.comingSoon && (
-                            <span
-                              className={`text-xs px-2 py-0.5 rounded-full ${
-                                isBambiMode
-                                  ? 'bg-pink-100 text-pink-500'
-                                  : 'bg-protocol-surface-light text-protocol-text-muted'
-                              }`}
-                            >
-                              Soon
-                            </span>
-                          )}
                         </div>
                         <p
                           className={`text-sm ${
@@ -425,6 +415,49 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
                     </p>
                   </div>
                 </button>
+
+                {/* Task Upload - Always visible for flooding the protocol */}
+                <button
+                  onClick={() => setActiveSection('taskupload')}
+                    className={`w-full p-4 rounded-xl border flex items-center gap-4 text-left transition-all ${
+                      isBambiMode
+                        ? 'bg-pink-50 border-pink-200 hover:border-pink-300'
+                        : 'bg-protocol-surface border-protocol-border hover:border-protocol-accent/30'
+                    }`}
+                  >
+                    <div
+                      className="p-3 rounded-xl"
+                      style={{ backgroundColor: '#10b98120' }}
+                    >
+                      <Upload
+                        className="w-5 h-5"
+                        style={{ color: '#10b981' }}
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <p
+                          className={`font-medium ${
+                            isBambiMode ? 'text-pink-700' : 'text-protocol-text'
+                          }`}
+                        >
+                          Task Upload
+                        </p>
+                      </div>
+                      <p
+                        className={`text-sm ${
+                          isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'
+                        }`}
+                      >
+                        Import tasks from CSV or JSON
+                      </p>
+                    </div>
+                    <ChevronRight
+                      className={`w-5 h-5 ${
+                        isBambiMode ? 'text-pink-300' : 'text-protocol-text-muted'
+                      }`}
+                    />
+                  </button>
 
                 {/* Handler Dashboard - Debug Mode Only */}
                 {isDebugMode && (
@@ -555,6 +588,20 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
         {activeSection === 'handler' && isDebugMode && (
           <HandlerDashboard onBack={() => setActiveSection('main')} />
         )}
+
+        {/* Task Upload - Always available for flooding the protocol */}
+        {activeSection === 'taskupload' && (
+          <TaskUploadSettings />
+        )}
+
+        {/* Privacy & Security */}
+        {activeSection === 'privacy' && <PrivacySettings />}
+
+        {/* Appearance */}
+        {activeSection === 'appearance' && <AppearanceSettings />}
+
+        {/* Data Export */}
+        {activeSection === 'data' && <DataExportView />}
       </div>
     </div>
   );

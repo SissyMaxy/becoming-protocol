@@ -1,0 +1,18 @@
+{
+  "sessions": {
+    "edge": [],
+    "goon": [],
+    "conditioning": [],
+    "freestyle": [],
+    "denial": []
+  },
+  "primers": {
+    "posture": [],
+    "gait": [],
+    "sitting": [],
+    "hands": [],
+    "fullbody": [],
+    "universal": []
+  },
+  "_instructions": "Add video filenames (without path) to the appropriate arrays. Videos should be placed in the corresponding folder. Example: edge videos go in /videos/sessions/edge/ and you add just the filename like 'video1.mp4' to the edge array."
+}

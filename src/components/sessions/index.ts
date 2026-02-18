@@ -15,3 +15,9 @@ export { SessionCompletionFlow } from './SessionCompletionFlow';
 export { EdgeSession } from './EdgeSession';
 export { GooningSession } from './GooningSession';
 export { SessionLauncher } from './SessionLauncher';
+
+// Handler v2 Integration
+export { SessionWithHandler } from './SessionWithHandler';
+export { PostSessionMoodCapture } from './PostSessionMoodCapture';
+export { TimeCapsulePrompt } from './TimeCapsulePrompt';
+export { DenialTracker } from './DenialTracker';

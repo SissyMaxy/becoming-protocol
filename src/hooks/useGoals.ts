@@ -169,45 +169,74 @@ export function useGoals(): UseGoalsReturn {
     }
   }, [userId, loadGoals]);
 
-  // Complete a goal
+  // Complete a goal with optimistic update
   const handleCompleteGoal = useCallback(async (input: GoalCompletionInput): Promise<DailyGoalCompletion | null> => {
+    // Optimistic update - immediately update UI
+    setTodaysGoals(prev => prev.map(goal =>
+      goal.goalId === input.goalId
+        ? { ...goal, completedToday: true, drillUsedId: input.drillId }
+        : goal
+    ));
+    setCompletionStatus(prev => ({ ...prev, completed: prev.completed + 1 }));
+
     try {
       const completion = await completeGoal(input);
-      // Refresh to update UI
-      await loadGoals();
+      // Background refresh for accurate data
+      loadGoals();
       return completion;
     } catch (err) {
+      // Revert optimistic update on error
+      setTodaysGoals(prev => prev.map(goal =>
+        goal.goalId === input.goalId
+          ? { ...goal, completedToday: false, drillUsedId: null }
+          : goal
+      ));
+      setCompletionStatus(prev => ({ ...prev, completed: Math.max(0, prev.completed - 1) }));
       console.error('Failed to complete goal:', err);
       setError(err instanceof Error ? err.message : 'Failed to complete goal');
       return null;
     }
   }, [loadGoals]);
 
-  // Abandon a goal
+  // Abandon a goal with optimistic update
   const handleAbandonGoal = useCallback(async (goalId: string, reason: string): Promise<Goal | null> => {
+    // Optimistic: remove from today's goals
+    const previousGoals = todaysGoals;
+    setTodaysGoals(prev => prev.filter(g => g.goalId !== goalId));
+    setAllGoals(prev => prev.map(g => g.id === goalId ? { ...g, status: 'abandoned' as const } : g));
+
     try {
       const goal = await abandonGoal(goalId, reason);
-      await loadGoals();
+      loadGoals(); // Background refresh
       return goal;
     } catch (err) {
+      // Revert on error
+      setTodaysGoals(previousGoals);
       console.error('Failed to abandon goal:', err);
       setError(err instanceof Error ? err.message : 'Failed to abandon goal');
       return null;
     }
-  }, [loadGoals]);
+  }, [loadGoals, todaysGoals]);
 
-  // Pause a goal
+  // Pause a goal with optimistic update
   const handlePauseGoal = useCallback(async (goalId: string): Promise<Goal | null> => {
+    // Optimistic update
+    const previousGoals = todaysGoals;
+    setTodaysGoals(prev => prev.filter(g => g.goalId !== goalId));
+    setAllGoals(prev => prev.map(g => g.id === goalId ? { ...g, status: 'paused' as const } : g));
+
     try {
       const goal = await pauseGoal(goalId);
-      await loadGoals();
+      loadGoals(); // Background refresh
       return goal;
     } catch (err) {
+      // Revert on error
+      setTodaysGoals(previousGoals);
       console.error('Failed to pause goal:', err);
       setError(err instanceof Error ? err.message : 'Failed to pause goal');
       return null;
     }
-  }, [loadGoals]);
+  }, [loadGoals, todaysGoals]);
 
   // Resume a goal
   const handleResumeGoal = useCallback(async (goalId: string): Promise<Goal | null> => {

@@ -11,7 +11,16 @@
  * - low: Informational modals, optional prompts
  */
 
-import { createContext, useContext, useState, useCallback, useMemo, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useMemo, useEffect, ReactNode } from 'react';
+
+function BodyScrollLock() {
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+  return null;
+}
 
 // ============================================
 // TYPES
@@ -149,6 +158,8 @@ export function ModalOrchestratorProvider({ children }: ModalOrchestratorProvide
   return (
     <ModalOrchestratorContext.Provider value={value}>
       {children}
+      {/* Lock body scroll when modal is open */}
+      {currentModal && <BodyScrollLock />}
       {/* Render the current modal */}
       {currentModal && (
         <div

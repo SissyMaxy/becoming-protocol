@@ -54,38 +54,27 @@ interface UseEscalationStateReturn {
 }
 
 // Initial escalation descriptions per domain
+// Ordered by priority: arousal (driver) > sissification (driver) > submission (driver) > identity (outcome) > feminization (outcome)
 const INITIAL_DESCRIPTIONS: Record<EscalationDomain, { current: string; next: string }> = {
-  identity: {
-    current: 'Exploring feminine identity',
-    next: 'Practicing feminine identity daily',
-  },
-  presentation: {
-    current: 'Private feminine presentation',
-    next: 'Home-only presentation',
+  arousal: {
+    current: 'Beginning arousal training',
+    next: 'Regular edge sessions',
   },
   sissification: {
-    current: 'Curious about submission',
-    next: 'Exploring submissive femininity',
+    current: 'Curious about sissification',
+    next: 'Exploring sissy practices',
   },
-  chastity: {
-    current: 'Occasional chastity',
-    next: 'Regular chastity sessions',
+  submission: {
+    current: 'Exploring submission',
+    next: 'Regular obedience practice',
   },
-  denial: {
-    current: 'Short-term denial (days)',
-    next: 'Extended denial (weeks)',
+  identity: {
+    current: 'Identity awareness',
+    next: 'Identity shifts during arousal',
   },
-  hypno: {
-    current: 'Light hypno exploration',
-    next: 'Moderate hypno engagement',
-  },
-  sexual_service: {
-    current: 'Fantasy only',
-    next: 'Content consumption',
-  },
-  gina_dynamic: {
-    current: 'Gina is aware',
-    next: 'Gina is curious',
+  feminization: {
+    current: 'Private feminine exploration',
+    next: 'Regular feminine practice',
   },
 };
 

@@ -3,6 +3,7 @@
  * Displays a ceremony with its status and theme
  */
 
+import { memo } from 'react';
 import { Lock, Check, Play, Clock } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
 import { CEREMONY_THEMES } from '../../types/ceremonies';
@@ -20,7 +21,8 @@ function isUserCeremony(c: UserCeremony | Ceremony): c is UserCeremony {
   return 'ceremonyId' in c;
 }
 
-export function CeremonyCard({
+// Memoized to prevent unnecessary re-renders
+export const CeremonyCard = memo(function CeremonyCard({
   ceremony,
   status,
   onBegin,
@@ -145,7 +147,10 @@ export function CeremonyCard({
       </div>
     </div>
   );
-}
+});
+
+// Display name for React DevTools
+CeremonyCard.displayName = 'CeremonyCard';
 
 // Helper to get theme name from ceremony name
 function getThemeName(name: string): string {

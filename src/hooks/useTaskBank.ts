@@ -5,6 +5,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useProtocol } from '../context/ProtocolContext';
 import { useAuth } from '../context/AuthContext';
 import { useArousalState } from './useArousalState';
+import { useUserState } from './useUserState';
 import {
   getTodayTasks,
   getOrCreateTodayTasks,
@@ -14,6 +15,8 @@ import {
   skipTask,
   getTaskStats,
   getTimeOfDay,
+  enhanceTasks,
+  buildEnhancementContext,
 } from '../lib/task-bank';
 import type {
   DailyTask,
@@ -67,6 +70,7 @@ export function useTaskBank(): UseTaskBankReturn {
   const { currentEntry: _currentEntry, progress } = useProtocol();
   const { user } = useAuth();
   const { metrics, currentState } = useArousalState();
+  const { userState } = useUserState();
 
   // Task state
   const [todayTasks, setTodayTasks] = useState<DailyTask[]>([]);
@@ -95,29 +99,44 @@ export function useTaskBank(): UseTaskBankReturn {
   // Ref to track if initial load has happened
   const hasLoadedRef = useRef(false);
 
+  // Calculate max daily tasks based on executive function
+  const getMaxDailyTasks = useCallback((): number => {
+    const execFn = userState?.estimatedExecFunction || 'medium';
+    const odometer = userState?.odometer || 'coasting';
+
+    // Depression/survival mode: minimal tasks
+    if (execFn === 'depleted' || odometer === 'survival') return 2;
+    if (execFn === 'low') return 3;
+    // High function / momentum: can handle more
+    if (execFn === 'high' && (odometer === 'momentum' || odometer === 'breakthrough')) return 5;
+    // Default
+    return 4;
+  }, [userState?.estimatedExecFunction, userState?.odometer]);
+
   // Build user context - takes existingTasks as parameter to avoid stale closure
   const buildContext = useCallback((existingTasks: DailyTask[] = []): UserTaskContext => {
     return {
       userId: user?.id || '',
       phase: progress?.phase?.currentPhase || 1,
-      denialDay: metrics?.currentStreakDays || 0,
-      streakDays: 0, // Will be updated after stats load
+      denialDay: userState?.denialDay || metrics?.currentStreakDays || 0,
+      streakDays: userState?.streakDays || stats?.currentStreak || 0,
       arousalState: currentState,
       timeOfDay: getTimeOfDay(),
-      ginaHome: false, // Would come from user input/schedule
+      ginaHome: userState?.ginaHome ?? false,
+      ginaAsleep: userState?.ginaAsleep ?? false,
       ownedItems: [], // Would come from wishlist/inventory
       completedTaskIds: [], // Would be loaded from completions
       recentlyServedTaskIds: existingTasks.map(t => t.taskId),
       categoryCompletions: {} as Record<TaskCategory, number>,
-      totalCompletions: 0,
+      totalCompletions: userState?.tasksCompletedToday || 0,
       resistancePatterns: {
         skippedCategories: [],
         skippedTaskIds: [],
         delayPatterns: false,
       },
-      maxDailyTasks: 4,
+      maxDailyTasks: getMaxDailyTasks(),
     };
-  }, [user, progress, metrics, currentState]);
+  }, [user, progress, metrics, currentState, userState, stats, getMaxDailyTasks]);
 
   // Load tasks
   const loadTasks = useCallback(async () => {
@@ -141,6 +160,27 @@ export function useTaskBank(): UseTaskBankReturn {
       // Load stats
       const taskStats = await getTaskStats();
       setStats(taskStats);
+
+      // Enhance tasks with Claude personalization (async, non-blocking)
+      // Only if there are pending tasks without enhancements
+      const hasPendingUnenhanced = tasks.some(
+        t => t.status === 'pending' && !t.enhancedInstruction
+      );
+      if (hasPendingUnenhanced) {
+        console.log('[useTaskBank] Starting task enhancement for', tasks.filter(t => t.status === 'pending' && !t.enhancedInstruction).length, 'tasks');
+        buildEnhancementContext(user.id).then(ctx => {
+          console.log('[useTaskBank] Enhancement context built:', { chosenName: ctx.chosenName, denialDay: ctx.denialDay, timeOfDay: ctx.timeOfDay });
+          return enhanceTasks(tasks, ctx).then(enhanced => {
+            const enhancedCount = enhanced.filter(t => t.enhancedInstruction).length;
+            console.log('[useTaskBank] Enhancement result:', enhancedCount, 'tasks enhanced');
+            if (enhancedCount > 0) {
+              setTodayTasks(enhanced);
+            }
+          });
+        }).catch(err => {
+          console.error('[useTaskBank] Enhancement failed:', err);
+        });
+      }
     } catch (err) {
       console.error('Failed to load tasks:', err);
       setError(err instanceof Error ? err.message : 'Failed to load tasks');
@@ -148,6 +188,10 @@ export function useTaskBank(): UseTaskBankReturn {
       setIsLoading(false);
     }
   }, [user?.id, buildContext]);
+
+  // Track ginaHome/ginaAsleep for reactive re-filtering
+  const prevGinaHomeRef = useRef<boolean | undefined>(undefined);
+  const prevGinaAsleepRef = useRef<boolean | undefined>(undefined);
 
   // Load on mount - only once
   useEffect(() => {
@@ -157,6 +201,33 @@ export function useTaskBank(): UseTaskBankReturn {
     hasLoadedRef.current = true;
     loadTasks();
   }, [user?.id, loadTasks]);
+
+  // Re-load tasks when ginaHome changes (hide/show intimate tasks)
+  useEffect(() => {
+    if (userState?.ginaHome === undefined) return;
+    if (prevGinaHomeRef.current === undefined) {
+      prevGinaHomeRef.current = userState.ginaHome;
+      return;
+    }
+    if (prevGinaHomeRef.current !== userState.ginaHome) {
+      prevGinaHomeRef.current = userState.ginaHome;
+      // Reload tasks with new ginaHome context
+      loadTasks();
+    }
+  }, [userState?.ginaHome, loadTasks]);
+
+  // Re-load tasks when ginaAsleep changes (filter noisy tasks)
+  useEffect(() => {
+    if (userState?.ginaAsleep === undefined) return;
+    if (prevGinaAsleepRef.current === undefined) {
+      prevGinaAsleepRef.current = userState.ginaAsleep;
+      return;
+    }
+    if (prevGinaAsleepRef.current !== userState.ginaAsleep) {
+      prevGinaAsleepRef.current = userState.ginaAsleep;
+      loadTasks();
+    }
+  }, [userState?.ginaAsleep, loadTasks]);
 
   // Complete task
   const complete = useCallback(async (

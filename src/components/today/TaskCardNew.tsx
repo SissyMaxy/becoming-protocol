@@ -16,7 +16,7 @@ function navigateToWishlist() {
 
 interface TaskCardNewProps {
   task: DailyTask;
-  onComplete: (feltGood?: boolean) => void;
+  onComplete: (feltGood?: boolean, notes?: string) => void;
   onIncrement?: () => void;
   onSkip: () => void;
   onUndo?: () => void;
@@ -85,11 +85,17 @@ export function TaskCardNew({
   const { isBambiMode } = useBambiMode();
   const [expanded, setExpanded] = useState(isFirst);
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
+  const [showLogInput, setShowLogInput] = useState(false);
+  const [logText, setLogText] = useState('');
 
   const { instruction, category, intensity, completionType, targetCount, durationMinutes, subtext } = task.task;
   const emoji = CATEGORY_EMOJI[category];
   const intensityConfig = INTENSITY_CONFIG[intensity];
   const categoryConfig = CATEGORY_CONFIG[category];
+
+  // Prefer Claude-enhanced text over base task text
+  const displayInstruction = task.enhancedInstruction || instruction;
+  const displaySubtext = task.enhancedSubtext || subtext || getSubtext(category);
 
   const isCompleted = task.status === 'completed';
   const isSkipped = task.status === 'skipped';
@@ -99,15 +105,31 @@ export function TaskCardNew({
   const showProgress = completionType === 'count' && targetCount;
   const progressPercent = showProgress ? (task.progress / (targetCount || 1)) * 100 : 0;
 
-  // Get persuasive subtext
-  const persuasiveText = subtext || getSubtext(category);
+  // Get persuasive subtext (already computed above)
+  const persuasiveText = displaySubtext;
+
+  // Categories that should show a logging input before completion
+  const logCategories = ['wear', 'apply', 'use'];
+  const needsLog = logCategories.includes(category);
+  const logPrompts: Record<string, string> = {
+    wear: 'What are you wearing?',
+    apply: 'What did you apply?',
+    use: 'What did you use?',
+  };
 
   const handleComplete = () => {
     if (showProgress && task.progress < (targetCount || 0) - 1) {
       onIncrement?.();
+    } else if (needsLog && !showLogInput) {
+      setShowLogInput(true);
     } else {
       onComplete(true);
     }
+  };
+
+  const handleLogComplete = () => {
+    setShowLogInput(false);
+    onComplete(true, logText.trim() || undefined);
   };
 
   const handleSkip = () => {
@@ -138,7 +160,7 @@ export function TaskCardNew({
             <p className={`font-medium line-through opacity-60 ${
               isBambiMode ? 'text-pink-800' : 'text-protocol-text'
             }`}>
-              {instruction}
+              {displayInstruction}
             </p>
             <p className={`text-xs mt-0.5 ${
               isBambiMode ? 'text-pink-500' : 'text-emerald-400'
@@ -181,7 +203,7 @@ export function TaskCardNew({
           </div>
           <div className="flex-1">
             <p className="font-medium line-through text-gray-400">
-              {instruction}
+              {displayInstruction}
             </p>
             <p className="text-xs mt-0.5 text-gray-400">
               Skipped
@@ -242,6 +264,54 @@ export function TaskCardNew({
         </div>
       )}
 
+      {/* Log input overlay for wear/apply/use tasks */}
+      {showLogInput && (
+        <div className={`absolute inset-0 z-10 flex items-center justify-center backdrop-blur-sm ${
+          isBambiMode ? 'bg-white/90' : 'bg-protocol-bg/90'
+        }`}>
+          <div className="text-center px-6 w-full">
+            <p className={`font-semibold mb-3 ${
+              isBambiMode ? 'text-pink-700' : 'text-protocol-text'
+            }`}>
+              {logPrompts[category] || 'What did you do?'}
+            </p>
+            <input
+              type="text"
+              value={logText}
+              onChange={(e) => setLogText(e.target.value)}
+              placeholder="Optional — describe what you logged"
+              autoFocus
+              className={`w-full px-3 py-2 rounded-lg border text-sm mb-4 ${
+                isBambiMode
+                  ? 'border-pink-300 bg-white text-gray-800 placeholder:text-pink-300 focus:ring-pink-400'
+                  : 'border-protocol-border bg-protocol-bg text-protocol-text placeholder:text-protocol-text-muted focus:ring-protocol-accent'
+              } focus:outline-none focus:ring-2`}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleLogComplete(); }}
+            />
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => setShowLogInput(false)}
+                className={`px-4 py-2 rounded-xl text-sm ${
+                  isBambiMode
+                    ? 'bg-gray-200 text-gray-600'
+                    : 'bg-gray-700 text-gray-400'
+                }`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleLogComplete}
+                className={`px-5 py-2 rounded-xl font-medium text-white text-sm bg-gradient-to-r ${
+                  getIntensityGradient(intensity, isBambiMode)
+                }`}
+              >
+                {logText.trim() ? 'Log & Complete' : 'Complete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header with gradient */}
       <div className={`bg-gradient-to-r ${getIntensityGradient(intensity, isBambiMode)} p-4`}>
         <div className="flex items-center justify-between">
@@ -270,6 +340,7 @@ export function TaskCardNew({
 
           <button
             onClick={() => setExpanded(!expanded)}
+            aria-label={expanded ? 'Collapse task details' : 'Expand task details'}
             className="p-1.5 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
           >
             {expanded ? (
@@ -287,7 +358,7 @@ export function TaskCardNew({
         <p className={`text-lg font-semibold leading-snug ${
           isBambiMode ? 'text-gray-800' : 'text-protocol-text'
         }`}>
-          {instruction}
+          {displayInstruction}
         </p>
 
         {/* Persuasive subtext */}
@@ -364,36 +435,72 @@ export function TaskCardNew({
           <div className="mt-4 flex items-center gap-3">
             <button
               onClick={handleSkip}
-              className={`p-2.5 rounded-xl transition-colors ${
+              aria-label="Skip task"
+              className={`p-2.5 rounded-xl transition-colors flex flex-col items-center ${
                 isBambiMode
                   ? 'text-gray-400 hover:bg-pink-50 hover:text-pink-400'
                   : 'text-protocol-text-muted hover:bg-protocol-bg'
               }`}
             >
               <X className="w-5 h-5" />
+              <span className="text-[10px] -mt-0.5">Skip</span>
             </button>
 
-            <button
-              onClick={handleComplete}
-              disabled={isCompleting}
-              className={`flex-1 py-3 rounded-xl font-semibold text-white transition-all active:scale-[0.98] bg-gradient-to-r ${
-                getIntensityGradient(intensity, isBambiMode)
-              } hover:opacity-90`}
-            >
-              {isCompleting ? (
-                <Loader2 className="w-5 h-5 animate-spin mx-auto" />
-              ) : showProgress && task.progress < (targetCount || 0) - 1 ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span>+1</span>
-                  <span className="text-white/70">({task.progress + 1}/{targetCount})</span>
-                </span>
-              ) : (
-                <span className="flex items-center justify-center gap-2">
-                  <Check className="w-5 h-5" />
-                  <span>Complete</span>
-                </span>
-              )}
-            </button>
+            {/* Binary completion type - show Yes/No buttons */}
+            {completionType === 'binary' ? (
+              <div className="flex-1 flex gap-2">
+                <button
+                  onClick={() => onComplete(false)}
+                  disabled={isCompleting}
+                  className={`flex-1 py-3 rounded-xl font-semibold transition-all active:scale-[0.98] ${
+                    isBambiMode
+                      ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
+                  }`}
+                >
+                  {isCompleting ? (
+                    <Loader2 className="w-5 h-5 animate-spin mx-auto" />
+                  ) : (
+                    'No'
+                  )}
+                </button>
+                <button
+                  onClick={() => onComplete(true)}
+                  disabled={isCompleting}
+                  className={`flex-1 py-3 rounded-xl font-semibold text-white transition-all active:scale-[0.98] bg-gradient-to-r ${
+                    getIntensityGradient(intensity, isBambiMode)
+                  } hover:opacity-90`}
+                >
+                  {isCompleting ? (
+                    <Loader2 className="w-5 h-5 animate-spin mx-auto" />
+                  ) : (
+                    'Yes'
+                  )}
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={handleComplete}
+                disabled={isCompleting}
+                className={`flex-1 py-3 rounded-xl font-semibold text-white transition-all active:scale-[0.98] bg-gradient-to-r ${
+                  getIntensityGradient(intensity, isBambiMode)
+                } hover:opacity-90`}
+              >
+                {isCompleting ? (
+                  <Loader2 className="w-5 h-5 animate-spin mx-auto" />
+                ) : showProgress && task.progress < (targetCount || 0) - 1 ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span>+1</span>
+                    <span className="text-white/70">({task.progress + 1}/{targetCount})</span>
+                  </span>
+                ) : (
+                  <span className="flex items-center justify-center gap-2">
+                    <Check className="w-5 h-5" />
+                    <span>Complete</span>
+                  </span>
+                )}
+              </button>
+            )}
           </div>
         )}
       </div>

@@ -6,7 +6,6 @@ import {
   ChevronLeft,
   Film,
   TrendingUp,
-  Clock,
   Loader2,
   Eye,
   Flame,
@@ -14,7 +13,7 @@ import {
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useBambiMode } from '../../context/BambiModeContext';
-import type { ContentEscalation, ContentTheme } from '../../types/escalation';
+import type { ContentEscalation } from '../../types/escalation';
 
 interface ContentEscalationViewProps {
   onBack: () => void;

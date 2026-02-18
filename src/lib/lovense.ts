@@ -432,6 +432,7 @@ interface TeaseState {
   pulseDuration: number;
   toyId: string | null;
   timeoutId: NodeJS.Timeout | null;
+  onIntensityChange?: (intensity: number) => void;
 }
 
 let teaseState: TeaseState | null = null;
@@ -446,6 +447,7 @@ export function startTeaseMode(options: {
   minInterval?: number; // ms
   maxInterval?: number; // ms
   pulseDuration?: number; // ms
+  onIntensityChange?: (intensity: number) => void;
 } = {}): void {
   stopTeaseMode();
 
@@ -458,6 +460,7 @@ export function startTeaseMode(options: {
     pulseDuration: options.pulseDuration || 500,
     toyId: options.toyId || null,
     timeoutId: null,
+    onIntensityChange: options.onIntensityChange,
   };
 
   scheduleNextTease();
@@ -475,14 +478,18 @@ function scheduleNextTease(): void {
     // Random intensity pulse
     const intensity = teaseState.minIntensity +
       Math.random() * (teaseState.maxIntensity - teaseState.minIntensity);
+    const roundedIntensity = Math.round(intensity);
 
     // Use smart vibrate for cloud API support
     smartVibrate(intensity, 0, 'tease');
+    // Update React state via callback
+    teaseState?.onIntensityChange?.(roundedIntensity);
 
     // Stop after pulse duration
     setTimeout(() => {
       if (teaseState?.isActive) {
         smartStop('tease');
+        teaseState?.onIntensityChange?.(0);
         scheduleNextTease();
       }
     }, teaseState.pulseDuration);
@@ -558,6 +565,7 @@ interface DenialTrainingState {
   toyId: string | null;
   timeoutId: NodeJS.Timeout | null;
   onPhaseChange?: (phase: string, cycle: number) => void;
+  onIntensityChange?: (intensity: number) => void;
 }
 
 let denialTraining: DenialTrainingState | null = null;
@@ -575,6 +583,7 @@ export function startDenialTraining(options: {
   maxIntensity?: number;
   cycles?: number;
   onPhaseChange?: (phase: string, cycle: number) => void;
+  onIntensityChange?: (intensity: number) => void;
 } = {}): void {
   stopDenialTraining();
 
@@ -591,6 +600,7 @@ export function startDenialTraining(options: {
     toyId: options.toyId || null,
     timeoutId: null,
     onPhaseChange: options.onPhaseChange,
+    onIntensityChange: options.onIntensityChange,
   };
 
   runDenialPhase('building');
@@ -615,6 +625,7 @@ function runDenialPhase(phase: DenialTrainingState['phase']): void {
     case 'peak':
       // Hold at max - use smart vibrate for cloud API support
       smartVibrate(maxIntensity, 0, 'denial_training');
+      denialTraining.onIntensityChange?.(maxIntensity);
       denialTraining.timeoutId = setTimeout(() => {
         runDenialPhase('denial');
       }, peakDuration);
@@ -623,6 +634,7 @@ function runDenialPhase(phase: DenialTrainingState['phase']): void {
     case 'denial':
       // Stop completely
       smartStop('denial_training');
+      denialTraining.onIntensityChange?.(0);
       denialTraining.timeoutId = setTimeout(() => {
         runDenialPhase('rest');
       }, denialDuration);
@@ -663,8 +675,11 @@ function runBuildUp(
     }
 
     const intensity = startIntensity + (currentStep * intensityStep);
+    const roundedIntensity = Math.round(intensity);
     // Use smart vibrate for cloud API support
     smartVibrate(intensity, 0, 'denial_training');
+    // Update React state via callback
+    denialTraining?.onIntensityChange?.(roundedIntensity);
 
     currentStep++;
     denialTraining.timeoutId = setTimeout(nextStep, stepDuration);
@@ -854,21 +869,9 @@ export async function checkCloudConnection(): Promise<{
   connected: boolean;
   device?: { id: string; name: string; battery?: number };
 }> {
-  console.log('Checking cloud connection...');
-
-  // First check if we have a connection record
-  const { data: connection, error: connError } = await supabase
-    .from('lovense_connections')
-    .select('*')
-    .single();
-
-  console.log('Connection record:', connection, 'Error:', connError);
-
   const device = await getConnectedDevice();
-  console.log('Device record:', device);
 
   if (device && device.is_connected) {
-    console.log('Device is connected!');
     return {
       connected: true,
       device: {
@@ -878,7 +881,6 @@ export async function checkCloudConnection(): Promise<{
       },
     };
   }
-  console.log('No connected device found');
   return { connected: false };
 }
 
@@ -908,25 +910,16 @@ export async function getCloudDevices(): Promise<DbLovenseDevice[]> {
  * Only returns a device if it was seen within the last 5 minutes
  */
 export async function getConnectedDevice(): Promise<DbLovenseDevice | null> {
-  // First, let's see ALL devices for this user
-  const { data: allDevices, error: allError } = await supabase
-    .from('lovense_devices')
-    .select('*');
-
-  console.log('All devices for user:', allDevices, 'Error:', allError);
-
   const { data, error } = await supabase
     .from('lovense_devices')
     .select('*')
     .eq('is_connected', true)
-    .maybeSingle(); // Use maybeSingle instead of single to avoid error on 0 rows
+    .maybeSingle();
 
   if (error) {
-    console.error('Error getting connected device:', error);
+    console.error('[Lovense] Error getting connected device:', error);
     return null;
   }
-
-  console.log('Connected device query result:', data);
 
   // Check if the device was seen recently (within last 5 minutes)
   // If not, the connection is likely stale
@@ -935,7 +928,6 @@ export async function getConnectedDevice(): Promise<DbLovenseDevice | null> {
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
 
     if (lastSeen < fiveMinutesAgo) {
-      console.log('Device connection is stale (last seen:', lastSeen, ')');
       // Mark the device as disconnected since it's stale
       await supabase
         .from('lovense_devices')
@@ -949,7 +941,7 @@ export async function getConnectedDevice(): Promise<DbLovenseDevice | null> {
 }
 
 /**
- * Update device connection status
+ * Update device connection status by toy_id
  */
 export async function updateDeviceStatus(
   toyId: string,
@@ -966,6 +958,22 @@ export async function updateDeviceStatus(
     })
     .eq('user_id', user.id)
     .eq('toy_id', toyId);
+}
+
+/**
+ * Update device connection status by database row ID
+ */
+export async function updateDeviceStatusById(
+  id: string,
+  isConnected: boolean
+): Promise<void> {
+  await supabase
+    .from('lovense_devices')
+    .update({
+      is_connected: isConnected,
+      last_seen_at: new Date().toISOString(),
+    })
+    .eq('id', id);
 }
 
 // ============================================
@@ -1179,16 +1187,22 @@ export async function smartVibrate(
   triggerType: HapticTriggerType = 'manual',
   triggerId?: string
 ): Promise<boolean> {
+  // IMPORTANT: Lovense requires integer intensity 0-20
+  const intIntensity = Math.round(Math.min(20, Math.max(0, intensity)));
+
   if (useCloudApi) {
     const result = await sendVibrateCommand(
-      intensity,
+      intIntensity,
       durationSec || 0,
       triggerType,
       triggerId
     );
+    if (!result.success) {
+      console.warn('[Lovense] Command failed:', result.error);
+    }
     return result.success;
   } else {
-    return vibrateAll(intensity);
+    return vibrateAll(intIntensity);
   }
 }
 
@@ -1200,6 +1214,9 @@ export async function smartStop(
 ): Promise<boolean> {
   if (useCloudApi) {
     const result = await sendStopCommand(triggerType);
+    if (!result.success) {
+      console.warn('[Lovense] Stop command failed:', result.error);
+    }
     return result.success;
   } else {
     return stopAll();

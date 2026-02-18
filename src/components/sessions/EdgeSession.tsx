@@ -1,5 +1,5 @@
 // EdgeSession.tsx
-// Full-screen edging session with immersive UI
+// Full-screen edging session with immersive UI and mid-session controls
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -13,8 +13,17 @@ import {
   TrendingUp,
   Volume2,
   VolumeX,
+  Settings2,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
 import { useLovense } from '../../hooks/useLovense';
+import { useHandlerContext } from '../../context/HandlerContext';
+import { useCurrentDenialDay } from '../../hooks/useCurrentDenialDay';
+import { useUserState } from '../../hooks/useUserState';
+import { CommitmentPromptModal } from '../handler/CommitmentPromptModal';
+import { SessionControls } from './SessionControls';
+import type { LovensePatternName } from '../../types/lovense';
 
 interface EdgeSessionProps {
   onClose: () => void;
@@ -32,6 +41,9 @@ type SessionPhase = 'warmup' | 'building' | 'edge' | 'cooldown' | 'rest';
 
 export function EdgeSession({ onClose, onSessionComplete }: EdgeSessionProps) {
   const lovense = useLovense();
+  const { requestCommitmentPrompt, acceptCommitment, notifySessionEvent } = useHandlerContext();
+  const denial = useCurrentDenialDay();
+  const { userState } = useUserState();
 
   // Session state
   const [isActive, setIsActive] = useState(false);
@@ -45,6 +57,18 @@ export function EdgeSession({ onClose, onSessionComplete }: EdgeSessionProps) {
   const [intensitySamples, setIntensitySamples] = useState(0);
   const [showInstructions, setShowInstructions] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [showControls, setShowControls] = useState(false);
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [currentPattern, setCurrentPattern] = useState<LovensePatternName | null>('building');
+
+  // Handler/Commitment state
+  const [showCommitmentModal, setShowCommitmentModal] = useState(false);
+  const [currentCommitment, setCurrentCommitment] = useState<{
+    prompt: string;
+    domain: string;
+    escalationLevel: number;
+  } | null>(null);
+  const sessionIdRef = useRef<string>(`edge-${Date.now()}`);
 
   // Refs
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -69,11 +93,25 @@ export function EdgeSession({ onClose, onSessionComplete }: EdgeSessionProps) {
   };
 
   // Start session
-  const startSession = useCallback(() => {
+  const startSession = useCallback(async () => {
     setIsActive(true);
     setIsPaused(false);
     setShowInstructions(false);
     setPhase('warmup');
+
+    // Generate new session ID
+    sessionIdRef.current = `edge-${Date.now()}`;
+
+    // Notify Handler AI of session start
+    try {
+      await notifySessionEvent({
+        sessionId: sessionIdRef.current,
+        event: 'session_start',
+        data: { type: 'edge', startTime: new Date().toISOString() },
+      });
+    } catch (err) {
+      console.warn('Failed to notify handler of session start:', err);
+    }
 
     // Start Lovense edge training
     lovense.startEdgeTraining({
@@ -97,7 +135,7 @@ export function EdgeSession({ onClose, onSessionComplete }: EdgeSessionProps) {
       setTotalIntensity(t => t + currentIntensity);
       setIntensitySamples(s => s + 1);
     }, 1000);
-  }, [lovense, peakIntensity]);
+  }, [lovense, peakIntensity, notifySessionEvent]);
 
   // Pause/resume
   const togglePause = useCallback(() => {
@@ -106,6 +144,8 @@ export function EdgeSession({ onClose, onSessionComplete }: EdgeSessionProps) {
       timerRef.current = setInterval(() => {
         setDuration(d => d + 1);
       }, 1000);
+      // Resume at current intensity
+      lovense.setIntensity(intensity);
     } else {
       setIsPaused(true);
       if (timerRef.current) {
@@ -113,7 +153,86 @@ export function EdgeSession({ onClose, onSessionComplete }: EdgeSessionProps) {
       }
       lovense.stop();
     }
-  }, [isPaused, lovense]);
+  }, [isPaused, lovense, intensity]);
+
+  // GinaHome detection: auto-end session when Gina comes home (gap #17)
+  const prevGinaHomeRef = useRef<boolean | undefined>(undefined);
+  useEffect(() => {
+    if (userState?.ginaHome === undefined) return;
+    if (prevGinaHomeRef.current === undefined) {
+      prevGinaHomeRef.current = userState.ginaHome;
+      return;
+    }
+    if (!prevGinaHomeRef.current && userState.ginaHome && isActive) {
+      // Gina just came home while session is active - emergency end
+      lovense.stop();
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (intensityRef.current) clearInterval(intensityRef.current);
+      setIsActive(false);
+      setIsPaused(false);
+      onClose();
+    }
+    prevGinaHomeRef.current = userState.ginaHome;
+  }, [userState?.ginaHome, isActive, lovense, onClose]);
+
+  // Manual intensity change
+  const handleIntensityChange = useCallback((newIntensity: number) => {
+    setIntensity(newIntensity);
+    if (isActive && !isPaused) {
+      lovense.setIntensity(newIntensity);
+    }
+    if (newIntensity > peakIntensity) {
+      setPeakIntensity(newIntensity);
+    }
+  }, [isActive, isPaused, lovense, peakIntensity]);
+
+  // Pattern change
+  const handlePatternChange = useCallback((pattern: LovensePatternName) => {
+    setCurrentPattern(pattern);
+    if (isActive && !isPaused) {
+      lovense.playPattern(pattern);
+    }
+  }, [isActive, isPaused, lovense]);
+
+  // Emergency stop
+  const handleEmergencyStop = useCallback(async () => {
+    lovense.stop();
+    lovense.stopEdgeTraining();
+
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+    if (intensityRef.current) {
+      clearInterval(intensityRef.current);
+    }
+
+    // Brief cooldown pattern
+    setIntensity(2);
+    lovense.setIntensity(2);
+
+    // Notify handler
+    try {
+      await notifySessionEvent({
+        sessionId: sessionIdRef.current,
+        event: 'emergency_stop',
+        data: { edgeCount, duration, intensity },
+      });
+    } catch (err) {
+      console.warn('Failed to notify emergency stop:', err);
+    }
+
+    // Wait 5 seconds then fully stop
+    setTimeout(() => {
+      lovense.stop();
+      setIsActive(false);
+      onClose();
+    }, 5000);
+  }, [lovense, edgeCount, duration, intensity, notifySessionEvent, onClose]);
+
+  // Commitment window edges: 5, 8, 10, then every 5 after that
+  const isCommitmentEdge = (count: number) => {
+    return [5, 8, 10].includes(count) || (count > 10 && count % 5 === 0);
+  };
 
   // Record edge
   const recordEdge = useCallback(async () => {
@@ -133,16 +252,46 @@ export function EdgeSession({ onClose, onSessionComplete }: EdgeSessionProps) {
       navigator.vibrate([100, 50, 100]);
     }
 
+    // Notify handler of edge
+    try {
+      await notifySessionEvent({
+        sessionId: sessionIdRef.current,
+        event: 'edge',
+        data: { edgeCount: count, intensity, duration },
+      });
+    } catch (err) {
+      console.warn('Failed to notify handler of edge:', err);
+    }
+
+    // Check for commitment window (Handler AI extracts commitments at high arousal)
+    if (isCommitmentEdge(count) && intensity >= 5) {
+      try {
+        const commitment = await requestCommitmentPrompt({
+          sessionId: sessionIdRef.current,
+          arousalLevel: Math.min(10, Math.round(intensity / 2)), // Convert 0-20 to 0-10
+          edgeCount: count,
+          denialDay: denial.currentDay,
+        });
+
+        if (commitment) {
+          setCurrentCommitment(commitment);
+          setShowCommitmentModal(true);
+        }
+      } catch (err) {
+        console.warn('Failed to get commitment prompt:', err);
+      }
+    }
+
     // Return to building phase after 3 seconds
     setTimeout(() => {
       if (isActive && !isPaused) {
         setPhase('building');
       }
     }, 3000);
-  }, [isActive, isPaused, lovense]);
+  }, [isActive, isPaused, lovense, intensity, duration, notifySessionEvent, requestCommitmentPrompt]);
 
   // End session
-  const endSession = useCallback(() => {
+  const endSession = useCallback(async () => {
     setIsActive(false);
 
     if (timerRef.current) {
@@ -162,8 +311,43 @@ export function EdgeSession({ onClose, onSessionComplete }: EdgeSessionProps) {
       averageIntensity: intensitySamples > 0 ? totalIntensity / intensitySamples : 0,
     };
 
+    // Notify Handler AI of session end
+    try {
+      await notifySessionEvent({
+        sessionId: sessionIdRef.current,
+        event: 'session_end',
+        data: { ...stats, endTime: new Date().toISOString() },
+      });
+    } catch (err) {
+      console.warn('Failed to notify handler of session end:', err);
+    }
+
     onSessionComplete?.(stats);
-  }, [edgeCount, duration, peakIntensity, totalIntensity, intensitySamples, lovense, onSessionComplete]);
+  }, [edgeCount, duration, peakIntensity, totalIntensity, intensitySamples, lovense, onSessionComplete, notifySessionEvent]);
+
+  // Handle commitment acceptance
+  const handleAcceptCommitment = useCallback(async () => {
+    if (!currentCommitment) return;
+
+    try {
+      await acceptCommitment(
+        currentCommitment.prompt,
+        currentCommitment.domain,
+        Math.min(10, Math.round(intensity / 2))
+      );
+    } catch (err) {
+      console.error('Failed to accept commitment:', err);
+    }
+
+    setShowCommitmentModal(false);
+    setCurrentCommitment(null);
+  }, [currentCommitment, intensity, acceptCommitment]);
+
+  // Handle commitment decline
+  const handleDeclineCommitment = useCallback(() => {
+    setShowCommitmentModal(false);
+    setCurrentCommitment(null);
+  }, []);
 
   // Reset session
   const resetSession = useCallback(() => {
@@ -211,10 +395,37 @@ export function EdgeSession({ onClose, onSessionComplete }: EdgeSessionProps) {
     <div
       className={`fixed inset-0 z-50 flex flex-col bg-gradient-to-b ${phaseColors[phase]} transition-all duration-1000`}
     >
+      {/* Close confirmation overlay */}
+      {showCloseConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70">
+          <div className="bg-gray-900 p-6 rounded-2xl max-w-sm mx-4 text-center">
+            <p className="text-white font-semibold text-lg mb-2">End session?</p>
+            <p className="text-gray-400 text-sm mb-6">
+              Your progress ({edgeCount} edge{edgeCount !== 1 ? 's' : ''}, {formatTime(duration)}) will be lost.
+            </p>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => setShowCloseConfirm(false)}
+                className="px-5 py-2.5 rounded-xl bg-white/10 text-white font-medium hover:bg-white/20 transition-colors"
+              >
+                Keep Going
+              </button>
+              <button
+                onClick={() => { setShowCloseConfirm(false); onClose(); }}
+                className="px-5 py-2.5 rounded-xl bg-red-600 text-white font-medium hover:bg-red-700 transition-colors"
+              >
+                End Session
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between p-4 text-white/90">
         <button
-          onClick={onClose}
+          onClick={() => isActive ? setShowCloseConfirm(true) : onClose()}
+          aria-label="Close session"
           className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
         >
           <X className="w-6 h-6" />
@@ -359,10 +570,36 @@ export function EdgeSession({ onClose, onSessionComplete }: EdgeSessionProps) {
                   Avg: {intensitySamples > 0 ? Math.round(totalIntensity / intensitySamples) : 0}
                 </span>
               </div>
+              {denial.currentDay > 0 && (
+                <div className="flex items-center gap-2">
+                  <Flame className="w-4 h-4" />
+                  <span className="text-sm">Day {denial.currentDay}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Quick Intensity Controls (always visible) */}
+            <div className="flex items-center justify-center gap-3 mt-6">
+              <button
+                onClick={() => handleIntensityChange(Math.max(0, intensity - 2))}
+                className="w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
+              >
+                <ChevronDown className="w-6 h-6 text-white" />
+              </button>
+              <div className="text-white text-center">
+                <div className="text-2xl font-bold">{intensity}</div>
+                <div className="text-xs opacity-70">intensity</div>
+              </div>
+              <button
+                onClick={() => handleIntensityChange(Math.min(20, intensity + 2))}
+                className="w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
+              >
+                <ChevronUp className="w-6 h-6 text-white" />
+              </button>
             </div>
 
             {/* Controls */}
-            <div className="flex items-center gap-4 mt-8">
+            <div className="flex items-center gap-4 mt-6">
               <button
                 onClick={togglePause}
                 className="p-4 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
@@ -375,12 +612,39 @@ export function EdgeSession({ onClose, onSessionComplete }: EdgeSessionProps) {
               </button>
 
               <button
+                onClick={() => setShowControls(!showControls)}
+                className={`p-4 rounded-full transition-colors ${
+                  showControls ? 'bg-white/40' : 'bg-white/20 hover:bg-white/30'
+                }`}
+              >
+                <Settings2 className="w-6 h-6 text-white" />
+              </button>
+
+              <button
                 onClick={resetSession}
                 className="p-4 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
               >
                 <RotateCcw className="w-6 h-6 text-white" />
               </button>
             </div>
+
+            {/* Advanced Controls Panel */}
+            {showControls && (
+              <div className="mt-6 w-full max-w-md">
+                <SessionControls
+                  intensity={intensity}
+                  maxIntensity={20}
+                  currentPattern={currentPattern}
+                  phase={phase}
+                  isPaused={isPaused}
+                  onIntensityChange={handleIntensityChange}
+                  onPatternChange={handlePatternChange}
+                  onPause={togglePause}
+                  onResume={togglePause}
+                  onEmergencyStop={handleEmergencyStop}
+                />
+              </div>
+            )}
           </>
         )}
       </div>
@@ -395,6 +659,20 @@ export function EdgeSession({ onClose, onSessionComplete }: EdgeSessionProps) {
             End Session
           </button>
         </div>
+      )}
+
+      {/* Commitment Prompt Modal */}
+      {currentCommitment && (
+        <CommitmentPromptModal
+          isOpen={showCommitmentModal}
+          prompt={currentCommitment.prompt}
+          domain={currentCommitment.domain}
+          escalationLevel={currentCommitment.escalationLevel}
+          arousalLevel={Math.min(10, Math.round(intensity / 2))}
+          edgeCount={edgeCount}
+          onAccept={handleAcceptCommitment}
+          onDecline={handleDeclineCommitment}
+        />
       )}
     </div>
   );

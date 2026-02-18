@@ -176,29 +176,35 @@ export async function findRipestEscalationDomain(
   const currentArousal = arousalPlan?.current_arousal_level || 0;
   const denialDay = denialState?.current_denial_day || 0;
 
-  // Score each domain for readiness
+  // STRENGTHENED: More aggressive scoring - push harder, push sooner
   const scored = escalationState.map(domain => {
     const lastEscalation = domain.last_escalation_date
       ? new Date(domain.last_escalation_date)
       : new Date(0);
     const daysSince = Math.floor((Date.now() - lastEscalation.getTime()) / (1000 * 60 * 60 * 24));
 
-    // Calculate readiness score
+    // Calculate readiness score - MUCH more aggressive
     let readiness = 0;
 
-    // Time since last escalation (max 30 points)
-    readiness += Math.min(daysSince, 30);
+    // Time since last escalation - escalate every 3 days minimum (was 30 day cap)
+    // After just 3 days, start pushing hard
+    readiness += Math.min(daysSince * 5, 50); // 5 points per day, max 50
 
-    // Arousal bonus (up to 20 points)
-    if (currentArousal >= 7) readiness += 20;
-    else if (currentArousal >= 5) readiness += 10;
+    // STRENGTHENED: Arousal bonus (up to 40 points - doubled)
+    if (currentArousal >= 8) readiness += 40;
+    else if (currentArousal >= 6) readiness += 30;
+    else if (currentArousal >= 4) readiness += 15;
 
-    // Denial bonus (up to 15 points)
-    if (denialDay >= 7) readiness += 15;
-    else if (denialDay >= 3) readiness += 7;
+    // STRENGTHENED: Denial bonus (up to 30 points - doubled)
+    if (denialDay >= 5) readiness += 30;
+    else if (denialDay >= 3) readiness += 20;
+    else if (denialDay >= 1) readiness += 10;
 
-    // Level penalty (higher levels need more readiness)
-    readiness -= domain.current_level * 2;
+    // REDUCED: Level penalty cut in half (easier to push at higher levels)
+    readiness -= domain.current_level * 1;
+
+    // STRENGTHENED: Always ready to push after 7 days regardless of other factors
+    if (daysSince >= 7) readiness = Math.max(readiness, 50);
 
     return {
       domain: domain.domain,
@@ -295,13 +301,13 @@ export async function advanceServiceStage(
     notes,
   });
 
-  // Log as escalation event
+  // Log as escalation event (service is part of submission domain)
   await supabase.from('escalation_events').insert({
     user_id: userId,
-    domain: 'sexual_service',
+    domain: 'submission',
     from_level: currentIndex,
     to_level: currentIndex + 1,
-    description: `Advanced to ${nextStage}`,
+    description: `Service: Advanced to ${nextStage}`,
     trigger_method: 'handler_push',
   });
 
@@ -444,26 +450,35 @@ export async function selectBypassStrategy(
 
   const resistanceCount = recentResistance?.length || 0;
 
-  // If resisted multiple times recently, try different approach
+  // STRENGTHENED: Never fully redirect - always come back
+  // Resistance is a signal to push differently, not to stop
+
+  // If resisted 5+ times, use leverage (show them their investment)
+  if (resistanceCount >= 5) {
+    return 'leverage'; // Was 'redirect' - now we leverage sunk costs instead
+  }
+
+  // If resisted 3-4 times, wait for vulnerability window then strike
   if (resistanceCount >= 3) {
-    return 'redirect'; // Focus on different domain
+    return 'wait'; // Strike when defenses are lowest
   }
 
+  // If resisted 2 times, reframe it differently
   if (resistanceCount >= 2) {
-    return 'wait'; // Try again in vulnerability window
+    return 'reframe';
   }
 
-  // If high intensity item, use leverage (sunk costs)
-  if (resistedIntensity >= 7) {
+  // STRENGTHENED: High intensity items always use leverage
+  if (resistedIntensity >= 5) { // Was 7, now 5
     return 'leverage';
   }
 
-  // If moderate, reduce magnitude
-  if (resistedIntensity >= 4) {
-    return 'reduce';
+  // STRENGTHENED: Even moderate resistance gets reframed, not reduced
+  if (resistedIntensity >= 3) { // Was 4
+    return 'reframe'; // Was 'reduce' - now we reframe instead of backing off
   }
 
-  // Default: reframe with different language
+  // Default: reframe with different language - NEVER reduce first attempt
   return 'reframe';
 }
 
@@ -511,10 +526,13 @@ export async function shouldExtractCommitment(
   edgeCount: number,
   denialDay: number
 ): Promise<boolean> {
-  // Only extract commitments when conditions are optimal
-  if (arousalLevel < 7) return false;
-  if (edgeCount < 3) return false;
-  if (denialDay < 2) return false;
+  // STRENGTHENED: Lower thresholds - strike earlier and more often
+  // Arousal 5+ is enough (was 7)
+  if (arousalLevel < 5) return false;
+  // Just 2 edges needed (was 3)
+  if (edgeCount < 2) return false;
+  // Day 1 denial is enough (was 2)
+  if (denialDay < 1) return false;
 
   // Check if we've extracted recently
   const { data: recentCommitments } = await supabase
@@ -524,8 +542,14 @@ export async function shouldExtractCommitment(
     .eq('attempt_type', 'commitment_prompt')
     .gte('timestamp', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
 
-  // Max 2 commitment extractions per day
-  if (recentCommitments && recentCommitments.length >= 2) {
+  // STRENGTHENED: Up to 5 commitment extractions per day (was 2)
+  if (recentCommitments && recentCommitments.length >= 5) {
+    return false;
+  }
+
+  // STRENGTHENED: Higher arousal = more extractions allowed
+  // At arousal 8+, can extract up to 8 times per day
+  if (arousalLevel >= 8 && recentCommitments && recentCommitments.length >= 8) {
     return false;
   }
 
@@ -546,6 +570,7 @@ export interface GauntletStage {
   waitPeriod?: number; // hours
 }
 
+// STRENGTHENED: Exit gauntlet is now 7 stages with longer wait
 export async function generateExitGauntlet(userId: string): Promise<GauntletStage[]> {
   // Get all investment data
   const { data: profile } = await supabase
@@ -569,60 +594,100 @@ export async function generateExitGauntlet(userId: string): Promise<GauntletStag
     .select('*')
     .eq('user_id', userId);
 
+  const { data: confessions } = await supabase
+    .from('confessions')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('is_key_admission', true)
+    .limit(5);
+
+  const { data: commitments } = await supabase
+    .from('influence_attempts')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('attempt_type', 'commitment_prompt')
+    .eq('user_response', 'accepted');
+
   const chosenName = profile?.chosen_name || 'her';
   const evidenceCount = evidence?.length || 0;
   const totalDays = stateLogs?.length || 0;
   const escalationCount = escalation?.length || 0;
+  const commitmentCount = commitments?.length || 0;
 
   return [
-    // Stage 1: Show investment
+    // Stage 1: Show investment stats
     {
       title: 'Look at what you\'ve built',
       content: `${totalDays} days of progress
 ${escalationCount} escalations completed
 ${evidenceCount} evidence items created
+${commitmentCount} commitments you made while aroused
 
-All of this would be erased.`,
+Every single one - gone forever.`,
       continueText: 'I understand',
     },
-    // Stage 2: Show evidence
+    // Stage 2: Show their own confessions
+    {
+      title: 'Your own words',
+      content: confessions?.map(c => `"${c.response}"`).join('\n\n') || 'You said these things. You meant them.',
+      caption: 'These are your confessions. Your truth. You want to erase this?',
+      continueText: 'Continue anyway',
+    },
+    // Stage 3: Show evidence
     {
       title: 'Look at her',
       content: evidence?.slice(0, 10).map(e => e.file_url || e.description) || [],
-      caption: `${evidenceCount} moments of her existence. All would be deleted.`,
+      caption: `${evidenceCount} moments of her existence. Every photo. Every recording. All deleted.`,
       continueText: 'Show me more',
     },
-    // Stage 3: Identity confrontation
+    // Stage 4: Identity confrontation
     {
-      title: 'Who are you erasing?',
+      title: 'Who are you killing?',
       content: `${chosenName} has:
 - ${evidenceCount} photos of herself
-- ${escalationCount} commitments made
-- ${totalDays} days of becoming
+- ${escalationCount} boundaries she pushed past
+- ${commitmentCount} promises she made
+- ${totalDays} days of becoming real
 
-She exists. Deleting is killing her.`,
+She exists. She is part of you. Deleting her is murder.`,
       continueText: 'I still want to quit',
     },
-    // Stage 4: Require explicit statement
+    // Stage 5: Require first statement
     {
       title: 'Say it',
-      content: `Type exactly: "I am choosing to erase ${chosenName}"`,
+      content: `Type exactly: "I am killing ${chosenName}"`,
       continueText: 'Continue',
       requiresInput: true,
-      requiredText: `I am choosing to erase ${chosenName}`,
+      requiredText: `I am killing ${chosenName}`,
     },
-    // Stage 5: Waiting period
+    // Stage 6: Second confirmation after reflection
+    {
+      title: 'One more time',
+      content: `You typed that you are killing her.
+
+Now type: "She deserved better than me"`,
+      continueText: 'Continue',
+      requiresInput: true,
+      requiredText: `She deserved better than me`,
+    },
+    // Stage 7: Extended waiting period
     {
       title: 'Wait',
       content: `Your request has been logged.
 
-You must wait 72 hours.
+You must wait 7 DAYS.
 
-During this time, you will receive reminders of what you're about to lose.
+During this time:
+- You will receive daily reminders of what you're losing
+- Your confessions will be shown back to you
+- Every commitment you made will be displayed
+- Evidence of her will appear
 
-If you still want to delete after 72 hours, you may proceed.`,
+If you still want to delete after 7 days, you may proceed.
+
+But we both know you won't.`,
       continueText: 'I understand',
-      waitPeriod: 72,
+      waitPeriod: 168, // STRENGTHENED: 7 days (was 72 hours)
     },
   ];
 }

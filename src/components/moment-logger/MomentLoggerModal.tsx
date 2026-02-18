@@ -1,6 +1,7 @@
 // Moment Logger Modal
 // Step-based flow: type → details → post-log
 
+import { useEffect } from 'react';
 import { X, ArrowLeft } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
 import { TypeSelector } from './steps/TypeSelector';
@@ -22,6 +23,14 @@ export function MomentLoggerModal({
   momentLogger,
 }: MomentLoggerModalProps) {
   const { isBambiMode } = useBambiMode();
+
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (!isOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

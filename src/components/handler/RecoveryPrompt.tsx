@@ -13,7 +13,6 @@ import {
   Heart,
   RotateCcw,
   Check,
-  X,
   AlertCircle,
 } from 'lucide-react';
 import type { RecoveryPrompt as RecoveryPromptType, RecoveryType } from '../../hooks/useDisassociationRecovery';

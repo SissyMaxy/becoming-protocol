@@ -24,6 +24,7 @@ import {
   dbCompletionToCompletion,
   dbGoalTemplateToTemplate,
   dbDrillTemplateToTemplate,
+  DOMAIN_PRIORITY,
 } from '../types/goals';
 
 // ============================================
@@ -111,8 +112,18 @@ export async function getGoalWithDrills(goalId: string): Promise<GoalWithDrills 
 /**
  * Get today's goals with completion status and drills
  */
+// Get current time window for filtering goals
+function getTimeOfDay(): 'morning' | 'afternoon' | 'evening' | 'night' {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return 'morning';
+  if (hour >= 12 && hour < 17) return 'afternoon';
+  if (hour >= 17 && hour < 21) return 'evening';
+  return 'night';
+}
+
 export async function getTodaysGoals(userId: string): Promise<TodaysGoalWithDrills[]> {
   const today = getTodayDate();
+  const currentTime = getTimeOfDay();
 
   // Get active goals
   const { data: goals, error: goalsError } = await supabase
@@ -150,7 +161,7 @@ export async function getTodaysGoals(userId: string): Promise<TodaysGoalWithDril
   const completions = (completionsResult.data as DbDailyGoalCompletion[]) || [];
   const completionMap = new Map(completions.map(c => [c.goal_id, c]));
 
-  return (goals as DbGoal[]).map(dbGoal => {
+  const mappedGoals = (goals as DbGoal[]).map(dbGoal => {
     const goal = dbGoalToGoal(dbGoal);
     const completion = completionMap.get(goal.id);
     const goalDrills = drills
@@ -178,6 +189,27 @@ export async function getTodaysGoals(userId: string): Promise<TodaysGoalWithDril
       drillUsedName: usedDrill?.name || null,
       drills: goalDrills,
     };
+  });
+
+  // Filter by suitable times - exclude goals not suitable for current time of day
+  // But always show goals that are already completed today (so user sees their progress)
+  const timeFilteredGoals = mappedGoals.filter(g => {
+    // Always show completed goals
+    if (g.completedToday) return true;
+
+    // Check time suitability from the source goal data
+    const dbGoal = (goals as DbGoal[]).find(db => db.id === g.goalId);
+    const suitableTimes = dbGoal?.suitable_times || ['any'];
+
+    // 'any' or matching current time passes the filter
+    return suitableTimes.includes('any') || suitableTimes.includes(currentTime);
+  });
+
+  // STRENGTHENED: Sort by domain priority - arousal first, skincare last
+  return timeFilteredGoals.sort((a, b) => {
+    const priorityA = a.goalDomain ? (DOMAIN_PRIORITY[a.goalDomain] ?? 99) : 99;
+    const priorityB = b.goalDomain ? (DOMAIN_PRIORITY[b.goalDomain] ?? 99) : 99;
+    return priorityA - priorityB;
   });
 }
 
@@ -516,7 +548,13 @@ export async function getDecayingDomains(userId: string, dayThreshold: number = 
       .filter(Boolean)
   );
 
-  const allDomains: Domain[] = ['voice', 'movement', 'skincare', 'style', 'social', 'mindset'];
+  // STRENGTHENED: Prioritize arousal-based domains, skincare is last
+  const allDomains: Domain[] = [
+    'arousal', 'conditioning', 'chastity',  // Highest priority
+    'mindset', 'identity',                   // Sissification
+    'social',                                // Submission
+    'movement', 'voice', 'style', 'skincare' // Lowest priority
+  ];
   return allDomains.filter(d => !recentDomains.has(d));
 }
 
@@ -727,7 +765,13 @@ export async function recommendGoals(userId: string): Promise<{
   }
 
   // Recommend templates for domains not yet explored (medium urgency)
-  const allDomains: Domain[] = ['voice', 'movement', 'skincare', 'style', 'social', 'mindset'];
+  // STRENGTHENED: Prioritize arousal-based domains, skincare is last
+  const allDomains: Domain[] = [
+    'arousal', 'conditioning', 'chastity',  // Highest priority
+    'mindset', 'identity',                   // Sissification
+    'social',                                // Submission
+    'movement', 'voice', 'style', 'skincare' // Lowest priority
+  ];
   const exploredDomains = new Set([...activeDomains, ...decayingDomains]);
 
   for (const domain of allDomains) {

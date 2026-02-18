@@ -393,24 +393,12 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Insert default goal templates
 INSERT INTO goal_templates (name, domain, description, graduation_threshold, priority, difficulty) VALUES
-  ('Embody Feminine Presence', 'movement', 'Practice feminine body language until it becomes automatic', 30, 10, 2),
   ('Cultivate Feminine Voice', 'voice', 'Develop natural feminine speech patterns', 60, 9, 3),
   ('Establish Skincare Ritual', 'skincare', 'Build consistent skincare habit', 21, 8, 1),
   ('Embrace Feminine Style', 'style', 'Develop personal feminine aesthetic', 30, 7, 2),
   ('Build Social Confidence', 'social', 'Practice feminine social presence', 45, 6, 3),
   ('Cultivate Feminine Mindset', 'mindset', 'Develop feminine thought patterns and self-perception', 30, 5, 2)
 ON CONFLICT DO NOTHING;
-
--- Insert drill templates for "Embody Feminine Presence"
-INSERT INTO drill_templates (goal_template_id, name, instruction, estimated_minutes, difficulty, category, points, affirmation, sort_order)
-SELECT goal_templates.id, t.drill_name, t.instruction, t.minutes, t.diff, t.cat, t.pts, t.aff, t.ord
-FROM goal_templates, (VALUES
-  ('Posture check-ins', 'Set 3 alarms throughout the day. When they go off, check and correct your posture: shoulders back, chin level, core engaged. Hold for 30 seconds.', 1, 1, 'posture', 10, 'My body naturally adopts feminine grace.', 1),
-  ('Feminine sitting practice', 'During meals, practice sitting femininely: knees together or crossed, hands in lap between bites, small graceful movements.', 5, 1, 'posture', 10, 'I sit with effortless feminine elegance.', 2),
-  ('Walk practice', 'Walk to your mailbox or around the block focusing on feminine gait: smaller steps, hips leading, arms close to body with soft gestures.', 5, 2, 'gait', 15, 'Each step expresses my feminine nature.', 3),
-  ('Hand gestures practice', 'For 5 minutes, practice speaking while using feminine hand gestures: soft wrist movements, fingers together, gestures closer to body.', 5, 2, 'gestures', 10, 'My hands dance with feminine expression.', 4)
-) AS t(drill_name, instruction, minutes, diff, cat, pts, aff, ord)
-WHERE goal_templates.name = 'Embody Feminine Presence';
 
 -- Insert drill templates for "Cultivate Feminine Voice"
 INSERT INTO drill_templates (goal_template_id, name, instruction, estimated_minutes, difficulty, category, points, affirmation, sort_order)

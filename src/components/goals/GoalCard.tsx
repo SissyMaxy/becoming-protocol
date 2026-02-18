@@ -1,7 +1,7 @@
 // Goal Card Component
 // Displays a goal with selectable drills for completion
 
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import {
   Target,
   Check,
@@ -25,12 +25,14 @@ interface GoalCardProps {
   onAbandon?: (goalId: string) => void;
 }
 
-export function GoalCard({ goal, onComplete, onPause, onAbandon }: GoalCardProps) {
+// Memoized to prevent unnecessary re-renders when parent state changes
+export const GoalCard = memo(function GoalCard({ goal, onComplete, onPause, onAbandon }: GoalCardProps) {
   const { isBambiMode } = useBambiMode();
   const [selectedDrill, setSelectedDrill] = useState<Drill | null>(null);
   const [expanded, setExpanded] = useState(true);
   const [showMenu, setShowMenu] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const [notes, setNotes] = useState('');
 
   const domainColor = getDomainColor(goal.goalDomain);
   const isCompleted = goal.completedToday;
@@ -43,6 +45,7 @@ export function GoalCard({ goal, onComplete, onPause, onAbandon }: GoalCardProps
       await onComplete({
         goalId: goal.goalId,
         drillId: selectedDrill.id,
+        notes: notes.trim() || undefined,
       });
     } finally {
       setCompleting(false);
@@ -277,6 +280,23 @@ export function GoalCard({ goal, onComplete, onPause, onAbandon }: GoalCardProps
             ))}
           </div>
 
+          {/* Notes input - appears when a drill is selected */}
+          {!isCompleted && selectedDrill && (
+            <div className="mt-3">
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Log details here (optional)"
+                rows={2}
+                className={`w-full px-3 py-2 rounded-lg border text-sm resize-none ${
+                  isBambiMode
+                    ? 'border-pink-300 bg-white text-gray-800 placeholder:text-pink-300 focus:ring-pink-400'
+                    : 'border-protocol-border bg-protocol-bg text-protocol-text placeholder:text-protocol-text-muted focus:ring-protocol-accent'
+                } focus:outline-none focus:ring-2`}
+              />
+            </div>
+          )}
+
           {/* Complete button */}
           {!isCompleted && (
             <button
@@ -327,4 +347,7 @@ export function GoalCard({ goal, onComplete, onPause, onAbandon }: GoalCardProps
       )}
     </div>
   );
-}
+});
+
+// Display name for React DevTools
+GoalCard.displayName = 'GoalCard';

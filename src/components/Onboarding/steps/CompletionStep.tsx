@@ -52,8 +52,8 @@ export function CompletionStep({ profile, letters, inventoryData, onComplete, on
           {isEditMode
             ? 'Your changes have been saved.'
             : profile.preferredName
-              ? `${profile.preferredName}, your protocol is ready.`
-              : 'Your protocol has been personalized.'}
+              ? `Alright ${profile.preferredName}, we're good to go.`
+              : 'Alright, we\'re good to go.'}
         </p>
       </div>
 
@@ -77,7 +77,7 @@ export function CompletionStep({ profile, letters, inventoryData, onComplete, on
               </div>
             </div>
             <p className="text-xs text-protocol-text-muted text-center italic mt-2">
-              Your past self has been working toward this. Now we make it systematic.
+              You've already been doing this. Now let's build on it.
             </p>
           </div>
         )}
@@ -88,7 +88,7 @@ export function CompletionStep({ profile, letters, inventoryData, onComplete, on
             <div className="p-2 rounded-lg bg-protocol-accent/20">
               <Target className="w-4 h-4 text-protocol-accent" />
             </div>
-            <span className="font-medium text-protocol-text">Context Captured</span>
+            <span className="font-medium text-protocol-text">What I Know</span>
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div className="text-center p-2 rounded-lg bg-protocol-surface-light">
@@ -174,7 +174,7 @@ export function CompletionStep({ profile, letters, inventoryData, onComplete, on
               </div>
               <div>
                 <p className="text-sm text-protocol-text">Choose your daily intensity</p>
-                <p className="text-xs text-protocol-text-muted">Gentle, Normal, or Push Me</p>
+                <p className="text-xs text-protocol-text-muted">Based on how busy you are</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
@@ -182,8 +182,8 @@ export function CompletionStep({ profile, letters, inventoryData, onComplete, on
                 <span className="text-xs font-bold text-protocol-accent">2</span>
               </div>
               <div>
-                <p className="text-sm text-protocol-text">Complete personalized tasks</p>
-                <p className="text-xs text-protocol-text-muted">Based on everything you shared</p>
+                <p className="text-sm text-protocol-text">Do your daily practice</p>
+                <p className="text-xs text-protocol-text-muted">Tailored to what you told me</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
@@ -192,7 +192,7 @@ export function CompletionStep({ profile, letters, inventoryData, onComplete, on
               </div>
               <div>
                 <p className="text-sm text-protocol-text">Watch yourself grow</p>
-                <p className="text-xs text-protocol-text-muted">Progress that sticks through the ratchet principle</p>
+                <p className="text-xs text-protocol-text-muted">Small steps that add up</p>
               </div>
             </div>
           </div>
@@ -202,9 +202,7 @@ export function CompletionStep({ profile, letters, inventoryData, onComplete, on
       {/* Quote */}
       <div className="p-4 rounded-lg bg-gradient-to-r from-protocol-accent/10 to-pink-500/10 border border-protocol-accent/20 mb-8">
         <p className="text-sm text-protocol-text-muted italic text-center">
-          "The woman you're becoming is already here.
-          <br />
-          We're just helping her emerge."
+          She's already in there. This just helps her come out.
         </p>
       </div>
 
@@ -214,7 +212,7 @@ export function CompletionStep({ profile, letters, inventoryData, onComplete, on
           onClick={onComplete}
           className="w-full py-4 rounded-lg bg-protocol-accent text-white font-medium flex items-center justify-center gap-2 hover:bg-protocol-accent/90 transition-colors"
         >
-          {isEditMode ? 'Save Changes' : 'Begin The Protocol'}
+          {isEditMode ? 'Save Changes' : 'Let\'s Go'}
           <ChevronRight className="w-4 h-4" />
         </button>
 

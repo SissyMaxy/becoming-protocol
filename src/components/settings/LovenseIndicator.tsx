@@ -21,9 +21,10 @@ export function LovenseIndicator({
   const { isBambiMode } = useBambiMode();
   const lovense = useLovense();
 
-  const isConnected = lovense.status === 'connected';
+  const isConnected = lovense.status === 'connected' || lovense.cloudConnected;
   const isConnecting = lovense.status === 'connecting';
   const hasActivity = lovense.currentIntensity > 0;
+  const intensity = lovense.currentIntensity;
 
   const sizeClasses = {
     sm: 'p-1.5',
@@ -77,12 +78,34 @@ export function LovenseIndicator({
         <span className="text-xs font-medium">
           {isConnected
             ? hasActivity
-              ? `${lovense.currentIntensity}`
+              ? `${intensity}/20`
               : lovense.activeToy?.name || 'Connected'
             : isConnecting
               ? 'Connecting...'
               : 'Lovense'}
         </span>
+      )}
+
+      {/* Intensity bar when vibrating */}
+      {isConnected && hasActivity && !showLabel && (
+        <div className="flex gap-0.5">
+          {[1, 2, 3, 4, 5].map((level) => (
+            <div
+              key={level}
+              className={`w-1 rounded-full transition-all ${
+                intensity >= level * 4
+                  ? level <= 2
+                    ? 'bg-green-400 h-2'
+                    : level <= 3
+                      ? 'bg-yellow-400 h-2.5'
+                      : level <= 4
+                        ? 'bg-orange-400 h-3'
+                        : 'bg-red-400 h-3.5'
+                  : 'bg-white/30 h-1.5'
+              }`}
+            />
+          ))}
+        </div>
       )}
     </button>
   );
@@ -91,16 +114,29 @@ export function LovenseIndicator({
 // Compact version for header/navbar
 export function LovenseStatusDot({ className = '' }: { className?: string }) {
   const lovense = useLovense();
-  const isConnected = lovense.status === 'connected';
+  const isConnected = lovense.status === 'connected' || lovense.cloudConnected;
   const hasActivity = lovense.currentIntensity > 0;
+  const intensity = lovense.currentIntensity;
 
   if (!isConnected) return null;
+
+  // Color based on intensity level
+  const dotColor = hasActivity
+    ? intensity > 15
+      ? 'bg-red-500'
+      : intensity > 10
+        ? 'bg-orange-500'
+        : intensity > 5
+          ? 'bg-yellow-500'
+          : 'bg-green-500'
+    : 'bg-green-500';
 
   return (
     <span
       className={`
         w-2 h-2 rounded-full
-        ${hasActivity ? 'bg-green-500 animate-pulse' : 'bg-green-500'}
+        ${dotColor}
+        ${hasActivity ? 'animate-pulse' : ''}
         ${className}
       `}
     />
@@ -112,7 +148,7 @@ export function LovenseQuickControl({ className = '' }: { className?: string }) 
   const { isBambiMode } = useBambiMode();
   const lovense = useLovense();
 
-  const isConnected = lovense.status === 'connected';
+  const isConnected = lovense.status === 'connected' || lovense.cloudConnected;
 
   if (!isConnected) return null;
 

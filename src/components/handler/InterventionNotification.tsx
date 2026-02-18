@@ -16,6 +16,13 @@ import {
   Flame,
   Clock,
   CheckCircle,
+  Play,
+  AlertTriangle,
+  Shield,
+  HeartHandshake,
+  TrendingUp,
+  Sunrise,
+  MessageCircle,
 } from 'lucide-react';
 import type { HandlerIntervention, InterventionType } from '../../types/handler';
 
@@ -92,6 +99,56 @@ const INTERVENTION_CONFIG: Record<
     borderColor: 'border-orange-500/30',
     title: 'Escalation',
   },
+  // Timing engine intervention types (Feature 2)
+  session_initiation: {
+    icon: Play,
+    color: 'text-purple-400',
+    bgColor: 'bg-purple-500/10',
+    borderColor: 'border-purple-500/30',
+    title: 'Session Time',
+  },
+  avoidance_confrontation: {
+    icon: AlertTriangle,
+    color: 'text-amber-400',
+    bgColor: 'bg-amber-500/10',
+    borderColor: 'border-amber-500/30',
+    title: 'Avoidance Detected',
+  },
+  streak_protection: {
+    icon: Shield,
+    color: 'text-emerald-400',
+    bgColor: 'bg-emerald-500/10',
+    borderColor: 'border-emerald-500/30',
+    title: 'Streak at Risk',
+  },
+  support_check_in: {
+    icon: HeartHandshake,
+    color: 'text-rose-400',
+    bgColor: 'bg-rose-500/10',
+    borderColor: 'border-rose-500/30',
+    title: 'Check-In',
+  },
+  momentum_push: {
+    icon: TrendingUp,
+    color: 'text-cyan-400',
+    bgColor: 'bg-cyan-500/10',
+    borderColor: 'border-cyan-500/30',
+    title: 'Keep Going',
+  },
+  integration_prompt: {
+    icon: Sunrise,
+    color: 'text-yellow-400',
+    bgColor: 'bg-yellow-500/10',
+    borderColor: 'border-yellow-500/30',
+    title: 'Morning Reflection',
+  },
+  post_session_capture: {
+    icon: MessageCircle,
+    color: 'text-indigo-400',
+    bgColor: 'bg-indigo-500/10',
+    borderColor: 'border-indigo-500/30',
+    title: 'Capture This',
+  },
 };
 
 export function InterventionNotification({
@@ -102,7 +159,6 @@ export function InterventionNotification({
 }: InterventionNotificationProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
-  const startTime = useState(() => Date.now())[0];
 
   const config = INTERVENTION_CONFIG[intervention.type];
   const Icon = config.icon;
@@ -114,7 +170,6 @@ export function InterventionNotification({
 
   const handleDismiss = () => {
     setIsExiting(true);
-    const responseTime = Math.round((Date.now() - startTime) / 1000);
     onResponse?.('dismissed');
     setTimeout(() => {
       onDismiss();
@@ -123,7 +178,6 @@ export function InterventionNotification({
 
   const handleComplete = () => {
     setIsExiting(true);
-    const responseTime = Math.round((Date.now() - startTime) / 1000);
     onResponse?.('completed');
     setTimeout(() => {
       onComplete();

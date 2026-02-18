@@ -1,148 +1,402 @@
 /**
  * Menu View - Secondary navigation for less-used features
+ * Organized into logical categories for easier discovery
  */
 
-import { ChevronRight, Calendar, Wallet, Heart, Settings, HelpCircle, Flame, Sparkles, TrendingUp, Crown, Users, Film } from 'lucide-react';
+import { useState } from 'react';
+import {
+  ChevronRight, ChevronDown, Calendar, Wallet, Heart,
+  HelpCircle, Flame, Sparkles, TrendingUp, Crown, Users, Film,
+  Layers, Eye, Filter, Sprout, Zap, BarChart3, Activity, Mic,
+  LayoutDashboard, BookOpen, Bot
+} from 'lucide-react';
+import { useBambiMode } from '../context/BambiModeContext';
+
+type MenuItemId =
+  | 'history' | 'investments' | 'wishlist' | 'settings' | 'help'
+  | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service'
+  | 'service-analytics' | 'content' | 'domains' | 'patterns'
+  | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game'
+  | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous';
 
 interface MenuViewProps {
-  onNavigate: (view: 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'service' | 'content') => void;
+  onNavigate: (view: MenuItemId) => void;
+}
+
+interface MenuItem {
+  id: MenuItemId;
+  icon: React.ElementType;
+  label: string;
+  description: string;
+  color: string;
+}
+
+interface MenuCategory {
+  id: string;
+  label: string;
+  emoji?: string;
+  items: MenuItem[];
+  defaultExpanded?: boolean;
 }
 
 export function MenuView({ onNavigate }: MenuViewProps) {
-  const menuItems = [
+  const { isBambiMode } = useBambiMode();
+
+  // Track which categories are expanded
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
+    new Set(['journey', 'training']) // Default expanded
+  );
+
+  const toggleCategory = (categoryId: string) => {
+    setExpandedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(categoryId)) {
+        next.delete(categoryId);
+      } else {
+        next.add(categoryId);
+      }
+      return next;
+    });
+  };
+
+  const categories: MenuCategory[] = [
     {
-      id: 'timeline' as const,
-      icon: TrendingUp,
-      label: 'Transformation Timeline',
-      description: 'Voice & photo progress tracking',
-      color: '#f472b6',
+      id: 'journey',
+      label: 'Journey & Service',
+      emoji: '✨',
+      defaultExpanded: true,
+      items: [
+        {
+          id: 'handler-autonomous',
+          icon: Bot,
+          label: 'Handler Command Center',
+          description: 'Content briefs, compliance, fund & platforms',
+          color: '#ef4444',
+        },
+        {
+          id: 'timeline',
+          icon: TrendingUp,
+          label: 'Transformation Timeline',
+          description: 'Voice & photo progress tracking',
+          color: '#f472b6',
+        },
+        {
+          id: 'service',
+          icon: Users,
+          label: 'Service Progression',
+          description: 'Your journey of service',
+          color: '#8b5cf6',
+        },
+        {
+          id: 'gina',
+          icon: Crown,
+          label: 'Gina Emergence',
+          description: 'Her journey to becoming Goddess',
+          color: '#f59e0b',
+        },
+        {
+          id: 'gina-pipeline',
+          icon: Heart,
+          label: 'Gina Pipeline',
+          description: 'Develop her into soft mommy dom',
+          color: '#ec4899',
+        },
+      ],
     },
     {
-      id: 'gina' as const,
-      icon: Crown,
-      label: 'Gina Emergence',
-      description: 'Her journey to becoming Goddess',
-      color: '#f59e0b',
+      id: 'training',
+      label: 'Training & Sessions',
+      emoji: '🔥',
+      defaultExpanded: true,
+      items: [
+        {
+          id: 'sessions',
+          icon: Flame,
+          label: 'Sessions',
+          description: 'Edge training, gooning, and more',
+          color: '#ef4444',
+        },
+        {
+          id: 'quiz',
+          icon: Sparkles,
+          label: 'Readiness Quiz',
+          description: 'Assess your journey progress',
+          color: '#a855f7',
+        },
+        {
+          id: 'voice-game',
+          icon: Mic,
+          label: 'Voice Training',
+          description: 'Speak affirmations for rewards',
+          color: '#8b5cf6',
+        },
+      ],
     },
     {
-      id: 'service' as const,
-      icon: Users,
-      label: 'Service Progression',
-      description: 'Your journey of service',
-      color: '#8b5cf6',
+      id: 'escalation',
+      label: 'Escalation & Patterns',
+      emoji: '📈',
+      items: [
+        {
+          id: 'content',
+          icon: Film,
+          label: 'Content Escalation',
+          description: 'Content intensity tracking',
+          color: '#ec4899',
+        },
+        {
+          id: 'domains',
+          icon: Layers,
+          label: 'Domain Escalation',
+          description: 'Track progression across all domains',
+          color: '#8b5cf6',
+        },
+        {
+          id: 'patterns',
+          icon: Eye,
+          label: 'Pattern Dissolution',
+          description: 'Track masculine patterns dissolving',
+          color: '#ef4444',
+        },
+        {
+          id: 'seeds',
+          icon: Sprout,
+          label: 'Intimate Seeds',
+          description: 'Plant desires, nurture growth',
+          color: '#22c55e',
+        },
+      ],
     },
     {
-      id: 'content' as const,
-      icon: Film,
-      label: 'Content Escalation',
-      description: 'Content intensity tracking',
-      color: '#ec4899',
+      id: 'analytics',
+      label: 'Analytics & Insights',
+      emoji: '📊',
+      items: [
+        {
+          id: 'protocol-analytics',
+          icon: Activity,
+          label: 'Protocol Analytics',
+          description: 'Is the protocol working? Real data.',
+          color: '#ec4899',
+        },
+        {
+          id: 'dashboard',
+          icon: LayoutDashboard,
+          label: 'Unified Dashboard',
+          description: 'Full overview of all progress metrics',
+          color: '#a855f7',
+        },
+        {
+          id: 'journal',
+          icon: BookOpen,
+          label: 'Journal',
+          description: 'Daily reflections and timeline',
+          color: '#22c55e',
+        },
+        {
+          id: 'service-analytics',
+          icon: BarChart3,
+          label: 'Service Analytics',
+          description: 'Deep dive into service metrics',
+          color: '#6366f1',
+        },
+        {
+          id: 'vectors',
+          icon: Zap,
+          label: 'Adaptive Vectors',
+          description: 'Track transformation dimensions',
+          color: '#f59e0b',
+        },
+        {
+          id: 'trigger-audit',
+          icon: Activity,
+          label: 'Trigger Audit',
+          description: 'System trigger effectiveness',
+          color: '#f97316',
+        },
+      ],
     },
     {
-      id: 'quiz' as const,
-      icon: Sparkles,
-      label: 'Readiness Quiz',
-      description: 'Assess your journey progress',
-      color: '#a855f7',
+      id: 'tools',
+      label: 'Tools & Curation',
+      emoji: '🛠️',
+      items: [
+        {
+          id: 'curation',
+          icon: Filter,
+          label: 'Task Curation',
+          description: 'Build your personal task bank',
+          color: '#06b6d4',
+        },
+      ],
     },
     {
-      id: 'sessions' as const,
-      icon: Flame,
-      label: 'Sessions',
-      description: 'Edge training, gooning, and more',
-      color: '#ef4444',
-    },
-    {
-      id: 'history' as const,
-      icon: Calendar,
-      label: 'History',
-      description: 'View past entries and progress',
-      color: '#22c55e',
-    },
-    {
-      id: 'investments' as const,
-      icon: Wallet,
-      label: 'Investment Ledger',
-      description: 'Track your feminization investments',
-      color: '#a855f7',
-    },
-    {
-      id: 'wishlist' as const,
-      icon: Heart,
-      label: 'Wishlist',
-      description: 'Items you want to get',
-      color: '#ec4899',
+      id: 'records',
+      label: 'Records & Investments',
+      emoji: '📚',
+      items: [
+        {
+          id: 'history',
+          icon: Calendar,
+          label: 'History',
+          description: 'View past entries and progress',
+          color: '#22c55e',
+        },
+        {
+          id: 'investments',
+          icon: Wallet,
+          label: 'Investment Ledger',
+          description: 'Track your feminization investments',
+          color: '#a855f7',
+        },
+        {
+          id: 'wishlist',
+          icon: Heart,
+          label: 'Wishlist',
+          description: 'Items you want to get',
+          color: '#ec4899',
+        },
+      ],
     },
   ];
 
   return (
-    <div className="space-y-6 pb-24">
+    <div className="space-y-4 pb-24">
       <div>
-        <h2 className="text-xl font-semibold text-protocol-text">More</h2>
-        <p className="text-sm text-protocol-text-muted">
+        <h2 className={`text-xl font-semibold ${
+          isBambiMode ? 'text-pink-700' : 'text-protocol-text'
+        }`}>More</h2>
+        <p className={`text-sm ${
+          isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'
+        }`}>
           Additional features and settings
         </p>
       </div>
 
-      <div className="space-y-2">
-        {menuItems.map((item) => {
-          const Icon = item.icon;
+      {/* Categorized menu items */}
+      <div className="space-y-3">
+        {categories.map((category) => {
+          const isExpanded = expandedCategories.has(category.id);
+
           return (
-            <button
-              key={item.id}
-              onClick={() => onNavigate(item.id)}
-              className="w-full p-4 rounded-xl bg-protocol-surface border border-protocol-border
-                         hover:border-protocol-accent/30 transition-all
-                         flex items-center gap-4 text-left group"
-            >
-              <div
-                className="p-3 rounded-xl transition-colors"
-                style={{ backgroundColor: `${item.color}20` }}
+            <div key={category.id} className={`rounded-xl overflow-hidden ${
+              isBambiMode
+                ? 'bg-pink-50 border border-pink-200'
+                : 'bg-protocol-surface border border-protocol-border'
+            }`}>
+              {/* Category header */}
+              <button
+                onClick={() => toggleCategory(category.id)}
+                className={`w-full p-3 flex items-center justify-between transition-colors ${
+                  isBambiMode
+                    ? 'hover:bg-pink-100'
+                    : 'hover:bg-protocol-border/30'
+                }`}
               >
-                <Icon className="w-5 h-5" style={{ color: item.color }} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-protocol-text">{item.label}</p>
-                <p className="text-sm text-protocol-text-muted">{item.description}</p>
-              </div>
-              <ChevronRight className="w-5 h-5 text-protocol-text-muted group-hover:text-protocol-accent transition-colors" />
-            </button>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">{category.emoji}</span>
+                  <span className={`font-medium ${
+                    isBambiMode ? 'text-pink-700' : 'text-protocol-text'
+                  }`}>
+                    {category.label}
+                  </span>
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                    isBambiMode
+                      ? 'bg-pink-200 text-pink-600'
+                      : 'bg-protocol-border text-protocol-text-muted'
+                  }`}>
+                    {category.items.length}
+                  </span>
+                </div>
+                <ChevronDown className={`w-4 h-4 transition-transform ${
+                  isExpanded ? 'rotate-180' : ''
+                } ${isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'}`} />
+              </button>
+
+              {/* Category items */}
+              {isExpanded && (
+                <div className={`border-t ${
+                  isBambiMode ? 'border-pink-200' : 'border-protocol-border'
+                }`}>
+                  {category.items.map((item, idx) => {
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => onNavigate(item.id)}
+                        className={`w-full p-3 flex items-center gap-3 text-left group transition-colors ${
+                          idx > 0
+                            ? isBambiMode
+                              ? 'border-t border-pink-100'
+                              : 'border-t border-protocol-border/50'
+                            : ''
+                        } ${
+                          isBambiMode
+                            ? 'hover:bg-pink-100'
+                            : 'hover:bg-protocol-border/30'
+                        }`}
+                      >
+                        <div
+                          className="p-2 rounded-lg transition-colors"
+                          style={{ backgroundColor: `${item.color}20` }}
+                        >
+                          <Icon className="w-4 h-4" style={{ color: item.color }} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-medium ${
+                            isBambiMode ? 'text-pink-800' : 'text-protocol-text'
+                          }`}>{item.label}</p>
+                          <p className={`text-xs ${
+                            isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'
+                          }`}>{item.description}</p>
+                        </div>
+                        <ChevronRight className={`w-4 h-4 transition-colors ${
+                          isBambiMode
+                            ? 'text-pink-300 group-hover:text-pink-500'
+                            : 'text-protocol-text-muted group-hover:text-protocol-accent'
+                        }`} />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           );
         })}
       </div>
 
-      {/* Settings section */}
-      <div className="pt-4 border-t border-protocol-border">
-        <button
-          onClick={() => onNavigate('settings')}
-          className="w-full p-4 rounded-xl bg-protocol-surface border border-protocol-border
-                     hover:border-protocol-accent/30 transition-all
-                     flex items-center gap-4 text-left group"
-        >
-          <div className="p-3 rounded-xl bg-protocol-surface-light">
-            <Settings className="w-5 h-5 text-protocol-text-muted" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-medium text-protocol-text">Settings</p>
-            <p className="text-sm text-protocol-text-muted">Account and preferences</p>
-          </div>
-          <ChevronRight className="w-5 h-5 text-protocol-text-muted group-hover:text-protocol-accent transition-colors" />
-        </button>
-
+      {/* Help section - always visible at bottom */}
+      <div className={`pt-4 border-t ${
+        isBambiMode ? 'border-pink-200' : 'border-protocol-border'
+      }`}>
         <button
           onClick={() => onNavigate('help')}
-          className="w-full p-4 rounded-xl bg-protocol-surface border border-protocol-border
-                     hover:border-protocol-accent/30 transition-all mt-2
-                     flex items-center gap-4 text-left group"
+          className={`w-full p-4 rounded-xl transition-all mt-2 flex items-center gap-4 text-left group ${
+            isBambiMode
+              ? 'bg-pink-50 border border-pink-200 hover:border-pink-300'
+              : 'bg-protocol-surface border border-protocol-border hover:border-protocol-accent/30'
+          }`}
         >
-          <div className="p-3 rounded-xl bg-protocol-surface-light">
-            <HelpCircle className="w-5 h-5 text-protocol-text-muted" />
+          <div className={`p-3 rounded-xl ${
+            isBambiMode ? 'bg-pink-100' : 'bg-protocol-surface-light'
+          }`}>
+            <HelpCircle className={`w-5 h-5 ${
+              isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'
+            }`} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-medium text-protocol-text">Help & Feedback</p>
-            <p className="text-sm text-protocol-text-muted">Get support or share ideas</p>
+            <p className={`font-medium ${
+              isBambiMode ? 'text-pink-700' : 'text-protocol-text'
+            }`}>Help & Feedback</p>
+            <p className={`text-sm ${
+              isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'
+            }`}>Get support or share ideas</p>
           </div>
-          <ChevronRight className="w-5 h-5 text-protocol-text-muted group-hover:text-protocol-accent transition-colors" />
+          <ChevronRight className={`w-5 h-5 transition-colors ${
+            isBambiMode
+              ? 'text-pink-300 group-hover:text-pink-500'
+              : 'text-protocol-text-muted group-hover:text-protocol-accent'
+          }`} />
         </button>
       </div>
     </div>

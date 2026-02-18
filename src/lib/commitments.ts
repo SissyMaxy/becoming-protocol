@@ -324,3 +324,303 @@ export function getPostCommitmentMessage(bindingLevel: BindingLevel): string {
 
   return messages[bindingLevel];
 }
+
+// ============================================
+// COMMITMENT ENFORCEMENT
+// ============================================
+
+export interface CommitmentEnforcement {
+  commitment: UserCommitment;
+  daysSinceMade: number;
+  status: 'on_track' | 'needs_attention' | 'overdue' | 'critical';
+  reminderMessage: string;
+  consequence?: string;
+}
+
+// Status thresholds based on binding level
+const ENFORCEMENT_THRESHOLDS: Record<BindingLevel, {
+  needsAttentionDays: number;
+  overdueDays: number;
+  criticalDays: number;
+}> = {
+  soft: {
+    needsAttentionDays: 7,
+    overdueDays: 14,
+    criticalDays: 21,
+  },
+  hard: {
+    needsAttentionDays: 3,
+    overdueDays: 7,
+    criticalDays: 10,
+  },
+  permanent: {
+    needsAttentionDays: 1,
+    overdueDays: 3,
+    criticalDays: 5,
+  },
+};
+
+/**
+ * Check enforcement status for all active commitments
+ */
+export async function checkCommitmentEnforcement(): Promise<CommitmentEnforcement[]> {
+  const activeCommitments = await getActiveCommitments();
+  const now = new Date();
+  const enforcements: CommitmentEnforcement[] = [];
+
+  for (const commitment of activeCommitments) {
+    const madeAt = new Date(commitment.madeAt);
+    const daysSinceMade = Math.floor((now.getTime() - madeAt.getTime()) / (1000 * 60 * 60 * 24));
+    const thresholds = ENFORCEMENT_THRESHOLDS[commitment.bindingLevel];
+
+    let status: CommitmentEnforcement['status'] = 'on_track';
+    let reminderMessage = '';
+    let consequence: string | undefined;
+
+    if (daysSinceMade >= thresholds.criticalDays) {
+      status = 'critical';
+      reminderMessage = getCriticalReminderMessage(commitment, daysSinceMade);
+      consequence = getConsequence(commitment.bindingLevel, 'critical');
+    } else if (daysSinceMade >= thresholds.overdueDays) {
+      status = 'overdue';
+      reminderMessage = getOverdueReminderMessage(commitment, daysSinceMade);
+      consequence = getConsequence(commitment.bindingLevel, 'overdue');
+    } else if (daysSinceMade >= thresholds.needsAttentionDays) {
+      status = 'needs_attention';
+      reminderMessage = getNeedsAttentionMessage(commitment, daysSinceMade);
+    }
+
+    // Only include commitments that need attention
+    if (status !== 'on_track') {
+      enforcements.push({
+        commitment,
+        daysSinceMade,
+        status,
+        reminderMessage,
+        consequence,
+      });
+    }
+  }
+
+  // Sort by severity (critical first)
+  const severityOrder = { critical: 0, overdue: 1, needs_attention: 2, on_track: 3 };
+  return enforcements.sort((a, b) => severityOrder[a.status] - severityOrder[b.status]);
+}
+
+/**
+ * Get the most urgent commitment needing attention
+ */
+export async function getMostUrgentCommitment(): Promise<CommitmentEnforcement | null> {
+  const enforcements = await checkCommitmentEnforcement();
+  return enforcements[0] || null;
+}
+
+/**
+ * Check if there are any commitments needing enforcement action
+ */
+export async function hasOverdueCommitments(): Promise<boolean> {
+  const enforcements = await checkCommitmentEnforcement();
+  return enforcements.some(e => e.status === 'overdue' || e.status === 'critical');
+}
+
+function getNeedsAttentionMessage(commitment: UserCommitment, days: number): string {
+  const messages = [
+    `You made a commitment ${days} days ago: "${commitment.commitmentText}". Time to make progress.`,
+    `${days} days since your commitment. Your aroused self knew what she wanted. Don't let her down.`,
+    `Remember what you promised: "${commitment.commitmentText}". It's been ${days} days.`,
+    `Day ${days} of your commitment. Still waiting for action.`,
+    `"${commitment.commitmentText}" - ${days} days and counting. What's your next step?`,
+  ];
+  return messages[Math.floor(Math.random() * messages.length)];
+}
+
+function getOverdueReminderMessage(commitment: UserCommitment, days: number): string {
+  const messages = [
+    `OVERDUE: "${commitment.commitmentText}" has been waiting ${days} days. Your horny self made this promise. Honor her.`,
+    `${days} days overdue. Your commitment to "${commitment.commitmentText}" is slipping. Time to act.`,
+    `You're falling behind on your commitment. ${days} days since you promised: "${commitment.commitmentText}"`,
+    `Warning: Commitment overdue by ${days - 7} days. The aroused version of you would be disappointed.`,
+  ];
+  return messages[Math.floor(Math.random() * messages.length)];
+}
+
+function getCriticalReminderMessage(commitment: UserCommitment, days: number): string {
+  const messages = [
+    `CRITICAL: "${commitment.commitmentText}" - ${days} days without action. This ${commitment.bindingLevel} commitment is at risk.`,
+    `Final warning. Your ${commitment.bindingLevel} commitment made ${days} days ago needs immediate attention.`,
+    `You made this commitment while aroused. ${days} days later, you're still avoiding it. Your horny self knew the truth. Honor her decision.`,
+    `URGENT: "${commitment.commitmentText}" - ${days} days. Consequences are imminent.`,
+  ];
+  return messages[Math.floor(Math.random() * messages.length)];
+}
+
+function getConsequence(bindingLevel: BindingLevel, severity: 'overdue' | 'critical'): string {
+  const consequences: Record<BindingLevel, Record<string, string>> = {
+    soft: {
+      overdue: 'Your commitment record will note this delay.',
+      critical: 'This commitment will be marked as incomplete in your record.',
+    },
+    hard: {
+      overdue: 'Streak impact warning. Investment decay starting.',
+      critical: 'Streak impact imminent. Investment decay accelerating. Record will show broken commitment.',
+    },
+    permanent: {
+      overdue: 'Permanent commitments cannot be delayed. Intervention escalating.',
+      critical: 'This was permanent. There is no escape. Forcing intervention.',
+    },
+  };
+  return consequences[bindingLevel][severity];
+}
+
+// ============================================
+// COMMITMENT INTERVENTION INTEGRATION
+// ============================================
+
+/**
+ * Get commitment-based intervention content
+ */
+export async function getCommitmentIntervention(): Promise<{
+  type: 'reminder' | 'escalation' | 'consequence';
+  message: string;
+  commitment: UserCommitment;
+  severity: CommitmentEnforcement['status'];
+} | null> {
+  const urgent = await getMostUrgentCommitment();
+  if (!urgent) return null;
+
+  let type: 'reminder' | 'escalation' | 'consequence' = 'reminder';
+  if (urgent.status === 'critical') {
+    type = 'consequence';
+  } else if (urgent.status === 'overdue') {
+    type = 'escalation';
+  }
+
+  return {
+    type,
+    message: urgent.reminderMessage,
+    commitment: urgent.commitment,
+    severity: urgent.status,
+  };
+}
+
+/**
+ * Record that a commitment reminder was sent
+ */
+export async function recordCommitmentReminder(
+  commitmentId: string,
+  reminderType: 'nudge' | 'warning' | 'escalation'
+): Promise<void> {
+  // Store reminder in influence_attempts for tracking
+  await supabase
+    .from('influence_attempts')
+    .insert({
+      attempt_type: 'commitment_reminder',
+      method: reminderType,
+      target_domain: 'commitment_enforcement',
+      content: { commitmentId },
+      user_aware: true,
+    });
+}
+
+/**
+ * Apply consequences for failed commitments
+ */
+export async function applyCommitmentConsequence(
+  commitmentId: string,
+  consequenceType: 'streak_impact' | 'investment_decay' | 'record_mark'
+): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  // Record the consequence
+  await supabase
+    .from('commitment_consequences')
+    .insert({
+      user_id: user.id,
+      commitment_id: commitmentId,
+      consequence_type: consequenceType,
+      applied_at: new Date().toISOString(),
+    });
+
+  // Apply specific consequence effects
+  switch (consequenceType) {
+    case 'streak_impact':
+      // Reduce streak by 10%
+      const { data: denial } = await supabase
+        .from('denial_state')
+        .select('streak_days')
+        .eq('user_id', user.id)
+        .single();
+
+      if (denial?.streak_days) {
+        const newStreak = Math.floor(denial.streak_days * 0.9);
+        await supabase
+          .from('denial_state')
+          .update({ streak_days: newStreak })
+          .eq('user_id', user.id);
+      }
+      break;
+
+    case 'investment_decay':
+      // Decay investments by 5%
+      const { data: investments } = await supabase
+        .from('user_investments')
+        .select('id, current_value')
+        .eq('user_id', user.id)
+        .eq('status', 'active');
+
+      if (investments) {
+        for (const inv of investments) {
+          const newValue = Math.floor(inv.current_value * 0.95);
+          await supabase
+            .from('user_investments')
+            .update({ current_value: newValue })
+            .eq('id', inv.id);
+        }
+      }
+      break;
+
+    case 'record_mark':
+      // Just record the mark - no mechanical effect
+      break;
+  }
+}
+
+/**
+ * Get commitment compliance rate
+ */
+export async function getComplianceRate(): Promise<{
+  overall: number;
+  byLevel: Record<BindingLevel, number>;
+  recentTrend: 'improving' | 'stable' | 'declining';
+}> {
+  const commitments = await getUserCommitments();
+
+  const calculate = (filtered: UserCommitment[]) => {
+    if (filtered.length === 0) return 1;
+    const fulfilled = filtered.filter(c => c.status === 'fulfilled').length;
+    return fulfilled / filtered.length;
+  };
+
+  const overall = calculate(commitments);
+
+  const byLevel: Record<BindingLevel, number> = {
+    soft: calculate(commitments.filter(c => c.bindingLevel === 'soft')),
+    hard: calculate(commitments.filter(c => c.bindingLevel === 'hard')),
+    permanent: calculate(commitments.filter(c => c.bindingLevel === 'permanent')),
+  };
+
+  // Calculate trend from recent vs older commitments
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const recent = commitments.filter(c => new Date(c.madeAt) > thirtyDaysAgo);
+  const older = commitments.filter(c => new Date(c.madeAt) <= thirtyDaysAgo);
+
+  const recentRate = calculate(recent);
+  const olderRate = calculate(older);
+
+  let recentTrend: 'improving' | 'stable' | 'declining' = 'stable';
+  if (recentRate > olderRate + 0.1) recentTrend = 'improving';
+  else if (recentRate < olderRate - 0.1) recentTrend = 'declining';
+
+  return { overall, byLevel, recentTrend };
+}

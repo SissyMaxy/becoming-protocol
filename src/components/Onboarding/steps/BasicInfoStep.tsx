@@ -45,7 +45,7 @@ export function BasicInfoStep({ profile, onUpdate, onNext, onBack }: BasicInfoSt
         About You
       </h2>
       <p className="text-protocol-text-muted mb-6">
-        What should I call you? These basics help me personalize your experience.
+        What should I call you?
       </p>
 
       <div className="space-y-6">
@@ -150,7 +150,7 @@ export function BasicInfoStep({ profile, onUpdate, onNext, onBack }: BasicInfoSt
             ))}
           </div>
           <p className="text-xs text-protocol-text-muted mt-2">
-            This helps tailor practices to your life stage
+            Different ages, different challenges
           </p>
         </div>
       </div>

@@ -416,24 +416,28 @@ export function CompulsoryGateScreen({
                     })}
                   </div>
 
-                  {/* Submit */}
-                  <button
-                    onClick={handlePhysicalStateSubmit}
-                    disabled={isCompleting}
-                    className="w-full py-3 rounded-lg bg-gradient-to-r from-pink-500 to-purple-500 text-white font-medium text-sm hover:from-pink-600 hover:to-purple-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed mt-2"
-                  >
-                    {isCompleting ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Saving...
-                      </span>
-                    ) : (
-                      <span className="flex items-center justify-center gap-2">
-                        <CheckCircle2 className="w-4 h-4" />
-                        Save Physical State
-                      </span>
-                    )}
-                  </button>
+                  {/* Submit buttons */}
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      onClick={handlePhysicalStateSubmit}
+                      disabled={isCompleting}
+                      className="flex-1 py-3 rounded-lg bg-gradient-to-r from-pink-500 to-purple-500 text-white font-medium text-sm hover:from-pink-600 hover:to-purple-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {isCompleting ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Saving...
+                        </span>
+                      ) : Object.values(physicalState).some(Boolean) ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <CheckCircle2 className="w-4 h-4" />
+                          Save Physical State
+                        </span>
+                      ) : (
+                        'Nothing right now'
+                      )}
+                    </button>
+                  </div>
                 </div>
               )}
 

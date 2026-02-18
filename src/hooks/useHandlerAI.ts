@@ -6,7 +6,7 @@
  * commitment extraction, and pattern analysis.
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import {
   generateDailyPlan,
@@ -74,7 +74,7 @@ interface UseHandlerAIReturn {
 
   handleSession: (
     sessionId: string,
-    event: 'session_start' | 'edge' | 'commitment_window' | 'session_end',
+    event: 'session_start' | 'edge' | 'commitment_window' | 'session_end' | 'emergency_stop',
     data: Record<string, unknown>
   ) => Promise<HandlerIntervention | null>;
 
@@ -289,7 +289,7 @@ export function useHandlerAI(): UseHandlerAIReturn {
   // Handle session events for real-time AI decisions
   const handleSession = useCallback(async (
     sessionId: string,
-    event: 'session_start' | 'edge' | 'commitment_window' | 'session_end',
+    event: 'session_start' | 'edge' | 'commitment_window' | 'session_end' | 'emergency_stop',
     data: Record<string, unknown>
   ): Promise<HandlerIntervention | null> => {
     if (!user) {
@@ -388,7 +388,7 @@ export function useAutoIntervention(
   }, []);
 
   // Clean up on unmount
-  useCallback(() => {
+  useEffect(() => {
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);

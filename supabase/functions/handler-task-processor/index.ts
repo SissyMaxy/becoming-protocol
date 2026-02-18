@@ -68,6 +68,13 @@ serve(async (req) => {
           case 'analyze_patterns':
             result = await analyzePatterns(supabase, anthropic, task.user_id)
             break
+          case 'morning_enforcement':
+          case 'evening_enforcement':
+            result = await runEnforcement(supabase, task.user_id, task.task_type, task.payload)
+            break
+          case 'generate_narration':
+            result = await generateStandaloneNarration(supabase, anthropic, task.user_id, task.payload)
+            break
           default:
             throw new Error(`Unknown task type: ${task.task_type}`)
         }
@@ -289,4 +296,112 @@ Respond with JSON:
   }
 
   return analysis
+}
+
+// ============================================
+// ENFORCEMENT TASK HANDLERS
+// ============================================
+
+async function runEnforcement(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  taskType: string,
+  payload: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  // Delegate to the handler-enforcement edge function
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+
+  const runType = taskType === 'morning_enforcement' ? 'morning' : 'evening'
+
+  const response = await fetch(`${supabaseUrl}/functions/v1/handler-enforcement`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${serviceKey}`,
+    },
+    body: JSON.stringify({
+      run_type: runType,
+      user_id: userId,
+    }),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Enforcement function returned ${response.status}: ${errorText}`)
+  }
+
+  return await response.json()
+}
+
+async function generateStandaloneNarration(
+  supabase: ReturnType<typeof createClient>,
+  anthropic: Anthropic,
+  userId: string,
+  payload: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  // Gather context
+  const [
+    { data: profile },
+    { data: denialState },
+    { data: userState },
+    { data: recentEnforcement },
+    { data: recentNarrations },
+  ] = await Promise.all([
+    supabase.from('profile_foundation').select('chosen_name, pronouns').eq('user_id', userId).single(),
+    supabase.from('denial_state').select('current_denial_day, is_locked').eq('user_id', userId).single(),
+    supabase.from('user_state').select('streak_days, longest_streak').eq('user_id', userId).single(),
+    supabase.from('enforcement_log').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(10),
+    supabase.from('handler_narrations').select('title, narration_type').eq('user_id', userId).order('created_at', { ascending: false }).limit(5),
+  ])
+
+  const chosenName = profile?.chosen_name || 'her'
+  const narType = (payload?.narration_type as string) || 'progress_report'
+
+  const systemPrompt = `You are THE HANDLER writing a ${narType} about ${chosenName}.
+
+Tone: Firm, knowing, direct. You see everything. You are always a step ahead.
+Style: Second person. Reference specific data. Short paragraphs, punchy sentences.
+Frame compliance as natural progression, noncompliance as temporary resistance.
+End with a directive or observation.
+
+Recent narrations (avoid repeating):
+${(recentNarrations || []).map(n => `- ${n.title}`).join('\n')}`
+
+  const userPrompt = `Write a ${narType} narration.
+
+Data:
+- Name: ${chosenName}
+- Denial day: ${denialState?.current_denial_day || 0}, Locked: ${denialState?.is_locked || false}
+- Streak: ${userState?.streak_days || 0} / longest: ${userState?.longest_streak || 0}
+
+Recent enforcement:
+${(recentEnforcement || []).map(e => `- ${e.enforcement_type}: ${e.action_taken}`).join('\n') || 'None'}
+
+Write JSON: {"title": "...", "body": "..."}`
+
+  const message = await anthropic.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 1000,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: userPrompt }],
+  })
+
+  const responseText = message.content[0].type === 'text' ? message.content[0].text : ''
+  const jsonMatch = responseText.match(/\{[\s\S]*\}/)
+  if (!jsonMatch) return { error: 'Failed to parse narration' }
+
+  const parsed = JSON.parse(jsonMatch[0])
+
+  const { data } = await supabase.from('handler_narrations').insert({
+    user_id: userId,
+    narration_type: narType,
+    title: parsed.title,
+    body: parsed.body,
+    source_data: { recent_enforcement: recentEnforcement },
+    published: false,
+    platform: 'internal',
+  }).select('id').single()
+
+  return { narration_id: data?.id, title: parsed.title }
 }
