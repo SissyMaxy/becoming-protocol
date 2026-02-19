@@ -35,6 +35,12 @@ import { getActiveAuctionCount } from './marketplace/auctions';
 import { getDailyAggregate, getWeeklyTrend } from './passive-voice/aggregation';
 import { getRecentInterventions } from './passive-voice/interventions';
 import { buildDenialContentContext } from './industry/denial-content-bridge';
+import { buildSkipContext } from './industry/skip-escalation';
+import { buildFanMemoryContext } from './industry/fan-memory';
+import { buildCommunityContext } from './industry/community-engine';
+import { buildOutreachContext } from './industry/creator-outreach';
+import { buildKarmaContext } from './industry/reddit-karma';
+import { buildRecycleContext } from './industry/content-recycler';
 
 // ============================================
 // TYPES
@@ -52,6 +58,7 @@ export interface SystemsContext {
   marketplace: string;
   passiveVoice: string;
   denialContent: string;
+  industry: string;
 }
 
 // ============================================
@@ -364,6 +371,33 @@ async function buildPassiveVoiceContext(userId: string): Promise<string> {
   }
 }
 
+async function buildIndustryContext(userId: string): Promise<string> {
+  try {
+    const [skip, fan, community, outreach, karma, recycle] = await Promise.allSettled([
+      buildSkipContext(userId),
+      buildFanMemoryContext(userId),
+      buildCommunityContext(userId),
+      buildOutreachContext(userId),
+      buildKarmaContext(userId),
+      buildRecycleContext(userId),
+    ]);
+
+    const parts = [
+      skip.status === 'fulfilled' ? skip.value : '',
+      fan.status === 'fulfilled' ? fan.value : '',
+      community.status === 'fulfilled' ? community.value : '',
+      outreach.status === 'fulfilled' ? outreach.value : '',
+      karma.status === 'fulfilled' ? karma.value : '',
+      recycle.status === 'fulfilled' ? recycle.value : '',
+    ].filter(Boolean);
+
+    if (parts.length === 0) return '';
+    return parts.join('\n');
+  } catch {
+    return '';
+  }
+}
+
 // ============================================
 // MAIN CONTEXT BUILDERS
 // ============================================
@@ -373,7 +407,7 @@ async function buildPassiveVoiceContext(userId: string): Promise<string> {
  * All systems, maximum data density.
  */
 export async function buildFullSystemsContext(userId: string): Promise<string> {
-  const [gina, content, voice, cam, sleep, exercise, hypno, sexting, marketplace, passiveVoice, denialContent] = await Promise.allSettled([
+  const [gina, content, voice, cam, sleep, exercise, hypno, sexting, marketplace, passiveVoice, denialContent, industry] = await Promise.allSettled([
     buildGinaContext(userId),
     buildContentContext(userId),
     buildVoiceContext(userId),
@@ -385,6 +419,7 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     buildMarketplaceContext(userId),
     buildPassiveVoiceContext(userId),
     buildDenialContentContext(userId),
+    buildIndustryContext(userId),
   ]);
 
   const blocks = [
@@ -399,6 +434,7 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     passiveVoice.status === 'fulfilled' ? passiveVoice.value : '',
     sleep.status === 'fulfilled' ? sleep.value : '',
     exercise.status === 'fulfilled' ? exercise.value : '',
+    industry.status === 'fulfilled' ? industry.value : '',
   ].filter(Boolean);
 
   if (blocks.length === 0) return '';
@@ -410,7 +446,7 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
  * Content pipeline performance, voice progress, exercise, sleep.
  */
 export async function buildDebriefContext(userId: string): Promise<string> {
-  const [content, voice, exercise, sleep, hypno, sexting, marketplace, passiveVoice, denialContent] = await Promise.allSettled([
+  const [content, voice, exercise, sleep, hypno, sexting, marketplace, passiveVoice, denialContent, industry] = await Promise.allSettled([
     buildContentContext(userId),
     buildVoiceContext(userId),
     buildExerciseContext(userId),
@@ -420,6 +456,7 @@ export async function buildDebriefContext(userId: string): Promise<string> {
     buildMarketplaceContext(userId),
     buildPassiveVoiceContext(userId),
     buildDenialContentContext(userId),
+    buildIndustryContext(userId),
   ]);
 
   const blocks = [
@@ -432,6 +469,7 @@ export async function buildDebriefContext(userId: string): Promise<string> {
     passiveVoice.status === 'fulfilled' ? passiveVoice.value : '',
     exercise.status === 'fulfilled' ? exercise.value : '',
     sleep.status === 'fulfilled' ? sleep.value : '',
+    industry.status === 'fulfilled' ? industry.value : '',
   ].filter(Boolean);
 
   if (blocks.length === 0) return '';
