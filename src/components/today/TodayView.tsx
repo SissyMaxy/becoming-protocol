@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { Loader2, RefreshCw, AlertTriangle, Heart, Target, Focus, LayoutGrid, Moon, Zap, FileText, ChevronRight, Clock, Star, DollarSign } from 'lucide-react';
+import { Loader2, RefreshCw, AlertTriangle, Heart, Target, Focus, LayoutGrid, Moon, Zap, FileText, ChevronRight, Clock, Star, DollarSign, Send, Headphones, Camera } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
 import { supabase } from '../../lib/supabase';
 import { useTaskBank } from '../../hooks/useTaskBank';
@@ -13,6 +13,16 @@ import { useArousalState } from '../../hooks/useArousalState';
 import { useWeekend } from '../../hooks/useWeekend';
 import { useGoals } from '../../hooks/useGoals';
 import { useLovense } from '../../hooks/useLovense';
+import { useContentPipeline } from '../../hooks/useContentPipeline';
+import { useHypnoSession } from '../../hooks/useHypnoSession';
+import { PostPackCard } from '../content/PostPackCard';
+import { HypnoSessionCard } from '../hypno/HypnoSessionCard';
+import { HYPNO_TASK_CODES } from '../../lib/content/hypno-tasks';
+import { useShootFlow } from '../../hooks/useShootFlow';
+import { ShootCard } from '../shoots/ShootCard';
+import { ShotView } from '../shoots/ShotView';
+import { MediaUpload } from '../shoots/MediaUpload';
+import { ReadyToPost } from '../shoots/ReadyToPost';
 import { TodayHeader } from './TodayHeader';
 import { ProgressRing } from './ProgressRing';
 import { TaskCardNew } from './TaskCardNew';
@@ -36,6 +46,9 @@ import { TimeRatchetsDisplay } from '../ratchets/TimeRatchets';
 import { ArousalPlannerSection } from '../arousal-planner';
 // NextBestActionWidget removed - consolidated into FocusedActionCard
 import { StreakWarningsWidget } from '../streak';
+import { ExerciseTodayWidget } from '../exercise';
+import { ProteinTracker } from '../protein';
+import { MicroTaskWidget } from '../micro-tasks';
 import { HandlerDirective } from '../handler/HandlerDirective';
 import { getActiveBriefs, type ContentBrief } from '../../lib/handler-v2/content-engine';
 import { useAuth } from '../../context/AuthContext';
@@ -102,6 +115,15 @@ export function TodayView() {
   // Lovense connection status
   const { status: lovenseStatus, activeToy } = useLovense();
   const lovenseConnected = lovenseStatus === 'connected';
+
+  // Content pipeline — pending post packs for manual posting
+  const { pendingPostPacks, markPosted } = useContentPipeline();
+
+  // Hypno sessions — active session display
+  const { activeSession: activeHypnoSession } = useHypnoSession();
+
+  // Shoot flow — prescribed content shoots
+  const shootFlow = useShootFlow();
 
   const [showAllComplete, setShowAllComplete] = useState(false);
 
@@ -703,6 +725,56 @@ export function TodayView() {
         </div>
       )}
 
+      {/* Post Packs — manual posting queue for Reddit/Fansly */}
+      {!isGinaHome && pendingPostPacks.length > 0 && (
+        <div className="px-4 mb-4 space-y-3">
+          <div className="flex items-center gap-2 px-1">
+            <Send className={`w-4 h-4 ${isBambiMode ? 'text-blue-500' : 'text-blue-400'}`} />
+            <span className={`text-xs uppercase tracking-wider font-semibold ${
+              isBambiMode ? 'text-blue-500' : 'text-blue-400'
+            }`}>
+              Post Packs
+            </span>
+            <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+              isBambiMode ? 'bg-blue-200 text-blue-600' : 'bg-blue-800 text-blue-300'
+            }`}>
+              {pendingPostPacks.length}
+            </span>
+          </div>
+          {pendingPostPacks.map(dist => (
+            <PostPackCard
+              key={dist.id}
+              distribution={dist}
+              onMarkPosted={markPosted}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Hypno Session — active session or prescription */}
+      {!isGinaHome && activeHypnoSession && (
+        <div className="px-4 mb-4">
+          <div className="flex items-center gap-2 px-1 mb-2">
+            <Headphones className={`w-4 h-4 ${isBambiMode ? 'text-purple-500' : 'text-purple-400'}`} />
+            <span className={`text-xs uppercase tracking-wider font-semibold ${
+              isBambiMode ? 'text-purple-500' : 'text-purple-400'
+            }`}>
+              Hypno Session
+            </span>
+            <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+              isBambiMode ? 'bg-green-100 text-green-600' : 'bg-green-900/30 text-green-400'
+            }`}>
+              Active
+            </span>
+          </div>
+          <HypnoSessionCard
+            taskCode={HYPNO_TASK_CODES.HYPNO_SESSION}
+            activeSession={activeHypnoSession}
+            onStart={() => window.dispatchEvent(new CustomEvent('navigate-to-hypno'))}
+          />
+        </div>
+      )}
+
       {/* Streak Break Recovery: show sunk cost prominently (gap #21) */}
       {isStreakBreakRecovery && (
         <div className="px-4 mb-4">
@@ -775,6 +847,13 @@ export function TodayView() {
               </>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Protein Tracker (shown in evening alongside check-in) */}
+      {isEvening && (
+        <div className="px-4 mb-4">
+          <ProteinTracker />
         </div>
       )}
 
@@ -974,6 +1053,20 @@ export function TodayView() {
       {!isWeekendDay && !directiveMode && (!focusMode || showAllItems) && (
         <div className="px-4 mb-4">
           <TimeRatchetsDisplay compact />
+        </div>
+      )}
+
+      {/* Micro-Task Widget (hidden in focus/directive mode unless expanded) */}
+      {!isWeekendDay && !directiveMode && (!focusMode || showAllItems) && (
+        <div className="px-4 mb-4">
+          <MicroTaskWidget />
+        </div>
+      )}
+
+      {/* Exercise Widget (hidden in focus/directive mode unless expanded) */}
+      {!isWeekendDay && !directiveMode && (!focusMode || showAllItems) && (
+        <div className="px-4 mb-4">
+          <ExerciseTodayWidget />
         </div>
       )}
 
@@ -1177,6 +1270,30 @@ export function TodayView() {
           </div>
         ) : todayTasks.length > 0 && (
           <>
+            {/* Section: Prescribed Shoots */}
+            {shootFlow.prescriptions.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 px-1">
+                  <Camera className={`w-4 h-4 ${isBambiMode ? 'text-pink-500' : 'text-protocol-accent'}`} />
+                  <span className={`text-xs uppercase tracking-wider font-semibold ${
+                    isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'
+                  }`}>
+                    {shootFlow.prescriptions.length === 1 ? 'Prescribed Shoot' : `${shootFlow.prescriptions.length} Shoots`}
+                  </span>
+                </div>
+                {shootFlow.prescriptions.map(shoot => (
+                  <ShootCard
+                    key={shoot.id}
+                    prescription={shoot}
+                    activePoll={shootFlow.activePoll}
+                    onStartShoot={() => shootFlow.startShoot(shoot.id)}
+                    onSkip={() => shootFlow.skipShoot(shoot.id)}
+                    isLoading={shootFlow.isLoading}
+                  />
+                ))}
+              </div>
+            )}
+
             {/* Section: Pending tasks */}
             {pendingTasks.length > 0 && (
               <div className="space-y-3">
@@ -1189,7 +1306,7 @@ export function TodayView() {
                   <TaskCardNew
                     key={task.id}
                     task={task}
-                    onComplete={(feltGood, notes) => complete(task.id, feltGood, notes)}
+                    onComplete={(feltGood, notes, captureData) => complete(task.id, feltGood, notes, captureData as Record<string, unknown> | undefined)}
                     onIncrement={() => incrementProgress(task.id)}
                     onSkip={() => skip(task.id)}
                     isCompleting={completingTaskId === task.id}
@@ -1335,6 +1452,106 @@ export function TodayView() {
           onCancel={handleSessionCancel}
         />
       )}
+
+      {/* Shoot Flow Overlays */}
+      {shootFlow.phase === 'shooting' && shootFlow.activeShoot && (
+        <ShotView
+          shots={shootFlow.activeShoot.shotList}
+          references={shootFlow.references}
+          shootTitle={shootFlow.activeShoot.title}
+          onComplete={shootFlow.completeShoting}
+          onClose={shootFlow.closeFlow}
+        />
+      )}
+
+      {shootFlow.phase === 'upload' && shootFlow.activeShoot && (
+        <MediaUpload
+          shootId={shootFlow.activeShoot.id}
+          onUploadComplete={shootFlow.uploadMedia}
+          onClose={shootFlow.closeFlow}
+        />
+      )}
+
+      {shootFlow.phase === 'posting' && shootFlow.activeShoot && (
+        <div className="fixed inset-0 z-50 overflow-y-auto p-4 bg-protocol-bg">
+          <ReadyToPost
+            posts={(shootFlow.activeShoot.selectedMedia || []).length > 0
+              ? buildReadyToPostEntries(shootFlow.activeShoot)
+              : []
+            }
+            shootTitle={shootFlow.activeShoot.title}
+            totalPhotos={shootFlow.activeShoot.mediaPaths.length}
+            selectedCount={shootFlow.activeShoot.selectedMedia.length}
+            onMarkPosted={async (postId) => { await shootFlow.markPosted(postId); }}
+            onDone={shootFlow.markAllPosted}
+          />
+        </div>
+      )}
     </div>
   );
+}
+
+/**
+ * Build platform post entries for ReadyToPost from a shoot prescription.
+ */
+function buildReadyToPostEntries(shoot: import('../../types/industry').ShootPrescription) {
+  const posts: Array<{
+    id: string;
+    platform: string;
+    subreddit?: string;
+    title?: string;
+    caption: string;
+    mediaUrls: string[];
+    ppvPrice?: number;
+    denialDay: number;
+    posted: boolean;
+  }> = [];
+
+  const denialDay = shoot.denialDay ?? 0;
+  const caption = shoot.captionDraft || '';
+  const mediaUrls = shoot.selectedMedia || [];
+
+  // OF: full set
+  posts.push({
+    id: `${shoot.id}-of`,
+    platform: 'onlyfans',
+    caption,
+    mediaUrls,
+    ppvPrice: denialDay >= 5 ? 4.99 : undefined,
+    denialDay,
+    posted: false,
+  });
+
+  // Primary Reddit
+  const secondary = shoot.secondaryPlatforms || [];
+  const redditSubs = secondary
+    .filter((p: string) => p.startsWith('reddit:'))
+    .map((p: string) => p.replace('reddit:', ''));
+
+  for (const sub of redditSubs) {
+    posts.push({
+      id: `${shoot.id}-reddit-${sub}`,
+      platform: 'reddit',
+      subreddit: sub,
+      title: caption.slice(0, 100),
+      caption: `${caption} [link in bio for full set]`,
+      mediaUrls: mediaUrls.slice(0, 1),
+      denialDay,
+      posted: false,
+    });
+  }
+
+  // Twitter
+  if (secondary.includes('twitter') || secondary.some((p: string) => p === 'twitter')) {
+    posts.push({
+      id: `${shoot.id}-twitter`,
+      platform: 'twitter',
+      caption: caption.length > 240 ? caption.slice(0, 237) + '...' : caption,
+      mediaUrls: mediaUrls.slice(0, 1),
+      denialDay,
+      posted: false,
+    });
+  }
+
+  return posts;
 }
