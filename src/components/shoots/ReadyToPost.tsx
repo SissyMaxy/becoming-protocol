@@ -6,9 +6,10 @@
 import { useState, useCallback } from 'react';
 import {
   Copy, Check, Download, ExternalLink, CheckCircle2,
-  Lock, Loader2, DollarSign,
+  Loader2, DollarSign,
 } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
+import { DenialBadge } from '../ui/DenialBadge';
 
 interface PlatformPost {
   id: string;
@@ -74,12 +75,6 @@ const PLATFORM_CONFIG: Record<string, {
   },
 };
 
-function getDenialBadgeClasses(day: number, isBambiMode: boolean): string {
-  if (day <= 2) return isBambiMode ? 'bg-blue-100 text-blue-600' : 'bg-blue-900/30 text-blue-400';
-  if (day <= 4) return isBambiMode ? 'bg-amber-100 text-amber-600' : 'bg-amber-900/30 text-amber-400';
-  if (day <= 6) return isBambiMode ? 'bg-pink-100 text-pink-600' : 'bg-pink-900/30 text-pink-400';
-  return isBambiMode ? 'bg-purple-100 text-purple-600' : 'bg-purple-900/30 text-purple-400';
-}
 
 export function ReadyToPost({
   posts,
@@ -236,12 +231,7 @@ function PlatformPostCard({
           )}
         </div>
         {post.denialDay > 0 && (
-          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-            getDenialBadgeClasses(post.denialDay, isBambiMode)
-          }`}>
-            <Lock className="w-2.5 h-2.5 inline mr-0.5" style={{ marginTop: -1 }} />
-            Day {post.denialDay}
-          </span>
+          <DenialBadge denialDay={post.denialDay} size="sm" />
         )}
       </div>
 

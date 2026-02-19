@@ -6,27 +6,13 @@
 
 import { useState } from 'react';
 import {
-  Camera, Lock, Clock, ChevronDown, ChevronUp,
+  Camera, Clock, ChevronDown, ChevronUp,
   Play, SkipForward, CheckCircle2, AlertTriangle,
   Image as ImageIcon, Loader2, BarChart3,
 } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
+import { DenialBadge } from '../ui/DenialBadge';
 import type { ShootPrescription, ShootStatus, AudiencePoll, ShotListEntry } from '../../types/industry';
-
-// Denial badge color by day
-function getDenialBadgeColor(day: number): string {
-  if (day <= 2) return '#4A90D9';   // cool blue
-  if (day <= 4) return '#D4A843';   // warm amber
-  if (day <= 6) return '#D94A6B';   // hot pink
-  return '#8B4AD9';                  // deep purple
-}
-
-function getDenialBadgeClasses(day: number, isBambiMode: boolean): string {
-  if (day <= 2) return isBambiMode ? 'bg-blue-100 text-blue-700' : 'bg-blue-900/30 text-blue-400';
-  if (day <= 4) return isBambiMode ? 'bg-amber-100 text-amber-700' : 'bg-amber-900/30 text-amber-400';
-  if (day <= 6) return isBambiMode ? 'bg-pink-100 text-pink-700' : 'bg-pink-900/30 text-pink-400';
-  return isBambiMode ? 'bg-purple-100 text-purple-700' : 'bg-purple-900/30 text-purple-400';
-}
 
 function getStatusConfig(status: ShootStatus): { label: string; icon: typeof Camera; color: string } {
   switch (status) {
@@ -104,13 +90,7 @@ export function ShootCard({
         <div className="flex items-center gap-2 flex-shrink-0">
           {/* Denial Day Badge */}
           {denialDay > 0 && (
-            <span
-              className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${getDenialBadgeClasses(denialDay, isBambiMode)}`}
-              style={{ borderLeft: `3px solid ${getDenialBadgeColor(denialDay)}` }}
-            >
-              <Lock className="w-2.5 h-2.5 inline mr-0.5" style={{ marginTop: -1 }} />
-              Day {denialDay}
-            </span>
+            <DenialBadge denialDay={denialDay} size="md" />
           )}
           {expanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
         </div>
