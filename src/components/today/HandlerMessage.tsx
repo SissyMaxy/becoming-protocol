@@ -132,7 +132,14 @@ export function HandlerMessage(props: HandlerMessageProps) {
   const { handlerMode } = props;
   const [isCollapsed, setIsCollapsed] = useState(false);
 
-  const message = composeMessage(props);
+  let message = composeMessage(props);
+  // Guard against empty primary (edge case with missing personalization data)
+  if (!message.primary || !message.primary.trim()) {
+    message = {
+      primary: `${getTimeGreeting(props.timeOfDay)} Day ${props.denialDay}.`,
+      secondary: getDailyFallback(props.denialDay),
+    };
+  }
   const styles = getModeStyles(handlerMode, isBambiMode);
 
   // Auto-expand when message changes

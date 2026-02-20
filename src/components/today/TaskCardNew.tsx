@@ -64,12 +64,12 @@ function getIntensityGradient(intensity: number, isBambiMode: boolean): string {
     }
   }
   switch (intensity) {
-    case 1: return 'from-emerald-500 to-teal-500';
-    case 2: return 'from-teal-500 to-cyan-500';
-    case 3: return 'from-amber-500 to-orange-500';
-    case 4: return 'from-orange-500 to-red-500';
+    case 1: return 'from-purple-500 to-violet-500';
+    case 2: return 'from-violet-500 to-fuchsia-500';
+    case 3: return 'from-fuchsia-500 to-rose-500';
+    case 4: return 'from-rose-500 to-red-500';
     case 5: return 'from-red-500 to-rose-600';
-    default: return 'from-emerald-500 to-teal-500';
+    default: return 'from-purple-500 to-violet-500';
   }
 }
 
@@ -223,13 +223,13 @@ export function TaskCardNew({
       <div className={`relative rounded-2xl overflow-hidden transition-all duration-500 ${
         isBambiMode
           ? 'bg-gradient-to-br from-pink-100 via-fuchsia-50 to-purple-50 border-2 border-pink-300 shadow-lg shadow-pink-200/50'
-          : 'bg-gradient-to-br from-emerald-900/40 via-teal-900/30 to-cyan-900/20 border border-emerald-500/40'
+          : 'bg-gradient-to-br from-purple-900/40 via-violet-900/30 to-fuchsia-900/20 border border-purple-500/40'
       }`}>
         <div className="p-6 text-center">
           <div className={`w-12 h-12 mx-auto mb-3 rounded-full flex items-center justify-center ${
             isBambiMode
               ? 'bg-gradient-to-br from-pink-400 to-fuchsia-500'
-              : 'bg-gradient-to-br from-emerald-400 to-teal-500'
+              : 'bg-gradient-to-br from-purple-400 to-rose-500'
           }`}>
             <Sparkles className="w-6 h-6 text-white" />
           </div>
@@ -243,7 +243,7 @@ export function TaskCardNew({
           }`}>
             <span className="text-base">✨</span>
             <span className={`text-sm font-semibold ${
-              isBambiMode ? 'text-pink-600' : 'text-emerald-300'
+              isBambiMode ? 'text-pink-600' : 'text-purple-300'
             }`}>
               +{affirmationPoints} points
             </span>

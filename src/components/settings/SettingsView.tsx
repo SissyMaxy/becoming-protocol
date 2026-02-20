@@ -1,7 +1,7 @@
 // Settings View
 // Main settings page for the app
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   ChevronLeft,
   User,
@@ -19,7 +19,13 @@ import {
   Upload,
   Zap,
   Moon,
+  Gauge,
+  LogOut,
+  Trash2,
+  Loader2,
 } from 'lucide-react';
+import { profileStorageV2 } from '../../lib/profile-storage-v2';
+import { useAuth } from '../../context/AuthContext';
 import { useBambiMode } from '../../context/BambiModeContext';
 import { useProtocol } from '../../context/ProtocolContext';
 import { useDebugMode } from '../../context/DebugContext';
@@ -38,6 +44,151 @@ import { PrivacySettings } from './PrivacySettings';
 import { MicroTaskSettings } from '../micro-tasks';
 import { CorruptionDashboard } from '../admin/CorruptionDashboard';
 import { SleepContentSettings } from '../sleep-content/SleepContentSettings';
+
+const DIFFICULTY_LEVELS = [
+  { id: 'gentle', label: 'Gentle', desc: 'Lighter load, longer timers' },
+  { id: 'moderate', label: 'Moderate', desc: 'Balanced pace' },
+  { id: 'intense', label: 'Intense', desc: 'Harder tasks, shorter windows' },
+  { id: 'relentless', label: 'Relentless', desc: 'Maximum pressure' },
+] as const;
+
+function DifficultySection() {
+  const { isBambiMode } = useBambiMode();
+  const [level, setLevel] = useState<string>('moderate');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    profileStorageV2.getDifficultyLevel().then(setLevel).catch(() => {});
+  }, []);
+
+  const handleChange = async (newLevel: string) => {
+    setLevel(newLevel);
+    setSaving(true);
+    try {
+      await profileStorageV2.setDifficultyLevel(newLevel);
+    } catch {
+      // Revert on failure
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <h2 className={`text-sm font-medium mb-3 ${
+        isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'
+      }`}>
+        Difficulty
+      </h2>
+      <div className={`rounded-xl border p-4 ${
+        isBambiMode ? 'bg-pink-50 border-pink-200' : 'bg-protocol-surface border-protocol-border'
+      }`}>
+        <div className="flex items-center gap-2 mb-3">
+          <Gauge className={`w-4 h-4 ${isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'}`} />
+          <span className={`text-sm font-medium ${isBambiMode ? 'text-pink-700' : 'text-protocol-text'}`}>
+            Protocol Difficulty {saving && <Loader2 className="inline w-3 h-3 animate-spin ml-1" />}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {DIFFICULTY_LEVELS.map(d => (
+            <button
+              key={d.id}
+              onClick={() => handleChange(d.id)}
+              className={`p-3 rounded-lg border text-left transition-all ${
+                level === d.id
+                  ? isBambiMode
+                    ? 'border-pink-400 bg-pink-100'
+                    : 'border-protocol-accent bg-protocol-accent/10'
+                  : isBambiMode
+                    ? 'border-pink-200 bg-white hover:border-pink-300'
+                    : 'border-protocol-border bg-protocol-surface-light hover:border-protocol-accent/30'
+              }`}
+            >
+              <p className={`text-sm font-medium ${
+                level === d.id
+                  ? isBambiMode ? 'text-pink-700' : 'text-protocol-text'
+                  : isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'
+              }`}>{d.label}</p>
+              <p className={`text-xs mt-0.5 ${
+                isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted/70'
+              }`}>{d.desc}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DangerZoneSection() {
+  const { isBambiMode } = useBambiMode();
+  const { signOut } = useAuth();
+  const [showConfirm, setShowConfirm] = useState<'logout' | 'reset' | null>(null);
+
+  const handleLogout = async () => {
+    await signOut();
+  };
+
+  return (
+    <div>
+      <h2 className={`text-sm font-medium mb-3 ${
+        isBambiMode ? 'text-pink-500' : 'text-red-400/70'
+      }`}>
+        Danger Zone
+      </h2>
+      <div className={`rounded-xl border p-4 space-y-3 ${
+        isBambiMode ? 'bg-red-50 border-red-200' : 'bg-red-950/10 border-red-900/30'
+      }`}>
+        {showConfirm === 'logout' ? (
+          <div className="text-center py-2">
+            <p className={`text-sm font-medium mb-3 ${isBambiMode ? 'text-red-700' : 'text-red-400'}`}>
+              Sign out of this device?
+            </p>
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 rounded-lg bg-red-500 text-white text-sm font-medium hover:bg-red-600"
+              >
+                Sign Out
+              </button>
+              <button
+                onClick={() => setShowConfirm(null)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                  isBambiMode ? 'bg-gray-200 text-gray-700' : 'bg-gray-700 text-gray-300'
+                }`}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <button
+              onClick={() => setShowConfirm('logout')}
+              className={`w-full flex items-center gap-3 p-3 rounded-lg text-left transition-colors ${
+                isBambiMode
+                  ? 'hover:bg-red-100 text-red-600'
+                  : 'hover:bg-red-900/20 text-red-400'
+              }`}
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="text-sm font-medium">Sign Out</span>
+            </button>
+            <div className={`flex items-center gap-3 p-3 rounded-lg opacity-50 cursor-not-allowed ${
+              isBambiMode ? 'text-red-400' : 'text-red-500/60'
+            }`}>
+              <Trash2 className="w-4 h-4" />
+              <div>
+                <span className="text-sm font-medium">Delete All Data</span>
+                <p className="text-xs mt-0.5 opacity-60">Contact support to delete your account</p>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 interface SettingsViewProps {
   onBack: () => void;
@@ -298,6 +449,9 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
             }`}>
               <OpacitySelector />
             </div>
+
+            {/* Difficulty — always visible (settings_basic) */}
+            <DifficultySection />
 
             {/* Features Section */}
             <div>
@@ -643,6 +797,9 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
                 )}
               </div>
             </div>}
+
+            {/* Danger Zone — always visible (settings_basic) */}
+            <DangerZoneSection />
 
             {/* App Version - Tap to enable debug mode */}
             <div className="text-center pt-4">

@@ -36,7 +36,7 @@ function getTodayDate(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function JournalPrompt({ userId, handlerMode }: JournalPromptProps) {
+export function JournalPrompt({ userId }: JournalPromptProps) {
   const { isBambiMode } = useBambiMode();
   const [text, setText] = useState('');
   const [savedText, setSavedText] = useState<string | null>(null);
@@ -80,9 +80,6 @@ export function JournalPrompt({ userId, handlerMode }: JournalPromptProps) {
 
   const prompt = getDailyPrompt();
   const showInput = !savedText || isEditing;
-
-  // Invisible handler mode: minimal
-  if (handlerMode === 'invisible') return null;
 
   return (
     <div className={`rounded-xl p-4 ${

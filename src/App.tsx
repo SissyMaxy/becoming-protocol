@@ -26,7 +26,8 @@ import { OnboardingFlow } from './components/Onboarding';
 import { SharedWishlistView } from './components/wishlist';
 // AchievementModal, RewardLevelUpModal now rendered via useOrchestratedModals
 import { SettingsView } from './components/settings';
-import { SessionLauncher } from './components/sessions';
+import { SessionContainer } from './components/session';
+import type { SessionConfig } from './components/session';
 import { KinkQuizView } from './components/kink-quiz';
 import { WorkoutSessionPage } from './components/exercise';
 import { HerWorldPage } from './components/collections';
@@ -292,6 +293,59 @@ function LoadingScreen() {
 }
 
 type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | 'progress-page' | 'sealed-page' | null;
+
+/** Session picker → launches immersive SessionContainer */
+function SessionPickerOrContainer({ onBack }: { onBack: () => void }) {
+  const { isBambiMode } = useBambiMode();
+  const [config, setConfig] = useState<SessionConfig | null>(null);
+
+  if (config) {
+    return (
+      <SessionContainer
+        config={config}
+        onComplete={() => setConfig(null)}
+        onCancel={() => setConfig(null)}
+      />
+    );
+  }
+
+  const SESSION_TYPES: { type: SessionConfig['sessionType']; label: string; desc: string; edges: number }[] = [
+    { type: 'anchoring', label: 'Anchoring', desc: 'Build edge control with guided recovery', edges: 10 },
+    { type: 'exploration', label: 'Exploration', desc: 'Push limits with shorter recovery windows', edges: 15 },
+    { type: 'endurance', label: 'Endurance', desc: 'Extended session, maximum edge count', edges: 20 },
+  ];
+
+  return (
+    <div>
+      <button
+        onClick={onBack}
+        className="mb-4 text-protocol-text-muted hover:text-protocol-text transition-colors"
+      >
+        &larr; Back to Menu
+      </button>
+      <div className="space-y-3">
+        <h2 className={`text-lg font-semibold ${isBambiMode ? 'text-pink-700' : 'text-protocol-text'}`}>
+          Edge Sessions
+        </h2>
+        {SESSION_TYPES.map(s => (
+          <button
+            key={s.type}
+            onClick={() => setConfig({ sessionType: s.type, targetEdges: s.edges, prescribed: false })}
+            className={`w-full p-4 rounded-2xl border text-left transition-all ${
+              isBambiMode
+                ? 'bg-pink-50 border-pink-200 hover:border-pink-400'
+                : 'bg-protocol-surface border-protocol-border hover:border-protocol-accent/50'
+            }`}
+          >
+            <p className={`font-semibold ${isBambiMode ? 'text-pink-700' : 'text-protocol-text'}`}>{s.label}</p>
+            <p className={`text-sm mt-1 ${isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'}`}>{s.desc}</p>
+            <p className={`text-xs mt-1.5 ${isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted/60'}`}>{s.edges} edges</p>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function AuthenticatedAppInner() {
   const { currentEntry, isLoading, investmentMilestone, dismissInvestmentMilestone, userName, progress } = useProtocol();
@@ -602,15 +656,7 @@ function AuthenticatedAppInner() {
         );
       case 'sessions':
         return (
-          <div>
-            <button
-              onClick={handleBackFromSubView}
-              className="mb-4 text-protocol-text-muted hover:text-protocol-text transition-colors"
-            >
-              &larr; Back to Menu
-            </button>
-            <SessionLauncher />
-          </div>
+          <SessionPickerOrContainer onBack={handleBackFromSubView} />
         );
       case 'exercise':
         return <WorkoutSessionPage onBack={handleBackFromSubView} />;

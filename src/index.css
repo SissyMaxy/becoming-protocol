@@ -144,9 +144,10 @@ body {
   animation: slide-down 0.3s ease-out;
 }
 
-/* Handler voice typography — warm serif for Handler-authored content */
+/* Handler voice typography — warm serif for Handler-authored content.
+   !important overrides the inherited JetBrains Mono from html root. */
 .handler-voice {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'Playfair Display', Georgia, serif !important;
 }
 
 /* Utility classes */
@@ -160,7 +161,7 @@ body {
   }
 
   .card {
-    @apply bg-protocol-surface border border-protocol-border/60 rounded-xl;
+    @apply bg-protocol-surface border border-protocol-border/60 rounded-2xl;
   }
 
   .btn-primary {
