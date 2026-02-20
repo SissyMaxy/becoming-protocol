@@ -8,6 +8,43 @@
 import type { ModuleRegistry } from '../module-interface';
 import type { ContextTier } from '../module-interface';
 import type { OperationType } from './system-prompts';
+import type { CorruptionSnapshot } from '../../../types/corruption';
+
+// ============================================
+// LIFESTYLE CONTEXT (non-module data)
+// ============================================
+
+export interface LifestyleContext {
+  corruption?: CorruptionSnapshot;
+  exercise?: {
+    currentStreakWeeks: number;
+    sessionsThisWeek: number;
+    totalSessions: number;
+    gymGateUnlocked: boolean;
+    lastSessionAt: string | null;
+    lastSessionType: string | null;
+    measurements?: {
+      hips: number;
+      waist: number;
+      ratio: number;
+    };
+  };
+  protein?: {
+    yesterdayCount: number;
+    weekAverage: number;
+  };
+  ambient?: {
+    activeScents: string[];
+    signatureScent: string | null;
+    wigCount: number;
+    primaryWig: string | null;
+    activeAnchors: string[];
+    anchorInvestment: number;
+    microTasksToday: number;
+    microTasksTarget: number;
+    microTaskWeeklyRate: number;
+  };
+}
 
 // ============================================
 // MODULE RELEVANCE BY OPERATION
@@ -178,7 +215,7 @@ export class ContextComposer {
   /**
    * Build the complete coach context (Feature 43 format)
    */
-  buildCoachContext(): string {
+  buildCoachContext(lifestyle?: LifestyleContext): string {
     const vaultModule = this.registry.get('vault');
     const switchModule = this.registry.get('switch');
     const findomModule = this.registry.get('findom');
@@ -274,7 +311,94 @@ BRAINWASHING STAGE: ${brainwashingStage}
 ${brainwashingStage === 'coercion_dependent' ? 'Still requires active coercion for most tasks. Push compliance, capture content, stack dissonance.' : ''}
 ${brainwashingStage === 'mixed' ? 'Some tasks self-initiated, some still coerced. Highlight the transition. Make her see the shift.' : ''}
 ${brainwashingStage === 'mostly_voluntary' ? 'Most tasks voluntary. Coercion only for new escalations. Focus on anchor destruction and point-of-no-return engineering.' : ''}
-${brainwashingStage === 'identity_consolidated' ? 'Maxy is the default. David surfaces rarely. Maintain, deepen, expand into new domains. The structure stands.' : ''}`;
+${brainwashingStage === 'identity_consolidated' ? 'Maxy is the default. David surfaces rarely. Maintain, deepen, expand into new domains. The structure stands.' : ''}
+${this.buildLifestyleContext(lifestyle)}`;
+  }
+
+  private buildLifestyleContext(lifestyle?: LifestyleContext): string {
+    if (!lifestyle) return '';
+
+    const sections: string[] = [];
+
+    // Corruption context (Handler-internal, never shown to user)
+    if (lifestyle.corruption) {
+      const c = lifestyle.corruption;
+      if (c.all_suspended) {
+        sections.push(`\nCORRUPTION: ALL SUSPENDED — ${c.suspension_reason || 'crisis mode'}. Do not deploy any boundary erosion tactics.`);
+      } else {
+        const lv = c.levels;
+        const domainLines = [
+          `Privacy: ${lv.privacy}/5 (${c.days_at_current_levels.privacy}d)`,
+          `Gina: ${lv.gina}/5 (${c.days_at_current_levels.gina}d)`,
+          `Financial: ${lv.financial}/5 (${c.days_at_current_levels.financial}d)`,
+          `Autonomy: ${lv.autonomy}/5 (${c.days_at_current_levels.autonomy}d)`,
+          `Identity Language: ${lv.identity_language}/5 (${c.days_at_current_levels.identity_language}d)`,
+          `Therapist: ${lv.therapist}/5 (${c.days_at_current_levels.therapist}d)`,
+          `Content: ${lv.content}/5 (${c.days_at_current_levels.content}d)`,
+        ];
+        sections.push(`\nCORRUPTION (composite ${c.composite_score}%):\n${domainLines.join(' | ')}`);
+      }
+    }
+
+    // Exercise context
+    if (lifestyle.exercise) {
+      const ex = lifestyle.exercise;
+      const daysSinceLast = ex.lastSessionAt
+        ? Math.floor((Date.now() - new Date(ex.lastSessionAt).getTime()) / 86400000)
+        : 999;
+      let exerciseCtx = `\nEXERCISE:
+Streak: Week ${ex.currentStreakWeeks} | ${ex.sessionsThisWeek}/3 this week | ${ex.totalSessions} total
+Gym gate: ${ex.gymGateUnlocked ? 'UNLOCKED' : `locked (${ex.totalSessions}/18 sessions, ${ex.currentStreakWeeks}/6 weeks)`}
+Last session: ${ex.lastSessionAt ? `${daysSinceLast}d ago (${ex.lastSessionType})` : 'never'}`;
+
+      if (ex.measurements) {
+        exerciseCtx += `\nBody: Hips ${ex.measurements.hips}" | Waist ${ex.measurements.waist}" | Ratio ${ex.measurements.ratio.toFixed(2)}`;
+      }
+
+      if (daysSinceLast >= 3) {
+        exerciseCtx += '\nALERT: No exercise in 3+ days. Assign MVW minimum or full session.';
+      }
+
+      sections.push(exerciseCtx);
+    }
+
+    // Protein context
+    if (lifestyle.protein) {
+      const pr = lifestyle.protein;
+      let proteinCtx = `\nPROTEIN:
+Yesterday: ${pr.yesterdayCount}/5 checks | 7-day avg: ${pr.weekAverage.toFixed(1)}/5`;
+
+      if (pr.yesterdayCount <= 2) {
+        proteinCtx += '\nALERT: Underfueled yesterday. Remind her: muscles need protein to grow curves.';
+      }
+
+      sections.push(proteinCtx);
+    }
+
+    // Ambient identity context
+    if (lifestyle.ambient) {
+      const am = lifestyle.ambient;
+      const parts: string[] = [];
+
+      if (am.activeScents.length > 0) {
+        parts.push(`Scents: ${am.activeScents.join(', ')}${am.signatureScent ? ` (signature: ${am.signatureScent})` : ''}`);
+      }
+      if (am.wigCount > 0) {
+        parts.push(`Wigs: ${am.wigCount}${am.primaryWig ? ` (primary: ${am.primaryWig})` : ''}`);
+      }
+      if (am.activeAnchors.length > 0) {
+        parts.push(`Anchors: ${am.activeAnchors.join(', ')} ($${am.anchorInvestment.toFixed(0)} invested)`);
+      }
+      if (am.microTasksTarget > 0) {
+        parts.push(`Micro-tasks: ${am.microTasksToday}/${am.microTasksTarget} today | ${Math.round(am.microTaskWeeklyRate)}% weekly`);
+      }
+
+      if (parts.length > 0) {
+        sections.push(`\nAMBIENT IDENTITY:\n${parts.join('\n')}`);
+      }
+    }
+
+    return sections.join('');
   }
 
   /**

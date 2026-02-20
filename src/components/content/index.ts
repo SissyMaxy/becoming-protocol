@@ -6,3 +6,5 @@ export { CamSessionView } from './CamSessionView';
 export { CamPrescriptionCard } from './CamPrescriptionCard';
 export { RevenueDashboard } from './RevenueDashboard';
 export { FanPollView } from './FanPollView';
+export { VaultSwipe } from './VaultSwipe';
+export { PermissionsManager } from './PermissionsManager';

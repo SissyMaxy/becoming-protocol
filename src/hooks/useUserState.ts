@@ -3,10 +3,11 @@
  * Manages the v2 user_state table - central state tracking
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import type { OdometerState, TimeOfDay } from '../lib/rules-engine-v2';
 import { getCurrentTimeOfDay } from '../lib/rules-engine-v2';
+import { handleOdometerChange } from '../lib/corruption-crisis';
 
 // Handler mode types
 export type HandlerMode = 'architect' | 'director' | 'handler' | 'caretaker' | 'invisible';
@@ -173,6 +174,7 @@ export function useUserState(): UseUserStateReturn {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>(getCurrentTimeOfDay());
+  const prevOdometerRef = useRef<string | null>(null);
 
   // Update time of day periodically
   useEffect(() => {
@@ -327,6 +329,13 @@ export function useUserState(): UseUserStateReturn {
     if (targetMode !== handlerMode) {
       updateState({ handlerMode: targetMode });
     }
+
+    // Corruption crisis suspension on odometer change
+    if (prevOdometerRef.current !== null && prevOdometerRef.current !== odometer) {
+      handleOdometerChange(userState.userId, odometer, prevOdometerRef.current)
+        .catch(err => console.error('[Corruption] Odometer change handler failed:', err));
+    }
+    prevOdometerRef.current = odometer;
   }, [userState?.odometer, userState?.estimatedExecFunction, userState?.currentArousal, userState?.denialDay, userState?.ginaHome]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-detect vulnerability window (gap #15)

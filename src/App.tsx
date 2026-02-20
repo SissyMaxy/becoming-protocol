@@ -27,6 +27,12 @@ import { SharedWishlistView } from './components/wishlist';
 import { SettingsView } from './components/settings';
 import { SessionLauncher } from './components/sessions';
 import { KinkQuizView } from './components/kink-quiz';
+import { WorkoutSessionPage } from './components/exercise';
+import { HerWorldPage } from './components/collections';
+import { MorningBookend, EveningBookend } from './components/bookends';
+import { useBookends } from './hooks/useBookends';
+import { MicroTaskCard } from './components/micro-tasks';
+import { useMicroTasks } from './hooks/useMicroTasks';
 import { MomentLoggerFAB } from './components/moment-logger';
 // ReminderModal now rendered via useOrchestratedModals
 import { useReminders } from './hooks/useReminders';
@@ -34,7 +40,9 @@ import { usePatternNotifications } from './hooks/usePatternNotifications';
 import { TimelineView } from './components/timeline';
 import { GinaEmergenceView, GinaPipelineView } from './components/gina';
 import { ServiceProgressionView, ServiceAnalyticsDashboard } from './components/service';
-import { ContentEscalationView } from './components/content';
+import { ContentEscalationView, VaultSwipe } from './components/content';
+import { PermissionsManager } from './components/content/PermissionsManager';
+import { ContentDashboard } from './components/admin/ContentDashboard';
 import { DomainEscalationView } from './components/domains';
 import { PatternCatchView } from './components/patterns';
 import { TriggerAuditDashboard } from './components/triggers';
@@ -43,10 +51,14 @@ import { TaskCurationView } from './components/curation';
 import { SeedsView } from './components/seeds';
 import { VectorGridView } from './components/adaptive-feminization';
 import { VoiceAffirmationGame } from './components/voice-game';
+import { VoiceDrillView } from './components/voice-game/VoiceDrillView';
 import { Dashboard } from './components/dashboard';
 import { JournalView } from './components/journal';
 import { ProtocolAnalytics } from './components/analytics/ProtocolAnalytics';
 import { HandlerAutonomousView } from './components/autonomous';
+import { CamDashboard } from './components/cam/CamDashboard';
+import { HypnoDashboard } from './components/hypno';
+import { SleepContentPlayer } from './components/sleep-content';
 import { getTodayDate } from './lib/protocol';
 import { profileStorage, letterStorage } from './lib/storage';
 import { useTaskBank } from './hooks/useTaskBank';
@@ -211,7 +223,7 @@ function LoadingScreen() {
   );
 }
 
-type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | null;
+type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | null;
 
 function AuthenticatedAppInner() {
   const { currentEntry, isLoading, investmentMilestone, dismissInvestmentMilestone, userName, progress } = useProtocol();
@@ -235,12 +247,19 @@ function AuthenticatedAppInner() {
     enabled: true,
   });
 
+  // Morning/Evening bookend system
+  const bookends = useBookends();
+
+  // Micro-task identity reinforcement
+  const microTasks = useMicroTasks();
+
   const [activeTab, setActiveTab] = useState<Tab>('protocol');
   const [menuSubView, setMenuSubView] = useState<MenuSubView>(null);
   const [showMorningFlow, setShowMorningFlow] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
   const [editIntakeMode, setEditIntakeMode] = useState(false);
   const [editIntakeProfile, setEditIntakeProfile] = useState<Partial<UserProfile> | null>(null);
+  const [showSleepContent, setShowSleepContent] = useState(false);
 
   // Feminization reminders - all day presence
   const {
@@ -311,15 +330,33 @@ function AuthenticatedAppInner() {
       setActiveTab('menu');
       setMenuSubView('handler-autonomous');
     };
+    const handleNavigateToExercise = () => {
+      setActiveTab('menu');
+      setMenuSubView('exercise');
+    };
+    const handleNavigateToCam = () => {
+      setActiveTab('menu');
+      setMenuSubView('cam-session');
+    };
+    const handleNavigateToHypno = () => {
+      setActiveTab('menu');
+      setMenuSubView('hypno-session');
+    };
     window.addEventListener('navigate-to-investments', handleNavigateToInvestments);
     window.addEventListener('navigate-to-wishlist', handleNavigateToWishlist);
     window.addEventListener('navigate-to-settings', handleNavigateToSettings);
     window.addEventListener('navigate-to-handler', handleNavigateToHandler);
+    window.addEventListener('navigate-to-exercise', handleNavigateToExercise);
+    window.addEventListener('navigate-to-cam', handleNavigateToCam);
+    window.addEventListener('navigate-to-hypno', handleNavigateToHypno);
     return () => {
       window.removeEventListener('navigate-to-investments', handleNavigateToInvestments);
       window.removeEventListener('navigate-to-wishlist', handleNavigateToWishlist);
       window.removeEventListener('navigate-to-settings', handleNavigateToSettings);
       window.removeEventListener('navigate-to-handler', handleNavigateToHandler);
+      window.removeEventListener('navigate-to-exercise', handleNavigateToExercise);
+      window.removeEventListener('navigate-to-cam', handleNavigateToCam);
+      window.removeEventListener('navigate-to-hypno', handleNavigateToHypno);
     };
   }, []);
 
@@ -431,6 +468,19 @@ function AuthenticatedAppInner() {
     );
   }
 
+  // Show morning bookend before morning flow (first open each day)
+  if (bookends.showMorningBookend && bookends.config) {
+    return (
+      <MorningBookend
+        name={bookends.config.morningName}
+        denialDay={progress?.totalDays ?? 0}
+        streak={progress?.overallStreak ?? 0}
+        message={bookends.morningMessage}
+        onDismiss={bookends.dismissMorning}
+      />
+    );
+  }
+
   // Show morning flow if no entry for today
   if (showMorningFlow) {
     return <MorningFlow onComplete={() => setShowMorningFlow(false)} />;
@@ -487,10 +537,32 @@ function AuthenticatedAppInner() {
             <SessionLauncher />
           </div>
         );
+      case 'exercise':
+        return <WorkoutSessionPage onBack={handleBackFromSubView} />;
+      case 'her-world':
+        return <HerWorldPage onBack={handleBackFromSubView} />;
+      case 'vault-swipe':
+        return (
+          <VaultSwipe
+            onBack={handleBackFromSubView}
+            onManagePermissions={() => setMenuSubView('vault-permissions')}
+          />
+        );
+      case 'vault-permissions':
+        return <PermissionsManager onBack={() => setMenuSubView('vault-swipe')} />;
+      case 'content-dashboard':
+        return <ContentDashboard onBack={handleBackFromSubView} />;
       case 'quiz':
         return <KinkQuizView onBack={handleBackFromSubView} />;
       case 'voice-game':
         return <VoiceAffirmationGame onBack={handleBackFromSubView} />;
+      case 'voice-drills':
+        return (
+          <VoiceDrillView
+            onBack={handleBackFromSubView}
+            onAffirmationGame={() => setMenuSubView('voice-game')}
+          />
+        );
       case 'timeline':
         return <TimelineView onBack={handleBackFromSubView} userName={userName ?? undefined} />;
       case 'gina':
@@ -529,6 +601,10 @@ function AuthenticatedAppInner() {
         return <ProtocolAnalytics onBack={handleBackFromSubView} />;
       case 'handler-autonomous':
         return <HandlerAutonomousView onBack={handleBackFromSubView} />;
+      case 'cam-session':
+        return <CamDashboard onBack={handleBackFromSubView} />;
+      case 'hypno-session':
+        return <HypnoDashboard onBack={handleBackFromSubView} />;
       case 'dashboard':
         return (
           <div>
@@ -615,6 +691,39 @@ function AuthenticatedAppInner() {
 
       {/* Floating hearts for Bambi mode celebrations */}
       <FloatingHearts />
+
+      {/* Micro-task card overlay */}
+      {microTasks.activeMicro && (
+        <MicroTaskCard
+          micro={microTasks.activeMicro}
+          onComplete={microTasks.completeMicro}
+          onSkip={microTasks.skipMicro}
+        />
+      )}
+
+      {/* Evening Bookend overlay */}
+      {bookends.showEveningBookend && bookends.daySummary && bookends.config && (
+        <EveningBookend
+          name={bookends.config.morningName}
+          message={bookends.eveningMessage}
+          summary={bookends.daySummary}
+          onDismiss={bookends.dismissEvening}
+          onJournal={() => {
+            bookends.dismissEvening();
+            setActiveTab('menu');
+            setMenuSubView('journal');
+          }}
+          onSleepContent={() => {
+            bookends.dismissEvening();
+            setShowSleepContent(true);
+          }}
+        />
+      )}
+
+      {/* Sleep Content Player overlay */}
+      {showSleepContent && (
+        <SleepContentPlayer onDismiss={() => setShowSleepContent(false)} />
+      )}
 
       {/* Modals (Investment, Achievement, LevelUp, Reminder, Intervention, Recovery)
           are now rendered via useOrchestratedModals - only one shows at a time */}

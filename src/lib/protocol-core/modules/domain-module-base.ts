@@ -246,6 +246,10 @@ export abstract class BaseDomainModule extends BaseModule {
       'evening': () => state.timeOfDay === 'evening',
       'night': () => state.timeOfDay === 'night',
       'daytime': () => state.timeOfDay === 'daytime',
+      // Lifestyle conditions
+      'gym_unlocked': () => state.gymGateUnlocked === true,
+      'low_protein_yesterday': () => (state.proteinYesterday ?? 5) <= 2,
+      'no_exercise_3_days': () => (state.daysSinceExercise ?? 0) >= 3,
     };
 
     return conditions[condition]?.() ?? true;

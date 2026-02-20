@@ -99,6 +99,7 @@ export interface PriorityAction {
   difficulty?: 1 | 2 | 3 | 4 | 5;
   isComplex?: boolean; // If true, always show full preview
   references?: ReferenceLink[]; // External tutorial/guide links
+  copyStyle?: 'normal' | 'short' | 'command'; // Arousal-gated formatting
 }
 
 interface FocusedActionCardProps {
@@ -210,12 +211,18 @@ export function FocusedActionCard({
             {getIcon()}
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className={`font-bold text-lg leading-tight ${
+            <h3 className={`leading-tight ${
+              priorityAction.copyStyle === 'command'
+                ? 'text-xl font-black tracking-tight'
+                : priorityAction.copyStyle === 'short'
+                  ? 'text-lg font-bold'
+                  : 'font-bold text-lg'
+            } ${
               isBambiMode ? 'text-pink-800' : 'text-protocol-text'
             }`}>
               {priorityAction.title}
             </h3>
-            {priorityAction.description && (
+            {priorityAction.copyStyle !== 'command' && priorityAction.description && (
               <p className={`text-sm mt-1 ${
                 isBambiMode ? 'text-pink-600' : 'text-protocol-text-muted'
               }`}>
@@ -500,6 +507,21 @@ export function FocusedActionCard({
 }
 
 /**
+ * Parse pipe-delimited steps from a task instruction or goal name.
+ * Returns an array of step strings, or empty array if no pipes found.
+ * Strips the title prefix (everything before " -- ") from the first segment
+ * only if the first segment looks like a title (no actionable verb).
+ */
+function parsePipeSteps(text: string): string[] {
+  if (!text.includes('|')) return [];
+
+  // The instruction field is the pipe-delimited part inside quotes in the CSV.
+  // When it reaches the UI, it's the raw instruction string.
+  const steps = text.split('|').map(s => s.trim()).filter(s => s.length > 0);
+  return steps;
+}
+
+/**
  * Get detailed, actionable steps for goals based on domain
  * Returns specific instructions with time estimates
  */
@@ -559,23 +581,32 @@ function getGoalSteps(goalName: string, domain: string | null): SessionData {
   }
 
   // === SKINCARE / BEAUTY ===
+  // Parse actual steps from the goal name if it contains pipe-delimited instructions
   if (domain === 'skincare' || name.includes('skin') || name.includes('glow') || name.includes('beauty')) {
+    const parsed = parsePipeSteps(goalName);
+    if (parsed.length > 0) {
+      const estMinutes = Math.max(3, parsed.length * 2);
+      return {
+        estimatedMinutes: estMinutes,
+        steps: parsed.map(step => ({ label: step })),
+        prerequisites: [
+          { item: 'Clean towel', icon: 'supplies' as const },
+          { item: 'CeraVe moisturizer', icon: 'supplies' as const },
+        ],
+      };
+    }
+    // Fallback: generic skincare breakdown (no toner/serum/SPF at Level 1)
     return {
-      estimatedMinutes: 12,
+      estimatedMinutes: 5,
       steps: [
-        { label: 'Wash hands thoroughly with soap', durationMinutes: 1 },
-        { label: 'Wet face with lukewarm water, apply cleanser in circles', durationMinutes: 2 },
-        { label: 'Rinse cleanser, pat face dry with clean towel', durationMinutes: 1 },
-        { label: 'Apply toner to cotton pad, sweep across face and neck', durationMinutes: 1 },
-        { label: 'Warm 2-3 drops of serum between palms, press into skin', durationMinutes: 2 },
-        { label: 'Take pea-sized moisturizer, dot on forehead, cheeks, chin, nose', durationMinutes: 2 },
-        { label: 'Massage moisturizer in upward strokes, include neck', durationMinutes: 2 },
-        { label: 'If morning: apply SPF generously as final step', durationMinutes: 1 },
+        { label: 'Wash face with warm water', durationMinutes: 1 },
+        { label: 'Pat dry with clean towel', durationMinutes: 1 },
+        { label: 'Apply CeraVe moisturizer -- dot on forehead, cheeks, chin, nose, spread gently', durationMinutes: 2 },
+        { label: 'Bring down to neck', durationMinutes: 1 },
       ],
       prerequisites: [
-        { item: 'Cleanser, toner, serum, moisturizer', icon: 'supplies' },
+        { item: 'CeraVe moisturizer', icon: 'supplies' },
         { item: 'Clean towel', icon: 'supplies' },
-        { item: 'Mirror with good lighting', icon: 'mirror' },
       ],
     };
   }
@@ -841,17 +872,27 @@ function getTaskSteps(instruction: string, domain: string): SessionData {
   }
 
   if (domain === 'skincare' || inst.includes('skin') || inst.includes('face') || inst.includes('moistur')) {
+    // Parse pipe-delimited steps from the instruction (task data drives the UI)
+    const parsed = parsePipeSteps(instruction);
+    if (parsed.length > 0) {
+      const estMinutes = Math.max(3, parsed.length * 2);
+      return {
+        estimatedMinutes: estMinutes,
+        steps: parsed.map(step => ({ label: step })),
+        prerequisites: [
+          { item: 'Clean towel', icon: 'supplies' as const },
+        ],
+      };
+    }
+    // Fallback only if no pipe steps found
     return {
-      estimatedMinutes: 8,
+      estimatedMinutes: 5,
       steps: [
-        { label: 'Wash and dry hands', durationMinutes: 1 },
-        { label: `Complete task: ${instruction}`, durationMinutes: 5 },
-        { label: 'Check results in mirror', durationMinutes: 1 },
+        { label: `Complete: ${instruction}`, durationMinutes: 4 },
         { label: 'Clean up and put products away', durationMinutes: 1 },
       ],
       prerequisites: [
         { item: 'Products needed for task', icon: 'supplies' },
-        { item: 'Mirror', icon: 'mirror' },
       ],
     };
   }
@@ -1241,21 +1282,29 @@ function getSessionData(sessionTitle: string): SessionData {
     };
   }
 
-  // Skincare routine
+  // Skincare routine — parse steps from session title if pipe-delimited
   if (title.includes('skincare') || title.includes('skin care') || title.includes('facial')) {
+    const parsed = parsePipeSteps(sessionTitle);
+    if (parsed.length > 0) {
+      return {
+        estimatedMinutes: Math.max(3, parsed.length * 2),
+        steps: parsed.map(step => ({ label: step })),
+        prerequisites: [
+          { item: 'Clean towel', icon: 'supplies' as const },
+        ],
+      };
+    }
+    // Fallback: simple routine without toner/serum/SPF assumptions
     return {
-      estimatedMinutes: 15,
+      estimatedMinutes: 5,
       steps: [
-        { label: 'Remove any makeup', durationMinutes: 2 },
-        { label: 'Cleanse face', durationMinutes: 2 },
-        { label: 'Apply toner', durationMinutes: 1 },
-        { label: 'Serum application', durationMinutes: 2 },
-        { label: 'Moisturizer', durationMinutes: 2 },
-        { label: 'SPF (if morning)', durationMinutes: 1 },
-        { label: 'Enjoy soft skin moment', durationMinutes: 5 },
+        { label: 'Wash face with warm water', durationMinutes: 1 },
+        { label: 'Pat dry with clean towel', durationMinutes: 1 },
+        { label: 'Apply moisturizer', durationMinutes: 2 },
+        { label: 'Bring down to neck', durationMinutes: 1 },
       ],
       prerequisites: [
-        { item: 'Skincare products', icon: 'supplies' },
+        { item: 'Moisturizer', icon: 'supplies' },
         { item: 'Clean towel', icon: 'supplies' },
       ],
     };
@@ -1627,6 +1676,7 @@ export function getPriorityAction(
       bestTime: best.bestTime,
       difficulty: task.task.intensity,
       isComplex: true, // Always show preview since we now have detailed steps
+      copyStyle: task.copyStyle,
     };
   }
 

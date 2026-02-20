@@ -8,7 +8,7 @@ import {
   ChevronRight, ChevronDown, Calendar, Wallet, Heart,
   HelpCircle, Flame, Sparkles, TrendingUp, Crown, Users, Film,
   Layers, Eye, Filter, Sprout, Zap, BarChart3, Activity, Mic,
-  LayoutDashboard, BookOpen, Bot
+  LayoutDashboard, BookOpen, Bot, Dumbbell, Gem, ImageIcon, Monitor, AudioLines, Camera, Headphones
 } from 'lucide-react';
 import { useBambiMode } from '../context/BambiModeContext';
 
@@ -16,8 +16,9 @@ type MenuItemId =
   | 'history' | 'investments' | 'wishlist' | 'settings' | 'help'
   | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service'
   | 'service-analytics' | 'content' | 'domains' | 'patterns'
-  | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game'
-  | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous';
+  | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills'
+  | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous'
+  | 'exercise' | 'her-world' | 'vault-swipe' | 'content-dashboard' | 'cam-session' | 'hypno-session';
 
 interface MenuViewProps {
   onNavigate: (view: MenuItemId) => void;
@@ -101,6 +102,20 @@ export function MenuView({ onNavigate }: MenuViewProps) {
           description: 'Develop her into soft mommy dom',
           color: '#ec4899',
         },
+        {
+          id: 'her-world',
+          icon: Gem,
+          label: 'Her World',
+          description: 'Wigs, scents, and anchor objects',
+          color: '#f472b6',
+        },
+        {
+          id: 'vault-swipe',
+          icon: ImageIcon,
+          label: 'Content Vault',
+          description: 'Approve or reject content for posting',
+          color: '#06b6d4',
+        },
       ],
     },
     {
@@ -117,6 +132,20 @@ export function MenuView({ onNavigate }: MenuViewProps) {
           color: '#ef4444',
         },
         {
+          id: 'cam-session',
+          icon: Camera,
+          label: 'Cam Session',
+          description: 'Live session dashboard with tips & prompts',
+          color: '#ec4899',
+        },
+        {
+          id: 'hypno-session',
+          icon: Headphones,
+          label: 'Hypno Sessions',
+          description: 'Conditioning sessions with capture integration',
+          color: '#8b5cf6',
+        },
+        {
           id: 'quiz',
           icon: Sparkles,
           label: 'Readiness Quiz',
@@ -124,11 +153,25 @@ export function MenuView({ onNavigate }: MenuViewProps) {
           color: '#a855f7',
         },
         {
+          id: 'voice-drills',
+          icon: AudioLines,
+          label: 'Voice Drills',
+          description: 'Structured practice with pitch tracking',
+          color: '#7c3aed',
+        },
+        {
           id: 'voice-game',
           icon: Mic,
-          label: 'Voice Training',
+          label: 'Affirmation Game',
           description: 'Speak affirmations for rewards',
           color: '#8b5cf6',
+        },
+        {
+          id: 'exercise',
+          icon: Dumbbell,
+          label: 'Workouts',
+          description: 'Guided exercise sessions',
+          color: '#f97316',
         },
       ],
     },
@@ -213,6 +256,13 @@ export function MenuView({ onNavigate }: MenuViewProps) {
           label: 'Trigger Audit',
           description: 'System trigger effectiveness',
           color: '#f97316',
+        },
+        {
+          id: 'content-dashboard',
+          icon: Monitor,
+          label: 'Content Dashboard',
+          description: 'Handler content analytics & scheduling',
+          color: '#10b981',
         },
       ],
     },

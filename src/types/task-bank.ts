@@ -28,7 +28,14 @@ export type TaskCategory =
   | 'corrupt'        // Deep sissification & turning out
   | 'worship'        // Cock/cum worship conditioning
   | 'deepen'         // Submission intensification
-  | 'bambi';         // Bimbo-specific training
+  | 'bambi'          // Bimbo-specific training
+  | 'acquire'        // Purchase or obtain an item
+  | 'explore'        // Research, sample, discover
+  | 'ritual'         // Daily/recurring rituals
+  | 'measure'        // Track progress metrics
+  | 'milestone'      // Gate checks and achievements
+  | 'condition'      // Arousal-paired conditioning
+  | 'care';          // Self-care and nutrition
 
 export type FeminizationDomain =
   | 'voice'
@@ -42,9 +49,33 @@ export type FeminizationDomain =
   | 'arousal'
   | 'chastity'
   | 'conditioning'
-  | 'identity';
+  | 'identity'
+  | 'exercise'
+  | 'scent'
+  | 'nutrition'
+  | 'wigs';
 
-export type TaskCompletionType = 'binary' | 'duration' | 'count' | 'confirm';
+export type TaskCompletionType = 'binary' | 'duration' | 'count' | 'confirm' | 'scale' | 'reflect' | 'log_entry' | 'session_complete';
+
+// ============================================
+// CAPTURE FIELD DEFINITIONS (for log_entry)
+// ============================================
+
+export type CaptureFieldType = 'date' | 'select' | 'toggle' | 'slider' | 'number' | 'text';
+
+export interface CaptureFieldDef {
+  key: string;
+  type: CaptureFieldType;
+  label?: string;
+  optional?: boolean;
+  default?: string | number | boolean;
+  // select
+  options?: string[];
+  // slider / number
+  min?: number;
+  max?: number;
+  step?: number;
+}
 
 export type TimeWindow = 'morning' | 'afternoon' | 'evening' | 'night' | 'any';
 
@@ -151,6 +182,7 @@ export interface Task {
   completionType: TaskCompletionType;
   durationMinutes?: number;
   targetCount?: number;
+  captureFields?: CaptureFieldDef[];
 
   // Rewards
   reward: TaskReward;
@@ -160,6 +192,15 @@ export interface Task {
 
   // AI flags
   aiFlags: TaskAIFlags;
+
+  // Hypno session task fields (when category === 'condition' or 'watch')
+  playlistIds?: string[];
+  contentIds?: string[];
+  ritualRequired?: boolean;
+  captureMode?: 'passive' | 'active' | 'none';
+  deviceRequired?: boolean;
+  cageRequired?: boolean;
+  handlerFraming?: string;
 
   // Metadata
   createdAt: string;
@@ -197,6 +238,25 @@ export interface DbTask {
   created_by: string;
   parent_task_id: string | null;
   active: boolean;
+  // New columns (057 migration)
+  level: number | null;
+  steps: string | null;
+  trigger_condition: string | null;
+  time_window: string | null;
+  requires_privacy: boolean;
+  resource_url: string | null;
+  consequence_if_declined: string | null;
+  pivot_if_unable: string | null;
+  // New column (084 migration)
+  capture_fields: CaptureFieldDef[] | null;
+  // New columns (086 migration) — hypno session task fields
+  playlist_ids: string[] | null;
+  content_ids: string[] | null;
+  ritual_required: boolean;
+  capture_mode: string | null;
+  device_required: boolean;
+  cage_required: boolean;
+  handler_framing: string | null;
 }
 
 export interface DailyTask {
@@ -216,6 +276,8 @@ export interface DailyTask {
   enhancedInstruction?: string;
   enhancedSubtext?: string;
   enhancedAffirmation?: string;
+  // Arousal-gated copy formatting
+  copyStyle?: 'normal' | 'short' | 'command';
 }
 
 export interface DbDailyTask {
@@ -252,6 +314,7 @@ export interface TaskCompletion {
   feltGood?: boolean;
   notes?: string;
   pointsEarned: number;
+  captureData?: CompletionData;
 }
 
 export interface DbTaskCompletion {
@@ -266,7 +329,30 @@ export interface DbTaskCompletion {
   felt_good: boolean | null;
   notes: string | null;
   points_earned: number;
+  capture_data: Record<string, unknown> | null;
   created_at: string;
+}
+
+// ============================================
+// COMPLETION INPUT DATA
+// ============================================
+
+/**
+ * Data emitted by CompletionInput components.
+ * Sent alongside task completion to be stored in task_completions.capture_data.
+ */
+export interface CompletionData {
+  completion_type: TaskCompletionType;
+  /** Duration input: actual seconds elapsed */
+  actual_duration_seconds?: number;
+  /** Scale input: 1-10 rating */
+  scale_value?: number;
+  /** Count input: final count */
+  count_value?: number;
+  /** Reflect input: free text */
+  reflection_text?: string;
+  /** Generic structured capture (for future log_entry, etc.) */
+  fields?: Record<string, unknown>;
 }
 
 export interface TaskResistance {
@@ -306,6 +392,7 @@ export interface UserTaskContext {
   timeOfDay: TimeWindow;
   ginaHome: boolean;
   ginaAsleep: boolean;
+  ginaCorruptionLevel: number; // 0-5, from corruption state (gina domain)
   ownedItems: string[];
   completedTaskIds: string[];
   recentlyServedTaskIds: string[]; // Last 7 days
@@ -366,6 +453,13 @@ export const CATEGORY_EMOJI: Record<TaskCategory, string> = {
   worship: '🛐',
   deepen: '⬇️',
   bambi: '🎀',
+  acquire: '🛒',
+  explore: '🔍',
+  ritual: '🕯️',
+  measure: '📏',
+  milestone: '🏁',
+  condition: '⚡',
+  care: '💊',
 };
 
 export const CATEGORY_CONFIG: Record<TaskCategory, { label: string; description: string }> = {
@@ -392,6 +486,13 @@ export const CATEGORY_CONFIG: Record<TaskCategory, { label: string; description:
   worship: { label: 'Worship', description: 'Cock/cum conditioning' },
   deepen: { label: 'Deepen', description: 'Submission intensification' },
   bambi: { label: 'Bambi', description: 'Bimbo training' },
+  acquire: { label: 'Acquire', description: 'Get an item' },
+  explore: { label: 'Explore', description: 'Research and discover' },
+  ritual: { label: 'Ritual', description: 'Daily ritual' },
+  measure: { label: 'Measure', description: 'Track progress' },
+  milestone: { label: 'Milestone', description: 'Gate check' },
+  condition: { label: 'Condition', description: 'Arousal-paired training' },
+  care: { label: 'Care', description: 'Self-care and nutrition' },
 };
 
 // ============================================

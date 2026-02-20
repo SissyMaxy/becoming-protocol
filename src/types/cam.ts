@@ -8,6 +8,20 @@ export type CamRevenueEventType = 'tip' | 'private_show' | 'subscription' | 'tok
 export type RevenueSource = 'subscription' | 'tip' | 'ppv' | 'donation' | 'custom_request' | 'cam_tip' | 'cam_private';
 export type PollStatus = 'active' | 'closed' | 'cancelled';
 
+export type PromptType =
+  | 'voice_check'
+  | 'engagement'
+  | 'pacing'
+  | 'tip_goal'
+  | 'edge_warning'
+  | 'outfit_adjust'
+  | 'position_change'
+  | 'affirmation'
+  | 'wind_down'
+  | 'custom';
+
+export type HighlightType = 'tip_surge' | 'edge_peak' | 'viewer_spike' | 'compliance' | 'custom';
+
 export interface TipLevel {
   min: number;
   max: number | null;
@@ -15,6 +29,35 @@ export interface TipLevel {
   intensity: [number, number];
   seconds: number;
   label: string;
+  edge2Channel?: string; // Edge2 spec vibration channel
+}
+
+// ============================================
+// Live Session Sub-types (JSONB column types)
+// ============================================
+
+export interface HandlerAction {
+  timestamp: string;
+  action: string;
+  details: string;
+}
+
+export interface SessionHighlight {
+  timestampSeconds: number;
+  durationSeconds: number;
+  type: HighlightType;
+  description: string;
+  extractedToVault?: boolean;
+}
+
+export interface TipGoal {
+  label: string;
+  targetTokens: number;
+  currentTokens: number;
+  reward?: string;
+  reached: boolean;
+  isFake?: boolean;       // Handler decides. Fake goals are content.
+  fakeResponse?: string;  // "Goal reached. Handler says no."
 }
 
 export interface CamSession {
@@ -59,6 +102,24 @@ export interface CamSession {
   highlightVaultIds?: string[];
   createdAt: string;
   updatedAt: string;
+
+  // --- Migration 070 fields ---
+  denialDay?: number;
+  prescribedMakeup?: string;
+  prescribedSetup?: string;
+  prepStartedAt?: string;
+  liveStartedAt?: string;
+  liveEndedAt?: string;
+  streamUrl?: string;
+  isRecording: boolean;
+  recordingUrl?: string;
+  recordingDurationSeconds?: number;
+  edgeCount: number;
+  tipCount: number;
+  handlerActions: HandlerAction[];
+  highlights: SessionHighlight[];
+  vaultItemsCreated: number;
+  tipGoals: TipGoal[];
 }
 
 export interface DbCamSession {
@@ -103,6 +164,24 @@ export interface DbCamSession {
   highlight_vault_ids: string[] | null;
   created_at: string;
   updated_at: string;
+
+  // --- Migration 070 fields ---
+  denial_day: number | null;
+  prescribed_makeup: string | null;
+  prescribed_setup: string | null;
+  prep_started_at: string | null;
+  live_started_at: string | null;
+  live_ended_at: string | null;
+  stream_url: string | null;
+  is_recording: boolean;
+  recording_url: string | null;
+  recording_duration_seconds: number | null;
+  edge_count: number;
+  tip_count: number;
+  handler_actions: unknown;
+  highlights: unknown;
+  vault_items_created: number;
+  tip_goals: unknown;
 }
 
 // ============================================
@@ -254,6 +333,89 @@ export interface RevenueIntelligence {
 }
 
 // ============================================
+// Cam Tips (per-tip logging from cam_tips table)
+// ============================================
+
+export interface CamTip {
+  id: string;
+  userId: string;
+  camSessionId: string;
+  tipperUsername?: string;
+  tipperPlatform?: string;
+  tokenAmount: number;
+  tipAmountUsd?: number;
+  patternTriggered?: string;
+  deviceResponseSent: boolean;
+  sessionTimestampSeconds?: number;
+  createdAt: string;
+}
+
+export interface DbCamTip {
+  id: string;
+  user_id: string;
+  cam_session_id: string;
+  tipper_username: string | null;
+  tipper_platform: string | null;
+  token_amount: number;
+  tip_amount_usd: number | null;
+  pattern_triggered: string | null;
+  device_response_sent: boolean;
+  session_timestamp_seconds: number | null;
+  created_at: string;
+}
+
+// ============================================
+// Handler Prompts (invisible prompts during live)
+// ============================================
+
+export interface HandlerPrompt {
+  id: string;
+  userId: string;
+  camSessionId: string;
+  promptType: PromptType;
+  promptText: string;
+  acknowledged: boolean;
+  acknowledgedAt?: string;
+  sessionTimestampSeconds?: number;
+  createdAt: string;
+}
+
+export interface DbHandlerPrompt {
+  id: string;
+  user_id: string;
+  cam_session_id: string;
+  prompt_type: string;
+  prompt_text: string;
+  acknowledged: boolean;
+  acknowledged_at: string | null;
+  session_timestamp_seconds: number | null;
+  created_at: string;
+}
+
+// ============================================
+// Cam Session Summary (post-session analytics)
+// ============================================
+
+export interface CamSessionSummary {
+  sessionId: string;
+  durationMinutes: number;
+  totalTokens: number;
+  totalUsd: number;
+  tipCount: number;
+  edgeCount: number;
+  peakViewers: number;
+  highlightCount: number;
+  vaultItemsCreated: number;
+  handlerPromptCount: number;
+  promptAcknowledgeRate: number;
+  tipGoalsReached: number;
+  tipGoalsTotal: number;
+  topTipper?: { username: string; totalTokens: number };
+  handlerNote?: string;   // AI-generated post-session debrief
+  revenueUsd?: number;    // Calculated from tips
+}
+
+// ============================================
 // Cam Prescription Types
 // ============================================
 
@@ -274,6 +436,12 @@ export interface CamPrescription {
   preSessionPost?: string;
   isConsequence: boolean;
   consequenceTier?: number;
+  // --- New prescription fields ---
+  prescribedMakeup?: string;
+  prescribedSetup?: string;
+  sessionType?: 'solo' | 'interactive' | 'edge_show' | 'goal_show';
+  tipGoals?: TipGoal[];
+  handlerStrategy?: string;
 }
 
 export interface HandlerCamDirective {
@@ -331,6 +499,23 @@ export function mapDbToCamSession(db: DbCamSession): CamSession {
     highlightVaultIds: db.highlight_vault_ids || undefined,
     createdAt: db.created_at,
     updatedAt: db.updated_at,
+    // Migration 070 fields
+    denialDay: db.denial_day || undefined,
+    prescribedMakeup: db.prescribed_makeup || undefined,
+    prescribedSetup: db.prescribed_setup || undefined,
+    prepStartedAt: db.prep_started_at || undefined,
+    liveStartedAt: db.live_started_at || undefined,
+    liveEndedAt: db.live_ended_at || undefined,
+    streamUrl: db.stream_url || undefined,
+    isRecording: db.is_recording ?? true,
+    recordingUrl: db.recording_url || undefined,
+    recordingDurationSeconds: db.recording_duration_seconds || undefined,
+    edgeCount: db.edge_count ?? 0,
+    tipCount: db.tip_count ?? 0,
+    handlerActions: (db.handler_actions as HandlerAction[]) || [],
+    highlights: (db.highlights as SessionHighlight[]) || [],
+    vaultItemsCreated: db.vault_items_created ?? 0,
+    tipGoals: (db.tip_goals as TipGoal[]) || [],
   };
 }
 
@@ -382,5 +567,79 @@ export function mapDbToRevenueEvent(db: DbRevenueEvent): RevenueEvent {
     fundingMilestoneId: db.funding_milestone_id || undefined,
     fanTier: db.fan_tier || undefined,
     createdAt: db.created_at,
+  };
+}
+
+export function mapDbToCamTip(db: DbCamTip): CamTip {
+  return {
+    id: db.id,
+    userId: db.user_id,
+    camSessionId: db.cam_session_id,
+    tipperUsername: db.tipper_username || undefined,
+    tipperPlatform: db.tipper_platform || undefined,
+    tokenAmount: db.token_amount,
+    tipAmountUsd: db.tip_amount_usd || undefined,
+    patternTriggered: db.pattern_triggered || undefined,
+    deviceResponseSent: db.device_response_sent,
+    sessionTimestampSeconds: db.session_timestamp_seconds || undefined,
+    createdAt: db.created_at,
+  };
+}
+
+export function mapDbToHandlerPrompt(db: DbHandlerPrompt): HandlerPrompt {
+  return {
+    id: db.id,
+    userId: db.user_id,
+    camSessionId: db.cam_session_id,
+    promptType: db.prompt_type as PromptType,
+    promptText: db.prompt_text,
+    acknowledged: db.acknowledged,
+    acknowledgedAt: db.acknowledged_at || undefined,
+    sessionTimestampSeconds: db.session_timestamp_seconds || undefined,
+    createdAt: db.created_at,
+  };
+}
+
+export function buildCamSessionSummary(
+  session: CamSession,
+  tips: CamTip[],
+  prompts: HandlerPrompt[],
+): CamSessionSummary {
+  const totalTokens = tips.reduce((sum, t) => sum + t.tokenAmount, 0);
+  const totalUsd = tips.reduce((sum, t) => sum + (t.tipAmountUsd || 0), 0);
+  const acknowledgedPrompts = prompts.filter(p => p.acknowledged).length;
+
+  // Find top tipper
+  const tipperMap = new Map<string, number>();
+  for (const tip of tips) {
+    const name = tip.tipperUsername || 'anonymous';
+    tipperMap.set(name, (tipperMap.get(name) || 0) + tip.tokenAmount);
+  }
+  let topTipper: { username: string; totalTokens: number } | undefined;
+  for (const [username, tokens] of tipperMap) {
+    if (!topTipper || tokens > topTipper.totalTokens) {
+      topTipper = { username, totalTokens: tokens };
+    }
+  }
+
+  const durationMs = session.liveStartedAt && session.liveEndedAt
+    ? new Date(session.liveEndedAt).getTime() - new Date(session.liveStartedAt).getTime()
+    : (session.actualDurationMinutes || 0) * 60 * 1000;
+
+  return {
+    sessionId: session.id,
+    durationMinutes: Math.round(durationMs / 60000),
+    totalTokens,
+    totalUsd,
+    tipCount: tips.length,
+    edgeCount: session.edgeCount,
+    peakViewers: session.peakViewers || 0,
+    highlightCount: session.highlights.length,
+    vaultItemsCreated: session.vaultItemsCreated,
+    handlerPromptCount: prompts.length,
+    promptAcknowledgeRate: prompts.length > 0 ? acknowledgedPrompts / prompts.length : 1,
+    tipGoalsReached: session.tipGoals.filter(g => g.reached).length,
+    tipGoalsTotal: session.tipGoals.length,
+    topTipper,
   };
 }

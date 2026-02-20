@@ -9,7 +9,7 @@
 // BASE TASK (CSV-derived)
 // ============================================
 
-export type TaskCompletionType = 'binary' | 'duration' | 'count';
+export type TaskCompletionType = 'binary' | 'duration' | 'count' | 'confirm' | 'scale' | 'reflect';
 export type TaskTimeWindow = 'morning' | 'daytime' | 'evening' | 'night' | 'any';
 export type TaskDomain = 'voice' | 'movement' | 'skincare' | 'style' | 'social' | 'mindset' | 'body' | 'arousal' | 'gina' | 'makeup';
 export type TaskCategory = 'explore' | 'practice' | 'routine' | 'ritual' | 'care' | 'learn' | 'acquire' | 'record' | 'listen';
@@ -111,6 +111,11 @@ export interface TaskSelectionState {
   completedToday: string[];
   avoidedDomains: string[];
   tasksCompletedToday: number;
+
+  // Extended state for lifestyle systems
+  gymGateUnlocked?: boolean;
+  proteinYesterday?: number;
+  daysSinceExercise?: number;
 }
 
 // ============================================

@@ -6,8 +6,9 @@
 import { useState } from 'react';
 import { Check, X, Loader2, Clock, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
-import type { DailyTask } from '../../types/task-bank';
+import type { DailyTask, CompletionData } from '../../types/task-bank';
 import { CATEGORY_EMOJI, INTENSITY_CONFIG, CATEGORY_CONFIG } from '../../types/task-bank';
+import { CompletionInput } from './CompletionInput';
 
 // Helper to navigate to wishlist
 function navigateToWishlist() {
@@ -16,7 +17,7 @@ function navigateToWishlist() {
 
 interface TaskCardNewProps {
   task: DailyTask;
-  onComplete: (feltGood?: boolean, notes?: string) => void;
+  onComplete: (feltGood?: boolean, notes?: string, captureData?: CompletionData) => void;
   onIncrement?: () => void;
   onSkip: () => void;
   onUndo?: () => void;
@@ -85,11 +86,7 @@ export function TaskCardNew({
   const { isBambiMode } = useBambiMode();
   const [expanded, setExpanded] = useState(isFirst);
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
-  const [showLogInput, setShowLogInput] = useState(false);
-  const [logText, setLogText] = useState('');
-  const [responseText, setResponseText] = useState('');
-
-  const { instruction, category, intensity, completionType, targetCount, durationMinutes, subtext } = task.task;
+  const { instruction, category, intensity, completionType, targetCount, durationMinutes, subtext, captureFields } = task.task;
   const emoji = CATEGORY_EMOJI[category];
   const intensityConfig = INTENSITY_CONFIG[intensity];
   const categoryConfig = CATEGORY_CONFIG[category];
@@ -97,51 +94,20 @@ export function TaskCardNew({
   // Prefer Claude-enhanced text over base task text
   const displayInstruction = task.enhancedInstruction || instruction;
   const displaySubtext = task.enhancedSubtext || subtext || getSubtext(category);
+  const copyStyle = task.copyStyle || 'normal';
 
   const isCompleted = task.status === 'completed';
   const isSkipped = task.status === 'skipped';
   const isPending = task.status === 'pending';
 
-  // Progress for count tasks
-  const showProgress = completionType === 'count' && targetCount;
-  const progressPercent = showProgress ? (task.progress / (targetCount || 1)) * 100 : 0;
-
   // Get persuasive subtext (already computed above)
   const persuasiveText = displaySubtext;
 
-  // Categories that should show a logging input before completion
-  const logCategories = ['wear', 'apply', 'use'];
-  const needsLog = logCategories.includes(category);
-  const logPrompts: Record<string, string> = {
-    wear: 'What are you wearing?',
-    apply: 'What did you apply?',
-    use: 'What did you use?',
-  };
-
-  // Detect tasks requiring a text response — check raw instruction (not enhanced)
-  // and completionType for text-input types
-  const needsTextInput = (() => {
-    const rawInstruction = task.task.instruction || '';
-    const ct = task.task.completionType || '';
-    const textTypes = ['journal', 'reflection', 'checkin', 'text_response'];
-    if (textTypes.includes(ct)) return true;
-    return /tell me|write|journal|reflect|describe|note down|record your/i.test(rawInstruction);
-  })();
-  const textInputReady = !needsTextInput || responseText.trim().length >= 10;
-
-  const handleComplete = () => {
-    if (showProgress && task.progress < (targetCount || 0) - 1) {
-      onIncrement?.();
-    } else if (needsLog && !showLogInput) {
-      setShowLogInput(true);
-    } else {
-      onComplete(true, responseText.trim() || undefined);
-    }
-  };
-
-  const handleLogComplete = () => {
-    setShowLogInput(false);
-    onComplete(true, logText.trim() || undefined);
+  // Handle completion from CompletionInput components
+  const handleCompletionInput = (data: CompletionData) => {
+    const feltGood = data.fields?.felt_good as boolean | undefined;
+    const notes = data.reflection_text || undefined;
+    onComplete(feltGood ?? true, notes, data);
   };
 
   const handleSkip = () => {
@@ -276,54 +242,6 @@ export function TaskCardNew({
         </div>
       )}
 
-      {/* Log input overlay for wear/apply/use tasks */}
-      {showLogInput && (
-        <div className={`absolute inset-0 z-10 flex items-center justify-center backdrop-blur-sm ${
-          isBambiMode ? 'bg-white/90' : 'bg-protocol-bg/90'
-        }`}>
-          <div className="text-center px-6 w-full">
-            <p className={`font-semibold mb-3 ${
-              isBambiMode ? 'text-pink-700' : 'text-protocol-text'
-            }`}>
-              {logPrompts[category] || 'What did you do?'}
-            </p>
-            <input
-              type="text"
-              value={logText}
-              onChange={(e) => setLogText(e.target.value)}
-              placeholder="Optional — describe what you logged"
-              autoFocus
-              className={`w-full px-3 py-2 rounded-lg border text-sm mb-4 ${
-                isBambiMode
-                  ? 'border-pink-300 bg-white text-gray-800 placeholder:text-pink-300 focus:ring-pink-400'
-                  : 'border-protocol-border bg-protocol-bg text-protocol-text placeholder:text-protocol-text-muted focus:ring-protocol-accent'
-              } focus:outline-none focus:ring-2`}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleLogComplete(); }}
-            />
-            <div className="flex gap-3 justify-center">
-              <button
-                onClick={() => setShowLogInput(false)}
-                className={`px-4 py-2 rounded-xl text-sm ${
-                  isBambiMode
-                    ? 'bg-gray-200 text-gray-600'
-                    : 'bg-gray-700 text-gray-400'
-                }`}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleLogComplete}
-                className={`px-5 py-2 rounded-xl font-medium text-white text-sm bg-gradient-to-r ${
-                  getIntensityGradient(intensity, isBambiMode)
-                }`}
-              >
-                {logText.trim() ? 'Log & Complete' : 'Complete'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Header with gradient */}
       <div className={`bg-gradient-to-r ${getIntensityGradient(intensity, isBambiMode)} p-4`}>
         <div className="flex items-center justify-between">
@@ -366,19 +284,27 @@ export function TaskCardNew({
 
       {/* Main content */}
       <div className="p-4">
-        {/* Instruction */}
-        <p className={`text-lg font-semibold leading-snug ${
+        {/* Instruction — sized by copy_style: command=large+bold, short=medium+bold, normal=base */}
+        <p className={`leading-snug ${
+          copyStyle === 'command'
+            ? 'text-xl font-bold tracking-tight'
+            : copyStyle === 'short'
+              ? 'text-lg font-bold'
+              : 'text-lg font-semibold'
+        } ${
           isBambiMode ? 'text-gray-800' : 'text-protocol-text'
         }`}>
           {displayInstruction}
         </p>
 
-        {/* Persuasive subtext */}
-        <p className={`text-sm mt-2 italic ${
-          isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'
-        }`}>
-          {persuasiveText}
-        </p>
+        {/* Persuasive subtext — hidden in command mode (no fluff when aroused) */}
+        {copyStyle !== 'command' && (
+          <p className={`text-sm mt-2 italic ${
+            isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'
+          }`}>
+            {persuasiveText}
+          </p>
+        )}
 
         {/* Wishlist link if task mentions wishlist */}
         {instruction.toLowerCase().includes('wishlist') && isPending && (
@@ -393,32 +319,6 @@ export function TaskCardNew({
             <ExternalLink className="w-4 h-4" />
             Go to Wishlist
           </button>
-        )}
-
-        {/* Progress bar for count tasks */}
-        {showProgress && (
-          <div className="mt-4">
-            <div className="flex justify-between text-xs mb-1">
-              <span className={isBambiMode ? 'text-pink-600' : 'text-protocol-text-muted'}>
-                Progress
-              </span>
-              <span className={`font-medium ${
-                isBambiMode ? 'text-pink-700' : 'text-protocol-text'
-              }`}>
-                {task.progress} / {targetCount}
-              </span>
-            </div>
-            <div className={`h-2 rounded-full overflow-hidden ${
-              isBambiMode ? 'bg-pink-100' : 'bg-protocol-bg'
-            }`}>
-              <div
-                className={`h-full rounded-full transition-all duration-500 bg-gradient-to-r ${
-                  getIntensityGradient(intensity, isBambiMode)
-                }`}
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-          </div>
         )}
 
         {/* Expanded content */}
@@ -442,37 +342,7 @@ export function TaskCardNew({
           </div>
         )}
 
-        {/* Text response input for journal/reflection tasks */}
-        {isPending && needsTextInput && (
-          <div className="mt-4">
-            <textarea
-              value={responseText}
-              onChange={(e) => setResponseText(e.target.value)}
-              placeholder="Share your response here..."
-              rows={3}
-              className={`w-full px-3 py-2.5 rounded-xl border text-sm resize-none transition-colors ${
-                isBambiMode
-                  ? 'border-pink-200 bg-pink-50/50 text-gray-800 placeholder:text-pink-300 focus:border-pink-400 focus:ring-pink-400'
-                  : 'border-protocol-border bg-protocol-bg text-protocol-text placeholder:text-protocol-text-muted focus:border-protocol-accent focus:ring-protocol-accent'
-              } focus:outline-none focus:ring-1`}
-              style={{ minHeight: '4.5rem', height: 'auto', overflow: 'hidden' }}
-              onInput={(e) => {
-                const target = e.target as HTMLTextAreaElement;
-                target.style.height = 'auto';
-                target.style.height = target.scrollHeight + 'px';
-              }}
-            />
-            {responseText.trim().length > 0 && responseText.trim().length < 10 && (
-              <p className={`text-xs mt-1 ${
-                isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'
-              }`}>
-                {10 - responseText.trim().length} more characters needed
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Action buttons */}
+        {/* Completion input — type-aware (binary, duration, scale, count, reflect) */}
         {isPending && (
           <div className="mt-4 flex items-center gap-3">
             <button
@@ -488,67 +358,19 @@ export function TaskCardNew({
               <span className="text-[10px] -mt-0.5">Skip</span>
             </button>
 
-            {/* Binary completion type - show Yes/No buttons */}
-            {completionType === 'binary' ? (
-              <div className="flex-1 flex gap-2">
-                <button
-                  onClick={() => onComplete(false, responseText.trim() || undefined)}
-                  disabled={isCompleting || !textInputReady}
-                  className={`flex-1 py-3 rounded-xl font-semibold transition-all active:scale-[0.98] ${
-                    !textInputReady ? 'opacity-50 cursor-not-allowed' : ''
-                  } ${
-                    isBambiMode
-                      ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                      : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
-                  }`}
-                >
-                  {isCompleting ? (
-                    <Loader2 className="w-5 h-5 animate-spin mx-auto" />
-                  ) : (
-                    'No'
-                  )}
-                </button>
-                <button
-                  onClick={() => onComplete(true, responseText.trim() || undefined)}
-                  disabled={isCompleting || !textInputReady}
-                  className={`flex-1 py-3 rounded-xl font-semibold text-white transition-all active:scale-[0.98] ${
-                    !textInputReady ? 'opacity-50 cursor-not-allowed' : ''
-                  } bg-gradient-to-r ${
-                    getIntensityGradient(intensity, isBambiMode)
-                  } hover:opacity-90`}
-                >
-                  {isCompleting ? (
-                    <Loader2 className="w-5 h-5 animate-spin mx-auto" />
-                  ) : (
-                    'Yes'
-                  )}
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={handleComplete}
-                disabled={isCompleting || !textInputReady}
-                className={`flex-1 py-3 rounded-xl font-semibold text-white transition-all active:scale-[0.98] ${
-                  !textInputReady ? 'opacity-50 cursor-not-allowed' : ''
-                } bg-gradient-to-r ${
-                  getIntensityGradient(intensity, isBambiMode)
-                } hover:opacity-90`}
-              >
-                {isCompleting ? (
-                  <Loader2 className="w-5 h-5 animate-spin mx-auto" />
-                ) : showProgress && task.progress < (targetCount || 0) - 1 ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <span>+1</span>
-                    <span className="text-white/70">({task.progress + 1}/{targetCount})</span>
-                  </span>
-                ) : (
-                  <span className="flex items-center justify-center gap-2">
-                    <Check className="w-5 h-5" />
-                    <span>Complete</span>
-                  </span>
-                )}
-              </button>
-            )}
+            <CompletionInput
+              completionType={completionType}
+              targetCount={targetCount}
+              currentProgress={task.progress}
+              durationMinutes={durationMinutes}
+              subtext={displaySubtext}
+              intensity={intensity}
+              isCompleting={isCompleting}
+              onComplete={handleCompletionInput}
+              onIncrement={onIncrement}
+              getGradient={getIntensityGradient}
+              captureFields={captureFields}
+            />
           </div>
         )}
       </div>

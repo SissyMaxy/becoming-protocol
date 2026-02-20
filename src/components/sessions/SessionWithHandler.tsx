@@ -16,8 +16,13 @@ import { EdgeSession } from './EdgeSession';
 import { TimeCapsulePrompt } from './TimeCapsulePrompt';
 import { PostSessionMoodCapture } from './PostSessionMoodCapture';
 import { CommitmentPromptModal } from '../handler/CommitmentPromptModal';
+import { CleanupChecklist } from '../corruption/CleanupChecklist';
 import { useSessionHandler } from '../../hooks/useSessionHandler';
 import { useUserState } from '../../hooks/useUserState';
+import { useCorruption } from '../../hooks/useCorruption';
+import { shouldShowCleanup } from '../../lib/corruption-behaviors';
+import { useStandingPermission } from '../../hooks/useStandingPermission';
+import { HandlerNotification } from '../handler/HandlerNotification';
 
 interface SessionWithHandlerProps {
   onClose: () => void;
@@ -37,6 +42,8 @@ export function SessionWithHandler({
 }: SessionWithHandlerProps) {
   const { userState } = useUserState();
   const ginaHome = userState?.ginaHome ?? true;
+  const { snapshot: corruptionSnapshot } = useCorruption();
+  const ginaCorruptionLevel = corruptionSnapshot?.levels.gina ?? 0;
 
   const {
     isInitialized,
@@ -53,7 +60,9 @@ export function SessionWithHandler({
     dismissTimeCapsule,
   } = useSessionHandler(ginaHome);
 
+  const sessionAutoStart = useStandingPermission('session_auto_start');
   const [showMoodCapture, setShowMoodCapture] = useState(false);
+  const [showCleanup, setShowCleanup] = useState(false);
   const [completedSessionData, setCompletedSessionData] = useState<{
     sessionId: string;
     sessionType: string;
@@ -96,14 +105,18 @@ export function SessionWithHandler({
       edgeCount: stats.edgeCount,
     });
 
-    // Trigger immediate mood capture for testing, or schedule for 15 min
-    // In production, this would be scheduled; for UX we show immediately
-    setTimeout(() => {
-      setShowMoodCapture(true);
-    }, 1000);
+    // Show cleanup checklist if Gina is home/expected and there are items to check
+    if (shouldShowCleanup(ginaCorruptionLevel, ginaHome, false)) {
+      setShowCleanup(true);
+    } else {
+      // Go straight to mood capture
+      setTimeout(() => {
+        setShowMoodCapture(true);
+      }, 1000);
+    }
 
     onSessionComplete?.(stats);
-  }, [sessionId, endSession, onSessionComplete]);
+  }, [sessionId, endSession, onSessionComplete, ginaCorruptionLevel, ginaHome]);
 
   // Handle commitment acceptance
   const handleAcceptCommitment = useCallback(async () => {
@@ -115,6 +128,14 @@ export function SessionWithHandler({
     await saveTimeCapsule(message);
   }, [saveTimeCapsule]);
 
+  // Handle cleanup checklist dismissal → proceed to mood capture
+  const handleCleanupDismiss = useCallback(() => {
+    setShowCleanup(false);
+    setTimeout(() => {
+      setShowMoodCapture(true);
+    }, 500);
+  }, []);
+
   // Handle mood capture completion
   const handleMoodCaptureComplete = useCallback(() => {
     setShowMoodCapture(false);
@@ -122,8 +143,19 @@ export function SessionWithHandler({
     onClose();
   }, [onClose]);
 
-  // If session not available (Gina home), show blocker
+  // If session not available (Gina home), show blocker or auto-start notification
   if (!canStartSession) {
+    // Standing permission: show notification instead of hard block
+    if (sessionAutoStart.granted) {
+      return (
+        <HandlerNotification
+          message={sessionUnavailableReason || 'Session conditions not yet met. Handler will auto-start when ready.'}
+          detail="Session will begin automatically when conditions are met per your standing permission."
+          onDismiss={onClose}
+        />
+      );
+    }
+
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
         <div className="max-w-sm w-full bg-protocol-surface border border-protocol-border rounded-2xl p-6 text-center">
@@ -145,6 +177,16 @@ export function SessionWithHandler({
           </button>
         </div>
       </div>
+    );
+  }
+
+  // Show cleanup checklist after session (before mood capture)
+  if (showCleanup) {
+    return (
+      <CleanupChecklist
+        ginaCorruptionLevel={ginaCorruptionLevel}
+        onDismiss={handleCleanupDismiss}
+      />
     );
   }
 

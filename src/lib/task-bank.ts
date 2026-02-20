@@ -17,6 +17,8 @@ import type {
 import { DEFAULT_SKIP_COST } from '../types/task-bank';
 import { SYSTEM_PROMPTS } from './protocol-core/ai/system-prompts';
 import { recordTaskAtLevel, getEscalationOverview } from './escalation/level-generator';
+import { shouldHideTask } from './corruption-behaviors';
+import { getCopyStyle } from './handler-v2/types';
 
 // ============================================
 // CONVERTERS
@@ -52,6 +54,15 @@ function dbTaskToTask(db: DbTask): Task {
     createdBy: db.created_by as Task['createdBy'],
     parentTaskId: db.parent_task_id || undefined,
     active: db.active,
+    captureFields: db.capture_fields || undefined,
+    // Hypno session task fields
+    playlistIds: db.playlist_ids || undefined,
+    contentIds: db.content_ids || undefined,
+    ritualRequired: db.ritual_required || undefined,
+    captureMode: (db.capture_mode as Task['captureMode']) || undefined,
+    deviceRequired: db.device_required || undefined,
+    cageRequired: db.cage_required || undefined,
+    handlerFraming: db.handler_framing || undefined,
   };
 }
 
@@ -183,7 +194,7 @@ function meetsRequirements(task: Task, context: UserTaskContext): boolean {
 
 // Categories that are too vague to be actionable (per user feedback)
 // These are journal prompts or vision statements, not real tasks
-const EXCLUDED_VAGUE_CATEGORIES = ['normalize', 'condition', 'seed'];
+const EXCLUDED_VAGUE_CATEGORIES = ['normalize', 'seed'];
 
 function isExcluded(task: Task, context: UserTaskContext): boolean {
   const excl = task.excludeIf;
@@ -193,9 +204,13 @@ function isExcluded(task: Task, context: UserTaskContext): boolean {
     return true;
   }
 
-  // Gina home check
-  if (excl.ginaHome === true && context.ginaHome) {
-    return true;
+  // Gina home check — corruption-level-aware
+  if (context.ginaHome) {
+    const requiresPrivacy = excl.ginaHome === true;
+    const isExplicit = task.intensity >= 4 && ['edge', 'wear', 'display'].includes(task.category);
+    if (shouldHideTask(task.domain, task.category, requiresPrivacy, isExplicit, true, context.ginaCorruptionLevel)) {
+      return true;
+    }
   }
 
   // Gina asleep: exclude noisy categories (voice, audio, video tasks)
@@ -400,6 +415,7 @@ export async function completeTask(
     streakDay: number;
     feltGood: boolean;
     notes: string;
+    captureData: Record<string, unknown>;
   }> = {}
 ): Promise<{ success: boolean; pointsEarned: number; affirmation: string }> {
   // Get the daily task
@@ -443,9 +459,26 @@ export async function completeTask(
       felt_good: context.feltGood,
       notes: context.notes,
       points_earned: pointsEarned,
+      capture_data: context.captureData || null,
     });
 
   if (logError) throw logError;
+
+  // If this is a reflect task, also create a linked journal entry
+  if (context.captureData?.completion_type === 'reflect' && context.captureData?.reflection_text) {
+    const today = getTodayDate();
+    supabase
+      .from('daily_entries')
+      .upsert({
+        user_id: dailyTask.user_id,
+        date: today,
+        handler_notes: context.captureData.reflection_text as string,
+      }, { onConflict: 'user_id,date' })
+      .then(({ error: journalError }) => {
+        if (journalError) console.warn('[TaskBank] Failed to create journal entry from reflection:', journalError.message);
+        else console.log('[TaskBank] Reflection linked to journal for', today);
+      });
+  }
 
   // Record task at domain level for infinite escalation tracking (fire-and-forget)
   recordTaskAtLevel(dailyTask.user_id, task.domain, task.intensity, true).catch(err => {
@@ -864,16 +897,18 @@ export async function importTasks(tasks: TaskImportData[]): Promise<TaskImportRe
   let imported = 0;
   let failed = 0;
 
-  // Valid categories and domains
+  // Valid categories and domains (must match types/task-bank.ts)
   const validCategories = [
     'wear', 'listen', 'say', 'apply', 'watch', 'edge', 'lock', 'practice',
     'use', 'remove', 'commit', 'expose', 'serve', 'surrender', 'plug',
-    'sissygasm', 'oral', 'thirst', 'fantasy', 'corrupt', 'worship', 'deepen', 'bambi'
+    'sissygasm', 'oral', 'thirst', 'fantasy', 'corrupt', 'worship', 'deepen', 'bambi',
+    'acquire', 'explore', 'ritual', 'measure', 'milestone', 'condition', 'care'
   ];
 
   const validDomains = [
     'voice', 'movement', 'skincare', 'style', 'makeup', 'social',
-    'body_language', 'inner_narrative', 'arousal', 'chastity', 'conditioning', 'identity'
+    'body_language', 'inner_narrative', 'arousal', 'chastity', 'conditioning', 'identity',
+    'exercise', 'nutrition', 'scent', 'wigs'
   ];
 
   for (let i = 0; i < tasks.length; i++) {
@@ -960,12 +995,14 @@ export async function bulkImportTasks(tasks: TaskImportData[]): Promise<TaskImpo
   const validCategories = [
     'wear', 'listen', 'say', 'apply', 'watch', 'edge', 'lock', 'practice',
     'use', 'remove', 'commit', 'expose', 'serve', 'surrender', 'plug',
-    'sissygasm', 'oral', 'thirst', 'fantasy', 'corrupt', 'worship', 'deepen', 'bambi'
+    'sissygasm', 'oral', 'thirst', 'fantasy', 'corrupt', 'worship', 'deepen', 'bambi',
+    'acquire', 'explore', 'ritual', 'measure', 'milestone', 'condition', 'care'
   ];
 
   const validDomains = [
     'voice', 'movement', 'skincare', 'style', 'makeup', 'social',
-    'body_language', 'inner_narrative', 'arousal', 'chastity', 'conditioning', 'identity'
+    'body_language', 'inner_narrative', 'arousal', 'chastity', 'conditioning', 'identity',
+    'exercise', 'nutrition', 'scent', 'wigs'
   ];
 
   // Validate all tasks first
@@ -1187,6 +1224,14 @@ export async function enhanceTasks(
     return tasks;
   }
 
+  // Arousal-gated copy formatting directive
+  const copyStyle = getCopyStyle(context.arousalLevel);
+  const formatDirective = copyStyle === 'command'
+    ? 'COPY FORMAT: COMMAND MODE. Max 3 lines per task. Verb-first every sentence. No preamble, no softening. Raw imperative.'
+    : copyStyle === 'short'
+      ? 'COPY FORMAT: SHORT MODE. Max 4 lines per task. Imperative sentences only. No filler, no explanation.'
+      : 'COPY FORMAT: NORMAL. Up to 6 sentences per task. Direct, commanding.';
+
   // Build Handler-voiced system prompt using the real Handler identity
   const systemPrompt = `${SYSTEM_PROMPTS.base}
 
@@ -1206,11 +1251,14 @@ CURRENT STATE:
 ${context.avoidedDomains.length > 0 ? `- AVOIDING: ${context.avoidedDomains.join(', ')} — push into these.` : ''}
 ${context.recentResistance.length > 0 ? `- RECENT RESISTANCE: ${context.recentResistance.join(', ')} — address this.` : ''}
 
+${formatDirective}
+
 RULES:
 - Keep the same core action but make it feel personally targeted
 - Low energy: fewer spoons, but no free passes. Reduce friction, not expectations.
 - High arousal + high denial: leverage it. Extract more.
 - Reference her data. Be specific, not generic.
+- STRICTLY obey the COPY FORMAT above — aroused eyes don't read walls of text.
 - "subtext" = one sentence that makes it personal (reference streak, denial, recent behavior)
 - "affirmation" = completion reward message in Handler voice
 
@@ -1269,6 +1317,7 @@ ${JSON.stringify(taskList, null, 2)}`;
         enhancedInstruction: e.instruction,
         enhancedSubtext: e.subtext,
         enhancedAffirmation: e.affirmation,
+        copyStyle,
       };
     });
 

@@ -6,14 +6,18 @@ import { Check, X, Loader2 } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
 import type { DailyTask } from '../../types/task-bank';
 import { CATEGORY_EMOJI, INTENSITY_CONFIG } from '../../types/task-bank';
+import { OverrideDialog } from '../corruption/OverrideDialog';
+import type { OverrideFriction } from '../../lib/corruption-behaviors';
 
 interface TaskCardProps {
   task: DailyTask;
   onComplete: (feltGood?: boolean) => void;
   onIncrement?: () => void;
   onSkip: () => void;
+  onOverrideLogged?: (reason?: string) => void;
   isCompleting: boolean;
   isSkipping: boolean;
+  overrideFriction?: OverrideFriction;
 }
 
 // Memoized to prevent unnecessary re-renders in task lists
@@ -22,11 +26,14 @@ export const TaskCard = memo(function TaskCard({
   onComplete,
   onIncrement,
   onSkip,
+  onOverrideLogged,
   isCompleting,
   isSkipping,
+  overrideFriction = 'none',
 }: TaskCardProps) {
   const { isBambiMode } = useBambiMode();
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
+  const [showOverrideDialog, setShowOverrideDialog] = useState(false);
 
   const { instruction, category, intensity, completionType, targetCount, durationMinutes } = task.task;
   const emoji = CATEGORY_EMOJI[category];
@@ -78,11 +85,23 @@ export const TaskCard = memo(function TaskCard({
 
   const handleSkipClick = () => {
     if (showSkipConfirm) {
+      // At autonomy level 3+, show override dialog before allowing skip
+      if (overrideFriction !== 'none') {
+        setShowSkipConfirm(false);
+        setShowOverrideDialog(true);
+        return;
+      }
       onSkip();
       setShowSkipConfirm(false);
     } else {
       setShowSkipConfirm(true);
     }
+  };
+
+  const handleOverrideConfirm = (reason?: string) => {
+    setShowOverrideDialog(false);
+    onOverrideLogged?.(reason);
+    onSkip();
   };
 
   return (
@@ -236,6 +255,17 @@ export const TaskCard = memo(function TaskCard({
           )}
         </div>
       </div>
+
+      {/* Override friction dialog (autonomy level 3+) */}
+      {showOverrideDialog && (
+        <OverrideDialog
+          friction={overrideFriction}
+          taskName={instruction}
+          onKeep={() => setShowOverrideDialog(false)}
+          onOverride={handleOverrideConfirm}
+          onCancel={() => setShowOverrideDialog(false)}
+        />
+      )}
 
       {/* Skip warning overlay */}
       {showSkipConfirm && (

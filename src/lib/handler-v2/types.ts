@@ -99,6 +99,33 @@ export interface UserState {
   workStressModeActive: boolean;
   weekendModeActive: boolean;
   recoveryProtocolActive?: string;
+
+  // Lifestyle tracking (from exercise, protein, collections, micro-tasks)
+  lifestyle?: {
+    exercise?: {
+      streakWeeks: number;
+      sessionsThisWeek: number;
+      gymUnlocked: boolean;
+      lastSessionAt: string | null;
+      lastSessionType: string | null;
+    };
+    protein?: {
+      yesterday: number;
+      weekAvg: number;
+    };
+    ambient?: {
+      scents: string[];
+      signatureScent: string | null;
+      wig: string | null;
+      anchors: number;
+      microToday: number;
+      microTarget: number;
+    };
+    corruption?: {
+      compositeScore: number;
+      allSuspended: boolean;
+    };
+  };
 }
 
 // Intervention types
@@ -181,6 +208,48 @@ export interface CrisisKitItem {
   curatedBy: 'handler' | 'user' | 'both';
   timesShown: number;
   effectivenessRating?: number;
+}
+
+// Pop-up notification types (from reward notification distribution)
+export type PopUpNotificationType =
+  | 'micro_task'
+  | 'affirmation'
+  | 'content_unlock'
+  | 'challenge'
+  | 'jackpot';
+
+// Pop-up message — enforced character limits
+export interface PopUpMessage {
+  title: string;           // ≤40 chars
+  body: string;            // ≤200 chars
+  subtext?: string;        // ≤80 chars
+  notification_type: PopUpNotificationType;
+  handler_mode: HandlerMode;
+  priority: 'normal' | 'high';
+  haptic?: string;
+  expires_minutes?: number;
+}
+
+// Pop-up character limits
+export const POPUP_LIMITS = {
+  title: 40,
+  body: 200,
+  subtext: 80,
+} as const;
+
+// Copy style — arousal-gated formatting for task prescriptions
+export type CopyStyle = 'normal' | 'short' | 'command';
+
+/**
+ * Derive copy style from arousal level.
+ * 0-2: normal (up to 6 sentences)
+ * 3-4: short (max 4 lines, imperative)
+ * 5+: command (max 3 lines, verb-first, no preamble)
+ */
+export function getCopyStyle(arousal: number): CopyStyle {
+  if (arousal >= 5) return 'command';
+  if (arousal >= 3) return 'short';
+  return 'normal';
 }
 
 // Handler action log entry

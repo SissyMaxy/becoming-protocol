@@ -13,6 +13,7 @@
 
 import { supabase } from './supabase';
 import { getQuickForecast } from './arousal-forecast';
+import { dailyCorruptionMaintenance } from './corruption-advancement';
 import type { Intensity } from '../types';
 
 // ============================================
@@ -94,6 +95,7 @@ export async function getMorningPersonalization(userId: string): Promise<Morning
     serviceData,
     ginaData,
     intensityHistory,
+    _corruptionMaintenance,
   ] = await Promise.all([
     getProfileData(userId),
     getStreakData(userId),
@@ -102,6 +104,10 @@ export async function getMorningPersonalization(userId: string): Promise<Morning
     getServiceData(userId),
     getGinaData(userId),
     getIntensityHistory(userId),
+    dailyCorruptionMaintenance(userId).catch(err => {
+      console.error('[Corruption] Daily maintenance failed:', err);
+      return null;
+    }),
   ]);
 
   // Generate personalized greeting

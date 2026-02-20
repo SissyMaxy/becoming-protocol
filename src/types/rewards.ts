@@ -68,7 +68,8 @@ export type PointSource =
   | 'narration_milestone'
   | 'notification_response'
   | 'jackpot'
-  | 'bonus';
+  | 'bonus'
+  | 'micro_task';
 
 export interface UserRewardState {
   id: string;

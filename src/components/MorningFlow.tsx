@@ -9,6 +9,7 @@ import { supabase } from '../lib/supabase';
 import { Flame, Sparkles, Leaf, ArrowRight, Loader2, AlertTriangle, Star, TrendingUp, Info, Heart } from 'lucide-react';
 import { StreakBreakModal } from './SkipConfirmModal';
 import { getMorningPersonalization, type MorningPersonalization } from '../lib/morning-personalization';
+import { HandlerStatusBriefing } from './handler/HandlerStatusBriefing';
 
 interface MorningFlowProps {
   onComplete: () => void;
@@ -247,6 +248,9 @@ export function MorningFlow({ onComplete }: MorningFlowProps) {
             ))}
           </div>
         )}
+
+        {/* Handler Status Briefing — status report format */}
+        <HandlerStatusBriefing />
 
         {/* Morning Insight Card */}
         {personalization?.insight && (

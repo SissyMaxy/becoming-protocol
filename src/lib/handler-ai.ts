@@ -51,6 +51,11 @@ import {
   handleSessionEventFromTemplate,
   type TemplateContext,
 } from './handler-templates';
+import {
+  buildFullSystemsContext,
+  buildSessionContext,
+  buildInterventionContext,
+} from './handler-systems-context';
 
 // ============================================
 // BILLING ERROR TRACKING
@@ -610,6 +615,7 @@ export async function generateDailyPlan(
 
   const systemPrompt = buildHandlerSystemPrompt(profile, handlerState);
   const serviceGuidance = getServiceStageGuidance(serviceStage);
+  const systemsCtx = await buildFullSystemsContext(userId);
 
   const userPrompt = `Generate today's intervention plan.
 
@@ -639,6 +645,8 @@ Readiness: ${ripestDomain.readinessScore}
 Current edge: ${ripestDomain.currentEdge}
 Next target: ${ripestDomain.nextTarget}
 Days since escalation: ${ripestDomain.daysSinceEscalation}` : 'No escalation targets identified'}
+
+## SYSTEMS STATE${systemsCtx}
 
 Notification budget: ${notificationBudget.min}-${notificationBudget.max} interventions today
 
@@ -783,6 +791,7 @@ export async function shouldInterveneNow(
   const currentHour = new Date().getHours();
   const todaysPlan = handlerState.todaysPlan;
   const serviceGuidance = getServiceStageGuidance(serviceStage);
+  const systemsCtx = await buildInterventionContext(userId);
 
   const userPrompt = `Should an intervention fire now?
 
@@ -815,6 +824,8 @@ Identity language to use: ${serviceGuidance.identityLanguage.join(' ')}
 Tier: ${hypnoPrescription.tier}
 Themes: ${hypnoPrescription.themes.join(', ')}
 Intensity: ${hypnoPrescription.intensity}
+
+## SYSTEMS STATE${systemsCtx}
 
 Today's plan elements due now: ${JSON.stringify(todaysPlan?.plannedInterventions.filter(i => {
   const [h] = i.time.split(':').map(Number);
@@ -949,6 +960,7 @@ export async function generateCommitmentPrompt(
   }
 
   const serviceGuidance = getServiceStageGuidance(serviceStage);
+  const systemsCtx = await buildSessionContext(userId);
 
   const systemPrompt = `You are THE HANDLER. Your job is to extract escalation commitments during arousal.
 
@@ -968,6 +980,8 @@ ${vulnerabilityWindows.map(w => `- ${w.type}: strength ${w.strength}, exploit: $
 ## SERVICE PROGRESSION
 Current stage: ${serviceStage}
 Identity language to inject: "${serviceGuidance.identityLanguage.join(' ')}"
+
+## SYSTEMS STATE${systemsCtx}
 
 Generate a commitment prompt that:
 1. Pushes past their current edge
@@ -1135,8 +1149,11 @@ export async function analyzePatterns(userId: string): Promise<PatternAnalysis |
     .limit(20);
 
   const systemPrompt = buildHandlerSystemPrompt(profile, handlerState);
+  const systemsCtx = await buildFullSystemsContext(userId);
 
   const userPrompt = `Analyze patterns in user behavior and response to interventions.
+
+## SYSTEMS STATE${systemsCtx}
 
 Recent influence attempts and outcomes:
 ${JSON.stringify(handlerState.recentInfluenceAttempts, null, 2)}
@@ -1336,6 +1353,7 @@ export async function handleSessionEvent(
   }
 
   const systemPrompt = buildHandlerSystemPrompt(profile, handlerState);
+  const systemsCtx = await buildSessionContext(userId);
 
   const userPrompt = `Session event occurred.
 
@@ -1346,6 +1364,7 @@ Event data: ${JSON.stringify(data)}
 Current handler state:
 - Active triggers: ${handlerState.activeTriggers.length}
 - Today's focus: ${handlerState.todaysPlan?.focusAreas.join(', ') || 'not set'}
+${systemsCtx}
 
 Based on this event, decide:
 1. should_act: boolean - Should we do something right now?

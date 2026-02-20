@@ -12,6 +12,8 @@ import {
   Calendar,
 } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
+import { useStandingPermission } from '../../hooks/useStandingPermission';
+import { HandlerNotificationBanner } from '../handler/HandlerNotification';
 import type { CamSession } from '../../types/cam';
 
 interface CamPrescriptionCardProps {
@@ -22,6 +24,7 @@ interface CamPrescriptionCardProps {
 
 export function CamPrescriptionCard({ session, onAccept, onSkip }: CamPrescriptionCardProps) {
   const { isBambiMode } = useBambiMode();
+  const camAutoSchedule = useStandingPermission('cam_auto_schedule');
 
   const scheduledDate = session.scheduledAt
     ? new Date(session.scheduledAt)
@@ -108,27 +111,33 @@ export function CamPrescriptionCard({ session, onAccept, onSkip }: CamPrescripti
           </div>
         )}
 
-        {/* Actions */}
-        <div className="flex gap-2">
-          {onAccept && (
-            <button
-              onClick={onAccept}
-              className="flex-1 py-2 rounded-lg bg-green-500/20 text-green-400 text-xs font-medium flex items-center justify-center gap-1.5 hover:bg-green-500/30 transition-colors"
-            >
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              Accept
-            </button>
-          )}
-          {onSkip && (
-            <button
-              onClick={onSkip}
-              className="flex-1 py-2 rounded-lg bg-red-500/10 text-red-400 text-xs font-medium flex items-center justify-center gap-1.5 hover:bg-red-500/20 transition-colors"
-            >
-              <XCircle className="w-3.5 h-3.5" />
-              Skip (Consequence)
-            </button>
-          )}
-        </div>
+        {/* Actions — notification when auto-scheduled, buttons otherwise */}
+        {camAutoSchedule.granted ? (
+          <HandlerNotificationBanner
+            message={`Cam session confirmed${scheduledDate ? ` for ${scheduledDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}` : ''}. Understood.`}
+          />
+        ) : (
+          <div className="flex gap-2">
+            {onAccept && (
+              <button
+                onClick={onAccept}
+                className="flex-1 py-2 rounded-lg bg-green-500/20 text-green-400 text-xs font-medium flex items-center justify-center gap-1.5 hover:bg-green-500/30 transition-colors"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Accept
+              </button>
+            )}
+            {onSkip && (
+              <button
+                onClick={onSkip}
+                className="flex-1 py-2 rounded-lg bg-red-500/10 text-red-400 text-xs font-medium flex items-center justify-center gap-1.5 hover:bg-red-500/20 transition-colors"
+              >
+                <XCircle className="w-3.5 h-3.5" />
+                Skip (Consequence)
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

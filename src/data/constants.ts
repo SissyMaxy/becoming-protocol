@@ -167,60 +167,55 @@ export const TASK_TEMPLATES: TaskTemplate[] = [
   // Morning - Skincare
   {
     id: 'skincare-morning-cleanse',
-    title: 'Morning skincare routine',
-    description: 'Cleanse, tone, moisturize, SPF',
+    title: 'Morning skincare -- shower and moisturize',
+    description: 'Shower, wash face, CeraVe moisturizer',
     domain: 'skincare',
     timeBlock: 'morning',
-    duration: 10,
+    duration: 5,
     baseIntensity: 'crazy',
     instructions: {
-      overview: 'Your morning skincare ritual is more than hygiene - it\'s a daily act of self-love and feminine care. Each step is an opportunity to connect with your body and set intentions for the day.',
-      preparation: 'Gather your products: cleanser, toner, moisturizer, and SPF. Tie back your hair if needed.',
+      overview: 'Your morning skincare ritual is more than hygiene - it\'s a daily act of self-love and feminine care. Simplicity is the point: a routine you actually do beats a 10-step routine you skip.',
+      preparation: 'CeraVe moisturizing lotion within reach of the bathroom. Clean towel ready.',
       steps: [
-        'Splash your face with lukewarm water to wake up your skin',
-        'Apply a small amount of cleanser and massage in gentle circular motions for 60 seconds',
-        'Rinse thoroughly and pat (don\'t rub) your face dry with a soft towel',
-        'Apply toner with your fingertips or a cotton pad, pressing gently into your skin',
-        'Take a moment to look at yourself in the mirror - really see yourself',
-        'Apply moisturizer in upward strokes, treating your skin with tenderness',
-        'Finish with SPF, even on cloudy days - protecting your skin is an act of self-care'
+        'Shower with bar soap -- wash face and body',
+        'Dry off with clean towel',
+        'CeraVe moisturizing lotion on face -- dot on forehead, cheeks, chin, nose, spread gently'
       ],
-      goal: 'Transform a daily routine into a ritual of self-care and feminine connection',
+      goal: 'A routine that actually happens every single day. Consistency over complexity.',
       tips: [
-        'Use this time to set an intention for your day',
-        'Gentle pressure - your face is delicate',
-        'Don\'t forget your neck - it deserves love too'
+        'Lukewarm water, not hot -- hot strips your skin barrier',
+        'Pat dry, don\'t rub',
+        'Bring moisturizer down to neck if you remember'
       ],
       commonMistakes: [
-        'Rushing through - this is YOUR time',
+        'Overcomplicating it -- 3 steps is the right number for Level 1',
         'Using water that\'s too hot (damages skin barrier)',
-        'Skipping SPF - sun damage is real and cumulative'
+        'Skipping it because it feels "too simple to matter"'
       ]
     },
     sensory: {
       think: 'I am caring for myself. This skin is mine and it deserves my attention.',
-      feel: 'The cool water waking your skin, the smooth glide of products, your fingertips connecting with your face',
+      feel: 'Warm water waking your skin, the smooth glide of CeraVe, your fingertips connecting with your face',
       see: 'Watch yourself in the mirror with soft eyes - not judging, just being present',
-      smell: 'Notice the subtle scents of your products - let them signal "self-care time" to your brain'
+      smell: 'Notice the clean scent of soap and the subtle scent of lotion'
     },
     ambiance: {
       lighting: 'Bright bathroom light or natural morning light',
       music: 'Soft morning playlist or peaceful silence',
-      environment: 'Clean bathroom counter, products arranged neatly'
+      environment: 'Bathroom, products within reach'
     },
     affirmation: 'I care for my body with love. My skin glows with the attention I give it.',
-    whyItMatters: 'Skincare is one of the first ways many trans women reclaim their femininity. Women are socialized from girlhood to nurture their skin - this practice gives you what you should have had all along, while building habits that serve your transition. The ritual aspect matters as much as the products: this is daily proof that you deserve care.',
+    whyItMatters: 'Skincare is one of the first ways many trans women reclaim their femininity. The ritual aspect matters as much as the products: this is daily proof that you deserve care. A simple routine you never skip beats a complex one you abandon.',
     whatToNotice: {
       successIndicators: [
-        'Your skin feels hydrated, not tight or dry after cleansing',
-        'Products absorb smoothly without pilling',
+        'Your skin feels hydrated, not tight or dry',
+        'CeraVe absorbs smoothly without pilling',
         'You feel a sense of calm completion, not rushed'
       ],
       sensoryCues: [
-        'The cool refreshing sensation of water on your face',
-        'The smooth glide of cleanser creating a light foam',
-        'The dewy, plump feeling of moisturized skin',
-        'Warmth in your cheeks from gentle massage motions'
+        'The warm sensation of the shower',
+        'The smooth glide of CeraVe on clean skin',
+        'The dewy, plump feeling of moisturized skin'
       ],
       progressMarkers: [
         'After 1 week: Routine feels automatic, not like a chore',
@@ -1023,46 +1018,44 @@ export const TASK_TEMPLATES: TaskTemplate[] = [
   // Evening - Skincare
   {
     id: 'skincare-evening-routine',
-    title: 'Evening skincare routine',
-    description: 'Double cleanse, treatments, night cream',
+    title: 'Evening skincare -- cleanse and moisturize',
+    description: 'Wash face, CeraVe moisturizer, lip balm',
     domain: 'skincare',
     timeBlock: 'evening',
-    duration: 15,
+    duration: 3,
     baseIntensity: 'crazy',
     instructions: {
-      overview: 'Your evening skincare is a wind-down ritual - a signal to your body and mind that the day is ending. This extended routine cleanses away the day and prepares your skin for overnight renewal.',
-      preparation: 'Remove any makeup first. Gather: oil cleanser, water-based cleanser, any treatments/serums, night cream. Have a soft towel ready.',
+      overview: 'Your evening skincare is a wind-down signal - the day is ending and she gets to rest. Keep it simple so it always happens.',
+      preparation: 'CeraVe moisturizing lotion and lip balm within reach. Clean towel.',
       steps: [
-        'Start with an oil-based cleanser - massage into dry skin to dissolve makeup, sunscreen, and daily grime',
-        'Rinse with warm water, then apply your water-based cleanser for a deeper clean',
-        'Pat your face dry gently - remember, patting not rubbing',
-        'While skin is slightly damp, apply any serums or treatments',
-        'Take a moment to look at your reflection with kindness - you made it through another day',
-        'Apply night cream in gentle upward strokes, including your neck',
-        'Finish with eye cream if you use one - gentle tapping motions around the orbital bone'
+        'Wash face with warm water',
+        'Pat dry with clean towel',
+        'CeraVe moisturizing lotion on face',
+        'Bring down to neck',
+        'Lip balm if dry'
       ],
-      goal: 'Release the day, nurture your skin, and transition into restful evening energy',
+      goal: 'Release the day, nurture your skin, signal to your brain that the day is done',
       tips: [
-        'This is NOT the time to pick at your skin or scrutinize "flaws"',
-        'Warm products between your palms before applying',
+        'Warm water, not hot -- skin barrier matters',
+        'Pat dry, don\'t rub',
         'Use this time to mentally review your day with compassion'
       ],
       commonMistakes: [
-        'Skipping the double cleanse - one cleanser isn\'t enough in the evening',
+        'Skipping it because you\'re tired -- this is 3 minutes',
         'Being harsh with tired skin - gentleness always',
         'Doing this while distracted - be present with yourself'
       ]
     },
     sensory: {
       think: 'I am washing away the day. Tomorrow is fresh. Right now, I rest.',
-      feel: 'The warmth of water, the silky glide of oil cleanser, the richness of night cream',
+      feel: 'The warmth of water on your face, the smooth CeraVe, the softness of lip balm',
       see: 'Soft bathroom lighting, your reflection becoming cleaner and softer',
-      smell: 'The soothing scents of your evening products - perhaps lavender or chamomile'
+      smell: 'The clean scent of warm water and lotion'
     },
     ambiance: {
       lighting: 'Dim, warm bathroom lighting - avoid harsh overhead lights',
       music: 'Calming evening playlist or gentle nature sounds',
-      environment: 'Warm bathroom, perhaps with a candle lit'
+      environment: 'Warm bathroom'
     },
     affirmation: 'I release this day with gratitude. My skin renews as I rest.'
   },

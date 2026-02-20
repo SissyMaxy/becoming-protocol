@@ -10,9 +10,16 @@ import {
   Save,
   Check,
   Star,
-  SkipForward
+  SkipForward,
+  Heart,
+  Crown,
+  Stethoscope,
 } from 'lucide-react';
 import { JournalSkipModal } from './SkipConfirmModal';
+import { useLanguageTracking } from '../hooks/useLanguageTracking';
+import { useCorruption } from '../hooks/useCorruption';
+import { useAuth } from '../context/AuthContext';
+import { handleTherapistConcern } from '../lib/corruption-crisis';
 
 interface AlignmentSliderProps {
   value: number;
@@ -129,6 +136,9 @@ function JournalTextArea({
 
 export function EveningJournal() {
   const { currentEntry, saveJournal } = useProtocol();
+  const { trackSubmission } = useLanguageTracking();
+  const { logEvent, snapshot: corruptionSnapshot } = useCorruption();
+  const { user } = useAuth();
   const [alignment, setAlignment] = useState(5);
   const [euphoria, setEuphoria] = useState('');
   const [dysphoria, setDysphoria] = useState('');
@@ -137,6 +147,14 @@ export function EveningJournal() {
   const [isSaved, setIsSaved] = useState(false);
   const [showSkipModal, setShowSkipModal] = useState(false);
   const [isSkipped, setIsSkipped] = useState(false);
+
+  // Gina context check-in state
+  const [ginaNotices, setGinaNotices] = useState('');
+  const [sharedSpace, setSharedSpace] = useState('');
+
+  // Therapist check-in state
+  const [hadTherapy, setHadTherapy] = useState<boolean | null>(null);
+  const [therapyNotes, setTherapyNotes] = useState('');
 
   // Load existing journal if present
   useEffect(() => {
@@ -152,6 +170,12 @@ export function EveningJournal() {
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      // Track identity language in journal text
+      const allText = [euphoria, dysphoria, insights].join(' ');
+      if (allText.trim()) {
+        trackSubmission(allText);
+      }
+
       const journal: JournalEntry = {
         alignmentScore: alignment,
         euphoriaNote: euphoria,
@@ -159,6 +183,40 @@ export function EveningJournal() {
         insights
       };
       await saveJournal(journal);
+
+      // Log Gina context data as corruption milestones (fire-and-forget)
+      const ginaLevel = corruptionSnapshot?.levels.gina ?? 0;
+      if (ginaNotices.trim()) {
+        logEvent('gina', 'milestone', ginaLevel, {
+          gina_notices: ginaNotices,
+          gina_questions_logged: true,
+        }).catch(() => {});
+      }
+      if (sharedSpace.trim()) {
+        logEvent('gina', 'milestone', ginaLevel, {
+          shared_space_activities: 1,
+          shared_space_description: sharedSpace,
+        }).catch(() => {});
+      }
+
+      // Log therapist check-in data (fire-and-forget)
+      if (hadTherapy === true) {
+        const therapistLevel = corruptionSnapshot?.levels.therapist ?? 0;
+        logEvent('therapist', 'milestone', therapistLevel, {
+          therapy_session: true,
+          therapy_notes: therapyNotes,
+        }).catch(() => {});
+
+        // If notes contain concern keywords, flag it
+        const concernKeywords = ['concern', 'worried', 'alarming', 'unhealthy', 'problem', 'flag'];
+        const hasConcern = concernKeywords.some(k =>
+          therapyNotes.toLowerCase().includes(k)
+        );
+        if (hasConcern && user?.id) {
+          handleTherapistConcern(user.id, therapyNotes).catch(() => {});
+        }
+      }
+
       setIsSaved(true);
     } catch (error) {
       console.error('Failed to save journal:', error);
@@ -170,7 +228,7 @@ export function EveningJournal() {
   // Mark as unsaved when content changes
   useEffect(() => {
     setIsSaved(false);
-  }, [alignment, euphoria, dysphoria, insights]);
+  }, [alignment, euphoria, dysphoria, insights, ginaNotices, sharedSpace, hadTherapy, therapyNotes]);
 
   // Handle journal skip
   const handleSkipClick = () => {
@@ -269,6 +327,74 @@ export function EveningJournal() {
           onChange={setInsights}
           accentColor="#a855f7"
         />
+      </div>
+
+      {/* Home & Relationship check-in */}
+      <div className="space-y-4">
+        <p className="text-xs text-protocol-text-muted uppercase tracking-wider px-1">
+          Home & Relationship
+        </p>
+        <JournalTextArea
+          icon={<Heart className="w-4 h-4" />}
+          label="Anything Gina noticed today?"
+          placeholder="Did she comment on anything, ask questions, or seem curious?"
+          value={ginaNotices}
+          onChange={setGinaNotices}
+          accentColor="#f59e0b"
+        />
+        <JournalTextArea
+          icon={<Crown className="w-4 h-4" />}
+          label="Protocol in shared space?"
+          placeholder="Any moments where protocol life overlapped with home life?"
+          value={sharedSpace}
+          onChange={setSharedSpace}
+          accentColor="#ec4899"
+        />
+      </div>
+
+      {/* Wellbeing check-in */}
+      <div className="space-y-4">
+        <p className="text-xs text-protocol-text-muted uppercase tracking-wider px-1">
+          Wellbeing
+        </p>
+        <div className="card p-4 space-y-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-protocol-text">
+            <Stethoscope className="w-4 h-4 text-blue-400" />
+            Therapy today?
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setHadTherapy(true)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                hadTherapy === true
+                  ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                  : 'bg-protocol-surface border border-protocol-border text-protocol-text-muted hover:border-protocol-accent/30'
+              }`}
+            >
+              Yes
+            </button>
+            <button
+              onClick={() => setHadTherapy(false)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                hadTherapy === false
+                  ? 'bg-protocol-surface-light text-protocol-text border border-protocol-border'
+                  : 'bg-protocol-surface border border-protocol-border text-protocol-text-muted hover:border-protocol-accent/30'
+              }`}
+            >
+              No
+            </button>
+          </div>
+          {hadTherapy === true && (
+            <JournalTextArea
+              icon={<Lightbulb className="w-4 h-4" />}
+              label="How did it go?"
+              placeholder="Any insights, concerns, or breakthroughs?"
+              value={therapyNotes}
+              onChange={setTherapyNotes}
+              accentColor="#3b82f6"
+            />
+          )}
+        </div>
       </div>
 
       {/* Save button */}

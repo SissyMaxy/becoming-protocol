@@ -17,6 +17,8 @@ import {
   Clock,
   Brain,
   Upload,
+  Zap,
+  Moon,
 } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
 import { useProtocol } from '../../context/ProtocolContext';
@@ -31,13 +33,16 @@ import { TaskUploadSettings } from './TaskUploadSettings';
 import { DataExportView } from './DataExportView';
 import { AppearanceSettings } from './AppearanceSettings';
 import { PrivacySettings } from './PrivacySettings';
+import { MicroTaskSettings } from '../micro-tasks';
+import { CorruptionDashboard } from '../admin/CorruptionDashboard';
+import { SleepContentSettings } from '../sleep-content/SleepContentSettings';
 
 interface SettingsViewProps {
   onBack: () => void;
   onEditIntake?: () => void;
 }
 
-type SettingsSection = 'main' | 'profile' | 'lovense' | 'timeratchets' | 'reminders' | 'privacy' | 'appearance' | 'data' | 'handler' | 'taskupload';
+type SettingsSection = 'main' | 'profile' | 'lovense' | 'timeratchets' | 'reminders' | 'privacy' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content';
 
 export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
   const { isBambiMode } = useBambiMode();
@@ -74,6 +79,20 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
       label: 'Reminders',
       description: 'All-day feminization presence',
       color: '#f59e0b',
+    },
+    {
+      id: 'microtasks' as const,
+      icon: Zap,
+      label: 'Micro-Tasks',
+      description: 'Identity reinforcement during work',
+      color: '#a855f7',
+    },
+    {
+      id: 'sleep-content' as const,
+      icon: Moon,
+      label: 'Sleep Content',
+      description: 'Bedtime affirmations & voice settings',
+      color: '#6366f1',
     },
     {
       id: 'privacy' as const,
@@ -113,6 +132,7 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
     if (activeSection === 'reminders') return 'Feminization Reminders';
     if (activeSection === 'handler') return 'Handler Dashboard';
     if (activeSection === 'taskupload') return 'Task Upload';
+    if (activeSection === 'microtasks') return 'Micro-Tasks';
     if (activeSection === 'privacy') return 'Privacy & Security';
     if (activeSection === 'appearance') return 'Appearance';
     if (activeSection === 'data') return 'Data Export';
@@ -507,6 +527,54 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
                   </button>
                 )}
 
+                {/* Corruption Dashboard - Debug Mode Only */}
+                {isDebugMode && (
+                  <button
+                    onClick={() => setActiveSection('corruption')}
+                    className={`w-full p-4 rounded-xl border flex items-center gap-4 text-left transition-all ${
+                      isBambiMode
+                        ? 'bg-pink-50 border-pink-200 hover:border-pink-300'
+                        : 'bg-protocol-surface border-protocol-border hover:border-protocol-accent/30'
+                    }`}
+                  >
+                    <div
+                      className="p-3 rounded-xl"
+                      style={{ backgroundColor: '#22c55e20' }}
+                    >
+                      <Shield
+                        className="w-5 h-5"
+                        style={{ color: '#22c55e' }}
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <p
+                          className={`font-medium ${
+                            isBambiMode ? 'text-pink-700' : 'text-protocol-text'
+                          }`}
+                        >
+                          Corruption Dashboard
+                        </p>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-400">
+                          DEBUG
+                        </span>
+                      </div>
+                      <p
+                        className={`text-sm ${
+                          isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'
+                        }`}
+                      >
+                        View corruption state and advancement
+                      </p>
+                    </div>
+                    <ChevronRight
+                      className={`w-5 h-5 ${
+                        isBambiMode ? 'text-pink-300' : 'text-protocol-text-muted'
+                      }`}
+                    />
+                  </button>
+                )}
+
                 {/* Debug Mode Toggle */}
                 {isDebugMode && (
                   <button
@@ -589,10 +657,21 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
           <HandlerDashboard onBack={() => setActiveSection('main')} />
         )}
 
+        {/* Corruption Dashboard - Debug Mode Only */}
+        {activeSection === 'corruption' && isDebugMode && (
+          <CorruptionDashboard onBack={() => setActiveSection('main')} />
+        )}
+
         {/* Task Upload - Always available for flooding the protocol */}
         {activeSection === 'taskupload' && (
           <TaskUploadSettings />
         )}
+
+        {/* Micro-Tasks */}
+        {activeSection === 'microtasks' && <MicroTaskSettings />}
+
+        {/* Sleep Content */}
+        {activeSection === 'sleep-content' && <SleepContentSettings />}
 
         {/* Privacy & Security */}
         {activeSection === 'privacy' && <PrivacySettings />}

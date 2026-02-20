@@ -30,7 +30,8 @@ const CATEGORIES: TaskCategory[] = [
 
 const DOMAINS: FeminizationDomain[] = [
   'voice', 'movement', 'skincare', 'style', 'makeup', 'social',
-  'body_language', 'inner_narrative', 'arousal', 'chastity', 'conditioning', 'identity'
+  'body_language', 'inner_narrative', 'arousal', 'chastity', 'conditioning', 'identity',
+  'exercise', 'scent', 'nutrition', 'wigs',
 ];
 
 const DOMAIN_LABELS: Record<FeminizationDomain, string> = {
@@ -46,6 +47,10 @@ const DOMAIN_LABELS: Record<FeminizationDomain, string> = {
   chastity: 'Chastity',
   conditioning: 'Conditioning',
   identity: 'Identity',
+  exercise: 'Exercise',
+  scent: 'Scent',
+  nutrition: 'Nutrition',
+  wigs: 'Wigs',
 };
 
 export function TaskFilters({

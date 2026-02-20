@@ -55,6 +55,28 @@ export type AutonomousActionType =
 
 export type ContentQueueStatus = 'queued' | 'posted' | 'failed' | 'skipped';
 
+export type CustomOrderStatus =
+  | 'inquiry'
+  | 'quoted'
+  | 'accepted'
+  | 'in_progress'
+  | 'captured'
+  | 'editing'
+  | 'delivered'
+  | 'cancelled';
+
+export type WardrobeCategory =
+  | 'lingerie'
+  | 'hosiery'
+  | 'accessories'
+  | 'shoes'
+  | 'tops'
+  | 'bottoms'
+  | 'makeup'
+  | 'wigs';
+
+export type NarrativeArcStatus = 'upcoming' | 'active' | 'completed';
+
 export type CommunityTargetStatus = 'active' | 'paused';
 
 export type ConsequenceType =
@@ -339,6 +361,103 @@ export interface FanProfileMemory {
   engagementPattern: string | null;
   whaleStatus: boolean;
   handlerRelationshipNotes: string | null;
+}
+
+// ============================================
+// Custom Order
+// ============================================
+
+export interface CustomOrder {
+  id: string;
+  userId: string;
+  fanUsername: string | null;
+  platform: string | null;
+  inquiryText: string;
+  handlerEvaluation: string | null;
+  quotedPriceCents: number | null;
+  accepted: boolean | null;
+  shootPrescriptionId: string | null;
+  mediaPaths: string[];
+  deliveryStatus: CustomOrderStatus;
+  deliveredAt: string | null;
+  revenueCents: number;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ============================================
+// Wardrobe Item
+// ============================================
+
+export interface WardrobeItem {
+  id: string;
+  userId: string;
+  itemName: string;
+  category: WardrobeCategory;
+  tier: number;
+  purchaseUrl: string | null;
+  estimatedCostCents: number | null;
+  purchased: boolean;
+  purchasedAt: string | null;
+  unlockedByMilestone: string | null;
+  contentTypesEnabled: string[];
+  photoUrl: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+// ============================================
+// Content Event
+// ============================================
+
+export interface ContentEvent {
+  id: string;
+  userId: string;
+  eventType: string;
+  triggered: boolean;
+  triggeredAt: string | null;
+  triggerData: Record<string, unknown>;
+  contentProduced: boolean;
+  shootPrescriptionId: string | null;
+  postsCreated: number;
+  notes: string | null;
+  createdAt: string;
+}
+
+// ============================================
+// Narrative Arc Progress
+// ============================================
+
+export interface NarrativeArcProgress {
+  id: string;
+  userId: string;
+  arcNumber: number;
+  arcName: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  seedsPlanted: Array<{ seed: string; plantedAt: string }>;
+  keyMoments: Array<{ moment: string; occurredAt: string }>;
+  handlerContext: string | null;
+  status: NarrativeArcStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ============================================
+// Corruption Milestone
+// ============================================
+
+export interface CorruptionMilestone {
+  id: string;
+  userId: string;
+  milestoneKey: string;
+  triggered: boolean;
+  triggeredAt: string | null;
+  milestoneData: Record<string, unknown>;
+  corruptionEventLogged: boolean;
+  handlerMessage: string | null;
+  createdAt: string;
 }
 
 // ============================================
@@ -725,6 +844,178 @@ export function mapContentMultiplicationPlan(row: DbContentMultiplicationPlan): 
     sourceShootId: row.source_shoot_id,
     totalPostsPlanned: row.total_posts_planned,
     posts: row.posts ?? [],
+    createdAt: row.created_at,
+  };
+}
+
+// ============================================
+// Sprint 6 DB Row Types
+// ============================================
+
+export interface DbCustomOrder {
+  id: string;
+  user_id: string;
+  fan_username: string | null;
+  platform: string | null;
+  inquiry_text: string;
+  handler_evaluation: string | null;
+  quoted_price_cents: number | null;
+  accepted: boolean | null;
+  shoot_prescription_id: string | null;
+  media_paths: string[];
+  delivery_status: string;
+  delivered_at: string | null;
+  revenue_cents: number;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DbWardrobeItem {
+  id: string;
+  user_id: string;
+  item_name: string;
+  category: string;
+  tier: number;
+  purchase_url: string | null;
+  estimated_cost_cents: number | null;
+  purchased: boolean;
+  purchased_at: string | null;
+  unlocked_by_milestone: string | null;
+  content_types_enabled: string[];
+  photo_url: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface DbContentEvent {
+  id: string;
+  user_id: string;
+  event_type: string;
+  triggered: boolean;
+  triggered_at: string | null;
+  trigger_data: Record<string, unknown>;
+  content_produced: boolean;
+  shoot_prescription_id: string | null;
+  posts_created: number;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface DbNarrativeArcProgress {
+  id: string;
+  user_id: string;
+  arc_number: number;
+  arc_name: string;
+  started_at: string | null;
+  completed_at: string | null;
+  seeds_planted: Array<{ seed: string; plantedAt: string }>;
+  key_moments: Array<{ moment: string; occurredAt: string }>;
+  handler_context: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DbCorruptionMilestone {
+  id: string;
+  user_id: string;
+  milestone_key: string;
+  triggered: boolean;
+  triggered_at: string | null;
+  milestone_data: Record<string, unknown>;
+  corruption_event_logged: boolean;
+  handler_message: string | null;
+  created_at: string;
+}
+
+// ============================================
+// Sprint 6 Mappers
+// ============================================
+
+export function mapCustomOrder(row: DbCustomOrder): CustomOrder {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    fanUsername: row.fan_username,
+    platform: row.platform,
+    inquiryText: row.inquiry_text,
+    handlerEvaluation: row.handler_evaluation,
+    quotedPriceCents: row.quoted_price_cents,
+    accepted: row.accepted,
+    shootPrescriptionId: row.shoot_prescription_id,
+    mediaPaths: row.media_paths ?? [],
+    deliveryStatus: row.delivery_status as CustomOrderStatus,
+    deliveredAt: row.delivered_at,
+    revenueCents: row.revenue_cents,
+    notes: row.notes,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapWardrobeItem(row: DbWardrobeItem): WardrobeItem {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    itemName: row.item_name,
+    category: row.category as WardrobeCategory,
+    tier: row.tier,
+    purchaseUrl: row.purchase_url,
+    estimatedCostCents: row.estimated_cost_cents,
+    purchased: row.purchased,
+    purchasedAt: row.purchased_at,
+    unlockedByMilestone: row.unlocked_by_milestone,
+    contentTypesEnabled: row.content_types_enabled ?? [],
+    photoUrl: row.photo_url,
+    notes: row.notes,
+    createdAt: row.created_at,
+  };
+}
+
+export function mapContentEvent(row: DbContentEvent): ContentEvent {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    eventType: row.event_type,
+    triggered: row.triggered,
+    triggeredAt: row.triggered_at,
+    triggerData: row.trigger_data ?? {},
+    contentProduced: row.content_produced,
+    shootPrescriptionId: row.shoot_prescription_id,
+    postsCreated: row.posts_created,
+    notes: row.notes,
+    createdAt: row.created_at,
+  };
+}
+
+export function mapNarrativeArcProgress(row: DbNarrativeArcProgress): NarrativeArcProgress {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    arcNumber: row.arc_number,
+    arcName: row.arc_name,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    seedsPlanted: row.seeds_planted ?? [],
+    keyMoments: row.key_moments ?? [],
+    handlerContext: row.handler_context,
+    status: row.status as NarrativeArcStatus,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapCorruptionMilestone(row: DbCorruptionMilestone): CorruptionMilestone {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    milestoneKey: row.milestone_key,
+    triggered: row.triggered,
+    triggeredAt: row.triggered_at,
+    milestoneData: row.milestone_data ?? {},
+    corruptionEventLogged: row.corruption_event_logged,
+    handlerMessage: row.handler_message,
     createdAt: row.created_at,
   };
 }

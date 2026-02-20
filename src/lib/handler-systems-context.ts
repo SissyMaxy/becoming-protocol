@@ -34,6 +34,8 @@ import { getOrderStats } from './marketplace/orders';
 import { getActiveAuctionCount } from './marketplace/auctions';
 import { getDailyAggregate, getWeeklyTrend } from './passive-voice/aggregation';
 import { getRecentInterventions } from './passive-voice/interventions';
+import { getSessionSummaries, getLastSessionSummary } from './session-telemetry';
+import { getActiveAnchors } from './ritual-anchors';
 import { buildDenialContentContext } from './industry/denial-content-bridge';
 import { buildSkipContext } from './industry/skip-escalation';
 import { buildFanMemoryContext } from './industry/fan-memory';
@@ -54,6 +56,7 @@ export interface SystemsContext {
   sleep: string;
   exercise: string;
   hypno: string;
+  sessionTelemetry: string;
   sexting: string;
   marketplace: string;
   passiveVoice: string;
@@ -265,6 +268,91 @@ async function buildHypnoContext(userId: string): Promise<string> {
   }
 }
 
+async function buildSessionTelemetryContext(userId: string): Promise<string> {
+  try {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+    const [summaries, lastSession, anchors] = await Promise.allSettled([
+      getSessionSummaries(userId, thirtyDaysAgo, 30),
+      getLastSessionSummary(userId),
+      getActiveAnchors(userId),
+    ]);
+
+    const sessions = summaries.status === 'fulfilled' ? summaries.value : [];
+    const last = lastSession.status === 'fulfilled' ? lastSession.value : null;
+    const anchorList = anchors.status === 'fulfilled' ? anchors.value : [];
+
+    if (sessions.length === 0 && anchorList.length === 0) return '';
+
+    const parts: string[] = [];
+
+    if (sessions.length > 0) {
+      // Skip rate
+      const totalVideosPlayed = sessions.reduce((sum, s) => sum + (s.videos_played?.length || 0), 0);
+      const totalVideosSkipped = sessions.reduce((sum, s) => sum + (s.videos_skipped?.length || 0), 0);
+      const skipRate = totalVideosPlayed > 0
+        ? Math.round((totalVideosSkipped / (totalVideosPlayed + totalVideosSkipped)) * 100)
+        : 0;
+
+      // Trance depth trend (last 5 sessions)
+      const recentSessions = sessions.slice(0, 5);
+      const tranceDepths = recentSessions
+        .map(s => s.trance_depth_self_report)
+        .filter((d): d is number => d !== null && d !== undefined);
+      const avgTranceDepth = tranceDepths.length > 0
+        ? (tranceDepths.reduce((a, b) => a + b, 0) / tranceDepths.length).toFixed(1)
+        : '—';
+      const tranceTrend = tranceDepths.length >= 3
+        ? tranceDepths[0] > tranceDepths[tranceDepths.length - 1] ? 'deepening' : tranceDepths[0] < tranceDepths[tranceDepths.length - 1] ? 'shallowing' : 'stable'
+        : '';
+
+      // Peak arousal videos — frequency count
+      const peakVideoFreq: Record<string, number> = {};
+      for (const s of sessions) {
+        if (s.peak_arousal_video) {
+          peakVideoFreq[s.peak_arousal_video] = (peakVideoFreq[s.peak_arousal_video] || 0) + 1;
+        }
+      }
+      const topPeakVideo = Object.entries(peakVideoFreq).sort((a, b) => b[1] - a[1])[0];
+
+      // Commitment extraction rate
+      const commitmentSessions = sessions.filter(s => s.commitment_extracted).length;
+      const commitRate = Math.round((commitmentSessions / sessions.length) * 100);
+
+      parts.push(`SESSION TELEMETRY: ${sessions.length} sessions (30d), skip rate ${skipRate}%, avg trance ${avgTranceDepth}/5${tranceTrend ? ` (${tranceTrend})` : ''}, ${commitRate}% commitment extraction`);
+
+      if (topPeakVideo) {
+        parts.push(`  peak arousal video: ${topPeakVideo[0]} (${topPeakVideo[1]}x peak)`);
+      }
+    }
+
+    // Last session details
+    if (last) {
+      const daysSince = Math.floor((Date.now() - new Date(last.started_at).getTime()) / 86400000);
+      const dur = last.total_duration_minutes || 0;
+      const depth = last.trance_depth_self_report ?? '—';
+      const skipped = last.videos_skipped?.length || 0;
+      parts.push(`  last session: ${daysSince}d ago, ${dur}min, depth ${depth}/5, denial day ${last.denial_day_at_session}${skipped > 0 ? `, ${skipped} skipped` : ''}`);
+    }
+
+    // Anchor strength summary
+    if (anchorList.length > 0) {
+      const byStrength: Record<string, number> = {};
+      for (const a of anchorList) {
+        byStrength[a.estimated_strength] = (byStrength[a.estimated_strength] || 0) + 1;
+      }
+      const strengthStr = Object.entries(byStrength)
+        .map(([k, v]) => `${v} ${k}`)
+        .join(', ');
+      const autonomous = anchorList.filter(a => a.autonomous_trigger_observed).length;
+      parts.push(`  anchors: ${anchorList.length} active (${strengthStr})${autonomous > 0 ? ` — ${autonomous} autonomous` : ''}`);
+    }
+
+    return parts.join('\n');
+  } catch {
+    return '';
+  }
+}
+
 async function buildSextingContext(userId: string): Promise<string> {
   try {
     const [counts, autoStats, escalated, gfeRevenue] = await Promise.allSettled([
@@ -407,7 +495,7 @@ async function buildIndustryContext(userId: string): Promise<string> {
  * All systems, maximum data density.
  */
 export async function buildFullSystemsContext(userId: string): Promise<string> {
-  const [gina, content, voice, cam, sleep, exercise, hypno, sexting, marketplace, passiveVoice, denialContent, industry] = await Promise.allSettled([
+  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry] = await Promise.allSettled([
     buildGinaContext(userId),
     buildContentContext(userId),
     buildVoiceContext(userId),
@@ -415,6 +503,7 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     buildSleepContext(userId),
     buildExerciseContext(userId),
     buildHypnoContext(userId),
+    buildSessionTelemetryContext(userId),
     buildSextingContext(userId),
     buildMarketplaceContext(userId),
     buildPassiveVoiceContext(userId),
@@ -429,6 +518,7 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     voice.status === 'fulfilled' ? voice.value : '',
     cam.status === 'fulfilled' ? cam.value : '',
     hypno.status === 'fulfilled' ? hypno.value : '',
+    sessionTelemetry.status === 'fulfilled' ? sessionTelemetry.value : '',
     sexting.status === 'fulfilled' ? sexting.value : '',
     marketplace.status === 'fulfilled' ? marketplace.value : '',
     passiveVoice.status === 'fulfilled' ? passiveVoice.value : '',
@@ -446,12 +536,13 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
  * Content pipeline performance, voice progress, exercise, sleep.
  */
 export async function buildDebriefContext(userId: string): Promise<string> {
-  const [content, voice, exercise, sleep, hypno, sexting, marketplace, passiveVoice, denialContent, industry] = await Promise.allSettled([
+  const [content, voice, exercise, sleep, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry] = await Promise.allSettled([
     buildContentContext(userId),
     buildVoiceContext(userId),
     buildExerciseContext(userId),
     buildSleepContext(userId),
     buildHypnoContext(userId),
+    buildSessionTelemetryContext(userId),
     buildSextingContext(userId),
     buildMarketplaceContext(userId),
     buildPassiveVoiceContext(userId),
@@ -464,6 +555,7 @@ export async function buildDebriefContext(userId: string): Promise<string> {
     denialContent.status === 'fulfilled' ? denialContent.value : '',
     voice.status === 'fulfilled' ? voice.value : '',
     hypno.status === 'fulfilled' ? hypno.value : '',
+    sessionTelemetry.status === 'fulfilled' ? sessionTelemetry.value : '',
     sexting.status === 'fulfilled' ? sexting.value : '',
     marketplace.status === 'fulfilled' ? marketplace.value : '',
     passiveVoice.status === 'fulfilled' ? passiveVoice.value : '',
@@ -481,16 +573,18 @@ export async function buildDebriefContext(userId: string): Promise<string> {
  * Voice avoidance (leverage), content revenue (motivation), Gina pipeline (escalation).
  */
 export async function buildSessionContext(userId: string): Promise<string> {
-  const [gina, voice, content] = await Promise.allSettled([
+  const [gina, voice, content, sessionTelemetry] = await Promise.allSettled([
     buildGinaContext(userId),
     buildVoiceContext(userId),
     buildContentContext(userId),
+    buildSessionTelemetryContext(userId),
   ]);
 
   const blocks = [
     gina.status === 'fulfilled' ? gina.value : '',
     voice.status === 'fulfilled' ? voice.value : '',
     content.status === 'fulfilled' ? content.value : '',
+    sessionTelemetry.status === 'fulfilled' ? sessionTelemetry.value : '',
   ].filter(Boolean);
 
   if (blocks.length === 0) return '';

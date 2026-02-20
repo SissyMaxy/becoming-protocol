@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
 import { useAuth } from '../../context/AuthContext';
+import { useStandingPermission } from '../../hooks/useStandingPermission';
 import type {
   CaptureData,
   PrivacyScanResult,
@@ -62,6 +63,9 @@ export function SubmissionReview({ capture, onComplete, onCancel }: SubmissionRe
   const [vetoReason, setVetoReason] = useState('');
   const [showVetoConfirm, setShowVetoConfirm] = useState(false);
 
+  // Standing permission: content_full_autonomy skips approval entirely
+  const fullAutonomy = useStandingPermission('content_full_autonomy');
+
   // Process capture on mount
   useEffect(() => {
     let cancelled = false;
@@ -102,6 +106,18 @@ export function SubmissionReview({ capture, onComplete, onCancel }: SubmissionRe
   useEffect(() => {
     return () => cleanupFlowState(flowState);
   }, []);
+
+  // Auto-submit when full autonomy permission is granted (skip review entirely)
+  useEffect(() => {
+    if (!fullAutonomy.granted || fullAutonomy.loading) return;
+    if (flowState.step !== 'review') return;
+    if (!user || !flowState.classification || !flowState.strippedBlob || !flowState.reviewData) return;
+    // Privacy blocked items are never auto-submitted
+    if (flowState.reviewData.privacyScan?.blocked) return;
+
+    // Auto-submit
+    handleSubmit();
+  }, [fullAutonomy.granted, fullAutonomy.loading, flowState.step]);
 
   // Submit handler
   const handleSubmit = useCallback(async () => {

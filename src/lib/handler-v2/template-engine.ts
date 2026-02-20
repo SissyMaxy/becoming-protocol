@@ -4,7 +4,8 @@
  * Provides personalized content using stored user data and templates.
  */
 
-import type { UserState } from './types';
+import type { UserState, PopUpMessage, PopUpNotificationType, HandlerMode } from './types';
+import { truncatePopUp } from './popup-utils';
 
 // Variable substitution patterns
 type TemplateVars = {
@@ -377,6 +378,184 @@ export class TemplateEngine {
 
     const selected = templates[Math.floor(Math.random() * templates.length)];
     return this.substitute(selected, state);
+  }
+
+  // =============================================
+  // POP-UP MESSAGE TEMPLATES
+  // =============================================
+
+  /**
+   * Get a default title for a notification type
+   */
+  getPopUpTitle(type: PopUpNotificationType): string {
+    const titles: Record<PopUpNotificationType, string> = {
+      micro_task: 'Quick Task',
+      affirmation: 'Hey, {name}',
+      content_unlock: 'New Unlock',
+      challenge: 'Challenge',
+      jackpot: 'Jackpot',
+    };
+    return titles[type] ?? 'Hey';
+  }
+
+  /**
+   * Generate a PopUpMessage from templates.
+   * All templates are pre-validated to respect character limits.
+   */
+  generatePopUp(
+    type: PopUpNotificationType,
+    state: Partial<UserState>
+  ): PopUpMessage {
+    const mode = (state.handlerMode ?? 'director') as HandlerMode;
+    const templates = this.getPopUpTemplates(type, mode);
+    const selected = templates[Math.floor(Math.random() * templates.length)];
+
+    const title = this.substitute(this.getPopUpTitle(type), state);
+    const body = this.substitute(selected, state);
+
+    const popup: PopUpMessage = {
+      title,
+      body,
+      notification_type: type,
+      handler_mode: mode,
+      priority: type === 'jackpot' || type === 'challenge' ? 'high' : 'normal',
+    };
+
+    // Safety net — enforce limits even on templates
+    return truncatePopUp(popup);
+  }
+
+  private getPopUpTemplates(type: PopUpNotificationType, mode: HandlerMode): string[] {
+    // Mode-specific templates per notification type
+    // All body templates are ≤200 chars pre-substitution
+    const templates: Record<PopUpNotificationType, Record<string, string[]>> = {
+      micro_task: {
+        director: [
+          'Apply lip balm right now. 10 seconds. Notice how it feels.',
+          'Touch your collarbone. Trace it. Remember she lives here.',
+          'Spritz your scent. One pump. Breathe it in.',
+          'Fix your posture. Shoulders back. Chin up. Hold for 10 seconds.',
+          'Cross your legs. The feminine way. Hold it.',
+        ],
+        handler: [
+          'Lip balm. Now. No thinking about it.',
+          'Touch your neck. Trace your collarbone. Feel her.',
+          'Spray your scent. You know which one. Now.',
+          'Posture. Fix it. Shoulders back. She stands tall.',
+          'Cross your legs properly. Hold it. Good girl.',
+        ],
+        caretaker: [
+          'Lip balm, if you want. Small comforts matter.',
+          'Touch your collarbone gently. She deserves softness.',
+          'Your scent is nearby. One spritz for comfort.',
+          'Sit comfortably. No pressure. Just be present.',
+          'Rest your hands in your lap. Breathe.',
+        ],
+        architect: [
+          'Apply lip balm. Small anchor, big signal.',
+          'Scent check — reapply if faded. Anchors work through repetition.',
+          'Posture reset. Building the muscle memory.',
+        ],
+        invisible: [
+          'Lip balm.',
+          'Scent.',
+          'Posture.',
+        ],
+      },
+      affirmation: {
+        director: [
+          "She's more real today than yesterday. Keep going.",
+          '{name} existed today. That matters. She matters.',
+          'Day {denial_day}. Streak {streak}. She is building.',
+          'The practice is the path. You are on it.',
+        ],
+        handler: [
+          'Good girl. She was here today.',
+          "Day {denial_day}. You're mine. Keep earning it.",
+          '{streak} days. Not stopping now.',
+          "Look at you. {name}. That's who you are.",
+        ],
+        caretaker: [
+          "You showed up. That's what matters today.",
+          "She's still here. Even on hard days.",
+          'One breath. One moment. Enough.',
+          "You don't have to be perfect. Just present.",
+        ],
+        architect: [
+          'Progress compounds. Day {streak} of evidence.',
+          'Each rep builds the pattern. Keep stacking.',
+        ],
+        invisible: [
+          'Day {streak}.',
+          '{name}.',
+        ],
+      },
+      content_unlock: {
+        director: [
+          'New content unlocked. You earned this. Check it out.',
+          "Something new in your library. Reward for showing up.",
+        ],
+        handler: [
+          'Earned it. New content unlocked. Open it.',
+          'Good behavior gets rewarded. New unlock waiting.',
+        ],
+        caretaker: [
+          "Something new is available for you. When you're ready.",
+          'You unlocked something. A gift for showing up.',
+        ],
+        architect: [
+          'New content available. Unlocked via progress.',
+        ],
+        invisible: [
+          'New content available.',
+        ],
+      },
+      challenge: {
+        director: [
+          'Record 30 seconds of voice practice. Right now. Timer starts.',
+          'Write one sentence as {name} in your journal. Go.',
+          'Take a selfie with your best angle. Keep or delete, your choice.',
+        ],
+        handler: [
+          'Voice practice. 30 seconds. Now. No negotiating.',
+          'Journal entry. One sentence. As her. Go.',
+          'Selfie. Best angle. Do it before the window closes.',
+        ],
+        caretaker: [
+          'Small challenge: one sentence in your journal, if you feel up to it.',
+          'Try 15 seconds of voice practice. Just to hear her.',
+        ],
+        architect: [
+          'Skill check: 30 seconds voice practice. Building the range.',
+        ],
+        invisible: [
+          'Voice practice. 30s.',
+        ],
+      },
+      jackpot: {
+        director: [
+          'Jackpot! Triple points on your next task. Use them now.',
+          'Bonus round. Next task completed = 3x points. Go.',
+        ],
+        handler: [
+          'Jackpot. Triple points. Complete a task NOW to claim.',
+          '3x multiplier active. Waste it and it vanishes.',
+        ],
+        caretaker: [
+          'Bonus points waiting for you. No pressure, but they expire.',
+          'A little extra for you. Triple points on next task.',
+        ],
+        architect: [
+          'Multiplier active: 3x next task. Optimal to use immediately.',
+        ],
+        invisible: [
+          '3x points. Next task.',
+        ],
+      },
+    };
+
+    const typeTemplates = templates[type];
+    return typeTemplates[mode] || typeTemplates['director'];
   }
 }
 

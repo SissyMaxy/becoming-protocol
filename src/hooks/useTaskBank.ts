@@ -6,6 +6,7 @@ import { useProtocol } from '../context/ProtocolContext';
 import { useAuth } from '../context/AuthContext';
 import { useArousalState } from './useArousalState';
 import { useUserState } from './useUserState';
+import { useCorruption } from './useCorruption';
 import {
   getTodayTasks,
   getOrCreateTodayTasks,
@@ -58,7 +59,7 @@ interface UseTaskBankReturn {
 
   // Actions
   loadTasks: () => Promise<void>;
-  complete: (taskId: string, feltGood?: boolean, notes?: string) => Promise<void>;
+  complete: (taskId: string, feltGood?: boolean, notes?: string, captureData?: Record<string, unknown>) => Promise<void>;
   incrementProgress: (taskId: string) => Promise<void>;
   skip: (taskId: string) => Promise<{ cost: SkipCost; weeklySkipCount: number }>;
   undo: (taskId: string) => Promise<void>;
@@ -71,6 +72,8 @@ export function useTaskBank(): UseTaskBankReturn {
   const { user } = useAuth();
   const { metrics, currentState } = useArousalState();
   const { userState } = useUserState();
+  const { snapshot: corruptionSnapshot } = useCorruption();
+  const ginaCorruptionLevel = corruptionSnapshot?.levels.gina ?? 0;
 
   // Task state
   const [todayTasks, setTodayTasks] = useState<DailyTask[]>([]);
@@ -124,6 +127,7 @@ export function useTaskBank(): UseTaskBankReturn {
       timeOfDay: getTimeOfDay(),
       ginaHome: userState?.ginaHome ?? false,
       ginaAsleep: userState?.ginaAsleep ?? false,
+      ginaCorruptionLevel,
       ownedItems: [], // Would come from wishlist/inventory
       completedTaskIds: [], // Would be loaded from completions
       recentlyServedTaskIds: existingTasks.map(t => t.taskId),
@@ -136,7 +140,7 @@ export function useTaskBank(): UseTaskBankReturn {
       },
       maxDailyTasks: getMaxDailyTasks(),
     };
-  }, [user, progress, metrics, currentState, userState, stats, getMaxDailyTasks]);
+  }, [user, progress, metrics, currentState, userState, stats, getMaxDailyTasks, ginaCorruptionLevel]);
 
   // Load tasks
   const loadTasks = useCallback(async () => {
@@ -233,7 +237,8 @@ export function useTaskBank(): UseTaskBankReturn {
   const complete = useCallback(async (
     dailyTaskId: string,
     feltGood?: boolean,
-    notes?: string
+    notes?: string,
+    captureData?: Record<string, unknown>
   ) => {
     setCompletingTaskId(dailyTaskId);
 
@@ -244,6 +249,7 @@ export function useTaskBank(): UseTaskBankReturn {
         streakDay: stats?.currentStreak,
         feltGood,
         notes,
+        captureData,
       });
 
       // Update local state
