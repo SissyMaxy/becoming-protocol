@@ -87,7 +87,8 @@ export type SelectionReason =
   | 'progressive'         // Advancing phase goals
   | 'surprise'            // Random reinforcement
   | 'escalation'          // Time-locked escalation
-  | 'ceremony';           // Point of no return ceremony
+  | 'ceremony'            // Point of no return ceremony
+  | 'prescribed';         // Reactive prescription (replacement after completion/state change)
 
 // ============================================
 // TASK REQUIREMENTS

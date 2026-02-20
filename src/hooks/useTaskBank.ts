@@ -18,6 +18,9 @@ import {
   getTimeOfDay,
   enhanceTasks,
   buildEnhancementContext,
+  prescribeNextTask,
+  refilterTasks,
+  getHardcodedFallbackTasks,
 } from '../lib/task-bank';
 import type {
   DailyTask,
@@ -25,6 +28,7 @@ import type {
   TaskCategory,
   SkipCost,
 } from '../types/task-bank';
+import type { UserStateForSelection } from '../lib/rules-engine-v2';
 
 interface UseTaskBankReturn {
   // Today's tasks
@@ -65,6 +69,10 @@ interface UseTaskBankReturn {
   undo: (taskId: string) => Promise<void>;
   dismissCompletion: () => void;
   dismissSkipWarning: () => void;
+
+  // Reactive prescription
+  prescribeNext: (completedCategory: string, completedDomain: string) => Promise<void>;
+  refreshPrescriptions: () => Promise<void>;
 }
 
 export function useTaskBank(): UseTaskBankReturn {
@@ -367,6 +375,152 @@ export function useTaskBank(): UseTaskBankReturn {
     setShowSkipWarning(false);
   }, []);
 
+  // Daily task cap — don't prescribe infinitely
+  const DAILY_TASK_CAP = 10;
+
+  // Build state overrides from current user state for rules-engine
+  const buildStateOverrides = useCallback((): Partial<UserStateForSelection> => {
+    const completedDomains = todayTasks
+      .filter(t => t.status === 'completed')
+      .map(t => t.task.domain);
+    const completedCategories = todayTasks
+      .filter(t => t.status === 'completed')
+      .map(t => t.task.category);
+
+    return {
+      userId: user?.id || '',
+      timeOfDay: getTimeOfDay() as UserStateForSelection['timeOfDay'],
+      ginaHome: userState?.ginaHome ?? false,
+      denialDay: userState?.denialDay ?? 0,
+      currentArousal: userState?.currentArousal ?? 0,
+      inSession: userState?.inSession ?? false,
+      odometer: userState?.odometer ?? 'coasting',
+      estimatedExecFunction: userState?.estimatedExecFunction ?? 'medium',
+      currentPhase: userState?.currentPhase ?? 0,
+      streakDays: userState?.streakDays ?? 0,
+      lastTaskCategory: userState?.lastTaskCategory ?? null,
+      lastTaskDomain: userState?.lastTaskDomain ?? null,
+      avoidedDomains: userState?.avoidedDomains ?? [],
+      completedTodayDomains: completedDomains,
+      completedTodayCategories: completedCategories,
+      ownedItems: [],
+      completedTaskIds: [],
+    };
+  }, [user?.id, userState, todayTasks]);
+
+  // Prescribe a single replacement task after completion
+  const prescribeNext = useCallback(async (completedCategory: string, completedDomain: string) => {
+    if (!user?.id) return;
+
+    // Don't exceed daily cap
+    if (todayTasks.length >= DAILY_TASK_CAP) {
+      console.log('[useTaskBank] Daily task cap reached, not prescribing more');
+      return;
+    }
+
+    // Don't prescribe if enough pending tasks remain
+    const pendingCount = todayTasks.filter(t => t.status === 'pending').length;
+    const maxPending = getMaxDailyTasks();
+    if (pendingCount >= maxPending) {
+      console.log('[useTaskBank] Enough pending tasks remain, not prescribing');
+      return;
+    }
+
+    const context = buildContext(todayTasks);
+    const stateOverrides = buildStateOverrides();
+
+    // Set last task to the just-completed one for no-repeat filtering
+    stateOverrides.lastTaskCategory = completedCategory;
+    stateOverrides.lastTaskDomain = completedDomain;
+
+    // Exclude all currently assigned task IDs (not just pending — avoid reassigning completed)
+    const excludeIds = todayTasks.map(t => t.taskId);
+
+    try {
+      const newTask = await prescribeNextTask(context, stateOverrides, excludeIds);
+      if (newTask) {
+        setTodayTasks(prev => [...prev, newTask]);
+
+        // Enhance the new task (non-blocking)
+        if (user.id) {
+          buildEnhancementContext(user.id).then(ctx =>
+            enhanceTasks([newTask], ctx).then(enhanced => {
+              if (enhanced[0]?.enhancedInstruction) {
+                setTodayTasks(prev => prev.map(t =>
+                  t.id === newTask.id ? enhanced[0] : t
+                ));
+              }
+            })
+          ).catch(() => {});
+        }
+      }
+    } catch (err) {
+      console.error('[useTaskBank] prescribeNext failed:', err);
+    }
+  }, [user?.id, todayTasks, buildContext, buildStateOverrides, getMaxDailyTasks]);
+
+  // Re-filter tasks when state changes (Gina toggle, energy shift)
+  // Removes invalid tasks and prescribes replacements
+  const refreshPrescriptions = useCallback(async () => {
+    if (!user?.id) return;
+
+    const stateOverrides = buildStateOverrides();
+
+    // Re-filter existing tasks
+    const { valid, invalidatedIds } = refilterTasks(todayTasks, stateOverrides);
+
+    if (invalidatedIds.length === 0) return; // Nothing changed
+
+    console.log('[useTaskBank] Refiltered:', invalidatedIds.length, 'tasks invalidated');
+
+    // Update local state to remove invalidated pending tasks
+    setTodayTasks(valid);
+
+    // Prescribe replacements for invalidated tasks
+    const context = buildContext(valid);
+    const excludeIds = valid.map(t => t.taskId);
+    const newTasks: DailyTask[] = [];
+
+    for (const _invalidId of invalidatedIds) {
+      if (valid.filter(t => t.status === 'pending').length + newTasks.length >= getMaxDailyTasks()) {
+        break; // Enough tasks
+      }
+
+      try {
+        const replacement = await prescribeNextTask(context, stateOverrides, [...excludeIds, ...newTasks.map(t => t.taskId)]);
+        if (replacement) {
+          newTasks.push(replacement);
+        }
+      } catch {
+        // Individual replacement failure is ok, continue
+      }
+    }
+
+    if (newTasks.length > 0) {
+      setTodayTasks(prev => [...prev, ...newTasks]);
+
+      // Enhance new tasks (non-blocking)
+      if (user.id) {
+        buildEnhancementContext(user.id).then(ctx =>
+          enhanceTasks(newTasks, ctx).then(enhanced => {
+            const enhancedMap = new Map(enhanced.filter(t => t.enhancedInstruction).map(t => [t.id, t]));
+            if (enhancedMap.size > 0) {
+              setTodayTasks(prev => prev.map(t => enhancedMap.get(t.id) || t));
+            }
+          })
+        ).catch(() => {});
+      }
+    }
+
+    // If we ended up with zero pending tasks and zero replacements, use fallback
+    const finalPending = valid.filter(t => t.status === 'pending').length + newTasks.length;
+    if (finalPending === 0) {
+      console.warn('[useTaskBank] No pending tasks after refilter, using hardcoded fallback');
+      const fallbacks = getHardcodedFallbackTasks(2);
+      setTodayTasks(prev => [...prev, ...fallbacks]);
+    }
+  }, [user?.id, todayTasks, buildContext, buildStateOverrides, getMaxDailyTasks]);
+
   return {
     todayTasks,
     isLoading,
@@ -385,5 +539,7 @@ export function useTaskBank(): UseTaskBankReturn {
     undo,
     dismissCompletion,
     dismissSkipWarning,
+    prescribeNext,
+    refreshPrescriptions,
   };
 }

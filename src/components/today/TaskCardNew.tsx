@@ -3,8 +3,8 @@
  * Redesigned task card with better visual hierarchy and persuasive framing
  */
 
-import { useState } from 'react';
-import { Check, X, Loader2, ExternalLink } from 'lucide-react';
+import { useState, useCallback, useRef } from 'react';
+import { Check, X, Loader2, ExternalLink, Sparkles } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
 import type { DailyTask, CompletionData } from '../../types/task-bank';
 import { CompletionInput } from './CompletionInput';
@@ -13,6 +13,8 @@ import { CompletionInput } from './CompletionInput';
 function navigateToWishlist() {
   window.dispatchEvent(new CustomEvent('navigate-to-wishlist'));
 }
+
+export type CardPhase = 'active' | 'affirming' | 'transitioning';
 
 interface TaskCardNewProps {
   task: DailyTask;
@@ -84,6 +86,8 @@ export function TaskCardNew({
 }: TaskCardNewProps) {
   const { isBambiMode } = useBambiMode();
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
+  const [cardPhase, setCardPhase] = useState<CardPhase>('active');
+  const pendingCompletionRef = useRef<{ feltGood: boolean; notes?: string; data: CompletionData } | null>(null);
   const { instruction, category, intensity, completionType: baseCompletionType, targetCount, durationMinutes, subtext, captureFields: baseCaptureFields } = task.task;
   const completionType = task.completionTypeOverride || baseCompletionType;
   const captureFields = task.captureFieldsOverride || baseCaptureFields;
@@ -94,6 +98,10 @@ export function TaskCardNew({
   const displaySubtext = task.enhancedSubtext || subtext || getSubtext(category);
   const copyStyle = task.copyStyle || 'normal';
 
+  // Affirmation text and points (available locally — no API round-trip needed)
+  const affirmationText = task.enhancedAffirmation || task.task.reward.affirmation || 'Done. Keep going.';
+  const affirmationPoints = task.task.reward.points;
+
   const isCompleted = task.status === 'completed';
   const isSkipped = task.status === 'skipped';
   const isPending = task.status === 'pending';
@@ -101,12 +109,31 @@ export function TaskCardNew({
   // Get persuasive subtext (already computed above)
   const persuasiveText = displaySubtext;
 
-  // Handle completion from CompletionInput components
-  const handleCompletionInput = (data: CompletionData) => {
+  // Handle completion from CompletionInput components — enters affirming phase
+  const handleCompletionInput = useCallback((data: CompletionData) => {
     const feltGood = data.fields?.felt_good as boolean | undefined;
     const notes = data.reflection_text || undefined;
-    onComplete(feltGood ?? true, notes, data);
-  };
+
+    // Store completion data for after affirmation
+    pendingCompletionRef.current = { feltGood: feltGood ?? true, notes, data };
+
+    // Enter affirming phase
+    setCardPhase('affirming');
+
+    // After affirmation display, transition and fire completion
+    setTimeout(() => {
+      setCardPhase('transitioning');
+
+      // Short delay for transition animation, then fire actual completion
+      setTimeout(() => {
+        const pending = pendingCompletionRef.current;
+        if (pending) {
+          onComplete(pending.feltGood, pending.notes, pending.data);
+          pendingCompletionRef.current = null;
+        }
+      }, 350);
+    }, 1800);
+  }, [onComplete]);
 
   const handleSkip = () => {
     if (showSkipConfirm) {
@@ -186,6 +213,55 @@ export function TaskCardNew({
             </p>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // Affirming phase: show affirmation in the card space
+  if (cardPhase === 'affirming') {
+    return (
+      <div className={`relative rounded-2xl overflow-hidden transition-all duration-500 ${
+        isBambiMode
+          ? 'bg-gradient-to-br from-pink-100 via-fuchsia-50 to-purple-50 border-2 border-pink-300 shadow-lg shadow-pink-200/50'
+          : 'bg-gradient-to-br from-emerald-900/40 via-teal-900/30 to-cyan-900/20 border border-emerald-500/40'
+      }`}>
+        <div className="p-6 text-center">
+          <div className={`w-12 h-12 mx-auto mb-3 rounded-full flex items-center justify-center ${
+            isBambiMode
+              ? 'bg-gradient-to-br from-pink-400 to-fuchsia-500'
+              : 'bg-gradient-to-br from-emerald-400 to-teal-500'
+          }`}>
+            <Sparkles className="w-6 h-6 text-white" />
+          </div>
+          <p className={`text-lg font-bold leading-snug ${
+            isBambiMode ? 'text-pink-700' : 'text-white'
+          }`}>
+            {affirmationText}
+          </p>
+          <div className={`mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${
+            isBambiMode ? 'bg-pink-200/60' : 'bg-white/10'
+          }`}>
+            <span className="text-base">✨</span>
+            <span className={`text-sm font-semibold ${
+              isBambiMode ? 'text-pink-600' : 'text-emerald-300'
+            }`}>
+              +{affirmationPoints} points
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Transitioning phase: fading out before next task
+  if (cardPhase === 'transitioning') {
+    return (
+      <div className={`relative rounded-2xl overflow-hidden transition-all duration-300 opacity-0 scale-95 ${
+        isBambiMode
+          ? 'bg-white border-2 border-pink-200'
+          : 'bg-protocol-surface border border-protocol-border'
+      }`}>
+        <div className="p-6 h-20" />
       </div>
     );
   }

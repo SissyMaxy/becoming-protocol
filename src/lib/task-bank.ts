@@ -21,6 +21,8 @@ import { SYSTEM_PROMPTS } from './protocol-core/ai/system-prompts';
 import { recordTaskAtLevel, getEscalationOverview } from './escalation/level-generator';
 import { shouldHideTask } from './corruption-behaviors';
 import { getCopyStyle } from './handler-v2/types';
+import { selectTask, isTaskStillValid } from './rules-engine-v2';
+import type { UserStateForSelection } from './rules-engine-v2';
 
 // ============================================
 // CONVERTERS
@@ -1465,6 +1467,222 @@ export async function buildEnhancementContext(
     recentResistance: resistedCategories as string[],
     handlerMode: state?.handler_mode || 'director',
   };
+}
+
+// ============================================
+// REACTIVE PRESCRIPTION
+// ============================================
+
+/**
+ * Hardcoded fallback tasks — always available, never empty.
+ * Used when both rules engine and task bank DB fail.
+ */
+const FALLBACK_TASKS: Task[] = [
+  {
+    id: 'fallback-checkin',
+    category: 'care' as Task['category'],
+    domain: 'inner_narrative' as Task['domain'],
+    intensity: 1 as Task['intensity'],
+    instruction: 'Check in with how you\'re feeling right now. Name the emotion.',
+    subtext: 'Awareness is the first step.',
+    requires: {},
+    excludeIf: {},
+    completionType: 'reflect' as Task['completionType'],
+    reward: { points: 10, affirmation: 'Noticed. That matters.' },
+    aiFlags: { canIntensify: false, canClone: false, trackResistance: false, isCore: false },
+    createdAt: new Date().toISOString(),
+    createdBy: 'system' as Task['createdBy'],
+    active: true,
+  },
+  {
+    id: 'fallback-skincare',
+    category: 'care' as Task['category'],
+    domain: 'skincare' as Task['domain'],
+    intensity: 1 as Task['intensity'],
+    instruction: '5 minutes of skincare. Cleanser, moisturizer, sunscreen.',
+    subtext: 'The routine is the transformation.',
+    requires: {},
+    excludeIf: {},
+    completionType: 'binary' as Task['completionType'],
+    reward: { points: 15, affirmation: 'Skin taken care of. Good girl.' },
+    aiFlags: { canIntensify: false, canClone: false, trackResistance: false, isCore: false },
+    createdAt: new Date().toISOString(),
+    createdBy: 'system' as Task['createdBy'],
+    active: true,
+  },
+  {
+    id: 'fallback-journal',
+    category: 'practice' as Task['category'],
+    domain: 'inner_narrative' as Task['domain'],
+    intensity: 1 as Task['intensity'],
+    instruction: 'Write one sentence in your journal about today.',
+    subtext: 'One sentence. That\'s all it takes.',
+    requires: {},
+    excludeIf: {},
+    completionType: 'reflect' as Task['completionType'],
+    reward: { points: 10, affirmation: 'Words on the page. Progress.' },
+    aiFlags: { canIntensify: false, canClone: false, trackResistance: false, isCore: false },
+    createdAt: new Date().toISOString(),
+    createdBy: 'system' as Task['createdBy'],
+    active: true,
+  },
+];
+
+/**
+ * Get hardcoded fallback tasks (trimmed to count).
+ * These are local-only — not assigned to daily_tasks table.
+ */
+export function getHardcodedFallbackTasks(count: number = 3): DailyTask[] {
+  return FALLBACK_TASKS.slice(0, count).map((task, i) => ({
+    id: `fallback-${i}-${Date.now()}`,
+    taskId: task.id,
+    task,
+    assignedDate: getTodayDate(),
+    assignedAt: new Date().toISOString(),
+    status: 'pending' as const,
+    progress: 0,
+    selectionReason: 'prescribed' as SelectionReason,
+  }));
+}
+
+/**
+ * Convert UserTaskContext to UserStateForSelection (rules-engine-v2 format).
+ */
+function contextToSelectionState(context: UserTaskContext): UserStateForSelection {
+  return {
+    userId: context.userId,
+    timeOfDay: context.timeOfDay as UserStateForSelection['timeOfDay'],
+    ginaHome: context.ginaHome,
+    denialDay: context.denialDay,
+    currentArousal: 0, // Will be overridden by caller
+    inSession: false,
+    odometer: 'coasting',
+    estimatedExecFunction: 'medium',
+    currentPhase: context.phase,
+    streakDays: context.streakDays,
+    lastTaskCategory: null,
+    lastTaskDomain: null,
+    avoidedDomains: [],
+    completedTodayDomains: [],
+    completedTodayCategories: [],
+    ownedItems: context.ownedItems,
+    completedTaskIds: context.completedTaskIds,
+  };
+}
+
+/**
+ * Prescribe a single replacement task using rules-engine-v2.
+ * State-aware: uses current arousal, denial, exec function, Gina status.
+ * Assigns to daily_tasks table and returns the new DailyTask.
+ *
+ * Fallback chain: rules-engine → task-bank selection → hardcoded.
+ */
+export async function prescribeNextTask(
+  context: UserTaskContext,
+  stateOverrides: Partial<UserStateForSelection>,
+  excludeTaskIds: string[],
+): Promise<DailyTask | null> {
+  try {
+    // Load all active tasks from DB
+    const allTasks = await getAllTasks();
+    const available = allTasks.filter(t => !excludeTaskIds.includes(t.id));
+
+    if (available.length === 0) {
+      console.warn('[Prescription] No tasks available after exclusion');
+      return null;
+    }
+
+    // Build state for rules engine
+    const baseState = contextToSelectionState(context);
+    const state: UserStateForSelection = { ...baseState, ...stateOverrides };
+
+    // Try rules-engine selection (Layer 1)
+    const selected = selectTask(state, available);
+
+    if (selected) {
+      // Assign to daily_tasks table
+      const assigned = await assignDailyTasks(
+        [selected],
+        context,
+        { [selected.id]: 'prescribed' as SelectionReason },
+      );
+      if (assigned.length > 0) {
+        console.log('[Prescription] Prescribed:', selected.category, selected.domain, 'intensity', selected.intensity);
+        return assigned[0];
+      }
+    }
+
+    // Fallback: basic random selection from filtered eligible set
+    console.warn('[Prescription] Rules engine returned null, falling back to random eligible');
+    const eligible = available.filter(t =>
+      meetsRequirements(t, context) && !isExcluded(t, context)
+    );
+    if (eligible.length > 0) {
+      const fallback = eligible[Math.floor(Math.random() * eligible.length)];
+      const assigned = await assignDailyTasks(
+        [fallback],
+        context,
+        { [fallback.id]: 'prescribed' as SelectionReason },
+      );
+      if (assigned.length > 0) return assigned[0];
+    }
+
+    return null;
+  } catch (err) {
+    console.error('[Prescription] Failed:', err);
+    return null;
+  }
+}
+
+/**
+ * Re-filter existing daily tasks against current state.
+ * Returns tasks that are still valid and a list of invalidated task IDs.
+ * Used when state changes (Gina toggle, energy change) to remove tasks
+ * that no longer meet privacy/intensity requirements.
+ */
+export function refilterTasks(
+  tasks: DailyTask[],
+  stateOverrides: Partial<UserStateForSelection>,
+): { valid: DailyTask[]; invalidatedIds: string[] } {
+  const state: UserStateForSelection = {
+    userId: '',
+    timeOfDay: 'morning',
+    ginaHome: false,
+    denialDay: 0,
+    currentArousal: 0,
+    inSession: false,
+    odometer: 'coasting',
+    estimatedExecFunction: 'medium',
+    currentPhase: 0,
+    streakDays: 0,
+    lastTaskCategory: null,
+    lastTaskDomain: null,
+    avoidedDomains: [],
+    completedTodayDomains: [],
+    completedTodayCategories: [],
+    ownedItems: [],
+    completedTaskIds: [],
+    ...stateOverrides,
+  };
+
+  const valid: DailyTask[] = [];
+  const invalidatedIds: string[] = [];
+
+  for (const task of tasks) {
+    // Completed/skipped tasks are always kept
+    if (task.status !== 'pending') {
+      valid.push(task);
+      continue;
+    }
+
+    if (isTaskStillValid(task.task, state)) {
+      valid.push(task);
+    } else {
+      invalidatedIds.push(task.id);
+    }
+  }
+
+  return { valid, invalidatedIds };
 }
 
 // Expose debug functions globally

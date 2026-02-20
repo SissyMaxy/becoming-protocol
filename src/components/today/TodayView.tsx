@@ -4,7 +4,7 @@
  * With weekend Gina integration support and goal-based training
  */
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { Loader2, RefreshCw, AlertTriangle, Heart, Target, Moon, FileText, ChevronRight, Clock, Star, DollarSign, Send, Headphones, Camera } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
 import { supabase } from '../../lib/supabase';
@@ -25,12 +25,14 @@ import { MediaUpload } from '../shoots/MediaUpload';
 import { ReadyToPost } from '../shoots/ReadyToPost';
 // TodayHeader and ProgressRing removed — kill friction above first task
 import { TaskCardNew } from './TaskCardNew';
-import { CompletionCelebration } from './CompletionCelebration';
+// CompletionCelebration removed — affirmation is now inline in the card (CardPhase)
 import { AllCompleteCelebration } from './AllCompleteCelebration';
 import { HandlerMessage } from './HandlerMessage';
 import { AmbientFeedbackStrip } from './AmbientFeedbackStrip';
 import { ActiveSessionOverlay } from './ActiveSessionOverlay';
-import { QuickStateUpdate } from './QuickStateUpdate';
+import { QuickStateStrip } from './QuickStateStrip';
+import { JournalPrompt } from './JournalPrompt';
+import { getTaskVariant, VoiceTaskEnrichment, EdgeTaskEnrichment, HypnoTaskEnrichment } from './TaskCardVariants';
 import { CommitmentReminder } from './CommitmentReminder';
 // DirectiveModeView and Tooltip removed — no mode toggles in main view
 import { useUserState } from '../../hooks/useUserState';
@@ -52,6 +54,7 @@ import { MicroTaskWidget } from '../micro-tasks';
 import { HandlerDirective } from '../handler/HandlerDirective';
 import { getActiveBriefs, type ContentBrief } from '../../lib/handler-v2/content-engine';
 import { useAuth } from '../../context/AuthContext';
+import { useVoiceTraining } from '../../hooks/useVoiceTraining';
 import type { WeekendActivity, ActivityFeedback } from '../../types/weekend';
 import type { Goal, GoalCompletionInput } from '../../types/goals';
 
@@ -97,6 +100,8 @@ export function TodayView() {
     undo,
     dismissCompletion,
     dismissSkipWarning,
+    prescribeNext,
+    refreshPrescriptions,
   } = useTaskBank();
 
   // Weekend system
@@ -125,6 +130,9 @@ export function TodayView() {
   // Shoot flow — prescribed content shoots
   const shootFlow = useShootFlow();
 
+  // Voice training stats for task card variants
+  const { stats: voiceStats } = useVoiceTraining();
+
   const [showAllComplete, setShowAllComplete] = useState(false);
 
   // Morning personalization for Handler message
@@ -133,6 +141,23 @@ export function TodayView() {
     if (!user?.id) return;
     getMorningPersonalization(user.id).then(setMorningData).catch(() => {});
   }, [user?.id]);
+
+  // Completion counter for Handler message reactivity
+  const completionCountRef = useRef(0);
+
+  // Handler message refresh: re-fetch morning personalization
+  const refreshHandlerMessage = useCallback(() => {
+    if (!user?.id) return;
+    getMorningPersonalization(user.id).then(setMorningData).catch(() => {});
+  }, [user?.id]);
+
+  // QuickStateStrip callback: re-filter tasks and refresh Handler on significant changes
+  const handleStateChanged = useCallback(() => {
+    // Debounce slightly to let state persist before refiltering
+    setTimeout(() => {
+      refreshPrescriptions();
+    }, 300);
+  }, [refreshPrescriptions]);
 
   // Active session - shows step-by-step guidance with vibration control
   const [activeSession, setActiveSession] = useState<PriorityAction | null>(null);
@@ -228,6 +253,11 @@ export function TodayView() {
     }
     // Save to database in background
     quickUpdate(update);
+
+    // Refresh Handler message on Gina toggle (significant state change)
+    if (update.ginaHome !== undefined || update.ginaAsleep !== undefined) {
+      refreshHandlerMessage();
+    }
   };
 
   // Streak break recovery: show sunk cost prominently (gap #21)
@@ -341,23 +371,40 @@ export function TodayView() {
     }
   }, [isEvening, allDone, eveningSubmitted]);
 
-  // Trigger hearts on completion in Bambi mode
+  // Trigger hearts on completion in Bambi mode + auto-dismiss
   useEffect(() => {
-    if (lastCompletedTask && isBambiMode) {
-      triggerHearts?.();
+    if (lastCompletedTask) {
+      if (isBambiMode) {
+        triggerHearts?.();
+      }
+      // Auto-dismiss after card's affirmation phase completes (~2.5s)
+      const timer = setTimeout(() => dismissCompletion(), 2500);
+      return () => clearTimeout(timer);
     }
-  }, [lastCompletedTask, isBambiMode, triggerHearts]);
+  }, [lastCompletedTask, isBambiMode, triggerHearts, dismissCompletion]);
 
-  // Record task completion to user_state for tracking
+  // Record task completion to user_state + prescribe next task + refresh Handler message
   useEffect(() => {
     if (lastCompletedTask) {
       // Find the completed task to get category and domain
       const completedTask = todayTasks.find(t => t.id === lastCompletedTask.id);
       if (completedTask?.task) {
-        recordTaskCompletion(completedTask.task.category, completedTask.task.domain);
+        const { category, domain } = completedTask.task;
+
+        // Update user_state tracking
+        recordTaskCompletion(category, domain);
+
+        // Prescribe a replacement task (reactive loop core)
+        prescribeNext(category, domain);
+
+        // Refresh Handler message every 3 completions
+        completionCountRef.current += 1;
+        if (completionCountRef.current % 3 === 0) {
+          refreshHandlerMessage();
+        }
       }
     }
-  }, [lastCompletedTask, todayTasks, recordTaskCompletion]);
+  }, [lastCompletedTask, todayTasks, recordTaskCompletion, prescribeNext, refreshHandlerMessage]);
 
   // Show all complete celebration when everything is done
   useEffect(() => {
@@ -497,16 +544,17 @@ export function TodayView() {
         />
       </div>
 
-      {/* ═══ Check-in pill row ═══ */}
+      {/* ═══ Quick state strip ═══ */}
       {userState && (
         <div className="px-4 pb-2">
-          <QuickStateUpdate
+          <QuickStateStrip
             currentMood={currentMood}
             currentArousal={userState.currentArousal}
             currentExecFunction={userState.estimatedExecFunction}
             ginaHome={userState.ginaHome}
             ginaAsleep={userState.ginaAsleep}
             onUpdate={handleQuickUpdate}
+            onStateChanged={handleStateChanged}
             isLoading={isUserStateLoading}
           />
         </div>
@@ -1090,18 +1138,25 @@ export function TodayView() {
                 }`}>
                   {isWeekendDay ? 'Solo Tasks' : pendingTasks.length === 1 ? 'Your task' : `${pendingTasks.length} tasks remaining`}
                 </p>
-                {pendingTasks.map((task, index) => (
-                  <TaskCardNew
-                    key={task.id}
-                    task={task}
-                    onComplete={(feltGood, notes, captureData) => complete(task.id, feltGood, notes, captureData as Record<string, unknown> | undefined)}
-                    onIncrement={() => incrementProgress(task.id)}
-                    onSkip={() => skip(task.id)}
-                    isCompleting={completingTaskId === task.id}
-                    isSkipping={skippingTaskId === task.id}
-                    isFirst={index === 0 && pendingWeekendActivities.length === 0}
-                  />
-                ))}
+                {pendingTasks.map((task, index) => {
+                  const variant = getTaskVariant(task);
+                  return (
+                    <div key={task.id}>
+                      {variant === 'voice' && <VoiceTaskEnrichment stats={voiceStats} />}
+                      {variant === 'edge' && <EdgeTaskEnrichment denialDay={userState?.denialDay ?? 0} arousalLevel={userState?.currentArousal ?? 0} />}
+                      {variant === 'hypno' && <HypnoTaskEnrichment session={activeHypnoSession} taskInstruction={task.task.instruction} />}
+                      <TaskCardNew
+                        task={task}
+                        onComplete={(feltGood, notes, captureData) => complete(task.id, feltGood, notes, captureData as Record<string, unknown> | undefined)}
+                        onIncrement={() => incrementProgress(task.id)}
+                        onSkip={() => skip(task.id)}
+                        isCompleting={completingTaskId === task.id}
+                        isSkipping={skippingTaskId === task.id}
+                        isFirst={index === 0 && pendingWeekendActivities.length === 0}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             )}
 
@@ -1152,6 +1207,16 @@ export function TodayView() {
         )}
       </div>
 
+      {/* ═══ Journal Prompt ═══ */}
+      {user?.id && (
+        <div className="px-4 pb-2">
+          <JournalPrompt
+            userId={user.id}
+            handlerMode={userState?.handlerMode ?? 'director'}
+          />
+        </div>
+      )}
+
       {/* ═══ Ambient Feedback Strip ═══ */}
       <div className="px-4 py-4">
         <AmbientFeedbackStrip
@@ -1162,14 +1227,8 @@ export function TodayView() {
         />
       </div>
 
-      {/* Completion celebration (per-task) */}
-      {lastCompletedTask && (
-        <CompletionCelebration
-          affirmation={lastCompletedTask.affirmation}
-          pointsEarned={lastCompletedTask.pointsEarned}
-          onDismiss={dismissCompletion}
-        />
-      )}
+      {/* Per-task affirmation is now inline in the card (CardPhase: affirming).
+          Auto-dismiss lastCompletedTask so it doesn't linger. */}
 
       {/* ContinuationPrompt removed — flat layout replaces single-action flow */}
 

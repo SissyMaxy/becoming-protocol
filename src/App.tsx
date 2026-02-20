@@ -33,7 +33,7 @@ import { MorningBookend, EveningBookend } from './components/bookends';
 import { useBookends } from './hooks/useBookends';
 import { MicroTaskCard } from './components/micro-tasks';
 import { useMicroTasks } from './hooks/useMicroTasks';
-import { MomentLoggerFAB } from './components/moment-logger';
+// MomentLoggerFAB removed — absorbed by QuickStateStrip + JournalPrompt
 // ReminderModal now rendered via useOrchestratedModals
 import { useReminders } from './hooks/useReminders';
 import { usePatternNotifications } from './hooks/usePatternNotifications';
@@ -692,9 +692,6 @@ function AuthenticatedAppInner() {
           {activeTab === 'menu' && renderMenuSubView()}
         </ErrorBoundary>
       </main>
-
-      {/* Moment Logger FAB - Quick euphoria/dysphoria logging */}
-      <MomentLoggerFAB />
 
       {/* Unified Notification Toast Stack */}
       <NotificationToastStack position="top" maxVisible={3} />
