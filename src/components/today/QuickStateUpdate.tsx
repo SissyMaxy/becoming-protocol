@@ -219,19 +219,21 @@ export function QuickStateUpdate({
           </div>
         </div>
 
-        {/* Done — appears after mood is set */}
-        {localMood !== undefined && (
-          <button
-            onClick={() => setExpanded(null)}
-            className={`w-full py-2 rounded-lg text-xs font-semibold transition-colors ${
-              isBambiMode
+        {/* Close */}
+        <button
+          onClick={() => setExpanded(null)}
+          className={`w-full py-2 rounded-lg text-xs font-semibold transition-colors ${
+            localMood !== undefined
+              ? isBambiMode
                 ? 'bg-pink-500 text-white hover:bg-pink-600'
                 : 'bg-protocol-accent text-white hover:bg-protocol-accent/90'
-            }`}
-          >
-            Done
-          </button>
-        )}
+              : isBambiMode
+                ? 'bg-pink-100 text-pink-500 hover:bg-pink-200'
+                : 'bg-protocol-surface text-protocol-text-muted hover:bg-protocol-surface/80'
+          }`}
+        >
+          {localMood !== undefined ? 'Done' : 'Not now'}
+        </button>
       </div>
     );
   }
