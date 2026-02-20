@@ -25,10 +25,19 @@ jobs:
 
   schedule-notifications:
     runs-on: ubuntu-latest
-    # Only run every 15 minutes (on :00, :15, :30, :45)
-    if: ${{ github.event.schedule == '*/5 * * * *' && (github.run_number % 3 == 0) }}
     steps:
+      - name: Check if 15-minute window
+        id: should_run
+        run: |
+          MINUTE=$(date -u +%M)
+          if [ "$MINUTE" -lt "5" ] || [ "$MINUTE" -ge "15" -a "$MINUTE" -lt "20" ] || [ "$MINUTE" -ge "30" -a "$MINUTE" -lt "35" ] || [ "$MINUTE" -ge "45" -a "$MINUTE" -lt "50" ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Trigger schedule-notifications
+        if: steps.should_run.outputs.run == 'true'
         run: |
           curl -X POST "${{ env.SUPABASE_URL }}/functions/v1/schedule-notifications" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
