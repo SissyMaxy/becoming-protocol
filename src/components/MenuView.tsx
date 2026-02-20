@@ -5,7 +5,7 @@
 
 import { useState } from 'react';
 import {
-  ChevronRight, ChevronDown, Calendar, Wallet, Heart,
+  ChevronRight, ChevronDown, Calendar, Wallet, Heart, Gift,
   HelpCircle, Flame, Sparkles, TrendingUp, Crown, Users, Film,
   Layers, Eye, Filter, Sprout, Zap, BarChart3, Activity, Mic,
   LayoutDashboard, BookOpen, Bot, Dumbbell, Gem, ImageIcon, Monitor, AudioLines, Camera, Headphones
@@ -18,7 +18,8 @@ type MenuItemId =
   | 'service-analytics' | 'content' | 'domains' | 'patterns'
   | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills'
   | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous'
-  | 'exercise' | 'her-world' | 'vault-swipe' | 'content-dashboard' | 'cam-session' | 'hypno-session';
+  | 'exercise' | 'her-world' | 'vault-swipe' | 'content-dashboard' | 'cam-session' | 'hypno-session'
+  | 'progress-page' | 'sealed-page';
 
 interface MenuViewProps {
   onNavigate: (view: MenuItemId) => void;
@@ -67,6 +68,20 @@ export function MenuView({ onNavigate }: MenuViewProps) {
       emoji: '✨',
       defaultExpanded: true,
       items: [
+        {
+          id: 'progress-page',
+          icon: TrendingUp,
+          label: 'Progress',
+          description: 'Phase progress, domain levels, and stats',
+          color: '#10b981',
+        },
+        {
+          id: 'sealed-page',
+          icon: Gift,
+          label: 'Sealed Content',
+          description: 'Letters, challenges, and rewards to unlock',
+          color: '#f59e0b',
+        },
         {
           id: 'handler-autonomous',
           icon: Bot,

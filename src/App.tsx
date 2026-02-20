@@ -12,7 +12,7 @@ import { useDisassociationRecovery } from './hooks/useDisassociationRecovery';
 import { useCompulsoryGate } from './hooks/useCompulsoryGate';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Auth } from './components/Auth';
-import { MorningFlow } from './components/MorningFlow';
+import { MorningBriefing } from './components/MorningBriefing';
 import { CompulsoryGateScreen } from './components/CompulsoryGateScreen';
 import { TodayView } from './components/today';
 import { ProgressDashboard } from './components/ProgressDashboard';
@@ -29,7 +29,8 @@ import { SessionLauncher } from './components/sessions';
 import { KinkQuizView } from './components/kink-quiz';
 import { WorkoutSessionPage } from './components/exercise';
 import { HerWorldPage } from './components/collections';
-import { MorningBookend, EveningBookend } from './components/bookends';
+import { MorningBookend } from './components/bookends';
+import { EveningDebrief } from './components/EveningDebrief';
 import { useBookends } from './hooks/useBookends';
 import { MicroTaskCard } from './components/micro-tasks';
 import { useMicroTasks } from './hooks/useMicroTasks';
@@ -61,17 +62,12 @@ import { HypnoDashboard } from './components/hypno';
 import { SleepContentPlayer } from './components/sleep-content';
 import { getTodayDate } from './lib/protocol';
 import { profileStorage, letterStorage } from './lib/storage';
-import { useTaskBank } from './hooks/useTaskBank';
-import { useGoals } from './hooks/useGoals';
-import { useWeekend } from './hooks/useWeekend';
+// useTaskBank, useGoals, useWeekend — now used only inside TodayView (badge removed)
 import type { UserProfile, SealedLetter } from './components/Onboarding/types';
 import {
   CheckSquare,
-  TrendingUp,
   Loader2,
   Settings,
-  Gift,
-  Menu,
   Heart
 } from 'lucide-react';
 
@@ -84,36 +80,16 @@ function parseWishlistToken(): string | null {
 
 type Tab = 'protocol' | 'progress' | 'sealed' | 'menu';
 
-// Tab labels for normal and bambi modes
-const getTabLabel = (id: Tab, isBambi: boolean): string => {
-  const labels: Record<Tab, { normal: string; bambi: string }> = {
-    protocol: { normal: 'Today', bambi: 'Instructions' },
-    progress: { normal: 'Progress', bambi: 'Conditioning' },
-    sealed: { normal: 'Sealed', bambi: 'Secrets' },
-    menu: { normal: 'More', bambi: 'More' },
-  };
-  return isBambi ? labels[id].bambi : labels[id].normal;
-};
-
 function Navigation({
   activeTab,
   onTabChange,
-  completedCount,
-  totalCount
 }: {
   activeTab: Tab;
   onTabChange: (tab: Tab) => void;
-  completedCount?: number;
-  totalCount?: number;
 }) {
   const { isBambiMode } = useBambiMode();
-
-  const tabs: { id: Tab; icon: React.ElementType; bambiIcon?: React.ElementType }[] = [
-    { id: 'protocol', icon: CheckSquare, bambiIcon: Heart },
-    { id: 'progress', icon: TrendingUp },
-    { id: 'sealed', icon: Gift },
-    { id: 'menu', icon: Menu },
-  ];
+  const TodayIcon = isBambiMode ? Heart : CheckSquare;
+  const isToday = activeTab === 'protocol';
 
   return (
     <nav aria-label="Main navigation" className={`fixed bottom-0 left-0 right-0 backdrop-blur-lg border-t z-40 ${
@@ -122,40 +98,31 @@ function Navigation({
         : 'bg-protocol-surface/95 border-protocol-border'
     }`}>
       <div className="max-w-lg mx-auto px-4 py-2">
-        <div className="flex items-center justify-around">
-          {tabs.map(tab => {
-            const Icon = isBambiMode && tab.bambiIcon ? tab.bambiIcon : tab.icon;
-            const isActive = activeTab === tab.id;
-            const showBadge = tab.id === 'protocol' &&
-              totalCount !== undefined &&
-              completedCount !== undefined &&
-              completedCount < totalCount;
+        <div className="flex items-center justify-between">
+          {/* Today tab */}
+          <button
+            onClick={() => onTabChange('protocol')}
+            className={`flex items-center gap-2 py-2 px-4 rounded-lg transition-colors ${
+              isToday
+                ? isBambiMode ? 'text-pink-500' : 'text-protocol-accent'
+                : isBambiMode ? 'text-pink-400 hover:text-pink-600' : 'text-protocol-text-muted hover:text-protocol-text'
+            }`}
+          >
+            <TodayIcon className={`w-5 h-5 ${isToday ? 'stroke-2' : ''}`} />
+            <span className="text-sm font-medium">{isBambiMode ? 'Instructions' : 'Today'}</span>
+          </button>
 
-            return (
-              <button
-                key={tab.id}
-                onClick={() => onTabChange(tab.id)}
-                className={`relative flex flex-col items-center gap-1 py-2 px-4 rounded-lg transition-colors ${
-                  isActive
-                    ? isBambiMode ? 'text-pink-500' : 'text-protocol-accent'
-                    : isBambiMode ? 'text-pink-400 hover:text-pink-600' : 'text-protocol-text-muted hover:text-protocol-text'
-                }`}
-              >
-                <div className="relative">
-                  <Icon className={`w-5 h-5 ${isActive ? 'stroke-2' : ''}`} />
-                  {/* Completion badge for Today tab */}
-                  {showBadge && (
-                    <span className={`absolute -top-1 -right-2 min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[10px] font-bold text-white rounded-full ${
-                      isBambiMode ? 'bg-pink-500' : 'bg-amber-500'
-                    }`}>
-                      {completedCount}/{totalCount}
-                    </span>
-                  )}
-                </div>
-                <span className="text-xs font-medium">{getTabLabel(tab.id, isBambiMode)}</span>
-              </button>
-            );
-          })}
+          {/* Settings / More gear */}
+          <button
+            onClick={() => onTabChange('menu')}
+            className={`p-2 rounded-lg transition-colors ${
+              activeTab === 'menu'
+                ? isBambiMode ? 'text-pink-500' : 'text-protocol-accent'
+                : isBambiMode ? 'text-pink-400 hover:text-pink-600' : 'text-protocol-text-muted hover:text-protocol-text'
+            }`}
+          >
+            <Settings className={`w-5 h-5 ${activeTab === 'menu' ? 'stroke-2' : ''}`} />
+          </button>
         </div>
       </div>
     </nav>
@@ -240,7 +207,7 @@ function LoadingScreen() {
   );
 }
 
-type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | null;
+type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | 'progress-page' | 'sealed-page' | null;
 
 function AuthenticatedAppInner() {
   const { currentEntry, isLoading, investmentMilestone, dismissInvestmentMilestone, userName, progress } = useProtocol();
@@ -313,21 +280,7 @@ function AuthenticatedAppInner() {
     onDismissLevelUp: rewardContext?.dismissLevelUp || (() => {}),
   });
 
-  // Task bank, goals, and weekend for nav badge - same source as TodayView
-  const { todayTasks } = useTaskBank();
-  const { todaysGoals } = useGoals();
-  const { todaysActivities } = useWeekend();
-
-  // Task completion tracking for nav badge - combining tasks, goals, and weekend activities like TodayView does
-  const taskBankCompleted = todayTasks.filter(t => t.status === 'completed').length;
-  const taskBankTotal = todayTasks.length;
-  const goalsCompleted = todaysGoals.filter(g => g.completedToday).length;
-  const goalsTotal = todaysGoals.length;
-  const weekendCompleted = todaysActivities.filter(a => a.status === 'completed').length;
-  const weekendTotal = todaysActivities.length;
-
-  const completedCount = taskBankCompleted + goalsCompleted + weekendCompleted;
-  const totalCount = taskBankTotal + goalsTotal + weekendTotal;
+  // Task bank, goals, and weekend — used by TodayView directly, no longer for nav badge
 
   // Listen for navigation events from components
   useEffect(() => {
@@ -402,8 +355,18 @@ function AuthenticatedAppInner() {
     setActiveTab(newTab);
   };
 
-  // Handle menu navigation
+  // Handle menu navigation — special cases for progress/sealed pages
   const handleMenuNavigate = (view: MenuSubView) => {
+    if (view === 'progress-page') {
+      setActiveTab('progress');
+      setMenuSubView(null);
+      return;
+    }
+    if (view === 'sealed-page') {
+      setActiveTab('sealed');
+      setMenuSubView(null);
+      return;
+    }
     setMenuSubView(view);
   };
 
@@ -498,9 +461,9 @@ function AuthenticatedAppInner() {
     );
   }
 
-  // Show morning flow if no entry for today
+  // Show morning briefing if no entry for today
   if (showMorningFlow) {
-    return <MorningFlow onComplete={() => setShowMorningFlow(false)} />;
+    return <MorningBriefing onComplete={() => setShowMorningFlow(false)} />;
   }
 
   // Show compulsory gate if app is locked (Feature 38)
@@ -699,8 +662,6 @@ function AuthenticatedAppInner() {
       <Navigation
         activeTab={activeTab}
         onTabChange={handleTabChange}
-        completedCount={completedCount}
-        totalCount={totalCount}
       />
 
       {/* Floating hearts for Bambi mode celebrations */}
@@ -715,18 +676,14 @@ function AuthenticatedAppInner() {
         />
       )}
 
-      {/* Evening Bookend overlay */}
+      {/* Evening Debrief overlay */}
       {bookends.showEveningBookend && bookends.daySummary && bookends.config && (
-        <EveningBookend
+        <EveningDebrief
           name={bookends.config.morningName}
           message={bookends.eveningMessage}
           summary={bookends.daySummary}
+          streakDays={progress?.overallStreak ?? 0}
           onDismiss={bookends.dismissEvening}
-          onJournal={() => {
-            bookends.dismissEvening();
-            setActiveTab('menu');
-            setMenuSubView('journal');
-          }}
           onSleepContent={() => {
             bookends.dismissEvening();
             setShowSleepContent(true);
