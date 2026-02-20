@@ -43,6 +43,7 @@ import { buildCommunityContext } from './industry/community-engine';
 import { buildOutreachContext } from './industry/creator-outreach';
 import { buildKarmaContext } from './industry/reddit-karma';
 import { buildRecycleContext } from './industry/content-recycler';
+import { buildVoiceContentContext } from './industry/voice-content';
 
 // ============================================
 // TYPES
@@ -461,13 +462,14 @@ async function buildPassiveVoiceContext(userId: string): Promise<string> {
 
 async function buildIndustryContext(userId: string): Promise<string> {
   try {
-    const [skip, fan, community, outreach, karma, recycle] = await Promise.allSettled([
+    const [skip, fan, community, outreach, karma, recycle, voiceContent] = await Promise.allSettled([
       buildSkipContext(userId),
       buildFanMemoryContext(userId),
       buildCommunityContext(userId),
       buildOutreachContext(userId),
       buildKarmaContext(userId),
       buildRecycleContext(userId),
+      buildVoiceContentContext(userId),
     ]);
 
     const parts = [
@@ -477,6 +479,7 @@ async function buildIndustryContext(userId: string): Promise<string> {
       outreach.status === 'fulfilled' ? outreach.value : '',
       karma.status === 'fulfilled' ? karma.value : '',
       recycle.status === 'fulfilled' ? recycle.value : '',
+      voiceContent.status === 'fulfilled' ? voiceContent.value : '',
     ].filter(Boolean);
 
     if (parts.length === 0) return '';
