@@ -4,10 +4,9 @@
  */
 
 import { useState } from 'react';
-import { Check, X, Loader2, Clock, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
+import { Check, X, Loader2, ExternalLink } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
 import type { DailyTask, CompletionData } from '../../types/task-bank';
-import { CATEGORY_EMOJI, INTENSITY_CONFIG, CATEGORY_CONFIG } from '../../types/task-bank';
 import { CompletionInput } from './CompletionInput';
 
 // Helper to navigate to wishlist
@@ -84,12 +83,11 @@ export function TaskCardNew({
   isFirst = false,
 }: TaskCardNewProps) {
   const { isBambiMode } = useBambiMode();
-  const [expanded, setExpanded] = useState(isFirst);
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
-  const { instruction, category, intensity, completionType, targetCount, durationMinutes, subtext, captureFields } = task.task;
-  const emoji = CATEGORY_EMOJI[category];
-  const intensityConfig = INTENSITY_CONFIG[intensity];
-  const categoryConfig = CATEGORY_CONFIG[category];
+  const { instruction, category, intensity, completionType: baseCompletionType, targetCount, durationMinutes, subtext, captureFields: baseCaptureFields } = task.task;
+  const completionType = task.completionTypeOverride || baseCompletionType;
+  const captureFields = task.captureFieldsOverride || baseCaptureFields;
+  const contextLine = task.enhancedContextLine || task.task.handlerFraming;
 
   // Prefer Claude-enhanced text over base task text
   const displayInstruction = task.enhancedInstruction || instruction;
@@ -242,48 +240,17 @@ export function TaskCardNew({
         </div>
       )}
 
-      {/* Header with gradient */}
-      <div className={`bg-gradient-to-r ${getIntensityGradient(intensity, isBambiMode)} p-4`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-3xl">{emoji}</span>
-            <div>
-              <span className="text-white/90 text-xs font-medium uppercase tracking-wider">
-                {categoryConfig?.label || category}
-              </span>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-white/80 text-xs">
-                  {intensityConfig.label}
-                </span>
-                {durationMinutes && (
-                  <>
-                    <span className="text-white/50">•</span>
-                    <span className="text-white/80 text-xs flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      {durationMinutes}m
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <button
-            onClick={() => setExpanded(!expanded)}
-            aria-label={expanded ? 'Collapse task details' : 'Expand task details'}
-            className="p-1.5 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
-          >
-            {expanded ? (
-              <ChevronUp className="w-4 h-4 text-white" />
-            ) : (
-              <ChevronDown className="w-4 h-4 text-white" />
-            )}
-          </button>
-        </div>
-      </div>
-
       {/* Main content */}
       <div className="p-4">
+        {/* Handler context line */}
+        {contextLine && (
+          <p className={`text-xs italic mb-2 ${
+            isBambiMode ? 'text-pink-400' : 'text-protocol-accent/70'
+          }`}>
+            {contextLine}
+          </p>
+        )}
+
         {/* Instruction — sized by copy_style: command=large+bold, short=medium+bold, normal=base */}
         <p className={`leading-snug ${
           copyStyle === 'command'
@@ -319,27 +286,6 @@ export function TaskCardNew({
             <ExternalLink className="w-4 h-4" />
             Go to Wishlist
           </button>
-        )}
-
-        {/* Expanded content */}
-        {expanded && task.task.reward && (
-          <div className={`mt-4 pt-4 border-t ${
-            isBambiMode ? 'border-pink-100' : 'border-protocol-border'
-          }`}>
-            <p className={`text-xs uppercase tracking-wider mb-2 ${
-              isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'
-            }`}>
-              On completion
-            </p>
-            <div className="flex items-center gap-2">
-              <span className="text-lg">✨</span>
-              <span className={`text-sm ${
-                isBambiMode ? 'text-pink-600' : 'text-protocol-text'
-              }`}>
-                +{task.task.reward.points} points
-              </span>
-            </div>
-          </div>
         )}
 
         {/* Completion input — type-aware (binary, duration, scale, count, reflect) */}

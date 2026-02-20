@@ -11,6 +11,8 @@ import type {
   DbDailyTask,
   UserTaskContext,
   TaskCategory,
+  TaskCompletionType,
+  CaptureFieldDef,
   SelectionReason,
   SkipCost,
 } from '../types/task-bank';
@@ -83,6 +85,9 @@ function dbDailyTaskToDailyTask(db: DbDailyTask): DailyTask {
     enhancedInstruction: db.enhanced_instruction || undefined,
     enhancedSubtext: db.enhanced_subtext || undefined,
     enhancedAffirmation: db.enhanced_affirmation || undefined,
+    completionTypeOverride: (db.completion_type_override as TaskCompletionType) || undefined,
+    captureFieldsOverride: db.capture_fields_override || undefined,
+    enhancedContextLine: db.enhanced_context_line || undefined,
   };
 }
 
@@ -1199,6 +1204,30 @@ export interface TaskEnhancementContext {
   handlerMode: string;
 }
 
+// ============================================
+// AI CAPTURE FIELD VALIDATION
+// ============================================
+
+function validateCaptureFields(fields: unknown): CaptureFieldDef[] | undefined {
+  if (!Array.isArray(fields)) return undefined;
+  const validTypes = ['date', 'select', 'toggle', 'slider', 'number', 'text'];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const validated = fields.filter((f: any) =>
+    typeof f === 'object' && f !== null &&
+    typeof f.key === 'string' && f.key.length > 0 &&
+    validTypes.includes(f.type)
+  );
+  return validated.length > 0 ? validated as CaptureFieldDef[] : undefined;
+}
+
+function validateCompletionTypeOverride(type: unknown): TaskCompletionType | undefined {
+  const validTypes = ['binary', 'duration', 'count', 'confirm', 'scale', 'reflect', 'log_entry', 'session_complete'];
+  if (typeof type === 'string' && validTypes.includes(type)) {
+    return type as TaskCompletionType;
+  }
+  return undefined;
+}
+
 /**
  * Enhance tasks with Claude-personalized instruction/subtext/affirmation.
  * Sends all pending tasks in one batch to minimize API calls.
@@ -1261,8 +1290,17 @@ RULES:
 - STRICTLY obey the COPY FORMAT above — aroused eyes don't read walls of text.
 - "subtext" = one sentence that makes it personal (reference streak, denial, recent behavior)
 - "affirmation" = completion reward message in Handler voice
+- "context_line" = short Handler-voiced framing (5-12 words). Sets the emotional frame before the instruction. Examples: "Day 6. She's pliable.", "The streak speaks for itself.", "After last night, this is easy." Always return this field.
 
-Respond ONLY with a JSON array: [{"id": "task_id", "instruction": "...", "subtext": "...", "affirmation": "..."}]`;
+CAPTURE FIELD GENERATION:
+If your rewritten instruction asks her to log, record, report, rate, track, measure, weigh, or answer anything — you MUST also return "completion_type_override": "log_entry" and a "capture_fields" array.
+Never write an instruction that asks for input without providing the fields to capture it.
+Each field: {"key": "snake_case", "type": "text"|"number"|"slider"|"select"|"toggle"|"date", "label": "Human label"}
+For "select": include "options" array. For "slider"/"number": include "min" and "max".
+Keep 2-5 fields max. Do NOT add capture fields for simple action tasks (put on X, listen to Y).
+If the task already has completionType other than "binary", do NOT override it.
+
+Respond ONLY with a JSON array: [{"id":"task_id","instruction":"...","subtext":"...","affirmation":"...","context_line":"..."} plus optional "completion_type_override" and "capture_fields" when instruction asks for data input]`;
 
   const taskList = needsEnhancement.map(t => ({
     id: t.id,
@@ -1270,6 +1308,7 @@ Respond ONLY with a JSON array: [{"id": "task_id", "instruction": "...", "subtex
     category: t.task.category,
     domain: t.task.domain,
     intensity: t.task.intensity,
+    completionType: t.task.completionType,
   }));
 
   const userPrompt = `${context.chosenName}'s tasks for today. Enhance each one.
@@ -1296,8 +1335,11 @@ ${JSON.stringify(taskList, null, 2)}`;
     console.log('[TaskEnhance] Raw response:', JSON.stringify(data).substring(0, 200));
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const enhanced: Array<{ id: string; instruction: string; subtext: string; affirmation: string }> =
-      (data as any)?.enhanced || [];
+    const enhanced: Array<{
+      id: string; instruction: string; subtext: string; affirmation: string;
+      completion_type_override?: string; capture_fields?: unknown[];
+      context_line?: string;
+    }> = (data as any)?.enhanced || [];
 
     if (enhanced.length === 0) {
       console.warn('[TaskEnhance] No enhanced tasks returned');
@@ -1318,6 +1360,9 @@ ${JSON.stringify(taskList, null, 2)}`;
         enhancedSubtext: e.subtext,
         enhancedAffirmation: e.affirmation,
         copyStyle,
+        completionTypeOverride: validateCompletionTypeOverride(e.completion_type_override),
+        captureFieldsOverride: validateCaptureFields(e.capture_fields),
+        enhancedContextLine: e.context_line || undefined,
       };
     });
 
@@ -1329,6 +1374,9 @@ ${JSON.stringify(taskList, null, 2)}`;
           enhanced_instruction: e.instruction,
           enhanced_subtext: e.subtext,
           enhanced_affirmation: e.affirmation,
+          completion_type_override: validateCompletionTypeOverride(e.completion_type_override) || null,
+          capture_fields_override: validateCaptureFields(e.capture_fields) || null,
+          enhanced_context_line: e.context_line || null,
         })
         .eq('id', e.id)
         .then(({ error: dbErr }) => {

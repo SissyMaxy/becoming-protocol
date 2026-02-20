@@ -235,7 +235,7 @@ function formatResponse(action: string, result: any): any {
       }
 
     case 'enhance_tasks':
-      // result is already an array of {id, instruction, subtext, affirmation}
+      // result is array of {id, instruction, subtext, affirmation, optional overrides}
       return {
         enhanced: Array.isArray(result)
           ? result.map((t: any) => ({
@@ -243,6 +243,9 @@ function formatResponse(action: string, result: any): any {
               instruction: t.instruction,
               subtext: t.subtext,
               affirmation: t.affirmation,
+              completion_type_override: t.completion_type_override || null,
+              capture_fields: t.capture_fields || null,
+              context_line: t.context_line || null,
             }))
           : []
       }

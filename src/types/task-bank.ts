@@ -278,6 +278,12 @@ export interface DailyTask {
   enhancedAffirmation?: string;
   // Arousal-gated copy formatting
   copyStyle?: 'normal' | 'short' | 'command';
+  // AI-generated completion type override (e.g. binary -> log_entry)
+  completionTypeOverride?: TaskCompletionType;
+  // AI-generated capture fields when completionTypeOverride = log_entry
+  captureFieldsOverride?: CaptureFieldDef[];
+  // Handler-voiced context line (rendered above instruction)
+  enhancedContextLine?: string;
 }
 
 export interface DbDailyTask {
@@ -298,6 +304,10 @@ export interface DbDailyTask {
   enhanced_instruction: string | null;
   enhanced_subtext: string | null;
   enhanced_affirmation: string | null;
+  // AI-generated overrides
+  completion_type_override: string | null;
+  capture_fields_override: CaptureFieldDef[] | null;
+  enhanced_context_line: string | null;
   // Joined task data
   task_bank?: DbTask;
 }

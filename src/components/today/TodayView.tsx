@@ -4,7 +4,7 @@
  * With weekend Gina integration support and goal-based training
  */
 
-import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Loader2, RefreshCw, AlertTriangle, Heart, Target, Moon, FileText, ChevronRight, Clock, Star, DollarSign, Send, Headphones, Camera } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
 import { supabase } from '../../lib/supabase';
@@ -27,14 +27,16 @@ import { ReadyToPost } from '../shoots/ReadyToPost';
 import { TaskCardNew } from './TaskCardNew';
 import { CompletionCelebration } from './CompletionCelebration';
 import { AllCompleteCelebration } from './AllCompleteCelebration';
-import { FocusedActionCard, getPriorityAction } from './FocusedActionCard';
-import { ContinuationPrompt } from './ContinuationPrompt';
+import { HandlerMessage } from './HandlerMessage';
+import { AmbientFeedbackStrip } from './AmbientFeedbackStrip';
 import { ActiveSessionOverlay } from './ActiveSessionOverlay';
 import { QuickStateUpdate } from './QuickStateUpdate';
 import { CommitmentReminder } from './CommitmentReminder';
 // DirectiveModeView and Tooltip removed — no mode toggles in main view
 import { useUserState } from '../../hooks/useUserState';
 import type { PriorityAction } from './FocusedActionCard';
+import { getMorningPersonalization } from '../../lib/morning-personalization';
+import type { MorningPersonalization } from '../../lib/morning-personalization';
 import { WeekendHeader } from '../weekend/WeekendHeader';
 import { WeekendActivityCard } from '../weekend/WeekendActivityCard';
 import { GinaFramingModal } from '../weekend/GinaFramingModal';
@@ -74,6 +76,7 @@ export function TodayView() {
   const {
     userState,
     isLoading: isUserStateLoading,
+    timeOfDay,
     quickUpdate,
     recordTaskCompletion,
   } = useUserState();
@@ -110,9 +113,8 @@ export function TodayView() {
     getPlannedActivity,
   } = useWeekend();
 
-  // Lovense connection status
-  const { status: lovenseStatus, activeToy } = useLovense();
-  const lovenseConnected = lovenseStatus === 'connected';
+  // Lovense connection status (used by ActiveSessionOverlay)
+  useLovense();
 
   // Content pipeline — pending post packs for manual posting
   const { pendingPostPacks, markPosted } = useContentPipeline();
@@ -125,14 +127,13 @@ export function TodayView() {
 
   const [showAllComplete, setShowAllComplete] = useState(false);
 
-  // Always focus mode — one action at a time, "See N more" expands the rest
-  const [showAllItems, setShowAllItems] = useState(false);
-  const focusedCardRef = useRef<HTMLDivElement>(null);
-  // Track dismissed actions for "Not Now" - resets at end of day
-  const [dismissedActionIds, setDismissedActionIds] = useState<string[]>([]);
-  // Continuation prompt - maintains momentum after task completion
-  const [showContinuation, setShowContinuation] = useState(false);
-  const [completedActionName, setCompletedActionName] = useState<string>('');
+  // Morning personalization for Handler message
+  const [morningData, setMorningData] = useState<MorningPersonalization | null>(null);
+  useEffect(() => {
+    if (!user?.id) return;
+    getMorningPersonalization(user.id).then(setMorningData).catch(() => {});
+  }, [user?.id]);
+
   // Active session - shows step-by-step guidance with vibration control
   const [activeSession, setActiveSession] = useState<PriorityAction | null>(null);
 
@@ -142,7 +143,6 @@ export function TodayView() {
     allGoals,
     loading: goalsLoading,
     initialized: goalsInitialized,
-    streakRisk,
     goalNeedingAffirmation,
     clearAffirmationTrigger,
     completeGoal,
@@ -341,18 +341,10 @@ export function TodayView() {
     }
   }, [isEvening, allDone, eveningSubmitted]);
 
-  // Trigger hearts on completion in Bambi mode, and show continuation prompt
+  // Trigger hearts on completion in Bambi mode
   useEffect(() => {
-    if (lastCompletedTask) {
-      if (isBambiMode) {
-        triggerHearts?.();
-      }
-      // Show continuation prompt after a brief delay (let celebration play first)
-      const timer = setTimeout(() => {
-        setCompletedActionName(lastCompletedTask.affirmation || 'Task');
-        setShowContinuation(true);
-      }, 1500);
-      return () => clearTimeout(timer);
+    if (lastCompletedTask && isBambiMode) {
+      triggerHearts?.();
     }
   }, [lastCompletedTask, isBambiMode, triggerHearts]);
 
@@ -374,15 +366,6 @@ export function TodayView() {
       return () => clearTimeout(timer);
     }
   }, [allDone, completedCount]);
-
-  // Scroll to focused card area when expanding items (Issue #9)
-  useEffect(() => {
-    if (showAllItems && focusedCardRef.current) {
-      requestAnimationFrame(() => {
-        focusedCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
-    }
-  }, [showAllItems]);
 
   // Combined loading state
   const isAnyLoading = isLoading || goalsLoading || (isWeekendDay && isWeekendLoading);
@@ -452,30 +435,7 @@ export function TodayView() {
   const completedWeekendActivities = todaysActivities.filter(a => a.status === 'completed');
   const skippedWeekendActivities = todaysActivities.filter(a => a.status === 'skipped');
 
-  // Get priority action for focus mode (excluding dismissed actions)
-  const priorityAction = getPriorityAction(
-    todaysGoals,
-    todayTasks,
-    streakRisk?.isAtRisk || false,
-    null, // TODO: Pass scheduled session if available
-    dismissedActionIds
-  );
-
-  // Count of other pending items (excluding the priority action)
-  const otherPendingCount = (pendingGoals.length + pendingTasks.length + pendingWeekendActivities.length) - (priorityAction ? 1 : 0);
-
-  // Handle starting the priority action - open active session overlay with steps
-  const handleStartPriorityAction = () => {
-    if (!priorityAction) return;
-
-    // If action has steps, start active session mode with step-by-step guidance
-    if (priorityAction.steps && priorityAction.steps.length > 0) {
-      setActiveSession(priorityAction);
-    } else {
-      // No steps defined - complete directly
-      handleCompleteAction(priorityAction);
-    }
-  };
+  // (FocusedActionCard removed — tasks shown directly in flat layout)
 
   // Complete an action (called when session ends or action has no steps)
   const handleCompleteAction = (action: PriorityAction) => {
@@ -510,26 +470,6 @@ export function TodayView() {
     setActiveSession(null);
   };
 
-  // Handle "Not Now" - dismiss current action and show next
-  const handleDismissAction = () => {
-    if (!priorityAction) return;
-    setDismissedActionIds(prev => [...prev, priorityAction.id]);
-  };
-
-  // Handle "Yes, Keep Going" from continuation prompt
-  const handleContinue = () => {
-    setShowContinuation(false);
-    dismissCompletion();
-    // The next priority action will automatically show
-    // Optional: scroll to the focused action card
-  };
-
-  // Handle "Done" from continuation prompt
-  const handleDoneContinuing = () => {
-    setShowContinuation(false);
-    dismissCompletion();
-  };
-
   // Refresh all data
   const handleRefresh = () => {
     loadTasks();
@@ -544,9 +484,22 @@ export function TodayView() {
           ? 'bg-gradient-to-b from-pink-50 to-white'
           : 'bg-protocol-bg'
     }`}>
+      {/* ═══ Handler Message — persistent voice ═══ */}
+      <div className="px-4 pt-4 pb-2">
+        <HandlerMessage
+          handlerMode={userState?.handlerMode ?? 'director'}
+          greeting={morningData?.greeting}
+          insight={morningData?.insight}
+          motivationalMessage={morningData?.motivationalMessage}
+          streakDays={userState?.streakDays ?? 0}
+          denialDay={userState?.denialDay ?? 0}
+          timeOfDay={timeOfDay ?? 'morning'}
+        />
+      </div>
+
       {/* ═══ Check-in pill row ═══ */}
       {userState && (
-        <div className="px-4 pt-4 pb-2">
+        <div className="px-4 pb-2">
           <QuickStateUpdate
             currentMood={currentMood}
             currentArousal={userState.currentArousal}
@@ -558,20 +511,6 @@ export function TodayView() {
           />
         </div>
       )}
-
-      {/* ═══ Priority action card — first thing after check-in ═══ */}
-      <div ref={focusedCardRef} className="mb-2">
-        <FocusedActionCard
-          priorityAction={priorityAction}
-          pendingCount={otherPendingCount}
-          onStartAction={handleStartPriorityAction}
-          onDismiss={handleDismissAction}
-          onShowAll={() => setShowAllItems(!showAllItems)}
-          isExpanded={showAllItems}
-          lovenseConnected={lovenseConnected}
-          lovenseDeviceName={activeToy?.nickName || activeToy?.name}
-        />
-      </div>
 
       {/* ═══ Skip warning — always visible when triggered ═══ */}
       {showSkipWarning && (
@@ -618,9 +557,8 @@ export function TodayView() {
         </div>
       )}
 
-      {/* ═══ Everything below the fold — shown when "See N more" is expanded ═══ */}
-      {showAllItems && (
-        <>
+      {/* ═══ Main content — always visible ═══ */}
+
           {/* Refresh */}
           <div className="px-4 mb-3 flex justify-end">
             <button
@@ -1213,11 +1151,19 @@ export function TodayView() {
           </>
         )}
       </div>
-      </>
-      )}
+
+      {/* ═══ Ambient Feedback Strip ═══ */}
+      <div className="px-4 py-4">
+        <AmbientFeedbackStrip
+          tasksCompleted={completedCount}
+          totalTasks={totalCount}
+          currentStreak={userState?.streakDays ?? 0}
+          denialDay={userState?.denialDay ?? 0}
+        />
+      </div>
 
       {/* Completion celebration (per-task) */}
-      {lastCompletedTask && !showContinuation && (
+      {lastCompletedTask && (
         <CompletionCelebration
           affirmation={lastCompletedTask.affirmation}
           pointsEarned={lastCompletedTask.pointsEarned}
@@ -1225,15 +1171,7 @@ export function TodayView() {
         />
       )}
 
-      {/* Continuation prompt - maintains momentum after completion */}
-      {showContinuation && (
-        <ContinuationPrompt
-          completedTaskName={completedActionName}
-          nextAction={priorityAction}
-          onContinue={handleContinue}
-          onDone={handleDoneContinuing}
-        />
-      )}
+      {/* ContinuationPrompt removed — flat layout replaces single-action flow */}
 
       {/* All complete celebration */}
       {showAllComplete && (
