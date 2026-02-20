@@ -77,12 +77,12 @@ export function EveningDebrief({
           <Moon className={`w-8 h-8 mx-auto mb-3 ${
             isBambiMode ? 'text-purple-400' : 'text-indigo-400'
           }`} />
-          <h1 className={`text-2xl font-bold mb-1 ${
+          <h1 className={`text-2xl font-bold mb-1 handler-voice ${
             isBambiMode ? 'text-pink-800' : 'text-white'
           }`}>
             Evening, {name}.
           </h1>
-          <p className={`text-sm italic ${
+          <p className={`text-sm italic handler-voice ${
             isBambiMode ? 'text-pink-500' : 'text-white/60'
           }`}>
             &ldquo;{message}&rdquo;
@@ -110,7 +110,7 @@ export function EveningDebrief({
             ? 'bg-white/80 border border-pink-200'
             : 'bg-white/5 border border-white/10'
         }`}>
-          <p className={`text-sm font-medium mb-3 text-center ${
+          <p className={`text-sm font-medium mb-3 text-center handler-voice ${
             isBambiMode ? 'text-pink-700' : 'text-white/80'
           }`}>
             How aligned did you feel today?
@@ -120,10 +120,10 @@ export function EveningDebrief({
               <button
                 key={i}
                 onClick={() => setAlignment(i)}
-                className={`text-2xl p-2 rounded-lg transition-all ${
+                className={`text-2xl p-2 rounded-lg transition-all duration-200 ease-in-out ${
                   alignment === i
-                    ? 'opacity-100 scale-110 bg-white/10'
-                    : 'opacity-40 hover:opacity-70'
+                    ? 'opacity-100 scale-110'
+                    : 'opacity-25 hover:opacity-50'
                 }`}
               >
                 {emoji}

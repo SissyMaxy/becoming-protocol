@@ -155,17 +155,17 @@ export function HandlerMessage(props: HandlerMessageProps) {
   return (
     <button
       onClick={() => setIsCollapsed(!isCollapsed)}
-      className={`w-full text-left rounded-lg px-4 py-3 transition-all duration-200 ${styles.container}`}
+      className={`w-full text-left rounded-xl px-4 py-3.5 transition-all duration-300 ${styles.container}`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
-          <p className={`text-sm leading-snug ${styles.primary} ${
+          <p className={`text-sm leading-snug handler-voice ${styles.primary} ${
             isCollapsed ? 'truncate' : ''
           }`}>
             {message.primary}
           </p>
           {!isCollapsed && message.secondary && (
-            <p className={`text-xs mt-1.5 leading-relaxed ${styles.secondary}`}>
+            <p className={`text-xs mt-1.5 leading-relaxed handler-voice ${styles.secondary}`}>
               {message.secondary}
             </p>
           )}

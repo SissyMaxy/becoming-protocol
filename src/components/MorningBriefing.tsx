@@ -178,7 +178,7 @@ export function MorningBriefing({ onComplete }: MorningBriefingProps) {
     : 'bg-protocol-surface border-protocol-border';
 
   return (
-    <div className={`min-h-screen flex flex-col items-center justify-start p-6 pt-12 overflow-y-auto ${
+    <div className={`min-h-screen flex flex-col items-center justify-start p-6 pt-16 overflow-y-auto ${
       isBambiMode ? 'bg-pink-50' : 'bg-protocol-bg'
     }`}>
       {/* Streak Break Modal */}
@@ -190,7 +190,7 @@ export function MorningBriefing({ onComplete }: MorningBriefingProps) {
         />
       )}
 
-      <div className="max-w-md w-full space-y-5 animate-slide-up">
+      <div className="max-w-md w-full space-y-6 animate-slide-up">
         {/* Greeting */}
         <div className="text-center space-y-2">
           <div className={`w-14 h-14 mx-auto rounded-full flex items-center justify-center border ${iconBg}`}>
@@ -200,7 +200,7 @@ export function MorningBriefing({ onComplete }: MorningBriefingProps) {
               : isBambiMode ? 'text-pink-500' : 'text-protocol-accent'
             }`} />
           </div>
-          <h1 className={`text-2xl font-semibold ${
+          <h1 className={`text-2xl font-semibold handler-voice ${
             isBambiMode ? 'text-pink-800' : 'text-protocol-text'
           }`}>
             {greetingText}{personalAddress ? `, ${personalAddress}` : ''}
@@ -370,12 +370,15 @@ export function MorningBriefing({ onComplete }: MorningBriefingProps) {
           className={`w-full py-4 rounded-xl font-medium flex items-center justify-center gap-2 transition-all ${
             selectedIntensity
               ? isBambiMode
-                ? 'bg-pink-500 hover:bg-pink-600 text-white'
-                : 'bg-protocol-accent hover:bg-protocol-accent-soft text-white'
+                ? 'bg-pink-500 hover:bg-pink-600 text-white shadow-lg'
+                : 'text-white shadow-lg hover:shadow-xl'
               : isBambiMode
               ? 'bg-pink-200 text-pink-400 cursor-not-allowed'
-              : 'bg-protocol-surface border border-protocol-border text-protocol-text-muted cursor-not-allowed'
+              : 'bg-protocol-surface border border-protocol-border/60 text-protocol-text-muted cursor-not-allowed'
           }`}
+          style={selectedIntensity && !isBambiMode ? {
+            background: 'linear-gradient(135deg, #c77dff, #a855f7)',
+          } : undefined}
         >
           {isStarting ? (
             <>

@@ -7,6 +7,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { Loader2, RefreshCw, AlertTriangle, Heart, Target, Moon, FileText, ChevronRight, Clock, Star, DollarSign, Send, Headphones, Camera } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
+import { useOpacity } from '../../context/OpacityContext';
 import { supabase } from '../../lib/supabase';
 import { useTaskBank } from '../../hooks/useTaskBank';
 import { useArousalState } from '../../hooks/useArousalState';
@@ -30,6 +31,8 @@ import { AllCompleteCelebration } from './AllCompleteCelebration';
 import { HandlerMessage } from './HandlerMessage';
 import { AmbientFeedbackStrip } from './AmbientFeedbackStrip';
 import { ActiveSessionOverlay } from './ActiveSessionOverlay';
+import { SessionContainer } from '../session';
+import type { SessionConfig } from '../session';
 import { QuickStateStrip } from './QuickStateStrip';
 import { JournalPrompt } from './JournalPrompt';
 import { getTaskVariant, VoiceTaskEnrichment, EdgeTaskEnrichment, HypnoTaskEnrichment } from './TaskCardVariants';
@@ -55,11 +58,14 @@ import { HandlerDirective } from '../handler/HandlerDirective';
 import { getActiveBriefs, type ContentBrief } from '../../lib/handler-v2/content-engine';
 import { useAuth } from '../../context/AuthContext';
 import { useVoiceTraining } from '../../hooks/useVoiceTraining';
+import { useStandingPermission } from '../../hooks/useStandingPermission';
+import { VaultSwipe } from '../vault/VaultSwipe';
 import type { WeekendActivity, ActivityFeedback } from '../../types/weekend';
 import type { Goal, GoalCompletionInput } from '../../types/goals';
 
 export function TodayView() {
   const { isBambiMode, triggerHearts } = useBambiMode();
+  const { canSee } = useOpacity();
   useArousalState(); // hook still needed for side effects
   const { user } = useAuth();
 
@@ -133,6 +139,23 @@ export function TodayView() {
   // Voice training stats for task card variants
   const { stats: voiceStats } = useVoiceTraining();
 
+  // Vault — pending content count + standing permission
+  const { granted: vaultFullAutonomy } = useStandingPermission('content_full_autonomy');
+  const [vaultPendingCount, setVaultPendingCount] = useState(0);
+  const [showVault, setShowVault] = useState(false);
+
+  useEffect(() => {
+    if (!user?.id || vaultFullAutonomy) return;
+    supabase
+      .from('content_vault')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('status', 'pending')
+      .then(({ count }) => {
+        setVaultPendingCount(count ?? 0);
+      });
+  }, [user?.id, vaultFullAutonomy]);
+
   const [showAllComplete, setShowAllComplete] = useState(false);
 
   // Morning personalization for Handler message
@@ -161,6 +184,9 @@ export function TodayView() {
 
   // Active session - shows step-by-step guidance with vibration control
   const [activeSession, setActiveSession] = useState<PriorityAction | null>(null);
+
+  // Immersive edge session (v2)
+  const [edgeSessionConfig, setEdgeSessionConfig] = useState<SessionConfig | null>(null);
 
   // Goals system
   const {
@@ -544,8 +570,24 @@ export function TodayView() {
         />
       </div>
 
-      {/* ═══ Quick state strip ═══ */}
-      {userState && (
+      {/* ═══ Vault access — visible at opacity ≤ 1, hidden with full autonomy ═══ */}
+      {canSee('vault_swipe') && !vaultFullAutonomy && vaultPendingCount > 0 && (
+        <div className="px-4 pb-1 flex justify-end">
+          <button
+            onClick={() => setShowVault(true)}
+            className="relative p-2 rounded-lg hover:bg-protocol-surface transition-colors"
+            aria-label={`${vaultPendingCount} vault items pending`}
+          >
+            <Camera className={`w-4 h-4 ${isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'}`} />
+            <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 rounded-full bg-protocol-accent text-[10px] text-white font-bold flex items-center justify-center px-1">
+              {vaultPendingCount}
+            </span>
+          </button>
+        </div>
+      )}
+
+      {/* ═══ Quick state strip — hidden at opacity level 3 ═══ */}
+      {canSee('quick_state_strip') && userState && (
         <div className="px-4 pb-2">
           <QuickStateStrip
             currentMood={currentMood}
@@ -1140,6 +1182,8 @@ export function TodayView() {
                 </p>
                 {pendingTasks.map((task, index) => {
                   const variant = getTaskVariant(task);
+                  const effectiveCompletionType = task.completionTypeOverride || task.task.completionType;
+                  const isEdgeSession = effectiveCompletionType === 'session_complete' && !isGinaHome;
                   return (
                     <div key={task.id}>
                       {variant === 'voice' && <VoiceTaskEnrichment stats={voiceStats} />}
@@ -1147,7 +1191,18 @@ export function TodayView() {
                       {variant === 'hypno' && <HypnoTaskEnrichment session={activeHypnoSession} taskInstruction={task.task.instruction} />}
                       <TaskCardNew
                         task={task}
-                        onComplete={(feltGood, notes, captureData) => complete(task.id, feltGood, notes, captureData as Record<string, unknown> | undefined)}
+                        onComplete={(feltGood, notes, captureData) => {
+                          if (isEdgeSession) {
+                            setEdgeSessionConfig({
+                              sessionType: 'anchoring',
+                              targetEdges: 10,
+                              originTaskId: task.id,
+                              prescribed: true,
+                            });
+                          } else {
+                            complete(task.id, feltGood, notes, captureData as Record<string, unknown> | undefined);
+                          }
+                        }}
                         onIncrement={() => incrementProgress(task.id)}
                         onSkip={() => skip(task.id)}
                         isCompleting={completingTaskId === task.id}
@@ -1207,8 +1262,8 @@ export function TodayView() {
         )}
       </div>
 
-      {/* ═══ Journal Prompt ═══ */}
-      {user?.id && (
+      {/* ═══ Journal Prompt — hidden at opacity level 3 ═══ */}
+      {canSee('journal_prompt') && user?.id && (
         <div className="px-4 pb-2">
           <JournalPrompt
             userId={user.id}
@@ -1217,15 +1272,17 @@ export function TodayView() {
         </div>
       )}
 
-      {/* ═══ Ambient Feedback Strip ═══ */}
-      <div className="px-4 py-4">
-        <AmbientFeedbackStrip
-          tasksCompleted={completedCount}
-          totalTasks={totalCount}
-          currentStreak={userState?.streakDays ?? 0}
-          denialDay={userState?.denialDay ?? 0}
-        />
-      </div>
+      {/* ═══ Ambient Feedback Strip — hidden at opacity level 3 ═══ */}
+      {canSee('ambient_feedback_strip') && (
+        <div className="px-4 py-4">
+          <AmbientFeedbackStrip
+            tasksCompleted={completedCount}
+            totalTasks={totalCount}
+            currentStreak={userState?.streakDays ?? 0}
+            denialDay={userState?.denialDay ?? 0}
+          />
+        </div>
+      )}
 
       {/* Per-task affirmation is now inline in the card (CardPhase: affirming).
           Auto-dismiss lastCompletedTask so it doesn't linger. */}
@@ -1302,6 +1359,19 @@ export function TodayView() {
         />
       )}
 
+      {/* Immersive Edge Session (v2) */}
+      {edgeSessionConfig && (
+        <SessionContainer
+          config={edgeSessionConfig}
+          denialDay={userState?.denialDay ?? 0}
+          onComplete={() => {
+            loadTasks();
+            setEdgeSessionConfig(null);
+          }}
+          onCancel={() => setEdgeSessionConfig(null)}
+        />
+      )}
+
       {/* Shoot Flow Overlays */}
       {shootFlow.phase === 'shooting' && shootFlow.activeShoot && (
         <ShotView
@@ -1319,6 +1389,22 @@ export function TodayView() {
           onUploadComplete={shootFlow.uploadMedia}
           onClose={shootFlow.closeFlow}
         />
+      )}
+
+      {/* Vault Swipe Overlay */}
+      {showVault && (
+        <VaultSwipe onClose={() => {
+          setShowVault(false);
+          // Refresh pending count after vault interaction
+          if (user?.id && !vaultFullAutonomy) {
+            supabase
+              .from('content_vault')
+              .select('id', { count: 'exact', head: true })
+              .eq('user_id', user.id)
+              .eq('status', 'pending')
+              .then(({ count }) => setVaultPendingCount(count ?? 0));
+          }
+        }} />
       )}
 
       {shootFlow.phase === 'posting' && shootFlow.activeShoot && (

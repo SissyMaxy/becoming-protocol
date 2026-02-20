@@ -91,7 +91,7 @@ export function JournalPrompt({ userId, handlerMode }: JournalPromptProps) {
         : 'bg-protocol-surface/40 border border-protocol-border'
     }`}>
       {/* Prompt */}
-      <p className={`text-sm italic mb-3 ${
+      <p className={`text-sm italic mb-3 handler-voice ${
         isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'
       }`}>
         {prompt}

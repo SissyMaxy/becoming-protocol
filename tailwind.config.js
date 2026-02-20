@@ -8,12 +8,13 @@ export default {
     extend: {
       colors: {
         'protocol': {
-          'bg': '#0a0a0f',
-          'surface': '#12121a',
-          'surface-light': '#1a1a24',
-          'border': '#2a2a3a',
-          'text': '#e4e4eb',
-          'text-muted': '#8888a0',
+          'bg': '#0b0a10',
+          'surface': '#13121c',
+          'surface-light': '#1b1a26',
+          'border': '#2b2a3c',
+          'text': '#e8e6ed',
+          'text-muted': '#908da4',
+          'text-warm': '#f5f0eb',
           'accent': '#a855f7',
           'accent-soft': '#c084fc',
           'success': '#22c55e',
@@ -57,6 +58,7 @@ export default {
       fontFamily: {
         'mono': ['JetBrains Mono', 'Fira Code', 'monospace'],
         'bambi': ['Quicksand', 'Nunito', 'Poppins', 'sans-serif'],
+        'handler': ['Playfair Display', 'Georgia', 'serif'],
       },
       boxShadow: {
         'bambi': '0 4px 20px rgba(255, 105, 180, 0.3)',

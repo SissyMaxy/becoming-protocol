@@ -23,6 +23,8 @@ import {
 import { useBambiMode } from '../../context/BambiModeContext';
 import { useProtocol } from '../../context/ProtocolContext';
 import { useDebugMode } from '../../context/DebugContext';
+import { useOpacity } from '../../context/OpacityContext';
+import { OpacitySelector } from './OpacitySelector';
 import { useReminders } from '../../hooks/useReminders';
 import { LovenseSettings } from './LovenseSettings';
 import { ProfileView } from './ProfileView';
@@ -42,12 +44,13 @@ interface SettingsViewProps {
   onEditIntake?: () => void;
 }
 
-type SettingsSection = 'main' | 'profile' | 'lovense' | 'timeratchets' | 'reminders' | 'privacy' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content';
+type SettingsSection = 'main' | 'profile' | 'lovense' | 'timeratchets' | 'reminders' | 'privacy' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content' | 'opacity';
 
 export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
   const { isBambiMode } = useBambiMode();
   const { regenerateToday } = useProtocol();
   const { isDebugMode, registerTap, disableDebugMode } = useDebugMode();
+  const { canSee } = useOpacity();
   const {
     settings: reminderSettings,
     updateSettings: updateReminderSettings,
@@ -58,7 +61,19 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>('main');
   const [isRegenerating, setIsRegenerating] = useState(false);
 
-  const sections = [
+  // Map section IDs to opacity feature keys
+  const SECTION_FEATURE: Record<string, string> = {
+    lovense: 'settings_basic',        // always visible
+    timeratchets: 'settings_timeratchets',
+    reminders: 'settings_reminders',
+    microtasks: 'settings_microtasks',
+    'sleep-content': 'settings_sleep',
+    privacy: 'settings_privacy',
+    appearance: 'settings_appearance',
+    data: 'settings_data',
+  };
+
+  const allSections = [
     {
       id: 'lovense' as const,
       icon: Vibrate,
@@ -117,6 +132,12 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
     },
   ];
 
+  // Filter sections by opacity level
+  const sections = allSections.filter(s => {
+    const feature = SECTION_FEATURE[s.id];
+    return !feature || canSee(feature);
+  });
+
   const handleBack = () => {
     if (activeSection === 'main') {
       onBack();
@@ -136,6 +157,7 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
     if (activeSection === 'privacy') return 'Privacy & Security';
     if (activeSection === 'appearance') return 'Appearance';
     if (activeSection === 'data') return 'Data Export';
+    if (activeSection === 'opacity') return 'Visibility';
     const section = sections.find(s => s.id === activeSection);
     return section?.label || 'Settings';
   };
@@ -270,6 +292,13 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
               </div>
             </div>
 
+            {/* Opacity Selector — always visible */}
+            <div className={`rounded-xl border p-4 ${
+              isBambiMode ? 'bg-pink-50 border-pink-200' : 'bg-protocol-surface border-protocol-border'
+            }`}>
+              <OpacitySelector />
+            </div>
+
             {/* Features Section */}
             <div>
               <h2
@@ -378,8 +407,8 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
               </button>
             </div>
 
-            {/* Developer Section */}
-            <div>
+            {/* Developer Section — only at opacity level 0 */}
+            {canSee('developer_tools') && <div>
               <h2
                 className={`text-sm font-medium mb-3 ${
                   isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'
@@ -613,7 +642,7 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
                   </button>
                 )}
               </div>
-            </div>
+            </div>}
 
             {/* App Version - Tap to enable debug mode */}
             <div className="text-center pt-4">

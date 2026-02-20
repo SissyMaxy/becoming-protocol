@@ -4,6 +4,7 @@ import { ProtocolProvider, useProtocol } from './context/ProtocolContext';
 import { BambiModeProvider, useBambiMode, FloatingHearts } from './context/BambiModeContext';
 import { RewardProvider, useRewardOptional } from './context/RewardContext';
 import { DebugModeProvider } from './context/DebugContext';
+import { OpacityProvider, useOpacity } from './context/OpacityContext';
 import { HandlerProvider, useHandlerContext } from './context/HandlerContext';
 import { AmbushProvider } from './components/ambush';
 import { ModalOrchestratorProvider } from './context/ModalOrchestrator';
@@ -66,9 +67,13 @@ import { profileStorage, letterStorage } from './lib/storage';
 import type { UserProfile, SealedLetter } from './components/Onboarding/types';
 import {
   CheckSquare,
+  TrendingUp,
   Loader2,
   Settings,
-  Heart
+  Gift,
+  Menu,
+  Heart,
+  MoreHorizontal,
 } from 'lucide-react';
 
 // Parse hash route for shared wishlist
@@ -80,6 +85,14 @@ function parseWishlistToken(): string | null {
 
 type Tab = 'protocol' | 'progress' | 'sealed' | 'menu';
 
+// Tab labels for full nav (level 0)
+const TAB_LABELS: Record<Tab, { normal: string; bambi: string }> = {
+  protocol: { normal: 'Today', bambi: 'Instructions' },
+  progress: { normal: 'Progress', bambi: 'Conditioning' },
+  sealed: { normal: 'Sealed', bambi: 'Secrets' },
+  menu: { normal: 'More', bambi: 'More' },
+};
+
 function Navigation({
   activeTab,
   onTabChange,
@@ -88,33 +101,104 @@ function Navigation({
   onTabChange: (tab: Tab) => void;
 }) {
   const { isBambiMode } = useBambiMode();
-  const TodayIcon = isBambiMode ? Heart : CheckSquare;
-  const isToday = activeTab === 'protocol';
+  const { level: opacityLevel } = useOpacity();
 
+  const navCls = `fixed bottom-0 left-0 right-0 backdrop-blur-lg border-t z-40 ${
+    isBambiMode ? 'bg-white/95 border-pink-200' : 'bg-protocol-surface/95 border-protocol-border'
+  }`;
+
+  const btnCls = (isActive: boolean) =>
+    `relative flex flex-col items-center gap-1 py-2 px-4 rounded-lg transition-colors ${
+      isActive
+        ? isBambiMode ? 'text-pink-500' : 'text-protocol-accent'
+        : isBambiMode ? 'text-pink-400 hover:text-pink-600' : 'text-protocol-text-muted hover:text-protocol-text'
+    }`;
+
+  // Level 0: Full 4-tab nav
+  if (opacityLevel === 0) {
+    const tabs: { id: Tab; icon: React.ElementType; bambiIcon?: React.ElementType }[] = [
+      { id: 'protocol', icon: CheckSquare, bambiIcon: Heart },
+      { id: 'progress', icon: TrendingUp },
+      { id: 'sealed', icon: Gift },
+      { id: 'menu', icon: Menu },
+    ];
+
+    return (
+      <nav aria-label="Main navigation" className={navCls}>
+        <div className="max-w-lg mx-auto px-4 py-2">
+          <div className="flex items-center justify-around">
+            {tabs.map(tab => {
+              const Icon = isBambiMode && tab.bambiIcon ? tab.bambiIcon : tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button key={tab.id} onClick={() => onTabChange(tab.id)} className={btnCls(isActive)}>
+                  <Icon className={`w-5 h-5 ${isActive ? 'stroke-2' : ''}`} />
+                  <span className="text-xs font-medium">
+                    {isBambiMode ? TAB_LABELS[tab.id].bambi : TAB_LABELS[tab.id].normal}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </nav>
+    );
+  }
+
+  // Level 1: Today + "..." More + Settings gear
+  if (opacityLevel === 1) {
+    const TodayIcon = isBambiMode ? Heart : CheckSquare;
+    return (
+      <nav aria-label="Main navigation" className={navCls}>
+        <div className="max-w-lg mx-auto px-4 py-2">
+          <div className="flex items-center justify-between">
+            <button onClick={() => onTabChange('protocol')} className={btnCls(activeTab === 'protocol')}>
+              <TodayIcon className={`w-5 h-5 ${activeTab === 'protocol' ? 'stroke-2' : ''}`} />
+              <span className="text-xs font-medium">{isBambiMode ? 'Instructions' : 'Today'}</span>
+            </button>
+            <button
+              onClick={() => onTabChange('menu')}
+              className={`p-2 rounded-lg transition-colors ${
+                activeTab === 'menu'
+                  ? isBambiMode ? 'text-pink-500' : 'text-protocol-accent'
+                  : isBambiMode ? 'text-pink-400 hover:text-pink-600' : 'text-protocol-text-muted hover:text-protocol-text'
+              }`}
+            >
+              <MoreHorizontal className={`w-5 h-5 ${activeTab === 'menu' ? 'stroke-2' : ''}`} />
+            </button>
+            <button
+              onClick={() => {
+                onTabChange('menu');
+                // Dispatch settings navigation after tab change
+                setTimeout(() => window.dispatchEvent(new CustomEvent('navigate-to-settings')), 0);
+              }}
+              className={`p-2 rounded-lg transition-colors ${
+                isBambiMode ? 'text-pink-400 hover:text-pink-600' : 'text-protocol-text-muted hover:text-protocol-text'
+              }`}
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      </nav>
+    );
+  }
+
+  // Level 2-3: Minimal — Today + Settings only
+  const TodayIcon = isBambiMode ? Heart : CheckSquare;
   return (
-    <nav aria-label="Main navigation" className={`fixed bottom-0 left-0 right-0 backdrop-blur-lg border-t z-40 ${
-      isBambiMode
-        ? 'bg-white/95 border-pink-200'
-        : 'bg-protocol-surface/95 border-protocol-border'
-    }`}>
+    <nav aria-label="Main navigation" className={navCls}>
       <div className="max-w-lg mx-auto px-4 py-2">
         <div className="flex items-center justify-between">
-          {/* Today tab */}
-          <button
-            onClick={() => onTabChange('protocol')}
-            className={`flex items-center gap-2 py-2 px-4 rounded-lg transition-colors ${
-              isToday
-                ? isBambiMode ? 'text-pink-500' : 'text-protocol-accent'
-                : isBambiMode ? 'text-pink-400 hover:text-pink-600' : 'text-protocol-text-muted hover:text-protocol-text'
-            }`}
-          >
-            <TodayIcon className={`w-5 h-5 ${isToday ? 'stroke-2' : ''}`} />
-            <span className="text-sm font-medium">{isBambiMode ? 'Instructions' : 'Today'}</span>
+          <button onClick={() => onTabChange('protocol')} className={btnCls(activeTab === 'protocol')}>
+            <TodayIcon className={`w-5 h-5 ${activeTab === 'protocol' ? 'stroke-2' : ''}`} />
+            <span className="text-xs font-medium">{isBambiMode ? 'Instructions' : 'Today'}</span>
           </button>
-
-          {/* Settings / More gear */}
           <button
-            onClick={() => onTabChange('menu')}
+            onClick={() => {
+              onTabChange('menu');
+              setTimeout(() => window.dispatchEvent(new CustomEvent('navigate-to-settings')), 0);
+            }}
             className={`p-2 rounded-lg transition-colors ${
               activeTab === 'menu'
                 ? isBambiMode ? 'text-pink-500' : 'text-protocol-accent'
@@ -212,6 +296,7 @@ type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' 
 function AuthenticatedAppInner() {
   const { currentEntry, isLoading, investmentMilestone, dismissInvestmentMilestone, userName, progress } = useProtocol();
   const { isBambiMode } = useBambiMode();
+  const { canSee } = useOpacity();
   const rewardContext = useRewardOptional();
   const { currentIntervention, dismissIntervention, completeIntervention, respondToIntervention } = useHandlerContext();
 
@@ -329,6 +414,16 @@ function AuthenticatedAppInner() {
       window.removeEventListener('navigate-to-hypno', handleNavigateToHypno);
     };
   }, []);
+
+  // Redirect away from gated tabs when opacity hides them
+  useEffect(() => {
+    if (activeTab === 'progress' && !canSee('progress_page')) {
+      setActiveTab('protocol');
+    }
+    if (activeTab === 'sealed' && !canSee('sealed_content')) {
+      setActiveTab('protocol');
+    }
+  }, [activeTab, canSee]);
 
   // Check if onboarding is complete
   useEffect(() => {
@@ -645,12 +740,16 @@ function AuthenticatedAppInner() {
         <ErrorBoundary componentName="TodayView">
           {activeTab === 'protocol' && <TodayView />}
         </ErrorBoundary>
-        <ErrorBoundary componentName="ProgressDashboard">
-          {activeTab === 'progress' && <ProgressDashboard />}
-        </ErrorBoundary>
-        <ErrorBoundary componentName="SealedContent">
-          {activeTab === 'sealed' && <SealedContentView />}
-        </ErrorBoundary>
+        {canSee('progress_page') && (
+          <ErrorBoundary componentName="ProgressDashboard">
+            {activeTab === 'progress' && <ProgressDashboard />}
+          </ErrorBoundary>
+        )}
+        {canSee('sealed_content') && (
+          <ErrorBoundary componentName="SealedContent">
+            {activeTab === 'sealed' && <SealedContentView />}
+          </ErrorBoundary>
+        )}
         <ErrorBoundary componentName="Menu">
           {activeTab === 'menu' && renderMenuSubView()}
         </ErrorBoundary>
@@ -702,24 +801,26 @@ function AuthenticatedAppInner() {
   );
 }
 
-// Wrapper component that provides BambiMode, Reward, Handler, Modal, and Debug contexts
+// Wrapper component that provides BambiMode, Reward, Handler, Modal, Opacity, and Debug contexts
 function AuthenticatedApp() {
   return (
     <DebugModeProvider>
-      <BambiModeProvider>
-        <RewardProvider>
-          <HandlerProvider
-            autoGeneratePlan={true}
-            enableBackgroundChecks={true}
-          >
-            <ModalOrchestratorProvider>
-              <AmbushProvider>
-                <AuthenticatedAppInner />
-              </AmbushProvider>
-            </ModalOrchestratorProvider>
-          </HandlerProvider>
-        </RewardProvider>
-      </BambiModeProvider>
+      <OpacityProvider>
+        <BambiModeProvider>
+          <RewardProvider>
+            <HandlerProvider
+              autoGeneratePlan={true}
+              enableBackgroundChecks={true}
+            >
+              <ModalOrchestratorProvider>
+                <AmbushProvider>
+                  <AuthenticatedAppInner />
+                </AmbushProvider>
+              </ModalOrchestratorProvider>
+            </HandlerProvider>
+          </RewardProvider>
+        </BambiModeProvider>
+      </OpacityProvider>
     </DebugModeProvider>
   );
 }

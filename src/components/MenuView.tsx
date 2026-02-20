@@ -11,6 +11,7 @@ import {
   LayoutDashboard, BookOpen, Bot, Dumbbell, Gem, ImageIcon, Monitor, AudioLines, Camera, Headphones
 } from 'lucide-react';
 import { useBambiMode } from '../context/BambiModeContext';
+import { useOpacity } from '../context/OpacityContext';
 
 type MenuItemId =
   | 'history' | 'investments' | 'wishlist' | 'settings' | 'help'
@@ -41,8 +42,44 @@ interface MenuCategory {
   defaultExpanded?: boolean;
 }
 
+// Map menu item IDs to opacity feature keys
+const MENU_ITEM_FEATURE: Record<string, string> = {
+  'progress-page': 'progress_page',
+  'sealed-page': 'sealed_content',
+  'handler-autonomous': 'more_menu',
+  'timeline': 'more_menu',
+  'service': 'more_menu',
+  'gina': 'more_menu',
+  'gina-pipeline': 'more_menu',
+  'her-world': 'more_menu',
+  'vault-swipe': 'vault_swipe',
+  'sessions': 'sessions_browse',
+  'cam-session': 'sessions_browse',
+  'hypno-session': 'sessions_browse',
+  'quiz': 'more_menu',
+  'voice-drills': 'more_menu',
+  'voice-game': 'more_menu',
+  'exercise': 'more_menu',
+  'content': 'escalation_content',
+  'domains': 'escalation_domain',
+  'patterns': 'escalation_patterns',
+  'seeds': 'escalation_seeds',
+  'protocol-analytics': 'analytics_protocol',
+  'dashboard': 'analytics_dashboard',
+  'journal': 'journal_page',
+  'service-analytics': 'analytics_service',
+  'vectors': 'analytics_vectors',
+  'trigger-audit': 'analytics_triggers',
+  'content-dashboard': 'analytics_content',
+  'curation': 'tools_curation',
+  'history': 'records_history',
+  'investments': 'records_investments',
+  'wishlist': 'records_wishlist',
+};
+
 export function MenuView({ onNavigate }: MenuViewProps) {
   const { isBambiMode } = useBambiMode();
+  const { canSee } = useOpacity();
 
   // Track which categories are expanded
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
@@ -341,6 +378,13 @@ export function MenuView({ onNavigate }: MenuViewProps) {
       {/* Categorized menu items */}
       <div className="space-y-3">
         {categories.map((category) => {
+          // Filter items by opacity visibility
+          const visibleItems = category.items.filter(item => {
+            const feature = MENU_ITEM_FEATURE[item.id];
+            return !feature || canSee(feature);
+          });
+          if (visibleItems.length === 0) return null;
+
           const isExpanded = expandedCategories.has(category.id);
 
           return (
@@ -370,7 +414,7 @@ export function MenuView({ onNavigate }: MenuViewProps) {
                       ? 'bg-pink-200 text-pink-600'
                       : 'bg-protocol-border text-protocol-text-muted'
                   }`}>
-                    {category.items.length}
+                    {visibleItems.length}
                   </span>
                 </div>
                 <ChevronDown className={`w-4 h-4 transition-transform ${
@@ -383,7 +427,7 @@ export function MenuView({ onNavigate }: MenuViewProps) {
                 <div className={`border-t ${
                   isBambiMode ? 'border-pink-200' : 'border-protocol-border'
                 }`}>
-                  {category.items.map((item, idx) => {
+                  {visibleItems.map((item, idx) => {
                     const Icon = item.icon;
                     return (
                       <button

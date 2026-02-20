@@ -12,8 +12,8 @@ html {
 
 body {
   margin: 0;
-  background-color: #0a0a0f;
-  color: #e4e4eb;
+  background-color: #0b0a10;
+  color: #e8e6ed;
   min-height: 100vh;
 }
 
@@ -101,7 +101,7 @@ body {
 }
 
 .animate-slide-up {
-  animation: slide-up 0.3s ease-out;
+  animation: slide-up 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 .animate-float {
@@ -127,8 +127,26 @@ body {
   }
 }
 
+@keyframes session-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-session-enter {
+  animation: session-enter 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
 .animate-slide-down {
   animation: slide-down 0.3s ease-out;
+}
+
+/* Handler voice typography — warm serif for Handler-authored content */
+.handler-voice {
+  font-family: 'Playfair Display', Georgia, serif;
 }
 
 /* Utility classes */
@@ -142,15 +160,20 @@ body {
   }
 
   .card {
-    @apply bg-protocol-surface border border-protocol-border rounded-lg;
+    @apply bg-protocol-surface border border-protocol-border/60 rounded-xl;
   }
 
   .btn-primary {
-    @apply bg-protocol-accent hover:bg-protocol-accent-soft text-white font-medium py-2 px-4 rounded-lg transition-colors;
+    @apply text-white font-medium py-2 px-4 rounded-xl transition-all;
+    background: linear-gradient(135deg, #c77dff, #a855f7);
+  }
+
+  .btn-primary:hover {
+    background: linear-gradient(135deg, #d4a0ff, #b87afc);
   }
 
   .btn-secondary {
-    @apply bg-protocol-surface-light hover:bg-protocol-border text-protocol-text font-medium py-2 px-4 rounded-lg transition-colors border border-protocol-border;
+    @apply bg-protocol-surface-light hover:bg-protocol-border text-protocol-text font-medium py-2 px-4 rounded-xl transition-colors border border-protocol-border/60;
   }
 
   /* Bambi Mode utility classes */

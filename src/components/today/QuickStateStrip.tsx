@@ -119,7 +119,7 @@ export function QuickStateStrip({
     <div className={`flex items-center justify-between rounded-xl px-2 py-1.5 ${
       isBambiMode
         ? 'bg-pink-50/50 border border-pink-200'
-        : 'bg-protocol-surface/50 border border-protocol-border'
+        : 'bg-transparent border border-protocol-border/30'
     } ${isLoading ? 'opacity-50 pointer-events-none' : ''}`}>
 
       {/* Mood: 5 emojis */}
@@ -128,8 +128,8 @@ export function QuickStateStrip({
           <button
             key={i}
             onClick={() => handleMood(i)}
-            className={`text-base leading-none p-1 rounded transition-opacity ${
-              localMoodIdx === i ? 'opacity-100 scale-110' : 'opacity-30 hover:opacity-60'
+            className={`text-base leading-none p-1 rounded transition-all duration-150 ${
+              localMoodIdx === i ? 'opacity-100 scale-110' : 'opacity-20 hover:opacity-50'
             }`}
           >
             {emoji}

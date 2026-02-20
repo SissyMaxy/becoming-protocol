@@ -22,30 +22,30 @@ export function AmbientFeedbackStrip({
   const { isBambiMode } = useBambiMode();
 
   return (
-    <div className={`flex justify-around items-center rounded-xl px-3 py-2.5 ${
+    <div className={`flex justify-around items-center rounded-xl px-3 py-2 opacity-50 ${
       isBambiMode
-        ? 'bg-pink-50 border border-pink-200'
-        : 'bg-protocol-surface border border-protocol-border'
+        ? 'bg-pink-50/30'
+        : ''
     }`}>
       <StatPill
-        icon={<CheckCircle className="w-3.5 h-3.5" />}
+        icon={<CheckCircle className="w-3 h-3" />}
         value={`${tasksCompleted}/${totalTasks}`}
         isBambiMode={isBambiMode}
-        color={isBambiMode ? 'text-pink-500' : 'text-emerald-400'}
+        color={isBambiMode ? 'text-pink-500' : 'text-emerald-400/70'}
       />
       <Divider isBambiMode={isBambiMode} />
       <StatPill
-        icon={<Flame className="w-3.5 h-3.5" />}
+        icon={<Flame className="w-3 h-3" />}
         value={currentStreak > 0 ? `${currentStreak}d` : '--'}
         isBambiMode={isBambiMode}
-        color={isBambiMode ? 'text-pink-500' : 'text-amber-400'}
+        color={isBambiMode ? 'text-pink-500' : 'text-amber-400/70'}
       />
       <Divider isBambiMode={isBambiMode} />
       <StatPill
-        icon={<Lock className="w-3.5 h-3.5" />}
+        icon={<Lock className="w-3 h-3" />}
         value={`D${denialDay}`}
         isBambiMode={isBambiMode}
-        color={isBambiMode ? 'text-pink-500' : 'text-purple-400'}
+        color={isBambiMode ? 'text-pink-500' : 'text-purple-400/70'}
       />
     </div>
   );
@@ -63,10 +63,10 @@ function StatPill({
   color: string;
 }) {
   return (
-    <div className={`flex items-center gap-1.5 ${color}`}>
+    <div className={`flex items-center gap-1 ${color}`}>
       {icon}
-      <span className={`text-xs font-semibold tabular-nums ${
-        isBambiMode ? 'text-pink-700' : 'text-protocol-text'
+      <span className={`text-[11px] font-medium tabular-nums ${
+        isBambiMode ? 'text-pink-700' : 'text-protocol-text-muted'
       }`}>
         {value}
       </span>
@@ -76,8 +76,8 @@ function StatPill({
 
 function Divider({ isBambiMode }: { isBambiMode: boolean }) {
   return (
-    <div className={`w-px h-4 ${
-      isBambiMode ? 'bg-pink-200' : 'bg-protocol-border'
+    <div className={`w-px h-3 ${
+      isBambiMode ? 'bg-pink-200/50' : 'bg-protocol-border/30'
     }`} />
   );
 }
