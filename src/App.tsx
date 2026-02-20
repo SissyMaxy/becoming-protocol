@@ -162,9 +162,26 @@ function Navigation({
   );
 }
 
+function formatHeaderTime(): string {
+  const now = new Date();
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const day = days[now.getDay()];
+  const hours = now.getHours();
+  const minutes = now.getMinutes();
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  const h12 = hours % 12 || 12;
+  return `${day} ${h12}:${minutes.toString().padStart(2, '0')} ${ampm}`;
+}
+
 function Header() {
   const { userName } = useProtocol();
   const { isBambiMode, getGreeting } = useBambiMode();
+  const [timeLabel, setTimeLabel] = useState(formatHeaderTime());
+
+  useEffect(() => {
+    const timer = setInterval(() => setTimeLabel(formatHeaderTime()), 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   const handleSettingsClick = () => {
     window.dispatchEvent(new CustomEvent('navigate-to-settings'));
@@ -194,7 +211,7 @@ function Header() {
             <p className={`text-xs ${
               isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'
             }`}>
-              {isBambiMode && userName ? userName : 'Protocol'}
+              {isBambiMode && userName ? userName : timeLabel}
             </p>
           </div>
         </div>

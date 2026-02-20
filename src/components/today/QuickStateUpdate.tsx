@@ -1,25 +1,11 @@
 /**
- * QuickStateUpdate Component
- * Quick state update control for Today View
- * Allows updating: mood, arousal, exec function, Gina home
+ * QuickStateUpdate — Compact pill row for state check-in
+ * Four pills: mood, arousal, energy, gina
+ * Tap a pill to expand its selector inline.
+ * If no check-in today, shows "Check in" prompt that expands all selectors once.
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import {
-  Smile,
-  Frown,
-  Meh,
-  Flame,
-  Battery,
-  BatteryLow,
-  BatteryMedium,
-  BatteryFull,
-  Home,
-  User,
-  Moon,
-  ChevronDown,
-  ChevronUp,
-} from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { useBambiMode } from '../../context/BambiModeContext';
 import type { ExecFunction } from '../../hooks/useUserState';
 
@@ -37,7 +23,34 @@ interface QuickStateUpdateProps {
     ginaAsleep?: boolean;
   }) => void;
   isLoading?: boolean;
-  compact?: boolean;
+  compact?: boolean; // kept for interface compat, always compact now
+}
+
+type Dimension = 'mood' | 'arousal' | 'energy' | 'gina';
+
+function getMoodDisplay(mood?: number): { emoji: string; label: string } {
+  if (mood === undefined) return { emoji: '😐', label: 'Okay' };
+  if (mood >= 7) return { emoji: '😊', label: 'Good' };
+  if (mood <= 3) return { emoji: '😔', label: 'Low' };
+  return { emoji: '😐', label: 'Okay' };
+}
+
+function getEnergyLabel(exec: ExecFunction): string {
+  switch (exec) {
+    case 'high': return 'High';
+    case 'medium': return 'Med';
+    case 'low': return 'Low';
+    case 'depleted': return 'Depleted';
+    default: return 'Med';
+  }
+}
+
+function getGinaDisplay(state: 'home' | 'asleep' | 'alone'): { emoji: string; label: string } {
+  switch (state) {
+    case 'home': return { emoji: '🏠', label: 'Home' };
+    case 'asleep': return { emoji: '🌙', label: 'Asleep' };
+    case 'alone': return { emoji: '👤', label: 'Alone' };
+  }
 }
 
 export function QuickStateUpdate({
@@ -48,345 +61,295 @@ export function QuickStateUpdate({
   ginaAsleep = false,
   onUpdate,
   isLoading = false,
-  compact = false,
 }: QuickStateUpdateProps) {
   const { isBambiMode } = useBambiMode();
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [savedField, setSavedField] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Dimension | 'all' | null>(null);
+  const [localMood, setLocalMood] = useState<number | undefined>(currentMood);
   const [ginaState, setGinaState] = useState<'home' | 'asleep' | 'alone'>(
     ginaHome ? 'home' : ginaAsleep ? 'asleep' : 'alone'
   );
 
-  // Sync ginaState when props change externally
+  useEffect(() => { setLocalMood(currentMood); }, [currentMood]);
   useEffect(() => {
     setGinaState(ginaHome ? 'home' : ginaAsleep ? 'asleep' : 'alone');
   }, [ginaHome, ginaAsleep]);
 
-  const showSaved = useCallback((field: string) => {
-    setSavedField(field);
-    setTimeout(() => setSavedField(null), 1500);
-  }, []);
+  const needsCheckin = localMood === undefined;
 
-  // Local state for immediate UI feedback
-  const [selectedMood, setSelectedMood] = useState<number | undefined>(currentMood);
-
-  // Sync with prop when it changes externally
-  useEffect(() => {
-    setSelectedMood(currentMood);
-  }, [currentMood]);
-
-  // Handle mood selection with immediate UI update
-  const handleMoodSelect = (moodValue: number) => {
-    setSelectedMood(moodValue);
-    onUpdate({ mood: moodValue });
-    showSaved('mood');
+  const handleMoodSelect = (value: number) => {
+    setLocalMood(value);
+    onUpdate({ mood: value });
+    if (expanded !== 'all') setExpanded(null);
   };
 
-  // Mood options
-  const moodOptions = [
-    { value: 2, label: 'Low', icon: Frown },
-    { value: 5, label: 'Okay', icon: Meh },
-    { value: 8, label: 'Good', icon: Smile },
-  ];
+  const handleArousalSelect = (value: number) => {
+    onUpdate({ arousal: value });
+    if (expanded !== 'all') setExpanded(null);
+  };
 
-  // Arousal options (0-5)
-  const arousalOptions = [
-    { value: 0, label: 'None' },
-    { value: 1, label: 'Low' },
-    { value: 2, label: 'Mild' },
-    { value: 3, label: 'Medium' },
-    { value: 4, label: 'High' },
-    { value: 5, label: 'Peak' },
-  ];
+  const handleEnergySelect = (value: ExecFunction) => {
+    onUpdate({ execFunction: value });
+    if (expanded !== 'all') setExpanded(null);
+  };
 
-  // Exec function options
-  const execOptions: { value: ExecFunction; label: string; icon: typeof Battery }[] = [
-    { value: 'depleted', label: 'Depleted', icon: BatteryLow },
-    { value: 'low', label: 'Low', icon: BatteryLow },
-    { value: 'medium', label: 'Medium', icon: BatteryMedium },
-    { value: 'high', label: 'High', icon: BatteryFull },
-  ];
+  const handleGinaSelect = (state: 'home' | 'asleep' | 'alone') => {
+    setGinaState(state);
+    onUpdate({
+      ginaHome: state === 'home',
+      ginaAsleep: state === 'asleep',
+    });
+    if (expanded !== 'all') setExpanded(null);
+  };
 
-  // Get current exec icon
-  const currentExecOption = execOptions.find(o => o.value === currentExecFunction) || execOptions[2];
-  const ExecIcon = currentExecOption.icon;
+  const toggleDimension = (dim: Dimension) => {
+    setExpanded(prev => prev === dim ? null : dim);
+  };
 
-  // Compact view - just shows current state with toggle
-  if (compact && !isExpanded) {
+  // Selector row styles
+  const selectorBtn = (isSelected: boolean, variant?: 'rose' | 'orange' | 'emerald' | 'red' | 'purple') => {
+    if (isSelected) {
+      if (variant === 'rose') return 'bg-rose-500 text-white';
+      if (variant === 'orange') return 'bg-orange-500 text-white';
+      if (variant === 'emerald') return 'bg-emerald-500 text-white';
+      if (variant === 'red') return 'bg-red-500 text-white';
+      if (variant === 'purple') return isBambiMode ? 'bg-purple-300 text-purple-800' : 'bg-purple-900/30 text-purple-400';
+      return isBambiMode ? 'bg-pink-300 text-pink-800' : 'bg-protocol-accent/30 text-protocol-accent';
+    }
+    return isBambiMode
+      ? 'bg-pink-50 text-pink-600 hover:bg-pink-100 border border-pink-200'
+      : 'bg-protocol-bg text-protocol-text-muted hover:bg-protocol-surface/80 border border-protocol-border';
+  };
+
+  // ── No check-in: show prompt ──
+  if (needsCheckin && expanded !== 'all') {
     return (
       <button
-        onClick={() => setIsExpanded(true)}
+        onClick={() => setExpanded('all')}
         disabled={isLoading}
-        className={`w-full flex items-center justify-between p-3 rounded-xl transition-colors ${
+        className={`w-full py-3 px-4 rounded-xl text-sm font-medium transition-colors ${
           isBambiMode
-            ? 'bg-pink-50 hover:bg-pink-100 border border-pink-200'
-            : 'bg-protocol-surface hover:bg-protocol-surface/80 border border-protocol-border'
+            ? 'bg-pink-50 text-pink-700 hover:bg-pink-100 border border-pink-200'
+            : 'bg-protocol-surface text-protocol-text hover:bg-protocol-surface/80 border border-protocol-border'
         } ${isLoading ? 'opacity-50' : ''}`}
       >
-        <div className="flex items-center gap-3">
-          {/* Mood indicator */}
-          <div className={`p-1.5 rounded-lg ${
-            selectedMood && selectedMood >= 7
-              ? isBambiMode ? 'bg-green-100 text-green-600' : 'bg-green-900/30 text-green-400'
-              : selectedMood && selectedMood <= 3
-                ? isBambiMode ? 'bg-red-100 text-red-600' : 'bg-red-900/30 text-red-400'
-                : isBambiMode ? 'bg-gray-100 text-gray-600' : 'bg-gray-800 text-gray-400'
-          }`}>
-            {selectedMood && selectedMood >= 7 ? <Smile className="w-4 h-4" /> :
-             selectedMood && selectedMood <= 3 ? <Frown className="w-4 h-4" /> :
-             <Meh className="w-4 h-4" />}
-          </div>
-
-          {/* Arousal indicator */}
-          <div className={`p-1.5 rounded-lg ${
-            currentArousal >= 4
-              ? isBambiMode ? 'bg-rose-100 text-rose-600' : 'bg-rose-900/30 text-rose-400'
-              : currentArousal >= 2
-                ? isBambiMode ? 'bg-orange-100 text-orange-600' : 'bg-orange-900/30 text-orange-400'
-                : isBambiMode ? 'bg-gray-100 text-gray-600' : 'bg-gray-800 text-gray-400'
-          }`}>
-            <Flame className="w-4 h-4" />
-          </div>
-
-          {/* Energy indicator */}
-          <div className={`p-1.5 rounded-lg ${
-            currentExecFunction === 'high'
-              ? isBambiMode ? 'bg-emerald-100 text-emerald-600' : 'bg-emerald-900/30 text-emerald-400'
-              : currentExecFunction === 'depleted'
-                ? isBambiMode ? 'bg-red-100 text-red-600' : 'bg-red-900/30 text-red-400'
-                : isBambiMode ? 'bg-yellow-100 text-yellow-600' : 'bg-yellow-900/30 text-yellow-400'
-          }`}>
-            <ExecIcon className="w-4 h-4" />
-          </div>
-
-          {/* Gina indicator */}
-          <div className={`p-1.5 rounded-lg ${
-            ginaState === 'home'
-              ? isBambiMode ? 'bg-purple-100 text-purple-600' : 'bg-purple-900/30 text-purple-400'
-              : ginaState === 'asleep'
-                ? isBambiMode ? 'bg-indigo-100 text-indigo-600' : 'bg-indigo-900/30 text-indigo-400'
-                : isBambiMode ? 'bg-gray-100 text-gray-600' : 'bg-gray-800 text-gray-400'
-          }`}>
-            {ginaState === 'home' ? <Home className="w-4 h-4" /> : ginaState === 'asleep' ? <Moon className="w-4 h-4" /> : <User className="w-4 h-4" />}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <span className={`text-xs ${isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'}`}>
-            Update state
-          </span>
-          <ChevronDown className={`w-4 h-4 ${isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'}`} />
-        </div>
+        Check in
       </button>
     );
   }
 
-  return (
-    <div className={`p-4 rounded-xl ${
-      isBambiMode
-        ? 'bg-pink-50 border border-pink-200'
-        : 'bg-protocol-surface border border-protocol-border'
-    } ${isLoading ? 'opacity-50 pointer-events-none' : ''}`}>
-      {/* Header with collapse button */}
-      {compact && (
-        <button
-          onClick={() => setIsExpanded(false)}
-          className={`w-full flex items-center justify-between mb-4 ${
-            isBambiMode ? 'text-pink-700' : 'text-protocol-text'
-          }`}
-        >
-          <span className="font-medium text-sm">Quick State Update</span>
-          <ChevronUp className="w-4 h-4" />
-        </button>
-      )}
-
-      {!compact && (
-        <h2 className={`font-medium text-sm mb-4 ${
-          isBambiMode ? 'text-pink-700' : 'text-protocol-text'
-        }`}>
-          How are you right now?
-        </h2>
-      )}
-
-      <div className="space-y-4">
+  // ── Full expansion (initial check-in) ──
+  if (expanded === 'all') {
+    return (
+      <div className={`rounded-xl p-3 space-y-3 ${
+        isBambiMode ? 'bg-pink-50 border border-pink-200' : 'bg-protocol-surface border border-protocol-border'
+      }`}>
         {/* Mood */}
-        <div>
-          <label className={`text-xs font-medium mb-2 flex items-center gap-2 ${
-            isBambiMode ? 'text-pink-600' : 'text-protocol-text-muted'
-          }`}>
-            Mood
-            {savedField === 'mood' && <span className="text-green-500 transition-opacity">Saved ✓</span>}
-          </label>
+        <div className="space-y-1.5">
+          <span className={`text-xs font-medium ${isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'}`}>Mood</span>
           <div className="flex gap-2">
-            {moodOptions.map(option => {
-              const Icon = option.icon;
-              const isSelected = selectedMood !== undefined &&
-                Math.abs(selectedMood - option.value) < 2;
-
-              return (
-                <button
-                  key={option.value}
-                  onClick={() => handleMoodSelect(option.value)}
-                  className={`flex-1 p-2 rounded-lg flex items-center justify-center gap-2 transition-colors ${
-                    isSelected
-                      ? isBambiMode
-                        ? 'bg-pink-200 text-pink-700 border-2 border-pink-400'
-                        : 'bg-protocol-accent/30 text-protocol-accent border-2 border-protocol-accent'
-                      : isBambiMode
-                        ? 'bg-white hover:bg-pink-100 text-pink-600 border border-pink-200'
-                        : 'bg-protocol-bg hover:bg-protocol-surface text-protocol-text-muted border border-protocol-border'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span className="text-xs">{option.label}</span>
-                </button>
-              );
-            })}
+            {[{ value: 2, label: '😔 Low' }, { value: 5, label: '😐 Okay' }, { value: 8, label: '😊 Good' }].map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => handleMoodSelect(opt.value)}
+                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${
+                  selectorBtn(localMood !== undefined && Math.abs(localMood - opt.value) < 2)
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Arousal Level */}
-        <div>
-          <label className={`text-xs font-medium mb-2 flex items-center gap-2 ${
-            isBambiMode ? 'text-pink-600' : 'text-protocol-text-muted'
-          }`}>
-            Arousal Level
-            {savedField === 'arousal' && <span className="text-green-500 transition-opacity">Saved ✓</span>}
-          </label>
+        {/* Arousal */}
+        <div className="space-y-1.5">
+          <span className={`text-xs font-medium ${isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'}`}>Arousal</span>
           <div className="flex gap-1">
-            {arousalOptions.map(option => {
-              const isSelected = currentArousal === option.value;
-
-              return (
-                <button
-                  key={option.value}
-                  onClick={() => { onUpdate({ arousal: option.value }); showSaved('arousal'); }}
-                  aria-label={`Arousal level ${option.value}: ${option.label}`}
-                  className={`flex-1 p-2 rounded-lg text-center transition-colors ${
-                    isSelected
-                      ? option.value >= 4
-                        ? 'bg-rose-500 text-white'
-                        : option.value >= 2
-                          ? 'bg-orange-500 text-white'
-                          : isBambiMode
-                            ? 'bg-pink-200 text-pink-700'
-                            : 'bg-protocol-accent/30 text-protocol-accent'
-                      : isBambiMode
-                        ? 'bg-white hover:bg-pink-100 text-pink-600 border border-pink-200'
-                        : 'bg-protocol-bg hover:bg-protocol-surface text-protocol-text-muted border border-protocol-border'
-                  }`}
-                >
-                  <span className="text-xs">{option.value}</span>
-                </button>
-              );
-            })}
-          </div>
-          <div className="flex justify-between mt-1">
-            <span className={`text-[10px] ${isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'}`}>
-              None
-            </span>
-            <span className={`text-[10px] ${isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'}`}>
-              Peak
-            </span>
+            {[0, 1, 2, 3, 4, 5].map(v => (
+              <button
+                key={v}
+                onClick={() => handleArousalSelect(v)}
+                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${
+                  selectorBtn(currentArousal === v, v >= 4 ? 'rose' : v >= 2 ? 'orange' : undefined)
+                }`}
+              >
+                {v}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Executive Function */}
-        <div>
-          <label className={`text-xs font-medium mb-2 flex items-center gap-2 ${
-            isBambiMode ? 'text-pink-600' : 'text-protocol-text-muted'
-          }`}>
-            Energy / Focus
-            {savedField === 'energy' && <span className="text-green-500 transition-opacity">Saved ✓</span>}
-          </label>
+        {/* Energy */}
+        <div className="space-y-1.5">
+          <span className={`text-xs font-medium ${isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'}`}>Energy</span>
+          <div className="flex gap-1">
+            {(['depleted', 'low', 'medium', 'high'] as ExecFunction[]).map(v => (
+              <button
+                key={v}
+                onClick={() => handleEnergySelect(v)}
+                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${
+                  selectorBtn(currentExecFunction === v, v === 'high' ? 'emerald' : v === 'depleted' ? 'red' : undefined)
+                }`}
+              >
+                {v === 'medium' ? 'Med' : v.charAt(0).toUpperCase() + v.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Gina */}
+        <div className="space-y-1.5">
+          <span className={`text-xs font-medium ${isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'}`}>Gina</span>
           <div className="flex gap-2">
-            {execOptions.map(option => {
-              const Icon = option.icon;
-              const isSelected = currentExecFunction === option.value;
-
-              return (
-                <button
-                  key={option.value}
-                  onClick={() => { onUpdate({ execFunction: option.value }); showSaved('energy'); }}
-                  className={`flex-1 p-2 rounded-lg flex flex-col items-center gap-1 transition-colors ${
-                    isSelected
-                      ? option.value === 'high'
-                        ? 'bg-emerald-500 text-white'
-                        : option.value === 'depleted'
-                          ? 'bg-red-500 text-white'
-                          : isBambiMode
-                            ? 'bg-pink-200 text-pink-700'
-                            : 'bg-protocol-accent/30 text-protocol-accent'
-                      : isBambiMode
-                        ? 'bg-white hover:bg-pink-100 text-pink-600 border border-pink-200'
-                        : 'bg-protocol-bg hover:bg-protocol-surface text-protocol-text-muted border border-protocol-border'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span className="text-[10px]">{option.label}</span>
-                </button>
-              );
-            })}
+            {([
+              { state: 'home' as const, label: '🏠 Home' },
+              { state: 'asleep' as const, label: '🌙 Asleep' },
+              { state: 'alone' as const, label: '👤 Alone' },
+            ]).map(opt => (
+              <button
+                key={opt.state}
+                onClick={() => handleGinaSelect(opt.state)}
+                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${
+                  selectorBtn(ginaState === opt.state, 'purple')
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Gina Home Toggle */}
-        <div>
-          <label className={`text-xs font-medium mb-2 flex items-center gap-2 ${
-            isBambiMode ? 'text-pink-600' : 'text-protocol-text-muted'
-          }`}>
-            Gina Home?
-            {savedField === 'gina' && <span className="text-green-500 transition-opacity">Saved ✓</span>}
-          </label>
-          <div className="flex gap-2">
-            <button
-              onClick={() => { setGinaState('home'); onUpdate({ ginaHome: true, ginaAsleep: false }); showSaved('gina'); }}
-              className={`flex-1 p-3 rounded-lg flex items-center justify-center gap-2 transition-colors ${
-                ginaState === 'home'
-                  ? isBambiMode
-                    ? 'bg-purple-200 text-purple-700 border-2 border-purple-400'
-                    : 'bg-purple-900/30 text-purple-400 border-2 border-purple-500'
-                  : isBambiMode
-                    ? 'bg-white hover:bg-purple-50 text-purple-600 border border-purple-200'
-                    : 'bg-protocol-bg hover:bg-protocol-surface text-protocol-text-muted border border-protocol-border'
-              }`}
-            >
-              <Home className="w-4 h-4" />
-              <span className="text-sm">Home</span>
-            </button>
-            <button
-              onClick={() => { setGinaState('asleep'); onUpdate({ ginaHome: false, ginaAsleep: true }); showSaved('gina'); }}
-              className={`flex-1 p-3 rounded-lg flex items-center justify-center gap-2 transition-colors ${
-                ginaState === 'asleep'
-                  ? isBambiMode
-                    ? 'bg-indigo-200 text-indigo-700 border-2 border-indigo-400'
-                    : 'bg-indigo-900/30 text-indigo-400 border-2 border-indigo-500'
-                  : isBambiMode
-                    ? 'bg-white hover:bg-indigo-50 text-indigo-600 border border-indigo-200'
-                    : 'bg-protocol-bg hover:bg-protocol-surface text-protocol-text-muted border border-protocol-border'
-              }`}
-            >
-              <Moon className="w-4 h-4" />
-              <span className="text-sm">Asleep</span>
-            </button>
-            <button
-              onClick={() => { setGinaState('alone'); onUpdate({ ginaHome: false, ginaAsleep: false }); showSaved('gina'); }}
-              className={`flex-1 p-3 rounded-lg flex items-center justify-center gap-2 transition-colors ${
-                ginaState === 'alone'
-                  ? isBambiMode
-                    ? 'bg-emerald-200 text-emerald-700 border-2 border-emerald-400'
-                    : 'bg-emerald-900/30 text-emerald-400 border-2 border-emerald-500'
-                  : isBambiMode
-                    ? 'bg-white hover:bg-emerald-50 text-emerald-600 border border-emerald-200'
-                    : 'bg-protocol-bg hover:bg-protocol-surface text-protocol-text-muted border border-protocol-border'
-              }`}
-            >
-              <User className="w-4 h-4" />
-              <span className="text-sm">Alone</span>
-            </button>
-          </div>
-        </div>
+        {/* Done — appears after mood is set */}
+        {localMood !== undefined && (
+          <button
+            onClick={() => setExpanded(null)}
+            className={`w-full py-2 rounded-lg text-xs font-semibold transition-colors ${
+              isBambiMode
+                ? 'bg-pink-500 text-white hover:bg-pink-600'
+                : 'bg-protocol-accent text-white hover:bg-protocol-accent/90'
+            }`}
+          >
+            Done
+          </button>
+        )}
       </div>
+    );
+  }
+
+  // ── Pill summary row ──
+  const moodDisplay = getMoodDisplay(localMood);
+  const energyLabel = getEnergyLabel(currentExecFunction);
+  const ginaDisplay = getGinaDisplay(ginaState);
+
+  const pillBase = 'px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer select-none';
+  const pillActive = isBambiMode
+    ? 'bg-pink-200 text-pink-700 border border-pink-300'
+    : 'bg-protocol-accent/20 text-protocol-accent border border-protocol-accent/30';
+  const pillInactive = isBambiMode
+    ? 'bg-pink-50 text-pink-600 border border-pink-200 hover:bg-pink-100'
+    : 'bg-protocol-surface text-protocol-text-muted border border-protocol-border hover:bg-protocol-surface/80';
+
+  return (
+    <div className="space-y-2">
+      {/* Pill row */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => toggleDimension('mood')}
+          className={`${pillBase} ${expanded === 'mood' ? pillActive : pillInactive}`}
+        >
+          {moodDisplay.emoji} {moodDisplay.label}
+        </button>
+        <button
+          onClick={() => toggleDimension('arousal')}
+          className={`${pillBase} ${expanded === 'arousal' ? pillActive : pillInactive}`}
+        >
+          🔥 {currentArousal}
+        </button>
+        <button
+          onClick={() => toggleDimension('energy')}
+          className={`${pillBase} ${expanded === 'energy' ? pillActive : pillInactive}`}
+        >
+          ⚡ {energyLabel}
+        </button>
+        <button
+          onClick={() => toggleDimension('gina')}
+          className={`${pillBase} ${expanded === 'gina' ? pillActive : pillInactive}`}
+        >
+          {ginaDisplay.emoji} {ginaDisplay.label}
+        </button>
+      </div>
+
+      {/* Inline selector — mood */}
+      {expanded === 'mood' && (
+        <div className="flex gap-2">
+          {[{ value: 2, label: '😔 Low' }, { value: 5, label: '😐 Okay' }, { value: 8, label: '😊 Good' }].map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => handleMoodSelect(opt.value)}
+              className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${
+                selectorBtn(localMood !== undefined && Math.abs(localMood - opt.value) < 2)
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Inline selector — arousal */}
+      {expanded === 'arousal' && (
+        <div className="flex gap-1">
+          {[0, 1, 2, 3, 4, 5].map(v => (
+            <button
+              key={v}
+              onClick={() => handleArousalSelect(v)}
+              className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${
+                selectorBtn(currentArousal === v, v >= 4 ? 'rose' : v >= 2 ? 'orange' : undefined)
+              }`}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Inline selector — energy */}
+      {expanded === 'energy' && (
+        <div className="flex gap-1">
+          {(['depleted', 'low', 'medium', 'high'] as ExecFunction[]).map(v => (
+            <button
+              key={v}
+              onClick={() => handleEnergySelect(v)}
+              className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${
+                selectorBtn(currentExecFunction === v, v === 'high' ? 'emerald' : v === 'depleted' ? 'red' : undefined)
+              }`}
+            >
+              {v === 'medium' ? 'Med' : v.charAt(0).toUpperCase() + v.slice(1)}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Inline selector — gina */}
+      {expanded === 'gina' && (
+        <div className="flex gap-2">
+          {([
+            { state: 'home' as const, label: '🏠 Home' },
+            { state: 'asleep' as const, label: '🌙 Asleep' },
+            { state: 'alone' as const, label: '👤 Alone' },
+          ]).map(opt => (
+            <button
+              key={opt.state}
+              onClick={() => handleGinaSelect(opt.state)}
+              className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${
+                selectorBtn(ginaState === opt.state, 'purple')
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

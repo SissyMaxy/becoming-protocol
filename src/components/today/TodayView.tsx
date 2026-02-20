@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { Loader2, RefreshCw, AlertTriangle, Heart, Target, Focus, LayoutGrid, Moon, Zap, FileText, ChevronRight, Clock, Star, DollarSign, Send, Headphones, Camera } from 'lucide-react';
+import { Loader2, RefreshCw, AlertTriangle, Heart, Target, Moon, FileText, ChevronRight, Clock, Star, DollarSign, Send, Headphones, Camera } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
 import { supabase } from '../../lib/supabase';
 import { useTaskBank } from '../../hooks/useTaskBank';
@@ -23,8 +23,7 @@ import { ShootCard } from '../shoots/ShootCard';
 import { ShotView } from '../shoots/ShotView';
 import { MediaUpload } from '../shoots/MediaUpload';
 import { ReadyToPost } from '../shoots/ReadyToPost';
-import { TodayHeader } from './TodayHeader';
-import { ProgressRing } from './ProgressRing';
+// TodayHeader and ProgressRing removed — kill friction above first task
 import { TaskCardNew } from './TaskCardNew';
 import { CompletionCelebration } from './CompletionCelebration';
 import { AllCompleteCelebration } from './AllCompleteCelebration';
@@ -33,8 +32,7 @@ import { ContinuationPrompt } from './ContinuationPrompt';
 import { ActiveSessionOverlay } from './ActiveSessionOverlay';
 import { QuickStateUpdate } from './QuickStateUpdate';
 import { CommitmentReminder } from './CommitmentReminder';
-import { DirectiveModeView } from './DirectiveModeView';
-import { Tooltip } from '../ui/Tooltip';
+// DirectiveModeView and Tooltip removed — no mode toggles in main view
 import { useUserState } from '../../hooks/useUserState';
 import type { PriorityAction } from './FocusedActionCard';
 import { WeekendHeader } from '../weekend/WeekendHeader';
@@ -57,7 +55,7 @@ import type { Goal, GoalCompletionInput } from '../../types/goals';
 
 export function TodayView() {
   const { isBambiMode, triggerHearts } = useBambiMode();
-  const { metrics } = useArousalState();
+  useArousalState(); // hook still needed for side effects
   const { user } = useAuth();
 
   // Handler briefs state
@@ -127,27 +125,9 @@ export function TodayView() {
 
   const [showAllComplete, setShowAllComplete] = useState(false);
 
-  // Focus mode - reduces decision paralysis by showing ONE action at a time
-  const [focusMode, setFocusMode] = useState(true);
+  // Always focus mode — one action at a time, "See N more" expands the rest
   const [showAllItems, setShowAllItems] = useState(false);
   const focusedCardRef = useRef<HTMLDivElement>(null);
-  // Directive mode - Handler-led single-card experience (Feature 6)
-  // Auto-enabled when userState.handlerMode is 'directive'
-  const [directiveMode, setDirectiveMode] = useState(false);
-  const [showDirectiveTooltip, setShowDirectiveTooltip] = useState(false);
-
-  // Show directive tooltip once, briefly, then auto-dismiss
-  useEffect(() => {
-    if (localStorage.getItem('directive-mode-seen')) return;
-    // Delay showing so it doesn't flash on mount
-    const showTimer = setTimeout(() => setShowDirectiveTooltip(true), 1500);
-    // Auto-dismiss after 6 seconds
-    const hideTimer = setTimeout(() => {
-      setShowDirectiveTooltip(false);
-      localStorage.setItem('directive-mode-seen', 'true');
-    }, 7500);
-    return () => { clearTimeout(showTimer); clearTimeout(hideTimer); };
-  }, []);
   // Track dismissed actions for "Not Now" - resets at end of day
   const [dismissedActionIds, setDismissedActionIds] = useState<string[]>([]);
   // Continuation prompt - maintains momentum after task completion
@@ -188,9 +168,6 @@ export function TodayView() {
   const [feedbackActivity, setFeedbackActivity] = useState<WeekendActivity | null>(null);
   const [completingWeekendActivityId, setCompletingWeekendActivityId] = useState<string | null>(null);
   const [skippingWeekendActivityId, setSkippingWeekendActivityId] = useState<string | null>(null);
-
-  // Get denial days from arousal metrics
-  const denialDays = metrics?.currentStreakDays || 0;
 
   // GinaHome: hide intimate content when Gina is home (gap #19)
   const isGinaHome = userState?.ginaHome ?? false;
@@ -475,10 +452,6 @@ export function TodayView() {
   const completedWeekendActivities = todaysActivities.filter(a => a.status === 'completed');
   const skippedWeekendActivities = todaysActivities.filter(a => a.status === 'skipped');
 
-  // Combined counts for progress ring (tasks + goals + weekend activities)
-  const combinedCompleted = completedCount + completedGoals.length + completedWeekendActivities.length;
-  const combinedTotal = totalCount + todaysGoals.length + todaysActivities.length;
-
   // Get priority action for focus mode (excluding dismissed actions)
   const priorityAction = getPriorityAction(
     todaysGoals,
@@ -571,32 +544,9 @@ export function TodayView() {
           ? 'bg-gradient-to-b from-pink-50 to-white'
           : 'bg-protocol-bg'
     }`}>
-      {/* Header section - Weekend or Regular */}
-      <div className="p-4">
-        {isWeekendDay && weekendDay ? (
-          <WeekendHeader
-            weekendDay={weekendDay}
-            activitiesRemaining={pendingWeekendActivities.length + pendingTasks.length}
-            activitiesTotal={todaysActivities.length + totalCount}
-            integrationProgress={integrationProgress}
-            weekendFocus={currentPlan?.weekendFocus}
-          />
-        ) : (
-          <TodayHeader
-            denialDays={denialDays}
-            tasksRemaining={combinedTotal - combinedCompleted}
-            tasksTotal={combinedTotal}
-            streakDays={userState?.streakDays || 0}
-            pointsToday={0}
-            execFunction={userState?.estimatedExecFunction}
-            handlerMode={userState?.handlerMode}
-          />
-        )}
-      </div>
-
-      {/* Quick State Update - mood, arousal, exec function, Gina home */}
+      {/* ═══ Check-in pill row ═══ */}
       {userState && (
-        <div className="px-4 mb-4">
+        <div className="px-4 pt-4 pb-2">
           <QuickStateUpdate
             currentMood={currentMood}
             currentArousal={userState.currentArousal}
@@ -609,394 +559,21 @@ export function TodayView() {
         </div>
       )}
 
-      {/* Commitment Reminders - hidden when Gina is home (gap #19) */}
-      {!isGinaHome && (
-        <div className="px-4 mb-4">
-          <CommitmentReminder maxDisplay={2} />
-        </div>
-      )}
-
-      {/* Handler Authority - hidden when Gina is home (gap #19) */}
-      {!isGinaHome && (
-      <div className="px-4 mb-4">
-        <HandlerDirective
-          onSessionStart={(sessionId, sessionType) => {
-            // Handler-scheduled sessions launch with step-by-step guidance
-            // Create a priority action from the scheduled session
-            setActiveSession({
-              id: sessionId,
-              type: 'session',
-              title: `Handler Session: ${sessionType}`,
-              description: 'Handler has scheduled this session for you.',
-              steps: [
-                { label: 'Find a private space where you won\'t be disturbed.', durationMinutes: 1 },
-                { label: 'Get comfortable and focus on your breathing.', durationMinutes: 1, vibration: 'gentle_wave' },
-                { label: 'Begin the session. Let Handler guide you deeper.', durationMinutes: 5, vibration: 'building' },
-                { label: 'Session complete. Return when you\'re ready.', durationMinutes: 1, vibration: 'gentle_wave' },
-              ],
-            });
-          }}
+      {/* ═══ Priority action card — first thing after check-in ═══ */}
+      <div ref={focusedCardRef} className="mb-2">
+        <FocusedActionCard
+          priorityAction={priorityAction}
+          pendingCount={otherPendingCount}
+          onStartAction={handleStartPriorityAction}
+          onDismiss={handleDismissAction}
+          onShowAll={() => setShowAllItems(!showAllItems)}
+          isExpanded={showAllItems}
+          lovenseConnected={lovenseConnected}
+          lovenseDeviceName={activeToy?.nickName || activeToy?.name}
         />
       </div>
-      )}
 
-      {/* Handler Content Briefs — show active assignments on landing */}
-      {!isGinaHome && briefsLoaded && activeBriefs.length > 0 && (
-        <div className="px-4 mb-4">
-          <div className={`rounded-xl border overflow-hidden ${
-            isBambiMode
-              ? 'bg-purple-50 border-purple-200'
-              : 'bg-purple-900/20 border-purple-700/30'
-          }`}>
-            <div className="flex items-center justify-between p-3 pb-2">
-              <div className="flex items-center gap-2">
-                <FileText className={`w-4 h-4 ${isBambiMode ? 'text-purple-500' : 'text-purple-400'}`} />
-                <span className={`text-sm font-semibold ${
-                  isBambiMode ? 'text-purple-700' : 'text-purple-300'
-                }`}>
-                  Handler Briefs
-                </span>
-                <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                  isBambiMode ? 'bg-purple-200 text-purple-600' : 'bg-purple-800 text-purple-300'
-                }`}>
-                  {activeBriefs.length}
-                </span>
-              </div>
-              <button
-                onClick={() => window.dispatchEvent(new CustomEvent('navigate-to-handler'))}
-                className={`text-xs flex items-center gap-1 ${
-                  isBambiMode ? 'text-purple-500 hover:text-purple-700' : 'text-purple-400 hover:text-purple-200'
-                }`}
-              >
-                Command Center <ChevronRight className="w-3 h-3" />
-              </button>
-            </div>
-            <div className="space-y-1 px-3 pb-3">
-              {activeBriefs.slice(0, 3).map((brief) => (
-                <button
-                  key={brief.id}
-                  onClick={() => window.dispatchEvent(new CustomEvent('navigate-to-handler'))}
-                  className={`w-full text-left p-2.5 rounded-lg transition-colors ${
-                    isBambiMode
-                      ? 'bg-white/60 hover:bg-white border border-purple-100'
-                      : 'bg-purple-900/30 hover:bg-purple-900/50 border border-purple-700/20'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className={`text-xs font-medium ${
-                      isBambiMode ? 'text-purple-600' : 'text-purple-300'
-                    }`}>
-                      Brief #{brief.briefNumber} — {brief.contentType}
-                    </span>
-                    {brief.rewardMoney && brief.rewardMoney > 0 && (
-                      <span className={`text-xs flex items-center gap-0.5 ${
-                        isBambiMode ? 'text-green-600' : 'text-green-400'
-                      }`}>
-                        <DollarSign className="w-3 h-3" />
-                        {brief.rewardMoney}
-                      </span>
-                    )}
-                  </div>
-                  <p className={`text-xs line-clamp-1 ${
-                    isBambiMode ? 'text-gray-600' : 'text-gray-400'
-                  }`}>
-                    {brief.instructions?.concept || brief.purpose}
-                  </p>
-                  <div className="flex items-center gap-3 mt-1.5">
-                    {brief.deadline && (
-                      <span className={`text-xs flex items-center gap-1 ${
-                        isBambiMode ? 'text-amber-600' : 'text-amber-400'
-                      }`}>
-                        <Clock className="w-3 h-3" />
-                        {new Date(brief.deadline).toLocaleDateString()}
-                      </span>
-                    )}
-                    <span className={`text-xs flex items-center gap-1 ${
-                      isBambiMode ? 'text-purple-500' : 'text-purple-400'
-                    }`}>
-                      <Star className="w-3 h-3" />
-                      {brief.difficulty || 'standard'}
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Post Packs — manual posting queue for Reddit/Fansly */}
-      {!isGinaHome && pendingPostPacks.length > 0 && (
-        <div className="px-4 mb-4 space-y-3">
-          <div className="flex items-center gap-2 px-1">
-            <Send className={`w-4 h-4 ${isBambiMode ? 'text-blue-500' : 'text-blue-400'}`} />
-            <span className={`text-xs uppercase tracking-wider font-semibold ${
-              isBambiMode ? 'text-blue-500' : 'text-blue-400'
-            }`}>
-              Post Packs
-            </span>
-            <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-              isBambiMode ? 'bg-blue-200 text-blue-600' : 'bg-blue-800 text-blue-300'
-            }`}>
-              {pendingPostPacks.length}
-            </span>
-          </div>
-          {pendingPostPacks.map(dist => (
-            <PostPackCard
-              key={dist.id}
-              distribution={dist}
-              onMarkPosted={markPosted}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Hypno Session — active session or prescription */}
-      {!isGinaHome && activeHypnoSession && (
-        <div className="px-4 mb-4">
-          <div className="flex items-center gap-2 px-1 mb-2">
-            <Headphones className={`w-4 h-4 ${isBambiMode ? 'text-purple-500' : 'text-purple-400'}`} />
-            <span className={`text-xs uppercase tracking-wider font-semibold ${
-              isBambiMode ? 'text-purple-500' : 'text-purple-400'
-            }`}>
-              Hypno Session
-            </span>
-            <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-              isBambiMode ? 'bg-green-100 text-green-600' : 'bg-green-900/30 text-green-400'
-            }`}>
-              Active
-            </span>
-          </div>
-          <HypnoSessionCard
-            taskCode={HYPNO_TASK_CODES.HYPNO_SESSION}
-            activeSession={activeHypnoSession}
-            onStart={() => window.dispatchEvent(new CustomEvent('navigate-to-hypno'))}
-          />
-        </div>
-      )}
-
-      {/* Streak Break Recovery: show sunk cost prominently (gap #21) */}
-      {isStreakBreakRecovery && (
-        <div className="px-4 mb-4">
-          <div className={`p-4 rounded-xl border ${
-            isBambiMode
-              ? 'bg-amber-50 border-amber-200'
-              : 'bg-amber-900/20 border-amber-700/30'
-          }`}>
-            <p className={`text-sm font-medium mb-2 ${
-              isBambiMode ? 'text-amber-700' : 'text-amber-300'
-            }`}>
-              Welcome back. Your {userState?.longestStreak || 0}-day streak is waiting to be rebuilt.
-            </p>
-            <p className={`text-xs ${
-              isBambiMode ? 'text-amber-600' : 'text-amber-400/70'
-            }`}>
-              Start with just one task. That's all it takes.
-            </p>
-          </div>
-          <div className="mt-2">
-            <TimeRatchetsDisplay compact />
-          </div>
-        </div>
-      )}
-
-      {/* Evening Mood Check-in (gap #5) */}
-      {showEveningCheckin && (
-        <div className="px-4 mb-4">
-          <div className={`p-4 rounded-xl border ${
-            isBambiMode
-              ? 'bg-indigo-50 border-indigo-200'
-              : 'bg-indigo-900/20 border-indigo-700/30'
-          }`}>
-            <div className="flex items-center gap-2 mb-3">
-              <Moon className={`w-4 h-4 ${isBambiMode ? 'text-indigo-500' : 'text-indigo-400'}`} />
-              <span className={`text-sm font-medium ${
-                isBambiMode ? 'text-indigo-700' : 'text-indigo-300'
-              }`}>
-                Evening Check-in
-              </span>
-            </div>
-            {eveningSubmitted ? (
-              <p className={`text-sm ${isBambiMode ? 'text-indigo-600' : 'text-indigo-400'}`}>
-                Mood logged. Rest well.
-              </p>
-            ) : (
-              <>
-                <p className={`text-xs mb-3 ${isBambiMode ? 'text-indigo-500' : 'text-indigo-400/70'}`}>
-                  How are you feeling right now?
-                </p>
-                <div className="flex gap-2">
-                  {[1, 2, 3, 4, 5].map(score => (
-                    <button
-                      key={score}
-                      onClick={() => handleEveningCheckin(score * 2)}
-                      className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        eveningMood === score * 2
-                          ? isBambiMode
-                            ? 'bg-indigo-500 text-white'
-                            : 'bg-indigo-500 text-white'
-                          : isBambiMode
-                            ? 'bg-indigo-100 hover:bg-indigo-200 text-indigo-600'
-                            : 'bg-indigo-900/30 hover:bg-indigo-900/50 text-indigo-300'
-                      }`}
-                    >
-                      {score === 1 ? 'Low' : score === 2 ? 'Meh' : score === 3 ? 'OK' : score === 4 ? 'Good' : 'Great'}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Protein Tracker (shown in evening alongside check-in) */}
-      {isEvening && (
-        <div className="px-4 mb-4">
-          <ProteinTracker />
-        </div>
-      )}
-
-      {/* Progress and controls row */}
-      <div className="px-4 py-6 flex items-center justify-between">
-        <ProgressRing
-          completed={combinedCompleted}
-          total={combinedTotal}
-        />
-
-        <div className="flex items-center gap-2">
-          {/* Directive mode toggle (Handler-led single-card experience) */}
-          <div className="relative">
-            <Tooltip label={directiveMode ? 'Exit directive mode' : 'Directive mode (Handler-led)'}>
-              <button
-                onClick={() => {
-                  if (showDirectiveTooltip && !directiveMode) {
-                    // First time: dismiss tooltip and activate
-                    localStorage.setItem('directive-mode-seen', 'true');
-                    setShowDirectiveTooltip(false);
-                    setDirectiveMode(true);
-                    setFocusMode(false);
-                    setShowAllItems(false);
-                    return;
-                  }
-                  setDirectiveMode(!directiveMode);
-                  if (!directiveMode) {
-                    setFocusMode(false);
-                    setShowAllItems(false);
-                  }
-                }}
-                className={`p-3 rounded-xl transition-colors flex items-center gap-2 ${
-                  directiveMode
-                    ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-lg shadow-pink-500/25'
-                    : isBambiMode
-                      ? 'hover:bg-pink-50 text-pink-400'
-                      : 'hover:bg-protocol-surface text-protocol-text-muted'
-                }`}
-                aria-label={directiveMode ? 'Exit directive mode' : 'Enter directive mode'}
-              >
-                <Zap className="w-5 h-5" />
-              </button>
-            </Tooltip>
-            {showDirectiveTooltip && !directiveMode && (
-              <div className="absolute z-20 right-0 top-full mt-2 p-3 rounded-xl bg-gray-900 text-white text-sm max-w-[240px] shadow-xl">
-                <p className="font-medium mb-1">Directive Mode</p>
-                <p className="text-xs text-gray-300">Handler takes over. One task at a time, no choices. Tap the bolt again to exit.</p>
-                <button
-                  onClick={() => {
-                    localStorage.setItem('directive-mode-seen', 'true');
-                    setShowDirectiveTooltip(false);
-                    setDirectiveMode(true);
-                    setFocusMode(false);
-                    setShowAllItems(false);
-                  }}
-                  className="mt-2 text-xs text-purple-400 font-medium hover:text-purple-300"
-                >
-                  Got it, activate
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Focus/Full mode toggle (only when not in directive mode) */}
-          {!directiveMode && (
-            <Tooltip label={focusMode ? 'Full view' : 'Focus mode'}>
-              <button
-                onClick={() => {
-                  setFocusMode(!focusMode);
-                  setShowAllItems(false);
-                }}
-                className={`p-3 rounded-xl transition-colors flex items-center gap-2 ${
-                  focusMode
-                    ? isBambiMode
-                      ? 'bg-pink-100 text-pink-600'
-                      : 'bg-protocol-accent/20 text-protocol-accent'
-                    : isBambiMode
-                      ? 'hover:bg-pink-50 text-pink-400'
-                      : 'hover:bg-protocol-surface text-protocol-text-muted'
-                }`}
-                aria-label={focusMode ? 'Switch to full view' : 'Switch to focus mode'}
-              >
-                {focusMode ? <Focus className="w-5 h-5" /> : <LayoutGrid className="w-5 h-5" />}
-              </button>
-            </Tooltip>
-          )}
-
-          <Tooltip label="Refresh tasks">
-            <button
-              onClick={handleRefresh}
-              className={`p-3 rounded-xl transition-colors ${
-                isWeekendDay
-                  ? 'hover:bg-rose-100 text-rose-500 dark:hover:bg-rose-900/30 dark:text-rose-400'
-                  : isBambiMode
-                    ? 'hover:bg-pink-100 text-pink-500'
-                    : 'hover:bg-protocol-surface text-protocol-text-muted'
-              }`}
-              aria-label="Refresh tasks"
-            >
-              <RefreshCw className="w-5 h-5" />
-            </button>
-          </Tooltip>
-        </div>
-      </div>
-
-      {/* Directive Mode: Handler-led single-card experience (Feature 6) */}
-      {/* Works on any day — if user toggles directive mode, they want handler-led experience */}
-      {directiveMode && (
-        <div className="mb-6">
-          <DirectiveModeView
-            pendingTasks={pendingTasks}
-            userState={{
-              denialDay: denialDays,
-              arousalLevel: userState?.currentArousal || 0,
-              mood: currentMood || 5,
-              ginaHome: isGinaHome,
-              streakDays: userState?.streakDays || 0,
-              lastTask: userState?.lastTaskCategory || undefined,
-            }}
-            onTaskComplete={(taskId, feltGood) => complete(taskId, feltGood)}
-            onTaskSkip={(taskId) => skip(taskId)}
-            onRefresh={handleRefresh}
-          />
-        </div>
-      )}
-
-      {/* Focus Mode: Single priority action (only when not in directive mode) */}
-      {!directiveMode && focusMode && !isWeekendDay && (
-        <div ref={focusedCardRef} className="mb-6">
-          <FocusedActionCard
-            priorityAction={priorityAction}
-            pendingCount={otherPendingCount}
-            onStartAction={handleStartPriorityAction}
-            onDismiss={handleDismissAction}
-            onShowAll={() => setShowAllItems(!showAllItems)}
-            isExpanded={showAllItems}
-            lovenseConnected={lovenseConnected}
-            lovenseDeviceName={activeToy?.nickName || activeToy?.name}
-          />
-        </div>
-      )}
-
-      {/* Skip warning */}
+      {/* ═══ Skip warning — always visible when triggered ═══ */}
       {showSkipWarning && (
         <div className="px-4 mb-4">
           <div
@@ -1041,45 +618,318 @@ export function TodayView() {
         </div>
       )}
 
+      {/* ═══ Everything below the fold — shown when "See N more" is expanded ═══ */}
+      {showAllItems && (
+        <>
+          {/* Refresh */}
+          <div className="px-4 mb-3 flex justify-end">
+            <button
+              onClick={handleRefresh}
+              className={`p-2 rounded-lg transition-colors ${
+                isBambiMode
+                  ? 'hover:bg-pink-100 text-pink-500'
+                  : 'hover:bg-protocol-surface text-protocol-text-muted'
+              }`}
+              aria-label="Refresh tasks"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          </div>
 
-      {/* Streak Warnings - Proactive slip prevention (hidden in focus/directive mode unless expanded) */}
-      {!isWeekendDay && !directiveMode && (!focusMode || showAllItems) && (
-        <div className="px-4 mb-4">
-          <StreakWarningsWidget compact />
-        </div>
-      )}
+          {/* Weekend Header — only on weekends */}
+          {isWeekendDay && weekendDay && (
+            <div className="px-4 mb-4">
+              <WeekendHeader
+                weekendDay={weekendDay}
+                activitiesRemaining={pendingWeekendActivities.length + pendingTasks.length}
+                activitiesTotal={todaysActivities.length + totalCount}
+                integrationProgress={integrationProgress}
+                weekendFocus={currentPlan?.weekendFocus}
+              />
+            </div>
+          )}
 
-      {/* Time Anchors - Sunk cost awareness (hidden in focus/directive mode unless expanded) */}
-      {!isWeekendDay && !directiveMode && (!focusMode || showAllItems) && (
-        <div className="px-4 mb-4">
-          <TimeRatchetsDisplay compact />
-        </div>
-      )}
+          {/* Commitment Reminders */}
+          {!isGinaHome && (
+            <div className="px-4 mb-4">
+              <CommitmentReminder maxDisplay={2} />
+            </div>
+          )}
 
-      {/* Micro-Task Widget (hidden in focus/directive mode unless expanded) */}
-      {!isWeekendDay && !directiveMode && (!focusMode || showAllItems) && (
-        <div className="px-4 mb-4">
-          <MicroTaskWidget />
-        </div>
-      )}
+          {/* Handler Authority */}
+          {!isGinaHome && (
+            <div className="px-4 mb-4">
+              <HandlerDirective
+                onSessionStart={(sessionId, sessionType) => {
+                  setActiveSession({
+                    id: sessionId,
+                    type: 'session',
+                    title: `Handler Session: ${sessionType}`,
+                    description: 'Handler has scheduled this session for you.',
+                    steps: [
+                      { label: 'Find a private space where you won\'t be disturbed.', durationMinutes: 1 },
+                      { label: 'Get comfortable and focus on your breathing.', durationMinutes: 1, vibration: 'gentle_wave' },
+                      { label: 'Begin the session. Let Handler guide you deeper.', durationMinutes: 5, vibration: 'building' },
+                      { label: 'Session complete. Return when you\'re ready.', durationMinutes: 1, vibration: 'gentle_wave' },
+                    ],
+                  });
+                }}
+              />
+            </div>
+          )}
 
-      {/* Exercise Widget (hidden in focus/directive mode unless expanded) */}
-      {!isWeekendDay && !directiveMode && (!focusMode || showAllItems) && (
-        <div className="px-4 mb-4">
-          <ExerciseTodayWidget />
-        </div>
-      )}
+          {/* Handler Content Briefs */}
+          {!isGinaHome && briefsLoaded && activeBriefs.length > 0 && (
+            <div className="px-4 mb-4">
+              <div className={`rounded-xl border overflow-hidden ${
+                isBambiMode
+                  ? 'bg-purple-50 border-purple-200'
+                  : 'bg-purple-900/20 border-purple-700/30'
+              }`}>
+                <div className="flex items-center justify-between p-3 pb-2">
+                  <div className="flex items-center gap-2">
+                    <FileText className={`w-4 h-4 ${isBambiMode ? 'text-purple-500' : 'text-purple-400'}`} />
+                    <span className={`text-sm font-semibold ${
+                      isBambiMode ? 'text-purple-700' : 'text-purple-300'
+                    }`}>
+                      Handler Briefs
+                    </span>
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                      isBambiMode ? 'bg-purple-200 text-purple-600' : 'bg-purple-800 text-purple-300'
+                    }`}>
+                      {activeBriefs.length}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => window.dispatchEvent(new CustomEvent('navigate-to-handler'))}
+                    className={`text-xs flex items-center gap-1 ${
+                      isBambiMode ? 'text-purple-500 hover:text-purple-700' : 'text-purple-400 hover:text-purple-200'
+                    }`}
+                  >
+                    Command Center <ChevronRight className="w-3 h-3" />
+                  </button>
+                </div>
+                <div className="space-y-1 px-3 pb-3">
+                  {activeBriefs.slice(0, 3).map((brief) => (
+                    <button
+                      key={brief.id}
+                      onClick={() => window.dispatchEvent(new CustomEvent('navigate-to-handler'))}
+                      className={`w-full text-left p-2.5 rounded-lg transition-colors ${
+                        isBambiMode
+                          ? 'bg-white/60 hover:bg-white border border-purple-100'
+                          : 'bg-purple-900/30 hover:bg-purple-900/50 border border-purple-700/20'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className={`text-xs font-medium ${
+                          isBambiMode ? 'text-purple-600' : 'text-purple-300'
+                        }`}>
+                          Brief #{brief.briefNumber} — {brief.contentType}
+                        </span>
+                        {brief.rewardMoney && brief.rewardMoney > 0 && (
+                          <span className={`text-xs flex items-center gap-0.5 ${
+                            isBambiMode ? 'text-green-600' : 'text-green-400'
+                          }`}>
+                            <DollarSign className="w-3 h-3" />
+                            {brief.rewardMoney}
+                          </span>
+                        )}
+                      </div>
+                      <p className={`text-xs line-clamp-1 ${
+                        isBambiMode ? 'text-gray-600' : 'text-gray-400'
+                      }`}>
+                        {brief.instructions?.concept || brief.purpose}
+                      </p>
+                      <div className="flex items-center gap-3 mt-1.5">
+                        {brief.deadline && (
+                          <span className={`text-xs flex items-center gap-1 ${
+                            isBambiMode ? 'text-amber-600' : 'text-amber-400'
+                          }`}>
+                            <Clock className="w-3 h-3" />
+                            {new Date(brief.deadline).toLocaleDateString()}
+                          </span>
+                        )}
+                        <span className={`text-xs flex items-center gap-1 ${
+                          isBambiMode ? 'text-purple-500' : 'text-purple-400'
+                        }`}>
+                          <Star className="w-3 h-3" />
+                          {brief.difficulty || 'standard'}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
-      {/* Arousal Planner Section (hidden in focus/directive mode unless expanded, hidden when Gina home) */}
-      {!isWeekendDay && !directiveMode && !isGinaHome && (!focusMode || showAllItems) && (
-        <div className="px-4">
-          <ArousalPlannerSection />
-        </div>
-      )}
+          {/* Post Packs */}
+          {!isGinaHome && pendingPostPacks.length > 0 && (
+            <div className="px-4 mb-4 space-y-3">
+              <div className="flex items-center gap-2 px-1">
+                <Send className={`w-4 h-4 ${isBambiMode ? 'text-blue-500' : 'text-blue-400'}`} />
+                <span className={`text-xs uppercase tracking-wider font-semibold ${
+                  isBambiMode ? 'text-blue-500' : 'text-blue-400'
+                }`}>
+                  Post Packs
+                </span>
+                <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                  isBambiMode ? 'bg-blue-200 text-blue-600' : 'bg-blue-800 text-blue-300'
+                }`}>
+                  {pendingPostPacks.length}
+                </span>
+              </div>
+              {pendingPostPacks.map(dist => (
+                <PostPackCard
+                  key={dist.id}
+                  distribution={dist}
+                  onMarkPosted={markPosted}
+                />
+              ))}
+            </div>
+          )}
 
+          {/* Hypno Session */}
+          {!isGinaHome && activeHypnoSession && (
+            <div className="px-4 mb-4">
+              <div className="flex items-center gap-2 px-1 mb-2">
+                <Headphones className={`w-4 h-4 ${isBambiMode ? 'text-purple-500' : 'text-purple-400'}`} />
+                <span className={`text-xs uppercase tracking-wider font-semibold ${
+                  isBambiMode ? 'text-purple-500' : 'text-purple-400'
+                }`}>
+                  Hypno Session
+                </span>
+                <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                  isBambiMode ? 'bg-green-100 text-green-600' : 'bg-green-900/30 text-green-400'
+                }`}>
+                  Active
+                </span>
+              </div>
+              <HypnoSessionCard
+                taskCode={HYPNO_TASK_CODES.HYPNO_SESSION}
+                activeSession={activeHypnoSession}
+                onStart={() => window.dispatchEvent(new CustomEvent('navigate-to-hypno'))}
+              />
+            </div>
+          )}
 
-      {/* Goals Section (hidden in focus/directive mode unless expanded) */}
-      {todaysGoals.length > 0 && !directiveMode && (!focusMode || showAllItems) && (
+          {/* Streak Break Recovery */}
+          {isStreakBreakRecovery && (
+            <div className="px-4 mb-4">
+              <div className={`p-4 rounded-xl border ${
+                isBambiMode
+                  ? 'bg-amber-50 border-amber-200'
+                  : 'bg-amber-900/20 border-amber-700/30'
+              }`}>
+                <p className={`text-sm font-medium mb-2 ${
+                  isBambiMode ? 'text-amber-700' : 'text-amber-300'
+                }`}>
+                  Welcome back. Your {userState?.longestStreak || 0}-day streak is waiting to be rebuilt.
+                </p>
+                <p className={`text-xs ${
+                  isBambiMode ? 'text-amber-600' : 'text-amber-400/70'
+                }`}>
+                  Start with just one task. That's all it takes.
+                </p>
+              </div>
+              <div className="mt-2">
+                <TimeRatchetsDisplay compact />
+              </div>
+            </div>
+          )}
+
+          {/* Evening Mood Check-in */}
+          {showEveningCheckin && (
+            <div className="px-4 mb-4">
+              <div className={`p-4 rounded-xl border ${
+                isBambiMode
+                  ? 'bg-indigo-50 border-indigo-200'
+                  : 'bg-indigo-900/20 border-indigo-700/30'
+              }`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <Moon className={`w-4 h-4 ${isBambiMode ? 'text-indigo-500' : 'text-indigo-400'}`} />
+                  <span className={`text-sm font-medium ${
+                    isBambiMode ? 'text-indigo-700' : 'text-indigo-300'
+                  }`}>
+                    Evening Check-in
+                  </span>
+                </div>
+                {eveningSubmitted ? (
+                  <p className={`text-sm ${isBambiMode ? 'text-indigo-600' : 'text-indigo-400'}`}>
+                    Mood logged. Rest well.
+                  </p>
+                ) : (
+                  <>
+                    <p className={`text-xs mb-3 ${isBambiMode ? 'text-indigo-500' : 'text-indigo-400/70'}`}>
+                      How are you feeling right now?
+                    </p>
+                    <div className="flex gap-2">
+                      {[1, 2, 3, 4, 5].map(score => (
+                        <button
+                          key={score}
+                          onClick={() => handleEveningCheckin(score * 2)}
+                          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+                            eveningMood === score * 2
+                              ? 'bg-indigo-500 text-white'
+                              : isBambiMode
+                                ? 'bg-indigo-100 hover:bg-indigo-200 text-indigo-600'
+                                : 'bg-indigo-900/30 hover:bg-indigo-900/50 text-indigo-300'
+                          }`}
+                        >
+                          {score === 1 ? 'Low' : score === 2 ? 'Meh' : score === 3 ? 'OK' : score === 4 ? 'Good' : 'Great'}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Protein Tracker */}
+          {isEvening && (
+            <div className="px-4 mb-4">
+              <ProteinTracker />
+            </div>
+          )}
+
+          {/* Streak Warnings */}
+          {!isWeekendDay && (
+            <div className="px-4 mb-4">
+              <StreakWarningsWidget compact />
+            </div>
+          )}
+
+          {/* Time Anchors */}
+          {!isWeekendDay && (
+            <div className="px-4 mb-4">
+              <TimeRatchetsDisplay compact />
+            </div>
+          )}
+
+          {/* Micro-Task Widget */}
+          {!isWeekendDay && (
+            <div className="px-4 mb-4">
+              <MicroTaskWidget />
+            </div>
+          )}
+
+          {/* Exercise Widget */}
+          {!isWeekendDay && (
+            <div className="px-4 mb-4">
+              <ExerciseTodayWidget />
+            </div>
+          )}
+
+          {/* Arousal Planner */}
+          {!isWeekendDay && !isGinaHome && (
+            <div className="px-4">
+              <ArousalPlannerSection />
+            </div>
+          )}
+
+          {/* Goals Section */}
+          {todaysGoals.length > 0 && (
         <div className="px-4 space-y-4 mb-6">
           {/* Section header */}
           <div className="flex items-center gap-2 px-1">
@@ -1140,8 +990,8 @@ export function TodayView() {
         </div>
       )}
 
-      {/* Task list (hidden in focus/directive mode unless expanded) */}
-      {!directiveMode && (!focusMode || showAllItems) && <div className="px-4 space-y-4">
+      {/* Task list */}
+      <div className="px-4 space-y-4">
         {/* Weekend Activities Section */}
         {isWeekendDay && todaysActivities.length > 0 && (
           <>
@@ -1362,7 +1212,9 @@ export function TodayView() {
             )}
           </>
         )}
-      </div>}
+      </div>
+      </>
+      )}
 
       {/* Completion celebration (per-task) */}
       {lastCompletedTask && !showContinuation && (
