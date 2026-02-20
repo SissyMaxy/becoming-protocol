@@ -49,7 +49,8 @@ interface VoiceContentConfig {
 // Configuration
 // ============================================
 
-const VOICE_CONTENT_CONFIGS: VoiceContentConfig[] = [
+/** Available voice content configurations for future UI use. */
+export const VOICE_CONTENT_CONFIGS: VoiceContentConfig[] = [
   {
     type: 'daily_denial_audio',
     title: 'Daily Denial Update',
