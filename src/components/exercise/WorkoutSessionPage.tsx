@@ -16,46 +16,100 @@ import {
   Zap,
   Lock,
   ChevronRight,
+  ListChecks,
+  Target,
 } from 'lucide-react';
 import { useExercise } from '../../hooks/useExercise';
 import { useRewardOptional } from '../../context/RewardContext';
 import { ExerciseGuidedView } from './ExerciseGuidedView';
+import { CheckoffView } from './CheckoffView';
 import { SessionCompleteScreen } from './SessionCompleteScreen';
 import { ExerciseDomainProgress } from './ExerciseDomainProgress';
 import { MeasurementHistory } from './MeasurementHistory';
-import { WORKOUT_TEMPLATES } from '../../data/workout-templates';
-import type { SessionCompletionResult, WorkoutTemplate } from '../../types/exercise';
+import { WORKOUT_TEMPLATES, getTemplateById } from '../../data/workout-templates';
+import { startSession, completeSession } from '../../lib/exercise';
+import { toggleProteinSource } from '../../lib/protein';
+import { useAuth } from '../../context/AuthContext';
+import type { SessionCompletionResult, WorkoutTemplate, ExerciseCompleted } from '../../types/exercise';
 
 interface WorkoutSessionPageProps {
   onBack: () => void;
 }
 
+type WorkoutMode = 'guided' | 'checkoff';
+
 export function WorkoutSessionPage({ onBack }: WorkoutSessionPageProps) {
+  const { user } = useAuth();
   const exercise = useExercise();
   const reward = useRewardOptional();
   const [deviceEnabled, setDeviceEnabled] = useState(false);
   const [completionResult, setCompletionResult] = useState<SessionCompletionResult | null>(null);
   const [isStarting, setIsStarting] = useState(false);
 
+  // Default check-off for level 1-2, guided for 3+
+  const defaultMode: WorkoutMode = (exercise.domainConfig?.domainLevel || 1) <= 2 ? 'checkoff' : 'guided';
+  const [workoutMode, setWorkoutMode] = useState<WorkoutMode>(defaultMode);
+
+  // Active checkoff session (template being worked through in checkoff mode)
+  const [checkoffTemplate, setCheckoffTemplate] = useState<WorkoutTemplate | null>(null);
+
   const handleStart = useCallback(async (templateId: string) => {
+    if (workoutMode === 'checkoff') {
+      const template = getTemplateById(templateId);
+      if (template) {
+        setCheckoffTemplate(template);
+      }
+      return;
+    }
     setIsStarting(true);
     const success = await exercise.startWorkout(templateId, deviceEnabled);
     setIsStarting(false);
     if (!success) {
       console.error('[Workout] Failed to start session');
     }
-  }, [exercise, deviceEnabled]);
+  }, [exercise, deviceEnabled, workoutMode]);
+
+  const handleCheckoffComplete = useCallback(async (exercises: ExerciseCompleted[], durationMinutes: number) => {
+    if (!user?.id || !checkoffTemplate) return;
+    const denialDay = 0; // checkoff mode doesn't need denial context
+    const sessionId = await startSession(user.id, checkoffTemplate.id, false, denialDay);
+    if (!sessionId) {
+      console.error('[Workout] Failed to create checkoff session');
+      setCheckoffTemplate(null);
+      return;
+    }
+    const streakWeeks = exercise.streakData?.currentStreakWeeks || 0;
+    const result = await completeSession(user.id, sessionId, exercises, durationMinutes, checkoffTemplate.id, streakWeeks);
+    if (result) {
+      setCompletionResult(result);
+      if (reward?.addPoints) {
+        reward.addPoints(result.pointsAwarded, 'session_complete').catch(() => {});
+      }
+    }
+    setCheckoffTemplate(null);
+    exercise.refresh();
+  }, [user?.id, checkoffTemplate, exercise, reward]);
+
+  const handleCheckoffAbandon = useCallback(() => {
+    setCheckoffTemplate(null);
+  }, []);
 
   const handleComplete = useCallback(async () => {
     const result = await exercise.completeWorkout();
     if (result) {
       setCompletionResult(result);
-      // Award points through reward system
       if (reward?.addPoints) {
         reward.addPoints(result.pointsAwarded, 'session_complete').catch(() => {});
       }
     }
   }, [exercise, reward]);
+
+  const handleProteinShakeCheck = useCallback(() => {
+    if (!user?.id) return;
+    toggleProteinSource(user.id, 'shakePostWorkout', true).catch(err => {
+      console.error('[Workout] Shake auto-check failed:', err);
+    });
+  }, [user?.id]);
 
   const handleDone = useCallback(() => {
     setCompletionResult(null);
@@ -74,11 +128,23 @@ export function WorkoutSessionPage({ onBack }: WorkoutSessionPageProps) {
         onDone={handleDone}
         domainConfig={exercise.domainConfig}
         daysSinceMeasurement={daysSinceMeasurement}
+        onProteinShakeCheck={handleProteinShakeCheck}
       />
     );
   }
 
-  // Phase 2: Active guided session
+  // Phase 2b: Active checkoff session
+  if (checkoffTemplate) {
+    return (
+      <CheckoffView
+        template={checkoffTemplate}
+        onComplete={handleCheckoffComplete}
+        onAbandon={handleCheckoffAbandon}
+      />
+    );
+  }
+
+  // Phase 2a: Active guided session
   if (exercise.session && exercise.currentExercise) {
     return (
       <ExerciseGuidedView
@@ -203,6 +269,35 @@ export function WorkoutSessionPage({ onBack }: WorkoutSessionPageProps) {
             }`}
           />
         </button>
+      </div>
+
+      {/* Workout mode toggle */}
+      <div className="mx-4 mb-4 bg-white/5 rounded-xl p-4">
+        <p className="text-white/50 text-xs mb-2">Workout Mode</p>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setWorkoutMode('checkoff')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm transition-colors ${
+              workoutMode === 'checkoff'
+                ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                : 'bg-white/5 text-white/40 hover:text-white/60'
+            }`}
+          >
+            <ListChecks className="w-4 h-4" />
+            Check-off
+          </button>
+          <button
+            onClick={() => setWorkoutMode('guided')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm transition-colors ${
+              workoutMode === 'guided'
+                ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                : 'bg-white/5 text-white/40 hover:text-white/60'
+            }`}
+          >
+            <Target className="w-4 h-4" />
+            Guided
+          </button>
+        </div>
       </div>
 
       {/* Recommended template */}

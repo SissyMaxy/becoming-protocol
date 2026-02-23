@@ -21,6 +21,7 @@ import {
   getOrCreateDomainConfig,
   checkDomainAdvancement,
 } from '../lib/exercise';
+import { emitBodyEvent } from '../lib/body-events';
 import { getTemplateById, getTemplatesForLevel } from '../data/workout-templates';
 import {
   DOMAIN_LEVEL_NAMES,
@@ -389,6 +390,21 @@ export function useExercise(): UseExerciseReturn {
     if (domainConfig) {
       const updated = await checkDomainAdvancement(userId, domainConfig);
       setDomainConfig(updated);
+    }
+
+    // Emit workout_completed event
+    if (result) {
+      emitBodyEvent(userId, {
+        type: 'workout_completed',
+        templateId: session.template.id,
+        durationMin: durationMin,
+        sessionType: session.template.location === 'gym' ? 'gym' : session.template.id === 'mvw' ? 'mvw' : 'full',
+      });
+
+      // Emit streak milestone if applicable
+      if (result.newStreakWeeks > 0 && result.newStreakWeeks !== streakData?.currentStreakWeeks) {
+        emitBodyEvent(userId, { type: 'streak_milestone', weeks: result.newStreakWeeks });
+      }
     }
 
     setSession(null);

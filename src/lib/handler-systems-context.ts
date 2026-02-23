@@ -23,7 +23,9 @@ import {
 import { getActiveLiveSession } from './cam';
 import { getCamStats, getUpcomingSessions, getRecentSessions } from './content/cam-engine';
 import { getSleepStats } from './sleep-content';
-import { getOrCreateStreak } from './exercise';
+import { getOrCreateStreak, getLatestMeasurement } from './exercise';
+import { getTodayProtein } from './protein';
+import { estimateGrams, countSources, PROTEIN_TARGET } from '../types/protein';
 import { getHypnoSessionSummary } from './hypno-sessions';
 import { getLibraryStats } from './hypno-library';
 import { getConversationCounts } from './sexting/conversations';
@@ -219,16 +221,51 @@ async function buildSleepContext(userId: string): Promise<string> {
 }
 
 async function buildExerciseContext(userId: string): Promise<string> {
+  return buildBodyContext(userId);
+}
+
+async function buildBodyContext(userId: string): Promise<string> {
   try {
-    const streak = await getOrCreateStreak(userId);
-    if (streak.totalSessions === 0 && streak.currentStreakWeeks === 0) return '';
+    const [streak, protein, measurement] = await Promise.allSettled([
+      getOrCreateStreak(userId),
+      getTodayProtein(userId),
+      getLatestMeasurement(userId),
+    ]);
 
-    const gymStr = streak.gymGateUnlocked ? 'gym UNLOCKED' : 'gym locked';
-    const daysSince = streak.lastSessionAt
-      ? Math.floor((Date.now() - new Date(streak.lastSessionAt).getTime()) / 86400000)
-      : 999;
+    const parts: string[] = [];
 
-    return `EXERCISE: Week ${streak.currentStreakWeeks} streak, ${streak.sessionsThisWeek}/3 this week, ${gymStr}${daysSince >= 3 ? ` — NO WORKOUT ${daysSince}d` : ''}`;
+    // Exercise streak
+    const s = streak.status === 'fulfilled' ? streak.value : null;
+    if (s && (s.totalSessions > 0 || s.currentStreakWeeks > 0)) {
+      const gymStr = s.gymGateUnlocked ? 'gym UNLOCKED' : 'gym locked';
+      const daysSince = s.lastSessionAt
+        ? Math.floor((Date.now() - new Date(s.lastSessionAt).getTime()) / 86400000)
+        : 999;
+
+      parts.push(`BODY: Wk${s.currentStreakWeeks} streak, ${s.sessionsThisWeek}/3 this week, ${gymStr}${daysSince >= 3 ? ` — NO WORKOUT ${daysSince}d` : ''}`);
+    }
+
+    // Protein status
+    const p = protein.status === 'fulfilled' ? protein.value : null;
+    if (p) {
+      const grams = estimateGrams(p);
+      const sources = countSources(p);
+      parts.push(`  Protein: ${sources}/5 sources ~${grams}g/${PROTEIN_TARGET}g`);
+    }
+
+    // Latest measurement
+    const m = measurement.status === 'fulfilled' ? measurement.value : null;
+    if (m) {
+      const mParts: string[] = [];
+      if (m.waistInches) mParts.push(`W${m.waistInches}"`);
+      if (m.hipsInches) mParts.push(`H${m.hipsInches}"`);
+      if (m.hipWaistRatio) mParts.push(`ratio ${m.hipWaistRatio}`);
+      if (mParts.length > 0) {
+        parts.push(`  Measurements: ${mParts.join(' ')}`);
+      }
+    }
+
+    return parts.join('\n');
   } catch {
     return '';
   }

@@ -51,8 +51,7 @@ import { TimeRatchetsDisplay } from '../ratchets/TimeRatchets';
 import { ArousalPlannerSection } from '../arousal-planner';
 // NextBestActionWidget removed - consolidated into FocusedActionCard
 import { StreakWarningsWidget } from '../streak';
-import { ExerciseTodayWidget } from '../exercise';
-import { ProteinTracker } from '../protein';
+import { BodyDashboard } from '../body';
 import { MicroTaskWidget } from '../micro-tasks';
 import { HandlerDirective } from '../handler/HandlerDirective';
 import { getActiveBriefs, type ContentBrief } from '../../lib/handler-v2/content-engine';
@@ -914,12 +913,10 @@ export function TodayView() {
             </div>
           )}
 
-          {/* Protein Tracker */}
-          {isEvening && (
-            <div className="px-4 mb-4">
-              <ProteinTracker />
-            </div>
-          )}
+          {/* Body Dashboard (Protein + Exercise unified) */}
+          <div className="px-4 mb-4">
+            <BodyDashboard />
+          </div>
 
           {/* Streak Warnings */}
           {!isWeekendDay && (
@@ -942,12 +939,7 @@ export function TodayView() {
             </div>
           )}
 
-          {/* Exercise Widget */}
-          {!isWeekendDay && (
-            <div className="px-4 mb-4">
-              <ExerciseTodayWidget />
-            </div>
-          )}
+          {/* Exercise Widget — now part of BodyDashboard above */}
 
           {/* Arousal Planner */}
           {!isWeekendDay && !isGinaHome && (

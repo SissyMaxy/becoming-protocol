@@ -1,9 +1,10 @@
 /**
  * Session Complete Screen
- * Shows stats, points, streak update, protein reminder, affirmation.
+ * Shows stats, points, streak update, interactive protein shake prompt, affirmation.
  */
 
-import { Trophy, Flame, Clock, Dumbbell, UtensilsCrossed, TrendingUp } from 'lucide-react';
+import { useState } from 'react';
+import { Trophy, Flame, Clock, Dumbbell, UtensilsCrossed, TrendingUp, Check } from 'lucide-react';
 import type { SessionCompletionResult, ExerciseDomainConfig } from '../../types/exercise';
 import { DOMAIN_LEVEL_NAMES, DOMAIN_LEVEL_THRESHOLDS } from '../../types/exercise';
 
@@ -12,11 +13,19 @@ interface SessionCompleteScreenProps {
   onDone: () => void;
   domainConfig?: ExerciseDomainConfig | null;
   daysSinceMeasurement?: number | null;
+  onProteinShakeCheck?: () => void;
 }
 
-export function SessionCompleteScreen({ result, onDone, domainConfig, daysSinceMeasurement }: SessionCompleteScreenProps) {
+export function SessionCompleteScreen({ result, onDone, domainConfig, daysSinceMeasurement, onProteinShakeCheck }: SessionCompleteScreenProps) {
   const minutes = Math.floor(result.durationSeconds / 60);
   const seconds = result.durationSeconds % 60;
+  const [shakeDone, setShakeDone] = useState(false);
+
+  const handleShake = () => {
+    if (shakeDone) return;
+    setShakeDone(true);
+    onProteinShakeCheck?.();
+  };
 
   return (
     <div className="flex flex-col items-center gap-6 px-4 py-8 min-h-screen bg-gradient-to-b from-purple-900/40 to-black">
@@ -71,14 +80,33 @@ export function SessionCompleteScreen({ result, onDone, domainConfig, daysSinceM
         )}
       </div>
 
-      {/* Protein reminder */}
-      <div className="w-full max-w-sm bg-gradient-to-r from-pink-500/10 to-purple-500/10 border border-pink-500/20 rounded-xl p-4 flex items-center gap-3">
-        <UtensilsCrossed className="w-6 h-6 text-pink-400 flex-shrink-0" />
-        <div>
-          <p className="text-white font-medium text-sm">Shake time</p>
-          <p className="text-white/60 text-xs">30g of protein. Fuel the body you're building.</p>
+      {/* Interactive protein shake prompt */}
+      <button
+        onClick={handleShake}
+        className={`w-full max-w-sm rounded-xl p-4 flex items-center gap-3 transition-all ${
+          shakeDone
+            ? 'bg-green-500/15 border border-green-500/30'
+            : 'bg-gradient-to-r from-pink-500/10 to-purple-500/10 border border-pink-500/20 hover:from-pink-500/20 hover:to-purple-500/20'
+        }`}
+      >
+        {shakeDone ? (
+          <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
+            <Check className="w-4 h-4 text-white" />
+          </div>
+        ) : (
+          <UtensilsCrossed className="w-6 h-6 text-pink-400 flex-shrink-0" />
+        )}
+        <div className="text-left">
+          <p className={`font-medium text-sm ${shakeDone ? 'text-green-300' : 'text-white'}`}>
+            {shakeDone ? 'Shake done — 30g delivered' : 'Post-workout shake'}
+          </p>
+          <p className={`text-xs ${shakeDone ? 'text-green-300/60' : 'text-white/60'}`}>
+            {shakeDone
+              ? 'Fuel the muscles she just worked.'
+              : '1 scoop. Shake. Drink. 30g of protein.'}
+          </p>
         </div>
-      </div>
+      </button>
 
       {/* Domain level progress */}
       {domainConfig && domainConfig.domainLevel < 5 && (

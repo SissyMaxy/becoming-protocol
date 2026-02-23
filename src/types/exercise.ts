@@ -196,3 +196,35 @@ export const EQUIPMENT_BY_LEVEL: Record<ExerciseDomainLevel, EquipmentTier[]> = 
   4: ['bodyweight', 'bands', 'dumbbells', 'barbell'],
   5: ['bodyweight', 'bands', 'dumbbells', 'barbell', 'gym'],
 };
+
+// ============================================
+// HANDLER MESSAGES BY DOMAIN LEVEL
+// ============================================
+
+export const DOMAIN_HANDLER_MESSAGES: Record<ExerciseDomainLevel, string[]> = {
+  1: [
+    "Here's a glute workout. 20 minutes, no equipment.",
+    'She showed up. That\'s the whole game right now.',
+  ],
+  2: [
+    'The routine is loaded. Band is in the closet.',
+    'Glute day. 25 minutes. Start.',
+  ],
+  3: [
+    "It's getting heavier. So is she.",
+    'Progressive overload begins. Trust the process.',
+  ],
+  4: [
+    'Her body doesn\'t build itself. Workout loaded.',
+    'The weights are waiting. She knows what to do.',
+  ],
+  5: [
+    'This body is built. Now maintain what\'s hers.',
+    'She doesn\'t need motivation anymore. She just starts.',
+  ],
+};
+
+export function getDomainHandlerMessage(level: ExerciseDomainLevel): string {
+  const pool = DOMAIN_HANDLER_MESSAGES[level];
+  return pool[Math.floor(Math.random() * pool.length)];
+}
