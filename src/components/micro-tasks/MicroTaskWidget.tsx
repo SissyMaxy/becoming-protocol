@@ -66,8 +66,9 @@ export function MicroTaskWidget() {
       {/* Stats text */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
+          <span className="text-xs uppercase tracking-wider text-purple-400/60 mr-1">Micro</span>
           <span className="text-white/80 text-sm font-medium">
-            Micro-tasks: {stats.completedToday}/{dayTarget} today
+            {stats.completedToday}/{dayTarget} today
           </span>
         </div>
         <p className="text-white/30 text-xs">

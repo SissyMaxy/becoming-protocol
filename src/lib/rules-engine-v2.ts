@@ -105,8 +105,13 @@ function getTargetIntensity(state: UserStateForSelection): number {
 
   let base = odometerMap[state.odometer] || 3;
 
-  // Boost intensity if high arousal and denial day 4+
-  if (state.currentArousal >= 4 && state.denialDay >= 4) {
+  // Arousal-based intensity scaling
+  // High arousal (4-5) → boost intensity by 1 (no denial gate)
+  if (state.currentArousal >= 4) {
+    base = Math.min(5, base + 1);
+  }
+  // Peak arousal (5) with denial 4+ → boost by additional 1 (2 total)
+  if (state.currentArousal >= 5 && state.denialDay >= 4) {
     base = Math.min(5, base + 1);
   }
 
@@ -332,6 +337,15 @@ export function selectTask(state: UserStateForSelection, tasks: Task[]): Task | 
 
   // 4. Avoid repetition (don't repeat category/domain from last task)
   candidates = candidates.filter(t => passesNoRepeatRule(t, state));
+
+  // 4b. Domain saturation — cap any single domain at 3 completions per day
+  const domainCounts = new Map<string, number>();
+  state.completedTodayDomains.forEach(d => domainCounts.set(d, (domainCounts.get(d) || 0) + 1));
+  const unsaturated = candidates.filter(t => (domainCounts.get(t.domain) || 0) < 3);
+  if (unsaturated.length > 0) {
+    candidates = unsaturated;
+  }
+  // If all domains are saturated, keep full candidate list (don't deadlock)
 
   // 5. Prioritize avoided domains (confront avoidance - 30% chance)
   const avoidanceTasks = candidates.filter(t =>
