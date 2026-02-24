@@ -2,6 +2,7 @@
 // Core logic for goal-based training system
 
 import { supabase } from './supabase';
+import { getCurrentTimeOfDay } from './rules-engine-v2';
 import { getTodayDate, getYesterdayDate, getLocalDateString } from './protocol';
 import type {
   Goal,
@@ -112,18 +113,9 @@ export async function getGoalWithDrills(goalId: string): Promise<GoalWithDrills 
 /**
  * Get today's goals with completion status and drills
  */
-// Get current time window for filtering goals
-function getTimeOfDay(): 'morning' | 'afternoon' | 'evening' | 'night' {
-  const hour = new Date().getHours();
-  if (hour >= 5 && hour < 12) return 'morning';
-  if (hour >= 12 && hour < 17) return 'afternoon';
-  if (hour >= 17 && hour < 21) return 'evening';
-  return 'night';
-}
-
 export async function getTodaysGoals(userId: string): Promise<TodaysGoalWithDrills[]> {
   const today = getTodayDate();
-  const currentTime = getTimeOfDay();
+  const currentTime = getCurrentTimeOfDay();
 
   // Get active goals
   const { data: goals, error: goalsError } = await supabase

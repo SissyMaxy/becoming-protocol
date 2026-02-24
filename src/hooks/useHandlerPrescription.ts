@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import { getCurrentTimeOfDay } from '../lib/rules-engine-v2';
 import type { Directive, DirectiveState } from '../components/today-v2/DirectiveCard';
 
 // ============================================
@@ -92,12 +93,10 @@ const AFFIRMATIONS = [
 // HELPERS
 // ============================================
 
-function getTimeOfDay(): 'morning' | 'daytime' | 'evening' | 'night' {
-  const hour = new Date().getHours();
-  if (hour >= 5 && hour < 12) return 'morning';
-  if (hour >= 12 && hour < 17) return 'daytime';
-  if (hour >= 17 && hour < 21) return 'evening';
-  return 'night';
+/** Map canonical TimeOfDay to prescription template keys ('afternoon' -> 'daytime') */
+function getPrescriptionTimeOfDay(): 'morning' | 'daytime' | 'evening' | 'night' {
+  const t = getCurrentTimeOfDay();
+  return t === 'afternoon' ? 'daytime' : t;
 }
 
 function interpolate(template: string, vars: Record<string, unknown>): string {
@@ -163,7 +162,7 @@ export function useHandlerPrescription(): PrescriptionState & HandlerActions {
       }
 
       // Generate handler message (template fallback)
-      const timeOfDay = getTimeOfDay();
+      const timeOfDay = getPrescriptionTimeOfDay();
       const templates = HANDLER_MESSAGE_TEMPLATES[timeOfDay];
       const message = interpolate(pickRandom(templates), {
         denialDay: stateData?.denial_day || 1,
@@ -210,7 +209,7 @@ export function useHandlerPrescription(): PrescriptionState & HandlerActions {
       setError('Failed to load prescription');
 
       // Fallback handler message
-      const timeOfDay = getTimeOfDay();
+      const timeOfDay = getPrescriptionTimeOfDay();
       const templates = HANDLER_MESSAGE_TEMPLATES[timeOfDay];
       setHandlerMessage(pickRandom(templates).replace(/\{.*?\}/g, '—'));
 

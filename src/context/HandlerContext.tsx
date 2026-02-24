@@ -28,6 +28,7 @@ import {
   type TimingUserState,
 } from '../lib/timing-engine';
 import { generatePrefill, type PrefillContext } from '../lib/prefill-generator';
+import { getCurrentTimeOfDay, mapTimeOfDayLateNight } from '../lib/rules-engine-v2';
 import { supabase } from '../lib/supabase';
 import type { HandlerIntervention, HandlerDailyPlan } from '../types/handler';
 import type { ArousalState } from '../types/arousal';
@@ -502,14 +503,6 @@ async function generateInterventionFromSignal(
   signal: TimingSignal,
   state: TimingUserState
 ): Promise<HandlerIntervention | null> {
-  const getTimeOfDay = (): 'morning' | 'afternoon' | 'evening' | 'late_night' => {
-    const hour = new Date().getHours();
-    if (hour >= 5 && hour < 12) return 'morning';
-    if (hour >= 12 && hour < 17) return 'afternoon';
-    if (hour >= 17 && hour < 22) return 'evening';
-    return 'late_night';
-  };
-
   const getMoodString = (mood: number): string => {
     if (mood <= 2) return 'low';
     if (mood <= 4) return 'struggling';
@@ -522,7 +515,7 @@ async function generateInterventionFromSignal(
   const prefillContext: PrefillContext = {
     denial_day: state.denialDay,
     arousal_level: state.arousalLevel,
-    time_of_day: getTimeOfDay(),
+    time_of_day: mapTimeOfDayLateNight(getCurrentTimeOfDay()),
     task_category: signal.type,
     task_tier: signal.priority === 'high' ? 7 : signal.priority === 'medium' ? 5 : 3,
     mood: getMoodString(state.mood),
@@ -547,7 +540,7 @@ async function generateInterventionFromSignal(
           denial_day: state.denialDay,
           arousal_level: state.arousalLevel,
           mood: getMoodString(state.mood),
-          time_of_day: getTimeOfDay(),
+          time_of_day: mapTimeOfDayLateNight(getCurrentTimeOfDay()),
           gina_present: state.ginaPresent,
           streak_days: state.streakDays,
         },

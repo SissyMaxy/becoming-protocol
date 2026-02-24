@@ -806,13 +806,7 @@ export async function getUserLearningProfile(userId: string): Promise<UserLearni
 // HELPER FUNCTIONS
 // ============================================================
 
-export function getTimeOfDay(): 'morning' | 'afternoon' | 'evening' | 'night' {
-  const hour = new Date().getHours();
-  if (hour < 6) return 'night';
-  if (hour < 12) return 'morning';
-  if (hour < 18) return 'afternoon';
-  return 'evening';
-}
+export { getCurrentTimeOfDay as getTimeOfDay } from './rules-engine-v2';
 
 export function getDayOfWeek(): string {
   return new Date().toLocaleDateString('en-US', { weekday: 'long' });

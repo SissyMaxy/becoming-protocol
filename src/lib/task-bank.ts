@@ -17,7 +17,6 @@ import type {
   SkipCost,
 } from '../types/task-bank';
 import { DEFAULT_SKIP_COST } from '../types/task-bank';
-import { SYSTEM_PROMPTS } from './protocol-core/ai/system-prompts';
 import { recordTaskAtLevel, getEscalationOverview } from './escalation/level-generator';
 import { shouldHideTask } from './corruption-behaviors';
 import { getCopyStyle } from './handler-v2/types';
@@ -716,14 +715,6 @@ export async function getResistancePatterns(): Promise<{
 // HELPER FUNCTIONS
 // ============================================
 
-export function getTimeOfDay(): 'morning' | 'afternoon' | 'evening' | 'night' {
-  const hour = new Date().getHours();
-  if (hour >= 5 && hour < 12) return 'morning';
-  if (hour >= 12 && hour < 17) return 'afternoon';
-  if (hour >= 17 && hour < 21) return 'evening';
-  return 'night';
-}
-
 // ============================================
 // DEBUG FUNCTIONS
 // ============================================
@@ -1213,10 +1204,9 @@ export async function enhanceTasks(
       ? 'COPY FORMAT: SHORT MODE. Max 4 lines per task. Imperative sentences only. No filler, no explanation.'
       : 'COPY FORMAT: NORMAL. Up to 6 sentences per task. Direct, commanding.';
 
-  // Build Handler-voiced system prompt using the real Handler identity
-  const systemPrompt = `${SYSTEM_PROMPTS.base}
-
-OPERATION: BATCH TASK ENHANCEMENT
+  // Operation-specific instructions (non-sensitive — context and rules only).
+  // The Edge Function prepends the Handler base prompt server-side.
+  const operationInstructions = `OPERATION: BATCH TASK ENHANCEMENT
 Rewrite each task as a direct Handler instruction to ${context.chosenName}.
 Address her by name. Be specific to her current state.
 These are not suggestions — they are assignments from her Handler.
@@ -1275,8 +1265,7 @@ ${JSON.stringify(taskList, null, 2)}`;
     console.log('[TaskEnhance] Calling handler-ai enhance_tasks for', needsEnhancement.length, 'tasks');
     const { data, error } = await invokeWithAuth('handler-ai', {
       action: 'enhance_tasks',
-      systemPrompt,
-      userPrompt,
+      userPrompt: `${operationInstructions}\n\n${userPrompt}`,
     });
 
     if (error) {

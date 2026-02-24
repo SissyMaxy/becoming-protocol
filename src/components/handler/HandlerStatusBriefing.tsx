@@ -116,7 +116,7 @@ export function HandlerStatusBriefing({ className = '' }: HandlerStatusBriefingP
             PROGRESS
           </span>
         </div>
-        <p className={`text-sm ${isBambiMode ? 'text-green-700' : 'text-protocol-text'}`}>
+        <p className={`text-sm handler-voice ${isBambiMode ? 'text-green-700' : 'text-protocol-text'}`}>
           {briefing.progress.highlight}
         </p>
         {briefing.progress.hrtReframe && (
@@ -149,7 +149,7 @@ export function HandlerStatusBriefing({ className = '' }: HandlerStatusBriefingP
                 <p className={`text-xs ${isBambiMode ? 'text-amber-500' : 'text-amber-400/70'}`}>
                   @{comment.username} on {comment.platform}
                 </p>
-                <p className={`text-sm mt-1 ${isBambiMode ? 'text-amber-700' : 'text-protocol-text'}`}>
+                <p className={`text-sm mt-1 handler-voice ${isBambiMode ? 'text-amber-700' : 'text-protocol-text'}`}>
                   "{comment.text}"
                 </p>
               </div>
@@ -167,7 +167,7 @@ export function HandlerStatusBriefing({ className = '' }: HandlerStatusBriefingP
         <Heart className={`w-5 h-5 mx-auto mb-2 ${
           isBambiMode ? 'text-pink-400' : 'text-pink-400/80'
         }`} />
-        <p className={`text-sm italic ${
+        <p className={`text-sm italic handler-voice ${
           isBambiMode ? 'text-pink-600' : 'text-white/80'
         }`}>
           {briefing.affirmation}
@@ -236,7 +236,7 @@ function BriefingSection({
           {items.map((item, idx) => (
             <div key={idx} className="flex items-start gap-2 pt-2">
               <ItemIcon name={item.icon} isBambiMode={isBambiMode} />
-              <p className={`text-sm ${isBambiMode ? 'text-gray-700' : 'text-protocol-text'}`}>
+              <p className={`text-sm handler-voice ${isBambiMode ? 'text-gray-700' : 'text-protocol-text'}`}>
                 {item.text}
               </p>
             </div>

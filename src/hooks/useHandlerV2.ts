@@ -18,6 +18,7 @@ import {
   type FailureMode,
 } from '../lib/handler-v2';
 import { useUserState } from './useUserState';
+import { getCurrentTimeOfDay } from '../lib/rules-engine-v2';
 import type { Task } from '../types/task-bank';
 
 export interface UseHandlerV2Return {
@@ -138,7 +139,7 @@ export function useHandlerV2(): UseHandlerV2Return {
       userId: userState.userId,
       odometer: (userState.odometer ?? 'coasting') as UserState['odometer'],
       currentPhase: userState.currentPhase ?? 0,
-      timeOfDay: getTimeOfDay(),
+      timeOfDay: getCurrentTimeOfDay(),
       minutesSinceLastTask: 0, // Would need to track last task time separately
       tasksCompletedToday: userState.tasksCompletedToday ?? 0,
       pointsToday: 0, // Would need to track points separately
@@ -312,14 +313,6 @@ export function useHandlerV2(): UseHandlerV2Return {
 }
 
 // Helper functions
-function getTimeOfDay(): 'morning' | 'afternoon' | 'evening' | 'night' {
-  const hour = new Date().getHours();
-  if (hour >= 5 && hour < 12) return 'morning';
-  if (hour >= 12 && hour < 17) return 'afternoon';
-  if (hour >= 17 && hour < 21) return 'evening';
-  return 'night';
-}
-
 function isWorkday(): boolean {
   const day = new Date().getDay();
   return day >= 1 && day <= 5;

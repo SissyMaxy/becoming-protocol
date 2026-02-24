@@ -274,14 +274,8 @@ function getDaysSince(dateString: string): number {
   return diffTime / (1000 * 60 * 60 * 24);
 }
 
-// Get current time of day
-export function getTimeOfDay(): 'morning' | 'afternoon' | 'evening' | 'night' {
-  const hour = new Date().getHours();
-  if (hour >= 5 && hour < 12) return 'morning';
-  if (hour >= 12 && hour < 17) return 'afternoon';
-  if (hour >= 17 && hour < 21) return 'evening';
-  return 'night';
-}
+// Re-export canonical time-of-day helper
+export { getCurrentTimeOfDay as getTimeOfDay } from './rules-engine-v2';
 
 // Check if today is weekend
 export function isWeekend(): boolean {

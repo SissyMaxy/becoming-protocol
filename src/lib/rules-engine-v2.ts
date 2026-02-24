@@ -85,6 +85,11 @@ export function getCurrentTimeOfDay(wakeHour?: number, bedHour?: number): TimeOf
   return 'night';
 }
 
+/** Map canonical TimeOfDay to late_night variant used by some handler contexts */
+export function mapTimeOfDayLateNight(t: TimeOfDay): 'morning' | 'afternoon' | 'evening' | 'late_night' {
+  return t === 'night' ? 'late_night' : t;
+}
+
 /**
  * Get target intensity based on odometer state
  */

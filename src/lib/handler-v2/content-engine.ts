@@ -1129,35 +1129,25 @@ export async function markContentReleased(contentId: string): Promise<void> {
 // ============================================
 
 /**
- * Call the AI client for brief/caption generation.
- * Uses the AI client's internal API via a direct-ish approach:
- * we instantiate the client and call it with a generation prompt.
+ * Call the AI for brief/caption generation via Edge Function.
  */
 async function callAIForBriefs(
-  ai: ReturnType<typeof createAIClient>,
+  _ai: ReturnType<typeof createAIClient>,
   prompt: string
 ): Promise<string | null> {
-  // The AIClient exposes callAPI as private, so we use a workaround:
-  // Generate an "intervention" which gives us access to the generation pipeline.
-  // We pass the prompt as state context and extract the response.
-  //
-  // A cleaner approach: access the underlying Anthropic client directly.
-  // The AIClient constructor stores it. We use bracket notation to reach it.
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const client = (ai as any).client;
-    if (!client) return null;
-
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1500,
-      system: `You are the Handler for the Becoming Protocol. You generate content briefs and captions for your subject's content creation pipeline. Be specific, creative, and actionable. Output valid JSON only.`,
-      messages: [{ role: 'user', content: prompt }],
+    const { invokeWithAuth } = await import('../handler-ai');
+    const { data, error } = await invokeWithAuth('handler-ai', {
+      action: 'generate',
+      userPrompt: prompt,
+      maxTokens: 1500,
     });
 
-    if (response.content[0]?.type === 'text' && response.content[0].text) {
-      return response.content[0].text;
-    }
+    if (error) throw error;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = data as any;
+    return result?.text ?? result?.responseText ?? null;
   } catch (err) {
     console.error('AI call for briefs failed:', err);
   }

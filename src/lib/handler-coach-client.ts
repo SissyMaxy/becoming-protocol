@@ -2,6 +2,7 @@
 // Client-side library to interact with the handler-coach edge function
 
 import { supabase } from './supabase';
+import { getCurrentTimeOfDay, mapTimeOfDayLateNight } from './rules-engine-v2';
 import { generatePrefill, PrefillContext } from './prefill-generator';
 
 export interface UserState {
@@ -163,14 +164,10 @@ export async function getCheckInMessage(
 }
 
 /**
- * Determine the time of day based on current hour
+ * Determine the time of day based on current hour (late_night variant)
  */
 export function getTimeOfDay(): 'morning' | 'afternoon' | 'evening' | 'late_night' {
-  const hour = new Date().getHours();
-  if (hour >= 5 && hour < 12) return 'morning';
-  if (hour >= 12 && hour < 17) return 'afternoon';
-  if (hour >= 17 && hour < 22) return 'evening';
-  return 'late_night';
+  return mapTimeOfDayLateNight(getCurrentTimeOfDay());
 }
 
 /**

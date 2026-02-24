@@ -16,6 +16,7 @@ import { useAuth } from '../context/AuthContext';
 import { getHandler } from '../lib/handler-v2';
 import type { Handler } from '../lib/handler-v2';
 import type { UserState, SessionGuidance } from '../lib/handler-v2/types';
+import { getCurrentTimeOfDay } from '../lib/rules-engine-v2';
 
 interface SessionHandlerState {
   isInitialized: boolean;
@@ -148,7 +149,7 @@ export function useSessionHandler(ginaHome: boolean): UseSessionHandlerReturn {
       inSession: !!context,
       sessionType: context?.sessionType,
       streakDays: stateData?.streak_days ?? 0,
-      timeOfDay: getTimeOfDay(),
+      timeOfDay: getCurrentTimeOfDay(),
       handlerMode: stateData?.handler_mode ?? 'director',
       escalationLevel: stateData?.escalation_level ?? 1,
       ginaHome,
@@ -570,11 +571,3 @@ export function useSessionHandler(ginaHome: boolean): UseSessionHandlerReturn {
   };
 }
 
-// Helper: Get time of day
-function getTimeOfDay(): 'morning' | 'afternoon' | 'evening' | 'night' {
-  const hour = new Date().getHours();
-  if (hour >= 5 && hour < 12) return 'morning';
-  if (hour >= 12 && hour < 17) return 'afternoon';
-  if (hour >= 17 && hour < 21) return 'evening';
-  return 'night';
-}

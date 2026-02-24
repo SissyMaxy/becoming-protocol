@@ -56,6 +56,7 @@ import {
   buildSessionContext,
   buildInterventionContext,
 } from './handler-systems-context';
+import { getCurrentTimeOfDay } from './rules-engine-v2';
 
 // ============================================
 // BILLING ERROR TRACKING
@@ -80,15 +81,6 @@ function isBillingError(errorMessage: string): boolean {
   return errorMessage.includes('credit balance') ||
          errorMessage.includes('billing') ||
          errorMessage.includes('purchase credits');
-}
-
-// Helper to get time of day
-function getTimeOfDay(): 'morning' | 'afternoon' | 'evening' | 'night' {
-  const hour = new Date().getHours();
-  if (hour >= 5 && hour < 12) return 'morning';
-  if (hour >= 12 && hour < 17) return 'afternoon';
-  if (hour >= 17 && hour < 21) return 'evening';
-  return 'night';
 }
 
 // Build template context from available data
@@ -185,7 +177,7 @@ async function buildTemplateContext(
     denialDay: denialState?.current_denial_day || 0,
     arousalLevel: arousalPlan?.current_arousal_level || 0,
     edgeCount: arousalPlan?.edge_count || 0,
-    timeOfDay: getTimeOfDay(),
+    timeOfDay: getCurrentTimeOfDay(),
     isLocked: denialState?.is_locked || false,
     streakDays: denialState?.streak_days || 0,
     tasksCompletedToday: tasksToday || 0,

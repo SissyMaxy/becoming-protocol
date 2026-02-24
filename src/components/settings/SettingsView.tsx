@@ -20,6 +20,7 @@ import {
   Zap,
   Moon,
   Gauge,
+  Package,
   LogOut,
   Trash2,
   Loader2,
@@ -33,6 +34,7 @@ import { useOpacity } from '../../context/OpacityContext';
 import { OpacitySelector } from './OpacitySelector';
 import { useReminders } from '../../hooks/useReminders';
 import { LovenseSettings } from './LovenseSettings';
+import { EquipmentInventory } from './EquipmentInventory';
 import { ProfileView } from './ProfileView';
 import { TimeRatchetsSettings } from './TimeRatchetsSettings';
 import { ReminderSettingsPanel } from '../reminders';
@@ -195,7 +197,7 @@ interface SettingsViewProps {
   onEditIntake?: () => void;
 }
 
-type SettingsSection = 'main' | 'profile' | 'lovense' | 'timeratchets' | 'reminders' | 'privacy' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content' | 'opacity';
+type SettingsSection = 'main' | 'profile' | 'lovense' | 'equipment' | 'timeratchets' | 'reminders' | 'privacy' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content' | 'opacity';
 
 export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
   const { isBambiMode } = useBambiMode();
@@ -215,6 +217,7 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
   // Map section IDs to opacity feature keys
   const SECTION_FEATURE: Record<string, string> = {
     lovense: 'settings_basic',        // always visible
+    equipment: 'settings_basic',      // always visible — equipment filters tasks
     timeratchets: 'settings_timeratchets',
     reminders: 'settings_reminders',
     microtasks: 'settings_microtasks',
@@ -231,6 +234,13 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
       label: 'Lovense',
       description: 'Toy connection & rewards',
       color: '#ec4899',
+    },
+    {
+      id: 'equipment' as const,
+      icon: Package,
+      label: 'Equipment',
+      description: 'Items you own for tasks',
+      color: '#f97316',
     },
     {
       id: 'timeratchets' as const,
@@ -300,6 +310,7 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
   const getSectionTitle = () => {
     if (activeSection === 'main') return 'Settings';
     if (activeSection === 'profile') return 'Profile';
+    if (activeSection === 'equipment') return 'Equipment Inventory';
     if (activeSection === 'timeratchets') return 'Time Anchors';
     if (activeSection === 'reminders') return 'Feminization Reminders';
     if (activeSection === 'handler') return 'Handler Dashboard';
@@ -823,6 +834,9 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
 
         {/* Lovense Settings */}
         {activeSection === 'lovense' && <LovenseSettings />}
+
+        {/* Equipment Inventory */}
+        {activeSection === 'equipment' && <EquipmentInventory />}
 
         {/* Time Ratchets Settings */}
         {activeSection === 'timeratchets' && <TimeRatchetsSettings />}

@@ -67,7 +67,7 @@ export function HandlerDirective({ onSessionStart }: HandlerDirectiveProps) {
             </div>
             <div>
               <h2
-                className={`text-xl font-bold ${
+                className={`text-xl font-bold handler-voice ${
                   isBambiMode ? 'text-pink-100' : 'text-protocol-text'
                 }`}
               >
@@ -89,7 +89,7 @@ export function HandlerDirective({ onSessionStart }: HandlerDirectiveProps) {
             }`}
           >
             <p
-              className={`text-lg ${
+              className={`text-lg handler-voice ${
                 isBambiMode ? 'text-pink-100' : 'text-protocol-text'
               }`}
             >
@@ -162,7 +162,7 @@ export function HandlerDirective({ onSessionStart }: HandlerDirectiveProps) {
         </div>
 
         <p
-          className={`mb-4 ${
+          className={`mb-4 handler-voice ${
             isBambiMode ? 'text-pink-200' : 'text-protocol-text'
           }`}
         >
@@ -220,7 +220,7 @@ export function HandlerDirective({ onSessionStart }: HandlerDirectiveProps) {
         </div>
 
         <p
-          className={`mb-3 ${
+          className={`mb-3 handler-voice ${
             isBambiMode ? 'text-pink-200' : 'text-protocol-text'
           }`}
         >

@@ -1,6 +1,9 @@
 /**
  * AI Client - Handler Layer 3
  * Implements v2 Part 2.1: Claude API integration with 3-layer degradation
+ *
+ * All AI calls route through the handler-ai Supabase Edge Function.
+ * System prompts live server-side only — never in the client bundle.
  */
 
 import { BudgetManager, type ActionType } from './budget-manager';
@@ -23,65 +26,19 @@ import {
   buildSessionContext,
   buildInterventionContext,
 } from '../handler-systems-context';
-
-// Dynamic import for Anthropic SDK - makes it optional
-type AnthropicClient = {
-  messages: {
-    create: (params: {
-      model: string;
-      max_tokens: number;
-      system: string;
-      messages: { role: 'user' | 'assistant'; content: string }[];
-    }) => Promise<{
-      content: { type: string; text?: string }[];
-    }>;
-  };
-};
-
-// Will be populated if SDK is available
-let AnthropicClass: (new (opts: { apiKey: string; dangerouslyAllowBrowser: boolean }) => AnthropicClient) | null = null;
-
-// Try to load Anthropic SDK (optional dependency)
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const anthropicModule = require('@anthropic-ai/sdk');
-  AnthropicClass = anthropicModule.default || anthropicModule;
-} catch {
-  console.log('Anthropic SDK not available - Layer 3 will be disabled');
-}
-
-// System prompt and corruption builders are code-split into a separate chunk.
-// Dynamic import ensures they are NOT in the main application bundle.
-// Loaded lazily on first AI call.
-let _promptModule: typeof import('./system-prompt') | null = null;
-async function getPromptModule() {
-  if (!_promptModule) {
-    _promptModule = await import('./system-prompt');
-  }
-  return _promptModule;
-}
+import { invokeWithAuth } from '../handler-ai';
 
 export class AIClient {
-  private client: AnthropicClient | null = null;
   private budget: BudgetManager;
   private templates: TemplateEngine;
   private corruptionSnapshot: CorruptionSnapshot | null = null;
 
   constructor(
-    apiKey: string | null,
     budget: BudgetManager,
     templates?: TemplateEngine
   ) {
     this.budget = budget;
     this.templates = templates ?? getTemplateEngine();
-
-    if (apiKey && AnthropicClass) {
-      try {
-        this.client = new AnthropicClass({ apiKey, dangerouslyAllowBrowser: true });
-      } catch (e) {
-        console.error('Failed to initialize Anthropic client:', e);
-      }
-    }
   }
 
   /**
@@ -99,29 +56,31 @@ export class AIClient {
   }
 
   /**
-   * Build the full system prompt with corruption mechanics appended.
-   * Loads prompt module lazily (code-split, not in main bundle).
+   * Build corruption context summary for user-facing prompts.
+   * Contains only level numbers (non-sensitive metadata), not behavior text.
    */
-  private async getSystemPrompt(): Promise<string> {
-    const mod = await getPromptModule();
-    if (!this.corruptionSnapshot) return mod.HANDLER_BASE_PROMPT;
-    return mod.HANDLER_BASE_PROMPT + mod.buildCorruptionSystemPrompt(this.corruptionSnapshot);
-  }
+  private getCorruptionContext(): string {
+    const snapshot = this.corruptionSnapshot;
+    if (!snapshot) return '';
 
-  /**
-   * Get corruption context string for user-facing prompts.
-   * Loads prompt module lazily.
-   */
-  private async getCorruptionContext(): Promise<string> {
-    const mod = await getPromptModule();
-    return mod.buildCorruptionContext(this.corruptionSnapshot);
+    if (snapshot.all_suspended) {
+      return '\nCORRUPTION: ALL SUSPENDED. Caretaker mode. No boundary erosion tactics.';
+    }
+
+    const lv = snapshot.levels;
+    return `
+CORRUPTION STATE: composite ${snapshot.composite_score}/100
+  privacy: L${lv.privacy} | gina: L${lv.gina} | financial: L${lv.financial}
+  autonomy: L${lv.autonomy} | identity: L${lv.identity_language}
+  therapist: L${lv.therapist} | content: L${lv.content}
+Deploy corruption tactics appropriate to these levels. Never reference corruption to user.`.trim();
   }
 
   /**
    * Check if AI layer is available
    */
   isAvailable(): boolean {
-    return this.client !== null && this.budget.getRemaining() > 0;
+    return this.budget.getRemaining() > 0;
   }
 
   /**
@@ -212,7 +171,7 @@ Odometer: ${state.odometer}. Exec function: ${state.estimatedExecFunction}.
 ${state.avoidedDomains.length > 0 ? `Avoiding: ${state.avoidedDomains.join(', ')}` : ''}
 ${state.consecutiveSurvivalDays > 0 ? `Survival mode: ${state.consecutiveSurvivalDays} days` : ''}
 ${lifestyleParts.length > 0 ? lifestyleParts.join('\n') : ''}
-${await this.getCorruptionContext()}${systemsCtx}
+${this.getCorruptionContext()}${systemsCtx}
 
 Generate 3-sentence morning briefing. Acknowledge state, set intention, be direct. Apply corruption-level-appropriate directive style and framing. Reference systems data where actionable.
     `.trim();
@@ -290,7 +249,7 @@ Today: ${state.tasksCompletedToday} tasks, denial day ${state.denialDay}, streak
 Points earned: ${state.pointsToday}.
 ${state.avoidedDomains.length > 0 ? `Avoided: ${state.avoidedDomains.join(', ')}` : ''}
 ${lifestyleParts.length > 0 ? lifestyleParts.join('\n') : ''}
-${await this.getCorruptionContext()}${systemsCtx}
+${this.getCorruptionContext()}${systemsCtx}
 
 Generate 3-sentence debrief. Acknowledge, note improvement area, encourage. Use corruption-appropriate tone and framing. Reference content/voice/exercise progress where relevant.
     `.trim();
@@ -357,7 +316,7 @@ Generate 3-sentence debrief. Acknowledge, note improvement area, encourage. Use 
     return `
 Edge session, phase: ${phase}
 State: Edge ${state.edgeCount || 0}, denial day ${state.denialDay}, arousal ${state.currentArousal}/5
-${await this.getCorruptionContext()}${systemsCtx}
+${this.getCorruptionContext()}${systemsCtx}
 
 Generate 2-sentence guidance. ${phase === 'peak' ? 'Commitment extraction moment.' : ''} Direct. Match autonomy and identity corruption levels.
     `.trim();
@@ -443,7 +402,7 @@ Generate 2-sentence guidance. ${phase === 'peak' ? 'Commitment extraction moment
 State: Denial day ${state.denialDay}, arousal ${state.currentArousal}/5, ${state.timeOfDay}, streak ${state.streakDays}
 Mode: ${state.handlerMode}
 Task instruction: ${instruction}
-${await this.getCorruptionContext()}${systemsCtx}
+${this.getCorruptionContext()}${systemsCtx}
 
 ${formatDirective}
 Generate personalized delivery. Address as Maxy or "you". Apply autonomy-level directive style and identity-level language.
@@ -491,7 +450,7 @@ Generate personalized delivery. Address as Maxy or "you". Apply autonomy-level d
   }
 
   private async generateInterventionAI(type: string, state: UserState): Promise<string | null> {
-    const prompt = await this.buildInterventionPrompt(type, state);
+    const prompt = this.buildInterventionPrompt(type, state);
     const response = await this.callAPI(prompt, 150);
 
     if (response) {
@@ -505,13 +464,12 @@ Generate personalized delivery. Address as Maxy or "you". Apply autonomy-level d
     return null;
   }
 
-  private async buildInterventionPrompt(type: string, state: UserState): Promise<string> {
-    const corruptionCtx = await this.getCorruptionContext();
-    const systemsCtx = await buildInterventionContext(state.userId);
+  private buildInterventionPrompt(type: string, state: UserState): string {
+    const corruptionCtx = this.getCorruptionContext();
     const popupConstraint = `
-RESPONSE CONSTRAINTS: Title ≤${POPUP_LIMITS.title} chars. Body ≤${POPUP_LIMITS.body} chars. Action verb first. No Handler narration. One instruction only.`;
+RESPONSE CONSTRAINTS: Title <=${POPUP_LIMITS.title} chars. Body <=${POPUP_LIMITS.body} chars. Action verb first. No Handler narration. One instruction only.`;
 
-    const ctx = corruptionCtx + systemsCtx;
+    const ctx = corruptionCtx;
 
     const prompts: Record<string, string> = {
       streak_protection: `
@@ -580,8 +538,6 @@ Generate evidence-based response that presents accumulated data without arguing.
     notificationType: PopUpNotificationType,
     state: UserState
   ): Promise<PopUpMessage | null> {
-    const systemsCtx = await buildInterventionContext(state.userId);
-
     const prompt = `
 Generate a pop-up notification for Maxy.
 Type: ${notificationType}
@@ -589,7 +545,7 @@ Mode: ${state.handlerMode}
 State: Denial day ${state.denialDay}, arousal ${state.currentArousal}/5, streak ${state.streakDays}, ${state.timeOfDay}
 Odometer: ${state.odometer}. Exec function: ${state.estimatedExecFunction}.
 ${state.avoidedDomains.length > 0 ? `Avoiding: ${state.avoidedDomains.join(', ')}` : ''}
-${await this.getCorruptionContext()}${systemsCtx}
+${this.getCorruptionContext()}
 
 POP-UP MESSAGE CONSTRAINTS (MANDATORY):
 - Title: ${POPUP_LIMITS.title} characters MAX
@@ -645,7 +601,7 @@ Return ONLY a JSON object: {"title": "...", "body": "..."}
 Commitment extraction.
 State: Edge ${state.edgeCount || 8}+, denial day ${state.denialDay}, high arousal.
 ${state.avoidedDomains.length > 0 ? `Avoiding: ${state.avoidedDomains.join(', ')}` : ''}
-${await this.getCorruptionContext()}${systemsCtx}
+${this.getCorruptionContext()}${systemsCtx}
 
 Generate specific commitment demand. One sentence. "Say it: '...'" format. Match autonomy and identity corruption levels.
         `.trim();
@@ -664,28 +620,27 @@ Generate specific commitment demand. One sentence. "Say it: '...'" format. Match
   }
 
   // =============================================
-  // CORE API CALL
+  // CORE API CALL — routes through Edge Function
   // =============================================
 
   private async callAPI(prompt: string, maxTokens: number): Promise<string | null> {
-    if (!this.client) return null;
-
     try {
-      const response = await this.client.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: maxTokens,
-        system: await this.getSystemPrompt(),
-        messages: [{ role: 'user', content: prompt }],
+      const { data, error } = await invokeWithAuth('handler-ai', {
+        action: 'generate',
+        userPrompt: prompt,
+        maxTokens,
+        corruptionSnapshot: this.corruptionSnapshot,
       });
 
-      if (response.content[0].type === 'text' && response.content[0].text) {
-        return response.content[0].text;
-      }
-    } catch (error) {
-      console.error('API call failed:', error);
-    }
+      if (error) throw error;
 
-    return null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = data as any;
+      return result?.text ?? result?.responseText ?? null;
+    } catch (error) {
+      console.error('Edge function call failed:', error);
+      return null;
+    }
   }
 
   // =============================================
@@ -702,10 +657,8 @@ Generate specific commitment demand. One sentence. "Say it: '...'" format. Match
 }
 
 /**
- * Create AI client from environment
+ * Create AI client
  */
 export function createAIClient(_userId: string, budget: BudgetManager): AIClient {
-  // API key from environment variable
-  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY ?? null;
-  return new AIClient(apiKey as string | null, budget);
+  return new AIClient(budget);
 }

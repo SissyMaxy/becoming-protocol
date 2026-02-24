@@ -4,6 +4,7 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { generatePrefill, type PrefillContext } from '../lib/prefill-generator';
+import { getCurrentTimeOfDay, mapTimeOfDayLateNight } from '../lib/rules-engine-v2';
 import type { Task } from '../types/task-bank';
 
 export interface DirectiveState {
@@ -22,14 +23,6 @@ export interface UserStateForCoach {
   streak_days: number;
   avoided_domains?: string[];
   last_task?: string;
-}
-
-function getTimeOfDay(): 'morning' | 'afternoon' | 'evening' | 'late_night' {
-  const hour = new Date().getHours();
-  if (hour >= 5 && hour < 12) return 'morning';
-  if (hour >= 12 && hour < 17) return 'afternoon';
-  if (hour >= 17 && hour < 22) return 'evening';
-  return 'late_night';
 }
 
 export function useDirectiveCoach() {
@@ -240,7 +233,7 @@ export function useDirectiveCoach() {
     fetchDailyBriefing,
     fetchCheckIn,
     clearMessage,
-    getTimeOfDay,
+    getTimeOfDay: () => mapTimeOfDayLateNight(getCurrentTimeOfDay()),
   };
 }
 
