@@ -53,10 +53,14 @@ export interface UserState {
 
   // Tracking
   tasksCompletedToday: number;
+  lastTaskId: string | null;
   lastTaskCategory: string | null;
   lastTaskDomain: string | null;
   completedToday: string[];
   avoidedDomains: string[];
+
+  // Equipment
+  ownedItems: string[];
 
   // Timestamps
   createdAt: string;
@@ -92,7 +96,7 @@ interface UseUserStateReturn {
   resetStreak: () => Promise<void>;
 
   // Task tracking
-  recordTaskCompletion: (taskCategory: string, taskDomain: string) => Promise<void>;
+  recordTaskCompletion: (taskId: string, taskCategory: string, taskDomain: string) => Promise<void>;
 
   // Arousal tracking
   incrementArousal: () => Promise<void>;
@@ -128,10 +132,12 @@ function mapDbToUserState(row: Record<string, unknown>): UserState {
     resistanceDetected: (row.resistance_detected as boolean) || false,
     ginaVisibilityLevel: (row.gina_visibility_level as number) || 0,
     tasksCompletedToday: (row.tasks_completed_today as number) || 0,
+    lastTaskId: row.last_task_id as string | null,
     lastTaskCategory: row.last_task_category as string | null,
     lastTaskDomain: row.last_task_domain as string | null,
     completedToday: (row.completed_today as string[]) || [],
     avoidedDomains: (row.avoided_domains as string[]) || [],
+    ownedItems: (row.owned_items as string[]) || [],
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   };
@@ -161,10 +167,12 @@ function mapUpdateToDb(update: UserStateUpdate): Record<string, unknown> {
   if (update.resistanceDetected !== undefined) dbUpdate.resistance_detected = update.resistanceDetected;
   if (update.ginaVisibilityLevel !== undefined) dbUpdate.gina_visibility_level = update.ginaVisibilityLevel;
   if (update.tasksCompletedToday !== undefined) dbUpdate.tasks_completed_today = update.tasksCompletedToday;
+  if (update.lastTaskId !== undefined) dbUpdate.last_task_id = update.lastTaskId;
   if (update.lastTaskCategory !== undefined) dbUpdate.last_task_category = update.lastTaskCategory;
   if (update.lastTaskDomain !== undefined) dbUpdate.last_task_domain = update.lastTaskDomain;
   if (update.completedToday !== undefined) dbUpdate.completed_today = update.completedToday;
   if (update.avoidedDomains !== undefined) dbUpdate.avoided_domains = update.avoidedDomains;
+  if (update.ownedItems !== undefined) dbUpdate.owned_items = update.ownedItems;
 
   return dbUpdate;
 }
@@ -223,9 +231,37 @@ export function useUserState(): UseUserStateReturn {
           return;
         }
 
-        setUserState(mapDbToUserState(newData));
+        const newState = mapDbToUserState(newData);
+        setUserState(newState);
       } else {
-        setUserState(mapDbToUserState(data));
+        const mapped = mapDbToUserState(data);
+
+        // Midnight reset: if state was last updated on a previous day,
+        // reset daily counters to prevent stale data from yesterday
+        const today = new Date().toISOString().slice(0, 10);
+        const stateDate = mapped.updatedAt?.slice(0, 10);
+        if (stateDate && stateDate < today) {
+          const resetUpdate: Record<string, unknown> = {
+            tasks_completed_today: 0,
+            completed_today: [],
+            last_task_id: null,
+            last_task_category: null,
+            last_task_domain: null,
+            updated_at: new Date().toISOString(),
+          };
+          await supabase
+            .from('user_state')
+            .update(resetUpdate)
+            .eq('id', mapped.id);
+
+          mapped.tasksCompletedToday = 0;
+          mapped.completedToday = [];
+          mapped.lastTaskId = null;
+          mapped.lastTaskCategory = null;
+          mapped.lastTaskDomain = null;
+        }
+
+        setUserState(mapped);
       }
 
       setError(null);
@@ -374,11 +410,12 @@ export function useUserState(): UseUserStateReturn {
   }, [updateState]);
 
   // Record task completion
-  const recordTaskCompletion = useCallback(async (taskCategory: string, taskDomain: string) => {
+  const recordTaskCompletion = useCallback(async (taskId: string, taskCategory: string, taskDomain: string) => {
     if (!userState) return;
 
     await updateState({
       tasksCompletedToday: userState.tasksCompletedToday + 1,
+      lastTaskId: taskId,
       lastTaskCategory: taskCategory,
       lastTaskDomain: taskDomain,
       completedToday: [...userState.completedToday, `${taskCategory}:${taskDomain}`],

@@ -55,7 +55,7 @@ export type FeminizationDomain =
   | 'nutrition'
   | 'wigs';
 
-export type TaskCompletionType = 'binary' | 'duration' | 'count' | 'confirm' | 'scale' | 'reflect' | 'log_entry' | 'session_complete';
+export type TaskCompletionType = 'binary' | 'duration' | 'count' | 'batch_count' | 'check_in' | 'confirm' | 'scale' | 'reflect' | 'log_entry' | 'session_complete';
 
 // ============================================
 // CAPTURE FIELD DEFINITIONS (for log_entry)
@@ -104,6 +104,8 @@ export interface TaskRequirements {
   streakDays?: number;
   completedTaskCount?: number; // Must have completed X tasks total
   categoryCompletions?: Record<TaskCategory, number>; // Must have X completions in category
+  trigger?: string; // CSV trigger_condition string (e.g. 'denial_48hr+', 'peak_arousal')
+  dayOfWeek?: number[]; // 0=Sunday, 1=Monday, ..., 6=Saturday
 }
 
 export interface TaskExclusions {

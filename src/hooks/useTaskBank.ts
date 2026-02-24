@@ -398,12 +398,13 @@ export function useTaskBank(): UseTaskBankReturn {
       estimatedExecFunction: userState?.estimatedExecFunction ?? 'medium',
       currentPhase: userState?.currentPhase ?? 0,
       streakDays: userState?.streakDays ?? 0,
+      lastTaskId: userState?.lastTaskId ?? null,
       lastTaskCategory: userState?.lastTaskCategory ?? null,
       lastTaskDomain: userState?.lastTaskDomain ?? null,
       avoidedDomains: userState?.avoidedDomains ?? [],
       completedTodayDomains: completedDomains,
       completedTodayCategories: completedCategories,
-      ownedItems: [],
+      ownedItems: userState?.ownedItems ?? [],
       completedTaskIds: [],
     };
   }, [user?.id, userState, todayTasks]);

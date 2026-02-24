@@ -22,8 +22,8 @@ export default defineConfig({
     port: 5173,
   },
   build: {
-    // Enable source maps for debugging
-    sourcemap: true,
+    // Source maps disabled in production for operational opacity
+    sourcemap: false,
     // Optimize chunk size
     chunkSizeWarningLimit: 500,
     rollupOptions: {

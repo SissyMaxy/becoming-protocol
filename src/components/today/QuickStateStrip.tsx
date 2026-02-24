@@ -168,13 +168,20 @@ export function QuickStateStrip({
 
       {divider}
 
-      {/* Gina: toggle icon */}
-      <button onClick={handleGina} className={`flex items-center gap-1 px-2 py-1 ${
+      {/* Gina: toggle icon + label */}
+      <button onClick={handleGina} className={`flex flex-col items-center gap-0.5 px-2 py-1 ${
         isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'
       }`}>
         {localGina === 'home' && <Home className="w-4 h-4 text-purple-400" />}
         {localGina === 'alone' && <User className="w-4 h-4" />}
         {localGina === 'asleep' && <Moon className="w-4 h-4 text-indigo-400" />}
+        <span className={`text-[9px] leading-none font-medium ${
+          localGina === 'home' ? 'text-purple-400' :
+          localGina === 'asleep' ? 'text-indigo-400' :
+          isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'
+        }`}>
+          {localGina === 'home' ? 'Home' : localGina === 'asleep' ? 'Asleep' : 'Alone'}
+        </span>
       </button>
     </div>
   );

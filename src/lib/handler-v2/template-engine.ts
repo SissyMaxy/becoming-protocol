@@ -18,6 +18,10 @@ type TemplateVars = {
   name: string;
   points_today: number;
   odometer: string;
+  she: string;
+  her: string;
+  hers: string;
+  herself: string;
 };
 
 /**
@@ -37,9 +41,13 @@ export class TemplateEngine {
       time_of_day: state.timeOfDay ?? 'daytime',
       tasks_today: state.tasksCompletedToday ?? 0,
       arousal: state.currentArousal ?? 0,
-      name: 'Maxy',
+      name: state.chosenName ?? 'Maxy',
       points_today: state.pointsToday ?? 0,
       odometer: state.odometer ?? 'coasting',
+      she: 'she',
+      her: 'her',
+      hers: 'hers',
+      herself: 'herself',
     };
   }
 
@@ -58,7 +66,11 @@ export class TemplateEngine {
       .replace(/{arousal}/g, vars.arousal.toString())
       .replace(/{name}/g, vars.name)
       .replace(/{points_today}/g, vars.points_today.toString())
-      .replace(/{odometer}/g, vars.odometer);
+      .replace(/{odometer}/g, vars.odometer)
+      .replace(/{she}/g, vars.she)
+      .replace(/{her}/g, vars.her)
+      .replace(/{hers}/g, vars.hers)
+      .replace(/{herself}/g, vars.herself);
   }
 
   /**
@@ -84,7 +96,12 @@ export class TemplateEngine {
   // MORNING BRIEFING TEMPLATES
   // =============================================
 
-  getMorningBriefing(state: Partial<UserState>): string {
+  getMorningBriefing(state: Partial<UserState>): string | null {
+    // Time guard: only generate morning briefing during morning hours
+    if (state.timeOfDay && state.timeOfDay !== 'morning') return null;
+    const hour = new Date().getHours();
+    if (hour >= 12) return null;
+
     const templates = this.getMorningTemplates(state);
     const selected = templates[Math.floor(Math.random() * templates.length)];
     return this.substitute(selected, state);

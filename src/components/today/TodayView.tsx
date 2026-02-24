@@ -27,6 +27,8 @@ import { ReadyToPost } from '../shoots/ReadyToPost';
 // TodayHeader and ProgressRing removed — kill friction above first task
 import { TaskCardNew } from './TaskCardNew';
 // CompletionCelebration removed — affirmation is now inline in the card (CardPhase)
+// CompletionToast added — floating reward notification after inline phase fades
+import { CompletionToast } from './CompletionToast';
 import { AllCompleteCelebration } from './AllCompleteCelebration';
 import { HandlerMessage } from './HandlerMessage';
 import { AmbientFeedbackStrip } from './AmbientFeedbackStrip';
@@ -61,6 +63,7 @@ import { useStandingPermission } from '../../hooks/useStandingPermission';
 import { VaultSwipe } from '../vault/VaultSwipe';
 import type { WeekendActivity, ActivityFeedback } from '../../types/weekend';
 import type { Goal, GoalCompletionInput } from '../../types/goals';
+import { PRIVACY_REQUIRED_DOMAINS, PRIVACY_REQUIRED_CATEGORIES } from '../../lib/rules-engine-v2';
 
 export function TodayView() {
   const { isBambiMode, triggerHearts } = useBambiMode();
@@ -145,14 +148,17 @@ export function TodayView() {
 
   useEffect(() => {
     if (!user?.id || vaultFullAutonomy) return;
-    supabase
-      .from('content_vault')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .eq('status', 'pending')
-      .then(({ count }) => {
-        setVaultPendingCount(count ?? 0);
-      });
+    Promise.resolve(
+      supabase
+        .from('content_vault')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('status', 'pending')
+    ).then(({ count }) => {
+      setVaultPendingCount(count ?? 0);
+    }).catch((err: unknown) => {
+      console.warn('[TodayView] Vault count fetch failed:', err);
+    });
   }, [user?.id, vaultFullAutonomy]);
 
   const [showAllComplete, setShowAllComplete] = useState(false);
@@ -376,7 +382,17 @@ export function TodayView() {
   // Calculate progress (including weekend activities and goals)
   const completedCount = todayTasks.filter(t => t.status === 'completed').length;
   const totalCount = todayTasks.length;
-  const pendingTasks = todayTasks.filter(t => t.status === 'pending');
+  const pendingTasks = todayTasks.filter(t => {
+    if (t.status !== 'pending') return false;
+    // Privacy safety net: hide intimate tasks immediately when Gina is home
+    // Uses shared constants from rules-engine-v2 to prevent drift
+    if (isGinaHome) {
+      if (t.task.excludeIf?.ginaHome) return false;
+      if (PRIVACY_REQUIRED_DOMAINS.includes(t.task.domain) ||
+          PRIVACY_REQUIRED_CATEGORIES.includes(t.task.category)) return false;
+    }
+    return true;
+  });
   const completedTasks = todayTasks.filter(t => t.status === 'completed');
   const skippedTasks = todayTasks.filter(t => t.status === 'skipped');
 
@@ -414,10 +430,10 @@ export function TodayView() {
       // Find the completed task to get category and domain
       const completedTask = todayTasks.find(t => t.id === lastCompletedTask.id);
       if (completedTask?.task) {
-        const { category, domain } = completedTask.task;
+        const { id: taskId, category, domain } = completedTask.task;
 
         // Update user_state tracking
-        recordTaskCompletion(category, domain);
+        recordTaskCompletion(taskId, category, domain);
 
         // Prescribe a replacement task (reactive loop core)
         prescribeNext(category, domain);
@@ -913,41 +929,6 @@ export function TodayView() {
             </div>
           )}
 
-          {/* Body Dashboard (Protein + Exercise unified) */}
-          <div className="px-4 mb-4">
-            <BodyDashboard />
-          </div>
-
-          {/* Streak Warnings */}
-          {!isWeekendDay && (
-            <div className="px-4 mb-4">
-              <StreakWarningsWidget compact />
-            </div>
-          )}
-
-          {/* Time Anchors */}
-          {!isWeekendDay && (
-            <div className="px-4 mb-4">
-              <TimeRatchetsDisplay compact />
-            </div>
-          )}
-
-          {/* Micro-Task Widget */}
-          {!isWeekendDay && (
-            <div className="px-4 mb-4">
-              <MicroTaskWidget />
-            </div>
-          )}
-
-          {/* Exercise Widget — now part of BodyDashboard above */}
-
-          {/* Arousal Planner */}
-          {!isWeekendDay && !isGinaHome && (
-            <div className="px-4">
-              <ArousalPlannerSection />
-            </div>
-          )}
-
           {/* Goals Section */}
           {todaysGoals.length > 0 && (
         <div className="px-4 space-y-4 mb-6">
@@ -1207,6 +1188,17 @@ export function TodayView() {
               </div>
             )}
 
+            {/* Privacy hint: when Gina is home and tasks are hidden */}
+            {isGinaHome && pendingTasks.length === 0 && todayTasks.some(t => t.status === 'pending') && (
+              <div className={`p-4 rounded-xl text-center ${
+                isBambiMode ? 'bg-purple-50 border border-purple-200' : 'bg-purple-900/20 border border-purple-700/30'
+              }`}>
+                <p className={`text-sm ${isBambiMode ? 'text-purple-600' : 'text-purple-400'}`}>
+                  Some tasks hidden while Gina is home.
+                </p>
+              </div>
+            )}
+
             {/* Section: Completed tasks */}
             {completedTasks.length > 0 && (
               <div className="space-y-3 mt-6">
@@ -1254,6 +1246,41 @@ export function TodayView() {
         )}
       </div>
 
+      {/* ═══ Stats & Tracking — below tasks ═══ */}
+
+          {/* Body Dashboard (Protein + Exercise unified) */}
+          <div className="px-4 mb-4">
+            <BodyDashboard />
+          </div>
+
+          {/* Streak Warnings */}
+          {!isWeekendDay && (
+            <div className="px-4 mb-4">
+              <StreakWarningsWidget compact />
+            </div>
+          )}
+
+          {/* Time Anchors */}
+          {!isWeekendDay && (
+            <div className="px-4 mb-4">
+              <TimeRatchetsDisplay compact />
+            </div>
+          )}
+
+          {/* Micro-Task Widget */}
+          {!isWeekendDay && (
+            <div className="px-4 mb-4">
+              <MicroTaskWidget />
+            </div>
+          )}
+
+          {/* Arousal Planner */}
+          {!isWeekendDay && !isGinaHome && (
+            <div className="px-4">
+              <ArousalPlannerSection />
+            </div>
+          )}
+
       {/* ═══ Journal Prompt — hidden at opacity level 3 ═══ */}
       {canSee('journal_prompt') && user?.id && (
         <div className="px-4 pb-2">
@@ -1276,10 +1303,14 @@ export function TodayView() {
         </div>
       )}
 
-      {/* Per-task affirmation is now inline in the card (CardPhase: affirming).
-          Auto-dismiss lastCompletedTask so it doesn't linger. */}
-
-      {/* ContinuationPrompt removed — flat layout replaces single-action flow */}
+      {/* Per-task affirmation: inline card phase + floating toast */}
+      {lastCompletedTask && (
+        <CompletionToast
+          affirmation={lastCompletedTask.affirmation}
+          pointsEarned={lastCompletedTask.pointsEarned}
+          onDismiss={dismissCompletion}
+        />
+      )}
 
       {/* All complete celebration */}
       {showAllComplete && (

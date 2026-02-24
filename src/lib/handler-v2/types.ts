@@ -100,6 +100,9 @@ export interface UserState {
   weekendModeActive: boolean;
   recoveryProtocolActive?: string;
 
+  // Profile
+  chosenName?: string;
+
   // Lifestyle tracking (from exercise, protein, collections, micro-tasks)
   lifestyle?: {
     exercise?: {

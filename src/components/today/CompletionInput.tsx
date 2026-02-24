@@ -5,7 +5,7 @@
  */
 
 import type { CompletionData, TaskCompletionType, CaptureFieldDef } from '../../types/task-bank';
-import { BinaryInput, DurationInput, ScaleInput, CountInput, ReflectInput, LogEntryInput } from './inputs';
+import { BinaryInput, DurationInput, ScaleInput, CountInput, BatchCountInput, CheckInInput, ReflectInput, LogEntryInput } from './inputs';
 
 interface CompletionInputProps {
   completionType: TaskCompletionType | string;
@@ -67,6 +67,29 @@ export function CompletionInput({
           isCompleting={isCompleting}
           onComplete={onComplete}
           onIncrement={onIncrement}
+          getGradient={getGradient}
+        />
+      );
+
+    case 'batch_count':
+      return (
+        <BatchCountInput
+          targetCount={targetCount}
+          intensity={intensity}
+          isCompleting={isCompleting}
+          onComplete={onComplete}
+          getGradient={getGradient}
+        />
+      );
+
+    case 'check_in':
+      return (
+        <CheckInInput
+          durationMinutes={durationMinutes}
+          subtext={subtext}
+          intensity={intensity}
+          isCompleting={isCompleting}
+          onComplete={onComplete}
           getGradient={getGradient}
         />
       );

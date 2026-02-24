@@ -131,12 +131,17 @@ export class Handler {
   /**
    * Generate morning briefing
    */
-  async getMorningBriefing(): Promise<MorningBriefing> {
+  async getMorningBriefing(): Promise<MorningBriefing | null> {
     await this.ensureInitialized();
 
     if (!this.state) {
       throw new Error('State not set');
     }
+
+    // Time guard: only generate morning briefing before noon
+    const hour = new Date().getHours();
+    if (hour >= 12) return null;
+    if (this.state.timeOfDay && this.state.timeOfDay !== 'morning') return null;
 
     return this.ai!.generateMorningBriefing(this.state);
   }

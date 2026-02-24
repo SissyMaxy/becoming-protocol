@@ -14,6 +14,10 @@
 
 import type { Task } from '../types/task-bank';
 
+// Privacy-required domains/categories — shared with view-layer filters
+export const PRIVACY_REQUIRED_DOMAINS: string[] = ['arousal', 'conditioning'];
+export const PRIVACY_REQUIRED_CATEGORIES: string[] = ['edge', 'goon', 'deepen', 'worship', 'bambi', 'corrupt', 'session'];
+
 // Time of day derived from current hour
 // Matches TimeWindow from task-bank types
 export type TimeOfDay = 'morning' | 'afternoon' | 'evening' | 'night';
@@ -45,6 +49,7 @@ export interface UserStateForSelection {
   streakDays: number;
 
   // Last task context (for no-repeat)
+  lastTaskId: string | null;
   lastTaskCategory: string | null;
   lastTaskDomain: string | null;
 
@@ -63,13 +68,20 @@ export interface UserStateForSelection {
 }
 
 /**
- * Get current time of day
+ * Get current time of day.
+ * When wakeHour/bedHour are provided, windows are calculated relative to wake time.
+ * Default: wake=5, bed=22
  */
-export function getCurrentTimeOfDay(): TimeOfDay {
+export function getCurrentTimeOfDay(wakeHour?: number, bedHour?: number): TimeOfDay {
   const hour = new Date().getHours();
-  if (hour >= 5 && hour < 12) return 'morning';
-  if (hour >= 12 && hour < 17) return 'afternoon';
-  if (hour >= 17 && hour < 21) return 'evening';
+  const wake = wakeHour ?? 5;
+  const bed = bedHour ?? 22;
+  const midDay = wake + Math.floor((bed - wake) * 0.4); // ~40% of awake time = afternoon
+  const evening = wake + Math.floor((bed - wake) * 0.75); // ~75% = evening
+
+  if (hour >= wake && hour < midDay) return 'morning';
+  if (hour >= midDay && hour < evening) return 'afternoon';
+  if (hour >= evening && hour < bed) return 'evening';
   return 'night';
 }
 
@@ -115,6 +127,54 @@ function meetsTimeWindow(task: Task, state: UserStateForSelection): boolean {
   // Map time_window values to TimeOfDay
   // Task CSV uses: morning, daytime, evening, night, any
   return timeWindow.includes(state.timeOfDay);
+}
+
+/**
+ * Evaluate CSV trigger_condition string against current state.
+ * Known triggers map to state checks. Unknown triggers return false (conservative).
+ */
+function meetsTriggerString(trigger: string, state: UserStateForSelection): boolean {
+  const t = trigger.toLowerCase().trim();
+
+  // Denial-based triggers
+  if (t === 'denial_48hr+' || t === 'denial_2d+') return state.denialDay >= 2;
+  if (t === 'denial_72hr+' || t === 'denial_3d+') return state.denialDay >= 3;
+  if (t === 'denial_7d+' || t === 'denial_1w+') return state.denialDay >= 7;
+  if (t === 'denial_14d+' || t === 'denial_2w+') return state.denialDay >= 14;
+  if (t === 'denial_30d+' || t === 'denial_1m+') return state.denialDay >= 30;
+
+  // Arousal-based triggers
+  if (t === 'peak_arousal' || t === 'arousal_peak') return state.currentArousal >= 5;
+  if (t === 'high_arousal' || t === 'arousal_high') return state.currentArousal >= 4;
+  if (t === 'medium_arousal') return state.currentArousal >= 3;
+
+  // Session-based triggers
+  if (t === 'in_session' || t === 'during_session') return state.inSession;
+  if (t === 'post_session' || t === 'after_session') return !state.inSession && state.currentArousal >= 2;
+  if (t === 'goon_30min+' || t === 'goon_session') return state.inSession && state.currentArousal >= 4;
+  if (t === 'post_hypno') return !state.inSession;
+
+  // Streak-based triggers
+  if (t === 'streak_7d+' || t === 'streak_1w+') return state.streakDays >= 7;
+  if (t === 'streak_14d+' || t === 'streak_2w+') return state.streakDays >= 14;
+  if (t === 'streak_30d+') return state.streakDays >= 30;
+
+  // Privacy/time triggers (already handled by other filters, pass through)
+  if (t === 'alone' || t === 'private' || t === 'privacy') return !state.ginaHome;
+  if (t === 'nighttime' || t === 'bedtime') return state.timeOfDay === 'night';
+
+  // Phase triggers
+  if (t.startsWith('phase_')) {
+    const phaseNum = parseInt(t.replace('phase_', ''), 10);
+    if (!isNaN(phaseNum)) return state.currentPhase >= phaseNum;
+  }
+
+  // Odometer triggers
+  if (t === 'momentum' || t === 'momentum+') return state.odometer === 'momentum' || state.odometer === 'breakthrough';
+  if (t === 'breakthrough') return state.odometer === 'breakthrough';
+
+  // Unknown trigger — default to false (conservative: don't show task)
+  return false;
 }
 
 /**
@@ -166,6 +226,18 @@ function meetsTriggerConditions(task: Task, state: UserStateForSelection): boole
     return false;
   }
 
+  // Day of week check
+  if (req.dayOfWeek && req.dayOfWeek.length > 0) {
+    const today = new Date().getDay();
+    if (!req.dayOfWeek.includes(today)) return false;
+  }
+
+  // Trigger condition string check (from CSV trigger_condition)
+  // Unknown triggers default to false (conservative — don't show task if we can't verify)
+  if (req.trigger) {
+    if (!meetsTriggerString(req.trigger, state)) return false;
+  }
+
   return true;
 }
 
@@ -184,8 +256,8 @@ function meetsPrivacyRequirement(task: Task, state: UserStateForSelection): bool
 
   // Also check requires_privacy flag if present
   // Categories that require privacy:
-  const privacyRequiredDomains = ['arousal', 'conditioning'];
-  const privacyRequiredCategories = ['edge', 'goon', 'deepen', 'worship', 'bambi', 'corrupt', 'session'];
+  const privacyRequiredDomains = PRIVACY_REQUIRED_DOMAINS;
+  const privacyRequiredCategories = PRIVACY_REQUIRED_CATEGORIES;
 
   if (privacyRequiredDomains.includes(task.domain) ||
       privacyRequiredCategories.includes(task.category)) {
@@ -196,16 +268,12 @@ function meetsPrivacyRequirement(task: Task, state: UserStateForSelection): bool
 }
 
 /**
- * Check no immediate repetition (same category+domain combo)
+ * Check no immediate repetition — blocks the exact same task ID,
+ * not the entire category+domain combo (which was too aggressive).
  */
 function passesNoRepeatRule(task: Task, state: UserStateForSelection): boolean {
-  // Skip this rule if no last task
-  if (!state.lastTaskCategory || !state.lastTaskDomain) {
-    return true;
-  }
-
-  // Same category AND domain is not allowed
-  if (task.category === state.lastTaskCategory && task.domain === state.lastTaskDomain) {
+  // Don't repeat the exact same task back-to-back
+  if (state.lastTaskId && task.id === state.lastTaskId) {
     return false;
   }
 
@@ -271,13 +339,16 @@ export function selectTask(state: UserStateForSelection, tasks: Task[]): Task | 
   // 6. Intensity matching
   candidates = candidates.filter(t => meetsIntensityScaling(t, state));
 
-  // If no candidates after intensity filter, relax the constraint
+  // If no candidates after intensity filter, relax intensity but cap at target+1
+  // (defense-in-depth: fallback never surfaces tasks more than 1 level above target)
   if (candidates.length === 0) {
+    const maxIntensity = Math.min(5, getTargetIntensity(state) + 1) as 1 | 2 | 3 | 4 | 5;
     candidates = tasks.filter(t =>
       meetsTimeWindow(t, state) &&
       meetsTriggerConditions(t, state) &&
       meetsPrivacyRequirement(t, state) &&
-      passesNoRepeatRule(t, state)
+      passesNoRepeatRule(t, state) &&
+      t.intensity <= maxIntensity
     );
   }
 
@@ -306,13 +377,19 @@ export function selectDailyTasks(
       const last = selected[selected.length - 1];
       workingState = {
         ...workingState,
+        lastTaskId: last.id,
         lastTaskCategory: last.category,
         lastTaskDomain: last.domain,
       };
     }
 
-    // Filter out already selected tasks
-    const available = tasks.filter(t => !selected.some(s => s.id === t.id));
+    // Filter out already selected tasks + enforce domain diversity cap (max 3 per domain)
+    const domainCounts = new Map<string, number>();
+    selected.forEach(t => domainCounts.set(t.domain, (domainCounts.get(t.domain) || 0) + 1));
+    const available = tasks.filter(t =>
+      !selected.some(s => s.id === t.id) &&
+      (domainCounts.get(t.domain) || 0) < 3
+    );
 
     // Select next task
     const task = selectTask(workingState, available);
