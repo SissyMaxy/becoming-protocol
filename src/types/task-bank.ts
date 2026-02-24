@@ -205,6 +205,9 @@ export interface Task {
   cageRequired?: boolean;
   handlerFraming?: string;
 
+  // Pivot (softer fallback when user can't complete)
+  pivot?: string;
+
   // Metadata
   createdAt: string;
   createdBy: 'seed' | 'ai' | 'user';

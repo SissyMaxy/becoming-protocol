@@ -66,6 +66,7 @@ function dbTaskToTask(db: DbTask): Task {
     deviceRequired: db.device_required || undefined,
     cageRequired: db.cage_required || undefined,
     handlerFraming: db.handler_framing || undefined,
+    pivot: db.pivot_if_unable || undefined,
   };
 }
 

@@ -73,8 +73,10 @@ async function handleDecline(
 
     if (error) throw error;
 
-    // Generate a minimal pivot task in the same domain
-    const pivotTask = generateMinimalTask(task);
+    // Use curated DB pivot when available, fall back to hardcoded domain map
+    const pivotTask: Task = task.pivot
+      ? { ...task, id: `pivot-${task.id}`, instruction: task.pivot, intensity: 1 as const, subtext: 'Softer version. Just do this.' }
+      : generateMinimalTask(task);
 
     return {
       coachMessage: data.message,
@@ -84,8 +86,10 @@ async function handleDecline(
   } catch (err) {
     console.error('Failed to generate pivot:', err);
 
-    // Fallback pivot
-    const pivotTask = generateMinimalTask(task);
+    // Fallback pivot — same logic: DB pivot first, hardcoded second
+    const pivotTask: Task = task.pivot
+      ? { ...task, id: `pivot-${task.id}`, instruction: task.pivot, intensity: 1 as const, subtext: 'Softer version. Just do this.' }
+      : generateMinimalTask(task);
     return {
       coachMessage: `${prefill} just do this one small thing. ${pivotTask.instruction}`,
       task: pivotTask,
