@@ -205,8 +205,17 @@ export async function getTodaysGoals(userId: string): Promise<TodaysGoalWithDril
     return suitableTimes.includes('any') || suitableTimes.includes(currentTime);
   });
 
+  // Filter out goals with zero drills (empty picker prevention)
+  const withDrills = timeFilteredGoals.filter(g => g.drills.length > 0);
+  if (withDrills.length < timeFilteredGoals.length) {
+    console.warn(
+      '[goals] Hiding goals with 0 drills:',
+      timeFilteredGoals.filter(g => g.drills.length === 0).map(g => g.goalName)
+    );
+  }
+
   // STRENGTHENED: Sort by domain priority - arousal first, skincare last
-  return timeFilteredGoals.sort((a, b) => {
+  return withDrills.sort((a, b) => {
     const priorityA = a.goalDomain ? (DOMAIN_PRIORITY[a.goalDomain] ?? 99) : 99;
     const priorityB = b.goalDomain ? (DOMAIN_PRIORITY[b.goalDomain] ?? 99) : 99;
     return priorityA - priorityB;

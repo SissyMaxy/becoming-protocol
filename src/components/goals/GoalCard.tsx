@@ -12,6 +12,7 @@ import {
   MoreVertical,
   Pause,
   X,
+  AlertCircle,
 } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
 import type { TodaysGoalWithDrills, Drill, GoalCompletionInput } from '../../types/goals';
@@ -33,6 +34,7 @@ export const GoalCard = memo(function GoalCard({ goal, onComplete, onPause, onAb
   const [showMenu, setShowMenu] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [notes, setNotes] = useState('');
+  const [skipped, setSkipped] = useState(false);
 
   const domainColor = getDomainColor(goal.goalDomain);
   const isCompleted = goal.completedToday;
@@ -65,6 +67,29 @@ export const GoalCard = memo(function GoalCard({ goal, onComplete, onPause, onAb
       onAbandon(goal.goalId);
     }
   };
+
+  // Skipped state — dimmed collapsed card
+  if (skipped) {
+    return (
+      <div className={`rounded-xl border overflow-hidden opacity-50 ${
+        isBambiMode ? 'bg-pink-50/30 border-pink-200' : 'bg-protocol-surface/50 border-protocol-border'
+      }`}>
+        <div className="p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Target className="w-4 h-4" style={{ color: domainColor }} />
+            <span className={`text-sm ${isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'}`}>
+              {goal.goalName}
+            </span>
+          </div>
+          <span className={`text-xs px-2 py-0.5 rounded-full ${
+            isBambiMode ? 'bg-pink-100 text-pink-400' : 'bg-protocol-surface-light text-protocol-text-muted'
+          }`}>
+            Skipped
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -258,27 +283,51 @@ export const GoalCard = memo(function GoalCard({ goal, onComplete, onPause, onAb
             isBambiMode ? 'border-pink-200' : 'border-protocol-border'
           }`}
         >
-          <p
-            className={`text-xs mt-3 mb-2 ${
-              isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'
-            }`}
-          >
-            {isCompleted
-              ? `Completed with: ${goal.drillUsedName}`
-              : 'Pick any drill to complete this goal:'}
-          </p>
+          {/* Empty drills guard — defensive against race conditions / stale cache */}
+          {!isCompleted && goal.drills.length === 0 ? (
+            <div className="mt-3">
+              <div className={`flex items-center gap-2 py-3 px-4 rounded-lg ${
+                isBambiMode ? 'bg-pink-100 text-pink-500' : 'bg-protocol-surface-light text-protocol-text-muted'
+              }`}>
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span className="text-sm">No drills available right now</span>
+              </div>
+              <button
+                onClick={() => setSkipped(true)}
+                className={`w-full mt-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  isBambiMode
+                    ? 'bg-pink-100 text-pink-500 hover:bg-pink-200'
+                    : 'bg-protocol-surface-light text-protocol-text-muted hover:bg-protocol-border'
+                }`}
+              >
+                Skip for now
+              </button>
+            </div>
+          ) : (
+            <>
+              <p
+                className={`text-xs mt-3 mb-2 ${
+                  isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'
+                }`}
+              >
+                {isCompleted
+                  ? `Completed with: ${goal.drillUsedName}`
+                  : 'Pick any drill to complete this goal:'}
+              </p>
 
-          <div className="space-y-2">
-            {goal.drills.map((drill) => (
-              <DrillOption
-                key={drill.id}
-                drill={drill}
-                selected={selectedDrill?.id === drill.id}
-                completed={isCompleted && goal.drillUsedId === drill.id}
-                onSelect={() => !isCompleted && setSelectedDrill(drill)}
-              />
-            ))}
-          </div>
+              <div className="space-y-2">
+                {goal.drills.map((drill) => (
+                  <DrillOption
+                    key={drill.id}
+                    drill={drill}
+                    selected={selectedDrill?.id === drill.id}
+                    completed={isCompleted && goal.drillUsedId === drill.id}
+                    onSelect={() => !isCompleted && setSelectedDrill(drill)}
+                  />
+                ))}
+              </div>
+            </>
+          )}
 
           {/* Notes input - appears when a drill is selected */}
           {!isCompleted && selectedDrill && (
@@ -298,7 +347,7 @@ export const GoalCard = memo(function GoalCard({ goal, onComplete, onPause, onAb
           )}
 
           {/* Complete button */}
-          {!isCompleted && (
+          {!isCompleted && goal.drills.length > 0 && (
             <button
               onClick={handleComplete}
               disabled={!selectedDrill || completing}
