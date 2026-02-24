@@ -15,7 +15,6 @@ import {
   updateTaskProgress,
   skipTask,
   getTaskStats,
-  getTimeOfDay,
   enhanceTasks,
   buildEnhancementContext,
   prescribeNextTask,
@@ -41,8 +40,6 @@ interface UseTaskBankReturn {
     totalCompleted: number;
     totalSkipped: number;
     completionsByCategory: Record<TaskCategory, number>;
-    currentStreak: number;
-    longestStreak: number;
   } | null;
 
   // Completion state
@@ -79,7 +76,7 @@ export function useTaskBank(): UseTaskBankReturn {
   const { currentEntry: _currentEntry, progress } = useProtocol();
   const { user } = useAuth();
   const { metrics, currentState } = useArousalState();
-  const { userState } = useUserState();
+  const { userState, timeOfDay } = useUserState();
   const { snapshot: corruptionSnapshot } = useCorruption();
   const ginaCorruptionLevel = corruptionSnapshot?.levels.gina ?? 0;
 
@@ -130,9 +127,9 @@ export function useTaskBank(): UseTaskBankReturn {
       userId: user?.id || '',
       phase: progress?.phase?.currentPhase || 1,
       denialDay: userState?.denialDay || metrics?.currentStreakDays || 0,
-      streakDays: userState?.streakDays || stats?.currentStreak || 0,
+      streakDays: userState?.streakDays || 0,
       arousalState: currentState,
-      timeOfDay: getTimeOfDay(),
+      timeOfDay,
       ginaHome: userState?.ginaHome ?? false,
       ginaAsleep: userState?.ginaAsleep ?? false,
       ginaCorruptionLevel,
@@ -254,7 +251,7 @@ export function useTaskBank(): UseTaskBankReturn {
       const result = await completeTask(dailyTaskId, {
         denialDay: metrics?.currentStreakDays,
         arousalState: currentState,
-        streakDay: stats?.currentStreak,
+        streakDay: userState?.streakDays,
         feltGood,
         notes,
         captureData,
@@ -389,7 +386,7 @@ export function useTaskBank(): UseTaskBankReturn {
 
     return {
       userId: user?.id || '',
-      timeOfDay: getTimeOfDay() as UserStateForSelection['timeOfDay'],
+      timeOfDay: timeOfDay as UserStateForSelection['timeOfDay'],
       ginaHome: userState?.ginaHome ?? false,
       denialDay: userState?.denialDay ?? 0,
       currentArousal: userState?.currentArousal ?? 0,

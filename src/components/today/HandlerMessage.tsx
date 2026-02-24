@@ -9,12 +9,14 @@ import { useBambiMode } from '../../context/BambiModeContext';
 import type { HandlerMode } from '../../hooks/useUserState';
 import type { TimeOfDay } from '../../lib/rules-engine-v2';
 import type { PersonalizedGreeting, MorningInsight } from '../../lib/morning-personalization';
+import type { HandlerBriefing } from '../../lib/handler-briefing';
 
 interface HandlerMessageProps {
   handlerMode: HandlerMode;
   greeting?: PersonalizedGreeting;
   insight?: MorningInsight;
   motivationalMessage?: string;
+  briefing?: HandlerBriefing | null;
   streakDays: number;
   denialDay: number;
   timeOfDay: TimeOfDay;
@@ -93,15 +95,45 @@ function getModeStyles(handlerMode: HandlerMode, isBambiMode: boolean): ModeStyl
   }
 }
 
+function composeBriefingLines(briefing: HandlerBriefing): string {
+  const lines: string[] = [];
+
+  if (briefing.progress.highlight) {
+    lines.push(briefing.progress.highlight);
+  }
+
+  if (briefing.today.summary) {
+    lines.push(briefing.today.summary);
+  }
+
+  if (briefing.overnight.summary) {
+    lines.push(briefing.overnight.summary);
+  }
+
+  if (briefing.audience.comments.length > 0) {
+    const first = briefing.audience.comments[0];
+    lines.push(`"${first.text}" — ${first.username}`);
+  }
+
+  if (briefing.affirmation) {
+    lines.push(briefing.affirmation);
+  }
+
+  return lines.join(' · ');
+}
+
 function composeMessage(
   props: HandlerMessageProps,
 ): { primary: string; secondary?: string } {
-  const { greeting, insight, motivationalMessage, streakDays, denialDay, timeOfDay } = props;
+  const { greeting, insight, motivationalMessage, briefing, streakDays, denialDay, timeOfDay } = props;
 
   // Morning: use personalized greeting if available
   if (timeOfDay === 'morning' && greeting) {
     const primary = `${greeting.salutation}${greeting.personalAddress ? ', ' + greeting.personalAddress : ''}. ${greeting.subtext}`;
-    const secondary = insight?.description || motivationalMessage || undefined;
+    // Prefer briefing for expanded content, fall back to insight/motivational
+    const secondary = briefing
+      ? composeBriefingLines(briefing)
+      : (insight?.description || motivationalMessage || undefined);
     return { primary, secondary };
   }
 
@@ -109,21 +141,27 @@ function composeMessage(
   if (insight) {
     return {
       primary: insight.title,
-      secondary: insight.description,
+      secondary: briefing
+        ? composeBriefingLines(briefing)
+        : insight.description,
     };
   }
 
   if (motivationalMessage) {
     return {
       primary: motivationalMessage,
-      secondary: streakDays > 0 ? `Day ${streakDays} streak.` : undefined,
+      secondary: briefing
+        ? composeBriefingLines(briefing)
+        : (streakDays > 0 ? `Day ${streakDays} streak.` : undefined),
     };
   }
 
   // Fallback
   return {
     primary: `${getTimeGreeting(timeOfDay)} Day ${denialDay}.`,
-    secondary: getDailyFallback(denialDay),
+    secondary: briefing
+      ? composeBriefingLines(briefing)
+      : getDailyFallback(denialDay),
   };
 }
 

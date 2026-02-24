@@ -497,11 +497,32 @@ function AuthenticatedAppInner() {
     }
   }, [isLoading, currentEntry, showOnboarding]);
 
+  // Browser history: push/pop state for back button support
+  useEffect(() => {
+    // Replace initial state so first back doesn't exit the app
+    window.history.replaceState({ tab: 'protocol', subView: null }, '');
+
+    const handlePop = (e: PopStateEvent) => {
+      const state = e.state as { tab?: Tab; subView?: MenuSubView } | null;
+      if (state?.tab) {
+        setActiveTab(state.tab);
+        setMenuSubView(state.subView ?? null);
+      } else {
+        setActiveTab('protocol');
+        setMenuSubView(null);
+      }
+    };
+
+    window.addEventListener('popstate', handlePop);
+    return () => window.removeEventListener('popstate', handlePop);
+  }, []);
+
   // Handle tab change - no restrictions, all tabs accessible
   const handleTabChange = (newTab: Tab) => {
     // Reset menu sub-view when switching tabs
     setMenuSubView(null);
     setActiveTab(newTab);
+    window.history.pushState({ tab: newTab, subView: null }, '');
   };
 
   // Handle menu navigation — special cases for progress/sealed pages
@@ -509,19 +530,22 @@ function AuthenticatedAppInner() {
     if (view === 'progress-page') {
       setActiveTab('progress');
       setMenuSubView(null);
+      window.history.pushState({ tab: 'progress', subView: null }, '');
       return;
     }
     if (view === 'sealed-page') {
       setActiveTab('sealed');
       setMenuSubView(null);
+      window.history.pushState({ tab: 'sealed', subView: null }, '');
       return;
     }
     setMenuSubView(view);
+    window.history.pushState({ tab: activeTab, subView: view }, '');
   };
 
   // Handle back from menu sub-view
   const handleBackFromSubView = () => {
-    setMenuSubView(null);
+    window.history.back();
   };
 
   // Handle starting edit intake mode
@@ -666,11 +690,14 @@ function AuthenticatedAppInner() {
         return (
           <VaultSwipe
             onBack={handleBackFromSubView}
-            onManagePermissions={() => setMenuSubView('vault-permissions')}
+            onManagePermissions={() => {
+              setMenuSubView('vault-permissions');
+              window.history.pushState({ tab: activeTab, subView: 'vault-permissions' }, '');
+            }}
           />
         );
       case 'vault-permissions':
-        return <PermissionsManager onBack={() => setMenuSubView('vault-swipe')} />;
+        return <PermissionsManager onBack={handleBackFromSubView} />;
       case 'content-dashboard':
         return <ContentDashboard onBack={handleBackFromSubView} />;
       case 'quiz':
@@ -681,7 +708,10 @@ function AuthenticatedAppInner() {
         return (
           <VoiceDrillView
             onBack={handleBackFromSubView}
-            onAffirmationGame={() => setMenuSubView('voice-game')}
+            onAffirmationGame={() => {
+              setMenuSubView('voice-game');
+              window.history.pushState({ tab: activeTab, subView: 'voice-game' }, '');
+            }}
           />
         );
       case 'timeline':

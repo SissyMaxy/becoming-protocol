@@ -44,6 +44,7 @@ import { useUserState } from '../../hooks/useUserState';
 import type { PriorityAction } from './FocusedActionCard';
 import { getMorningPersonalization } from '../../lib/morning-personalization';
 import type { MorningPersonalization } from '../../lib/morning-personalization';
+import { composeHandlerBriefing, type HandlerBriefing } from '../../lib/handler-briefing';
 import { WeekendHeader } from '../weekend/WeekendHeader';
 import { WeekendActivityCard } from '../weekend/WeekendActivityCard';
 import { GinaFramingModal } from '../weekend/GinaFramingModal';
@@ -165,9 +166,11 @@ export function TodayView() {
 
   // Morning personalization for Handler message
   const [morningData, setMorningData] = useState<MorningPersonalization | null>(null);
+  const [briefingData, setBriefingData] = useState<HandlerBriefing | null>(null);
   useEffect(() => {
     if (!user?.id) return;
     getMorningPersonalization(user.id).then(setMorningData).catch(() => {});
+    composeHandlerBriefing(user.id).then(setBriefingData).catch(() => {});
   }, [user?.id]);
 
   // Completion counter for Handler message reactivity
@@ -579,6 +582,7 @@ export function TodayView() {
           greeting={morningData?.greeting}
           insight={morningData?.insight}
           motivationalMessage={morningData?.motivationalMessage}
+          briefing={briefingData}
           streakDays={userState?.streakDays ?? 0}
           denialDay={userState?.denialDay ?? 0}
           timeOfDay={timeOfDay ?? 'morning'}

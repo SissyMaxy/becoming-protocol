@@ -62,6 +62,10 @@ export interface UserState {
   // Equipment
   ownedItems: string[];
 
+  // Schedule (from bookend_config)
+  wakeHour?: number;
+  bedHour?: number;
+
   // Timestamps
   createdAt: string;
   updatedAt: string;
@@ -184,14 +188,14 @@ export function useUserState(): UseUserStateReturn {
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>(getCurrentTimeOfDay());
   const prevOdometerRef = useRef<string | null>(null);
 
-  // Update time of day periodically
+  // Update time of day periodically, using user's wake/bed schedule
   useEffect(() => {
     const interval = setInterval(() => {
-      setTimeOfDay(getCurrentTimeOfDay());
+      setTimeOfDay(getCurrentTimeOfDay(userState?.wakeHour, userState?.bedHour));
     }, 60000); // Check every minute
 
     return () => clearInterval(interval);
-  }, []);
+  }, [userState?.wakeHour, userState?.bedHour]);
 
   // Fetch user state
   const refreshState = useCallback(async () => {
@@ -216,6 +220,16 @@ export function useUserState(): UseUserStateReturn {
         return;
       }
 
+      // Fetch bookend config for wake/bed times (non-blocking)
+      const { data: bookend } = await supabase
+        .from('bookend_config')
+        .select('wake_time, bed_time')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      const wakeHour = bookend?.wake_time ? parseInt(String(bookend.wake_time).split(':')[0], 10) : undefined;
+      const bedHour = bookend?.bed_time ? parseInt(String(bookend.bed_time).split(':')[0], 10) : undefined;
+
       if (!data) {
         // Create initial user state
         const { data: newData, error: createError } = await supabase
@@ -232,6 +246,8 @@ export function useUserState(): UseUserStateReturn {
         }
 
         const newState = mapDbToUserState(newData);
+        newState.wakeHour = wakeHour;
+        newState.bedHour = bedHour;
         setUserState(newState);
       } else {
         const mapped = mapDbToUserState(data);
@@ -261,8 +277,13 @@ export function useUserState(): UseUserStateReturn {
           mapped.lastTaskDomain = null;
         }
 
+        mapped.wakeHour = wakeHour;
+        mapped.bedHour = bedHour;
         setUserState(mapped);
       }
+
+      // Update time of day with user's schedule
+      setTimeOfDay(getCurrentTimeOfDay(wakeHour, bedHour));
 
       setError(null);
     } catch (err) {

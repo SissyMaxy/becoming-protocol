@@ -431,8 +431,6 @@ export interface TaskBankStats {
   userStats: {
     totalCompleted: number;
     totalSkipped: number;
-    currentStreak: number;
-    longestStreak: number;
     favoriteCategory: TaskCategory;
     resistanceAreas: TaskCategory[];
   };

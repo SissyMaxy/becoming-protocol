@@ -2,7 +2,7 @@
 // CRUD operations and task selection logic
 
 import { supabase } from './supabase';
-import { getTodayDate, getLocalDateString } from './protocol';
+import { getTodayDate } from './protocol';
 import { invokeWithAuth, isHandlerAIDisabled } from './handler-ai';
 import type {
   Task,
@@ -617,8 +617,6 @@ export async function getTaskStats(): Promise<{
   totalCompleted: number;
   totalSkipped: number;
   completionsByCategory: Record<TaskCategory, number>;
-  currentStreak: number;
-  longestStreak: number;
 }> {
   // Get all completions
   const { data: completions, error: compError } = await supabase
@@ -654,45 +652,10 @@ export async function getTaskStats(): Promise<{
     }
   });
 
-  // Calculate streak (days with at least one completion)
-  let currentStreak = 0;
-  let longestStreak = 0;
-  let tempStreak = 0;
-  let lastDate: string | null = null;
-
-  const completionDates = [...new Set(
-    (completions || []).map(c => c.completed_at.split('T')[0])
-  )].sort().reverse();
-
-  const today = getTodayDate(); // Use local timezone, not UTC
-
-  for (const date of completionDates) {
-    if (lastDate === null) {
-      if (date === today || isYesterday(date)) {
-        tempStreak = 1;
-        currentStreak = 1;
-      }
-    } else {
-      const dayDiff = daysBetween(date, lastDate);
-      if (dayDiff === 1) {
-        tempStreak++;
-        if (currentStreak > 0) currentStreak++;
-      } else {
-        longestStreak = Math.max(longestStreak, tempStreak);
-        tempStreak = 1;
-        currentStreak = 0;
-      }
-    }
-    lastDate = date;
-  }
-  longestStreak = Math.max(longestStreak, tempStreak);
-
   return {
     totalCompleted: completions?.length || 0,
     totalSkipped: skipCount || 0,
     completionsByCategory: completionsByCategory as Record<TaskCategory, number>,
-    currentStreak,
-    longestStreak,
   };
 }
 
@@ -752,19 +715,6 @@ export async function getResistancePatterns(): Promise<{
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
-
-function isYesterday(dateStr: string): boolean {
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  return dateStr === getLocalDateString(yesterday); // Use local timezone, not UTC
-}
-
-function daysBetween(date1: string, date2: string): number {
-  const d1 = new Date(date1);
-  const d2 = new Date(date2);
-  const diff = Math.abs(d2.getTime() - d1.getTime());
-  return Math.floor(diff / (1000 * 60 * 60 * 24));
-}
 
 export function getTimeOfDay(): 'morning' | 'afternoon' | 'evening' | 'night' {
   const hour = new Date().getHours();

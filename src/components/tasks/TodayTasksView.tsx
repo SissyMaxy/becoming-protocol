@@ -148,7 +148,7 @@ export function TodayTasksView() {
                   isBambiMode ? 'text-pink-700' : 'text-protocol-text'
                 }`}
               >
-                {stats.currentStreak} day streak
+                {stats.totalCompleted} completed
               </span>
             </div>
           </div>
