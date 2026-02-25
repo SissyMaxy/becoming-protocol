@@ -42,7 +42,7 @@ coverage/
 nul
 
 # Large media files (too big for GitHub)
-public/hypno/sissy/
+public/hypno/
 
 .vercel
 
