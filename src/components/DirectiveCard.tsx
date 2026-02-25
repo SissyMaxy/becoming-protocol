@@ -28,6 +28,12 @@ interface UserState {
 interface DirectiveCardProps {
   coachMessage: string;
   task: Task;
+  enhancedCopy?: {
+    instruction: string;
+    subtext: string;
+    affirmation: string;
+    layer: 1 | 2 | 3;
+  } | null;
   userState: UserState;
   onComplete: (result?: boolean | number) => void;
   onDecline: () => void;
@@ -135,6 +141,7 @@ function generateMinimalTask(originalTask: Task): Task {
 export function DirectiveCard({
   coachMessage,
   task,
+  enhancedCopy,
   userState,
   onComplete,
   onDecline,
@@ -205,12 +212,12 @@ export function DirectiveCard({
       {/* The actual task - clear and specific */}
       <div className="task-directive mb-8">
         <h3 className="text-xl font-semibold text-white mb-3 leading-tight">
-          {task.instruction}
+          {enhancedCopy?.instruction || task.instruction}
         </h3>
 
-        {task.subtext && (
+        {(enhancedCopy?.subtext || task.subtext) && (
           <p className="text-gray-400 text-sm mb-4 leading-relaxed">
-            {task.subtext}
+            {enhancedCopy?.subtext || task.subtext}
           </p>
         )}
 

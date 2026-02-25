@@ -5,8 +5,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { DirectiveCard, EmptyDirective, LoadingDirective } from '../DirectiveCard';
 import { useDirectiveCoach, type UserStateForCoach } from '../../hooks/useDirectiveCoach';
+import { useHandlerV2 } from '../../hooks/useHandlerV2';
 import { useAuth } from '../../context/AuthContext';
 import type { DailyTask } from '../../types/task-bank';
+import type { HandlerIntervention } from '../../lib/handler-v2';
 
 interface DirectiveModeViewProps {
   pendingTasks: DailyTask[];
@@ -21,6 +23,7 @@ interface DirectiveModeViewProps {
   onTaskComplete: (taskId: string, feltGood?: boolean) => void;
   onTaskSkip: (taskId: string) => void;
   onRefresh: () => void;
+  onIntervention?: (intervention: HandlerIntervention) => void;
 }
 
 export function DirectiveModeView({
@@ -29,12 +32,20 @@ export function DirectiveModeView({
   onTaskComplete,
   onTaskSkip,
   onRefresh,
+  onIntervention,
 }: DirectiveModeViewProps) {
   const { user } = useAuth();
   const { fetchTaskFraming, isLoading: isCoachLoading, getTimeOfDay } = useDirectiveCoach();
+  const { enhanceTask, checkForIntervention } = useHandlerV2();
 
   const [currentTaskIndex, setCurrentTaskIndex] = useState(0);
   const [coachMessage, setCoachMessage] = useState<string | null>(null);
+  const [enhancedCopy, setEnhancedCopy] = useState<{
+    instruction: string;
+    subtext: string;
+    affirmation: string;
+    layer: 1 | 2 | 3;
+  } | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
 
   // Clamp index when pendingTasks shrinks (e.g. after completing a task with prior declines)
@@ -72,14 +83,17 @@ export function DirectiveModeView({
     const message = await fetchTaskFraming(currentTask, coachUserState);
     setCoachMessage(message || 'Good girl. Here\'s your next task.');
     setIsInitializing(false);
-  }, [currentTask, user?.id, fetchTaskFraming, coachUserState]);
+
+    // Enhance task copy via Handler (non-blocking, runs after init completes)
+    enhanceTask(currentTask).then(setEnhancedCopy).catch(() => {});
+  }, [currentTask, user?.id, fetchTaskFraming, coachUserState, enhanceTask]);
 
   useEffect(() => {
     loadCoachMessage();
   }, [loadCoachMessage]);
 
   // Handle task completion
-  const handleComplete = useCallback((result?: boolean | number) => {
+  const handleComplete = useCallback(async (result?: boolean | number) => {
     if (!currentDailyTask) return;
 
     const feltGood = typeof result === 'boolean' ? result : true;
@@ -88,7 +102,14 @@ export function DirectiveModeView({
     // Move to next task (parent will update pendingTasks)
     // If this was the last task, the list will be empty
     setCoachMessage(null);
-  }, [currentDailyTask, onTaskComplete]);
+    setEnhancedCopy(null);
+
+    // Check for intervention after completion
+    const intervention = await checkForIntervention();
+    if (intervention) {
+      onIntervention?.(intervention);
+    }
+  }, [currentDailyTask, onTaskComplete, checkForIntervention, onIntervention]);
 
   // Handle decline (pivot to next task or alternative)
   const handleDecline = useCallback(() => {
@@ -104,6 +125,7 @@ export function DirectiveModeView({
       setCurrentTaskIndex(0);
     }
     setCoachMessage(null);
+    setEnhancedCopy(null);
   }, [currentTaskIndex, pendingTasks.length, currentDailyTask, onTaskSkip]);
 
   // Loading state
@@ -126,6 +148,7 @@ export function DirectiveModeView({
       <DirectiveCard
         coachMessage={coachMessage || 'Good girl. Here\'s what you\'re doing now.'}
         task={currentTask}
+        enhancedCopy={enhancedCopy}
         userState={{
           user_id: coachUserState.user_id,
           denial_day: coachUserState.denial_day,

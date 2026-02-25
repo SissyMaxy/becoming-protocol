@@ -39,7 +39,10 @@ import { QuickStateStrip } from './QuickStateStrip';
 import { JournalPrompt } from './JournalPrompt';
 import { getTaskVariant, VoiceTaskEnrichment, EdgeTaskEnrichment, HypnoTaskEnrichment } from './TaskCardVariants';
 import { CommitmentReminder } from './CommitmentReminder';
-// DirectiveModeView and Tooltip removed — no mode toggles in main view
+// DirectiveModeView available but not in main view — mode toggles removed
+import { InterventionNotification } from '../handler/InterventionNotification';
+import type { HandlerIntervention as HandlerV2Intervention } from '../../lib/handler-v2';
+import type { HandlerIntervention, InterventionType } from '../../types/handler';
 import { useUserState } from '../../hooks/useUserState';
 import type { PriorityAction } from './FocusedActionCard';
 import { getMorningPersonalization } from '../../lib/morning-personalization';
@@ -227,6 +230,9 @@ export function TodayView() {
   const [feedbackActivity, setFeedbackActivity] = useState<WeekendActivity | null>(null);
   const [completingWeekendActivityId, setCompletingWeekendActivityId] = useState<string | null>(null);
   const [skippingWeekendActivityId, setSkippingWeekendActivityId] = useState<string | null>(null);
+
+  // Handler intervention state
+  const [activeIntervention, setActiveIntervention] = useState<HandlerV2Intervention | null>(null);
 
   // GinaHome: hide intimate content when Gina is home (gap #19)
   const isGinaHome = userState?.ginaHome ?? false;
@@ -1449,6 +1455,15 @@ export function TodayView() {
           />
         </div>
       )}
+
+      {/* Handler Intervention Overlay */}
+      {activeIntervention && (
+        <InterventionNotification
+          intervention={toNotificationIntervention(activeIntervention)}
+          onComplete={() => setActiveIntervention(null)}
+          onDismiss={() => setActiveIntervention(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1516,4 +1531,28 @@ function buildReadyToPostEntries(shoot: import('../../types/industry').ShootPres
   }
 
   return posts;
+}
+
+/**
+ * Adapt handler-v2 intervention to the format InterventionNotification expects.
+ * The two HandlerIntervention types have different shapes and InterventionType enums.
+ */
+function toNotificationIntervention(v2: HandlerV2Intervention): HandlerIntervention {
+  const typeMap: Record<string, InterventionType> = {
+    streak_protection: 'streak_protection',
+    vulnerability_window: 'support_check_in',
+    domain_avoidance: 'avoidance_confrontation',
+    depression_gentle: 'support_check_in',
+    work_stress_pause: 'anchor_reminder',
+    post_release_crash: 'support_check_in',
+    identity_crisis: 'affirmation',
+    commitment_extraction: 'commitment_prompt',
+    binge_prevention: 'anchor_reminder',
+    scheduled_check_in: 'support_check_in',
+  };
+  return {
+    type: typeMap[v2.type] || 'support_check_in',
+    content: v2.message,
+    targetDomain: v2.suggestedTask?.domain,
+  };
 }
