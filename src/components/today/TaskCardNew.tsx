@@ -4,8 +4,10 @@
  */
 
 import { useState, useCallback, useRef } from 'react';
-import { Check, X, Loader2, ExternalLink, Sparkles } from 'lucide-react';
+import { Check, X, Loader2, ExternalLink } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
+import { ESCALATION_DOMAIN_COLORS } from '../../types/escalation';
+import type { EscalationDomain } from '../../types/escalation';
 import type { DailyTask, CompletionData } from '../../types/task-bank';
 import { CompletionInput } from './CompletionInput';
 
@@ -87,6 +89,7 @@ export function TaskCardNew({
   const { isBambiMode } = useBambiMode();
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
   const [cardPhase, setCardPhase] = useState<CardPhase>('active');
+  const [instructionExpanded, setInstructionExpanded] = useState(false);
   const pendingCompletionRef = useRef<{ feltGood: boolean; notes?: string; data: CompletionData } | null>(null);
   const { instruction, category, intensity, completionType: baseCompletionType, targetCount, durationMinutes, subtext, captureFields: baseCaptureFields } = task.task;
   const completionType = task.completionTypeOverride || baseCompletionType;
@@ -97,6 +100,19 @@ export function TaskCardNew({
   const displayInstruction = task.enhancedInstruction || instruction;
   const displaySubtext = task.enhancedSubtext || subtext || getSubtext(category);
   const copyStyle = task.copyStyle || 'normal';
+
+  // Instruction truncation (25 word max)
+  const MAX_INSTRUCTION_WORDS = 25;
+  const instructionWords = displayInstruction.split(' ');
+  const isLongInstruction = instructionWords.length > MAX_INSTRUCTION_WORDS && !instructionExpanded;
+  const visibleInstruction = isLongInstruction
+    ? instructionWords.slice(0, MAX_INSTRUCTION_WORDS).join(' ') + '...'
+    : displayInstruction;
+
+  // Domain color accent
+  const domainColor = task.task.domain
+    ? ESCALATION_DOMAIN_COLORS[task.task.domain as EscalationDomain]
+    : undefined;
 
   // Affirmation text and points (available locally — no API round-trip needed)
   const affirmationText = task.enhancedAffirmation || task.task.reward.affirmation || 'Done. Keep going.';
@@ -217,7 +233,7 @@ export function TaskCardNew({
     );
   }
 
-  // Affirming phase: show affirmation in the card space
+  // Affirming phase: show affirmation with check pulse
   if (cardPhase === 'affirming') {
     return (
       <div className={`relative rounded-2xl overflow-hidden transition-all duration-500 ${
@@ -226,12 +242,12 @@ export function TaskCardNew({
           : 'bg-gradient-to-br from-purple-900/40 via-violet-900/30 to-fuchsia-900/20 border border-purple-500/40'
       }`}>
         <div className="p-6 text-center">
-          <div className={`w-12 h-12 mx-auto mb-3 rounded-full flex items-center justify-center ${
+          <div className={`w-14 h-14 mx-auto mb-3 rounded-full flex items-center justify-center animate-ping-once ${
             isBambiMode
               ? 'bg-gradient-to-br from-pink-400 to-fuchsia-500'
-              : 'bg-gradient-to-br from-purple-400 to-rose-500'
+              : 'bg-gradient-to-br from-emerald-400 to-emerald-600'
           }`}>
-            <Sparkles className="w-6 h-6 text-white" />
+            <Check className="w-8 h-8 text-white" />
           </div>
           <p className={`text-lg font-bold leading-snug ${
             isBambiMode ? 'text-pink-700' : 'text-white'
@@ -241,7 +257,6 @@ export function TaskCardNew({
           <div className={`mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${
             isBambiMode ? 'bg-pink-200/60' : 'bg-white/10'
           }`}>
-            <span className="text-base">✨</span>
             <span className={`text-sm font-semibold ${
               isBambiMode ? 'text-pink-600' : 'text-purple-300'
             }`}>
@@ -267,11 +282,14 @@ export function TaskCardNew({
   }
 
   return (
-    <div className={`relative rounded-2xl overflow-hidden transition-all duration-300 ${
-      isBambiMode
-        ? 'bg-white border-2 border-pink-200 shadow-lg shadow-pink-100'
-        : 'bg-protocol-surface border border-protocol-border'
-    } ${isFirst ? 'ring-2 ring-offset-2 ' + (isBambiMode ? 'ring-pink-400 ring-offset-pink-50' : 'ring-protocol-accent ring-offset-protocol-bg') : ''}`}>
+    <div
+      className={`relative rounded-2xl overflow-hidden transition-all duration-300 ${
+        isBambiMode
+          ? 'bg-white border-2 border-pink-200 shadow-lg shadow-pink-100'
+          : 'bg-protocol-surface border border-protocol-border'
+      } ${isFirst ? 'ring-2 ring-offset-2 ' + (isBambiMode ? 'ring-pink-400 ring-offset-pink-50' : 'ring-protocol-accent ring-offset-protocol-bg') : ''}`}
+      style={domainColor ? { borderLeftColor: domainColor, borderLeftWidth: '3px', borderLeftStyle: 'solid' } : undefined}
+    >
 
       {/* Skip confirmation overlay */}
       {showSkipConfirm && (
@@ -337,7 +355,17 @@ export function TaskCardNew({
         } ${
           isBambiMode ? 'text-gray-800' : 'text-protocol-text'
         }`}>
-          {displayInstruction}
+          {visibleInstruction}
+          {isLongInstruction && (
+            <span
+              onClick={() => setInstructionExpanded(true)}
+              className={`text-sm font-normal ml-1 cursor-pointer ${
+                isBambiMode ? 'text-pink-500' : 'text-protocol-accent'
+              }`}
+            >
+              more
+            </span>
+          )}
         </p>
 
         {/* Persuasive subtext — hidden in command mode (no fluff when aroused) */}

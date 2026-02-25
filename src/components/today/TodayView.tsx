@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { Loader2, RefreshCw, AlertTriangle, Heart, Target, Moon, FileText, ChevronRight, Clock, Star, DollarSign, Send, Headphones, Camera } from 'lucide-react';
+import { Loader2, RefreshCw, AlertTriangle, Heart, Target, Moon, FileText, ChevronRight, ChevronDown, Clock, Star, DollarSign, Send, Headphones, Camera, List } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
 import { useOpacity } from '../../context/OpacityContext';
 import { supabase } from '../../lib/supabase';
@@ -44,6 +44,7 @@ import { InterventionNotification } from '../handler/InterventionNotification';
 import type { HandlerIntervention as HandlerV2Intervention } from '../../lib/handler-v2';
 import type { HandlerIntervention, InterventionType } from '../../types/handler';
 import { useUserState } from '../../hooks/useUserState';
+import { FocusedActionCard, getPriorityAction } from './FocusedActionCard';
 import type { PriorityAction } from './FocusedActionCard';
 import { getMorningPersonalization } from '../../lib/morning-personalization';
 import type { MorningPersonalization } from '../../lib/morning-personalization';
@@ -166,6 +167,15 @@ export function TodayView() {
   }, [user?.id, vaultFullAutonomy]);
 
   const [showAllComplete, setShowAllComplete] = useState(false);
+
+  // Focused mode: single-task view (default on)
+  const [focusedMode, setFocusedMode] = useState(true);
+  const [dismissedActionIds, setDismissedActionIds] = useState<string[]>([]);
+
+  // Collapsible sections
+  const [statsExpanded, setStatsExpanded] = useState(false);
+  const [showCompleted, setShowCompleted] = useState(false);
+  const [showSkipped, setShowSkipped] = useState(false);
 
   // Morning personalization for Handler message
   const [morningData, setMorningData] = useState<MorningPersonalization | null>(null);
@@ -414,6 +424,12 @@ export function TodayView() {
   const allGoalsDone = todaysGoals.length > 0 && completedGoals.length === todaysGoals.length;
   const allDone = (totalCount === 0 || allTasksDone) && (todaysGoals.length === 0 || allGoalsDone);
 
+  // Focused mode: priority action
+  const priorityAction = useMemo(() => getPriorityAction(
+    todaysGoals, pendingTasks,
+    isStreakBreakRecovery, null, dismissedActionIds
+  ), [todaysGoals, pendingTasks, isStreakBreakRecovery, dismissedActionIds]);
+
   // Show evening check-in prompt if all tasks done and it's evening (gap #5)
   useEffect(() => {
     if (isEvening && allDone && !eveningSubmitted) {
@@ -532,7 +548,7 @@ export function TodayView() {
   const completedWeekendActivities = todaysActivities.filter(a => a.status === 'completed');
   const skippedWeekendActivities = todaysActivities.filter(a => a.status === 'skipped');
 
-  // (FocusedActionCard removed — tasks shown directly in flat layout)
+  // FocusedActionCard re-enabled as default view (Sprint 19 UI overhaul)
 
   // Complete an action (called when session ends or action has no steps)
   const handleCompleteAction = (action: PriorityAction) => {
@@ -551,6 +567,42 @@ export function TodayView() {
       if (task) {
         complete(task.id, true);
       }
+    }
+  };
+
+  // Focused mode: start the priority action
+  const handleFocusedStart = () => {
+    if (!priorityAction) return;
+
+    if (priorityAction.type === 'goal') {
+      handleCompleteAction(priorityAction);
+    } else if (priorityAction.type === 'task') {
+      const task = todayTasks.find(t => t.id === priorityAction.id);
+      if (task) {
+        const effectiveCompletionType = task.completionTypeOverride || task.task.completionType;
+        const isEdgeSession = effectiveCompletionType === 'session_complete' && !isGinaHome;
+        if (isEdgeSession) {
+          setEdgeSessionConfig({
+            sessionType: 'anchoring',
+            targetEdges: 10,
+            originTaskId: task.id,
+            prescribed: true,
+          });
+        } else if (priorityAction.steps && priorityAction.steps.length > 0) {
+          setActiveSession(priorityAction);
+        } else {
+          complete(task.id, true);
+        }
+      }
+    } else if (priorityAction.steps) {
+      setActiveSession(priorityAction);
+    }
+  };
+
+  // Focused mode: dismiss current action, show next
+  const handleFocusedDismiss = () => {
+    if (priorityAction) {
+      setDismissedActionIds(prev => [...prev, priorityAction.id]);
     }
   };
 
@@ -921,7 +973,7 @@ export function TodayView() {
                         <button
                           key={score}
                           onClick={() => handleEveningCheckin(score * 2)}
-                          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          className={`flex-1 py-3 min-h-[44px] rounded-lg text-sm font-medium transition-colors ${
                             eveningMood === score * 2
                               ? 'bg-indigo-500 text-white'
                               : isBambiMode
@@ -1155,46 +1207,90 @@ export function TodayView() {
               </div>
             )}
 
-            {/* Section: Pending tasks */}
+            {/* Section: Pending tasks — Focused or Flat mode */}
             {pendingTasks.length > 0 && (
               <div className="space-y-3">
-                <p className={`text-xs uppercase tracking-wider font-semibold px-1 ${
-                  isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'
-                }`}>
-                  {isWeekendDay ? 'Solo Tasks' : pendingTasks.length === 1 ? 'Your task' : `${pendingTasks.length} tasks remaining`}
-                </p>
-                {pendingTasks.map((task, index) => {
-                  const variant = getTaskVariant(task);
-                  const effectiveCompletionType = task.completionTypeOverride || task.task.completionType;
-                  const isEdgeSession = effectiveCompletionType === 'session_complete' && !isGinaHome;
-                  return (
-                    <div key={task.id}>
-                      {variant === 'voice' && <VoiceTaskEnrichment stats={voiceStats} />}
-                      {variant === 'edge' && <EdgeTaskEnrichment denialDay={userState?.denialDay ?? 0} arousalLevel={userState?.currentArousal ?? 0} />}
-                      {variant === 'hypno' && <HypnoTaskEnrichment session={activeHypnoSession} taskInstruction={task.task.instruction} />}
-                      <TaskCardNew
-                        task={task}
-                        onComplete={(feltGood, notes, captureData) => {
-                          if (isEdgeSession) {
-                            setEdgeSessionConfig({
-                              sessionType: 'anchoring',
-                              targetEdges: 10,
-                              originTaskId: task.id,
-                              prescribed: true,
-                            });
-                          } else {
-                            complete(task.id, feltGood, notes, captureData as Record<string, unknown> | undefined);
-                          }
-                        }}
-                        onIncrement={() => incrementProgress(task.id)}
-                        onSkip={() => skip(task.id)}
-                        isCompleting={completingTaskId === task.id}
-                        isSkipping={skippingTaskId === task.id}
-                        isFirst={index === 0 && pendingWeekendActivities.length === 0}
-                      />
+                {focusedMode && priorityAction ? (
+                  <>
+                    {/* Progress indicator */}
+                    <p className={`text-xs text-center font-medium ${
+                      isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'
+                    }`}>
+                      {completedCount} of {totalCount} done
+                    </p>
+
+                    {/* Single focused action card */}
+                    <FocusedActionCard
+                      priorityAction={priorityAction}
+                      pendingCount={pendingTasks.length - 1}
+                      onStartAction={handleFocusedStart}
+                      onDismiss={handleFocusedDismiss}
+                      onShowAll={() => setFocusedMode(false)}
+                      isExpanded={false}
+                    />
+                  </>
+                ) : (
+                  <>
+                    {/* Flat list header with focus mode toggle */}
+                    <div className="flex items-center justify-between px-1">
+                      <p className={`text-xs uppercase tracking-wider font-semibold ${
+                        isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'
+                      }`}>
+                        {isWeekendDay ? 'Solo Tasks' : pendingTasks.length === 1 ? 'Your task' : `${pendingTasks.length} tasks remaining`}
+                      </p>
+                      {!focusedMode && pendingTasks.length > 1 && (
+                        <button
+                          onClick={() => {
+                            setFocusedMode(true);
+                            setDismissedActionIds([]);
+                          }}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                            isBambiMode
+                              ? 'bg-pink-100 hover:bg-pink-200 text-pink-600'
+                              : 'bg-protocol-surface hover:bg-protocol-border/50 text-protocol-text-muted'
+                          }`}
+                        >
+                          <Target className="w-3 h-3" />
+                          Focus Mode
+                        </button>
+                      )}
                     </div>
-                  );
-                })}
+
+                    {/* Flat task list */}
+                    {pendingTasks.map((task, index) => {
+                      const variant = getTaskVariant(task);
+                      const effectiveCompletionType = task.completionTypeOverride || task.task.completionType;
+                      const isEdgeSession = effectiveCompletionType === 'session_complete' && !isGinaHome;
+                      return (
+                        <div key={task.id}>
+                          {variant === 'voice' && <VoiceTaskEnrichment stats={voiceStats} />}
+                          {variant === 'edge' && <EdgeTaskEnrichment denialDay={userState?.denialDay ?? 0} arousalLevel={userState?.currentArousal ?? 0} />}
+                          {variant === 'hypno' && <HypnoTaskEnrichment session={activeHypnoSession} taskInstruction={task.task.instruction} />}
+                          <TaskCardNew
+                            task={task}
+                            onComplete={(feltGood, notes, captureData) => {
+                              if (isEdgeSession) {
+                                setEdgeSessionConfig({
+                                  sessionType: 'anchoring',
+                                  targetEdges: 10,
+                                  originTaskId: task.id,
+                                  prescribed: true,
+                                });
+                              } else {
+                                complete(task.id, feltGood, notes, captureData as Record<string, unknown> | undefined);
+                              }
+                            }}
+                            onIncrement={() => incrementProgress(task.id)}
+                            onSkip={() => skip(task.id)}
+                            isCompleting={completingTaskId === task.id}
+                            isSkipping={skippingTaskId === task.id}
+                            isFirst={index === 0 && pendingWeekendActivities.length === 0}
+                          />
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
               </div>
             )}
 
@@ -1209,55 +1305,89 @@ export function TodayView() {
               </div>
             )}
 
-            {/* Section: Completed tasks */}
+            {/* Section: Completed tasks — collapsed summary */}
             {completedTasks.length > 0 && (
-              <div className="space-y-3 mt-6">
-                <p className={`text-xs uppercase tracking-wider font-semibold px-1 ${
-                  isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'
-                }`}>
-                  Completed
-                </p>
-                {completedTasks.map(task => (
-                  <TaskCardNew
-                    key={task.id}
-                    task={task}
-                    onComplete={() => {}}
-                    onSkip={() => {}}
-                    onUndo={() => undo(task.id)}
-                    isCompleting={false}
-                    isSkipping={false}
-                    isUndoing={undoingTaskId === task.id}
-                  />
-                ))}
+              <div className="mt-6">
+                <button
+                  onClick={() => setShowCompleted(!showCompleted)}
+                  className={`flex items-center gap-2 px-1 py-2 text-xs uppercase tracking-wider font-semibold transition-colors ${
+                    isBambiMode ? 'text-pink-400 hover:text-pink-500' : 'text-protocol-text-muted hover:text-protocol-text'
+                  }`}
+                >
+                  <ChevronDown className={`w-3 h-3 transition-transform ${showCompleted ? 'rotate-180' : ''}`} />
+                  {completedTasks.length} completed
+                </button>
+                {showCompleted && (
+                  <div className="space-y-3 mt-2">
+                    {completedTasks.map(task => (
+                      <TaskCardNew
+                        key={task.id}
+                        task={task}
+                        onComplete={() => {}}
+                        onSkip={() => {}}
+                        onUndo={() => undo(task.id)}
+                        isCompleting={false}
+                        isSkipping={false}
+                        isUndoing={undoingTaskId === task.id}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Section: Skipped tasks */}
+            {/* Section: Skipped tasks — collapsed summary */}
             {skippedTasks.length > 0 && (
-              <div className="space-y-3 mt-6">
-                <p className={`text-xs uppercase tracking-wider font-semibold px-1 ${
-                  isBambiMode ? 'text-gray-400' : 'text-gray-500'
-                }`}>
-                  Skipped
-                </p>
-                {skippedTasks.map(task => (
-                  <TaskCardNew
-                    key={task.id}
-                    task={task}
-                    onComplete={() => {}}
-                    onSkip={() => {}}
-                    isCompleting={false}
-                    isSkipping={false}
-                  />
-                ))}
+              <div className="mt-4">
+                <button
+                  onClick={() => setShowSkipped(!showSkipped)}
+                  className={`flex items-center gap-2 px-1 py-2 text-xs uppercase tracking-wider font-semibold transition-colors ${
+                    isBambiMode ? 'text-gray-400 hover:text-gray-500' : 'text-gray-500 hover:text-gray-400'
+                  }`}
+                >
+                  <ChevronDown className={`w-3 h-3 transition-transform ${showSkipped ? 'rotate-180' : ''}`} />
+                  {skippedTasks.length} skipped
+                </button>
+                {showSkipped && (
+                  <div className="space-y-3 mt-2">
+                    {skippedTasks.map(task => (
+                      <TaskCardNew
+                        key={task.id}
+                        task={task}
+                        onComplete={() => {}}
+                        onSkip={() => {}}
+                        isCompleting={false}
+                        isSkipping={false}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </>
         )}
       </div>
 
-      {/* ═══ Stats & Tracking — below tasks ═══ */}
+      {/* ═══ Stats & Tracking — collapsed by default ═══ */}
+      <div className="px-4 mt-4">
+        <button
+          onClick={() => setStatsExpanded(!statsExpanded)}
+          className={`w-full flex items-center justify-between py-3 px-1 text-sm font-medium transition-colors ${
+            isBambiMode
+              ? 'text-pink-500 hover:text-pink-600'
+              : 'text-protocol-text-muted hover:text-protocol-text'
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <List className="w-4 h-4" />
+            Stats & Tracking
+          </span>
+          <ChevronDown className={`w-4 h-4 transition-transform ${statsExpanded ? 'rotate-180' : ''}`} />
+        </button>
+      </div>
 
+      {statsExpanded && (
+        <>
           {/* Body Dashboard (Protein + Exercise unified) */}
           <div className="px-4 mb-4">
             <BodyDashboard />
@@ -1290,6 +1420,8 @@ export function TodayView() {
               <ArousalPlannerSection />
             </div>
           )}
+        </>
+      )}
 
       {/* ═══ Journal Prompt — hidden at opacity level 3 ═══ */}
       {canSee('journal_prompt') && user?.id && (

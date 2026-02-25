@@ -71,6 +71,7 @@ export default {
         'bambi-glow': 'bambiGlow 2s ease-in-out infinite',
         'bambi-bounce': 'bambiBounce 0.6s ease-out',
         'shimmer': 'shimmer 2s linear infinite',
+        'ping-once': 'pingOnce 0.5s ease-out forwards',
       },
       keyframes: {
         sparkle: {
@@ -94,6 +95,11 @@ export default {
         shimmer: {
           '0%': { backgroundPosition: '-200% 0' },
           '100%': { backgroundPosition: '200% 0' },
+        },
+        pingOnce: {
+          '0%': { transform: 'scale(0.5)', opacity: '0' },
+          '50%': { transform: 'scale(1.2)', opacity: '1' },
+          '100%': { transform: 'scale(1)', opacity: '1' },
         },
       },
     },

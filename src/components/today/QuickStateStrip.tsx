@@ -128,7 +128,7 @@ export function QuickStateStrip({
           <button
             key={i}
             onClick={() => handleMood(i)}
-            className={`text-base leading-none p-1 rounded transition-all duration-150 ${
+            className={`text-lg leading-none p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded transition-all duration-150 ${
               localMoodIdx === i ? 'opacity-100 scale-110' : 'opacity-20 hover:opacity-50'
             }`}
           >
@@ -140,7 +140,7 @@ export function QuickStateStrip({
       {divider}
 
       {/* Energy: bar segments */}
-      <button onClick={handleEnergy} className="flex items-center gap-0.5 px-2 py-1">
+      <button onClick={handleEnergy} className="flex items-center gap-0.5 px-2 py-1 min-h-[44px]">
         {[0, 1, 2].map(bar => (
           <div
             key={bar}
@@ -157,7 +157,7 @@ export function QuickStateStrip({
       {divider}
 
       {/* Arousal: flame + number */}
-      <button onClick={handleArousal} className="flex items-center gap-1 px-2 py-1">
+      <button onClick={handleArousal} className="flex items-center gap-1 px-2 py-1 min-h-[44px]">
         <Flame className={`w-4 h-4 ${AROUSAL_COLORS[currentArousal]} ${currentArousal >= 4 ? 'animate-pulse' : ''}`} />
         <span className={`text-xs font-bold tabular-nums ${
           isBambiMode ? 'text-pink-700' : 'text-protocol-text'
@@ -169,7 +169,7 @@ export function QuickStateStrip({
       {divider}
 
       {/* Gina: toggle icon + label */}
-      <button onClick={handleGina} className={`flex flex-col items-center gap-0.5 px-2 py-1 ${
+      <button onClick={handleGina} className={`flex flex-col items-center gap-0.5 px-2 py-1 min-h-[44px] ${
         isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'
       }`}>
         {localGina === 'home' && <Home className="w-4 h-4 text-purple-400" />}
