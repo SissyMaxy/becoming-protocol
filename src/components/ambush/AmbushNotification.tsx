@@ -9,6 +9,7 @@ import { useState, useEffect, useRef } from 'react';
 import { X, Clock, Camera, Mic, Check, AlarmClock, SkipForward } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
 import type { ScheduledAmbush } from '../../types/scheduled-ambush';
+import { truncateToLimit, NOTIFICATION_LIMITS } from '../../lib/handler-v2/popup-utils';
 import { AMBUSH_TYPE_CONFIG } from '../../types/scheduled-ambush';
 
 interface AmbushNotificationProps {
@@ -114,10 +115,10 @@ export function AmbushNotification({
         {/* Content */}
         <div className="p-4 space-y-4">
           {/* Instruction */}
-          <p className={`text-lg leading-relaxed ${
+          <p className={`text-lg leading-relaxed line-clamp-3 ${
             isBambiMode ? 'text-pink-50' : 'text-white'
           }`}>
-            {template?.instruction || 'Complete this quick task'}
+            {truncateToLimit(template?.instruction || 'Complete this quick task', NOTIFICATION_LIMITS.ambushInstruction)}
           </p>
 
           {/* Timer display */}

@@ -26,6 +26,14 @@ export async function addToVault(
     source_type: string;
     source_task_id?: string;
     capture_context?: string;
+    tags?: string[];
+    caption_draft?: string;
+    face_visible?: boolean;
+    auto_captured?: boolean;
+    domain?: string;
+    platforms?: string[];
+    file_size_bytes?: number;
+    duration_seconds?: number;
   }
 ): Promise<string | null> {
   const { data, error } = await supabase
@@ -220,6 +228,45 @@ export async function rejectVaultItem(userId: string, vaultId: string): Promise<
   }
 
   return true;
+}
+
+// ── Browse vault items (filtered) ────────────────────────
+
+export async function browseVaultItems(
+  userId: string,
+  filters?: {
+    status?: string;
+    content_type?: string;
+    platform?: string;
+    domain?: string;
+    face_visible?: boolean;
+    limit?: number;
+    offset?: number;
+  }
+): Promise<VaultItem[]> {
+  let query = supabase
+    .from('content_vault')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (filters?.status) query = query.eq('approval_status', filters.status);
+  if (filters?.content_type) query = query.eq('content_type', filters.content_type);
+  if (filters?.domain) query = query.eq('domain', filters.domain);
+  if (filters?.face_visible !== undefined) query = query.eq('face_visible', filters.face_visible);
+  if (filters?.platform) query = query.contains('platforms', [filters.platform]);
+
+  query = query.range(
+    filters?.offset || 0,
+    (filters?.offset || 0) + (filters?.limit || 50) - 1
+  );
+
+  const { data, error } = await query;
+  if (error) {
+    console.error('[vault] browseVaultItems error:', error);
+    return [];
+  }
+  return (data || []) as VaultItem[];
 }
 
 // ── Vault stats ─────────────────────────────────────────

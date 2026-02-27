@@ -35,6 +35,16 @@ export interface VaultItem {
   privacyScanResult?: PrivacyScanResult;
   exifStripped: boolean;
   createdAt: string;
+
+  // Gap-fill fields (from 110)
+  tags?: string[];
+  captionDraft?: string;
+  faceVisible?: boolean;
+  autoCaptured?: boolean;
+  domain?: string;
+  platforms?: string[];
+  fileSizeBytes?: number;
+  durationSeconds?: number;
 }
 
 export interface DbVaultItem {
@@ -63,6 +73,16 @@ export interface DbVaultItem {
   privacy_scan_result: Record<string, unknown> | null;
   exif_stripped: boolean;
   created_at: string;
+
+  // Gap-fill fields (from 110)
+  tags: string[] | null;
+  caption_draft: string | null;
+  face_visible: boolean;
+  auto_captured: boolean;
+  domain: string | null;
+  platforms: string[] | null;
+  file_size_bytes: number | null;
+  duration_seconds: number | null;
 }
 
 // ============================================
@@ -220,6 +240,14 @@ export function mapDbToVaultItem(db: DbVaultItem): VaultItem {
     privacyScanResult: db.privacy_scan_result as unknown as PrivacyScanResult | undefined,
     exifStripped: db.exif_stripped,
     createdAt: db.created_at,
+    tags: db.tags || undefined,
+    captionDraft: db.caption_draft || undefined,
+    faceVisible: db.face_visible,
+    autoCaptured: db.auto_captured,
+    domain: db.domain || undefined,
+    platforms: db.platforms || undefined,
+    fileSizeBytes: db.file_size_bytes || undefined,
+    durationSeconds: db.duration_seconds || undefined,
   };
 }
 

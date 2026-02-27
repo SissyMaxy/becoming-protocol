@@ -7,7 +7,7 @@
 
 import { supabase } from '../supabase';
 import { invokeWithAuth } from '../handler-ai';
-import type { FanProfile, FanTier, FanMessage } from '../../types/content-pipeline';
+import type { FanProfile, FanTier, FanMessage, FanInteraction } from '../../types/content-pipeline';
 
 // ── Tier thresholds ─────────────────────────────────────
 
@@ -200,6 +200,107 @@ export async function getPendingMessages(userId: string): Promise<FanMessage[]> 
 
   if (error) return [];
   return (data || []) as FanMessage[];
+}
+
+// ── Log fan interaction ──────────────────────────────────
+
+export async function logFanInteraction(
+  userId: string,
+  interaction: {
+    fan_username: string;
+    fan_platform: string;
+    fan_tier?: string;
+    interaction_type: string;
+    content?: string;
+    source_post_url?: string;
+    tip_amount_cents?: number;
+  }
+): Promise<FanInteraction | null> {
+  const { data, error } = await supabase
+    .from('fan_interactions')
+    .insert({
+      user_id: userId,
+      fan_username: interaction.fan_username,
+      fan_platform: interaction.fan_platform,
+      fan_tier: interaction.fan_tier || 'casual',
+      interaction_type: interaction.interaction_type,
+      content: interaction.content || null,
+      source_post_url: interaction.source_post_url || null,
+      tip_amount_cents: interaction.tip_amount_cents || 0,
+    })
+    .select('*')
+    .single();
+
+  if (error) {
+    console.error('[fans] logFanInteraction error:', error);
+    return null;
+  }
+  return data as FanInteraction;
+}
+
+// ── Get fan interactions ─────────────────────────────────
+
+export async function getFanInteractions(
+  userId: string,
+  filters?: {
+    interaction_type?: string;
+    sentiment?: string;
+    response_approved?: boolean;
+    limit?: number;
+  }
+): Promise<FanInteraction[]> {
+  let query = supabase
+    .from('fan_interactions')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (filters?.interaction_type) query = query.eq('interaction_type', filters.interaction_type);
+  if (filters?.sentiment) query = query.eq('sentiment', filters.sentiment);
+  if (filters?.response_approved !== undefined) query = query.eq('response_approved', filters.response_approved);
+  query = query.limit(filters?.limit || 50);
+
+  const { data, error } = await query;
+  if (error) {
+    console.error('[fans] getFanInteractions error:', error);
+    return [];
+  }
+  return (data || []) as FanInteraction[];
+}
+
+// ── Get pending interactions (needs review) ──────────────
+
+export async function getPendingInteractions(userId: string): Promise<FanInteraction[]> {
+  const { data, error } = await supabase
+    .from('fan_interactions')
+    .select('*')
+    .eq('user_id', userId)
+    .not('handler_response', 'is', null)
+    .eq('response_approved', false)
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  if (error) return [];
+  return (data || []) as FanInteraction[];
+}
+
+// ── Approve interaction response ─────────────────────────
+
+export async function approveInteractionResponse(
+  interactionId: string,
+  userId: string
+): Promise<boolean> {
+  const { error } = await supabase
+    .from('fan_interactions')
+    .update({
+      response_approved: true,
+      responded_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', interactionId)
+    .eq('user_id', userId);
+
+  return !error;
 }
 
 // ── Fan count ───────────────────────────────────────────

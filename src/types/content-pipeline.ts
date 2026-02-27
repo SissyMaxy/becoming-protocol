@@ -33,6 +33,13 @@ export type ArcStatus = 'planned' | 'active' | 'climax' | 'completed' | 'abandon
 export type PermissionRuleType = 'explicitness_max' | 'content_type' | 'platform' | 'source' | 'full_autonomy';
 export type MessageDirection = 'inbound' | 'outbound';
 export type MessageApprovalStatus = 'auto' | 'pending' | 'approved' | 'rejected';
+export type BeatPosition = 'setup' | 'development' | 'payoff' | 'standalone';
+export type InteractionType = 'comment' | 'dm' | 'tip' | 'subscription' | 'like' | 'share' | 'custom_request' | 'complaint';
+export type PollStatus = 'draft' | 'approved' | 'active' | 'closed' | 'applied';
+export type PollType = 'single_choice' | 'multiple_choice' | 'ranked';
+export type Sentiment = 'positive' | 'neutral' | 'negative' | 'thirsty' | 'demanding' | 'supportive';
+export type HandlerAction = 'respond' | 'ignore' | 'escalate' | 'curate' | 'block';
+export type SlotStatus = 'open' | 'assigned' | 'queued' | 'posted' | 'skipped';
 
 // ── Vault ───────────────────────────────────────────────
 
@@ -56,6 +63,16 @@ export interface VaultItem {
   approval_status: ApprovalStatus;
   approved_at?: string;
   auto_approval_rule?: string;
+
+  // Gap-fill fields (from 110)
+  tags?: string[];
+  caption_draft?: string;
+  face_visible?: boolean;
+  auto_captured?: boolean;
+  domain?: string;
+  platforms?: string[];
+  file_size_bytes?: number;
+  duration_seconds?: number;
 
   created_at: string;
   updated_at?: string;
@@ -84,6 +101,14 @@ export interface Distribution {
   handler_strategy?: string;
   narrative_arc_id?: string;
   auto_generated: boolean;
+
+  // Gap-fill fields (from 110)
+  subreddit?: string;
+  content_tier?: string;
+  beat_position?: BeatPosition;
+  calendar_slot_id?: string;
+  timezone?: string;
+  engagement?: Record<string, unknown>;
 
   created_at: string;
   updated_at?: string;
@@ -128,6 +153,15 @@ export interface RevenueEntry {
   session_id?: string;
   period_date?: string;
   notes?: string;
+
+  // Gap-fill fields (from 110)
+  scraped?: boolean;
+  scrape_source?: string;
+  platform_transaction_id?: string;
+  revenue_date?: string;
+  fan_username?: string;
+  description?: string;
+
   created_at: string;
 }
 
@@ -183,7 +217,10 @@ export interface CalendarSlot {
   platform: Platform;
   vault_id?: string;
   distribution_id?: string;
-  status: 'open' | 'assigned' | 'scheduled' | 'posted';
+  status: SlotStatus;
+  planned_content_type?: string;
+  planned_tier?: string;
+  handler_notes?: string;
 }
 
 export interface ContentCalendarDay {
@@ -208,6 +245,8 @@ export interface StandingPermission {
   is_active: boolean;
   granted_denial_day?: number;
   granted_at: string;
+  parameters?: Record<string, unknown>;
+  expires_at?: string;
   created_at: string;
 }
 
@@ -233,4 +272,60 @@ export interface VaultStats {
   rejected: number;
   auto_approved: number;
   by_content_type: Record<string, number>;
+}
+
+// ── Fan Interactions ────────────────────────────────────
+
+export interface FanInteraction {
+  id: string;
+  user_id: string;
+  fan_username: string;
+  fan_platform: string;
+  fan_tier?: string;
+  interaction_type: InteractionType;
+  content?: string;
+  source_post_url?: string;
+  sentiment?: Sentiment;
+  handler_action?: HandlerAction;
+  handler_response?: string;
+  response_approved: boolean;
+  responded_at?: string;
+  tip_amount_cents: number;
+  influence_weight: number;
+  created_at: string;
+  updated_at?: string;
+}
+
+// ── Subscriber Polls ────────────────────────────────────
+
+export interface PollOption {
+  id: string;
+  label: string;
+  description?: string;
+  votes: number;
+  vote_weight: number;
+}
+
+export interface SubscriberPoll {
+  id: string;
+  user_id: string;
+  title: string;
+  description?: string;
+  poll_type: PollType;
+  options: PollOption[];
+  platform?: string;
+  voting_open_at?: string;
+  voting_close_at?: string;
+  votes_per_fan: number;
+  weighted_voting: boolean;
+  winning_option_id?: string;
+  total_votes: number;
+  total_vote_weight: number;
+  approved: boolean;
+  approved_at?: string;
+  result_applied: boolean;
+  result_action?: string;
+  status: PollStatus;
+  created_at: string;
+  updated_at?: string;
 }

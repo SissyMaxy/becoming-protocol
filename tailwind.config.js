@@ -58,7 +58,7 @@ export default {
       fontFamily: {
         'mono': ['JetBrains Mono', 'Fira Code', 'monospace'],
         'bambi': ['Quicksand', 'Nunito', 'Poppins', 'sans-serif'],
-        'handler': ['Playfair Display', 'Georgia', 'serif'],
+        'handler': ['Inter', 'Quicksand', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
         'bambi': '0 4px 20px rgba(255, 105, 180, 0.3)',

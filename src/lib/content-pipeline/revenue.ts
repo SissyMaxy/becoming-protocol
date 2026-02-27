@@ -148,6 +148,134 @@ export async function getRevenueBriefing(userId: string): Promise<{
   };
 }
 
+// ── Log revenue (extended) ───────────────────────────────
+
+export async function logRevenueExtended(
+  userId: string,
+  entry: {
+    source: string;
+    platform: string;
+    amount_cents: number;
+    currency?: string;
+    revenue_type?: string;
+    revenue_date?: string;
+    fan_username?: string;
+    description?: string;
+    scraped?: boolean;
+    scrape_source?: string;
+    platform_transaction_id?: string;
+    distribution_id?: string;
+    session_id?: string;
+    notes?: string;
+  }
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('revenue_log')
+    .insert({
+      user_id: userId,
+      source: entry.source,
+      platform: entry.platform,
+      amount_cents: entry.amount_cents,
+      currency: entry.currency || 'USD',
+      revenue_type: entry.revenue_type || null,
+      revenue_date: entry.revenue_date || new Date().toISOString().split('T')[0],
+      fan_username: entry.fan_username || null,
+      description: entry.description || null,
+      scraped: entry.scraped || false,
+      scrape_source: entry.scrape_source || null,
+      platform_transaction_id: entry.platform_transaction_id || null,
+      distribution_id: entry.distribution_id || null,
+      session_id: entry.session_id || null,
+      period_date: entry.revenue_date || new Date().toISOString().split('T')[0],
+      notes: entry.notes || null,
+    })
+    .select('id')
+    .single();
+
+  if (error) {
+    console.error('[revenue] logRevenueExtended error:', error);
+    return null;
+  }
+  return data.id;
+}
+
+// ── Import CSV rows ──────────────────────────────────────
+
+export async function importRevenueCSV(
+  userId: string,
+  rows: Array<{
+    platform: string;
+    amount_cents: number;
+    revenue_type?: string;
+    revenue_date: string;
+    fan_username?: string;
+    description?: string;
+    platform_transaction_id?: string;
+  }>
+): Promise<{ imported: number; skipped: number }> {
+  let imported = 0;
+  let skipped = 0;
+
+  for (const row of rows) {
+    const result = await logRevenueExtended(userId, {
+      source: 'csv_import',
+      platform: row.platform,
+      amount_cents: row.amount_cents,
+      revenue_type: row.revenue_type,
+      revenue_date: row.revenue_date,
+      fan_username: row.fan_username,
+      description: row.description,
+      platform_transaction_id: row.platform_transaction_id,
+      scraped: true,
+      scrape_source: 'csv',
+    });
+
+    if (result) imported++;
+    else skipped++;
+  }
+
+  return { imported, skipped };
+}
+
+// ── Get revenue by date range ────────────────────────────
+
+export async function getRevenueByDate(
+  userId: string,
+  start: string,
+  end: string
+): Promise<Array<{ date: string; total_cents: number; entries: number }>> {
+  const { data, error } = await supabase
+    .from('revenue_log')
+    .select('amount_cents, revenue_date')
+    .eq('user_id', userId)
+    .gte('revenue_date', start)
+    .lte('revenue_date', end)
+    .order('revenue_date', { ascending: true });
+
+  if (error || !data) return [];
+
+  const byDate: Record<string, { total_cents: number; entries: number }> = {};
+  for (const row of data) {
+    const d = (row.revenue_date as string) || 'unknown';
+    if (!byDate[d]) byDate[d] = { total_cents: 0, entries: 0 };
+    byDate[d].total_cents += row.amount_cents as number;
+    byDate[d].entries++;
+  }
+
+  return Object.entries(byDate).map(([date, val]) => ({ date, ...val }));
+}
+
+// ── Screenshot OCR stub ──────────────────────────────────
+
+export async function scrapeRevenueFromScreenshot(
+  _userId: string,
+  _imageUrl: string
+): Promise<Array<{ platform: string; amount_cents: number; revenue_date: string }>> {
+  // TODO: Wire Claude vision to extract revenue data from screenshots
+  console.log('[revenue] scrapeRevenueFromScreenshot stub — not yet implemented');
+  return [];
+}
+
 // ── Revenue threshold checks (for corruption advancement) ──
 
 export async function checkRevenueThresholds(userId: string): Promise<{

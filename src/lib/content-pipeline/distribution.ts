@@ -215,6 +215,56 @@ export async function getTodaySchedule(userId: string): Promise<Distribution[]> 
   return (data || []) as Distribution[];
 }
 
+// ── Batch mark posted ────────────────────────────────────
+
+export async function batchMarkPosted(distributionIds: string[]): Promise<number> {
+  let count = 0;
+  for (const id of distributionIds) {
+    const success = await markManuallyPosted(id);
+    if (success) count++;
+  }
+  return count;
+}
+
+// ── Skip distribution ────────────────────────────────────
+
+export async function skipDistribution(distributionId: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('content_distribution')
+    .update({
+      post_status: 'cancelled' as PostStatus,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', distributionId);
+
+  return !error;
+}
+
+// ── Get distributions grouped by day ─────────────────────
+
+export async function getUpcomingDistributions(
+  userId: string,
+  days: number = 7
+): Promise<Distribution[]> {
+  const now = new Date();
+  const endDate = new Date(now.getTime() + days * 86400000);
+
+  const { data, error } = await supabase
+    .from('content_distribution')
+    .select('*')
+    .eq('user_id', userId)
+    .in('post_status', ['scheduled', 'ready_for_manual', 'draft'])
+    .gte('scheduled_at', now.toISOString())
+    .lte('scheduled_at', endDate.toISOString())
+    .order('scheduled_at', { ascending: true });
+
+  if (error) {
+    console.error('[distribution] getUpcomingDistributions error:', error);
+    return [];
+  }
+  return (data || []) as Distribution[];
+}
+
 // ── Distribution history ────────────────────────────────
 
 export async function getDistributionHistory(

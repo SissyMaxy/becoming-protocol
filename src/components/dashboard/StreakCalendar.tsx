@@ -12,11 +12,13 @@ import type { CalendarDay } from '../../lib/dashboard-analytics';
 interface StreakCalendarProps {
   data: CalendarDay[];
   days?: number;
+  currentStreak?: number;
+  longestStreak?: number;
 }
 
 const WEEKDAY_LABELS = ['', 'M', '', 'W', '', 'F', ''];
 
-export function StreakCalendar({ data, days = 90 }: StreakCalendarProps) {
+export function StreakCalendar({ data, days = 90, currentStreak, longestStreak }: StreakCalendarProps) {
   const { isBambiMode } = useBambiMode();
 
   const calendarGrid = useMemo(() => {
@@ -71,11 +73,19 @@ export function StreakCalendar({ data, days = 90 }: StreakCalendarProps) {
     <div className={`rounded-lg p-4 ${
       isBambiMode ? 'bg-white border border-pink-200' : 'bg-protocol-surface border border-protocol-border'
     }`}>
-      <h3 className={`text-sm font-medium mb-3 ${
-        isBambiMode ? 'text-pink-800' : 'text-protocol-text'
-      }`}>
-        Streak Calendar
-      </h3>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className={`text-sm font-medium ${
+          isBambiMode ? 'text-pink-800' : 'text-protocol-text'
+        }`}>
+          Streak Calendar
+        </h3>
+        {(currentStreak !== undefined || longestStreak !== undefined) && (
+          <div className={`flex gap-3 text-[11px] ${isBambiMode ? 'text-pink-500' : 'text-gray-400'}`}>
+            {currentStreak !== undefined && <span>Current: {currentStreak}d</span>}
+            {longestStreak !== undefined && <span>Best: {longestStreak}d</span>}
+          </div>
+        )}
+      </div>
 
       <div className="flex gap-1">
         {/* Weekday labels */}

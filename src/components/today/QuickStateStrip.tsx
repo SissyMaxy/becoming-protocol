@@ -105,7 +105,7 @@ export function QuickStateStrip({
     const next = GINA_CYCLE[nextIdx];
     setLocalGina(next);
     onUpdate({
-      ginaHome: next === 'home',
+      ginaHome: next !== 'alone', // Both "home" and "asleep" = Gina present = privacy on
       ginaAsleep: next === 'asleep',
     });
     onStateChanged?.();

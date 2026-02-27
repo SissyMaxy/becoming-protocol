@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { Loader2, RefreshCw, AlertTriangle, Heart, Target, Moon, FileText, ChevronRight, ChevronDown, Clock, Star, DollarSign, Send, Headphones, Camera, List } from 'lucide-react';
+import { Loader2, RefreshCw, AlertTriangle, Heart, Target, Moon, FileText, ChevronRight, ChevronDown, Clock, Star, DollarSign, Send, Headphones, Camera, List, Zap, Flame } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
 import { useOpacity } from '../../context/OpacityContext';
 import { supabase } from '../../lib/supabase';
@@ -37,7 +37,7 @@ import { SessionContainer } from '../session';
 import type { SessionConfig } from '../session';
 import { QuickStateStrip } from './QuickStateStrip';
 import { JournalPrompt } from './JournalPrompt';
-import { getTaskVariant, VoiceTaskEnrichment, EdgeTaskEnrichment, HypnoTaskEnrichment } from './TaskCardVariants';
+// TaskCardVariants removed — flat task list removed in prescription model
 import { CommitmentReminder } from './CommitmentReminder';
 // DirectiveModeView available but not in main view — mode toggles removed
 import { InterventionNotification } from '../handler/InterventionNotification';
@@ -68,7 +68,7 @@ import { useStandingPermission } from '../../hooks/useStandingPermission';
 import { VaultSwipe } from '../vault/VaultSwipe';
 import type { WeekendActivity, ActivityFeedback } from '../../types/weekend';
 import type { Goal, GoalCompletionInput } from '../../types/goals';
-import { PRIVACY_REQUIRED_DOMAINS, PRIVACY_REQUIRED_CATEGORIES } from '../../lib/rules-engine-v2';
+import { PRIVACY_REQUIRED_DOMAINS, PRIVACY_REQUIRED_CATEGORIES, getCurrentTimeOfDay } from '../../lib/rules-engine-v2';
 
 export function TodayView() {
   const { isBambiMode, triggerHearts } = useBambiMode();
@@ -100,16 +100,12 @@ export function TodayView() {
     todayTasks,
     isLoading,
     error,
-    completingTaskId,
     lastCompletedTask,
-    skippingTaskId,
     weeklySkipCount,
     showSkipWarning,
     undoingTaskId,
     loadTasks,
     complete,
-    incrementProgress,
-    skip,
     undo,
     dismissCompletion,
     dismissSkipWarning,
@@ -143,8 +139,8 @@ export function TodayView() {
   // Shoot flow — prescribed content shoots
   const shootFlow = useShootFlow();
 
-  // Voice training stats for task card variants
-  const { stats: voiceStats } = useVoiceTraining();
+  // Voice training hook kept for side effects
+  useVoiceTraining();
 
   // Vault — pending content count + standing permission
   const { granted: vaultFullAutonomy } = useStandingPermission('content_full_autonomy');
@@ -168,8 +164,7 @@ export function TodayView() {
 
   const [showAllComplete, setShowAllComplete] = useState(false);
 
-  // Focused mode: single-task view (default on)
-  const [focusedMode, setFocusedMode] = useState(true);
+  // Dismissed actions (Handler prescription model — no browsing, just dismiss-and-next)
   const [dismissedActionIds, setDismissedActionIds] = useState<string[]>([]);
 
   // Collapsible sections
@@ -401,19 +396,27 @@ export function TodayView() {
   // Calculate progress (including weekend activities and goals)
   const completedCount = todayTasks.filter(t => t.status === 'completed').length;
   const totalCount = todayTasks.length;
+  const currentTimeWindow = getCurrentTimeOfDay();
   const pendingTasks = todayTasks.filter(t => {
     if (t.status !== 'pending') return false;
     // Privacy safety net: hide intimate tasks immediately when Gina is home
-    // Uses shared constants from rules-engine-v2 to prevent drift
     if (isGinaHome) {
       if (t.task.excludeIf?.ginaHome) return false;
       if (PRIVACY_REQUIRED_DOMAINS.includes(t.task.domain) ||
           PRIVACY_REQUIRED_CATEGORIES.includes(t.task.category)) return false;
     }
+    // Time window re-filter: don't show evening tasks in the morning
+    const tw = t.task.requires?.timeOfDay;
+    if (tw && tw.length > 0 && !tw.includes('any') && !tw.includes(currentTimeWindow)) {
+      return false;
+    }
     return true;
   });
   const completedTasks = todayTasks.filter(t => t.status === 'completed');
   const skippedTasks = todayTasks.filter(t => t.status === 'skipped');
+
+  // Points earned today — sum from completed tasks
+  const pointsToday = completedTasks.reduce((sum, t) => sum + (t.task.reward?.points ?? 0), 0);
 
   // Goals progress
   const pendingGoals = todaysGoals.filter(g => !g.completedToday);
@@ -600,9 +603,29 @@ export function TodayView() {
   };
 
   // Focused mode: dismiss current action, show next
+  // Logs avoidance data for Handler intelligence (test B3.5)
   const handleFocusedDismiss = () => {
-    if (priorityAction) {
-      setDismissedActionIds(prev => [...prev, priorityAction.id]);
+    if (!priorityAction) return;
+    setDismissedActionIds(prev => [...prev, priorityAction.id]);
+
+    // Log dismissal for Handler avoidance tracking (fire-and-forget)
+    if (user?.id && priorityAction.type === 'task') {
+      const task = todayTasks.find(t => t.id === priorityAction.id);
+      if (task) {
+        supabase.from('task_dismissals').insert({
+          user_id: user.id,
+          task_id: task.taskId,
+          daily_task_id: task.id,
+          task_domain: task.task.domain,
+          task_category: task.task.category,
+          dismissed_at: new Date().toISOString(),
+          mood_at_dismissal: currentMood ?? null,
+          arousal_at_dismissal: userState?.currentArousal ?? null,
+          exec_function_at_dismissal: userState?.estimatedExecFunction ?? null,
+        }).then(({ error }) => {
+          if (error) console.warn('[TodayView] Dismissal log failed:', error.message);
+        });
+      }
     }
   };
 
@@ -676,6 +699,30 @@ export function TodayView() {
             onStateChanged={handleStateChanged}
             isLoading={isUserStateLoading}
           />
+        </div>
+      )}
+
+      {/* ═══ Stats bar — streak, denial, points (always visible) ═══ */}
+      {userState && (
+        <div className={`px-4 pb-2 flex items-center justify-center gap-4 text-xs ${
+          isBambiMode ? 'text-pink-500/70' : 'text-protocol-text-muted/70'
+        }`}>
+          {(userState.streakDays ?? 0) > 0 && (
+            <span className="flex items-center gap-1">
+              <Zap className="w-3 h-3" />
+              {userState.streakDays}d streak
+            </span>
+          )}
+          {(userState.denialDay ?? 0) > 0 && (
+            <span className="flex items-center gap-1">
+              <Flame className="w-3 h-3" />
+              D{userState.denialDay}
+            </span>
+          )}
+          <span className="flex items-center gap-1">
+            <Star className="w-3 h-3" />
+            {pointsToday} pts
+          </span>
         </div>
       )}
 
@@ -1207,90 +1254,25 @@ export function TodayView() {
               </div>
             )}
 
-            {/* Section: Pending tasks — Focused or Flat mode */}
-            {pendingTasks.length > 0 && (
+            {/* Section: Pending tasks — Handler prescription model (one task at a time) */}
+            {pendingTasks.length > 0 && priorityAction && (
               <div className="space-y-3">
-                {focusedMode && priorityAction ? (
-                  <>
-                    {/* Progress indicator */}
-                    <p className={`text-xs text-center font-medium ${
-                      isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'
-                    }`}>
-                      {completedCount} of {totalCount} done
-                    </p>
+                {/* Progress indicator */}
+                <p className={`text-xs text-center font-medium ${
+                  isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'
+                }`}>
+                  {completedCount} of {totalCount} done
+                </p>
 
-                    {/* Single focused action card */}
-                    <FocusedActionCard
-                      priorityAction={priorityAction}
-                      pendingCount={pendingTasks.length - 1}
-                      onStartAction={handleFocusedStart}
-                      onDismiss={handleFocusedDismiss}
-                      onShowAll={() => setFocusedMode(false)}
-                      isExpanded={false}
-                    />
-                  </>
-                ) : (
-                  <>
-                    {/* Flat list header with focus mode toggle */}
-                    <div className="flex items-center justify-between px-1">
-                      <p className={`text-xs uppercase tracking-wider font-semibold ${
-                        isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'
-                      }`}>
-                        {isWeekendDay ? 'Solo Tasks' : pendingTasks.length === 1 ? 'Your task' : `${pendingTasks.length} tasks remaining`}
-                      </p>
-                      {!focusedMode && pendingTasks.length > 1 && (
-                        <button
-                          onClick={() => {
-                            setFocusedMode(true);
-                            setDismissedActionIds([]);
-                          }}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                            isBambiMode
-                              ? 'bg-pink-100 hover:bg-pink-200 text-pink-600'
-                              : 'bg-protocol-surface hover:bg-protocol-border/50 text-protocol-text-muted'
-                          }`}
-                        >
-                          <Target className="w-3 h-3" />
-                          Focus Mode
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Flat task list */}
-                    {pendingTasks.map((task, index) => {
-                      const variant = getTaskVariant(task);
-                      const effectiveCompletionType = task.completionTypeOverride || task.task.completionType;
-                      const isEdgeSession = effectiveCompletionType === 'session_complete' && !isGinaHome;
-                      return (
-                        <div key={task.id}>
-                          {variant === 'voice' && <VoiceTaskEnrichment stats={voiceStats} />}
-                          {variant === 'edge' && <EdgeTaskEnrichment denialDay={userState?.denialDay ?? 0} arousalLevel={userState?.currentArousal ?? 0} />}
-                          {variant === 'hypno' && <HypnoTaskEnrichment session={activeHypnoSession} taskInstruction={task.task.instruction} />}
-                          <TaskCardNew
-                            task={task}
-                            onComplete={(feltGood, notes, captureData) => {
-                              if (isEdgeSession) {
-                                setEdgeSessionConfig({
-                                  sessionType: 'anchoring',
-                                  targetEdges: 10,
-                                  originTaskId: task.id,
-                                  prescribed: true,
-                                });
-                              } else {
-                                complete(task.id, feltGood, notes, captureData as Record<string, unknown> | undefined);
-                              }
-                            }}
-                            onIncrement={() => incrementProgress(task.id)}
-                            onSkip={() => skip(task.id)}
-                            isCompleting={completingTaskId === task.id}
-                            isSkipping={skippingTaskId === task.id}
-                            isFirst={index === 0 && pendingWeekendActivities.length === 0}
-                          />
-                        </div>
-                      );
-                    })}
-                  </>
-                )}
+                {/* Single prescribed action card — no browsing */}
+                <FocusedActionCard
+                  priorityAction={priorityAction}
+                  pendingCount={pendingTasks.length - 1}
+                  onStartAction={handleFocusedStart}
+                  onDismiss={handleFocusedDismiss}
+                  onShowAll={() => {}} // No-op: browsing removed
+                  isExpanded={false}
+                />
               </div>
             )}
 

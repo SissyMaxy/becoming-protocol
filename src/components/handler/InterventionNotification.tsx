@@ -25,6 +25,7 @@ import {
   MessageCircle,
 } from 'lucide-react';
 import type { HandlerIntervention, InterventionType } from '../../types/handler';
+import { truncateToLimit, NOTIFICATION_LIMITS } from '../../lib/handler-v2/popup-utils';
 
 interface InterventionNotificationProps {
   intervention: HandlerIntervention;
@@ -211,7 +212,9 @@ export function InterventionNotification({
 
         {/* Content */}
         <div className="p-6">
-          <p className="text-white text-lg leading-relaxed">{intervention.content}</p>
+          <p className="text-white text-lg leading-relaxed line-clamp-4">
+            {truncateToLimit(intervention.content, NOTIFICATION_LIMITS.interventionContent)}
+          </p>
 
           {intervention.targetDomain && (
             <div className="mt-3 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-sm text-gray-300">

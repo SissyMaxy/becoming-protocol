@@ -78,7 +78,7 @@ export function ReminderSettingsPanel({
             )}
             <div>
               <h3 className="font-medium text-protocol-text">
-                Feminization Reminders
+                Reminders
               </h3>
               <p className="text-sm text-protocol-text-muted">
                 {settings.enabled

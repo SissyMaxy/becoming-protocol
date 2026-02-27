@@ -56,6 +56,21 @@ export function truncatePopUp(message: PopUpMessage): PopUpMessage {
 }
 
 /**
+ * Character limits for non-PopUpMessage notification surfaces.
+ * These render at larger font sizes / tighter layouts than PopUpMessage.
+ */
+export const NOTIFICATION_LIMITS = {
+  /** InterventionNotification — renders at text-lg in a modal */
+  interventionContent: 160,
+  /** HandlerNotification — modal message body */
+  handlerMessage: 120,
+  /** CompletionToast — thin floating bar */
+  toastAffirmation: 80,
+  /** AmbushNotification — top banner instruction */
+  ambushInstruction: 120,
+} as const;
+
+/**
  * Validate that a PopUpMessage respects all character limits.
  * Returns an array of violations (empty = valid).
  */

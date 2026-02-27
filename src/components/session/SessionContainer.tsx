@@ -25,7 +25,7 @@ interface SessionContainerProps {
   onCancel: () => void;
 }
 
-export function SessionContainer({ config, denialDay = 0, onComplete, onCancel: _onCancel }: SessionContainerProps) {
+export function SessionContainer({ config, denialDay = 0, onComplete, onCancel }: SessionContainerProps) {
   const {
     state,
     timer,
@@ -64,11 +64,17 @@ export function SessionContainer({ config, denialDay = 0, onComplete, onCancel: 
     }
   }, [state?.phase, state?.config.originTaskId, state?.pointsAwarded, state?.edgeCount, onComplete]);
 
-  // Not initialized yet
+  // Not initialized yet — show loading with always-visible cancel
   if (!state) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center animate-session-enter" style={{ backgroundColor: SESSION_COLORS.deepBg }}>
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 animate-session-enter" style={{ backgroundColor: SESSION_COLORS.deepBg }}>
         <div className="animate-pulse text-white/30 text-lg handler-voice">Preparing session...</div>
+        <button
+          onClick={onCancel}
+          className="px-6 py-2 rounded-lg text-white/40 hover:text-white/70 hover:bg-white/5 transition-colors text-sm"
+        >
+          Cancel
+        </button>
       </div>
     );
   }

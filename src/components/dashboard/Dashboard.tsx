@@ -289,7 +289,7 @@ export function Dashboard() {
       </Section>
 
       {/* 4. Streak Calendar */}
-      <StreakCalendar data={calendar} />
+      <StreakCalendar data={calendar} currentStreak={data.streak.currentStreak} longestStreak={data.streak.longestStreak} />
 
       {/* 5. Evidence Gallery */}
       <EvidenceGallery evidence={data.evidence} compact />

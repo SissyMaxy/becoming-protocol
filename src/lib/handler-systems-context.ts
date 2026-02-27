@@ -46,6 +46,8 @@ import { buildOutreachContext } from './industry/creator-outreach';
 import { buildKarmaContext } from './industry/reddit-karma';
 import { buildRecycleContext } from './industry/content-recycler';
 import { buildVoiceContentContext } from './industry/voice-content';
+import { getInteractionSummary } from './content/fan-interaction-processor';
+import { getPollSummary } from './content/subscriber-poll-engine';
 
 // ============================================
 // TYPES
@@ -85,12 +87,14 @@ async function buildGinaContext(userId: string): Promise<string> {
 
 async function buildContentContext(userId: string): Promise<string> {
   try {
-    const [vault, schedule, arc, revenue, fanCount] = await Promise.allSettled([
+    const [vault, schedule, arc, revenue, fanCount, interactions, polls] = await Promise.allSettled([
       getVaultStats(userId),
       getTodaySchedule(userId),
       getActiveArc(userId),
       getRevenueSummary(userId),
       getFanCount(userId),
+      getInteractionSummary(userId),
+      getPollSummary(userId),
     ]);
 
     const parts: string[] = [];
@@ -118,6 +122,23 @@ async function buildContentContext(userId: string): Promise<string> {
     const fc = fanCount.status === 'fulfilled' ? fanCount.value : 0;
     if (fc > 0) {
       parts.push(`  fans: ${fc} tracked`);
+    }
+
+    const ix = interactions.status === 'fulfilled' ? interactions.value : null;
+    if (ix && ix.totalToday > 0) {
+      parts.push(`  fan interactions today: ${ix.totalToday}, ${ix.pendingResponses} pending responses, tips $${(ix.tipsToday / 100).toFixed(0)}, mood ${ix.topSentiment}`);
+    }
+
+    const ps = polls.status === 'fulfilled' ? polls.value : null;
+    if (ps && (ps.active > 0 || ps.pendingApproval > 0)) {
+      const pollParts = [];
+      if (ps.active > 0) pollParts.push(`${ps.active} active`);
+      if (ps.pendingApproval > 0) pollParts.push(`${ps.pendingApproval} pending approval`);
+      parts.push(`  polls: ${pollParts.join(', ')}`);
+      if (ps.recentResults.length > 0) {
+        const latest = ps.recentResults[0];
+        parts.push(`  latest poll result: "${latest.title}" → ${latest.winner} (${latest.votes} votes)`);
+      }
     }
 
     return parts.join('\n');

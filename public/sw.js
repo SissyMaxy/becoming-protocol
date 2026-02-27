@@ -82,7 +82,7 @@ self.addEventListener('push', (event) => {
 
   const data = event.data.json();
   const options = {
-    body: data.body || 'The Handler requires your attention.',
+    body: data.body || 'You have a task waiting.',
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
     vibrate: [200, 100, 200],
@@ -94,7 +94,7 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title || 'Becoming Protocol', options)
+    self.registration.showNotification(data.title || 'BP', options)
   );
 });
 

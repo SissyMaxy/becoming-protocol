@@ -95,7 +95,7 @@ export function QuickStateUpdate({
   const handleGinaSelect = (state: 'home' | 'asleep' | 'alone') => {
     setGinaState(state);
     onUpdate({
-      ginaHome: state === 'home',
+      ginaHome: state !== 'alone', // Both "home" and "asleep" = Gina present = privacy on
       ginaAsleep: state === 'asleep',
     });
     if (expanded !== 'all') setExpanded(null);

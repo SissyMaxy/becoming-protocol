@@ -227,15 +227,15 @@ export function useReminders(): UseRemindersReturn {
   }, [triggerReminderInternal]);
 
   // Send browser notification
-  const sendNotification = (reminder: Reminder) => {
+  const sendNotification = (_reminder: Reminder) => {
     if (!('Notification' in window) || Notification.permission !== 'granted') {
       return;
     }
 
-    const notification = new Notification('Feminization Reminder', {
-      body: reminder.prompt,
+    const notification = new Notification('BP', {
+      body: 'You have a task waiting.',
       icon: '/icon-192.png',
-      tag: 'feminization-reminder',
+      tag: 'bp-reminder',
       requireInteraction: true,
     });
 

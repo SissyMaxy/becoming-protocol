@@ -28,6 +28,7 @@ import {
   type TimingUserState,
 } from '../lib/timing-engine';
 import { generatePrefill, type PrefillContext } from '../lib/prefill-generator';
+import { truncateToLimit, NOTIFICATION_LIMITS } from '../lib/handler-v2/popup-utils';
 import { getCurrentTimeOfDay, mapTimeOfDayLateNight } from '../lib/rules-engine-v2';
 import { supabase } from '../lib/supabase';
 import type { HandlerIntervention, HandlerDailyPlan } from '../types/handler';
@@ -113,33 +114,54 @@ const AI_ENABLED = import.meta.env.VITE_ENABLE_HANDLER_AI !== 'false';
 // Cache key for daily plan
 const DAILY_PLAN_CACHE_KEY = 'handler_daily_plan_cache';
 
-interface CachedPlan {
-  date: string;
-  plan: HandlerDailyPlan;
+/** Client-safe subset of HandlerDailyPlan — no strategic data in localStorage */
+interface ClientSafePlan {
+  id: string;
+  planDate: string;
+  focusAreas: string[];
+  /** Intervention times only — no content, type, or targeting data */
+  scheduledTimes: string[];
+  executed: boolean;
 }
 
-function getCachedPlan(): HandlerDailyPlan | null {
+interface CachedPlan {
+  date: string;
+  plan: ClientSafePlan;
+}
+
+/** Strip strategic fields before writing to localStorage */
+function sanitizePlanForClient(plan: HandlerDailyPlan): ClientSafePlan {
+  return {
+    id: plan.id,
+    planDate: plan.planDate,
+    focusAreas: plan.focusAreas ?? [],
+    scheduledTimes: (plan.plannedInterventions ?? []).map(i => i.time),
+    executed: plan.executed,
+    // Explicitly excluded: plannedInterventions content/type/targeting,
+    // vulnerabilityWindows, plannedExperiments, triggerReinforcementSchedule,
+    // executionNotes
+  };
+}
+
+/** Check if we already generated a plan today (avoids duplicate API calls) */
+function hasCachedPlanForToday(): boolean {
   try {
     const cached = localStorage.getItem(DAILY_PLAN_CACHE_KEY);
-    if (!cached) return null;
+    if (!cached) return false;
 
-    const { date, plan } = JSON.parse(cached) as CachedPlan;
+    const { date } = JSON.parse(cached) as CachedPlan;
     const today = new Date().toISOString().split('T')[0];
-
-    // Only use cached plan if it's from today
-    if (date === today) {
-      return plan;
-    }
-    return null;
+    return date === today;
   } catch {
-    return null;
+    return false;
   }
 }
 
+/** Write sanitized (strategy-stripped) plan to localStorage */
 function setCachedPlan(plan: HandlerDailyPlan): void {
   try {
     const today = new Date().toISOString().split('T')[0];
-    const cached: CachedPlan = { date: today, plan };
+    const cached: CachedPlan = { date: today, plan: sanitizePlanForClient(plan) };
     localStorage.setItem(DAILY_PLAN_CACHE_KEY, JSON.stringify(cached));
   } catch {
     // Ignore storage errors
@@ -182,11 +204,38 @@ export function HandlerProvider({
   const generateDailyPlan = useCallback(async () => {
     if (!user) return;
 
-    // First check if we have a cached plan for today (avoid duplicate API calls)
-    const cachedPlan = getCachedPlan();
-    if (cachedPlan) {
-      console.log('[HandlerContext] Using cached daily plan');
-      setTodaysPlan(cachedPlan);
+    // Check if we already generated a plan today (avoid duplicate API calls)
+    if (hasCachedPlanForToday()) {
+      console.log('[HandlerContext] Plan already generated today, fetching from DB');
+      // Fetch full plan from Supabase (not localStorage — localStorage is sanitized)
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const { data } = await supabase
+          .from('handler_daily_plans')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('plan_date', today)
+          .maybeSingle();
+
+        if (data) {
+          const dbPlan: HandlerDailyPlan = {
+            id: data.id,
+            userId: data.user_id,
+            planDate: data.plan_date,
+            plannedInterventions: (data.planned_interventions ?? []) as HandlerDailyPlan['plannedInterventions'],
+            plannedExperiments: (data.planned_experiments ?? []) as HandlerDailyPlan['plannedExperiments'],
+            focusAreas: (data.focus_areas ?? []) as string[],
+            triggerReinforcementSchedule: (data.trigger_reinforcement_schedule ?? []) as HandlerDailyPlan['triggerReinforcementSchedule'],
+            vulnerabilityWindows: (data.vulnerability_windows ?? []) as HandlerDailyPlan['vulnerabilityWindows'],
+            createdAt: data.created_at,
+            executed: data.executed,
+            executionNotes: data.execution_notes ?? undefined,
+          };
+          setTodaysPlan(dbPlan);
+        }
+      } catch (err) {
+        console.error('[HandlerContext] Failed to fetch plan from DB:', err);
+      }
       setPlanAttempted(true);
       return;
     }
@@ -201,7 +250,7 @@ export function HandlerProvider({
 
     if (plan) {
       setTodaysPlan(plan);
-      setCachedPlan(plan); // Cache the plan for today
+      setCachedPlan(plan); // Cache sanitized version to localStorage
     }
     // Mark as attempted regardless of success to prevent infinite retries
     setPlanAttempted(true);
@@ -550,7 +599,7 @@ async function generateInterventionFromSignal(
     });
 
     if (!error && data?.message) {
-      message = data.message;
+      message = truncateToLimit(data.message, NOTIFICATION_LIMITS.interventionContent);
     }
   } catch (error) {
     console.error('Error generating intervention message:', error);

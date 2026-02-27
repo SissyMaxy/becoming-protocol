@@ -15,8 +15,9 @@
 import type { Task } from '../types/task-bank';
 
 // Privacy-required domains/categories — shared with view-layer filters
-export const PRIVACY_REQUIRED_DOMAINS: string[] = ['arousal', 'conditioning'];
-export const PRIVACY_REQUIRED_CATEGORIES: string[] = ['edge', 'goon', 'deepen', 'worship', 'bambi', 'corrupt', 'session'];
+// When ginaHome = true, tasks in these domains/categories are NEVER shown
+export const PRIVACY_REQUIRED_DOMAINS: string[] = ['arousal', 'intimate', 'conditioning'];
+export const PRIVACY_REQUIRED_CATEGORIES: string[] = ['edge', 'goon', 'deepen', 'worship', 'bambi', 'corrupt', 'fantasy', 'session'];
 
 // Time of day derived from current hour
 // Matches TimeWindow from task-bank types
@@ -93,6 +94,14 @@ export function mapTimeOfDayLateNight(t: TimeOfDay): 'morning' | 'afternoon' | '
 /**
  * Get target intensity based on odometer state
  */
+// Hard intensity caps per executive function level
+const EXEC_INTENSITY_CAP: Record<string, number> = {
+  'high': 5,
+  'medium': 3,
+  'low': 2,
+  'depleted': 1,
+};
+
 function getTargetIntensity(state: UserStateForSelection): number {
   const odometerMap: Record<OdometerState, number> = {
     'survival': 1,
@@ -115,10 +124,9 @@ function getTargetIntensity(state: UserStateForSelection): number {
     base = Math.min(5, base + 1);
   }
 
-  // Reduce intensity if depleted exec function
-  if (state.estimatedExecFunction === 'depleted') {
-    base = Math.max(1, base - 1);
-  }
+  // Hard cap by executive function level — overrides arousal/odometer
+  const execCap = EXEC_INTENSITY_CAP[state.estimatedExecFunction] ?? 3;
+  base = Math.min(base, execCap);
 
   return base;
 }

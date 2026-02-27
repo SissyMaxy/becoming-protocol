@@ -13,6 +13,7 @@
 
 import { useState, useEffect } from 'react';
 import { useBambiMode } from '../../context/BambiModeContext';
+import { truncateToLimit, NOTIFICATION_LIMITS } from '../../lib/handler-v2/popup-utils';
 
 interface HandlerNotificationProps {
   message: string;
@@ -80,17 +81,17 @@ export function HandlerNotification({
 
         {/* Body */}
         <div className="p-5">
-          <p className={`text-sm leading-relaxed ${
+          <p className={`text-sm leading-relaxed line-clamp-3 ${
             isBambiMode ? 'text-pink-700' : 'text-protocol-text'
           }`}>
-            {message}
+            {truncateToLimit(message, NOTIFICATION_LIMITS.handlerMessage)}
           </p>
 
           {detail && (
-            <p className={`text-xs mt-2 ${
+            <p className={`text-xs mt-2 line-clamp-2 ${
               isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'
             }`}>
-              {detail}
+              {truncateToLimit(detail, NOTIFICATION_LIMITS.toastAffirmation)}
             </p>
           )}
         </div>
@@ -136,10 +137,10 @@ export function HandlerNotificationBanner({
         isBambiMode ? 'bg-pink-500' : 'bg-purple-400'
       } animate-pulse`} />
       <div className="flex-1">
-        <p className={`text-sm ${
+        <p className={`text-sm line-clamp-3 ${
           isBambiMode ? 'text-pink-700' : 'text-protocol-text'
         }`}>
-          {message}
+          {truncateToLimit(message, NOTIFICATION_LIMITS.handlerMessage)}
         </p>
       </div>
       {onDismiss && (

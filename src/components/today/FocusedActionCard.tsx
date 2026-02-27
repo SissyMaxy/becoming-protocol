@@ -10,7 +10,7 @@
  */
 
 import { useState } from 'react';
-import { Play, ChevronDown, ChevronUp, Target, Sparkles, Clock, Zap, Eye, Sun, Sunset, Moon, Lock, Smartphone, Headphones, Check, Package, Timer, X, Vibrate, ExternalLink } from 'lucide-react';
+import { Play, ChevronDown, Target, Sparkles, Clock, Zap, Eye, Sun, Sunset, Moon, Lock, Smartphone, Headphones, Check, Package, Timer, X, Vibrate, ExternalLink } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
 import type { DailyTask } from '../../types/task-bank';
 import type { TodaysGoal } from '../../types/goals';
@@ -118,8 +118,8 @@ export function FocusedActionCard({
   pendingCount,
   onStartAction,
   onDismiss,
-  onShowAll,
-  isExpanded,
+  onShowAll: _onShowAll,
+  isExpanded: _isExpanded,
   lovenseConnected,
   lovenseDeviceName,
 }: FocusedActionCardProps) {
@@ -479,28 +479,13 @@ export function FocusedActionCard({
         )}
       </div>
 
-      {/* Show more toggle */}
+      {/* Pending count hint — no browsing, just awareness */}
       {pendingCount > 0 && (
-        <button
-          onClick={onShowAll}
-          className={`w-full py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-medium transition-colors ${
-            isBambiMode
-              ? 'bg-pink-50 hover:bg-pink-100 text-pink-600'
-              : 'bg-protocol-surface hover:bg-protocol-border/50 text-protocol-text-muted'
-          }`}
-        >
-          {isExpanded ? (
-            <>
-              <ChevronUp className="w-4 h-4" />
-              Hide {pendingCount} other items
-            </>
-          ) : (
-            <>
-              <ChevronDown className="w-4 h-4" />
-              See {pendingCount} other items
-            </>
-          )}
-        </button>
+        <p className={`text-center text-xs py-2 ${
+          isBambiMode ? 'text-pink-400/60' : 'text-protocol-text-muted/40'
+        }`}>
+          {pendingCount} more after this
+        </p>
       )}
     </div>
   );
@@ -964,18 +949,13 @@ function getTaskSteps(instruction: string, domain: string): SessionData {
     };
   }
 
-  // Default task breakdown - still actionable
+  // Default: show the instruction itself as the action — no filler steps
   return {
-    estimatedMinutes: 8,
+    estimatedMinutes: 10,
     steps: [
-      { label: 'Read the task instruction fully', durationMinutes: 1 },
-      { label: 'Gather anything you need', durationMinutes: 1 },
-      { label: `Complete: ${instruction}`, durationMinutes: 5 },
-      { label: 'Mark complete when done', durationMinutes: 1 },
+      { label: instruction, durationMinutes: 10 },
     ],
-    prerequisites: [
-      { item: 'Focus time', icon: 'time' },
-    ],
+    prerequisites: [],
   };
 }
 

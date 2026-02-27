@@ -7,7 +7,7 @@
 
 import { supabase } from '../supabase';
 import { invokeWithAuth } from '../handler-ai';
-import type { ContentCalendarDay, CalendarSlot, Platform } from '../../types/content-pipeline';
+import type { ContentCalendarDay, CalendarSlot, Platform, SlotStatus } from '../../types/content-pipeline';
 
 // ── Generate weekly calendar ────────────────────────────
 
@@ -152,4 +152,43 @@ export async function getTodayCalendar(userId: string): Promise<ContentCalendarD
 
   if (error || !data) return null;
   return data as ContentCalendarDay;
+}
+
+// ── Get week calendar (7 days from date) ─────────────────
+
+export async function getWeekCalendar(userId: string, startDate?: string): Promise<ContentCalendarDay[]> {
+  const start = startDate || new Date().toISOString().split('T')[0];
+  const endDate = new Date(new Date(start).getTime() + 6 * 86400000).toISOString().split('T')[0];
+  return getCalendar(userId, start, endDate);
+}
+
+// ── Update slot status ───────────────────────────────────
+
+export async function updateSlotStatus(
+  userId: string,
+  date: string,
+  slotIndex: number,
+  status: SlotStatus
+): Promise<boolean> {
+  const { data } = await supabase
+    .from('content_calendar')
+    .select('slots')
+    .eq('user_id', userId)
+    .eq('calendar_date', date)
+    .single();
+
+  if (!data) return false;
+
+  const slots = (data.slots as CalendarSlot[]) || [];
+  if (slotIndex < 0 || slotIndex >= slots.length) return false;
+
+  slots[slotIndex] = { ...slots[slotIndex], status };
+
+  const { error } = await supabase
+    .from('content_calendar')
+    .update({ slots, updated_at: new Date().toISOString() })
+    .eq('user_id', userId)
+    .eq('calendar_date', date);
+
+  return !error;
 }

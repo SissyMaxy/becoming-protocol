@@ -144,10 +144,10 @@ body {
   animation: slide-down 0.3s ease-out;
 }
 
-/* Handler voice typography — warm serif for Handler-authored content.
+/* Handler voice typography — clean sans for Handler-authored content.
    !important overrides the inherited JetBrains Mono from html root. */
 .handler-voice {
-  font-family: 'Playfair Display', Georgia, serif !important;
+  font-family: 'Inter', 'Quicksand', system-ui, sans-serif !important;
 }
 
 /* Utility classes */

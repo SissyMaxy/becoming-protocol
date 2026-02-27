@@ -264,13 +264,26 @@ function mapV3Row(headers: string[], row: string[]): TaskRow | null {
   if (pivotIfUnable?.trim()) req.pivot_if_unable = pivotIfUnable.trim();
   if (steps?.trim()) req.steps = steps.trim().split('|').map((s) => s.trim());
 
+  // Build exclude_if JSONB — privacy-sensitive tasks excluded when Gina is home
+  const PRIVACY_DOMAINS = ['arousal', 'intimate', 'conditioning'];
+  const PRIVACY_CATEGORIES = ['edge', 'goon', 'deepen', 'worship', 'bambi', 'corrupt', 'fantasy', 'session'];
+  const domain = get('domain')?.trim() || 'unknown';
+  const cat = get('category')?.trim() || 'unknown';
+  const privacyFromCSV = requiresPrivacy?.trim().toLowerCase() === 'true';
+  const privacyFromDomain = PRIVACY_DOMAINS.includes(domain) || PRIVACY_CATEGORIES.includes(cat);
+  const excludeIf: Record<string, unknown> = {};
+  if (privacyFromCSV || privacyFromDomain) {
+    excludeIf.ginaHome = true;
+  }
+
   return {
-    category: get('category') || 'unknown',
-    domain: get('domain') || 'unknown',
+    category: cat,
+    domain,
     intensity: toIntensity(get('intensity')),
     instruction: instruction.trim(),
     subtext: get('subtext')?.trim() || null,
     requires: req,
+    exclude_if: excludeIf,
     completion_type: get('completion_type') || 'binary',
     duration_minutes: toInt(get('duration_minutes')),
     target_count: toInt(get('target_count')),

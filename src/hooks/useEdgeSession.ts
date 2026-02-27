@@ -122,32 +122,49 @@ export function useEdgeSession(): UseEdgeSessionReturn {
   }, []);
 
   // ─── Start Session ───
+  const SESSION_INIT_TIMEOUT_MS = 10000;
+
   const startSession = useCallback(async (config: SessionConfig) => {
     if (!user?.id) return;
 
-    // Create DB record
-    const { data, error } = await supabase
-      .from('edge_sessions')
-      .insert({
-        user_id: user.id,
-        task_id: config.originTaskId || null,
-        session_type: config.sessionType,
-        target_edges: config.targetEdges,
-        status: 'active',
-      })
-      .select('id')
-      .single();
+    let sessionId: string;
 
-    if (error || !data) {
-      console.error('[EdgeSession] Failed to create session:', error);
-      return;
+    try {
+      // Race the DB insert against a timeout
+      const dbInsert = supabase
+        .from('edge_sessions')
+        .insert({
+          user_id: user.id,
+          task_id: config.originTaskId || null,
+          session_type: config.sessionType,
+          target_edges: config.targetEdges,
+          status: 'active',
+        })
+        .select('id')
+        .single();
+
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Session init timeout')), SESSION_INIT_TIMEOUT_MS)
+      );
+
+      const { data, error } = await Promise.race([dbInsert, timeout]);
+
+      if (error || !data) {
+        throw new Error(error?.message || 'No session data returned');
+      }
+
+      sessionId = data.id;
+    } catch (err) {
+      console.error('[EdgeSession] Init failed, using fallback:', err);
+      // Fallback: generate a local session ID so the UI can still function
+      sessionId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     }
 
     // Request wake lock
     wakeLockRef.current = await requestWakeLock();
 
     // Initialize state
-    const initial = createInitialState(data.id, config);
+    const initial = createInitialState(sessionId, config);
     setState(initial);
     timer.reset();
 

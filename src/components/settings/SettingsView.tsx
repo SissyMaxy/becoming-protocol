@@ -26,6 +26,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { profileStorageV2 } from '../../lib/profile-storage-v2';
+import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useBambiMode } from '../../context/BambiModeContext';
 import { useProtocol } from '../../context/ProtocolContext';
@@ -124,12 +125,66 @@ function DifficultySection() {
 
 function DangerZoneSection() {
   const { isBambiMode } = useBambiMode();
-  const { signOut } = useAuth();
-  const [showConfirm, setShowConfirm] = useState<'logout' | 'reset' | null>(null);
+  const { signOut, user } = useAuth();
+  const [showConfirm, setShowConfirm] = useState<'logout' | 'reset' | 'delete' | null>(null);
+  const [confirmText, setConfirmText] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const handleLogout = async () => {
     await signOut();
   };
+
+  const handleResetStreak = async () => {
+    if (!user?.id || confirmText !== 'RESET') return;
+    setIsProcessing(true);
+    try {
+      // Reset streak_days to 0 but preserve longest_streak and history
+      await supabase
+        .from('user_state')
+        .update({ streak_days: 0 })
+        .eq('user_id', user.id);
+      // Reset domain streaks
+      await supabase
+        .from('domain_streaks')
+        .update({ current_streak: 0 })
+        .eq('user_id', user.id);
+      setShowConfirm(null);
+      setConfirmText('');
+      window.location.reload();
+    } catch (err) {
+      console.error('Reset streak failed:', err);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDeleteAllData = async () => {
+    if (!user?.id || confirmText !== 'DELETE MY DATA') return;
+    setIsProcessing(true);
+    try {
+      // Delete all user data from all tables
+      const tables = [
+        'daily_tasks', 'daily_entries', 'task_completions', 'task_dismissals',
+        'edge_sessions', 'session_commitments', 'mood_checkins',
+        'user_state', 'domain_streaks', 'handler_daily_plans',
+        'evidence', 'investments', 'content_vault', 'goals',
+        'weekend_plans', 'weekend_activities',
+      ];
+      for (const table of tables) {
+        await supabase.from(table).delete().eq('user_id', user.id);
+      }
+      // Sign out and redirect
+      await signOut();
+    } catch (err) {
+      console.error('Delete all data failed:', err);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const btnClass = `w-full flex items-center gap-3 p-3 rounded-lg text-left transition-colors ${
+    isBambiMode ? 'hover:bg-red-100 text-red-600' : 'hover:bg-red-900/20 text-red-400'
+  }`;
 
   return (
     <div>
@@ -141,50 +196,96 @@ function DangerZoneSection() {
       <div className={`rounded-xl border p-4 space-y-3 ${
         isBambiMode ? 'bg-red-50 border-red-200' : 'bg-red-950/10 border-red-900/30'
       }`}>
-        {showConfirm === 'logout' ? (
+        {showConfirm === 'logout' && (
           <div className="text-center py-2">
             <p className={`text-sm font-medium mb-3 ${isBambiMode ? 'text-red-700' : 'text-red-400'}`}>
               Sign out of this device?
             </p>
             <div className="flex gap-2 justify-center">
-              <button
-                onClick={handleLogout}
-                className="px-4 py-2 rounded-lg bg-red-500 text-white text-sm font-medium hover:bg-red-600"
-              >
+              <button onClick={handleLogout} className="px-4 py-2 rounded-lg bg-red-500 text-white text-sm font-medium hover:bg-red-600">
                 Sign Out
               </button>
-              <button
-                onClick={() => setShowConfirm(null)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium ${
-                  isBambiMode ? 'bg-gray-200 text-gray-700' : 'bg-gray-700 text-gray-300'
-                }`}
-              >
+              <button onClick={() => setShowConfirm(null)} className={`px-4 py-2 rounded-lg text-sm font-medium ${isBambiMode ? 'bg-gray-200 text-gray-700' : 'bg-gray-700 text-gray-300'}`}>
                 Cancel
               </button>
             </div>
           </div>
-        ) : (
+        )}
+
+        {showConfirm === 'reset' && (
+          <div className="py-2 space-y-3">
+            <p className={`text-sm font-medium ${isBambiMode ? 'text-red-700' : 'text-red-400'}`}>
+              This will reset your streak to 0. Your longest streak record and all history will be preserved.
+            </p>
+            <input
+              type="text"
+              placeholder='Type RESET to confirm'
+              value={confirmText}
+              onChange={e => setConfirmText(e.target.value)}
+              className={`w-full px-3 py-2 rounded-lg text-sm border ${isBambiMode ? 'bg-white border-red-300 text-red-700' : 'bg-red-950/20 border-red-800/40 text-red-300'}`}
+            />
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={handleResetStreak}
+                disabled={confirmText !== 'RESET' || isProcessing}
+                className="px-4 py-2 rounded-lg bg-red-500 text-white text-sm font-medium hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {isProcessing ? 'Resetting...' : 'Reset Streak'}
+              </button>
+              <button onClick={() => { setShowConfirm(null); setConfirmText(''); }} className={`px-4 py-2 rounded-lg text-sm font-medium ${isBambiMode ? 'bg-gray-200 text-gray-700' : 'bg-gray-700 text-gray-300'}`}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {showConfirm === 'delete' && (
+          <div className="py-2 space-y-3">
+            <p className={`text-sm font-medium ${isBambiMode ? 'text-red-700' : 'text-red-400'}`}>
+              This will permanently delete ALL your data. This cannot be undone.
+            </p>
+            <input
+              type="text"
+              placeholder='Type DELETE MY DATA to confirm'
+              value={confirmText}
+              onChange={e => setConfirmText(e.target.value)}
+              className={`w-full px-3 py-2 rounded-lg text-sm border ${isBambiMode ? 'bg-white border-red-300 text-red-700' : 'bg-red-950/20 border-red-800/40 text-red-300'}`}
+            />
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={handleDeleteAllData}
+                disabled={confirmText !== 'DELETE MY DATA' || isProcessing}
+                className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {isProcessing ? 'Deleting...' : 'Delete Everything'}
+              </button>
+              <button onClick={() => { setShowConfirm(null); setConfirmText(''); }} className={`px-4 py-2 rounded-lg text-sm font-medium ${isBambiMode ? 'bg-gray-200 text-gray-700' : 'bg-gray-700 text-gray-300'}`}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!showConfirm && (
           <>
-            <button
-              onClick={() => setShowConfirm('logout')}
-              className={`w-full flex items-center gap-3 p-3 rounded-lg text-left transition-colors ${
-                isBambiMode
-                  ? 'hover:bg-red-100 text-red-600'
-                  : 'hover:bg-red-900/20 text-red-400'
-              }`}
-            >
+            <button onClick={() => setShowConfirm('logout')} className={btnClass}>
               <LogOut className="w-4 h-4" />
               <span className="text-sm font-medium">Sign Out</span>
             </button>
-            <div className={`flex items-center gap-3 p-3 rounded-lg opacity-50 cursor-not-allowed ${
-              isBambiMode ? 'text-red-400' : 'text-red-500/60'
-            }`}>
+            <button onClick={() => setShowConfirm('reset')} className={btnClass}>
+              <RefreshCw className="w-4 h-4" />
+              <div>
+                <span className="text-sm font-medium">Reset Streak</span>
+                <p className="text-xs mt-0.5 opacity-60">Streak goes to 0. History preserved.</p>
+              </div>
+            </button>
+            <button onClick={() => setShowConfirm('delete')} className={btnClass}>
               <Trash2 className="w-4 h-4" />
               <div>
                 <span className="text-sm font-medium">Delete All Data</span>
-                <p className="text-xs mt-0.5 opacity-60">Contact support to delete your account</p>
+                <p className="text-xs mt-0.5 opacity-60">Permanently removes everything</p>
               </div>
-            </div>
+            </button>
           </>
         )}
       </div>
@@ -312,7 +413,7 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
     if (activeSection === 'profile') return 'Profile';
     if (activeSection === 'equipment') return 'Equipment Inventory';
     if (activeSection === 'timeratchets') return 'Time Anchors';
-    if (activeSection === 'reminders') return 'Feminization Reminders';
+    if (activeSection === 'reminders') return 'Reminders';
     if (activeSection === 'handler') return 'Handler Dashboard';
     if (activeSection === 'taskupload') return 'Task Upload';
     if (activeSection === 'microtasks') return 'Micro-Tasks';
@@ -820,7 +921,7 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
                   isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'
                 } hover:opacity-70 transition-opacity`}
               >
-                Becoming Protocol v1.0.0
+                BP v1.0.0
                 {isDebugMode && (
                   <span className="ml-2 text-red-400">(Debug)</span>
                 )}

@@ -9,6 +9,7 @@ export {
   getPendingVaultItems,
   approveVaultItem,
   rejectVaultItem,
+  browseVaultItems,
   getVaultStats,
 } from './vault';
 
@@ -21,6 +22,9 @@ export {
   getDistributionHistory,
   getPendingPostPacks,
   markManuallyPosted,
+  batchMarkPosted,
+  skipDistribution,
+  getUpcomingDistributions,
 } from './distribution';
 
 export {
@@ -37,6 +41,10 @@ export {
   getRevenueSummary,
   getRevenueBriefing,
   checkRevenueThresholds,
+  logRevenueExtended,
+  importRevenueCSV,
+  getRevenueByDate,
+  scrapeRevenueFromScreenshot,
 } from './revenue';
 
 export {
@@ -46,6 +54,10 @@ export {
   draftFanMessage,
   getPendingMessages,
   getFanCount,
+  logFanInteraction,
+  getFanInteractions,
+  getPendingInteractions,
+  approveInteractionResponse,
 } from './fans';
 
 export {
@@ -53,4 +65,6 @@ export {
   assignToSlot,
   getCalendar,
   getTodayCalendar,
+  getWeekCalendar,
+  updateSlotStatus,
 } from './calendar';

@@ -124,9 +124,9 @@ export class TemplateEngine {
     // High denial state - leverage it
     if (denialDay >= 7) {
       return [
-        "Good morning, {name}. Day {denial_day} of denial. {streak} day streak. The desperation is where it needs to be. Use it.",
-        "Morning. Day {denial_day}. You're as receptive as you'll get. Today's tasks will land deeper.",
-        "{name}. Day {denial_day}, streak {streak}. Maximum receptivity. She's emerging fast now.",
+        "Good morning, {name}. Day {denial_day}. Streak {streak}. The desperation is fuel. Use it.",
+        "Morning. Day {denial_day}. Maximum receptivity. Today's tasks land deeper.",
+        "{name}. Day {denial_day}, streak {streak}. She's emerging fast now.",
       ];
     }
 
@@ -141,7 +141,7 @@ export class TemplateEngine {
 
     // Standard morning
     return [
-      "Good morning, {name}. Day {denial_day} of denial. {streak} day streak. Today's focus: presence and practice. She's emerging.",
+      "Good morning, {name}. Day {denial_day}. Streak {streak}. Presence and practice. She's emerging.",
       "Morning. Day {denial_day}. The practice continues. She's more real than yesterday.",
       "{name}. Day {denial_day}. Ready to be her today?",
     ];
@@ -370,9 +370,9 @@ export class TemplateEngine {
 
   getPostReleaseCrashMessage(state: Partial<UserState>): string {
     const templates = [
-      "The crash is happening. You know this. It's prolactin, not truth. She was real 20 minutes ago and she's real now. Don't make decisions in this state. Just do one thing: skincare.",
-      "Post-release fog. Expected. Normal. The doubt isn't insight, it's chemistry. Wait it out. One task: log your mood.",
-      "The voice saying 'what's the point' is dopamine depletion talking, not you. One small thing: moisturizer. That's all.",
+      "The crash is prolactin, not truth. She was real 20 minutes ago. Don't decide anything now. One thing: skincare.",
+      "Post-release fog. Expected. The doubt isn't insight, it's chemistry. One task: log your mood.",
+      "That voice saying 'what's the point' is dopamine, not you. One small thing: moisturizer.",
     ];
 
     const selected = templates[Math.floor(Math.random() * templates.length)];

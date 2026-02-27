@@ -1,7 +1,7 @@
 {
-  "name": "Becoming Protocol",
-  "short_name": "Protocol",
-  "description": "Your daily feminization protocol",
+  "name": "BP",
+  "short_name": "BP",
+  "description": "Daily protocol tracker",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0a0f",

@@ -45,6 +45,14 @@ import { GinaEmergenceView, GinaPipelineView } from './components/gina';
 import { ServiceProgressionView, ServiceAnalyticsDashboard } from './components/service';
 import { ContentEscalationView, VaultSwipe } from './components/content';
 import { PermissionsManager } from './components/content/PermissionsManager';
+import { ContentCapture } from './components/content/ContentCapture';
+import { PostingQueue } from './components/content/PostingQueue';
+import { ContentCalendar } from './components/content/ContentCalendar';
+import { PlatformSettings } from './components/content/PlatformSettings';
+import { VaultView } from './components/content/VaultView';
+import { FanDashboard } from './components/content/FanDashboard';
+import { SubscriberPolls } from './components/content/SubscriberPolls';
+import { RevenueView } from './components/content/RevenueView';
 import { ContentDashboard } from './components/admin/ContentDashboard';
 import { DomainEscalationView } from './components/domains';
 import { PatternCatchView } from './components/patterns';
@@ -292,7 +300,7 @@ function LoadingScreen() {
   );
 }
 
-type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | 'progress-page' | 'sealed-page' | null;
+type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | 'progress-page' | 'sealed-page' | 'content-capture' | 'content-queue' | 'content-calendar' | 'content-fans' | 'content-polls' | 'content-revenue' | 'content-settings' | 'vault-browser' | null;
 
 /** Session picker → launches immersive SessionContainer */
 function SessionPickerOrContainer({ onBack }: { onBack: () => void }) {
@@ -698,6 +706,22 @@ function AuthenticatedAppInner() {
         );
       case 'vault-permissions':
         return <PermissionsManager onBack={handleBackFromSubView} />;
+      case 'vault-browser':
+        return <VaultView onBack={handleBackFromSubView} />;
+      case 'content-capture':
+        return <ContentCapture onBack={handleBackFromSubView} />;
+      case 'content-queue':
+        return <PostingQueue onBack={handleBackFromSubView} />;
+      case 'content-calendar':
+        return <ContentCalendar onBack={handleBackFromSubView} />;
+      case 'content-fans':
+        return <FanDashboard onBack={handleBackFromSubView} />;
+      case 'content-polls':
+        return <SubscriberPolls onBack={handleBackFromSubView} />;
+      case 'content-revenue':
+        return <RevenueView onBack={handleBackFromSubView} />;
+      case 'content-settings':
+        return <PlatformSettings onBack={handleBackFromSubView} />;
       case 'content-dashboard':
         return <ContentDashboard onBack={handleBackFromSubView} />;
       case 'quiz':

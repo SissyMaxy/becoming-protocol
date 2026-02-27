@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react';
 import { Sparkles } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
+import { truncateToLimit, NOTIFICATION_LIMITS } from '../../lib/handler-v2/popup-utils';
 
 interface CompletionToastProps {
   affirmation: string;
@@ -54,9 +55,9 @@ export function CompletionToast({ affirmation, pointsEarned, onDismiss }: Comple
           <Sparkles className="w-5 h-5 text-white" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className={`text-sm font-semibold leading-tight
+          <p className={`text-sm font-semibold leading-tight line-clamp-2
             ${isBambiMode ? 'text-pink-700' : 'text-white'}`}>
-            {affirmation}
+            {truncateToLimit(affirmation, NOTIFICATION_LIMITS.toastAffirmation)}
           </p>
           <p className={`text-xs mt-0.5 font-medium
             ${isBambiMode ? 'text-pink-500' : 'text-purple-300'}`}>
