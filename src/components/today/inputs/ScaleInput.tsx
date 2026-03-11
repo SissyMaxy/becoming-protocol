@@ -50,9 +50,9 @@ export function ScaleInput({ intensity, isCompleting, onComplete, getGradient }:
         }`}
         style={{
           background: `linear-gradient(to right, ${
-            isBambiMode ? '#ec4899' : '#10b981'
+            isBambiMode ? '#B06B61' : '#10b981'
           } ${((value - 1) / 9) * 100}%, ${
-            isBambiMode ? '#fce7f3' : '#1a1a2e'
+            isBambiMode ? '#FAF7F5' : '#1a1a2e'
           } ${((value - 1) / 9) * 100}%)`,
         }}
       />

@@ -378,7 +378,7 @@ export function getDomainColor(domain: Domain | null): string {
     social: '#f59e0b',         // amber
     // Feminization domains - softer colors (lowest priority)
     movement: '#22c55e',       // green
-    voice: '#f472b6',          // pink
+    voice: '#C4847A',          // pink
     style: '#a855f7',          // purple
     skincare: '#06b6d4',       // cyan
   };

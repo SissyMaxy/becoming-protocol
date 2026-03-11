@@ -5,7 +5,8 @@
  */
 
 import type { CompletionData, TaskCompletionType, CaptureFieldDef } from '../../types/task-bank';
-import { BinaryInput, DurationInput, ScaleInput, CountInput, BatchCountInput, CheckInInput, ReflectInput, LogEntryInput } from './inputs';
+import { BinaryInput, DurationInput, ScaleInput, CountInput, BatchCountInput, CheckInInput, ReflectInput, LogEntryInput, PhotoCaptureInput } from './inputs';
+import { DEFAULT_LOG_FIELDS } from '../../lib/default-log-fields';
 
 interface CompletionInputProps {
   completionType: TaskCompletionType | string;
@@ -21,6 +22,10 @@ interface CompletionInputProps {
   getGradient: (intensity: number, bambi: boolean) => string;
   /** Field definitions for log_entry completion type */
   captureFields?: CaptureFieldDef[];
+  /** Task domain (for photo evidence + default log fields) */
+  taskDomain?: string;
+  /** Task ID (for evidence linking) */
+  taskId?: string;
 }
 
 export function CompletionInput({
@@ -35,6 +40,8 @@ export function CompletionInput({
   onIncrement,
   getGradient,
   captureFields,
+  taskDomain,
+  taskId,
 }: CompletionInputProps) {
   switch (completionType) {
     case 'duration':
@@ -98,6 +105,7 @@ export function CompletionInput({
       return (
         <ReflectInput
           placeholder={subtext}
+          domain={taskDomain}
           intensity={intensity}
           isCompleting={isCompleting}
           onComplete={onComplete}
@@ -105,17 +113,49 @@ export function CompletionInput({
         />
       );
 
-    case 'log_entry':
+    case 'log_entry': {
+      // Use task-defined capture fields, or fall back to domain defaults
+      const fields = (captureFields && captureFields.length > 0)
+        ? captureFields
+        : DEFAULT_LOG_FIELDS[taskDomain || ''] || DEFAULT_LOG_FIELDS['_default'];
       return (
         <LogEntryInput
-          captureFields={captureFields || []}
+          captureFields={fields}
           intensity={intensity}
           isCompleting={isCompleting}
           onComplete={onComplete}
           getGradient={getGradient}
         />
       );
+    }
 
+    case 'photo':
+      return (
+        <PhotoCaptureInput
+          intensity={intensity}
+          isCompleting={isCompleting}
+          onComplete={onComplete}
+          getGradient={getGradient}
+          taskDomain={taskDomain}
+          taskId={taskId}
+        />
+      );
+
+    case 'tally':
+      // Tally works like count but without a target
+      return (
+        <CountInput
+          targetCount={targetCount}
+          currentProgress={currentProgress}
+          intensity={intensity}
+          isCompleting={isCompleting}
+          onComplete={onComplete}
+          onIncrement={onIncrement}
+          getGradient={getGradient}
+        />
+      );
+
+    case 'streak':
     case 'binary':
     case 'confirm':
     default:

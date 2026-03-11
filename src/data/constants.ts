@@ -5,7 +5,7 @@ export const DOMAINS: DomainInfo[] = [
     domain: 'voice',
     label: 'Voice',
     icon: 'Mic',
-    color: '#f472b6',
+    color: '#C4847A',
     description: 'Vocal feminization training'
   },
   {
@@ -47,7 +47,7 @@ export const DOMAINS: DomainInfo[] = [
     domain: 'body',
     label: 'Body',
     icon: 'Heart',
-    color: '#ec4899',
+    color: '#B06B61',
     description: 'Physical training and body awareness'
   }
 ];
@@ -92,7 +92,7 @@ export const INTENSITY_CONFIG: Record<Intensity, { label: string; multiplier: nu
   normal: {
     label: 'Normal',
     multiplier: 1.0,
-    color: '#f472b6'
+    color: '#C4847A'
   },
   crazy: {
     label: 'Crazy',

@@ -115,7 +115,7 @@ export function PrimerVideoPlayer({
   const typeColors: Record<string, string> = {
     identity_erasure: '#dc2626',
     trigger_plant: '#8b5cf6',
-    arousal: '#ec4899',
+    arousal: '#B06B61',
     affirmation: '#10b981',
     hypno: '#6366f1',
     mantra: '#f59e0b',

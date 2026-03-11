@@ -40,8 +40,8 @@ const modeConfig: Record<AIMode, {
   recover: {
     label: 'Recover',
     icon: Heart,
-    color: '#ec4899',
-    bgColor: 'rgba(236, 72, 153, 0.1)',
+    color: '#B06B61',
+    bgColor: 'rgba(176, 107, 97, 0.1)',
     description: 'Gentle re-entry. One good day at a time.'
   }
 };

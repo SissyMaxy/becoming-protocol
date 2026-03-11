@@ -131,7 +131,7 @@ export function MenuView({ onNavigate }: MenuViewProps) {
           icon: TrendingUp,
           label: 'Transformation Timeline',
           description: 'Voice & photo progress tracking',
-          color: '#f472b6',
+          color: '#C4847A',
         },
         {
           id: 'service',
@@ -152,14 +152,14 @@ export function MenuView({ onNavigate }: MenuViewProps) {
           icon: Heart,
           label: 'Gina Pipeline',
           description: 'Develop her into soft mommy dom',
-          color: '#ec4899',
+          color: '#B06B61',
         },
         {
           id: 'her-world',
           icon: Gem,
           label: 'Her World',
           description: 'Wigs, scents, and anchor objects',
-          color: '#f472b6',
+          color: '#C4847A',
         },
         {
           id: 'vault-swipe',
@@ -188,7 +188,7 @@ export function MenuView({ onNavigate }: MenuViewProps) {
           icon: Camera,
           label: 'Cam Session',
           description: 'Live session dashboard with tips & prompts',
-          color: '#ec4899',
+          color: '#B06B61',
         },
         {
           id: 'hypno-session',
@@ -237,7 +237,7 @@ export function MenuView({ onNavigate }: MenuViewProps) {
           icon: Film,
           label: 'Content Escalation',
           description: 'Content intensity tracking',
-          color: '#ec4899',
+          color: '#B06B61',
         },
         {
           id: 'domains',
@@ -272,7 +272,7 @@ export function MenuView({ onNavigate }: MenuViewProps) {
           icon: Activity,
           label: 'Protocol Analytics',
           description: 'Is the protocol working? Real data.',
-          color: '#ec4899',
+          color: '#B06B61',
         },
         {
           id: 'dashboard',
@@ -356,7 +356,7 @@ export function MenuView({ onNavigate }: MenuViewProps) {
           icon: Heart,
           label: 'Wishlist',
           description: 'Items you want to get',
-          color: '#ec4899',
+          color: '#B06B61',
         },
       ],
     },

@@ -286,7 +286,7 @@ export function getReminderTypeLabel(type: ReminderType): string {
 export function getReminderTypeColor(type: ReminderType): string {
   const colors: Record<ReminderType, string> = {
     posture: '#22c55e',    // green
-    voice: '#f472b6',      // pink
+    voice: '#C4847A',      // pink
     movement: '#a855f7',   // purple
     identity: '#3b82f6',   // blue
   };

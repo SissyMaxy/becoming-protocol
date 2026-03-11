@@ -6,3 +6,4 @@ export { BatchCountInput } from './BatchCountInput';
 export { CheckInInput } from './CheckInInput';
 export { ReflectInput } from './ReflectInput';
 export { LogEntryInput } from './LogEntryInput';
+export { PhotoCaptureInput } from './PhotoCaptureInput';

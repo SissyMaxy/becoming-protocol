@@ -95,7 +95,7 @@ export function QuizProgressBar({ current, total, showMilestone }: QuizProgressB
                 className="absolute w-3 h-3 rounded-full animate-confetti"
                 style={{
                   left: `${Math.random() * 100}%`,
-                  backgroundColor: ['#ec4899', '#a855f7', '#f59e0b', '#22c55e', '#3b82f6'][i % 5],
+                  backgroundColor: ['#B06B61', '#a855f7', '#f59e0b', '#22c55e', '#3b82f6'][i % 5],
                   animationDelay: `${Math.random() * 0.5}s`,
                   animationDuration: `${1 + Math.random()}s`,
                 }}

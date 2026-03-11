@@ -34,12 +34,19 @@ import { HerWorldPage } from './components/collections';
 import { MorningBookend } from './components/bookends';
 import { EveningDebrief } from './components/EveningDebrief';
 import { useBookends } from './hooks/useBookends';
+import { OrgasmLogModal } from './components/arousal/OrgasmLogModal';
+import { PostReleaseOverlay } from './components/post-release/PostReleaseOverlay';
+import { DeletionInterceptModal } from './components/post-release/DeletionInterceptModal';
+import { usePostReleaseProtocol } from './hooks/usePostReleaseProtocol';
+import { useArousalState } from './hooks/useArousalState';
+import type { OrgasmLogInput } from './types/arousal';
 import { MicroTaskCard } from './components/micro-tasks';
 import { useMicroTasks } from './hooks/useMicroTasks';
 // MomentLoggerFAB removed — absorbed by QuickStateStrip + JournalPrompt
 // ReminderModal now rendered via useOrchestratedModals
 import { useReminders } from './hooks/useReminders';
 import { usePatternNotifications } from './hooks/usePatternNotifications';
+import { useNotifications as useDopamineNotifications } from './hooks/useNotifications';
 import { TimelineView } from './components/timeline';
 import { GinaEmergenceView, GinaPipelineView } from './components/gina';
 import { ServiceProgressionView, ServiceAnalyticsDashboard } from './components/service';
@@ -293,9 +300,9 @@ function Header() {
 
 function LoadingScreen() {
   return (
-    <div className="min-h-screen bg-protocol-bg flex flex-col items-center justify-center">
-      <Loader2 className="w-10 h-10 text-protocol-accent animate-spin mb-4" />
-      <p className="text-protocol-text-muted text-sm">Loading...</p>
+    <div className="min-h-screen flex flex-col items-center justify-center" style={{ backgroundColor: '#FAF7F5' }}>
+      <Loader2 className="w-10 h-10 text-pink-400 animate-spin mb-4" />
+      <p className="text-pink-600 text-sm">Loading...</p>
     </div>
   );
 }
@@ -384,6 +391,17 @@ function AuthenticatedAppInner() {
   // Micro-task identity reinforcement
   const microTasks = useMicroTasks();
 
+  // Arousal state — for orgasm logging
+  const { logOrgasm, metrics: arousalMetrics } = useArousalState();
+
+  // Post-release protocol — lockout, shame capture, deletion intercept
+  const postRelease = usePostReleaseProtocol();
+  const [showOrgasmLog, setShowOrgasmLog] = useState(false);
+  const [deletionIntercept, setDeletionIntercept] = useState<{
+    message: string;
+    attemptNumber: number;
+  } | null>(null);
+
   const [activeTab, setActiveTab] = useState<Tab>('protocol');
   const [menuSubView, setMenuSubView] = useState<MenuSubView>(null);
   const [showMorningFlow, setShowMorningFlow] = useState(false);
@@ -402,6 +420,9 @@ function AuthenticatedAppInner() {
 
   // Pattern catch notifications - proactive pattern awareness
   usePatternNotifications({ enabled: true });
+
+  // Dopamine delivery system - delayed rewards + periodic notifications
+  useDopamineNotifications();
 
   // Orchestrated modals - prevents modal stacking, shows one at a time
   useOrchestratedModals({
@@ -459,6 +480,7 @@ function AuthenticatedAppInner() {
       setActiveTab('menu');
       setMenuSubView('hypno-session');
     };
+    const handleOpenReleaseLog = () => setShowOrgasmLog(true);
     window.addEventListener('navigate-to-investments', handleNavigateToInvestments);
     window.addEventListener('navigate-to-wishlist', handleNavigateToWishlist);
     window.addEventListener('navigate-to-settings', handleNavigateToSettings);
@@ -466,6 +488,7 @@ function AuthenticatedAppInner() {
     window.addEventListener('navigate-to-exercise', handleNavigateToExercise);
     window.addEventListener('navigate-to-cam', handleNavigateToCam);
     window.addEventListener('navigate-to-hypno', handleNavigateToHypno);
+    window.addEventListener('open-release-log', handleOpenReleaseLog);
     return () => {
       window.removeEventListener('navigate-to-investments', handleNavigateToInvestments);
       window.removeEventListener('navigate-to-wishlist', handleNavigateToWishlist);
@@ -474,6 +497,7 @@ function AuthenticatedAppInner() {
       window.removeEventListener('navigate-to-exercise', handleNavigateToExercise);
       window.removeEventListener('navigate-to-cam', handleNavigateToCam);
       window.removeEventListener('navigate-to-hypno', handleNavigateToHypno);
+      window.removeEventListener('open-release-log', handleOpenReleaseLog);
     };
   }, []);
 
@@ -638,6 +662,7 @@ function AuthenticatedAppInner() {
         streak={progress?.overallStreak ?? 0}
         message={bookends.morningMessage}
         onDismiss={bookends.dismissMorning}
+        lastProtocol={bookends.lastProtocol}
       />
     );
   }
@@ -894,6 +919,41 @@ function AuthenticatedAppInner() {
       {showSleepContent && (
         <SleepContentPlayer onDismiss={() => setShowSleepContent(false)} />
       )}
+
+      {/* OrgasmLogModal — Log Release flow */}
+      <OrgasmLogModal
+        isOpen={showOrgasmLog}
+        onClose={() => setShowOrgasmLog(false)}
+        onSubmit={async (data: OrgasmLogInput) => {
+          await logOrgasm(data);
+          // Fire post-release protocol after logging
+          postRelease.triggerProtocol(
+            data.releaseType,
+            data.regretLevel ?? 1,
+            data.intensity
+          );
+        }}
+        currentStreakDays={arousalMetrics?.currentStreakDays ?? 0}
+      />
+
+      {/* Post-Release Overlay — lockout with shame capture */}
+      {postRelease.activeProtocol && (
+        <PostReleaseOverlay
+          protocol={postRelease.activeProtocol}
+          minutesRemaining={postRelease.minutesRemaining}
+          onCaptureShame={postRelease.captureShame}
+          onSaveReflection={postRelease.saveReflection}
+        />
+      )}
+
+      {/* Deletion Intercept Modal */}
+      <DeletionInterceptModal
+        isOpen={deletionIntercept !== null}
+        onDismiss={() => setDeletionIntercept(null)}
+        message={deletionIntercept?.message ?? ''}
+        attemptNumber={deletionIntercept?.attemptNumber ?? 0}
+        minutesRemaining={postRelease.minutesRemaining}
+      />
 
       {/* Modals (Investment, Achievement, LevelUp, Reminder, Intervention, Recovery)
           are now rendered via useOrchestratedModals - only one shows at a time */}

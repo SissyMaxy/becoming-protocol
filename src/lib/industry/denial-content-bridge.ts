@@ -52,7 +52,7 @@ const DENIAL_BADGE_COLORS: Record<string, string> = {
   '2': '#3B82F6',   // blue — easy
   '3': '#F59E0B',   // amber — feeling it
   '4': '#F59E0B',   // amber — desperate edge
-  '5': '#EC4899',   // pink — PEAK
+  '5': '#B06B61',   // pink — PEAK
   '6': '#A855F7',   // purple — broken/surrendered
   '7': '#A855F7',   // purple — transcendent
 };
@@ -292,6 +292,8 @@ export async function generateShootPrescription(
     status: data.status as ShootPrescription['status'],
     skippedAt: data.skipped_at,
     skipConsequence: data.skip_consequence,
+    exposureLevel: data.exposure_level ?? 1,
+    feminizationPayload: data.feminization_payload ?? null,
     createdAt: data.created_at,
     updatedAt: data.updated_at,
   };

@@ -7,6 +7,7 @@
  */
 
 import { supabase } from '../supabase';
+import { isContentLocked } from '../post-release-engine';
 import type {
   ContentPermanenceType,
   PermanencePlatform,
@@ -310,6 +311,12 @@ export async function attemptDeletion(
   userId: string,
   contentPermanenceId: string
 ): Promise<DeletionAttemptResult> {
+  // Post-release lockout check — blocks all deletions during shame window
+  const locked = await isContentLocked(userId);
+  if (locked) {
+    return { allowed: false, reason: 'post-release lockout' };
+  }
+
   const { data: content } = await supabase
     .from('content_permanence')
     .select('permanence_tier, estimated_external_copies, can_be_deleted')

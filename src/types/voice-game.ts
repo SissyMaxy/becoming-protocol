@@ -149,8 +149,8 @@ export const CATEGORY_INFO: Record<AffirmationCategory, { label: string; color: 
   capability: { label: 'Capability', color: '#22c55e', icon: 'zap' },
   worthiness: { label: 'Worthiness', color: '#f59e0b', icon: 'heart' },
   transformation: { label: 'Transformation', color: '#8b5cf6', icon: 'refresh-cw' },
-  gratitude: { label: 'Gratitude', color: '#ec4899', icon: 'sparkles' },
-  feminine: { label: 'Feminine', color: '#f472b6', icon: 'flower' },
+  gratitude: { label: 'Gratitude', color: '#B06B61', icon: 'sparkles' },
+  feminine: { label: 'Feminine', color: '#C4847A', icon: 'flower' },
   submission: { label: 'Submission', color: '#6366f1', icon: 'hand' },
 };
 

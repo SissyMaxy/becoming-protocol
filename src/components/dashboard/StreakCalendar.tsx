@@ -60,11 +60,11 @@ export function StreakCalendar({ data, days = 90, currentStreak, longestStreak }
   }, [data, days]);
 
   const getColor = (tasks: number): string => {
-    if (tasks === 0) return isBambiMode ? '#fce7f3' : '#1a1a2e';
-    if (tasks === 1) return isBambiMode ? '#f9a8d4' : '#3b1f5e';
-    if (tasks <= 3) return isBambiMode ? '#f472b6' : '#6b21a8';
-    if (tasks <= 5) return isBambiMode ? '#ec4899' : '#9333ea';
-    return isBambiMode ? '#db2777' : '#a855f7';
+    if (tasks === 0) return isBambiMode ? '#FAF7F5' : '#1a1a2e';
+    if (tasks === 1) return isBambiMode ? '#D4A89C' : '#3b1f5e';
+    if (tasks <= 3) return isBambiMode ? '#C4847A' : '#6b21a8';
+    if (tasks <= 5) return isBambiMode ? '#B06B61' : '#9333ea';
+    return isBambiMode ? '#96524A' : '#a855f7';
   };
 
   const maxTasks = Math.max(...data.map(d => d.tasksCompleted), 1);

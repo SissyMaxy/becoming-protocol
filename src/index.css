@@ -7,13 +7,13 @@
 }
 
 html {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Quicksand', 'Nunito', 'Poppins', sans-serif;
 }
 
 body {
   margin: 0;
-  background-color: #0b0a10;
-  color: #e8e6ed;
+  background-color: #FAF7F5;
+  color: #3D2B2B;
   min-height: 100vh;
 }
 
@@ -28,16 +28,16 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #12121a;
+  background: #F5ECE8;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2a2a3a;
+  background: #E8CFC5;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3a3a4a;
+  background: #D4A89C;
 }
 
 /* Animations */
@@ -89,10 +89,10 @@ body {
 
 @keyframes glow-pulse {
   0%, 100% {
-    box-shadow: 0 0 20px rgba(168, 85, 247, 0.3);
+    box-shadow: 0 0 20px rgba(196, 132, 122, 0.3);
   }
   50% {
-    box-shadow: 0 0 40px rgba(168, 85, 247, 0.5);
+    box-shadow: 0 0 40px rgba(196, 132, 122, 0.5);
   }
 }
 
@@ -145,7 +145,7 @@ body {
 }
 
 /* Handler voice typography — clean sans for Handler-authored content.
-   !important overrides the inherited JetBrains Mono from html root. */
+   !important overrides the inherited font from html root. */
 .handler-voice {
   font-family: 'Inter', 'Quicksand', system-ui, sans-serif !important;
 }
@@ -180,7 +180,7 @@ body {
   /* Bambi Mode utility classes */
   .bambi-card {
     @apply bg-white border-2 border-pink-200 rounded-3xl;
-    box-shadow: 0 4px 20px rgba(255, 105, 180, 0.3);
+    box-shadow: 0 4px 20px rgba(196, 132, 122, 0.3);
   }
 
   .bambi-card-hover {
@@ -188,16 +188,16 @@ body {
   }
 
   .bambi-card-hover:hover {
-    box-shadow: 0 10px 40px rgba(255, 105, 180, 0.35);
+    box-shadow: 0 10px 40px rgba(196, 132, 122, 0.35);
   }
 
   .bambi-btn-primary {
     @apply bg-gradient-to-r from-pink-400 to-pink-600 text-white font-medium py-3 px-6 rounded-full transition-all;
-    box-shadow: 0 4px 20px rgba(255, 105, 180, 0.3);
+    box-shadow: 0 4px 20px rgba(196, 132, 122, 0.3);
   }
 
   .bambi-btn-primary:hover {
-    box-shadow: 0 10px 40px rgba(255, 105, 180, 0.35);
+    box-shadow: 0 10px 40px rgba(196, 132, 122, 0.35);
   }
 
   .bambi-btn-secondary {
@@ -217,7 +217,7 @@ body {
   }
 
   .bambi-glow {
-    box-shadow: 0 0 20px rgba(255, 105, 180, 0.3);
+    box-shadow: 0 0 20px rgba(196, 132, 122, 0.3);
   }
 
   .bambi-input {
@@ -228,22 +228,22 @@ body {
 /* Bambi Mode base styles */
 .bambi-mode {
   font-family: 'Quicksand', 'Nunito', 'Poppins', sans-serif;
-  background: linear-gradient(135deg, #FFF0F5 0%, #FFE4EC 50%, #F3E8FF 100%);
-  color: #5C0439;
+  background: linear-gradient(135deg, #FAF7F5 0%, #F5ECE8 50%, #F3E8FF 100%);
+  color: #3D2B2B;
   min-height: 100vh;
 }
 
 .bambi-mode ::-webkit-scrollbar-track {
-  background: #FFE4EC;
+  background: #F5ECE8;
 }
 
 .bambi-mode ::-webkit-scrollbar-thumb {
-  background: #FFBCD9;
+  background: #E8CFC5;
   border-radius: 3px;
 }
 
 .bambi-mode ::-webkit-scrollbar-thumb:hover {
-  background: #FF8DC7;
+  background: #D4A89C;
 }
 
 /* Sparkle overlay effect */
@@ -303,13 +303,13 @@ body {
 
 /* Bambi gradient backgrounds */
 .bambi-gradient-primary {
-  background: linear-gradient(135deg, #FF69B4 0%, #FF1493 50%, #C084FC 100%);
+  background: linear-gradient(135deg, #C4847A 0%, #B06B61 50%, #C084FC 100%);
 }
 
 .bambi-gradient-soft {
-  background: linear-gradient(135deg, #FFF0F5 0%, #FFE4EC 50%, #F3E8FF 100%);
+  background: linear-gradient(135deg, #FAF7F5 0%, #F5ECE8 50%, #F3E8FF 100%);
 }
 
 .bambi-gradient-card {
-  background: linear-gradient(135deg, #FFFFFF 0%, #FFF0F5 50%, #F3E8FF 100%);
+  background: linear-gradient(135deg, #FFFFFF 0%, #FAF7F5 50%, #F3E8FF 100%);
 }

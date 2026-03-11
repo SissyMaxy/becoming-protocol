@@ -142,7 +142,7 @@ export function UserModelTab({ model }: UserModelTabProps) {
           title="Compliance Accelerators"
           subtitle="What increases compliance"
           icon={Heart}
-          iconColor="#ec4899"
+          iconColor="#B06B61"
           expandable
           defaultExpanded={false}
         >

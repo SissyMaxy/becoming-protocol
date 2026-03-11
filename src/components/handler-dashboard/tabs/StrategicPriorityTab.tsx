@@ -122,14 +122,14 @@ export function StrategicPriorityTab({ handlerState }: StrategicPriorityTabProps
             label="Strategy"
             value={effectiveness.strategyScore}
             trend={effectiveness.strategyTrend}
-            color={isBambiMode ? '#ec4899' : '#6366f1'}
+            color={isBambiMode ? '#B06B61' : '#6366f1'}
             isBambiMode={isBambiMode}
           />
           <EffectivenessCard
             label="Trigger"
             value={effectiveness.triggerScore}
             trend={effectiveness.triggerTrend}
-            color={isBambiMode ? '#f472b6' : '#f59e0b'}
+            color={isBambiMode ? '#C4847A' : '#f59e0b'}
             isBambiMode={isBambiMode}
           />
           <EffectivenessCard

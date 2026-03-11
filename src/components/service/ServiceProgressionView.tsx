@@ -56,7 +56,7 @@ const SERVICE_STAGE_COLORS: Record<ServiceStage, string> = {
   content_consumption: '#8b5cf6',
   online_interaction: '#a855f7',
   first_encounter: '#d946ef',
-  regular_service: '#ec4899',
+  regular_service: '#B06B61',
   organized_availability: '#f43f5e',
   gina_directed: '#ef4444',
 };

@@ -247,8 +247,8 @@ export function VoiceRecorder({ phrase, onSave, onCancel, saving }: VoiceRecorde
                 >
                   <Star
                     className="w-8 h-8"
-                    fill={rating && value <= rating ? '#f472b6' : 'transparent'}
-                    color={rating && value <= rating ? '#f472b6' : '#666'}
+                    fill={rating && value <= rating ? '#C4847A' : 'transparent'}
+                    color={rating && value <= rating ? '#C4847A' : '#666'}
                   />
                 </button>
               ))}

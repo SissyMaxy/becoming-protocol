@@ -536,7 +536,7 @@ function RadarChart({
       cy={center}
       r={(level / 5) * maxRadius}
       fill="none"
-      stroke={isBambiMode ? '#fce7f3' : '#374151'}
+      stroke={isBambiMode ? '#FAF7F5' : '#374151'}
       strokeWidth="1"
       opacity="0.5"
     />
@@ -554,7 +554,7 @@ function RadarChart({
         y1={center}
         x2={endX}
         y2={endY}
-        stroke={isBambiMode ? '#fce7f3' : '#374151'}
+        stroke={isBambiMode ? '#FAF7F5' : '#374151'}
         strokeWidth="1"
         opacity="0.5"
       />
@@ -571,9 +571,9 @@ function RadarChart({
         {/* Control polygon */}
         <path
           d={polygonPath}
-          fill={isBambiMode ? '#ec4899' : '#f59e0b'}
+          fill={isBambiMode ? '#B06B61' : '#f59e0b'}
           fillOpacity="0.3"
-          stroke={isBambiMode ? '#ec4899' : '#f59e0b'}
+          stroke={isBambiMode ? '#B06B61' : '#f59e0b'}
           strokeWidth="2"
         />
 
@@ -584,7 +584,7 @@ function RadarChart({
               cx={p.x}
               cy={p.y}
               r="6"
-              fill={isBambiMode ? '#ec4899' : '#f59e0b'}
+              fill={isBambiMode ? '#B06B61' : '#f59e0b'}
               className="cursor-pointer hover:r-8"
               onClick={() => onSelect(analytics[i].domain)}
             />

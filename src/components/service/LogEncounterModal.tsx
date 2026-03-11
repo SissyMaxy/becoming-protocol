@@ -146,7 +146,7 @@ export function LogEncounterModal({ onSubmit, onClose }: LogEncounterModalProps)
                       encounterType === type
                         ? ENCOUNTER_TYPE_COLORS[type]
                         : isBambiMode
-                        ? '#be185d'
+                        ? '#7A3E38'
                         : undefined,
                   }}
                 >

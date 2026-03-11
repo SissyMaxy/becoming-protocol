@@ -194,12 +194,12 @@ export function AddSeedModal({ onSubmit, onCancel }: AddSeedModalProps) {
               }`}
               style={{
                 background: `linear-gradient(to right, ${
-                  isBambiMode ? '#ec4899' : '#06b6d4'
-                } 0%, ${isBambiMode ? '#ec4899' : '#06b6d4'} ${
+                  isBambiMode ? '#B06B61' : '#06b6d4'
+                } 0%, ${isBambiMode ? '#B06B61' : '#06b6d4'} ${
                   ((intensityLevel - 1) / 4) * 100
-                }%, ${isBambiMode ? '#fce7f3' : '#374151'} ${
+                }%, ${isBambiMode ? '#FAF7F5' : '#374151'} ${
                   ((intensityLevel - 1) / 4) * 100
-                }%, ${isBambiMode ? '#fce7f3' : '#374151'} 100%)`,
+                }%, ${isBambiMode ? '#FAF7F5' : '#374151'} 100%)`,
               }}
             />
             <div className="flex justify-between mt-1">

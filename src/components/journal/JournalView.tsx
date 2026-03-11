@@ -321,7 +321,7 @@ export function JournalView() {
               placeholder="Anything else on your mind..."
               value={freeText}
               onChange={setFreeText}
-              color={isBambiMode ? '#ec4899' : '#a855f7'}
+              color={isBambiMode ? '#B06B61' : '#a855f7'}
               isBambiMode={isBambiMode}
             />
           </div>

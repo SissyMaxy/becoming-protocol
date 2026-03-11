@@ -324,7 +324,7 @@ export const WEEKEND_CATEGORY_CONFIG: Record<WeekendActivityCategory, {
   gina_feminizing: {
     label: 'Gina Feminizing You',
     emoji: '💅',
-    color: '#ec4899', // pink
+    color: '#B06B61', // pink
     priority: 1
   },
   shared: {

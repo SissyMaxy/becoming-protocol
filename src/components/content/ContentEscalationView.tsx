@@ -33,8 +33,8 @@ const THEME_LABELS: Record<string, string> = {
 };
 
 const THEME_COLORS: Record<string, string> = {
-  feminization: '#ec4899',
-  sissification: '#f472b6',
+  feminization: '#B06B61',
+  sissification: '#C4847A',
   service: '#8b5cf6',
   humiliation: '#f97316',
   bbc: '#1f2937',

@@ -13,6 +13,8 @@ import type {
   ShootStatus,
 } from '../types/industry';
 import { generateMultiplicationPlan } from '../lib/industry/content-multiplier';
+import { trackSkipForIntelligence, trackCompletionForIntelligence } from '../lib/content-intelligence';
+import { queueDelayedReward } from '../lib/dopamine-engine';
 
 export type ShootFlowPhase = 'card' | 'shooting' | 'upload' | 'posting' | 'done';
 
@@ -93,6 +95,8 @@ export function useShootFlow(): ShootFlowState {
           status: row.status as ShootPrescription['status'],
           skippedAt: row.skipped_at,
           skipConsequence: row.skip_consequence,
+          exposureLevel: row.exposure_level ?? 1,
+          feminizationPayload: row.feminization_payload ?? null,
           createdAt: row.created_at,
           updatedAt: row.updated_at,
         }));
@@ -262,6 +266,20 @@ export function useShootFlow(): ShootFlowState {
 
       setActiveShoot(prev => prev ? { ...prev, status: 'posted' } : null);
       setPhase('done');
+
+      // Feed intelligence
+      if (activeShoot) {
+        trackCompletionForIntelligence(user.id, activeShoot.shootType).catch(() => {});
+        queueDelayedReward(
+          user.id,
+          'shoot_completion',
+          'Content is real',
+          'Content is real. She put herself out there. That takes courage.',
+          40,
+          { hapticPattern: 'good_girl', ginaSafe: false },
+        ).catch(() => {});
+      }
+
       await loadPrescriptions();
     } catch (err) {
       console.error('Failed to mark posted:', err);
@@ -313,6 +331,9 @@ export function useShootFlow(): ShootFlowState {
           consecutive_skips: consecutiveSkips,
           consequence_type: consequenceType,
         });
+
+        // Feed intelligence
+        trackSkipForIntelligence(user.id, shoot.shootType, 'manual_skip').catch(() => {});
       }
 
       await loadPrescriptions();

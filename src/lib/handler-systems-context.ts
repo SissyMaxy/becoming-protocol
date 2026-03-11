@@ -48,6 +48,12 @@ import { buildRecycleContext } from './industry/content-recycler';
 import { buildVoiceContentContext } from './industry/voice-content';
 import { getInteractionSummary } from './content/fan-interaction-processor';
 import { getPollSummary } from './content/subscriber-poll-engine';
+import { getWeekendHandlerContext } from './weekend-engine';
+import { getActiveProtocol, getLastCompletedProtocol } from './post-release-engine';
+import { buildFeminizationContext, buildShootEscalationContext } from './feminization-target-engine';
+import { buildConfrontationContext } from './evidence-confrontation';
+import { buildContentIntelligenceContext, buildCalendarContext, buildOvernightSummaryForBriefing } from './content-intelligence-context';
+import { buildDopamineContext } from './dopamine-context';
 
 // ============================================
 // TYPES
@@ -67,6 +73,14 @@ export interface SystemsContext {
   passiveVoice: string;
   denialContent: string;
   industry: string;
+  weekendPostRelease: string;
+  feminization: string;
+  evidenceConfrontation: string;
+  shootEscalation: string;
+  contentIntelligence: string;
+  contentCalendar: string;
+  overnightSummary: string;
+  dopamine: string;
 }
 
 // ============================================
@@ -518,6 +532,69 @@ async function buildPassiveVoiceContext(userId: string): Promise<string> {
   }
 }
 
+async function buildWeekendPostReleaseContext(userId: string): Promise<string> {
+  try {
+    const [weekendCtx, activeProtocol, completedProtocol] = await Promise.allSettled([
+      getWeekendHandlerContext(userId),
+      getActiveProtocol(userId),
+      getLastCompletedProtocol(userId),
+    ]);
+
+    const w = weekendCtx.status === 'fulfilled' ? weekendCtx.value : null;
+    const active = activeProtocol.status === 'fulfilled' ? activeProtocol.value : null;
+    const completed = completedProtocol.status === 'fulfilled' ? completedProtocol.value : null;
+
+    if (!w && !active && !completed) return '';
+
+    const parts: string[] = [];
+    const dayOfWeek = new Date().getDay();
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+    if (w) {
+      const total = w.releasePattern.total_tracked;
+      const friPct = total > 0 ? Math.round((w.releasePattern.friday / total) * 100) : 0;
+      const satPct = total > 0 ? Math.round((w.releasePattern.saturday / total) * 100) : 0;
+      const sunPct = total > 0 ? Math.round((w.releasePattern.sunday / total) * 100) : 0;
+
+      parts.push(`WEEKEND AWARENESS: ${w.isWeekendMode ? 'ACTIVE' : 'inactive'} (${dayNames[dayOfWeek]}), tone: ${w.suggestedTone}`);
+
+      if (total > 0) {
+        parts.push(`  release pattern: Fri ${friPct}%, Sat ${satPct}%, Sun ${sunPct}% (${total} tracked)`);
+      }
+
+      parts.push(`  pre-commitment: ${w.hasActivePreCommitment ? 'YES' : 'none'}${w.lastPreCommitmentText ? ` — "${w.lastPreCommitmentText.slice(0, 80)}"` : ''}`);
+    }
+
+    if (active) {
+      const minutesLeft = Math.max(0, Math.ceil((new Date(active.lockoutExpiresAt).getTime() - Date.now()) / 60000));
+      const hoursLeft = Math.floor(minutesLeft / 60);
+      parts.push(`POST-RELEASE: ACTIVE lockout (${active.lockoutTier}), ${hoursLeft}h ${minutesLeft % 60}m remaining, ${active.deletionAttempts} deletion attempts, ${active.shameEntries.length} shame entries`);
+      parts.push(`  regret level: ${active.regretLevel}, intensity: ${active.intensity ?? '—'}`);
+    } else if (completed) {
+      parts.push(`POST-RELEASE: completed (${completed.lockoutTier}), ${completed.deletionAttempts} deletion attempts blocked, ${completed.shameEntries.length} shame entries, morning reframe: ${completed.morningReframeShown ? 'shown' : 'PENDING'}`);
+    }
+
+    // Friday-specific directives
+    if (dayOfWeek === 5 && !active) {
+      parts.push(`\nFRIDAY DIRECTIVES: Prescribe pre-commitment before 3pm. Frame as preparation, not prevention. Prescribe feminine prep (underwear, skincare, short edge). Set internal narration: "She is the one having sex tonight."`);
+    }
+
+    // Post-release directives
+    if (active) {
+      parts.push(`\nPOST-RELEASE DIRECTIVES: Caretaker tone. No judgment. Neurochemistry framing. First task: minimum viable (skincare or mood log). Reference pre-commitment gently if exists.`);
+    }
+
+    // Saturday/Sunday morning after protocol
+    if ((dayOfWeek === 0 || dayOfWeek === 6) && completed && !completed.morningReframeShown) {
+      parts.push(`\nMORNING-AFTER: Lead with evidence of survival. "Everything is still here. ${completed.deletionAttempts > 0 ? `${completed.deletionAttempts} deletion attempts blocked.` : ''}" Prescribe one anchoring task.`);
+    }
+
+    return parts.join('\n');
+  } catch {
+    return '';
+  }
+}
+
 async function buildIndustryContext(userId: string): Promise<string> {
   try {
     const [skip, fan, community, outreach, karma, recycle, voiceContent] = await Promise.allSettled([
@@ -556,7 +633,7 @@ async function buildIndustryContext(userId: string): Promise<string> {
  * All systems, maximum data density.
  */
 export async function buildFullSystemsContext(userId: string): Promise<string> {
-  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry] = await Promise.allSettled([
+  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine] = await Promise.allSettled([
     buildGinaContext(userId),
     buildContentContext(userId),
     buildVoiceContext(userId),
@@ -570,12 +647,24 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     buildPassiveVoiceContext(userId),
     buildDenialContentContext(userId),
     buildIndustryContext(userId),
+    buildWeekendPostReleaseContext(userId),
+    buildFeminizationContext(userId),
+    buildConfrontationContext(userId),
+    buildShootEscalationContext(userId),
+    buildContentIntelligenceContext(userId),
+    buildCalendarContext(userId),
+    buildOvernightSummaryForBriefing(userId),
+    buildDopamineContext(userId),
   ]);
 
   const blocks = [
+    feminization.status === 'fulfilled' ? feminization.value : '',
     gina.status === 'fulfilled' ? gina.value : '',
     content.status === 'fulfilled' ? content.value : '',
     denialContent.status === 'fulfilled' ? denialContent.value : '',
+    contentIntelligence.status === 'fulfilled' ? contentIntelligence.value : '',
+    contentCalendar.status === 'fulfilled' ? contentCalendar.value : '',
+    overnightSummary.status === 'fulfilled' ? overnightSummary.value : '',
     voice.status === 'fulfilled' ? voice.value : '',
     cam.status === 'fulfilled' ? cam.value : '',
     hypno.status === 'fulfilled' ? hypno.value : '',
@@ -586,6 +675,10 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     sleep.status === 'fulfilled' ? sleep.value : '',
     exercise.status === 'fulfilled' ? exercise.value : '',
     industry.status === 'fulfilled' ? industry.value : '',
+    shootEscalation.status === 'fulfilled' ? shootEscalation.value : '',
+    weekendPostRelease.status === 'fulfilled' ? weekendPostRelease.value : '',
+    evidenceConfrontation.status === 'fulfilled' ? evidenceConfrontation.value : '',
+    dopamine.status === 'fulfilled' ? dopamine.value : '',
   ].filter(Boolean);
 
   if (blocks.length === 0) return '';
@@ -597,7 +690,7 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
  * Content pipeline performance, voice progress, exercise, sleep.
  */
 export async function buildDebriefContext(userId: string): Promise<string> {
-  const [content, voice, exercise, sleep, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry] = await Promise.allSettled([
+  const [content, voice, exercise, sleep, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, contentIntelligence, dopamine] = await Promise.allSettled([
     buildContentContext(userId),
     buildVoiceContext(userId),
     buildExerciseContext(userId),
@@ -609,11 +702,18 @@ export async function buildDebriefContext(userId: string): Promise<string> {
     buildPassiveVoiceContext(userId),
     buildDenialContentContext(userId),
     buildIndustryContext(userId),
+    buildWeekendPostReleaseContext(userId),
+    buildFeminizationContext(userId),
+    buildConfrontationContext(userId),
+    buildContentIntelligenceContext(userId),
+    buildDopamineContext(userId),
   ]);
 
   const blocks = [
+    feminization.status === 'fulfilled' ? feminization.value : '',
     content.status === 'fulfilled' ? content.value : '',
     denialContent.status === 'fulfilled' ? denialContent.value : '',
+    contentIntelligence.status === 'fulfilled' ? contentIntelligence.value : '',
     voice.status === 'fulfilled' ? voice.value : '',
     hypno.status === 'fulfilled' ? hypno.value : '',
     sessionTelemetry.status === 'fulfilled' ? sessionTelemetry.value : '',
@@ -623,6 +723,9 @@ export async function buildDebriefContext(userId: string): Promise<string> {
     exercise.status === 'fulfilled' ? exercise.value : '',
     sleep.status === 'fulfilled' ? sleep.value : '',
     industry.status === 'fulfilled' ? industry.value : '',
+    weekendPostRelease.status === 'fulfilled' ? weekendPostRelease.value : '',
+    evidenceConfrontation.status === 'fulfilled' ? evidenceConfrontation.value : '',
+    dopamine.status === 'fulfilled' ? dopamine.value : '',
   ].filter(Boolean);
 
   if (blocks.length === 0) return '';

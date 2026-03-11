@@ -36,7 +36,7 @@ const DOMAIN_COLORS: Record<CorruptionDomain, string> = {
   gina: '#f59e0b',
   financial: '#3b82f6',
   autonomy: '#a855f7',
-  identity_language: '#ec4899',
+  identity_language: '#B06B61',
   therapist: '#06b6d4',
   content: '#ef4444',
 };

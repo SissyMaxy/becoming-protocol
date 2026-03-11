@@ -87,8 +87,8 @@ export function VoiceAffirmationGame({ onBack }: VoiceAffirmationGameProps) {
     capability: { label: 'Capability', color: '#22c55e' },
     worthiness: { label: 'Worthiness', color: '#f59e0b' },
     transformation: { label: 'Transformation', color: '#8b5cf6' },
-    gratitude: { label: 'Gratitude', color: '#ec4899' },
-    feminine: { label: 'Feminine', color: '#f472b6' },
+    gratitude: { label: 'Gratitude', color: '#B06B61' },
+    feminine: { label: 'Feminine', color: '#C4847A' },
     submission: { label: 'Submission', color: '#6366f1' },
   };
 

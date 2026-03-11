@@ -24,7 +24,7 @@ const TYPE_ICONS: Record<string, typeof Image> = {
 };
 
 const TYPE_COLORS: Record<string, string> = {
-  photo: '#ec4899',
+  photo: '#B06B61',
   voice_recording: '#8b5cf6',
   journal_entry: '#22c55e',
   milestone: '#f59e0b',

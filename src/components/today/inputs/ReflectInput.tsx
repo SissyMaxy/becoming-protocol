@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Check, Loader2 } from 'lucide-react';
 import { useBambiMode } from '../../../context/BambiModeContext';
+import { getReflectionPrompt } from '../../../lib/reflection-prompts';
 import type { CompletionData } from '../../../types/task-bank';
 
 interface ReflectInputProps {
   placeholder?: string;
+  /** Task domain — used for feminization reflection prompts when no placeholder */
+  domain?: string;
   intensity: number;
   isCompleting: boolean;
   onComplete: (data: CompletionData) => void;
@@ -14,9 +17,15 @@ interface ReflectInputProps {
 const MAX_CHARS = 500;
 const MIN_CHARS = 10;
 
-export function ReflectInput({ placeholder, intensity, isCompleting, onComplete, getGradient }: ReflectInputProps) {
+export function ReflectInput({ placeholder, domain, intensity, isCompleting, onComplete, getGradient }: ReflectInputProps) {
   const { isBambiMode } = useBambiMode();
   const [text, setText] = useState('');
+
+  // Use explicit placeholder, or feminization prompt for domain, or generic fallback
+  const effectivePlaceholder = useMemo(
+    () => placeholder || (domain ? getReflectionPrompt(domain) : 'Share your reflection...'),
+    [placeholder, domain],
+  );
 
   const trimmed = text.trim();
   const isReady = trimmed.length >= MIN_CHARS;
@@ -40,7 +49,7 @@ export function ReflectInput({ placeholder, intensity, isCompleting, onComplete,
             setText(e.target.value);
           }
         }}
-        placeholder={placeholder || 'Share your reflection...'}
+        placeholder={effectivePlaceholder}
         rows={3}
         className={`w-full px-3 py-2.5 rounded-xl border text-sm resize-none transition-colors ${
           isBambiMode

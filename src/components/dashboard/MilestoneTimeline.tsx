@@ -18,7 +18,7 @@ const TYPE_CONFIG: Record<string, { icon: typeof Trophy; color: string }> = {
   level_up: { icon: TrendingUp, color: '#22c55e' },
   gina_rung_advancement: { icon: TrendingUp, color: '#a855f7' },
   commitment_honored: { icon: CheckCircle, color: '#3b82f6' },
-  default: { icon: Trophy, color: '#ec4899' },
+  default: { icon: Trophy, color: '#B06B61' },
 };
 
 function getTimeAgo(date: Date): string {

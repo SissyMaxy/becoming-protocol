@@ -94,10 +94,10 @@ export const DOMAIN_MAX_LEVELS: Record<EscalationDomain, number> = {
 
 export const ESCALATION_DOMAIN_COLORS: Record<EscalationDomain, string> = {
   arousal: '#ef4444',        // Red - Heat, desire, the engine
-  sissification: '#f472b6',  // Rose - Sissy pink
+  sissification: '#C4847A',  // Rose - Sissy pink
   submission: '#6366f1',     // Indigo - Service, depth
   identity: '#8b5cf6',       // Purple - Core self
-  feminization: '#ec4899',   // Pink - Feminine appearance
+  feminization: '#B06B61',   // Pink - Feminine appearance
 };
 
 export const ESCALATION_DOMAIN_ICONS: Record<EscalationDomain, string> = {

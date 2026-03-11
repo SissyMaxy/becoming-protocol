@@ -62,7 +62,7 @@ export function EveningDebrief({
       className="fixed inset-0 z-[100] flex flex-col items-center justify-center px-6 select-none"
       style={{
         background: isBambiMode
-          ? 'linear-gradient(135deg, #fdf2f8 0%, #fce7f3 40%, #f5f3ff 100%)'
+          ? 'linear-gradient(135deg, #FAF7F5 0%, #FAF7F5 40%, #f5f3ff 100%)'
           : 'linear-gradient(135deg, #0d0d1a 0%, #1a0a2e 40%, #0a0a14 100%)',
       }}
     >

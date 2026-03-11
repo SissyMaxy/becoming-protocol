@@ -151,6 +151,8 @@ export interface ShootPrescription {
   status: ShootStatus;
   skippedAt: string | null;
   skipConsequence: string | null;
+  exposureLevel: number;
+  feminizationPayload: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -489,6 +491,8 @@ export interface DbShootPrescription {
   status: string;
   skipped_at: string | null;
   skip_consequence: string | null;
+  exposure_level: number;
+  feminization_payload: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -673,6 +677,8 @@ export function mapShootPrescription(row: DbShootPrescription): ShootPrescriptio
     status: row.status as ShootStatus,
     skippedAt: row.skipped_at,
     skipConsequence: row.skip_consequence,
+    exposureLevel: row.exposure_level ?? 1,
+    feminizationPayload: row.feminization_payload ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

@@ -24,8 +24,8 @@ export function Card({ children, className = '', glow = false, hover = false, ..
   const { isBambiMode } = useBambiMode();
 
   const baseClass = isBambiMode
-    ? `bg-white border-2 border-pink-200 rounded-3xl shadow-[0_4px_20px_rgba(255,105,180,0.3)] ${
-        hover ? 'hover:shadow-[0_10px_40px_rgba(255,105,180,0.35)] hover:border-pink-300 transition-all' : ''
+    ? `bg-white border-2 border-pink-200 rounded-3xl shadow-[0_4px_20px_rgba(196,132,122,0.3)] ${
+        hover ? 'hover:shadow-[0_10px_40px_rgba(196,132,122,0.35)] hover:border-pink-300 transition-all' : ''
       } ${glow ? 'animate-bambi-glow' : ''}`
     : `bg-protocol-surface border border-protocol-border rounded-lg`;
 
@@ -65,7 +65,7 @@ export function Button({
     if (isBambiMode) {
       switch (variant) {
         case 'primary':
-          return 'bg-gradient-to-r from-pink-400 to-pink-600 text-white font-medium rounded-full shadow-[0_4px_20px_rgba(255,105,180,0.3)] hover:shadow-[0_10px_40px_rgba(255,105,180,0.35)] transition-all';
+          return 'bg-gradient-to-r from-pink-400 to-pink-600 text-white font-medium rounded-full shadow-[0_4px_20px_rgba(196,132,122,0.3)] hover:shadow-[0_10px_40px_rgba(196,132,122,0.35)] transition-all';
         case 'secondary':
           return 'bg-pink-100 text-pink-600 font-medium rounded-full hover:bg-pink-200 transition-colors';
         case 'ghost':
@@ -208,7 +208,7 @@ export function Checkbox({ checked, onChange, disabled, className = '' }: Checkb
         disabled={disabled}
         className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
           checked
-            ? 'bg-gradient-to-r from-pink-400 to-pink-600 border-pink-400 shadow-[0_4px_20px_rgba(255,105,180,0.3)]'
+            ? 'bg-gradient-to-r from-pink-400 to-pink-600 border-pink-400 shadow-[0_4px_20px_rgba(196,132,122,0.3)]'
             : 'border-pink-300 hover:border-pink-400 hover:bg-pink-50'
         } ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${className}`}
       >
@@ -359,8 +359,8 @@ export function ProgressRing({
   const circumference = radius * 2 * Math.PI;
   const offset = circumference - (progress / 100) * circumference;
 
-  const bgColor = isBambiMode ? '#FFBCD9' : '#2a2a3a';
-  const fillColor = isBambiMode ? '#FF69B4' : '#a855f7';
+  const bgColor = isBambiMode ? '#E8CFC5' : '#2a2a3a';
+  const fillColor = isBambiMode ? '#C4847A' : '#a855f7';
 
   return (
     <div className={`relative ${className}`} style={{ width: size, height: size }}>

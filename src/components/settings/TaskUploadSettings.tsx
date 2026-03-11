@@ -481,7 +481,7 @@ export function TaskUploadSettings() {
   const primerTypeColors: Record<string, string> = {
     identity_erasure: '#dc2626',
     trigger_plant: '#8b5cf6',
-    arousal: '#ec4899',
+    arousal: '#B06B61',
     affirmation: '#10b981',
     hypno: '#6366f1',
     mantra: '#f59e0b',
@@ -496,8 +496,8 @@ export function TaskUploadSettings() {
   const domainColors: Record<string, string> = {
     movement: '#3b82f6',
     voice: '#8b5cf6',
-    skincare: '#ec4899',
-    style: '#f472b6',
+    skincare: '#B06B61',
+    style: '#C4847A',
     body_language: '#06b6d4',
     conditioning: '#f59e0b',
     identity: '#10b981',

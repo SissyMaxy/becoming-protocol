@@ -348,7 +348,7 @@ export function EveningJournal() {
           placeholder="Any moments where protocol life overlapped with home life?"
           value={sharedSpace}
           onChange={setSharedSpace}
-          accentColor="#ec4899"
+          accentColor="#B06B61"
         />
       </div>
 

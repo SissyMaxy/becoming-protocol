@@ -169,7 +169,7 @@ export function QuickStateStrip({
       {divider}
 
       {/* Gina: toggle icon + label */}
-      <button onClick={handleGina} className={`flex flex-col items-center gap-0.5 px-2 py-1 min-h-[44px] ${
+      <button onClick={handleGina} className={`flex flex-col items-center justify-center gap-0.5 px-2 py-1 min-h-[44px] ${
         isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'
       }`}>
         {localGina === 'home' && <Home className="w-4 h-4 text-purple-400" />}

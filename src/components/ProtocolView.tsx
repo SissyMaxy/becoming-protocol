@@ -104,7 +104,7 @@ function TaskItem({ task, onToggle, onSkip, onViewDetails, isSkipped, isBambi = 
       ? 'bg-pink-100 border-2 border-pink-300 rounded-2xl'
       : isSkipped
         ? 'bg-amber-50 border-2 border-amber-200 rounded-2xl'
-        : 'bg-white border-2 border-pink-200 rounded-2xl hover:border-pink-300 hover:shadow-[0_4px_20px_rgba(255,105,180,0.3)]'
+        : 'bg-white border-2 border-pink-200 rounded-2xl hover:border-pink-300 hover:shadow-[0_4px_20px_rgba(196,132,122,0.3)]'
     : task.completed
       ? 'bg-protocol-success/10 border-protocol-success/30'
       : isSkipped
@@ -161,12 +161,12 @@ function TaskItem({ task, onToggle, onSkip, onViewDetails, isSkipped, isBambi = 
                   backgroundColor: isSkipped
                     ? 'rgba(245, 158, 11, 0.2)'
                     : isBambi
-                      ? '#FFBCD9'
+                      ? '#E8CFC5'
                       : `${domainInfo.color}20`,
                   color: isSkipped
                     ? '#f59e0b'
                     : isBambi
-                      ? '#DB0A7B'
+                      ? '#96524A'
                       : domainInfo.color
                 }}
               >

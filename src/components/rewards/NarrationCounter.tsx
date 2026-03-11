@@ -55,12 +55,12 @@ function NarrationProgressRing({
         />
         <defs>
           <linearGradient id="narrationGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#ec4899" />
+            <stop offset="0%" stopColor="#B06B61" />
             <stop offset="100%" stopColor="#a855f7" />
           </linearGradient>
           <linearGradient id="narrationGradientPink" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#f472b6" />
-            <stop offset="100%" stopColor="#ec4899" />
+            <stop offset="0%" stopColor="#C4847A" />
+            <stop offset="100%" stopColor="#B06B61" />
           </linearGradient>
         </defs>
       </svg>

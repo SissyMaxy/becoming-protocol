@@ -420,6 +420,8 @@ export function TaskCardNew({
               onIncrement={onIncrement}
               getGradient={getIntensityGradient}
               captureFields={captureFields}
+              taskDomain={task.task.domain}
+              taskId={task.task.id}
             />
           </div>
         )}

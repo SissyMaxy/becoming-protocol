@@ -55,7 +55,7 @@ export type FeminizationDomain =
   | 'nutrition'
   | 'wigs';
 
-export type TaskCompletionType = 'binary' | 'duration' | 'count' | 'batch_count' | 'check_in' | 'confirm' | 'scale' | 'reflect' | 'log_entry' | 'session_complete';
+export type TaskCompletionType = 'binary' | 'duration' | 'count' | 'batch_count' | 'check_in' | 'confirm' | 'scale' | 'reflect' | 'log_entry' | 'session_complete' | 'photo' | 'streak' | 'tally';
 
 // ============================================
 // CAPTURE FIELD DEFINITIONS (for log_entry)
@@ -367,6 +367,10 @@ export interface CompletionData {
   count_value?: number;
   /** Reflect input: free text */
   reflection_text?: string;
+  /** Photo input: storage path and URL */
+  photo_storage_path?: string;
+  photo_url?: string;
+  photo_note?: string;
   /** Generic structured capture (for future log_entry, etc.) */
   fields?: Record<string, unknown>;
 }

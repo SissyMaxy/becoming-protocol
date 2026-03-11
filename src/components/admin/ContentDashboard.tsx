@@ -14,6 +14,7 @@ import {
 import { useContentPipeline } from '../../hooks/useContentPipeline';
 import { getCalendar, getDistributionHistory, getTopFans, getFanCount } from '../../lib/content-pipeline';
 import { useAuth } from '../../context/AuthContext';
+import { PerformanceLogInput } from '../content/PerformanceLogInput';
 import type {
   ContentCalendarDay,
   Distribution,
@@ -329,6 +330,9 @@ export function ContentDashboard({ onBack }: ContentDashboardProps) {
             <p className="text-white/30 text-xs">No fan data yet.</p>
           )}
         </section>
+
+        {/* Performance Logging */}
+        <PerformanceLogInput />
 
       </div>
     </div>

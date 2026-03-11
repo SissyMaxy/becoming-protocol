@@ -84,7 +84,7 @@ export function RewardDashboard({
       <div
         className={`${
           isBambiMode
-            ? 'bg-white border-2 border-pink-200 rounded-3xl shadow-[0_4px_20px_rgba(255,105,180,0.2)]'
+            ? 'bg-white border-2 border-pink-200 rounded-3xl shadow-[0_4px_20px_rgba(196,132,122,0.2)]'
             : 'bg-protocol-surface border border-protocol-border rounded-lg'
         } p-6`}
       >

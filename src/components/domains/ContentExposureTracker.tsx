@@ -43,9 +43,9 @@ const THEME_COLORS: Record<ContentTheme, string> = {
   denial: '#dc2626',
   hypno: '#a855f7',
   // Sissification domain - pink colors
-  sissification: '#f472b6',
-  sissy_training: '#ec4899',
-  turning_out: '#db2777',
+  sissification: '#C4847A',
+  sissy_training: '#B06B61',
+  turning_out: '#96524A',
   // Submission domain - indigo/purple colors
   service: '#6366f1',
   submission: '#a855f7',
@@ -55,7 +55,7 @@ const THEME_COLORS: Record<ContentTheme, string> = {
   gangbang: '#d946ef',
   gloryhole: '#f59e0b',
   // Feminization - pink
-  feminization: '#ec4899',
+  feminization: '#B06B61',
 };
 
 interface GroupedContent {

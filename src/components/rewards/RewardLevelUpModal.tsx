@@ -47,7 +47,7 @@ export function RewardLevelUpModal({
             className="absolute w-2 h-2 rounded-full animate-float"
             style={{
               backgroundColor: isBambiMode
-                ? 'rgba(255, 105, 180, 0.4)'
+                ? 'rgba(196, 132, 122, 0.4)'
                 : 'rgba(139, 92, 246, 0.4)',
               left: `${Math.random() * 100}%`,
               top: `${Math.random() * 100}%`,
@@ -71,7 +71,7 @@ export function RewardLevelUpModal({
           }`}
           style={{
             boxShadow: isBambiMode
-              ? '0 0 60px rgba(255, 105, 180, 0.4)'
+              ? '0 0 60px rgba(196, 132, 122, 0.4)'
               : '0 0 60px rgba(139, 92, 246, 0.3)',
           }}
         >

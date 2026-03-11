@@ -137,7 +137,7 @@ export function AddPatternModal({ onSubmit, onClose }: AddPatternModalProps) {
                   >
                     <IconComponent
                       className="w-5 h-5"
-                      style={{ color: isSelected ? color : isBambiMode ? '#ec4899' : '#9ca3af' }}
+                      style={{ color: isSelected ? color : isBambiMode ? '#B06B61' : '#9ca3af' }}
                     />
                     <span
                       className={`text-xs font-medium ${

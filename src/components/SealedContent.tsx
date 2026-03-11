@@ -29,7 +29,7 @@ const categoryIcons = {
 };
 
 const categoryColors = {
-  letter: '#f472b6',
+  letter: '#C4847A',
   insight: '#a78bfa',
   challenge: '#fbbf24',
   reward: '#34d399',
@@ -124,7 +124,7 @@ function LetterCard({ letter, onClick, isBambiMode }: LetterCardProps) {
       }`}
     >
       <div className="flex items-center gap-3">
-        <div className="p-2 rounded-lg" style={{ backgroundColor: '#ec489920' }}>
+        <div className="p-2 rounded-lg" style={{ backgroundColor: 'rgba(176, 107, 97, 0.13)' }}>
           {letter.isUnlocked ? (
             <Heart className="w-5 h-5 text-pink-500" />
           ) : (
@@ -165,7 +165,7 @@ interface ContentModalProps {
 
 function ContentModal({ title, category, content, onClose, isBambiMode }: ContentModalProps) {
   const Icon = categoryIcons[category as keyof typeof categoryIcons] || Heart;
-  const color = categoryColors[category as keyof typeof categoryColors] || '#ec4899';
+  const color = categoryColors[category as keyof typeof categoryColors] || '#B06B61';
 
   return (
     <div className={`fixed inset-0 z-50 overflow-y-auto animate-slide-up ${
@@ -353,7 +353,7 @@ export function SealedContentView() {
           <h3 className={`text-sm font-medium flex items-center gap-2 ${
             isBambiMode ? 'text-pink-600' : 'text-protocol-text-muted'
           }`}>
-            <Heart className="w-4 h-4" style={{ color: '#ec4899' }} />
+            <Heart className="w-4 h-4" style={{ color: '#B06B61' }} />
             Personal Letters
           </h3>
           {personalLetters.map(letter => (

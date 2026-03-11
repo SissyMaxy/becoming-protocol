@@ -242,7 +242,7 @@ export async function createShootFromChallenge(
       shot_list: [{ ref: 'challenge_custom', notes: description }],
       handler_note: `Fan challenge from ${ch.fan_username ?? 'anonymous'} on ${ch.platform ?? 'unknown'}. ${ch.handler_evaluation ?? ''}`,
       estimated_minutes: 10,
-      denial_badge_color: denialDay >= 5 ? '#EC4899' : denialDay >= 3 ? '#F59E0B' : '#3B82F6',
+      denial_badge_color: denialDay >= 5 ? '#B06B61' : denialDay >= 3 ? '#F59E0B' : '#3B82F6',
       content_level: 'implied',
       poll_id: null,
       scheduled_for: new Date().toISOString(),
@@ -297,6 +297,8 @@ export async function createShootFromChallenge(
     status: shoot.status as ShootPrescription['status'],
     skippedAt: shoot.skipped_at,
     skipConsequence: shoot.skip_consequence,
+    exposureLevel: shoot.exposure_level ?? 1,
+    feminizationPayload: shoot.feminization_payload ?? null,
     createdAt: shoot.created_at,
     updatedAt: shoot.updated_at,
   };

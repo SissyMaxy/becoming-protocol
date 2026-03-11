@@ -1,8 +1,7 @@
 /**
  * Bambi Mode Theme Configuration
  *
- * A completely different aesthetic for users in Bambi mode.
- * Hot pink, sparkles, hearts, and directive language.
+ * Warm blush / rose gold aesthetic. This is the default theme.
  */
 
 // ============================================
@@ -10,18 +9,18 @@
 // ============================================
 
 export const BAMBI_COLORS = {
-  // Primary pinks
+  // Primary warm blush / rose gold
   pink: {
-    50: '#FFF0F5',   // Lavender blush
-    100: '#FFE4EC',  // Pale pink
-    200: '#FFBCD9',  // Light pink
-    300: '#FF8DC7',  // Bubblegum
-    400: '#FF69B4',  // Hot pink (primary)
-    500: '#FF1493',  // Deep pink
-    600: '#DB0A7B',  // Dark pink
-    700: '#B0086A',  // Darker pink
-    800: '#8A0655',  // Very dark pink
-    900: '#5C0439',  // Deepest pink
+    50: '#FAF7F5',   // Warm ivory
+    100: '#F5ECE8',  // Pale blush
+    200: '#E8CFC5',  // Dusty rose
+    300: '#D4A89C',  // Light rose gold
+    400: '#C4847A',  // Rose gold (primary)
+    500: '#B06B61',  // Deep rose
+    600: '#96524A',  // Dark rose
+    700: '#7A3E38',  // Darker rose
+    800: '#5E2B27',  // Deep warm brown
+    900: '#3D2B2B',  // Warm dark brown
   },
 
   // Secondary colors
@@ -35,30 +34,30 @@ export const BAMBI_COLORS = {
 
   // Accents
   gold: {
-    300: '#FDE68A',
-    400: '#FBBF24',
-    500: '#F59E0B',
-    rose: '#E8A598',
+    300: '#F5DEB3',
+    400: '#E8C89C',
+    500: '#D4A574',
+    rose: '#D4A89C',
   },
 
   // Neutral
   white: '#FFFFFF',
-  cream: '#FFF8F5',
+  cream: '#FAF7F5',
 
   // Text
   text: {
-    primary: '#5C0439',    // Deep pink for headers
-    secondary: '#8A0655',   // Medium for body
-    muted: '#B0086A',       // Muted pink
-    light: '#FF8DC7',       // Light accent text
+    primary: '#3D2B2B',    // Warm dark brown for headers
+    secondary: '#5E2B27',   // Deep warm brown for body
+    muted: '#7A3E38',       // Muted rose
+    light: '#D4A89C',       // Light rose gold accent text
   },
 
   // Backgrounds
   bg: {
-    primary: '#FFF0F5',     // Main background
+    primary: '#FAF7F5',     // Warm ivory
     card: '#FFFFFF',        // Card background
-    surface: '#FFE4EC',     // Surface elements
-    glow: 'rgba(255, 105, 180, 0.3)', // Glow effect
+    surface: '#F5ECE8',     // Pale blush surface
+    glow: 'rgba(196, 132, 122, 0.3)', // Rose gold glow
   },
 };
 
@@ -228,7 +227,7 @@ export const BAMBI_GRADIENTS = {
   button: 'bg-gradient-to-r from-pink-400 to-pink-600',
 
   // Glow effect
-  glow: 'shadow-[0_0_30px_rgba(255,105,180,0.4)]',
+  glow: 'shadow-[0_0_30px_rgba(196,132,122,0.4)]',
 
   // Sparkle overlay
   sparkleOverlay: 'bg-[url("/sparkles.png")] bg-repeat opacity-10',
@@ -243,7 +242,7 @@ export const BAMBI_STYLES = {
   card: {
     base: 'rounded-3xl border-2 border-pink-200 bg-white shadow-lg shadow-pink-200/50',
     hover: 'hover:shadow-xl hover:shadow-pink-300/50 hover:border-pink-300',
-    glow: 'shadow-[0_0_20px_rgba(255,105,180,0.3)]',
+    glow: 'shadow-[0_0_20px_rgba(196,132,122,0.3)]',
   },
 
   // Button styles
@@ -347,8 +346,8 @@ export function getCelebrationMessage(
 // ============================================
 
 export const BAMBI_SESSION_MODE = {
-  // Dark pink background for focus
-  background: 'bg-gradient-to-b from-pink-900 via-pink-800 to-purple-900',
+  // Warm rose/mauve background for focus
+  background: 'bg-gradient-to-b from-pink-800 via-pink-700 to-purple-900',
 
   // Centered, large text
   textStyle: 'text-center text-2xl font-light text-pink-100 leading-relaxed',

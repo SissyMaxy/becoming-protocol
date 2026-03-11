@@ -62,7 +62,7 @@ export function IdentityOdometer({ state }: IdentityOdometerProps) {
           <path
             d={arcPath}
             fill="none"
-            stroke={isBambiMode ? '#fce7f3' : '#1e1e2e'}
+            stroke={isBambiMode ? '#FAF7F5' : '#1e1e2e'}
             strokeWidth="12"
             strokeLinecap="round"
           />

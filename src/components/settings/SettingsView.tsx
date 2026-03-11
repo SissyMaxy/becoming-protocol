@@ -334,7 +334,7 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
       icon: Vibrate,
       label: 'Lovense',
       description: 'Toy connection & rewards',
-      color: '#ec4899',
+      color: '#B06B61',
     },
     {
       id: 'equipment' as const,
@@ -348,7 +348,7 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
       icon: Clock,
       label: 'Time Anchors',
       description: 'Commitment milestones & service',
-      color: '#f472b6',
+      color: '#C4847A',
     },
     {
       id: 'reminders' as const,

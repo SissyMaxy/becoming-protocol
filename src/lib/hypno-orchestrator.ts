@@ -604,8 +604,8 @@ export function getPhaseColor(phase: HypnoPhase): string {
     intro: '#6b7280',
     induction: '#3b82f6',
     deepening: '#8b5cf6',
-    content: '#ec4899',
-    reinforcement: '#f472b6',
+    content: '#B06B61',
+    reinforcement: '#C4847A',
     emergence: '#06b6d4',
     completion: '#10b981',
   };

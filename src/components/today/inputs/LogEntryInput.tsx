@@ -197,9 +197,9 @@ export function LogEntryInput({
                   }`}
                   style={{
                     background: `linear-gradient(to right, ${
-                      isBambiMode ? '#ec4899' : '#10b981'
+                      isBambiMode ? '#B06B61' : '#10b981'
                     } ${pct}%, ${
-                      isBambiMode ? '#fce7f3' : '#1a1a2e'
+                      isBambiMode ? '#FAF7F5' : '#1a1a2e'
                     } ${pct}%)`,
                   }}
                 />

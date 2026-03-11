@@ -35,7 +35,7 @@ export function ProgressRing({ completed, total, size = 120 }: ProgressRingProps
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke={isBambiMode ? '#fce7f3' : 'rgba(255,255,255,0.1)'}
+          stroke={isBambiMode ? '#FAF7F5' : 'rgba(255,255,255,0.1)'}
           strokeWidth={strokeWidth}
         />
 
@@ -44,7 +44,7 @@ export function ProgressRing({ completed, total, size = 120 }: ProgressRingProps
           <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
             {isBambiMode ? (
               <>
-                <stop offset="0%" stopColor="#ec4899" />
+                <stop offset="0%" stopColor="#B06B61" />
                 <stop offset="100%" stopColor="#a855f7" />
               </>
             ) : (
@@ -75,7 +75,7 @@ export function ProgressRing({ completed, total, size = 120 }: ProgressRingProps
             cy={size / 2}
             r={radius}
             fill="none"
-            stroke={isBambiMode ? '#ec4899' : '#10b981'}
+            stroke={isBambiMode ? '#B06B61' : '#10b981'}
             strokeWidth={strokeWidth}
             strokeLinecap="round"
             className="opacity-50 blur-sm animate-pulse"

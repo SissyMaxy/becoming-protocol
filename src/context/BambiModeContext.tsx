@@ -1,13 +1,11 @@
 /**
  * Bambi Mode Context
  *
- * Provides theme and language configuration based on whether the user
- * has a "Bambi" variant name. Creates a completely different app experience
- * with hot pink colors, hearts, sparkles, and directive language.
+ * Theme and language configuration. Light/blush is the default theme.
+ * Dark mode is opt-in via localStorage toggle.
  */
 
-import React, { createContext, useContext, useMemo, useCallback, useState } from 'react';
-import { useProtocol } from './ProtocolContext';
+import React, { createContext, useContext, useMemo, useCallback, useState, useEffect } from 'react';
 import {
   BAMBI_COLORS,
   BAMBI_LANGUAGE,
@@ -44,6 +42,10 @@ interface BambiModeContextType {
   // Core detection
   isBambiMode: boolean;
 
+  // Dark mode toggle
+  isDarkMode: boolean;
+  setDarkMode: (dark: boolean) => void;
+
   // Theme
   theme: BambiTheme;
 
@@ -73,25 +75,28 @@ interface BambiModeContextType {
 }
 
 // ============================================
-// DETECTION FUNCTION
+// THEME PERSISTENCE
 // ============================================
 
-/**
- * Detect if user is in Bambi mode based on their name
- */
-export function detectBambiMode(userName: string | null): boolean {
-  if (!userName) return false;
-  const name = userName.toLowerCase().trim();
-  return (
-    name === 'bambi' ||
-    name === 'bambi sleep' ||
-    name === 'bimbo' ||
-    name.includes('bambi') ||
-    name.includes('bimbo') ||
-    name === 'princess' ||
-    name === 'doll' ||
-    name === 'dolly'
-  );
+const THEME_KEY = 'bp-theme-preference';
+
+function getStoredTheme(): 'light' | 'dark' {
+  try {
+    const stored = localStorage.getItem(THEME_KEY);
+    if (stored === 'dark') return 'dark';
+  } catch {}
+  return 'light'; // default
+}
+
+function storeTheme(theme: 'light' | 'dark') {
+  try {
+    localStorage.setItem(THEME_KEY, theme);
+  } catch {}
+}
+
+// Keep detectBambiMode for backwards compat (no-op now)
+export function detectBambiMode(_userName: string | null): boolean {
+  return getStoredTheme() === 'light';
 }
 
 // ============================================
@@ -180,10 +185,24 @@ const normalLanguage: BambiLanguage = {
 const BambiModeContext = createContext<BambiModeContextType | undefined>(undefined);
 
 export function BambiModeProvider({ children }: { children: React.ReactNode }) {
-  const { userName } = useProtocol();
+  const [themePreference, setThemePreference] = useState<'light' | 'dark'>(getStoredTheme);
   const [showingHearts, setShowingHearts] = useState(false);
 
-  const isBambiMode = useMemo(() => detectBambiMode(userName), [userName]);
+  // Light IS bambi mode (the default)
+  const isBambiMode = themePreference === 'light';
+  const isDarkMode = themePreference === 'dark';
+
+  const setDarkMode = useCallback((dark: boolean) => {
+    const next = dark ? 'dark' : 'light';
+    setThemePreference(next);
+    storeTheme(next);
+  }, []);
+
+  // Sync body bg when theme changes
+  useEffect(() => {
+    document.body.style.backgroundColor = isDarkMode ? '#0b0a10' : '#FAF7F5';
+    document.body.style.color = isDarkMode ? '#e8e6ed' : '#3D2B2B';
+  }, [isDarkMode]);
 
   // Get time-based greeting
   const getGreeting = useCallback(() => {
@@ -211,7 +230,7 @@ export function BambiModeProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
-  // Trigger hearts animation
+  // Trigger hearts animation — fires in light mode (the default)
   const triggerHearts = useCallback(() => {
     if (!isBambiMode) return;
     setShowingHearts(true);
@@ -265,6 +284,8 @@ export function BambiModeProvider({ children }: { children: React.ReactNode }) {
   const value: BambiModeContextType = useMemo(
     () => ({
       isBambiMode,
+      isDarkMode,
+      setDarkMode,
       theme: defaultTheme,
       language: isBambiMode ? BAMBI_LANGUAGE : normalLanguage,
       getMantra: getRandomMantra,
@@ -285,6 +306,8 @@ export function BambiModeProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       isBambiMode,
+      isDarkMode,
+      setDarkMode,
       getGreeting,
       getRandomEncouragement,
       cn,

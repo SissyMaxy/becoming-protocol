@@ -14,7 +14,9 @@ import {
   getMorningMessage,
   getEveningMessage,
 } from '../lib/bookend';
+import { getLastCompletedProtocol, markMorningReframeShown } from '../lib/post-release-engine';
 import type { BookendConfig, DaySummary } from '../types/bookend';
+import type { PostReleaseProtocol } from '../types/post-release';
 
 interface UseBookendsReturn {
   config: BookendConfig | null;
@@ -23,6 +25,7 @@ interface UseBookendsReturn {
   morningMessage: string;
   eveningMessage: string;
   daySummary: DaySummary | null;
+  lastProtocol: PostReleaseProtocol | null;
   dismissMorning: () => Promise<void>;
   dismissEvening: () => Promise<void>;
   triggerEvening: () => void;
@@ -40,6 +43,7 @@ export function useBookends(): UseBookendsReturn {
   const [morningMessage, setMorningMessage] = useState('');
   const [eveningMessage, setEveningMessage] = useState('');
   const [daySummary, setDaySummary] = useState<DaySummary | null>(null);
+  const [lastProtocol, setLastProtocol] = useState<PostReleaseProtocol | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const denialDay = userState?.denialDay ?? 0;
@@ -65,6 +69,12 @@ export function useBookends(): UseBookendsReturn {
           const msg = getMorningMessage(denialDay, streak);
           setMorningMessage(msg);
           setShowMorning(true);
+
+          // Fetch last completed post-release protocol for morning reframe
+          const protocol = await getLastCompletedProtocol(userId);
+          if (protocol) {
+            setLastProtocol(protocol);
+          }
         }
 
         // Check if evening bookend should auto-show (after bed time)
@@ -93,7 +103,12 @@ export function useBookends(): UseBookendsReturn {
     if (userId && morningMessage) {
       await recordBookendView(userId, 'morning', morningMessage).catch(() => {});
     }
-  }, [userId, morningMessage]);
+    // Mark post-release morning reframe as shown
+    if (userId && lastProtocol) {
+      markMorningReframeShown(userId, lastProtocol.id).catch(() => {});
+      setLastProtocol(null);
+    }
+  }, [userId, morningMessage, lastProtocol]);
 
   const dismissEvening = useCallback(async () => {
     setShowEvening(false);
@@ -122,6 +137,7 @@ export function useBookends(): UseBookendsReturn {
     morningMessage,
     eveningMessage,
     daySummary,
+    lastProtocol,
     dismissMorning,
     dismissEvening,
     triggerEvening,

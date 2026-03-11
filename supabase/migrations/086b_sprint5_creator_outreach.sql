@@ -35,12 +35,15 @@ CREATE TABLE IF NOT EXISTS creator_outreach (
 );
 
 ALTER TABLE creator_outreach ENABLE ROW LEVEL SECURITY;
-CREATE POLICY creator_outreach_user ON creator_outreach
-  FOR ALL USING (auth.uid() = user_id);
+DO $$ BEGIN
+  CREATE POLICY creator_outreach_user ON creator_outreach
+    FOR ALL USING (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE INDEX idx_creator_outreach_stage
+CREATE INDEX IF NOT EXISTS idx_creator_outreach_stage
   ON creator_outreach(user_id, relationship_stage);
-CREATE INDEX idx_creator_outreach_platform
+CREATE INDEX IF NOT EXISTS idx_creator_outreach_platform
   ON creator_outreach(user_id, platform);
 
 -- ============================================================

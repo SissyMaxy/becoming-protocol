@@ -107,7 +107,7 @@ export function TimeCapsulePrompt({
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: `radial-gradient(circle at center, rgba(236, 72, 153, ${glowOpacity}) 0%, transparent 50%)`,
+          background: `radial-gradient(circle at center, rgba(176, 107, 97, ${glowOpacity}) 0%, transparent 50%)`,
           transform: `scale(${pulseScale})`,
         }}
       />

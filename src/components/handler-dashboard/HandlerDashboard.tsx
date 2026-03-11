@@ -51,7 +51,7 @@ const tabs: { id: DashboardTab; icon: typeof Brain; label: string; color: string
   { id: 'plans', icon: Calendar, label: 'Plans', color: '#22c55e' },
   { id: 'resistance', icon: Shield, label: 'Resist', color: '#f97316' },
   { id: 'model', icon: User, label: 'Model', color: '#3b82f6' },
-  { id: 'experiments', icon: FlaskConical, label: 'A/B', color: '#ec4899' },
+  { id: 'experiments', icon: FlaskConical, label: 'A/B', color: '#B06B61' },
 ];
 
 interface HandlerDashboardProps {

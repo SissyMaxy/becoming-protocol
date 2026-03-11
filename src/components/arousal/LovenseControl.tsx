@@ -314,12 +314,12 @@ export function LovenseControl({
                 }`}
                 style={{
                   background: `linear-gradient(to right, ${
-                    isBambiMode ? '#ec4899' : '#8b5cf6'
-                  } 0%, ${isBambiMode ? '#ec4899' : '#8b5cf6'} ${
+                    isBambiMode ? '#B06B61' : '#8b5cf6'
+                  } 0%, ${isBambiMode ? '#B06B61' : '#8b5cf6'} ${
                     (currentIntensity / 20) * 100
-                  }%, ${isBambiMode ? '#fce7f3' : '#1e1b4b'} ${
+                  }%, ${isBambiMode ? '#FAF7F5' : '#1e1b4b'} ${
                     (currentIntensity / 20) * 100
-                  }%, ${isBambiMode ? '#fce7f3' : '#1e1b4b'} 100%)`,
+                  }%, ${isBambiMode ? '#FAF7F5' : '#1e1b4b'} 100%)`,
                 }}
               />
               <div className="flex justify-between mt-2">

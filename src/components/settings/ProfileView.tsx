@@ -93,7 +93,7 @@ export function ProfileView() {
       id: 'anchors',
       title: 'Time Anchors',
       icon: Clock,
-      color: '#f472b6',
+      color: '#C4847A',
       content: (
         <TimeRatchetsDisplay showEmpty />
       ),
@@ -116,7 +116,7 @@ export function ProfileView() {
       id: 'partner',
       title: 'Partner',
       icon: Users,
-      color: '#ec4899',
+      color: '#B06B61',
       content: profile.hasPartner ? (
         <div className="space-y-3">
           <ProfileField label="Partner Name" value={profile.partnerName} />

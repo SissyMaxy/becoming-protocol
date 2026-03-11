@@ -69,7 +69,7 @@ export const PATTERN_CATEGORY_ICONS: Record<PatternCategory, string> = {
 export const PATTERN_CATEGORY_COLORS: Record<PatternCategory, string> = {
   language: '#6366f1', // Indigo
   posture: '#8b5cf6', // Purple
-  behavior: '#ec4899', // Pink
+  behavior: '#B06B61', // Pink
   thought: '#a855f7', // Violet
   appearance: '#f59e0b', // Amber
 };

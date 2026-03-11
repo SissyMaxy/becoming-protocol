@@ -22,6 +22,7 @@ import { shouldHideTask } from './corruption-behaviors';
 import { getCopyStyle } from './handler-v2/types';
 import { selectTask, isTaskStillValid } from './rules-engine-v2';
 import type { UserStateForSelection } from './rules-engine-v2';
+import { queueDelayedReward } from './dopamine-engine';
 
 // ============================================
 // CONVERTERS
@@ -474,23 +475,54 @@ export async function completeTask(
   // If this is a reflect task, also create a linked journal entry
   if (context.captureData?.completion_type === 'reflect' && context.captureData?.reflection_text) {
     const today = getTodayDate();
+    const reflectText = context.captureData.reflection_text as string;
     supabase
       .from('daily_entries')
       .upsert({
         user_id: dailyTask.user_id,
         date: today,
-        handler_notes: context.captureData.reflection_text as string,
+        handler_notes: reflectText,
       }, { onConflict: 'user_id,date' })
       .then(({ error: journalError }) => {
         if (journalError) console.warn('[TaskBank] Failed to create journal entry from reflection:', journalError.message);
         else console.log('[TaskBank] Reflection linked to journal for', today);
       });
+
+    // Auto-create evidence for substantial reflections (>50 words)
+    const wordCount = reflectText.split(/\s+/).filter(Boolean).length;
+    if (wordCount > 50) {
+      supabase
+        .from('evidence')
+        .insert({
+          user_id: dailyTask.user_id,
+          date: today,
+          type: 'photo', // closest match — evidence table uses 'photo' | 'voice' | 'video'
+          domain: task.domain,
+          task_id: task.id,
+          file_name: `reflection_${dailyTaskId}`,
+          file_url: '',
+          notes: reflectText.slice(0, 200),
+        })
+        .then(({ error: evidenceError }) => {
+          if (evidenceError) console.warn('[TaskBank] Evidence auto-create from reflection failed:', evidenceError.message);
+        });
+    }
   }
 
   // Record task at domain level for infinite escalation tracking (fire-and-forget)
   recordTaskAtLevel(dailyTask.user_id, task.domain, task.intensity, true).catch(err => {
     console.warn('[TaskBank] Escalation tracking failed:', err);
   });
+
+  // Dopamine: delayed reward after task completion (10-20 min)
+  queueDelayedReward(
+    dailyTask.user_id,
+    'task_completion',
+    'She showed up',
+    `She showed up. +${pointsEarned} points.`,
+    15,
+    { pointsAwarded: pointsEarned, ginaSafe: true },
+  ).catch(() => {});
 
   return {
     success: true,

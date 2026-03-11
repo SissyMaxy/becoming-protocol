@@ -1,67 +1,70 @@
 /**
  * Appearance Settings
  *
- * Phase H1: Theme display, display options, preview.
- * BambiMode is auto-detected from preferred name — shown as read-only indicator.
+ * Theme toggle (Blush / Dark), display options, preview.
  */
 
-import { Moon, Sparkles, Type, Palette } from 'lucide-react';
+import { Moon, Sun, Type, Palette } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
 
 export function AppearanceSettings() {
-  const { isBambiMode } = useBambiMode();
+  const { isBambiMode, isDarkMode, setDarkMode } = useBambiMode();
 
   return (
     <div className="space-y-6">
-      {/* Current Theme */}
+      {/* Theme Toggle */}
       <div>
         <h3 className={`text-sm font-medium mb-3 ${
           isBambiMode ? 'text-pink-700' : 'text-gray-300'
         }`}>
           <Palette className="w-4 h-4 inline mr-1.5" />
-          Active Theme
+          Theme
         </h3>
         <div className="grid grid-cols-2 gap-3">
-          {/* Protocol Mode */}
-          <div className={`p-4 rounded-xl border text-center transition-all ${
-            !isBambiMode
-              ? 'border-purple-500 bg-purple-500/10 ring-2 ring-purple-500/30'
-              : 'border-gray-700 bg-protocol-surface opacity-50'
-          }`}>
-            <Moon className={`w-6 h-6 mx-auto mb-2 ${!isBambiMode ? 'text-purple-400' : 'text-gray-500'}`} />
-            <div className={`text-sm font-medium ${!isBambiMode ? 'text-purple-300' : 'text-gray-400'}`}>
-              Protocol
+          {/* Blush (Light) */}
+          <button
+            onClick={() => setDarkMode(false)}
+            className={`p-4 rounded-xl border text-center transition-all ${
+              !isDarkMode
+                ? 'border-pink-400 bg-pink-50 ring-2 ring-pink-300'
+                : 'border-gray-700 bg-protocol-surface opacity-50 hover:opacity-75'
+            }`}
+          >
+            <Sun className={`w-6 h-6 mx-auto mb-2 ${!isDarkMode ? 'text-pink-500' : 'text-gray-500'}`} />
+            <div className={`text-sm font-medium ${!isDarkMode ? 'text-pink-700' : 'text-gray-400'}`}>
+              Blush
             </div>
-            <div className="text-[10px] text-gray-500 mt-1">
-              Dark, focused
+            <div className={`text-[10px] mt-1 ${!isDarkMode ? 'text-pink-400' : 'text-gray-500'}`}>
+              Warm, soft
             </div>
-            {!isBambiMode && (
-              <div className="text-[10px] mt-2 text-purple-400 font-medium">Active</div>
-            )}
-          </div>
-
-          {/* Bambi Mode */}
-          <div className={`p-4 rounded-xl border text-center transition-all ${
-            isBambiMode
-              ? 'border-pink-400 bg-pink-50 ring-2 ring-pink-300'
-              : 'border-gray-700 bg-protocol-surface opacity-50'
-          }`}>
-            <Sparkles className={`w-6 h-6 mx-auto mb-2 ${isBambiMode ? 'text-pink-500' : 'text-gray-500'}`} />
-            <div className={`text-sm font-medium ${isBambiMode ? 'text-pink-700' : 'text-gray-400'}`}>
-              Bambi
-            </div>
-            <div className={`text-[10px] mt-1 ${isBambiMode ? 'text-pink-400' : 'text-gray-500'}`}>
-              Soft, playful
-            </div>
-            {isBambiMode && (
+            {!isDarkMode && (
               <div className="text-[10px] mt-2 text-pink-500 font-medium">Active</div>
             )}
-          </div>
-        </div>
+          </button>
 
-        <p className={`text-xs mt-2 ${isBambiMode ? 'text-pink-400' : 'text-gray-500'}`}>
-          Theme is auto-detected from your preferred name in profile settings.
-        </p>
+          {/* Dark */}
+          <button
+            onClick={() => setDarkMode(true)}
+            className={`p-4 rounded-xl border text-center transition-all ${
+              isDarkMode
+                ? 'border-purple-500 bg-purple-500/10 ring-2 ring-purple-500/30'
+                : isBambiMode
+                  ? 'border-pink-200 bg-white opacity-50 hover:opacity-75'
+                  : 'border-gray-700 bg-protocol-surface opacity-50 hover:opacity-75'
+            }`}
+          >
+            <Moon className={`w-6 h-6 mx-auto mb-2 ${isDarkMode ? 'text-purple-400' : 'text-gray-500'}`} />
+            <div className={`text-sm font-medium ${isDarkMode ? 'text-purple-300' : 'text-gray-400'}`}>
+              Dark
+            </div>
+            <div className="text-[10px] text-gray-500 mt-1">
+              Focused
+            </div>
+            {isDarkMode && (
+              <div className="text-[10px] mt-2 text-purple-400 font-medium">Active</div>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Display Options */}
@@ -120,7 +123,7 @@ export function AppearanceSettings() {
               className="h-full rounded-full"
               style={{
                 width: '60%',
-                backgroundColor: isBambiMode ? '#ec4899' : '#a855f7',
+                backgroundColor: isBambiMode ? '#C4847A' : '#a855f7',
               }}
             />
           </div>
