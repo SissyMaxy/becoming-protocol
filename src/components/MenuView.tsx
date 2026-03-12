@@ -8,7 +8,7 @@ import {
   ChevronRight, ChevronDown, Calendar, Wallet, Heart, Gift,
   HelpCircle, Flame, Sparkles, TrendingUp, Crown, Users, Film,
   Layers, Eye, Filter, Sprout, Zap, BarChart3, Activity, Mic,
-  LayoutDashboard, BookOpen, Bot, Dumbbell, Gem, ImageIcon, Monitor, AudioLines, Camera, Headphones
+  LayoutDashboard, BookOpen, Bot, Dumbbell, Gem, ImageIcon, Monitor, AudioLines, Camera, Headphones, Moon
 } from 'lucide-react';
 import { useBambiMode } from '../context/BambiModeContext';
 import { useOpacity } from '../context/OpacityContext';
@@ -20,7 +20,7 @@ type MenuItemId =
   | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills'
   | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous'
   | 'exercise' | 'her-world' | 'vault-swipe' | 'content-dashboard' | 'cam-session' | 'hypno-session'
-  | 'progress-page' | 'sealed-page';
+  | 'progress-page' | 'sealed-page' | 'log-release';
 
 interface MenuViewProps {
   onNavigate: (view: MenuItemId) => void;
@@ -350,6 +350,13 @@ export function MenuView({ onNavigate }: MenuViewProps) {
           label: 'Investment Ledger',
           description: 'Track your feminization investments',
           color: '#a855f7',
+        },
+        {
+          id: 'log-release',
+          icon: Moon,
+          label: 'Log Release',
+          description: 'Record a release event',
+          color: '#8b5cf6',
         },
         {
           id: 'wishlist',

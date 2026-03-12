@@ -492,16 +492,13 @@ export async function completeTask(
     const wordCount = reflectText.split(/\s+/).filter(Boolean).length;
     if (wordCount > 50) {
       supabase
-        .from('evidence')
+        .from('evidence_captures')
         .insert({
           user_id: dailyTask.user_id,
-          date: today,
-          type: 'photo', // closest match — evidence table uses 'photo' | 'voice' | 'video'
-          domain: task.domain,
-          task_id: task.id,
-          file_name: `reflection_${dailyTaskId}`,
+          evidence_type: 'journal_entry',
+          description: reflectText.slice(0, 200),
           file_url: '',
-          notes: reflectText.slice(0, 200),
+          metadata: { domain: task.domain, task_id: task.id, source: 'reflection' },
         })
         .then(({ error: evidenceError }) => {
           if (evidenceError) console.warn('[TaskBank] Evidence auto-create from reflection failed:', evidenceError.message);

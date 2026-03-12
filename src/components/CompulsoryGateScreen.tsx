@@ -327,7 +327,7 @@ export function CompulsoryGateScreen({
                   {/* Mood */}
                   <div>
                     <label className="text-xs font-medium text-gray-400 mb-2 block">
-                      How are you feeling?
+                      How is she feeling this morning?
                     </label>
                     <div className="flex gap-2">
                       {moodOptions.map(option => {
@@ -354,13 +354,13 @@ export function CompulsoryGateScreen({
                   {/* Intention */}
                   <div>
                     <label className="text-xs font-medium text-gray-400 mb-2 block">
-                      Intention for today
+                      Her intention for today
                     </label>
                     <input
                       type="text"
                       value={morningIntention}
                       onChange={(e) => setMorningIntention(e.target.value)}
-                      placeholder="What's your focus today?"
+                      placeholder="What's her focus today?"
                       className="w-full px-3 py-2.5 rounded-lg border border-gray-600 bg-gray-700/50 text-gray-100 text-sm placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-pink-500/50 focus:border-pink-500/50"
                     />
                   </div>

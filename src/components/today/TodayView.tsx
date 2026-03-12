@@ -201,6 +201,9 @@ export function TodayView() {
   // Active session - shows step-by-step guidance with vibration control
   const [activeSession, setActiveSession] = useState<PriorityAction | null>(null);
 
+  // Expanded task — shows TaskCardNew with CompletionInput inline (for reflect, photo, log_entry, etc.)
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+
   // Immersive edge session (v2)
   const [edgeSessionConfig, setEdgeSessionConfig] = useState<SessionConfig | null>(null);
 
@@ -573,6 +576,11 @@ export function TodayView() {
     }
   };
 
+  // Completion types that need CompletionInput (not binary/session)
+  const INLINE_COMPLETION_TYPES = new Set([
+    'reflect', 'photo', 'log_entry', 'scale', 'check_in', 'count', 'batch_count', 'tally',
+  ]);
+
   // Focused mode: start the priority action
   const handleFocusedStart = () => {
     if (!priorityAction) return;
@@ -591,9 +599,13 @@ export function TodayView() {
             originTaskId: task.id,
             prescribed: true,
           });
-        } else if (priorityAction.steps && priorityAction.steps.length > 0) {
+        } else if (INLINE_COMPLETION_TYPES.has(effectiveCompletionType)) {
+          // Show TaskCardNew with CompletionInput inline
+          setExpandedTaskId(task.id);
+        } else if (effectiveCompletionType === 'duration' && priorityAction.steps && priorityAction.steps.length > 0) {
           setActiveSession(priorityAction);
         } else {
+          // binary, confirm, streak — complete directly
           complete(task.id, true);
         }
       }
@@ -1264,15 +1276,39 @@ export function TodayView() {
                   {completedCount} of {totalCount} done
                 </p>
 
+                {/* Expanded task with CompletionInput (reflect, photo, log_entry, etc.) */}
+                {expandedTaskId && (() => {
+                  const expandedTask = todayTasks.find(t => t.id === expandedTaskId);
+                  if (!expandedTask) return null;
+                  return (
+                    <TaskCardNew
+                      key={expandedTask.id}
+                      task={expandedTask}
+                      onComplete={(feltGood, notes, data) => {
+                        complete(expandedTask.id, feltGood, notes, data as Record<string, unknown> | undefined);
+                        setExpandedTaskId(null);
+                      }}
+                      onSkip={() => {
+                        setExpandedTaskId(null);
+                        handleFocusedDismiss();
+                      }}
+                      isCompleting={false}
+                      isSkipping={false}
+                    />
+                  );
+                })()}
+
                 {/* Single prescribed action card — no browsing */}
-                <FocusedActionCard
-                  priorityAction={priorityAction}
-                  pendingCount={pendingTasks.length - 1}
-                  onStartAction={handleFocusedStart}
-                  onDismiss={handleFocusedDismiss}
-                  onShowAll={() => {}} // No-op: browsing removed
-                  isExpanded={false}
-                />
+                {!expandedTaskId && (
+                  <FocusedActionCard
+                    priorityAction={priorityAction}
+                    pendingCount={pendingTasks.length - 1}
+                    onStartAction={handleFocusedStart}
+                    onDismiss={handleFocusedDismiss}
+                    onShowAll={() => {}} // No-op: browsing removed
+                    isExpanded={false}
+                  />
+                )}
               </div>
             )}
 

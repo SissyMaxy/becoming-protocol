@@ -219,19 +219,19 @@ export interface EvidenceEntry {
 
 export async function getRecentEvidence(userId: string, limit = 12): Promise<EvidenceEntry[]> {
   const { data } = await supabase
-    .from('evidence')
-    .select('id, evidence_type, domain, description, content_url, created_at')
+    .from('evidence_captures')
+    .select('id, evidence_type, description, file_url, metadata, captured_at')
     .eq('user_id', userId)
-    .order('created_at', { ascending: false })
+    .order('captured_at', { ascending: false })
     .limit(limit);
 
   return (data || []).map(row => ({
     id: row.id,
     type: row.evidence_type,
-    domain: row.domain,
+    domain: (row.metadata as Record<string, unknown>)?.domain as string | null ?? null,
     description: row.description,
-    contentUrl: row.content_url,
-    createdAt: new Date(row.created_at),
+    contentUrl: row.file_url,
+    createdAt: new Date(row.captured_at),
   }));
 }
 
