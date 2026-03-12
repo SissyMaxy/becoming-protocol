@@ -1307,6 +1307,7 @@ export function TodayView() {
                     onDismiss={handleFocusedDismiss}
                     onShowAll={() => {}} // No-op: browsing removed
                     isExpanded={false}
+                    ginaHome={isGinaHome}
                   />
                 )}
               </div>

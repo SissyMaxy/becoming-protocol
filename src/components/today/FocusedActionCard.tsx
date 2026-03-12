@@ -111,6 +111,7 @@ interface FocusedActionCardProps {
   isExpanded: boolean;
   lovenseConnected?: boolean; // Show Lovense indicator when connected
   lovenseDeviceName?: string; // e.g. "Gush 2"
+  ginaHome?: boolean; // Suppress revealing domain labels when Gina is present
 }
 
 export function FocusedActionCard({
@@ -122,6 +123,7 @@ export function FocusedActionCard({
   isExpanded: _isExpanded,
   lovenseConnected,
   lovenseDeviceName,
+  ginaHome,
 }: FocusedActionCardProps) {
   const { isBambiMode } = useBambiMode();
   const [showPreview, setShowPreview] = useState(false);
@@ -234,7 +236,7 @@ export function FocusedActionCard({
 
         {/* Domain + time estimate + difficulty */}
         <div className="flex items-center flex-wrap gap-2 mb-4">
-          {priorityAction.domain && (
+          {priorityAction.domain && !ginaHome && (
             <span className={`text-xs px-2 py-1 rounded-lg ${
               isBambiMode ? 'bg-pink-100 text-pink-600' : 'bg-protocol-surface text-protocol-text-muted'
             }`}>

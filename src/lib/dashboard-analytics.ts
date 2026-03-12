@@ -336,37 +336,37 @@ export async function saveJournalEntry(
       .maybeSingle();
 
   if (existing) {
-        // Merge into existing journal JSONB
-      const prev = (existing.journal as Record<string, unknown>) || {};
-        const merged = { ...prev, ...journalPayload };
-        const { error } = await supabase
-          .from('daily_entries')
-          .update({ journal: merged })
-          .eq('id', existing.id);
+    // Merge into existing journal JSONB
+    const prev = (existing.journal as Record<string, unknown>) || {};
+    const merged = { ...prev, ...journalPayload };
+    const { error } = await supabase
+      .from('daily_entries')
+      .update({ journal: merged })
+      .eq('id', existing.id);
 
-      if (error) {
-              console.error('Failed to update journal entry:', error);
-              return false;
-      }
-        return true;
+    if (error) {
+      console.error('Failed to update journal entry:', error);
+      return false;
+    }
+    return true;
   }
 
   // No row yet — insert with required v1 columns
   const { error } = await supabase
-      .from('daily_entries')
-      .insert({
-              user_id: userId,
-              date,
-              intensity: 'normal',
-              tasks: [],
-              journal: journalPayload,
-      });
+    .from('daily_entries')
+    .insert({
+      user_id: userId,
+      date,
+      intensity: 'normal',
+      tasks: [],
+      journal: journalPayload,
+    });
 
   if (error) {
-        console.error('Failed to save journal entry:', error);
-        return false;
+    console.error('Failed to save journal entry:', error);
+    return false;
   }
-    return true;
+  return true;
 }
 
 // ============================================
