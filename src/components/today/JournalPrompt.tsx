@@ -1,48 +1,53 @@
 /**
  * JournalPrompt — Inline daily journal below task cards.
- * Shows a rotating Handler-framed prompt, textarea, and submit.
+ * Shows a rotating feminization-aware prompt, textarea with word count, and submit.
  * Saves to daily_entries via saveJournalEntry (UPSERT).
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import { Loader2, Pencil } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Loader2, Pencil, Check } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
 import { saveJournalEntry, getJournalEntries } from '../../lib/dashboard-analytics';
+import { getReflectionPrompt } from '../../lib/reflection-prompts';
 import type { HandlerMode } from '../../hooks/useUserState';
 
 interface JournalPromptProps {
   userId: string;
   handlerMode: HandlerMode;
-}
-
-const PROMPTS = [
-  "What did she notice today?",
-  "What felt different this morning?",
-  "What would Maxy do that David wouldn't?",
-  "What are you avoiding? Name it.",
-  "How did your body feel during practice?",
-  "What's one thing you did today that surprised you?",
-  "What did the Handler get right today?",
-];
-
-function getDailyPrompt(): string {
-  const dayOfYear = Math.floor(
-    (Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000
-  );
-  return PROMPTS[dayOfYear % PROMPTS.length];
+  currentDomain?: string;
 }
 
 function getTodayDate(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function JournalPrompt({ userId }: JournalPromptProps) {
+export function JournalPrompt({ userId, currentDomain }: JournalPromptProps) {
   const { isBambiMode } = useBambiMode();
   const [text, setText] = useState('');
   const [savedText, setSavedText] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+
+  // Stable daily prompt — use day-of-year as index so it rotates but stays consistent within a day
+  const prompt = useMemo(() => {
+    const dayOfYear = Math.floor(
+      (Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000
+    );
+    return getReflectionPrompt(currentDomain || '_default', dayOfYear);
+  }, [currentDomain]);
+
+  // Stable placeholder from domain prompts
+  const placeholder = useMemo(() => {
+    const dayOfYear = Math.floor(
+      (Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000
+    );
+    // Offset by 3 so placeholder differs from the main prompt
+    return getReflectionPrompt(currentDomain || '_default', dayOfYear + 3);
+  }, [currentDomain]);
+
+  const wordCount = text.trim() ? text.trim().split(/\s+/).filter(Boolean).length : 0;
 
   // Check for existing entry today
   const loadExisting = useCallback(async () => {
@@ -68,6 +73,8 @@ export function JournalPrompt({ userId }: JournalPromptProps) {
       setSavedText(text.trim());
       setText('');
       setIsEditing(false);
+      setShowConfirmation(true);
+      setTimeout(() => setShowConfirmation(false), 2500);
     }
   };
 
@@ -78,7 +85,6 @@ export function JournalPrompt({ userId }: JournalPromptProps) {
 
   if (!loaded) return null;
 
-  const prompt = getDailyPrompt();
   const showInput = !savedText || isEditing;
 
   return (
@@ -100,39 +106,54 @@ export function JournalPrompt({ userId }: JournalPromptProps) {
             value={text}
             onChange={e => setText(e.target.value)}
             rows={3}
-            placeholder="Write freely..."
+            placeholder={placeholder}
             className={`w-full rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 ${
               isBambiMode
                 ? 'bg-white border border-pink-200 text-gray-800 placeholder-pink-300 focus:ring-pink-400'
                 : 'bg-protocol-bg border border-protocol-border text-protocol-text placeholder-protocol-text-muted/50 focus:ring-protocol-accent'
             }`}
           />
-          <div className="flex justify-end mt-2">
-            {isEditing && (
+          <div className="flex items-center justify-between mt-2">
+            <span className={`text-[10px] ${
+              isBambiMode ? 'text-pink-300' : 'text-protocol-text-muted/50'
+            }`}>
+              {wordCount} {wordCount === 1 ? 'word' : 'words'}
+            </span>
+            <div className="flex items-center">
+              {isEditing && (
+                <button
+                  onClick={() => { setIsEditing(false); setText(''); }}
+                  className={`text-xs mr-3 px-3 py-1.5 rounded-lg ${
+                    isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'
+                  }`}
+                >
+                  Cancel
+                </button>
+              )}
               <button
-                onClick={() => { setIsEditing(false); setText(''); }}
-                className={`text-xs mr-3 px-3 py-1.5 rounded-lg ${
-                  isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'
+                onClick={handleSubmit}
+                disabled={!text.trim() || isSubmitting}
+                className={`text-xs px-4 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-40 ${
+                  isBambiMode
+                    ? 'bg-pink-500 text-white hover:bg-pink-600'
+                    : 'bg-protocol-accent text-white hover:bg-protocol-accent/80'
                 }`}
               >
-                Cancel
+                {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Log'}
               </button>
-            )}
-            <button
-              onClick={handleSubmit}
-              disabled={!text.trim() || isSubmitting}
-              className={`text-xs px-4 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-40 ${
-                isBambiMode
-                  ? 'bg-pink-500 text-white hover:bg-pink-600'
-                  : 'bg-protocol-accent text-white hover:bg-protocol-accent/80'
-              }`}
-            >
-              {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Log'}
-            </button>
+            </div>
           </div>
         </>
       ) : (
         <div>
+          {showConfirmation && (
+            <div className={`flex items-center gap-1.5 mb-2 text-xs ${
+              isBambiMode ? 'text-pink-500' : 'text-green-400'
+            }`}>
+              <Check className="w-3 h-3" />
+              Captured.
+            </div>
+          )}
           <p className={`text-sm leading-relaxed ${
             isBambiMode ? 'text-pink-700/70' : 'text-protocol-text/60'
           }`}>

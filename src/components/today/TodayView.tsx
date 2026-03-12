@@ -1447,6 +1447,7 @@ export function TodayView() {
           <JournalPrompt
             userId={user.id}
             handlerMode={userState?.handlerMode ?? 'director'}
+            currentDomain={priorityAction?.domain || completedTasks[completedTasks.length - 1]?.task?.domain}
           />
         </div>
       )}
