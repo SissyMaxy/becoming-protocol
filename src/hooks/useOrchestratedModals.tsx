@@ -97,8 +97,20 @@ export function useOrchestratedModals({
             prompt={recoveryPrompt}
             escalationLevel={recoveryEscalationLevel}
             consecutiveIgnores={recoveryConsecutiveIgnores}
-            onComplete={onCompleteRecovery}
-            onDismiss={onDismissRecovery}
+            onComplete={() => {
+              onCompleteRecovery();
+              if (modalIds.current.recovery) {
+                dismissModal(modalIds.current.recovery);
+                modalIds.current.recovery = null;
+              }
+            }}
+            onDismiss={() => {
+              onDismissRecovery();
+              if (modalIds.current.recovery) {
+                dismissModal(modalIds.current.recovery);
+                modalIds.current.recovery = null;
+              }
+            }}
           />
         ),
         onDismiss: onDismissRecovery,
@@ -119,8 +131,20 @@ export function useOrchestratedModals({
         component: (
           <InterventionNotification
             intervention={currentIntervention}
-            onComplete={onCompleteIntervention}
-            onDismiss={onDismissIntervention}
+            onComplete={() => {
+              onCompleteIntervention();
+              if (modalIds.current.intervention) {
+                dismissModal(modalIds.current.intervention);
+                modalIds.current.intervention = null;
+              }
+            }}
+            onDismiss={() => {
+              onDismissIntervention();
+              if (modalIds.current.intervention) {
+                dismissModal(modalIds.current.intervention);
+                modalIds.current.intervention = null;
+              }
+            }}
             onResponse={onRespondIntervention}
           />
         ),
@@ -142,9 +166,27 @@ export function useOrchestratedModals({
         component: (
           <ReminderModal
             reminder={currentReminder}
-            onRespond={onRespondReminder}
-            onSkip={onSkipReminder}
-            onDismiss={onDismissReminder}
+            onRespond={(rating, note) => {
+              onRespondReminder(rating, note);
+              if (modalIds.current.reminder) {
+                dismissModal(modalIds.current.reminder);
+                modalIds.current.reminder = null;
+              }
+            }}
+            onSkip={() => {
+              onSkipReminder();
+              if (modalIds.current.reminder) {
+                dismissModal(modalIds.current.reminder);
+                modalIds.current.reminder = null;
+              }
+            }}
+            onDismiss={() => {
+              onDismissReminder();
+              if (modalIds.current.reminder) {
+                dismissModal(modalIds.current.reminder);
+                modalIds.current.reminder = null;
+              }
+            }}
           />
         ),
         onDismiss: onDismissReminder,
