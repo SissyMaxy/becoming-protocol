@@ -172,7 +172,7 @@ export function HandlerProvider({
   children,
   // CHANGED: Default to false to minimize API calls - set to true only when needed
   autoGeneratePlan = false,
-  interventionCheckIntervalMs = 5 * 60 * 1000, // 5 minutes
+  interventionCheckIntervalMs = 15 * 60 * 1000, // 15 minutes
   // CHANGED: Default to false to minimize API calls - set to true only when needed
   enableBackgroundChecks = false,
 }: HandlerProviderProps) {

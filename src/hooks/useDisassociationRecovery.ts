@@ -128,7 +128,7 @@ interface RecoveryState {
 
 export function useDisassociationRecovery(options: UseDisassociationRecoveryOptions = {}) {
   const {
-    inactivityThresholdMs = 10 * 60 * 1000, // 10 minutes
+    inactivityThresholdMs = 20 * 60 * 1000, // 20 minutes
     checkIntervalMs = 60 * 1000, // 1 minute
     enabled = true,
     activeHoursStart = 8,
@@ -227,7 +227,7 @@ export function useDisassociationRecovery(options: UseDisassociationRecoveryOpti
           currentPrompt: prompt,
         }));
       }
-    }, 5 * 60 * 1000); // 5 minutes if ignored
+    }, 10 * 60 * 1000); // 10 minutes if ignored
 
   }, [state.consecutiveIgnores, state.escalationLevel, enabled, isWithinActiveHours, getPromptForLevel]);
 

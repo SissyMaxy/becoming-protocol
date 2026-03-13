@@ -80,10 +80,14 @@ interface ModalOrchestratorProviderProps {
   children: ReactNode;
 }
 
+/** Minimum ms between one modal dismissal and the next modal appearing */
+const GLOBAL_COOLDOWN_MS = 3 * 60 * 1000; // 3 minutes
+
 export function ModalOrchestratorProvider({ children }: ModalOrchestratorProviderProps) {
   const [queue, setQueue] = useState<QueuedModal[]>([]);
+  const [cooldownUntil, setCooldownUntil] = useState<number>(0);
 
-  // Current modal is the first in the sorted queue
+  // Current modal is the first in the sorted queue, respecting global cooldown
   const currentModal = useMemo(() => {
     if (queue.length === 0) return null;
 
@@ -94,8 +98,15 @@ export function ModalOrchestratorProvider({ children }: ModalOrchestratorProvide
       return a.queuedAt - b.queuedAt;
     });
 
-    return sorted[0];
-  }, [queue]);
+    const top = sorted[0];
+
+    // Critical modals bypass cooldown; everything else waits
+    if (top.priority !== 'critical' && Date.now() < cooldownUntil) {
+      return null;
+    }
+
+    return top;
+  }, [queue, cooldownUntil]);
 
   const showModal = useCallback((modal: Omit<QueuedModal, 'id' | 'queuedAt'>): string => {
     const id = `modal_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -124,12 +135,14 @@ export function ModalOrchestratorProvider({ children }: ModalOrchestratorProvide
     // Call onDismiss callback if provided
     currentModal.onDismiss?.();
 
-    // Remove from queue
+    // Remove from queue and start global cooldown
     setQueue(prev => prev.filter(m => m.id !== currentModal.id));
+    setCooldownUntil(Date.now() + GLOBAL_COOLDOWN_MS);
   }, [currentModal]);
 
   const dismissModal = useCallback((id: string) => {
     setQueue(prev => prev.filter(m => m.id !== id));
+    setCooldownUntil(Date.now() + GLOBAL_COOLDOWN_MS);
   }, []);
 
   const clearQueue = useCallback(() => {
@@ -140,6 +153,14 @@ export function ModalOrchestratorProvider({ children }: ModalOrchestratorProvide
   const hasModalFromSource = useCallback((source: string) => {
     return queue.some(m => m.source === source);
   }, [queue]);
+
+  // Re-evaluate queue when cooldown expires so queued modals appear
+  useEffect(() => {
+    if (cooldownUntil <= Date.now() || queue.length === 0) return;
+    const remaining = cooldownUntil - Date.now();
+    const timer = setTimeout(() => setCooldownUntil(0), remaining);
+    return () => clearTimeout(timer);
+  }, [cooldownUntil, queue.length]);
 
   const value: ModalOrchestratorContextType = {
     currentModal,
@@ -162,9 +183,7 @@ export function ModalOrchestratorProvider({ children }: ModalOrchestratorProvide
           className="fixed inset-0 z-[60]"
           onClick={currentModal.dismissOnBackdrop ? dismissCurrent : undefined}
         >
-          <div onClick={e => e.stopPropagation()}>
-            {currentModal.component}
-          </div>
+          {currentModal.component}
         </div>
       )}
     </ModalOrchestratorContext.Provider>
