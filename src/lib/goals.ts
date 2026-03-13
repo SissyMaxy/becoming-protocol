@@ -243,6 +243,42 @@ export async function completeGoal(input: GoalCompletionInput): Promise<DailyGoa
 
   if (completionError) throw completionError;
 
+  // Award points if provided
+  if (input.points && input.points > 0) {
+    const today = getTodayDate();
+
+    // Update daily_entries points (read-then-write on journal JSONB)
+    const { data: entry } = await supabase
+      .from('daily_entries')
+      .select('id, journal')
+      .eq('user_id', user.id)
+      .eq('date', today)
+      .maybeSingle();
+
+    if (entry) {
+      const prev = (entry.journal as Record<string, unknown>) || {};
+      const currentPoints = (prev.points_earned as number) || 0;
+      await supabase
+        .from('daily_entries')
+        .update({ journal: { ...prev, points_earned: currentPoints + input.points } })
+        .eq('id', entry.id);
+    }
+
+    // Increment tasks_completed_today on user_state as a proxy for activity
+    const { data: state } = await supabase
+      .from('user_state')
+      .select('id, tasks_completed_today')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (state) {
+      await supabase
+        .from('user_state')
+        .update({ tasks_completed_today: (state.tasks_completed_today || 0) + 1 })
+        .eq('id', state.id);
+    }
+  }
+
   // Update goal stats
   const { error: updateError } = await supabase
     .from('goals')

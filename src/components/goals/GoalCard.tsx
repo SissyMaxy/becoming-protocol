@@ -48,6 +48,7 @@ export const GoalCard = memo(function GoalCard({ goal, onComplete, onPause, onAb
         goalId: goal.goalId,
         drillId: selectedDrill.id,
         notes: notes.trim() || undefined,
+        points: selectedDrill.points || 0,
       });
     } finally {
       setCompleting(false);

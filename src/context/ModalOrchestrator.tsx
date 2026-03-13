@@ -129,11 +129,7 @@ export function ModalOrchestratorProvider({ children }: ModalOrchestratorProvide
   }, [currentModal]);
 
   const dismissModal = useCallback((id: string) => {
-    setQueue(prev => {
-      const modal = prev.find(m => m.id === id);
-      modal?.onDismiss?.();
-      return prev.filter(m => m.id !== id);
-    });
+    setQueue(prev => prev.filter(m => m.id !== id));
   }, []);
 
   const clearQueue = useCallback(() => {

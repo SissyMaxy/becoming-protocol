@@ -435,6 +435,7 @@ export function MenuView({ onNavigate }: MenuViewProps) {
                   isBambiMode ? 'border-pink-200' : 'border-protocol-border'
                 }`}>
                   {visibleItems.map((item, idx) => {
+                    if (!item?.icon) return null;
                     const Icon = item.icon;
                     return (
                       <button

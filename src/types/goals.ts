@@ -158,6 +158,8 @@ export interface GoalCompletionInput {
   drillId: string;
   notes?: string;
   feltGood?: boolean;
+  /** Points awarded for this drill completion */
+  points?: number;
 }
 
 export interface GoalAbandonInput {
