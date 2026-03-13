@@ -206,7 +206,8 @@ export class Handler {
       task.instruction,
       subtext,
       affirmation,
-      this.state
+      this.state,
+      task.durationMinutes
     );
   }
 

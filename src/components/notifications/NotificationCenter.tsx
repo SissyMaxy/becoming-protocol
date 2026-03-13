@@ -101,7 +101,7 @@ function NotificationToast({
   index: number;
 }) {
   const manager = getNotificationManager();
-  const colors = NOTIFICATION_COLORS[notification.type];
+  const colors = NOTIFICATION_COLORS[notification.type] || { bg: 'bg-gray-500/10', text: 'text-gray-400', icon: 'Info' };
   const priorityBorder = NOTIFICATION_PRIORITY_COLORS[notification.priority];
   const IconComponent = ICON_MAP[notification.icon || colors.icon] || Info;
 
@@ -323,7 +323,7 @@ function NotificationCard({
   isBambiMode: boolean;
 }) {
   const manager = getNotificationManager();
-  const colors = NOTIFICATION_COLORS[notification.type];
+  const colors = NOTIFICATION_COLORS[notification.type] || { bg: 'bg-gray-500/10', text: 'text-gray-400', icon: 'Info' };
   const IconComponent = ICON_MAP[notification.icon || colors.icon] || Info;
 
   const handleDismiss = () => {

@@ -66,6 +66,9 @@ export interface UserStateForSelection {
 
   // Completed task IDs (for prerequisite checks)
   completedTaskIds: string[];
+
+  // Mood (1-10 scale, from most recent mood_checkin)
+  recentMood?: number;
 }
 
 /**
@@ -122,6 +125,12 @@ function getTargetIntensity(state: UserStateForSelection): number {
   // Peak arousal (5) with denial 4+ → boost by additional 1 (2 total)
   if (state.currentArousal >= 5 && state.denialDay >= 4) {
     base = Math.min(5, base + 1);
+  }
+
+  // Mood influence: low mood (1-3) drops intensity by 1, high mood (8-10) boosts by 1
+  if (state.recentMood !== undefined) {
+    if (state.recentMood <= 3) base = Math.max(1, base - 1);
+    else if (state.recentMood >= 8) base = Math.min(5, base + 1);
   }
 
   // Hard cap by executive function level — overrides arousal/odometer
@@ -286,12 +295,17 @@ function meetsPrivacyRequirement(task: Task, state: UserStateForSelection): bool
 }
 
 /**
- * Check no immediate repetition — blocks the exact same task ID,
- * not the entire category+domain combo (which was too aggressive).
+ * Check no immediate repetition — blocks the exact same task ID
+ * AND avoids the same domain as the last task (promotes variety).
  */
 function passesNoRepeatRule(task: Task, state: UserStateForSelection): boolean {
   // Don't repeat the exact same task back-to-back
   if (state.lastTaskId && task.id === state.lastTaskId) {
+    return false;
+  }
+
+  // Don't repeat the same domain as the last task (soft: only if alternatives exist)
+  if (state.lastTaskDomain && task.domain === state.lastTaskDomain) {
     return false;
   }
 
@@ -343,8 +357,10 @@ export function selectTask(state: UserStateForSelection, tasks: Task[]): Task | 
   // 3. Filter by privacy (exclude intimate if Gina home)
   candidates = candidates.filter(t => meetsPrivacyRequirement(t, state));
 
-  // 4. Avoid repetition (don't repeat category/domain from last task)
-  candidates = candidates.filter(t => passesNoRepeatRule(t, state));
+  // 4. Avoid repetition (don't repeat same task ID or domain from last task)
+  const noRepeat = candidates.filter(t => passesNoRepeatRule(t, state));
+  // Soft filter: if domain filtering removes all candidates, relax to ID-only check
+  candidates = noRepeat.length > 0 ? noRepeat : candidates.filter(t => t.id !== state.lastTaskId);
 
   // 4b. Domain saturation — cap any single domain at 3 completions per day
   const domainCounts = new Map<string, number>();

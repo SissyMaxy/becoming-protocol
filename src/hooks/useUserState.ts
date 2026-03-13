@@ -162,7 +162,8 @@ function mapUpdateToDb(update: UserStateUpdate): Record<string, unknown> {
   if (update.sessionType !== undefined) dbUpdate.session_type = update.sessionType;
   if (update.edgeCount !== undefined) dbUpdate.edge_count = update.edgeCount;
   if (update.lastRelease !== undefined) dbUpdate.last_release = update.lastRelease;
-  // gina_home and gina_asleep are local-only state (not DB columns)
+  if (update.ginaHome !== undefined) dbUpdate.gina_home = update.ginaHome;
+  if (update.ginaAsleep !== undefined) dbUpdate.gina_asleep = update.ginaAsleep;
   if (update.estimatedExecFunction !== undefined) dbUpdate.estimated_exec_function = update.estimatedExecFunction;
   if (update.handlerMode !== undefined) dbUpdate.handler_mode = update.handlerMode;
   if (update.escalationLevel !== undefined) dbUpdate.escalation_level = update.escalationLevel;

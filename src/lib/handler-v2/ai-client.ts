@@ -349,7 +349,8 @@ Generate 2-sentence guidance. ${phase === 'peak' ? 'Commitment extraction moment
     instruction: string,
     subtext: string,
     affirmation: string,
-    state: UserState
+    state: UserState,
+    durationMinutes?: number
   ): Promise<{ instruction: string; subtext: string; affirmation: string; layer: 1 | 2 | 3; copy_style: CopyStyle }> {
     const layer = this.getLayerForAction('task_enhancement');
     const copy_style = getCopyStyle(state.currentArousal);
@@ -369,7 +370,7 @@ Generate 2-sentence guidance. ${phase === 'peak' ? 'Commitment extraction moment
 
     if (layer === 3) {
       try {
-        const enhanced = await this.enhanceTaskCopyAI(taskId, instruction, state);
+        const enhanced = await this.enhanceTaskCopyAI(taskId, instruction, state, durationMinutes);
         if (enhanced) {
           this.templates.setCached(cacheKey, enhanced);
           return {
@@ -404,7 +405,8 @@ Generate 2-sentence guidance. ${phase === 'peak' ? 'Commitment extraction moment
   private async enhanceTaskCopyAI(
     _taskId: string,
     instruction: string,
-    state: UserState
+    state: UserState,
+    durationMinutes?: number
   ): Promise<string | null> {
     const systemsCtx = await buildInterventionContext(state.userId);
     const copyStyle = getCopyStyle(state.currentArousal);
@@ -430,7 +432,7 @@ VOICE RULES:
 - In FRAMING and CONTEXT sentences (sub-lines, descriptions of why), use "she/her": "This is how she builds her voice." "She hasn't done skincare in 3 days." "Her body is changing."
 - The sub-line (second line) must reference SPECIFIC state: domain avoidance, streak context ("Day ${state.streakDays} — she's building something real"), denial state ("Day ${state.denialDay} denial sharpens everything"), or progress from systems data.
 - NEVER use generic sub-lines like "You've been slipping on protocol" or "Keep going." Every sub-line must contain a specific data point or domain reference.
-- CURRENT TIME: ${new Date().toLocaleTimeString()} — it is currently ${state.timeOfDay}. Do NOT reference "this morning" if it is afternoon or evening. Do NOT reference "tonight" if it is morning. Match all time references to actual current time.
+- CURRENT TIME: ${new Date().toLocaleTimeString()} — it is currently ${state.timeOfDay}. Do NOT reference "this morning" if it is afternoon or evening. Do NOT reference "tonight" if it is morning. Match all time references to actual current time.${durationMinutes ? `\n- DURATION CONSTRAINT: This task is ${durationMinutes} minutes. Do NOT say "next hour" for a 10-min task, or "quick 5 minutes" for a 60-min task. Match all time references to the actual ${durationMinutes}-minute duration.` : ''}
     `.trim();
 
     const response = await this.callAPI(prompt, 150);

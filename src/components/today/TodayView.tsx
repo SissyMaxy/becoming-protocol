@@ -1302,7 +1302,7 @@ export function TodayView() {
                 {!expandedTaskId && (
                   <FocusedActionCard
                     priorityAction={priorityAction}
-                    pendingCount={pendingTasks.length - 1}
+                    pendingCount={pendingTasks.filter(t => !dismissedActionIds.includes(t.id)).length - 1}
                     onStartAction={handleFocusedStart}
                     onDismiss={handleFocusedDismiss}
                     onShowAll={() => {}} // No-op: browsing removed

@@ -4,6 +4,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useProtocol } from '../context/ProtocolContext';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 import { useArousalState } from './useArousalState';
 import { useUserState } from './useUserState';
 import { useCorruption } from './useCorruption';
@@ -104,6 +105,9 @@ export function useTaskBank(): UseTaskBankReturn {
   // Undo state
   const [undoingTaskId, setUndoingTaskId] = useState<string | null>(null);
 
+  // Recent mood (fetched from mood_checkins for intensity influence)
+  const [recentMood, setRecentMood] = useState<number | undefined>(undefined);
+
   // Ref to track if initial load has happened
   const hasLoadedRef = useRef(false);
 
@@ -165,6 +169,16 @@ export function useTaskBank(): UseTaskBankReturn {
       }
 
       setTodayTasks(tasks);
+
+      // Fetch most recent mood score (for intensity influence)
+      const { data: moodRow } = await supabase
+        .from('mood_checkins')
+        .select('score')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (moodRow?.score != null) setRecentMood(moodRow.score);
 
       // Load stats
       const taskStats = await getTaskStats();
@@ -403,8 +417,9 @@ export function useTaskBank(): UseTaskBankReturn {
       completedTodayCategories: completedCategories,
       ownedItems: userState?.ownedItems ?? [],
       completedTaskIds: [],
+      recentMood,
     };
-  }, [user?.id, userState, todayTasks]);
+  }, [user?.id, userState, todayTasks, recentMood]);
 
   // Prescribe a single replacement task after completion
   const prescribeNext = useCallback(async (completedCategory: string, completedDomain: string) => {
