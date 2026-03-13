@@ -64,6 +64,8 @@ export function useScheduledAmbush(
 
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasScheduledRef = useRef(false);
+  // Track dismissed ambush IDs so polling doesn't re-show them
+  const dismissedIdsRef = useRef<Set<string>>(new Set());
 
   // Check for pending ambushes
   const checkForAmbush = useCallback(async () => {
@@ -72,7 +74,7 @@ export function useScheduledAmbush(
     try {
       const ambush = await getNextAmbush(user.id);
 
-      if (ambush && ambush.id !== currentAmbush?.id) {
+      if (ambush && ambush.id !== currentAmbush?.id && !dismissedIdsRef.current.has(ambush.id)) {
         // Mark as delivered
         await markAmbushDelivered(ambush.id);
         setCurrentAmbush(ambush);
@@ -149,8 +151,11 @@ export function useScheduledAmbush(
 
   // Dismiss without action (for UI purposes)
   const dismiss = useCallback(() => {
+    if (currentAmbush) {
+      dismissedIdsRef.current.add(currentAmbush.id);
+    }
     setCurrentAmbush(null);
-  }, []);
+  }, [currentAmbush]);
 
   // Refresh all data
   const refresh = useCallback(async () => {
