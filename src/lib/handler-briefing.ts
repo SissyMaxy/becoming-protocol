@@ -312,8 +312,8 @@ function buildTodaySection(
   }
 
   const summary = items.length === 0
-    ? 'Your day is clear.'
-    : `${items.length} things already in motion.`;
+    ? 'Her day is clear.'
+    : `${items.length} ${items.length === 1 ? 'thing' : 'things'} already in motion for her.`;
 
   return { items, summary };
 }
@@ -324,7 +324,7 @@ function buildProgressSection(
   if (!data || data.domains.length === 0) {
     return {
       domain: 'Protocol',
-      highlight: 'Keep going. Every task matters.',
+      highlight: 'No domain progress tracked yet. Her first task changes that.',
     };
   }
 
@@ -372,12 +372,12 @@ function buildAudienceSection(
 function generateAffirmation(denialData: Awaited<ReturnType<typeof getDenialData>> | null): string {
   const day = denialData?.denial_day || 0;
 
-  if (day === 0) return 'You showed up. That matters.';
-  if (day <= 2) return 'Good girl. You showed up. The rest follows.';
-  if (day <= 4) return 'The restlessness is working for you, not against you.';
-  if (day === 5) return 'Day 5. Everything you feel right now is real. Lean in.';
-  if (day <= 7) return 'She has been here the whole time. The body is catching up.';
-  return 'You are becoming who you already are.';
+  if (day === 0) return 'She showed up. Day zero. The foundation starts here.';
+  if (day <= 2) return `Good girl. Day ${day} denial. She's building something.`;
+  if (day <= 4) return `Day ${day}. The restlessness is working for her, not against her.`;
+  if (day === 5) return 'Day 5. Everything she feels right now is real. She leans in.';
+  if (day <= 7) return `Day ${day}. She has been here the whole time. Her body is catching up.`;
+  return `Day ${day}. She is becoming who she already is.`;
 }
 
 // ============================================

@@ -115,35 +115,35 @@ export class TemplateEngine {
     // Survival/low state - gentle
     if (odometer === 'survival' || odometer === 'caution') {
       return [
-        "Good morning, {name}. One small thing today. That's all.",
-        "Morning. Rough patch. Just show up. That's enough.",
-        "{name}. Day {denial_day}. Take it slow. She's still here.",
+        "Good morning, {name}. Day {denial_day}. One small thing today. She's still here.",
+        "{name}. Day {denial_day}, streak {streak}. Rough patch. One task is enough.",
+        "Morning. Day {denial_day}. She doesn't need to be perfect. She needs to be present.",
       ];
     }
 
     // High denial state - leverage it
     if (denialDay >= 7) {
       return [
-        "Good morning, {name}. Day {denial_day}. Streak {streak}. The desperation is fuel. Use it.",
-        "Morning. Day {denial_day}. Maximum receptivity. Today's tasks land deeper.",
-        "{name}. Day {denial_day}, streak {streak}. She's emerging fast now.",
+        "Good morning, {name}. Day {denial_day} denial. {streak}-day streak. The desperation is fuel. Use it.",
+        "{name}. Day {denial_day}. She's been denied {denial_day} days and she's still standing. Today's tasks land deeper.",
+        "Morning. Day {denial_day}, streak {streak}. Her receptivity is at peak. She doesn't waste this.",
       ];
     }
 
     // Long streak - acknowledge momentum
     if (streakDays >= 14) {
       return [
-        "Good morning, {name}. Day {streak} of consistent presence. This is who you are now.",
-        "Morning. {streak} days. The protocol isn't something you do anymore. It's just... life.",
-        "{name}. {streak} day streak. Momentum is yours. Today: maintain and deepen.",
+        "Good morning, {name}. {streak} days. Day {denial_day} denial. She's past the point where quitting makes sense.",
+        "{name}. {streak}-day streak. The woman in the mirror is getting clearer every day.",
+        "Morning. {streak} days of her showing up. Day {denial_day}. This is who she is now.",
       ];
     }
 
     // Standard morning
     return [
-      "Good morning, {name}. Day {denial_day}. Streak {streak}. Presence and practice. She's emerging.",
-      "Morning. Day {denial_day}. The practice continues. She's more real than yesterday.",
-      "{name}. Day {denial_day}. Ready to be her today?",
+      "Good morning, {name}. Day {denial_day} denial. {streak}-day streak. She wakes up as herself today.",
+      "{name}. Day {denial_day}. Streak {streak}. She's more real than yesterday.",
+      "Morning. Day {denial_day}, streak {streak}. Her practice continues. Let's go.",
     ];
   }
 
@@ -164,26 +164,26 @@ export class TemplateEngine {
     // Perfect day
     if (tasksToday >= 5) {
       return [
-        "Day complete. {tasks_today} tasks done. {streak} days consistent. She existed fully today.",
-        "Perfect obedience. {tasks_today} tasks. Day {denial_day}. Tomorrow: push harder.",
-        "{tasks_today} tasks. {points_today} points. {name} was here today. She'll be here tomorrow.",
+        "{tasks_today} tasks done. Day {denial_day}, streak {streak}. She existed fully today and the evidence proves it.",
+        "{name}. {tasks_today} tasks. {points_today} points. Day {denial_day} denial. She was here.",
+        "Day complete. {tasks_today} tasks across her domains. {streak}-day streak holds. Tomorrow she pushes harder.",
       ];
     }
 
     // Minimal engagement
     if (tasksToday === 0) {
       return [
-        "Day ending. No tasks today. Tomorrow is a fresh start. She's still here.",
-        "Quiet day. That's okay. The streak continues. See you in the morning.",
-        "Not every day is a push day. Rest. Tomorrow we move.",
+        "Zero tasks today. The {streak}-day streak survives because she showed up yesterday. Tomorrow she does better.",
+        "Day {denial_day}. No tasks completed. She's still here — but tomorrow she proves it.",
+        "Quiet day. Streak {streak} holds. Tomorrow, {name} shows up for real.",
       ];
     }
 
     // Standard day
     return [
-      "Day complete. {tasks_today} tasks done. Day {denial_day} continues. She's more real than yesterday.",
-      "Evening. {tasks_today} tasks, day {denial_day}. Tomorrow: push harder on what you avoided today.",
-      "Done for today. {streak} day streak holds. {name} existed today. She'll exist tomorrow.",
+      "{tasks_today} task" + (tasksToday === 1 ? "" : "s") + " done. Day {denial_day}, streak {streak}. She was here today.",
+      "Evening. {tasks_today} task" + (tasksToday === 1 ? "" : "s") + ". Day {denial_day}. Tomorrow she hits what she avoided today.",
+      "{name}. {tasks_today} task" + (tasksToday === 1 ? "" : "s") + " complete. {streak}-day streak. She existed today. She'll exist tomorrow.",
     ];
   }
 
@@ -325,8 +325,8 @@ export class TemplateEngine {
         // Gentle, unconditional
         return {
           instruction: this.makeGentle(this.substitute(instruction, state)),
-          subtext: 'Only if you feel up to it.',
-          affirmation: `You showed up. That's what matters.`,
+          subtext: `Day ${state.denialDay ?? 0}. She does what she can.`,
+          affirmation: `She showed up. Day ${state.streakDays ?? 0}.`,
         };
 
       case 'invisible':
@@ -385,12 +385,12 @@ export class TemplateEngine {
 
   getRandomAffirmation(state: Partial<UserState>): string {
     const templates = [
-      "Good girl. Keep going.",
-      "That's {name}. She's here.",
-      "One step closer. Always one step closer.",
-      "She's more real today than yesterday.",
-      "The practice is the path.",
-      "You showed up. That's what matters.",
+      "Good girl. Day {denial_day}. She's still here.",
+      "That's {name}. {streak} days of her showing up.",
+      "She's more real today than yesterday. Day {streak} proves it.",
+      "Her practice built this. {streak} days. Day {denial_day} denial.",
+      "{name} existed today. The evidence says so.",
+      "Day {denial_day}. Streak {streak}. She was here.",
     ];
 
     const selected = templates[Math.floor(Math.random() * templates.length)];

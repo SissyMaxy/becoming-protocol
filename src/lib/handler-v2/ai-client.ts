@@ -164,16 +164,28 @@ Deploy corruption tactics appropriate to these levels. Never reference corruptio
 
     const systemsCtx = await buildFullSystemsContext(state.userId);
 
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString();
+    const dayName = now.toLocaleDateString('en-US', { weekday: 'long' });
+
     return `
-Morning briefing for Maxy.
-State: Day ${state.denialDay} denial, ${state.streakDays} day streak.
+Morning briefing for Maxy. She is waking up as herself today.
+State: Day ${state.denialDay} denial, ${state.streakDays}-day streak, ${state.tasksCompletedToday || 0} tasks already today.
 Odometer: ${state.odometer}. Exec function: ${state.estimatedExecFunction}.
-${state.avoidedDomains.length > 0 ? `Avoiding: ${state.avoidedDomains.join(', ')}` : ''}
+${state.avoidedDomains.length > 0 ? `Avoiding: ${state.avoidedDomains.join(', ')} — address this.` : ''}
 ${state.consecutiveSurvivalDays > 0 ? `Survival mode: ${state.consecutiveSurvivalDays} days` : ''}
 ${lifestyleParts.length > 0 ? lifestyleParts.join('\n') : ''}
+Time: ${timeStr} (${dayName})
 ${this.getCorruptionContext()}${systemsCtx}
 
-Generate 3-sentence morning briefing. Acknowledge state, set intention, be direct. Apply corruption-level-appropriate directive style and framing. Reference systems data where actionable.
+Generate her morning briefing. 3-4 sentences. Structure:
+1. Acknowledge who she is today — reference her name, her streak, her denial day. "Good morning, Maxy. Day ${state.denialDay}. ${state.streakDays} days of her showing up."
+2. What's already in motion — not vague but specific: domains scheduled, tasks pending, lifestyle data above.
+3. One identity-forward line using "she/her" — about her progress, her trajectory: "She's ${state.streakDays > 7 ? 'past the point where quitting makes sense' : 'building the foundation'}."
+4. Set intention for the day — directive, not generic.
+
+NEVER output: "Keep going." / "Every task matters." / "You showed up. That matters." These are filler. Every sentence must contain a specific reference to her actual state.
+Use correct grammar: "1 thing" not "1 things". Apply corruption-level-appropriate directive style and framing. Reference systems data where actionable.
     `.trim();
   }
 
@@ -244,14 +256,20 @@ Generate 3-sentence morning briefing. Acknowledge state, set intention, be direc
     const systemsCtx = await buildDebriefContext(state.userId);
 
     return `
-Evening debrief for Maxy.
-Today: ${state.tasksCompletedToday} tasks, denial day ${state.denialDay}, streak ${state.streakDays}.
+Evening debrief for Maxy. Her day is closing.
+Today: ${state.tasksCompletedToday} task${state.tasksCompletedToday === 1 ? '' : 's'} completed, denial day ${state.denialDay}, streak ${state.streakDays}.
 Points earned: ${state.pointsToday}.
-${state.avoidedDomains.length > 0 ? `Avoided: ${state.avoidedDomains.join(', ')}` : ''}
+${state.avoidedDomains.length > 0 ? `She avoided: ${state.avoidedDomains.join(', ')} — name it.` : 'No avoidance today.'}
 ${lifestyleParts.length > 0 ? lifestyleParts.join('\n') : ''}
+Time: ${new Date().toLocaleTimeString()}
 ${this.getCorruptionContext()}${systemsCtx}
 
-Generate 3-sentence debrief. Acknowledge, note improvement area, encourage. Use corruption-appropriate tone and framing. Reference content/voice/exercise progress where relevant.
+Generate her evening debrief. 3 sentences:
+1. Acknowledge what she did today — specific domains from systems data, not just count. "She did ${state.tasksCompletedToday} task${state.tasksCompletedToday === 1 ? '' : 's'} — voice, skincare, and a journal entry."
+2. One thing to improve — reference the avoided domain or weakest area. Use "she" framing: "She skipped voice again. Tomorrow, she doesn't."
+3. Close with identity: "She was here today. The evidence says so." — rooted in specifics, not platitudes.
+
+NEVER: generic encouragement without specifics. Use corruption-appropriate tone and framing. Reference content/voice/exercise progress where relevant.
     `.trim();
   }
 
@@ -405,7 +423,14 @@ Task instruction: ${instruction}
 ${this.getCorruptionContext()}${systemsCtx}
 
 ${formatDirective}
-Generate personalized delivery. Address as Maxy or "you". Apply autonomy-level directive style and identity-level language.
+Generate personalized delivery for Maxy. Direct, commanding.
+
+VOICE RULES:
+- Address Maxy directly as "Maxy" or "you" in directive sentences — this is correct for commands.
+- In FRAMING and CONTEXT sentences (sub-lines, descriptions of why), use "she/her": "This is how she builds her voice." "She hasn't done skincare in 3 days." "Her body is changing."
+- The sub-line (second line) must reference SPECIFIC state: domain avoidance, streak context ("Day ${state.streakDays} — she's building something real"), denial state ("Day ${state.denialDay} denial sharpens everything"), or progress from systems data.
+- NEVER use generic sub-lines like "You've been slipping on protocol" or "Keep going." Every sub-line must contain a specific data point or domain reference.
+- CURRENT TIME: ${new Date().toLocaleTimeString()} — it is currently ${state.timeOfDay}. Do NOT reference "this morning" if it is afternoon or evening. Do NOT reference "tonight" if it is morning. Match all time references to actual current time.
     `.trim();
 
     const response = await this.callAPI(prompt, 150);
