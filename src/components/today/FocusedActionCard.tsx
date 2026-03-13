@@ -91,6 +91,7 @@ export interface PriorityAction {
   urgencyReason?: string; // "Streak at risk" / "Scheduled for now" / etc
   domain?: string;
   estimatedMinutes?: number;
+  completionType?: string; // Task completion type for display adaptation
   // Enhanced context for cognitive pre-loading
   steps?: ActionStep[]; // Numbered steps with time breakdowns
   prerequisites?: ActionPrerequisite[]; // What you'll need before starting
@@ -271,8 +272,9 @@ export function FocusedActionCard({
           )}
         </div>
 
-        {/* Preview toggle - shows what you'll actually do */}
-        {(priorityAction.steps || priorityAction.whatYoullDo || priorityAction.prerequisites) && (
+        {/* Preview toggle - shows what you'll actually do (hidden for binary tasks) */}
+        {priorityAction.completionType !== 'binary' && priorityAction.completionType !== 'confirm' &&
+         (priorityAction.steps || priorityAction.whatYoullDo || priorityAction.prerequisites) && (
           <button
             onClick={() => setShowPreview(!showPreview)}
             className={`w-full mb-3 py-2 px-3 rounded-lg text-sm flex items-center justify-between transition-colors ${
@@ -444,8 +446,13 @@ export function FocusedActionCard({
                   : 'bg-protocol-accent/70 hover:bg-protocol-accent text-white'
             }`}
           >
-            <Play className="w-5 h-5" />
-            {isAvailableNow ? "I'm Ready" : 'Start Anyway'}
+            {priorityAction.completionType === 'binary' || priorityAction.completionType === 'confirm'
+              ? <Check className="w-5 h-5" />
+              : <Play className="w-5 h-5" />
+            }
+            {priorityAction.completionType === 'binary' || priorityAction.completionType === 'confirm'
+              ? 'Done'
+              : isAvailableNow ? "I'm Ready" : 'Start Anyway'}
           </button>
 
           {/* Secondary: Not Now */}
@@ -1642,8 +1649,14 @@ export function getPriorityAction(
     const sorted = sortByTimeAppropriate(tasksWithTime);
     const best = sorted[0];
     const task = best.task;
+    const effectiveCompletionType = task.completionTypeOverride || task.task.completionType || 'binary';
     // Get detailed steps - always use task-specific breakdown
     const taskData = getTaskSteps(task.task.instruction, task.task.domain);
+    // Use real duration from DB; fall back to getTaskSteps estimate only for duration-type tasks
+    const realMinutes = task.task.durationMinutes;
+    const estimatedMinutes = effectiveCompletionType === 'binary' || effectiveCompletionType === 'confirm'
+      ? undefined // Binary tasks don't show duration
+      : realMinutes || taskData.estimatedMinutes;
 
     return {
       type: 'task',
@@ -1651,13 +1664,14 @@ export function getPriorityAction(
       title: task.enhancedInstruction || task.task.instruction,
       description: task.enhancedSubtext || task.task.subtext,
       domain: task.task.domain,
-      estimatedMinutes: taskData.estimatedMinutes,
+      estimatedMinutes,
+      completionType: effectiveCompletionType,
       steps: taskData.steps,
       prerequisites: taskData.prerequisites,
       references: taskData.references,
       bestTime: best.bestTime,
       difficulty: task.task.intensity,
-      isComplex: true, // Always show preview since we now have detailed steps
+      isComplex: effectiveCompletionType !== 'binary' && effectiveCompletionType !== 'confirm',
       copyStyle: task.copyStyle,
     };
   }
