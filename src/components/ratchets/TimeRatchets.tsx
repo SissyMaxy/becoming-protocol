@@ -16,20 +16,20 @@ interface TimeRatchetCardProps {
 
 function TimeRatchetCard({ icon, label, value, sublabel, accentColor }: TimeRatchetCardProps) {
   return (
-    <div className={`bg-protocol-surface/50 border border-protocol-border rounded-xl p-4 ${accentColor}`}>
+    <div className={`bg-protocol-surface border border-protocol-border rounded-xl p-4 ${accentColor}`}>
       <div className="flex items-start gap-3">
-        <div className="p-2 rounded-lg bg-white/10">
+        <div className="p-2 rounded-lg bg-white/5">
           {icon}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-xs text-protocol-text-muted uppercase tracking-wide mb-1">
+          <p className="text-xs text-white/60 uppercase tracking-wide mb-1">
             {label}
           </p>
-          <p className="text-lg font-semibold text-protocol-text truncate">
+          <p className="text-lg font-semibold text-white truncate">
             {value}
           </p>
           {sublabel && (
-            <p className="text-xs text-protocol-text-muted mt-0.5">
+            <p className="text-xs text-white/50 mt-0.5">
               {sublabel}
             </p>
           )}
@@ -126,9 +126,9 @@ export function TimeRatchetsDisplay({ compact = false, showEmpty = false }: Time
 
   if (cards.length === 0 && showEmpty) {
     return (
-      <div className="bg-protocol-surface/30 border border-dashed border-protocol-border rounded-xl p-6 text-center">
-        <Clock className="w-8 h-8 text-protocol-text-muted mx-auto mb-2" />
-        <p className="text-sm text-protocol-text-muted">
+      <div className="bg-protocol-surface border border-dashed border-protocol-border rounded-xl p-6 text-center">
+        <Clock className="w-8 h-8 text-white/40 mx-auto mb-2" />
+        <p className="text-sm text-white/50">
           Set your anchor dates in Settings to track your journey
         </p>
       </div>
