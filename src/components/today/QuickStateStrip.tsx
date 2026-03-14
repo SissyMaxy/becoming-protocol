@@ -77,9 +77,13 @@ export function QuickStateStrip({
 }: QuickStateStripProps) {
   const { isBambiMode } = useBambiMode();
   const [localMoodIdx, setLocalMoodIdx] = useState<number | null>(moodToIndex(currentMood));
+  const [localEnergy, setLocalEnergy] = useState<ExecFunction>(currentExecFunction);
+  const [localArousal, setLocalArousal] = useState<number>(currentArousal);
   const [localGina, setLocalGina] = useState<GinaState>(deriveGinaState(ginaHome, ginaAsleep));
 
   useEffect(() => { setLocalMoodIdx(moodToIndex(currentMood)); }, [currentMood]);
+  useEffect(() => { setLocalEnergy(currentExecFunction); }, [currentExecFunction]);
+  useEffect(() => { setLocalArousal(currentArousal); }, [currentArousal]);
   useEffect(() => { setLocalGina(deriveGinaState(ginaHome, ginaAsleep)); }, [ginaHome, ginaAsleep]);
 
   const handleMood = (idx: number) => {
@@ -89,13 +93,16 @@ export function QuickStateStrip({
   };
 
   const handleEnergy = () => {
-    const nextIdx = (EXEC_CYCLE.indexOf(currentExecFunction) + 1) % EXEC_CYCLE.length;
-    onUpdate({ execFunction: EXEC_CYCLE[nextIdx] });
+    const nextIdx = (EXEC_CYCLE.indexOf(localEnergy) + 1) % EXEC_CYCLE.length;
+    const next = EXEC_CYCLE[nextIdx];
+    setLocalEnergy(next);
+    onUpdate({ execFunction: next });
     onStateChanged?.();
   };
 
   const handleArousal = () => {
-    const next = (currentArousal + 1) % 6;
+    const next = (localArousal + 1) % 6;
+    setLocalArousal(next);
     onUpdate({ arousal: next });
     onStateChanged?.();
   };
@@ -145,11 +152,11 @@ export function QuickStateStrip({
           <div
             key={bar}
             className={`w-1.5 rounded-sm transition-all ${
-              bar < EXEC_BARS[currentExecFunction]
-                ? `${EXEC_COLORS[currentExecFunction]} bg-current h-${bar === 0 ? '2' : bar === 1 ? '3' : '4'}`
-                : isBambiMode ? 'bg-pink-200 h-2' : 'bg-protocol-border h-2'
+              bar < EXEC_BARS[localEnergy]
+                ? `${EXEC_COLORS[localEnergy]} bg-current`
+                : isBambiMode ? 'bg-pink-200' : 'bg-protocol-border'
             }`}
-            style={{ height: bar < EXEC_BARS[currentExecFunction] ? `${(bar + 1) * 5 + 3}px` : '8px' }}
+            style={{ height: bar < EXEC_BARS[localEnergy] ? `${(bar + 1) * 5 + 3}px` : '8px' }}
           />
         ))}
       </button>
@@ -158,11 +165,11 @@ export function QuickStateStrip({
 
       {/* Arousal: flame + number */}
       <button onClick={handleArousal} className="flex items-center gap-1 px-2 py-1 min-h-[44px]">
-        <Flame className={`w-4 h-4 ${AROUSAL_COLORS[currentArousal]} ${currentArousal >= 4 ? 'animate-pulse' : ''}`} />
+        <Flame className={`w-4 h-4 ${AROUSAL_COLORS[localArousal]} ${localArousal >= 4 ? 'animate-pulse' : ''}`} />
         <span className={`text-xs font-bold tabular-nums ${
           isBambiMode ? 'text-pink-700' : 'text-protocol-text'
         }`}>
-          {currentArousal}
+          {localArousal}
         </span>
       </button>
 
