@@ -13,6 +13,7 @@ import { useState } from 'react';
 import { Play, ChevronDown, Target, Sparkles, Clock, Zap, Eye, Sun, Sunset, Moon, Lock, Smartphone, Headphones, Check, Package, Timer, X, Vibrate, ExternalLink } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
 import type { DailyTask } from '../../types/task-bank';
+import { inferCompletionType } from '../../types/task-bank';
 import type { TodaysGoal } from '../../types/goals';
 
 // Time periods for filtering
@@ -1502,7 +1503,10 @@ export function getPriorityAction(
     const sorted = sortByTimeAppropriate(tasksWithTime);
     const best = sorted[0];
     const task = best.task;
-    const effectiveCompletionType = task.completionTypeOverride || task.task.completionType || 'binary';
+    const displayTitle = task.enhancedInstruction || task.task.instruction;
+    const resolvedType = task.completionTypeOverride || task.task.completionType || 'binary';
+    // If DB says binary, check if the instruction text suggests something richer
+    const effectiveCompletionType = resolvedType === 'binary' ? inferCompletionType(displayTitle) : resolvedType;
     // Use real duration from DB only — no fake estimates
     const realMinutes = task.task.durationMinutes;
     const estimatedMinutes = effectiveCompletionType === 'binary' || effectiveCompletionType === 'confirm'

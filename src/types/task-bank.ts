@@ -57,6 +57,36 @@ export type FeminizationDomain =
 
 export type TaskCompletionType = 'binary' | 'duration' | 'count' | 'batch_count' | 'check_in' | 'confirm' | 'scale' | 'reflect' | 'log_entry' | 'session_complete' | 'photo' | 'streak' | 'tally';
 
+/**
+ * Infer completion type from instruction text when the DB value is missing or wrong.
+ * Used as a safety net — DB value takes precedence when present and non-binary.
+ */
+export function inferCompletionType(instruction: string): TaskCompletionType {
+  const lower = instruction.toLowerCase();
+  if (lower.includes('write') || lower.includes('describe') || lower.includes('tell me') ||
+      lower.includes('list ') || lower.includes('confess') || lower.includes('name ') ||
+      lower.includes('reflect') || lower.includes('journal')) {
+    return 'reflect';
+  }
+  if (lower.includes('report') || lower.includes('log ') || lower.includes('how many') ||
+      lower.includes('how much') || lower.includes('check in') || lower.includes('check-in')) {
+    return 'log_entry';
+  }
+  if (lower.includes('practice') || lower.includes('session') || lower.includes('routine') ||
+      lower.includes('exercise') || lower.includes(' minutes') || lower.includes(' mins')) {
+    return 'duration';
+  }
+  if (lower.includes('photo') || lower.includes('selfie') || lower.includes('capture') ||
+      lower.includes('take a pic')) {
+    return 'photo';
+  }
+  if (lower.includes('rate ') || lower.includes('on a scale') || lower.includes('1-10') ||
+      lower.includes('1 to 10')) {
+    return 'scale';
+  }
+  return 'binary';
+}
+
 // ============================================
 // CAPTURE FIELD DEFINITIONS (for log_entry)
 // ============================================

@@ -9,6 +9,7 @@ import { Loader2, RefreshCw, AlertTriangle, Heart, Target, Moon, FileText, Chevr
 import { useBambiMode } from '../../context/BambiModeContext';
 import { useOpacity } from '../../context/OpacityContext';
 import { supabase } from '../../lib/supabase';
+import { inferCompletionType } from '../../types/task-bank';
 import { useTaskBank } from '../../hooks/useTaskBank';
 import { useArousalState } from '../../hooks/useArousalState';
 import { useWeekend } from '../../hooks/useWeekend';
@@ -590,7 +591,9 @@ export function TodayView() {
     } else if (priorityAction.type === 'task') {
       const task = todayTasks.find(t => t.id === priorityAction.id);
       if (task) {
-        const effectiveCompletionType = task.completionTypeOverride || task.task.completionType;
+        const resolvedType = task.completionTypeOverride || task.task.completionType;
+        const displayText = task.enhancedInstruction || task.task.instruction;
+        const effectiveCompletionType = resolvedType === 'binary' ? inferCompletionType(displayText) : resolvedType;
         const isEdgeSession = effectiveCompletionType === 'session_complete' && !isGinaHome;
         if (isEdgeSession) {
           setEdgeSessionConfig({

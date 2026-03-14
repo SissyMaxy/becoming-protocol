@@ -9,6 +9,7 @@ import { useBambiMode } from '../../context/BambiModeContext';
 import { ESCALATION_DOMAIN_COLORS } from '../../types/escalation';
 import type { EscalationDomain } from '../../types/escalation';
 import type { DailyTask, CompletionData } from '../../types/task-bank';
+import { inferCompletionType } from '../../types/task-bank';
 import { CompletionInput } from './CompletionInput';
 
 // Helper to navigate to wishlist
@@ -92,12 +93,15 @@ export function TaskCardNew({
   const [instructionExpanded, setInstructionExpanded] = useState(false);
   const pendingCompletionRef = useRef<{ feltGood: boolean; notes?: string; data: CompletionData } | null>(null);
   const { instruction, category, intensity, completionType: baseCompletionType, targetCount, durationMinutes, subtext, captureFields: baseCaptureFields } = task.task;
-  const completionType = task.completionTypeOverride || baseCompletionType;
   const captureFields = task.captureFieldsOverride || baseCaptureFields;
   const contextLine = task.enhancedContextLine || task.task.handlerFraming;
 
   // Prefer Claude-enhanced text over base task text
   const displayInstruction = task.enhancedInstruction || instruction;
+
+  // Use override > base > inferred from instruction text (safety net)
+  const resolvedType = task.completionTypeOverride || baseCompletionType;
+  const completionType = resolvedType === 'binary' ? inferCompletionType(displayInstruction) : resolvedType;
   const displaySubtext = task.enhancedSubtext || subtext || getSubtext(category);
   const copyStyle = task.copyStyle || 'normal';
 

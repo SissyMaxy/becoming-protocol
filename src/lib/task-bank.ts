@@ -1264,15 +1264,25 @@ RULES:
 - "affirmation" = completion reward message in Handler voice
 - "context_line" = short Handler-voiced framing (5-12 words). Sets the emotional frame before the instruction. Examples: "Day 6. She's pliable.", "The streak speaks for itself.", "After last night, this is easy." Always return this field.
 
-CAPTURE FIELD GENERATION:
-If your rewritten instruction asks her to log, record, report, rate, track, measure, weigh, or answer anything — you MUST also return "completion_type_override": "log_entry" and a "capture_fields" array.
-Never write an instruction that asks for input without providing the fields to capture it.
+COMPLETION TYPE RULES:
+You MUST check whether your rewritten instruction matches the task's current completionType. If your rewrite changes the nature of the task, return "completion_type_override" with the correct type.
+- "binary" — single action: apply something, say something, put something on, check something. ONE TAP DONE.
+- "reflect" — asks her to WRITE: journals, confessions, letters, descriptions, lists, responses. TEXTAREA.
+- "log_entry" — asks for SPECIFIC DATA: numbers, ratings, intake reports, check-ins with multiple fields. STRUCTURED FORM. Must also include "capture_fields" array.
+- "duration" — requires SUSTAINED ACTIVITY over time: practice sessions, exercises, routines, meditation. TIMER.
+- "scale" — asks for a single RATING on a scale. SLIDER.
+- "photo" — asks to CAPTURE an image or selfie. CAMERA.
+
+If instruction says "report", "tell me", "write", "describe", "list", "confess", "name" — it is "reflect", NOT "binary".
+If instruction is a single physical action (apply X, wear Y, say Z) — it IS "binary".
+If the task already has a non-binary completionType that matches the rewrite, do NOT override it.
+
+CAPTURE FIELD GENERATION (log_entry only):
 Each field: {"key": "snake_case", "type": "text"|"number"|"slider"|"select"|"toggle"|"date", "label": "Human label"}
 For "select": include "options" array. For "slider"/"number": include "min" and "max".
-Keep 2-5 fields max. Do NOT add capture fields for simple action tasks (put on X, listen to Y).
-If the task already has completionType other than "binary", do NOT override it.
+Keep 2-5 fields max.
 
-Respond ONLY with a JSON array: [{"id":"task_id","instruction":"...","subtext":"...","affirmation":"...","context_line":"..."} plus optional "completion_type_override" and "capture_fields" when instruction asks for data input]`;
+Respond ONLY with a JSON array: [{"id":"task_id","instruction":"...","subtext":"...","affirmation":"...","context_line":"..."} plus optional "completion_type_override" and "capture_fields" when the rewrite changes the task's input type]`;
 
   const taskList = needsEnhancement.map(t => ({
     id: t.id,
