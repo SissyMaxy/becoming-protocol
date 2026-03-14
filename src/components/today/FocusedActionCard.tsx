@@ -821,153 +821,6 @@ function getGoalSteps(goalName: string, domain: string | null): SessionData {
   };
 }
 
-/**
- * Get detailed steps for tasks based on domain and instruction
- */
-function getTaskSteps(instruction: string, domain: string): SessionData {
-  const inst = instruction.toLowerCase();
-
-  // Check if task instruction matches any session patterns first
-  const sessionMatch = getSessionDataIfMatches(instruction);
-  if (sessionMatch) {
-    return sessionMatch;
-  }
-
-  // Domain-specific task breakdowns
-  if (domain === 'voice' || inst.includes('voice') || inst.includes('speak')) {
-    // Build task-specific references
-    const voiceRefs: ReferenceLink[] = [];
-    if (inst.includes('pitch')) {
-      voiceRefs.push({ title: 'Pitch & Resonance Isolation (Video)', url: 'https://www.reneeyoxon.com/blog/pitch-reso-isolation-for-trans-voice', source: 'Renee Yoxon' });
-    } else if (inst.includes('resonance')) {
-      voiceRefs.push({ title: 'Prove You Can Modify Resonance', url: 'https://www.reneeyoxon.com/blog/let-me-prove-to-you-that-you-can-modify-your-resonance', source: 'Renee Yoxon' });
-    } else if (inst.includes('hum') || inst.includes('warm')) {
-      voiceRefs.push({ title: 'Three Daily Voice Exercises', url: 'https://www.reneeyoxon.com/blog/three-daily-voice-feminization-exercises', source: 'Renee Yoxon' });
-    } else {
-      voiceRefs.push({ title: 'Three Daily Voice Exercises', url: 'https://www.reneeyoxon.com/blog/three-daily-voice-feminization-exercises', source: 'Renee Yoxon' });
-      voiceRefs.push({ title: 'TransVoiceLessons YouTube', url: 'https://www.youtube.com/@TransVoiceLessons', source: 'YouTube' });
-    }
-
-    return {
-      estimatedMinutes: 10,
-      steps: [
-        { label: 'Find a private space where you can speak freely', durationMinutes: 1 },
-        { label: 'Warm up: hum gently for 30 seconds', durationMinutes: 1 },
-        { label: `Complete task: ${instruction}`, durationMinutes: 6 },
-        { label: 'Record yourself if practicing speech/reading', durationMinutes: 1 },
-        { label: 'Note any observations about your progress', durationMinutes: 1 },
-      ],
-      prerequisites: [
-        { item: 'Private space to speak', icon: 'privacy' },
-        { item: 'Phone for recording', icon: 'device' },
-      ],
-      references: voiceRefs,
-    };
-  }
-
-  if (domain === 'skincare' || inst.includes('skin') || inst.includes('face') || inst.includes('moistur')) {
-    // Parse pipe-delimited steps from the instruction (task data drives the UI)
-    const parsed = parsePipeSteps(instruction);
-    if (parsed.length > 0) {
-      const estMinutes = Math.max(3, parsed.length * 2);
-      return {
-        estimatedMinutes: estMinutes,
-        steps: parsed.map(step => ({ label: step })),
-        prerequisites: [
-          { item: 'Clean towel', icon: 'supplies' as const },
-        ],
-      };
-    }
-    // Fallback only if no pipe steps found
-    return {
-      estimatedMinutes: 5,
-      steps: [
-        { label: `Complete: ${instruction}`, durationMinutes: 4 },
-        { label: 'Clean up and put products away', durationMinutes: 1 },
-      ],
-      prerequisites: [
-        { item: 'Products needed for task', icon: 'supplies' },
-      ],
-    };
-  }
-
-  if (domain === 'movement' || inst.includes('posture') || inst.includes('walk') || inst.includes('stretch')) {
-    // Build task-specific references
-    const movementRefs: ReferenceLink[] = [];
-    if (inst.includes('walk')) {
-      movementRefs.push({ title: 'How to Walk Like a Woman', url: 'https://feminizationsecrets.com/transgender-crossdressing-walk-like-woman/', source: 'Feminization Secrets' });
-    } else if (inst.includes('hip') || inst.includes('sway')) {
-      movementRefs.push({ title: 'Samba Secrets for Hip Movements', url: 'https://feminizationsecrets.com/move-hips-booty/', source: 'Feminization Secrets' });
-    } else if (inst.includes('sit') || inst.includes('knee')) {
-      movementRefs.push({ title: 'Top 7 Tips for Feminine Movements', url: 'https://feminizationsecrets.com/feminizing-body-movements/', source: 'Feminization Secrets' });
-    } else if (inst.includes('gesture') || inst.includes('hand')) {
-      movementRefs.push({ title: 'Body Language Dos and Don\'ts', url: 'https://feminizationsecrets.com/transgender-crossdressing-body-language-do-dont/', source: 'Feminization Secrets' });
-    } else if (inst.includes('posture') || inst.includes('stand')) {
-      movementRefs.push({ title: 'Posture Tips for Feminine Look', url: 'https://www.transvitae.com/posture-exercises-feminine-presentation-transgender/', source: 'TransVitae' });
-    } else {
-      movementRefs.push({ title: '5 MTF Movement Mistakes to Avoid', url: 'https://feminizationsecrets.com/male-to-female-movement-mistakes/', source: 'Feminization Secrets' });
-    }
-
-    return {
-      estimatedMinutes: 10,
-      steps: [
-        { label: 'Clear space to move around', durationMinutes: 1 },
-        { label: 'Quick 1-minute stretch to loosen up', durationMinutes: 1 },
-        { label: `Complete task: ${instruction}`, durationMinutes: 6 },
-        { label: 'Check form in mirror', durationMinutes: 1 },
-        { label: 'Note what felt natural vs. needs work', durationMinutes: 1 },
-      ],
-      prerequisites: [
-        { item: 'Space to move', icon: 'privacy' },
-        { item: 'Mirror (ideally full-length)', icon: 'mirror' },
-      ],
-      references: movementRefs,
-    };
-  }
-
-  if (domain === 'style' || inst.includes('outfit') || inst.includes('wear') || inst.includes('dress')) {
-    return {
-      estimatedMinutes: 12,
-      steps: [
-        { label: 'Gather items you\'ll need', durationMinutes: 2 },
-        { label: `Complete task: ${instruction}`, durationMinutes: 7 },
-        { label: 'Take photos for reference', durationMinutes: 2 },
-        { label: 'Put things back properly', durationMinutes: 1 },
-      ],
-      prerequisites: [
-        { item: 'Items for the task', icon: 'supplies' },
-        { item: 'Private space', icon: 'privacy' },
-        { item: 'Mirror', icon: 'mirror' },
-      ],
-    };
-  }
-
-  if (domain === 'mindset' || inst.includes('affirm') || inst.includes('journal') || inst.includes('reflect')) {
-    return {
-      estimatedMinutes: 8,
-      steps: [
-        { label: 'Find quiet, comfortable spot', durationMinutes: 1 },
-        { label: 'Take 3 deep breaths to center yourself', durationMinutes: 1 },
-        { label: `Complete task: ${instruction}`, durationMinutes: 5 },
-        { label: 'Close with intention-setting', durationMinutes: 1 },
-      ],
-      prerequisites: [
-        { item: 'Journal or notes app', icon: 'device' },
-        { item: 'Quiet space', icon: 'privacy' },
-      ],
-    };
-  }
-
-  // Default: show the instruction itself as the action — no filler steps
-  return {
-    estimatedMinutes: 10,
-    steps: [
-      { label: instruction, durationMinutes: 10 },
-    ],
-    prerequisites: [],
-  };
-}
-
 function getBestTimeForDomain(domain: string | null | undefined): TimePeriod {
   // Suggest best times for different activity types
   const timeMap: Record<string, TimePeriod> = {
@@ -1650,14 +1503,13 @@ export function getPriorityAction(
     const best = sorted[0];
     const task = best.task;
     const effectiveCompletionType = task.completionTypeOverride || task.task.completionType || 'binary';
-    // Get detailed steps - always use task-specific breakdown
-    const taskData = getTaskSteps(task.task.instruction, task.task.domain);
-    // Use real duration from DB; fall back to getTaskSteps estimate only for duration-type tasks
+    // Use real duration from DB only — no fake estimates
     const realMinutes = task.task.durationMinutes;
     const estimatedMinutes = effectiveCompletionType === 'binary' || effectiveCompletionType === 'confirm'
-      ? undefined // Binary tasks don't show duration
-      : realMinutes || taskData.estimatedMinutes;
+      ? undefined
+      : realMinutes || undefined;
 
+    // No fake steps. The instruction IS the directive.
     return {
       type: 'task',
       id: task.id,
@@ -1666,12 +1518,9 @@ export function getPriorityAction(
       domain: task.task.domain,
       estimatedMinutes,
       completionType: effectiveCompletionType,
-      steps: taskData.steps,
-      prerequisites: taskData.prerequisites,
-      references: taskData.references,
       bestTime: best.bestTime,
       difficulty: task.task.intensity,
-      isComplex: effectiveCompletionType !== 'binary' && effectiveCompletionType !== 'confirm',
+      isComplex: false,
       copyStyle: task.copyStyle,
     };
   }

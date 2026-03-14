@@ -599,11 +599,9 @@ export function TodayView() {
             originTaskId: task.id,
             prescribed: true,
           });
-        } else if (INLINE_COMPLETION_TYPES.has(effectiveCompletionType)) {
+        } else if (INLINE_COMPLETION_TYPES.has(effectiveCompletionType) || effectiveCompletionType === 'duration') {
           // Show TaskCardNew with CompletionInput inline
           setExpandedTaskId(task.id);
-        } else if (effectiveCompletionType === 'duration' && priorityAction.steps && priorityAction.steps.length > 0) {
-          setActiveSession(priorityAction);
         } else {
           // binary, confirm, streak — complete directly
           complete(task.id, true);
