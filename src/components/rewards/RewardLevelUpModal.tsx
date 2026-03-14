@@ -35,9 +35,10 @@ export function RewardLevelUpModal({
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-opacity duration-300 ${
+      className={`fixed inset-0 z-[70] flex items-center justify-center p-4 transition-opacity duration-300 ${
         isVisible ? 'opacity-100' : 'opacity-0'
       } ${isBambiMode ? 'bg-pink-900/90' : 'bg-protocol-bg/95'}`}
+      onClick={e => e.stopPropagation()}
     >
       {/* Background particles */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">

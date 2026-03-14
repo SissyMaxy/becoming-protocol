@@ -186,7 +186,7 @@ export function InterventionNotification({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={e => e.stopPropagation()}>
       <div
         className={`
           w-full max-w-sm rounded-2xl border ${config.borderColor} ${config.bgColor}

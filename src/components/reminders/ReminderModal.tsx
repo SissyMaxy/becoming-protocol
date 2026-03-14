@@ -58,7 +58,7 @@ export function ReminderModal({ reminder, onRespond, onSkip, onDismiss }: Remind
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-300 ${
+      className={`fixed inset-0 z-[70] flex items-center justify-center p-4 transition-all duration-300 ${
         isVisible ? 'bg-black/70' : 'bg-transparent pointer-events-none'
       }`}
       onClick={onDismiss}

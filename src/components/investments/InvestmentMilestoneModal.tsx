@@ -54,8 +54,9 @@ export function InvestmentMilestoneModal({
 
   return (
     <div
-      className={`fixed inset-0 z-50 bg-protocol-bg/95 flex items-center justify-center p-4
+      className={`fixed inset-0 z-[70] bg-protocol-bg/95 flex items-center justify-center p-4
                   transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}
+      onClick={e => e.stopPropagation()}
     >
       {/* Background particles */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
