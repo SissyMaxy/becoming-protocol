@@ -215,19 +215,11 @@ async function getTodayData(userId: string) {
     .eq('user_id', userId)
     .eq('status', 'queued');
 
-  // Standing permissions
-  const { data: permissions } = await supabase
-    .from('handler_standing_permissions')
-    .select('permission_domain, parameters')
-    .eq('user_id', userId)
-    .eq('granted', true);
-
   return {
     todayTasks: todayTasks || [],
     activeTarget,
     shoots: shoots || [],
     queuedContent: queuedContent || [],
-    permissions: permissions || [],
   };
 }
 
@@ -449,18 +441,9 @@ function buildTodaySection(
     }
   }
 
-  // Scheduled items from permissions
-  if (data?.permissions) {
-    for (const p of data.permissions) {
-      const params = p.parameters as Record<string, unknown> | null;
-      if (p.permission_domain === 'schedule_auto_block' && params) {
-        const voiceTime = params.voice_practice as string;
-        if (voiceTime) {
-          items.push({ icon: 'mic', text: `Voice practice at ${voiceTime}.`, type: 'scheduled' });
-        }
-      }
-    }
-  }
+  // Standing permissions — only show if they contain actionable, non-static data
+  // Note: schedule_auto_block with voice_practice removed — it was a static DB row
+  // that never updated. Voice practice should come from daily_tasks when prescribed.
 
   // Anchor status
   if (anchors.length > 0) {
