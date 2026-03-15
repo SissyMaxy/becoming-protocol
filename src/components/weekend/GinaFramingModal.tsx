@@ -69,9 +69,14 @@ export function GinaFramingModal({
           <div className="bg-protocol-surface rounded-xl p-4">
             <div className="flex items-center gap-2 mb-3">
               <MessageCircle className="w-5 h-5 text-protocol-accent" />
-              <h3 className="font-medium text-protocol-text">What to Say</h3>
+              <h3 className="font-medium text-protocol-text">
+                {activity.integrationLevel <= 2 ? 'What to Say to Gina' : 'How Gina Frames It'}
+              </h3>
             </div>
             <div className="bg-protocol-bg rounded-lg p-4 border-l-4 border-protocol-accent">
+              <p className="text-xs text-protocol-text-muted mb-2">
+                {activity.integrationLevel <= 2 ? 'Say this casually:' : 'At this level, she initiates:'}
+              </p>
               <p className="text-protocol-text italic text-lg leading-relaxed">
                 "{activity.ginaFraming}"
               </p>
