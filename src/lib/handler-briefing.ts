@@ -191,23 +191,6 @@ async function getTodayData(userId: string) {
     .eq('user_id', userId)
     .eq('assigned_date', today);
 
-  // Active feminization target
-  const { data: activeTarget } = await supabase
-    .from('feminization_targets')
-    .select('target_domain, target_description, comfort_zone_edge')
-    .eq('user_id', userId)
-    .eq('status', 'active')
-    .limit(1)
-    .maybeSingle();
-
-  // Prescribed shoots
-  const { data: shoots } = await supabase
-    .from('shoot_prescriptions')
-    .select('title, shoot_type, status')
-    .eq('user_id', userId)
-    .eq('status', 'prescribed')
-    .limit(3);
-
   // Content awaiting review
   const { data: queuedContent } = await supabase
     .from('content_queue')
@@ -217,32 +200,46 @@ async function getTodayData(userId: string) {
 
   return {
     todayTasks: todayTasks || [],
-    activeTarget,
-    shoots: shoots || [],
     queuedContent: queuedContent || [],
   };
 }
 
 async function getProgressData(userId: string) {
-  // Real progress lives in user_progress.domain_progress (JSONB array)
-  const { data: progressRow } = await supabase
-    .from('user_progress')
-    .select('domain_progress, overall_streak, total_days')
-    .eq('user_id', userId)
-    .maybeSingle();
-
-  // Also get task completion counts by domain for concrete numbers
+  // Task completions with domain info (last 30 days)
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const { data: completions } = await supabase
     .from('task_completions')
-    .select('task_id, created_at, daily_task_id')
+    .select('task_id, created_at, task_bank(domain)')
     .eq('user_id', userId)
     .gte('created_at', thirtyDaysAgo.toISOString());
 
+  // All-time completion count
+  const { count: totalCompletions } = await supabase
+    .from('task_completions')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId);
+
+  // Streak + denial from user_state
+  const { data: state } = await supabase
+    .from('user_state')
+    .select('streak_days, tasks_completed_today')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  // Count completions by domain
+  const domainCounts: Record<string, number> = {};
+  for (const c of completions || []) {
+    const tb = c.task_bank as { domain?: string } | null;
+    const domain = tb?.domain || 'unknown';
+    domainCounts[domain] = (domainCounts[domain] || 0) + 1;
+  }
+
   return {
-    progressRow,
-    completionCount: completions?.length || 0,
+    monthlyCompletions: completions?.length || 0,
+    totalCompletions: totalCompletions || 0,
+    domainCounts,
+    streakDays: state?.streak_days || 0,
   };
 }
 
@@ -427,28 +424,6 @@ function buildTodaySection(
     });
   }
 
-  // Active feminization target
-  if (data?.activeTarget) {
-    const t = data.activeTarget;
-    items.push({
-      icon: 'anchor',
-      text: `Focus: ${t.target_domain}${t.target_description ? ` — ${t.target_description}` : ''}.`,
-      type: 'action',
-    });
-  }
-
-  // Prescribed shoots
-  if (data?.shoots && data.shoots.length > 0) {
-    for (const s of data.shoots) {
-      const typeLabel = s.shoot_type?.replace(/_/g, ' ') || 'shoot';
-      items.push({
-        icon: 'shirt',
-        text: `${s.title || typeLabel} on the schedule.`,
-        type: 'scheduled',
-      });
-    }
-  }
-
   // Content awaiting review
   if (data?.queuedContent && data.queuedContent.length > 0) {
     items.push({
@@ -466,10 +441,6 @@ function buildTodaySection(
       items.push({ icon: 'lock', text: 'Gina asleep — extended window.', type: 'info' });
     }
   }
-
-  // Standing permissions — only show if they contain actionable, non-static data
-  // Note: schedule_auto_block with voice_practice removed — it was a static DB row
-  // that never updated. Voice practice should come from daily_tasks when prescribed.
 
   // Anchor status
   if (anchors.length > 0) {
@@ -492,69 +463,49 @@ function buildTodaySection(
   return { items, summary };
 }
 
-interface DomainProgressEntry {
-  domain: string;
-  level: number;
-  currentStreak?: number;
-  totalDays?: number;
-}
-
 function buildProgressSection(
   data: Awaited<ReturnType<typeof getProgressData>> | null,
 ): ProgressSection {
-  if (!data) {
+  if (!data || (data.monthlyCompletions === 0 && data.totalCompletions === 0)) {
     return {
       domain: 'Protocol',
-      highlight: 'No domain progress tracked yet. Her first task changes that.',
+      highlight: 'No tasks completed yet. Her first task changes that.',
     };
   }
 
-  const { progressRow, completionCount } = data;
+  const { monthlyCompletions, totalCompletions, domainCounts, streakDays } = data;
 
-  // Parse domain_progress JSONB from user_progress table
-  const domains: DomainProgressEntry[] = (progressRow?.domain_progress as DomainProgressEntry[] | null) || [];
-  const totalDays = progressRow?.total_days || 0;
-  const overallStreak = progressRow?.overall_streak || 0;
+  // Find the most-practiced domain
+  const sortedDomains = Object.entries(domainCounts).sort((a, b) => b[1] - a[1]);
+  const topDomain = sortedDomains.length > 0 ? sortedDomains[0] : null;
+  const activeDomainCount = sortedDomains.length;
 
-  // Find the highest-level domain
-  const activeDomains = domains.filter(d => d.level > 1 || (d.totalDays && d.totalDays > 0));
-
-  if (activeDomains.length === 0 && completionCount === 0) {
-    return {
-      domain: 'Protocol',
-      highlight: 'No domain progress tracked yet. Her first task changes that.',
-    };
-  }
-
-  // Build a real progress summary
   const parts: string[] = [];
 
-  if (activeDomains.length > 0) {
-    // Sort by level descending
-    const sorted = [...activeDomains].sort((a, b) => b.level - a.level);
-    const top = sorted[0];
-    parts.push(`${top.domain} — Level ${top.level}`);
-    if (sorted.length > 1) {
-      parts.push(`${sorted.length} domains active`);
-    }
+  if (topDomain) {
+    parts.push(`Most active: ${topDomain[0]} (${topDomain[1]} this month)`);
   }
 
-  if (completionCount > 0) {
-    parts.push(`${completionCount} tasks completed this month`);
+  if (activeDomainCount > 1) {
+    parts.push(`${activeDomainCount} domains practiced`);
   }
 
-  if (totalDays > 0) {
-    parts.push(`${totalDays} total protocol days`);
+  if (monthlyCompletions > 0) {
+    parts.push(`${monthlyCompletions} tasks this month`);
   }
 
-  const topDomain = activeDomains.length > 0
-    ? [...activeDomains].sort((a, b) => b.level - a.level)[0]
-    : null;
+  if (totalCompletions > monthlyCompletions) {
+    parts.push(`${totalCompletions} all-time`);
+  }
+
+  if (streakDays > 0) {
+    parts.push(`${streakDays}-day streak`);
+  }
 
   return {
-    domain: topDomain?.domain || 'Protocol',
-    highlight: parts.length > 0 ? parts.join('. ') + '.' : `${overallStreak}-day streak. ${completionCount} tasks this month.`,
-    hrtReframe: topDomain && (topDomain.domain === 'voice' || topDomain.domain === 'style')
+    domain: topDomain?.[0] || 'Protocol',
+    highlight: parts.join('. ') + '.',
+    hrtReframe: topDomain && (topDomain[0] === 'voice' || topDomain[0] === 'style')
       ? 'This is HRT preparation. Every level here is a step toward the body matching the identity.'
       : undefined,
   };
