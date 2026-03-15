@@ -224,14 +224,26 @@ async function getTodayData(userId: string) {
 }
 
 async function getProgressData(userId: string) {
-  const { data: domainProgress } = await supabase
-    .from('domain_progress')
-    .select('domain, level, xp, xp_to_next, updated_at')
+  // Real progress lives in user_progress.domain_progress (JSONB array)
+  const { data: progressRow } = await supabase
+    .from('user_progress')
+    .select('domain_progress, overall_streak, total_days')
     .eq('user_id', userId)
-    .order('updated_at', { ascending: false })
-    .limit(10);
+    .maybeSingle();
 
-  return { domains: domainProgress || [] };
+  // Also get task completion counts by domain for concrete numbers
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const { data: completions } = await supabase
+    .from('task_completions')
+    .select('task_id, created_at, daily_task_id')
+    .eq('user_id', userId)
+    .gte('created_at', thirtyDaysAgo.toISOString());
+
+  return {
+    progressRow,
+    completionCount: completions?.length || 0,
+  };
 }
 
 async function getAudienceData(userId: string) {
@@ -251,13 +263,27 @@ async function getAudienceData(userId: string) {
 }
 
 async function getDenialData(userId: string) {
-  const { data } = await supabase
+  // user_state has most fields but denial_day may be stale
+  const { data: state } = await supabase
     .from('user_state')
     .select('denial_day, streak_days, current_arousal, handler_mode, gina_home, gina_asleep, estimated_exec_function')
     .eq('user_id', userId)
     .maybeSingle();
 
-  return data;
+  // denial_state has the real, actively-incremented denial day
+  const { data: denialState } = await supabase
+    .from('denial_state')
+    .select('current_denial_day')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (!state) return null;
+
+  // Prefer denial_state.current_denial_day over user_state.denial_day
+  return {
+    ...state,
+    denial_day: denialState?.current_denial_day ?? state.denial_day ?? 0,
+  };
 }
 
 // ============================================
@@ -466,25 +492,69 @@ function buildTodaySection(
   return { items, summary };
 }
 
+interface DomainProgressEntry {
+  domain: string;
+  level: number;
+  currentStreak?: number;
+  totalDays?: number;
+}
+
 function buildProgressSection(
   data: Awaited<ReturnType<typeof getProgressData>> | null,
 ): ProgressSection {
-  if (!data || data.domains.length === 0) {
+  if (!data) {
     return {
       domain: 'Protocol',
       highlight: 'No domain progress tracked yet. Her first task changes that.',
     };
   }
 
-  const topDomain = data.domains[0];
-  const pctToNext = topDomain.xp_to_next > 0
-    ? Math.round((topDomain.xp / topDomain.xp_to_next) * 100)
-    : 100;
+  const { progressRow, completionCount } = data;
+
+  // Parse domain_progress JSONB from user_progress table
+  const domains: DomainProgressEntry[] = (progressRow?.domain_progress as DomainProgressEntry[] | null) || [];
+  const totalDays = progressRow?.total_days || 0;
+  const overallStreak = progressRow?.overall_streak || 0;
+
+  // Find the highest-level domain
+  const activeDomains = domains.filter(d => d.level > 1 || (d.totalDays && d.totalDays > 0));
+
+  if (activeDomains.length === 0 && completionCount === 0) {
+    return {
+      domain: 'Protocol',
+      highlight: 'No domain progress tracked yet. Her first task changes that.',
+    };
+  }
+
+  // Build a real progress summary
+  const parts: string[] = [];
+
+  if (activeDomains.length > 0) {
+    // Sort by level descending
+    const sorted = [...activeDomains].sort((a, b) => b.level - a.level);
+    const top = sorted[0];
+    parts.push(`${top.domain} — Level ${top.level}`);
+    if (sorted.length > 1) {
+      parts.push(`${sorted.length} domains active`);
+    }
+  }
+
+  if (completionCount > 0) {
+    parts.push(`${completionCount} tasks completed this month`);
+  }
+
+  if (totalDays > 0) {
+    parts.push(`${totalDays} total protocol days`);
+  }
+
+  const topDomain = activeDomains.length > 0
+    ? [...activeDomains].sort((a, b) => b.level - a.level)[0]
+    : null;
 
   return {
-    domain: topDomain.domain,
-    highlight: `${topDomain.domain} — Level ${topDomain.level}, ${pctToNext}% to next.`,
-    hrtReframe: topDomain.domain === 'voice' || topDomain.domain === 'style'
+    domain: topDomain?.domain || 'Protocol',
+    highlight: parts.length > 0 ? parts.join('. ') + '.' : `${overallStreak}-day streak. ${completionCount} tasks this month.`,
+    hrtReframe: topDomain && (topDomain.domain === 'voice' || topDomain.domain === 'style')
       ? 'This is HRT preparation. Every level here is a step toward the body matching the identity.'
       : undefined,
   };
