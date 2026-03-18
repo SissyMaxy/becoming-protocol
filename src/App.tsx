@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { PrivacyPage } from './components/PrivacyPage';
 import { useAuth } from './context/AuthContext';
 import { ProtocolProvider, useProtocol } from './context/ProtocolContext';
 import { BambiModeProvider, useBambiMode, FloatingHearts } from './context/BambiModeContext';
@@ -990,6 +991,9 @@ function AuthenticatedApp() {
 }
 
 export default function App() {
+  // Standalone pages (no auth required)
+  if (window.location.pathname === '/privacy') return <PrivacyPage />;
+
   const { user, isLoading } = useAuth();
   const [wishlistToken, setWishlistToken] = useState<string | null>(() => parseWishlistToken());
   const [passwordRecovery, setPasswordRecovery] = useState(() =>

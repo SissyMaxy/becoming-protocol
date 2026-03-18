@@ -9,6 +9,7 @@
  */
 
 import { getPipelineComposite } from './gina/ladder-engine';
+import { buildWhoopContext } from './whoop-context';
 import {
   getVaultStats,
   getTodaySchedule,
@@ -633,7 +634,7 @@ async function buildIndustryContext(userId: string): Promise<string> {
  * All systems, maximum data density.
  */
 export async function buildFullSystemsContext(userId: string): Promise<string> {
-  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine] = await Promise.allSettled([
+  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop] = await Promise.allSettled([
     buildGinaContext(userId),
     buildContentContext(userId),
     buildVoiceContext(userId),
@@ -655,6 +656,7 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     buildCalendarContext(userId),
     buildOvernightSummaryForBriefing(userId),
     buildDopamineContext(userId),
+    buildWhoopContextBlock(userId),
   ]);
 
   const blocks = [
@@ -679,10 +681,16 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     weekendPostRelease.status === 'fulfilled' ? weekendPostRelease.value : '',
     evidenceConfrontation.status === 'fulfilled' ? evidenceConfrontation.value : '',
     dopamine.status === 'fulfilled' ? dopamine.value : '',
+    whoop.status === 'fulfilled' ? whoop.value : '',
   ].filter(Boolean);
 
   if (blocks.length === 0) return '';
   return '\n' + blocks.join('\n');
+}
+
+async function buildWhoopContextBlock(userId: string): Promise<string> {
+  const ctx = await buildWhoopContext(userId);
+  return ctx.available ? ctx.contextBlock : '';
 }
 
 /**

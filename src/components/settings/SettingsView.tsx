@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import {
+  Activity,
   ChevronLeft,
   User,
   Vibrate,
@@ -35,6 +36,7 @@ import { useOpacity } from '../../context/OpacityContext';
 import { OpacitySelector } from './OpacitySelector';
 import { useReminders } from '../../hooks/useReminders';
 import { LovenseSettings } from './LovenseSettings';
+import { WhoopCard } from './WhoopCard';
 import { EquipmentInventory } from './EquipmentInventory';
 import { ProfileView } from './ProfileView';
 import { TimeRatchetsSettings } from './TimeRatchetsSettings';
@@ -298,7 +300,7 @@ interface SettingsViewProps {
   onEditIntake?: () => void;
 }
 
-type SettingsSection = 'main' | 'profile' | 'lovense' | 'equipment' | 'timeratchets' | 'reminders' | 'privacy' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content' | 'opacity';
+type SettingsSection = 'main' | 'profile' | 'lovense' | 'whoop' | 'equipment' | 'timeratchets' | 'reminders' | 'privacy' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content' | 'opacity';
 
 export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
   const { isBambiMode } = useBambiMode();
@@ -318,6 +320,7 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
   // Map section IDs to opacity feature keys
   const SECTION_FEATURE: Record<string, string> = {
     lovense: 'settings_basic',        // always visible
+    whoop: 'settings_basic',           // always visible
     equipment: 'settings_basic',      // always visible — equipment filters tasks
     timeratchets: 'settings_timeratchets',
     reminders: 'settings_reminders',
@@ -335,6 +338,13 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
       label: 'Lovense',
       description: 'Toy connection & rewards',
       color: '#B06B61',
+    },
+    {
+      id: 'whoop' as const,
+      icon: Activity,
+      label: 'Whoop',
+      description: 'Biometric integration',
+      color: '#10b981',
     },
     {
       id: 'equipment' as const,
@@ -935,6 +945,9 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
 
         {/* Lovense Settings */}
         {activeSection === 'lovense' && <LovenseSettings />}
+
+        {/* Whoop Settings */}
+        {activeSection === 'whoop' && <WhoopCard />}
 
         {/* Equipment Inventory */}
         {activeSection === 'equipment' && <EquipmentInventory />}
