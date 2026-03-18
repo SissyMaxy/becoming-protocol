@@ -94,14 +94,22 @@ export function useWhoop(): UseWhoopReturn {
     const whoopStatus = params.get('whoop');
     if (whoopStatus === 'connected') {
       setIsConnected(true);
+      setIsLoading(false);
+      // Clean URL
+      window.history.replaceState({}, '', window.location.pathname);
+      // Auto-sync immediately after connecting
+      console.log('[useWhoop] Connected via OAuth, triggering initial sync');
+    } else if (whoopStatus === 'error') {
+      console.warn('[useWhoop] OAuth error:', params.get('reason'));
       // Clean URL
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
 
   const connect = useCallback(() => {
-    window.location.href = '/api/whoop/auth';
-  }, []);
+    if (!user?.id) return;
+    window.location.href = `/api/whoop/auth?user_id=${user.id}`;
+  }, [user?.id]);
 
   const disconnect = useCallback(async () => {
     if (!user?.id) return;

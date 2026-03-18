@@ -6,8 +6,6 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const state = randomUUID();
-
   const clientId = process.env.WHOOP_CLIENT_ID;
   const redirectUri = process.env.WHOOP_REDIRECT_URI;
 
@@ -18,6 +16,16 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
       hasRedirectUri: !!redirectUri,
     });
   }
+
+  // User ID passed as query param from the client
+  const userId = req.query.user_id;
+  if (!userId) {
+    return res.status(400).json({ error: 'user_id query param required' });
+  }
+
+  // State = "userId:randomUUID" — embeds user identity for the callback
+  const nonce = randomUUID();
+  const state = `${userId}:${nonce}`;
 
   const params = new URLSearchParams({
     response_type: 'code',
