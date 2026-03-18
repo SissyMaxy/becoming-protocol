@@ -8,11 +8,22 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
 
   const state = randomUUID();
 
+  const clientId = process.env.WHOOP_CLIENT_ID;
+  const redirectUri = process.env.WHOOP_REDIRECT_URI;
+
+  if (!clientId || !redirectUri) {
+    return res.status(500).json({
+      error: 'Whoop not configured',
+      hasClientId: !!clientId,
+      hasRedirectUri: !!redirectUri,
+    });
+  }
+
   const params = new URLSearchParams({
     response_type: 'code',
-    client_id: process.env.WHOOP_CLIENT_ID || '',
-    redirect_uri: process.env.WHOOP_REDIRECT_URI || '',
-    scope: 'read:recovery read:cycles read:sleep read:workout read:body_measurement',
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    scope: 'read:recovery read:cycles read:sleep read:workout read:body_measurement read:profile',
     state,
   });
 
