@@ -191,16 +191,34 @@ async function getTodayData(userId: string) {
     .eq('user_id', userId)
     .eq('assigned_date', today);
 
-  // Content awaiting review
+  // Content awaiting review (both old queue and new vault)
   const { data: queuedContent } = await supabase
     .from('content_queue')
     .select('id')
     .eq('user_id', userId)
     .eq('status', 'queued');
 
+  // Vault items pending approval
+  const { data: pendingVault } = await supabase
+    .from('content_vault')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('approval_status', 'pending');
+
+  // Scheduled posts for today
+  const { data: scheduledPosts } = await supabase
+    .from('content_posts')
+    .select('platform, scheduled_at')
+    .eq('user_id', userId)
+    .eq('post_status', 'scheduled')
+    .gte('scheduled_at', `${today}T00:00:00`)
+    .lte('scheduled_at', `${today}T23:59:59`);
+
   return {
     todayTasks: todayTasks || [],
     queuedContent: queuedContent || [],
+    pendingVault: pendingVault || [],
+    scheduledPosts: scheduledPosts || [],
   };
 }
 
@@ -425,11 +443,22 @@ function buildTodaySection(
   }
 
   // Content awaiting review
-  if (data?.queuedContent && data.queuedContent.length > 0) {
+  const totalQueued = (data?.queuedContent?.length || 0) + (data?.pendingVault?.length || 0);
+  if (totalQueued > 0) {
     items.push({
       icon: 'bot',
-      text: `${data.queuedContent.length} content item${data.queuedContent.length > 1 ? 's' : ''} awaiting review.`,
+      text: `${totalQueued} content item${totalQueued > 1 ? 's' : ''} awaiting review.`,
       type: 'action',
+    });
+  }
+
+  // Scheduled posts
+  if (data?.scheduledPosts && data.scheduledPosts.length > 0) {
+    const platforms = [...new Set(data.scheduledPosts.map(p => p.platform))].join(', ');
+    items.push({
+      icon: 'bot',
+      text: `${data.scheduledPosts.length} post${data.scheduledPosts.length > 1 ? 's' : ''} scheduled today (${platforms}).`,
+      type: 'scheduled',
     });
   }
 

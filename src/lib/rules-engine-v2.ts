@@ -124,7 +124,8 @@ function getTargetIntensity(state: UserStateForSelection): number {
     'breakthrough': 5,
   };
 
-  let base = odometerMap[state.odometer] || 3;
+  // Use parameter override as base if provided, otherwise derive from odometer
+  let base = state.parameterOverrides?.intensityCapBase ?? odometerMap[state.odometer] ?? 3;
 
   // Arousal-based intensity scaling
   // High arousal (4-5) → boost intensity by 1 (no denial gate)

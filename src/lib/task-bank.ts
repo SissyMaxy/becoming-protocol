@@ -140,6 +140,39 @@ export async function getTasksByCategory(category: TaskCategory): Promise<Task[]
 // REQUIREMENT CHECKING
 // ============================================
 
+/**
+ * Convert a generated_tasks row into a Task compatible with the rules engine.
+ */
+function generatedToTask(g: Record<string, unknown>): Task {
+  return {
+    id: g.id as string,
+    category: (g.category as string) || 'practice',
+    domain: (g.domain as string) || 'body',
+    intensity: (g.intensity as number) || 3,
+    instruction: (g.instruction as string) || '',
+    subtext: (g.subtext as string) || null,
+    completionType: (g.completion_type as string) || 'binary',
+    durationMinutes: (g.duration_minutes as number) || null,
+    targetCount: (g.target_count as number) || null,
+    points: (g.points as number) || 10,
+    hapticPattern: null,
+    contentUnlock: null,
+    affirmation: (g.affirmation as string) || '',
+    requires: { minDenialDay: 0, minPhase: 0, equipment: [], hasItem: [] },
+    excludeIf: { ginaHome: g.requires_privacy === 'true', inSession: false },
+    ratchetTriggers: null,
+    aiFlags: { isCore: false, canIntensify: false, canClone: false, trackResistance: false },
+    createdAt: (g.created_at as string) || new Date().toISOString(),
+    createdBy: 'ai',
+    active: true,
+    level: (g.level as number) || 6,
+    triggerCondition: (g.trigger_condition as string) || null,
+    timeWindow: (g.time_window as string) || 'any',
+    requiresPrivacy: g.requires_privacy === 'true',
+    pivot: null,
+  } as unknown as Task;
+}
+
 function meetsRequirements(task: Task, context: UserTaskContext): boolean {
   const req = task.requires;
 
@@ -1578,9 +1611,26 @@ export async function prescribeNextTask(
   excludeTaskIds: string[],
 ): Promise<DailyTask | null> {
   try {
-    // Load all active tasks from DB
+    // Load all active tasks from DB + generated tasks
     const allTasks = await getAllTasks();
-    const available = allTasks.filter(t => !excludeTaskIds.includes(t.id));
+    let available = allTasks.filter(t => !excludeTaskIds.includes(t.id));
+
+    // Merge generated tasks into the candidate pool
+    try {
+      const { getEligibleGeneratedTasks } = await import('./handler-v2/escalation-engine');
+      const generated = await getEligibleGeneratedTasks(context.userId);
+      if (generated.length > 0) {
+        const converted = generated
+          .filter(g => !excludeTaskIds.includes(g.id as string))
+          .map(g => generatedToTask(g));
+        available = [...available, ...converted];
+        if (converted.length > 0) {
+          console.log(`[Prescription] Merged ${converted.length} generated tasks into pool`);
+        }
+      }
+    } catch {
+      // generated_tasks table may not exist yet
+    }
 
     if (available.length === 0) {
       console.warn('[Prescription] No tasks available after exclusion');
@@ -1596,6 +1646,7 @@ export async function prescribeNextTask(
       const { HandlerParameters } = await import('./handler-parameters');
       const params = new HandlerParameters(context.userId);
       state.parameterOverrides = {
+        intensityCapBase: await params.get<number>('rules.intensity_cap.base', undefined),
         avoidancePushProbability: await params.get<number>('rules.avoidance_push_probability', 0.3),
         domainSaturationCap: await params.get<number>('rules.domain_saturation_cap', 3),
         coreTaskWeight: await params.get<number>('rules.weight.is_core', 2.0),

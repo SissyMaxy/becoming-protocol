@@ -27,6 +27,7 @@ import { classifyResistance, logResistanceEvent } from '../lib/handler-v2/resist
 import { HandlerParameters, seedDefaultParameters } from '../lib/handler-parameters';
 import { advanceCommitmentStates } from '../lib/handler-v2/commitment-enforcement';
 import { generatePredictions } from '../lib/handler-v2/predictive-model';
+import { runOptimizationPass } from '../lib/handler-v2/parameter-optimizer';
 import type {
   DailyTask,
   UserTaskContext,
@@ -242,6 +243,20 @@ export function useTaskBank(): UseTaskBankReturn {
 
     // Fire-and-forget: generate tomorrow's predictions (runs once per day, cheap)
     generatePredictions(user.id, params).catch(() => {});
+
+    // Fire-and-forget: weekly parameter optimization (checks last run date internally)
+    params.get<string>('_optimizer.last_run', '').then(lastRun => {
+      const daysSinceRun = lastRun
+        ? (Date.now() - new Date(lastRun).getTime()) / (1000 * 60 * 60 * 24)
+        : 999;
+      if (daysSinceRun >= 7) {
+        runOptimizationPass(user!.id).then(changes => {
+          if (changes.length > 0) {
+            params.set('_optimizer.last_run', new Date().toISOString(), 'manual', `${changes.length} adjustments`).catch(() => {});
+          }
+        }).catch(() => {});
+      }
+    }).catch(() => {});
   }, [user?.id, loadTasks]);
 
   // Re-load tasks when ginaHome changes (hide/show intimate tasks)
