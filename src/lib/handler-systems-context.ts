@@ -768,16 +768,18 @@ export async function buildSessionContext(userId: string): Promise<string> {
  * Compact subset: voice avoidance, exercise gap, content pending.
  */
 export async function buildInterventionContext(userId: string): Promise<string> {
-  const [voice, exercise, content] = await Promise.allSettled([
+  const [voice, exercise, content, whoop] = await Promise.allSettled([
     buildVoiceContext(userId),
     buildExerciseContext(userId),
     buildContentContext(userId),
+    buildWhoopContextBlock(userId),
   ]);
 
   const blocks = [
     voice.status === 'fulfilled' ? voice.value : '',
     exercise.status === 'fulfilled' ? exercise.value : '',
     content.status === 'fulfilled' ? content.value : '',
+    whoop.status === 'fulfilled' ? whoop.value : '',
   ].filter(Boolean);
 
   if (blocks.length === 0) return '';
