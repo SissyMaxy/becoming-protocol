@@ -1,15 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import Anthropic from '@anthropic-ai/sdk';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
   process.env.SUPABASE_SERVICE_ROLE_KEY || '',
 );
-
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || '',
-});
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -105,15 +100,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     apiMessages.push({ role: 'user', content: message });
 
-    // 6. Call Claude
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 800,
-      system: systemPrompt,
-      messages: apiMessages,
+    // 6. Call Claude via direct fetch (avoids SDK bundling issues in Vercel)
+    const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY || '',
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 800,
+        system: systemPrompt,
+        messages: apiMessages,
+      }),
     });
 
-    const fullText = response.content[0].type === 'text' ? response.content[0].text : '';
+    if (!claudeRes.ok) {
+      const errBody = await claudeRes.text();
+      console.error('[Handler Chat] Claude API error:', claudeRes.status, errBody);
+      return res.status(502).json({ error: `Claude API error: ${claudeRes.status}` });
+    }
+
+    const claudeData = await claudeRes.json();
+    const fullText = claudeData.content?.[0]?.type === 'text' ? claudeData.content[0].text : '';
 
     // 7. Parse visible response and handler signals
     const { visibleResponse, signals } = parseResponse(fullText);

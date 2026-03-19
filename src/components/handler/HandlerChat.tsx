@@ -27,9 +27,12 @@ export function HandlerChat({ onClose, initialType, openingLine }: HandlerChatPr
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const initRef = useRef(false);
 
-  // Start conversation on mount
+  // Start conversation on mount (once only)
   useEffect(() => {
+    if (initRef.current) return;
+    initRef.current = true;
     startConversation(initialType, openingLine);
   }, []);
 
