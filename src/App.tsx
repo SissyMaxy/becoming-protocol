@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import { PrivacyPage } from './components/PrivacyPage';
+import { HandlerChat } from './components/handler/HandlerChat';
+import { getPendingOutreach, evaluateAndQueueOutreach } from './lib/handler-v2/outreach-engine';
+import { HandlerParameters } from './lib/handler-parameters';
 import { useAuth } from './context/AuthContext';
 import { ProtocolProvider, useProtocol } from './context/ProtocolContext';
 import { BambiModeProvider, useBambiMode, FloatingHearts } from './context/BambiModeContext';
@@ -428,6 +431,26 @@ function AuthenticatedAppInner() {
   const [editIntakeMode, setEditIntakeMode] = useState(false);
   const [editIntakeProfile, setEditIntakeProfile] = useState<Partial<UserProfile> | null>(null);
   const [showSleepContent, setShowSleepContent] = useState(false);
+  const [showHandlerChat, setShowHandlerChat] = useState(false);
+  const [pendingOutreach, setPendingOutreach] = useState<{ id: string; openingLine: string } | null>(null);
+
+  // Check for pending Handler outreach on load
+  const { user: authUser } = useAuth();
+  useEffect(() => {
+    if (!authUser?.id) return;
+    const user = authUser;
+    // Check for existing outreach
+    getPendingOutreach(user.id).then(o => {
+      if (o) setPendingOutreach({ id: o.id, openingLine: o.openingLine });
+    }).catch(() => {});
+    // Evaluate if new outreach should fire
+    const params = new HandlerParameters(user.id);
+    evaluateAndQueueOutreach(user.id, params).then(result => {
+      if (result.queued && result.line) {
+        setPendingOutreach({ id: '', openingLine: result.line });
+      }
+    }).catch(() => {});
+  }, [authUser?.id]);
 
   // Feminization reminders - all day presence
   const {
@@ -913,6 +936,36 @@ function AuthenticatedAppInner() {
 
       {/* Floating hearts for Bambi mode celebrations */}
       <FloatingHearts />
+
+      {/* Handler Chat — floating button + full-screen overlay */}
+      {!showHandlerChat && (
+        <button
+          onClick={() => {
+            setShowHandlerChat(true);
+            if (pendingOutreach) setPendingOutreach(null);
+          }}
+          className={`fixed bottom-20 right-4 z-40 w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110 ${
+            pendingOutreach ? 'animate-pulse' : ''
+          } ${
+            isBambiMode
+              ? 'bg-pink-500 text-white'
+              : 'bg-protocol-accent text-white'
+          }`}
+        >
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          </svg>
+          {pendingOutreach && (
+            <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-black" />
+          )}
+        </button>
+      )}
+      {showHandlerChat && (
+        <HandlerChat
+          onClose={() => setShowHandlerChat(false)}
+          openingLine={pendingOutreach?.openingLine}
+        />
+      )}
 
       {/* Whoop OAuth callback toast */}
       {whoopToast && (
