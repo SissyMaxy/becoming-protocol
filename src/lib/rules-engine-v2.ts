@@ -69,6 +69,15 @@ export interface UserStateForSelection {
 
   // Mood (1-10 scale, from most recent mood_checkin)
   recentMood?: number;
+
+  // Dynamic parameter overrides (from handler_parameters table)
+  // When present, these replace hardcoded values in the rules engine
+  parameterOverrides?: {
+    intensityCapBase?: number;
+    coreTaskWeight?: number;
+    domainSaturationCap?: number;
+    avoidancePushProbability?: number;
+  };
 }
 
 /**
@@ -362,10 +371,11 @@ export function selectTask(state: UserStateForSelection, tasks: Task[]): Task | 
   // Soft filter: if domain filtering removes all candidates, relax to ID-only check
   candidates = noRepeat.length > 0 ? noRepeat : candidates.filter(t => t.id !== state.lastTaskId);
 
-  // 4b. Domain saturation — cap any single domain at 3 completions per day
+  // 4b. Domain saturation — cap any single domain at N completions per day
+  const domainSatCap = state.parameterOverrides?.domainSaturationCap ?? 3;
   const domainCounts = new Map<string, number>();
   state.completedTodayDomains.forEach(d => domainCounts.set(d, (domainCounts.get(d) || 0) + 1));
-  const unsaturated = candidates.filter(t => (domainCounts.get(t.domain) || 0) < 3);
+  const unsaturated = candidates.filter(t => (domainCounts.get(t.domain) || 0) < domainSatCap);
   if (unsaturated.length > 0) {
     candidates = unsaturated;
   }
@@ -375,7 +385,8 @@ export function selectTask(state: UserStateForSelection, tasks: Task[]): Task | 
   const avoidanceTasks = candidates.filter(t =>
     state.avoidedDomains.includes(t.domain)
   );
-  if (avoidanceTasks.length > 0 && Math.random() < 0.3) {
+  const avoidanceProbability = state.parameterOverrides?.avoidancePushProbability ?? 0.3;
+  if (avoidanceTasks.length > 0 && Math.random() < avoidanceProbability) {
     candidates = avoidanceTasks;
   }
 

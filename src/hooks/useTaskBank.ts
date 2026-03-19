@@ -22,6 +22,9 @@ import {
   refilterTasks,
   getHardcodedFallbackTasks,
 } from '../lib/task-bank';
+import { checkEscalationTrigger } from '../lib/handler-v2/escalation-engine';
+import { classifyResistance, logResistanceEvent } from '../lib/handler-v2/resistance-classifier';
+import { HandlerParameters, seedDefaultParameters } from '../lib/handler-parameters';
 import type {
   DailyTask,
   UserTaskContext,
@@ -223,6 +226,9 @@ export function useTaskBank(): UseTaskBankReturn {
 
     hasLoadedRef.current = true;
     loadTasks();
+
+    // Fire-and-forget: seed default parameters if not yet seeded
+    seedDefaultParameters(user.id).catch(() => {});
   }, [user?.id, loadTasks]);
 
   // Re-load tasks when ginaHome changes (hide/show intimate tasks)
@@ -287,13 +293,26 @@ export function useTaskBank(): UseTaskBankReturn {
       // Refresh stats
       const newStats = await getTaskStats();
       setStats(newStats);
+
+      // Fire-and-forget: check if escalation generation should trigger
+      const completedTask = todayTasks.find(t => t.id === dailyTaskId);
+      if (user?.id && completedTask?.task?.domain) {
+        const params = new HandlerParameters(user.id);
+        checkEscalationTrigger(user.id, completedTask.task.domain, params)
+          .then(shouldGenerate => {
+            if (shouldGenerate) {
+              console.log(`[Escalation] Trigger fired for domain: ${completedTask.task.domain}`);
+            }
+          })
+          .catch(() => {});
+      }
     } catch (err) {
       console.error('Failed to complete task:', err);
       setError(err instanceof Error ? err.message : 'Failed to complete task');
     } finally {
       setCompletingTaskId(null);
     }
-  }, [metrics, currentState, stats]);
+  }, [metrics, currentState, stats, todayTasks, user?.id]);
 
   // Increment progress (for count/duration tasks)
   const incrementProgress = useCallback(async (dailyTaskId: string) => {
@@ -344,6 +363,35 @@ export function useTaskBank(): UseTaskBankReturn {
         setShowSkipWarning(true);
       }
 
+      // Fire-and-forget: classify resistance and log
+      const skippedTask = todayTasks.find(t => t.id === dailyTaskId);
+      if (user?.id && skippedTask && userState) {
+        const handlerState = {
+          denialDay: userState.denialDay ?? 0,
+          streakDays: userState.streakDays ?? 0,
+          currentArousal: userState.currentArousal ?? 0,
+          timeOfDay: new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening',
+          tasksCompletedToday: userState.tasksCompletedToday ?? 0,
+          avoidedDomains: userState.avoidedDomains ?? [],
+          ginaHome: userState.ginaHome ?? true,
+          inSession: false,
+          odometer: userState.odometer ?? 'coasting',
+          handlerMode: userState.handlerMode ?? 'director',
+        };
+        classifyResistance(
+          handlerState as Parameters<typeof classifyResistance>[0],
+          { type: 'task_declined', details: { domain: skippedTask.task.domain, category: skippedTask.task.category, taskId: skippedTask.taskId } },
+        ).then(classification => {
+          logResistanceEvent(
+            user.id,
+            classification,
+            { type: 'task_declined', details: { domain: skippedTask.task.domain, category: skippedTask.task.category } },
+            handlerState as Parameters<typeof logResistanceEvent>[3],
+          ).catch(() => {});
+          console.log(`[Resistance] Classified skip as ${classification.type} (${(classification.confidence * 100).toFixed(0)}% confidence)`);
+        }).catch(() => {});
+      }
+
       return result;
     } catch (err) {
       console.error('Failed to skip task:', err);
@@ -351,7 +399,7 @@ export function useTaskBank(): UseTaskBankReturn {
     } finally {
       setSkippingTaskId(null);
     }
-  }, []);
+  }, [todayTasks, user?.id, userState]);
 
   // Undo completed task
   const undo = useCallback(async (dailyTaskId: string) => {

@@ -400,13 +400,28 @@ export async function getOrCreateTodayTasks(context: UserTaskContext): Promise<D
 
   const assigned = await assignDailyTasks(selectedTasks, context, reasons);
 
-  // Check escalation readiness across domains (fire-and-forget hook for future dynamic task injection)
+  // Check escalation readiness across domains (fire-and-forget)
   getEscalationOverview(context.userId).then(overview => {
     const ready = overview.filter(d => d.advancementReady);
     if (ready.length > 0) {
       console.log('[TaskBank] Domains ready for advancement:', ready.map(d => `${d.domain} (level ${d.currentLevel})`).join(', '));
     }
-  }).catch(() => { /* silent */ });
+  }).catch(() => {});
+
+  // Check if novelty injection should fire (fire-and-forget)
+  import('./handler-v2/novelty-engine').then(({ shouldInjectNovelty }) => {
+    import('./handler-parameters').then(({ HandlerParameters }) => {
+      const params = new HandlerParameters(context.userId);
+      shouldInjectNovelty(context.userId, params).then(decision => {
+        if (decision?.inject) {
+          console.log(`[Novelty] Injecting ${decision.type}: ${decision.reason}`);
+          import('./handler-v2/novelty-engine').then(({ logNoveltyEvent }) => {
+            logNoveltyEvent(context.userId, decision.type, decision.reason).catch(() => {});
+          });
+        }
+      }).catch(() => {});
+    });
+  }).catch(() => {});
 
   return assigned;
 }
@@ -1572,9 +1587,22 @@ export async function prescribeNextTask(
       return null;
     }
 
-    // Build state for rules engine
+    // Build state for rules engine with dynamic parameter overrides
     const baseState = contextToSelectionState(context);
     const state: UserStateForSelection = { ...baseState, ...stateOverrides };
+
+    // Load dynamic parameters (fire-and-forget cache — won't block if table doesn't exist)
+    try {
+      const { HandlerParameters } = await import('./handler-parameters');
+      const params = new HandlerParameters(context.userId);
+      state.parameterOverrides = {
+        avoidancePushProbability: await params.get<number>('rules.avoidance_push_probability', 0.3),
+        domainSaturationCap: await params.get<number>('rules.domain_saturation_cap', 3),
+        coreTaskWeight: await params.get<number>('rules.weight.is_core', 2.0),
+      };
+    } catch {
+      // Parameters table may not exist yet — use defaults
+    }
 
     // Try rules-engine selection (Layer 1)
     const selected = selectTask(state, available);
