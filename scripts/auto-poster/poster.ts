@@ -10,6 +10,7 @@ import { postToFansly } from './platforms/fansly';
 import { postToOnlyFans } from './platforms/onlyfans';
 import { postToChaturbate } from './platforms/chaturbate';
 import { postToFetLife } from './platforms/fetlife';
+import { postToSniffies } from './platforms/sniffies';
 import path from 'path';
 import fs from 'fs';
 import https from 'https';
@@ -90,6 +91,9 @@ export async function processDuePosts(): Promise<number> {
         break;
       case 'fetlife':
         result = await postToFetLife(fullCaption, localMediaPath);
+        break;
+      case 'sniffies':
+        result = await postToSniffies(fullCaption, localMediaPath);
         break;
       default:
         result = { success: false, error: `Unknown platform: ${post.platform}` };

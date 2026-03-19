@@ -41,6 +41,11 @@ export const PLATFORMS = {
     url: 'https://fetlife.com',
     profileDir: path.join(PROFILE_DIR, 'fetlife'),
   },
+  sniffies: {
+    enabled: process.env.ENABLE_SNIFFIES === 'true',
+    url: 'https://sniffies.com',
+    profileDir: path.join(PROFILE_DIR, 'sniffies'),
+  },
 };
 
 export const POLL_INTERVAL_MS = (parseInt(process.env.POLL_INTERVAL_MINUTES || '15') || 15) * 60 * 1000;
