@@ -31,7 +31,7 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     response_type: 'code',
     client_id: clientId,
     redirect_uri: redirectUri,
-    scope: 'read:recovery read:cycles read:sleep read:workout read:body_measurement read:profile',
+    scope: 'read:recovery read:cycles read:sleep read:workout read:body_measurement read:profile offline',
     state,
   });
 

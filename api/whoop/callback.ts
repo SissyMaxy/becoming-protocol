@@ -75,7 +75,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { error: dbError } = await supabase.from('whoop_tokens').upsert({
     user_id: userId,
     access_token: tokens.access_token,
-    refresh_token: tokens.refresh_token,
+    refresh_token: tokens.refresh_token || '',
     expires_at: expiresAt.toISOString(),
     scopes: tokens.scope?.split(' ') || [],
     disconnected_at: null,
