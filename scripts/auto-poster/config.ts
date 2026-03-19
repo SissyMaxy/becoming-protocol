@@ -31,6 +31,16 @@ export const PLATFORMS = {
     url: 'https://onlyfans.com',
     profileDir: path.join(PROFILE_DIR, 'onlyfans'),
   },
+  chaturbate: {
+    enabled: process.env.ENABLE_CHATURBATE === 'true',
+    url: 'https://chaturbate.com',
+    profileDir: path.join(PROFILE_DIR, 'chaturbate'),
+  },
+  fetlife: {
+    enabled: process.env.ENABLE_FETLIFE === 'true',
+    url: 'https://fetlife.com',
+    profileDir: path.join(PROFILE_DIR, 'fetlife'),
+  },
 };
 
 export const POLL_INTERVAL_MS = (parseInt(process.env.POLL_INTERVAL_MINUTES || '15') || 15) * 60 * 1000;

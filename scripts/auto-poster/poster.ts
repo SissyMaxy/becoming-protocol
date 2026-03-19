@@ -8,6 +8,8 @@ import { postToTwitter } from './platforms/twitter';
 import { postToReddit } from './platforms/reddit';
 import { postToFansly } from './platforms/fansly';
 import { postToOnlyFans } from './platforms/onlyfans';
+import { postToChaturbate } from './platforms/chaturbate';
+import { postToFetLife } from './platforms/fetlife';
 import path from 'path';
 import fs from 'fs';
 import https from 'https';
@@ -82,6 +84,12 @@ export async function processDuePosts(): Promise<number> {
         break;
       case 'onlyfans':
         result = await postToOnlyFans(fullCaption, localMediaPath);
+        break;
+      case 'chaturbate':
+        result = await postToChaturbate(fullCaption, localMediaPath);
+        break;
+      case 'fetlife':
+        result = await postToFetLife(fullCaption, localMediaPath);
         break;
       default:
         result = { success: false, error: `Unknown platform: ${post.platform}` };
