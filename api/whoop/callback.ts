@@ -61,10 +61,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const expiresAt = new Date(Date.now() + (tokens.expires_in || 3600) * 1000);
 
   // Use service role to bypass RLS
-  const supabase = createClient(
-    process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '',
-    process.env.SUPABASE_SERVICE_ROLE_KEY || '',
-  );
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+  if (!supabaseUrl || !serviceKey) {
+    console.error('[Whoop Callback] Missing env:', { hasUrl: !!supabaseUrl, hasKey: !!serviceKey });
+    return res.redirect(302, `${appUrl}?whoop=error&reason=server_config`);
+  }
+
+  const supabase = createClient(supabaseUrl, serviceKey);
 
   // Upsert tokens
   const { error: dbError } = await supabase.from('whoop_tokens').upsert({
@@ -79,7 +84,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (dbError) {
     console.error('[Whoop Callback] DB error:', dbError);
-    return res.redirect(302, `${appUrl}?whoop=error&reason=db_error`);
+    const detail = encodeURIComponent(dbError.message || 'unknown');
+    return res.redirect(302, `${appUrl}?whoop=error&reason=db_error:${detail}`);
   }
 
   // Clear CSRF cookie and redirect to app root with success param
