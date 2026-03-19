@@ -100,10 +100,11 @@ export function useHandlerChat(): UseHandlerChatReturn {
       };
       setMessages(prev => [...prev, assistantMsg]);
     } catch (err) {
-      console.error('[HandlerChat] Error:', err);
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      console.error('[HandlerChat] Error:', errorMsg);
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: 'Connection interrupted. Try again.',
+        content: `Connection error: ${errorMsg}`,
         timestamp: new Date(),
       }]);
     } finally {
