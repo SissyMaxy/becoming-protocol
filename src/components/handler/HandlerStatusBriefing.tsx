@@ -158,21 +158,8 @@ export function HandlerStatusBriefing({ className = '' }: HandlerStatusBriefingP
         </div>
       )}
 
-      {/* AFFIRMATION */}
-      <div className={`rounded-xl p-4 text-center ${
-        isBambiMode
-          ? 'bg-gradient-to-r from-pink-50 to-purple-50 border-2 border-pink-200'
-          : 'bg-gradient-to-r from-purple-900/20 to-pink-900/20 border border-purple-500/30'
-      }`}>
-        <Heart className={`w-5 h-5 mx-auto mb-2 ${
-          isBambiMode ? 'text-pink-400' : 'text-pink-400/80'
-        }`} />
-        <p className={`text-sm italic handler-voice ${
-          isBambiMode ? 'text-pink-600' : 'text-white/80'
-        }`}>
-          {briefing.affirmation}
-        </p>
-      </div>
+      {/* AFFIRMATION removed — greeting subtext already provides
+          denial-day-based motivational message, preventing duplication */}
     </div>
   );
 }
