@@ -10,6 +10,8 @@
 
 import { getPipelineComposite } from './gina/ladder-engine';
 import { buildWhoopContext } from './whoop-context';
+import { buildCommitmentContext } from './handler-v2/commitment-enforcement';
+import { getCurrentPrediction } from './handler-v2/predictive-model';
 import {
   getVaultStats,
   getTodaySchedule,
@@ -634,7 +636,7 @@ async function buildIndustryContext(userId: string): Promise<string> {
  * All systems, maximum data density.
  */
 export async function buildFullSystemsContext(userId: string): Promise<string> {
-  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop] = await Promise.allSettled([
+  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction] = await Promise.allSettled([
     buildGinaContext(userId),
     buildContentContext(userId),
     buildVoiceContext(userId),
@@ -657,6 +659,8 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     buildOvernightSummaryForBriefing(userId),
     buildDopamineContext(userId),
     buildWhoopContextBlock(userId),
+    buildCommitmentContext(userId),
+    buildPredictionContextBlock(userId),
   ]);
 
   const blocks = [
@@ -682,10 +686,24 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     evidenceConfrontation.status === 'fulfilled' ? evidenceConfrontation.value : '',
     dopamine.status === 'fulfilled' ? dopamine.value : '',
     whoop.status === 'fulfilled' ? whoop.value : '',
+    commitments.status === 'fulfilled' ? commitments.value : '',
+    prediction.status === 'fulfilled' ? prediction.value : '',
   ].filter(Boolean);
 
   if (blocks.length === 0) return '';
   return '\n' + blocks.join('\n');
+}
+
+async function buildPredictionContextBlock(userId: string): Promise<string> {
+  const p = await getCurrentPrediction(userId);
+  if (!p) return '';
+  const lines = ['## Predicted State (today, this time block)'];
+  if (p.predictedEngagement) lines.push(`Predicted engagement: ${p.predictedEngagement}`);
+  if (p.predictedEnergy) lines.push(`Predicted energy: ${p.predictedEnergy}`);
+  if (p.resistanceRisk != null && p.resistanceRisk > 0.5) lines.push(`Resistance risk: ${(p.resistanceRisk * 100).toFixed(0)}% — pre-stage gentle approach`);
+  if (p.suggestedMode) lines.push(`Suggested mode: ${p.suggestedMode}`);
+  if (p.suggestedIntensityCap) lines.push(`Suggested intensity cap: ${p.suggestedIntensityCap}`);
+  return lines.length > 1 ? lines.join('\n') : '';
 }
 
 async function buildWhoopContextBlock(userId: string): Promise<string> {
@@ -768,11 +786,12 @@ export async function buildSessionContext(userId: string): Promise<string> {
  * Compact subset: voice avoidance, exercise gap, content pending.
  */
 export async function buildInterventionContext(userId: string): Promise<string> {
-  const [voice, exercise, content, whoop] = await Promise.allSettled([
+  const [voice, exercise, content, whoop, commitmentCtx] = await Promise.allSettled([
     buildVoiceContext(userId),
     buildExerciseContext(userId),
     buildContentContext(userId),
     buildWhoopContextBlock(userId),
+    buildCommitmentContext(userId),
   ]);
 
   const blocks = [
@@ -780,6 +799,7 @@ export async function buildInterventionContext(userId: string): Promise<string> 
     exercise.status === 'fulfilled' ? exercise.value : '',
     content.status === 'fulfilled' ? content.value : '',
     whoop.status === 'fulfilled' ? whoop.value : '',
+    commitmentCtx.status === 'fulfilled' ? commitmentCtx.value : '',
   ].filter(Boolean);
 
   if (blocks.length === 0) return '';

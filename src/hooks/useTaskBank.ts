@@ -22,9 +22,11 @@ import {
   refilterTasks,
   getHardcodedFallbackTasks,
 } from '../lib/task-bank';
-import { checkEscalationTrigger } from '../lib/handler-v2/escalation-engine';
+import { checkEscalationTrigger, generateNextLevel } from '../lib/handler-v2/escalation-engine';
 import { classifyResistance, logResistanceEvent } from '../lib/handler-v2/resistance-classifier';
 import { HandlerParameters, seedDefaultParameters } from '../lib/handler-parameters';
+import { advanceCommitmentStates } from '../lib/handler-v2/commitment-enforcement';
+import { generatePredictions } from '../lib/handler-v2/predictive-model';
 import type {
   DailyTask,
   UserTaskContext,
@@ -229,6 +231,17 @@ export function useTaskBank(): UseTaskBankReturn {
 
     // Fire-and-forget: seed default parameters if not yet seeded
     seedDefaultParameters(user.id).catch(() => {});
+
+    // Fire-and-forget: advance commitment state machine
+    const params = new HandlerParameters(user.id);
+    advanceCommitmentStates(user.id, params).then(changes => {
+      if (changes.length > 0) {
+        console.log(`[Commitments] ${changes.length} state transitions:`, changes.map(c => `${c.text}: ${c.from}→${c.to}`));
+      }
+    }).catch(() => {});
+
+    // Fire-and-forget: generate tomorrow's predictions (runs once per day, cheap)
+    generatePredictions(user.id, params).catch(() => {});
   }, [user?.id, loadTasks]);
 
   // Re-load tasks when ginaHome changes (hide/show intimate tasks)
@@ -301,7 +314,8 @@ export function useTaskBank(): UseTaskBankReturn {
         checkEscalationTrigger(user.id, completedTask.task.domain, params)
           .then(shouldGenerate => {
             if (shouldGenerate) {
-              console.log(`[Escalation] Trigger fired for domain: ${completedTask.task.domain}`);
+              console.log(`[Escalation] Trigger fired for domain: ${completedTask.task.domain}, generating next level...`);
+              generateNextLevel(user!.id, completedTask.task.domain, params).catch(() => {});
             }
           })
           .catch(() => {});

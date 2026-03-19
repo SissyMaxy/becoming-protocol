@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { logGinaReaction } from '../lib/handler-v2/gina-intelligence';
 import type {
   WeekendActivity,
   WeekendSession,
@@ -231,11 +232,32 @@ export function useWeekend(): UseWeekendReturn {
       // Reload progress (might have been updated by trigger)
       const progress = await getGinaIntegrationProgress();
       setIntegrationProgress(progress);
+
+      // Fire-and-forget: log Gina reaction to comfort map
+      if (feedback.ginaParticipated && feedback.completed) {
+        const activity = allActivities.find(a => a.activityId === activityId);
+        if (activity) {
+          import('../lib/supabase').then(({ supabase }) => {
+            supabase.auth.getUser().then(({ data: { user } }) => {
+              if (!user) return;
+              const reaction = (feedback.ginaEngagementRating ?? 3) >= 3 ? 'positive' : 'neutral';
+              logGinaReaction(
+                user.id,
+                activity.category === 'gina_feminizing' ? (activity as unknown as Record<string, unknown>).ginaAction as string || activity.category : activity.category,
+                activity.name,
+                reaction as 'positive' | 'neutral' | 'negative' | 'curious',
+                feedback.ginaReactions || undefined,
+                feedback.ginaInitiated,
+              ).catch(() => {});
+            });
+          });
+        }
+      }
     } catch (err) {
       console.error('Error completing activity:', err);
       setError('Failed to complete activity');
     }
-  }, [currentPlan]);
+  }, [currentPlan, allActivities]);
 
   /**
    * Skip an activity
