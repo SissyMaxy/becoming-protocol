@@ -180,10 +180,11 @@ export function ModalOrchestratorProvider({ children }: ModalOrchestratorProvide
       {/* Render the current modal */}
       {currentModal && (
         <div
-          className="fixed inset-0 z-[60]"
-          onClick={currentModal.dismissOnBackdrop ? dismissCurrent : undefined}
+          className="fixed inset-0 z-[60] pointer-events-none"
         >
-          {currentModal.component}
+          <div className="pointer-events-auto">
+            {currentModal.component}
+          </div>
         </div>
       )}
     </ModalOrchestratorContext.Provider>
