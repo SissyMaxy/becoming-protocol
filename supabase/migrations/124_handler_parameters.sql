@@ -287,21 +287,21 @@ CREATE POLICY "Users own signals" ON gina_disclosure_signals FOR ALL USING (auth
 -- COMMITMENT ENFORCEMENT EXTENSIONS
 -- ============================================
 
-ALTER TABLE commitments ADD COLUMN IF NOT EXISTS
+ALTER TABLE commitments_v2 ADD COLUMN IF NOT EXISTS
   state TEXT DEFAULT 'extracted';
-ALTER TABLE commitments ADD COLUMN IF NOT EXISTS
+ALTER TABLE commitments_v2 ADD COLUMN IF NOT EXISTS
   deadline TIMESTAMPTZ;
-ALTER TABLE commitments ADD COLUMN IF NOT EXISTS
+ALTER TABLE commitments_v2 ADD COLUMN IF NOT EXISTS
   enforcement_context JSONB DEFAULT '{}';
-ALTER TABLE commitments ADD COLUMN IF NOT EXISTS
+ALTER TABLE commitments_v2 ADD COLUMN IF NOT EXISTS
   coercion_stack_level INTEGER DEFAULT 0;
-ALTER TABLE commitments ADD COLUMN IF NOT EXISTS
+ALTER TABLE commitments_v2 ADD COLUMN IF NOT EXISTS
   lovense_summons_fired BOOLEAN DEFAULT FALSE;
-ALTER TABLE commitments ADD COLUMN IF NOT EXISTS
+ALTER TABLE commitments_v2 ADD COLUMN IF NOT EXISTS
   state_transitions JSONB DEFAULT '[]';
-ALTER TABLE commitments ADD COLUMN IF NOT EXISTS
+ALTER TABLE commitments_v2 ADD COLUMN IF NOT EXISTS
   enforcement_attempts INTEGER DEFAULT 0;
-ALTER TABLE commitments ADD COLUMN IF NOT EXISTS
+ALTER TABLE commitments_v2 ADD COLUMN IF NOT EXISTS
   handler_enforcement_notes TEXT;
 
-CREATE INDEX IF NOT EXISTS idx_commitments_state ON commitments(user_id, state, deadline);
+CREATE INDEX IF NOT EXISTS idx_commitments_state ON commitments_v2(user_id, state, deadline);
