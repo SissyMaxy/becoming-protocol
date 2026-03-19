@@ -403,6 +403,24 @@ function AuthenticatedAppInner() {
     attemptNumber: number;
   } | null>(null);
 
+  // Whoop OAuth callback toast
+  const [whoopToast, setWhoopToast] = useState<string | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get('whoop');
+    if (status) {
+      window.history.replaceState({}, '', window.location.pathname);
+      if (status === 'connected') return 'connected';
+      if (status === 'error') return params.get('reason') || 'error';
+    }
+    return null;
+  });
+  useEffect(() => {
+    if (whoopToast) {
+      const timer = setTimeout(() => setWhoopToast(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [whoopToast]);
+
   const [activeTab, setActiveTab] = useState<Tab>('protocol');
   const [menuSubView, setMenuSubView] = useState<MenuSubView>(null);
   const [showMorningFlow, setShowMorningFlow] = useState(false);
@@ -895,6 +913,24 @@ function AuthenticatedAppInner() {
 
       {/* Floating hearts for Bambi mode celebrations */}
       <FloatingHearts />
+
+      {/* Whoop OAuth callback toast */}
+      {whoopToast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[80] animate-slide-down">
+          <div className={`px-5 py-3 rounded-xl shadow-lg flex items-center gap-3 ${
+            whoopToast === 'connected'
+              ? 'bg-green-900 border border-green-500/50 text-green-100'
+              : 'bg-red-900 border border-red-500/50 text-red-100'
+          }`}>
+            <span className="text-lg">{whoopToast === 'connected' ? '✓' : '✕'}</span>
+            <span className="font-medium text-sm">
+              {whoopToast === 'connected'
+                ? 'Whoop connected. Biometric data syncing.'
+                : `Whoop connection failed: ${whoopToast}`}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Micro-task card overlay */}
       {microTasks.activeMicro && (
