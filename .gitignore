@@ -1,5 +1,11 @@
 # Dependencies
 node_modules/
+
+# Auto-poster sensitive data
+scripts/auto-poster/.browser-profiles/
+scripts/auto-poster/.env
+scripts/auto-poster/.temp-media*
+scripts/auto-poster/node_modules/
 .pnp/
 .pnp.js
 
