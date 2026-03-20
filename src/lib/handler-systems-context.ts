@@ -12,6 +12,12 @@ import { getPipelineComposite } from './gina/ladder-engine';
 import { buildWhoopContext } from './whoop-context';
 import { buildCommitmentContext } from './handler-v2/commitment-enforcement';
 import { getCurrentPrediction } from './handler-v2/predictive-model';
+import { getConditioningContext } from './handler-v2/conditioning-engine';
+import { getHRTContext } from './handler-v2/hrt-pipeline';
+import { getShameContext } from './handler-v2/shame-alchemy';
+import { getRevenueContext } from './handler-v2/revenue-acceleration';
+import { getDavidEliminationContext } from './handler-v2/david-elimination';
+import { getSocialContext } from './handler-v2/social-escalation';
 import {
   getVaultStats,
   getTodaySchedule,
@@ -636,7 +642,7 @@ async function buildIndustryContext(userId: string): Promise<string> {
  * All systems, maximum data density.
  */
 export async function buildFullSystemsContext(userId: string): Promise<string> {
-  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction] = await Promise.allSettled([
+  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social] = await Promise.allSettled([
     buildGinaContext(userId),
     buildContentContext(userId),
     buildVoiceContext(userId),
@@ -661,6 +667,12 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     buildWhoopContextBlock(userId),
     buildCommitmentContext(userId),
     buildPredictionContextBlock(userId),
+    getConditioningContext(userId),
+    getHRTContext(userId),
+    getShameContext(userId),
+    getRevenueContext(userId),
+    getDavidEliminationContext(userId),
+    getSocialContext(userId),
   ]);
 
   const blocks = [
@@ -688,6 +700,12 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     whoop.status === 'fulfilled' ? whoop.value : '',
     commitments.status === 'fulfilled' ? commitments.value : '',
     prediction.status === 'fulfilled' ? prediction.value : '',
+    conditioning.status === 'fulfilled' ? conditioning.value : '',
+    hrt.status === 'fulfilled' ? hrt.value : '',
+    shame.status === 'fulfilled' ? shame.value : '',
+    revenue.status === 'fulfilled' ? revenue.value : '',
+    davidElim.status === 'fulfilled' ? davidElim.value : '',
+    social.status === 'fulfilled' ? social.value : '',
   ].filter(Boolean);
 
   if (blocks.length === 0) return '';
