@@ -285,9 +285,12 @@ function isExcluded(task: Task, context: UserTaskContext): boolean {
 export async function selectDailyTasks(context: UserTaskContext): Promise<Task[]> {
   const allTasks = await getAllTasks();
 
-  // Filter to eligible tasks
+  // Filter to eligible tasks, excluding domains covered by active goals
+  const goalDomains = new Set(context.activeGoalDomains || []);
   const eligible = allTasks.filter(task =>
-    meetsRequirements(task, context) && !isExcluded(task, context)
+    meetsRequirements(task, context) &&
+    !isExcluded(task, context) &&
+    !goalDomains.has(task.domain)
   );
 
   const selected: Task[] = [];
@@ -1612,8 +1615,10 @@ export async function prescribeNextTask(
 ): Promise<DailyTask | null> {
   try {
     // Load all active tasks from DB + generated tasks
+    // Exclude domains covered by active goals
+    const goalDomains = new Set(context.activeGoalDomains || []);
     const allTasks = await getAllTasks();
-    let available = allTasks.filter(t => !excludeTaskIds.includes(t.id));
+    let available = allTasks.filter(t => !excludeTaskIds.includes(t.id) && !goalDomains.has(t.domain));
 
     // Merge generated tasks into the candidate pool
     try {

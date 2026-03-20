@@ -454,6 +454,8 @@ export interface UserTaskContext {
     delayPatterns: boolean;
   };
   maxDailyTasks: number;
+  /** Domains covered by active goals — task engine skips these to avoid duplication */
+  activeGoalDomains?: string[];
 }
 
 // ============================================

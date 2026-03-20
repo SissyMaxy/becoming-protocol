@@ -132,6 +132,24 @@ export function useTaskBank(): UseTaskBankReturn {
   }, [userState?.estimatedExecFunction, userState?.odometer]);
 
   // Build user context - takes existingTasks as parameter to avoid stale closure
+  // Track active goal domains to prevent task duplication
+  const [activeGoalDomains, setActiveGoalDomains] = useState<string[]>([]);
+  useEffect(() => {
+    if (!user?.id) return;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('goals')
+          .select('domain')
+          .eq('user_id', user.id)
+          .eq('active', true);
+        if (data) {
+          setActiveGoalDomains(data.map(g => g.domain).filter(Boolean) as string[]);
+        }
+      } catch { /* goals table may not exist */ }
+    })();
+  }, [user?.id]);
+
   const buildContext = useCallback((existingTasks: DailyTask[] = []): UserTaskContext => {
     return {
       userId: user?.id || '',
@@ -143,8 +161,8 @@ export function useTaskBank(): UseTaskBankReturn {
       ginaHome: userState?.ginaHome ?? false,
       ginaAsleep: userState?.ginaAsleep ?? false,
       ginaCorruptionLevel,
-      ownedItems: [], // Would come from wishlist/inventory
-      completedTaskIds: [], // Would be loaded from completions
+      ownedItems: [],
+      completedTaskIds: [],
       recentlyServedTaskIds: existingTasks.map(t => t.taskId),
       categoryCompletions: {} as Record<TaskCategory, number>,
       totalCompletions: userState?.tasksCompletedToday || 0,
@@ -154,8 +172,9 @@ export function useTaskBank(): UseTaskBankReturn {
         delayPatterns: false,
       },
       maxDailyTasks: getMaxDailyTasks(),
+      activeGoalDomains,
     };
-  }, [user, progress, metrics, currentState, userState, stats, getMaxDailyTasks, ginaCorruptionLevel]);
+  }, [user, progress, metrics, currentState, userState, stats, getMaxDailyTasks, ginaCorruptionLevel, activeGoalDomains]);
 
   // Load tasks
   const loadTasks = useCallback(async () => {
