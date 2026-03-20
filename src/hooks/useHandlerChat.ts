@@ -1,8 +1,9 @@
 /**
  * useHandlerChat — Client hook for conversational Handler.
+ * Persists conversations in DB and resumes on reopen.
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 
@@ -29,7 +30,7 @@ interface UseHandlerChatReturn {
   currentMode: string;
   conversationId: string | null;
   sendMessage: (text: string) => Promise<void>;
-  startConversation: (type?: string, openingLine?: string) => void;
+  startNewConversation: () => void;
   endConversation: () => void;
 }
 
@@ -37,29 +38,76 @@ export function useHandlerChat(): UseHandlerChatReturn {
   const { user } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isSending, setIsSending] = useState(false);
-  const [isLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [currentMode, setCurrentMode] = useState('director');
   const conversationIdRef = useRef<string | null>(null);
+  const loadedRef = useRef(false);
 
-  const startConversation = useCallback((_type?: string, openingLine?: string) => {
+  // Load most recent active conversation on mount
+  useEffect(() => {
+    if (!user?.id || loadedRef.current) return;
+    loadedRef.current = true;
+
+    async function loadRecent() {
+      setIsLoading(true);
+      try {
+        // Find most recent conversation from today that isn't ended
+        const today = new Date().toISOString().split('T')[0];
+        const { data: conv } = await supabase
+          .from('handler_conversations')
+          .select('id, final_mode')
+          .eq('user_id', user!.id)
+          .is('ended_at', null)
+          .gte('started_at', `${today}T00:00:00`)
+          .order('started_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (conv) {
+          conversationIdRef.current = conv.id;
+          if (conv.final_mode) setCurrentMode(conv.final_mode);
+
+          // Load messages
+          const { data: msgs } = await supabase
+            .from('handler_messages')
+            .select('role, content, detected_mode, created_at')
+            .eq('conversation_id', conv.id)
+            .order('message_index', { ascending: true });
+
+          if (msgs && msgs.length > 0) {
+            setMessages(msgs.map(m => ({
+              role: m.role as 'user' | 'assistant',
+              content: m.content,
+              timestamp: new Date(m.created_at),
+              mode: m.detected_mode || undefined,
+            })));
+          }
+        }
+      } catch (err) {
+        console.error('[HandlerChat] Failed to load conversation:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadRecent();
+  }, [user?.id]);
+
+  const startNewConversation = useCallback(() => {
+    // End current conversation if exists
+    if (conversationIdRef.current) {
+      supabase.from('handler_conversations').update({
+        ended_at: new Date().toISOString(),
+      }).eq('id', conversationIdRef.current).then(() => {});
+    }
     conversationIdRef.current = null;
     setMessages([]);
     setCurrentMode('director');
-
-    if (openingLine) {
-      setMessages([{
-        role: 'assistant',
-        content: openingLine,
-        timestamp: new Date(),
-        mode: 'director',
-      }]);
-    }
   }, []);
 
   const sendMessage = useCallback(async (text: string) => {
     if (!user?.id || !text.trim()) return;
 
-    // Add user message optimistically
     const userMsg: ChatMessage = { role: 'user', content: text.trim(), timestamp: new Date() };
     setMessages(prev => [...prev, userMsg]);
     setIsSending(true);
@@ -118,7 +166,6 @@ export function useHandlerChat(): UseHandlerChatReturn {
         ended_at: new Date().toISOString(),
       }).eq('id', conversationIdRef.current).then(() => {});
     }
-    conversationIdRef.current = null;
   }, []);
 
   return {
@@ -128,7 +175,7 @@ export function useHandlerChat(): UseHandlerChatReturn {
     currentMode,
     conversationId: conversationIdRef.current,
     sendMessage,
-    startConversation,
+    startNewConversation,
     endConversation,
   };
 }

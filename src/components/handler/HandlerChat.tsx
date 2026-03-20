@@ -9,7 +9,6 @@ import { useHandlerChat, type ChatMessage } from '../../hooks/useHandlerChat';
 
 interface HandlerChatProps {
   onClose: () => void;
-  initialType?: string;
   openingLine?: string;
 }
 
@@ -21,20 +20,23 @@ const MODE_COLORS: Record<string, { bg: string; text: string; label: string }> =
   architect: { bg: 'bg-purple-500/20', text: 'text-purple-400', label: 'Architect' },
 };
 
-export function HandlerChat({ onClose, initialType, openingLine }: HandlerChatProps) {
+export function HandlerChat({ onClose, openingLine }: HandlerChatProps) {
   const { isBambiMode } = useBambiMode();
-  const { messages, isSending, currentMode, sendMessage, startConversation, endConversation } = useHandlerChat();
+  const { messages, isLoading, isSending, currentMode, sendMessage, startNewConversation } = useHandlerChat();
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const initRef = useRef(false);
 
-  // Start conversation on mount (once only)
+  // If opening from outreach with an opening line AND no existing conversation loaded
   useEffect(() => {
-    if (initRef.current) return;
+    if (initRef.current || isLoading) return;
     initRef.current = true;
-    startConversation(initialType, openingLine);
-  }, []);
+    if (openingLine && messages.length === 0) {
+      // Don't call startNewConversation — just show the opening line locally
+      // The first user reply will create the conversation
+    }
+  }, [isLoading]);
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -60,7 +62,7 @@ export function HandlerChat({ onClose, initialType, openingLine }: HandlerChatPr
   };
 
   const handleClose = () => {
-    endConversation();
+    // Don't end conversation — just close the UI. It persists.
     onClose();
   };
 
@@ -85,17 +87,34 @@ export function HandlerChat({ onClose, initialType, openingLine }: HandlerChatPr
             </span>
           )}
         </div>
-        <button
-          onClick={handleClose}
-          className="p-2 rounded-full hover:bg-gray-800 text-gray-400"
-        >
-          <X className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          {messages.length > 0 && (
+            <button
+              onClick={startNewConversation}
+              className="text-xs px-2 py-1 rounded-lg hover:bg-gray-800 text-gray-400"
+            >
+              New
+            </button>
+          )}
+          <button
+            onClick={handleClose}
+            className="p-2 rounded-full hover:bg-gray-800 text-gray-400"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-        {messages.length === 0 && !openingLine && (
+        {isLoading && (
+          <div className="text-center text-gray-600 mt-20">
+            <Loader2 className="w-6 h-6 animate-spin mx-auto mb-3" />
+            <p className="text-sm">Loading conversation...</p>
+          </div>
+        )}
+
+        {!isLoading && messages.length === 0 && (
           <div className="text-center text-gray-600 mt-20">
             <p className="text-lg font-medium">Talk to the Handler.</p>
             <p className="text-sm mt-2">Type anything. She's listening.</p>
