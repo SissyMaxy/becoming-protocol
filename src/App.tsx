@@ -392,8 +392,8 @@ function AuthenticatedAppInner() {
   // Morning/Evening bookend system
   const bookends = useBookends();
 
-  // Micro-task identity reinforcement
-  const microTasks = useMicroTasks();
+  // Micro-tasks disabled — user found pop-ups disruptive
+  // const microTasks = useMicroTasks();
 
   // Arousal state — for orgasm logging
   const { logOrgasm, metrics: arousalMetrics } = useArousalState();
@@ -929,8 +929,7 @@ function AuthenticatedAppInner() {
         </ErrorBoundary>
       </main>
 
-      {/* Unified Notification Toast Stack */}
-      <NotificationToastStack position="top" maxVisible={3} />
+      {/* Notification toast stack disabled — all unprompted pop-ups removed */}
 
       <Navigation
         activeTab={activeTab}
