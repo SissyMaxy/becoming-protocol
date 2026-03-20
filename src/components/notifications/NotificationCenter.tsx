@@ -75,7 +75,7 @@ export function NotificationToastStack({
 
   return (
     <div
-      className={`fixed left-4 right-4 z-50 space-y-2 ${
+      className={`fixed left-4 right-4 z-[75] space-y-2 ${
         position === 'top' ? 'top-20' : 'bottom-24'
       }`}
     >
