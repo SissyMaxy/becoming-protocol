@@ -385,8 +385,8 @@ function AuthenticatedAppInner() {
 
   // Disassociation recovery - detects when you zone out
   const recovery = useDisassociationRecovery({
-    inactivityThresholdMs: 10 * 60 * 1000, // 10 minutes
-    enabled: true,
+    inactivityThresholdMs: 10 * 60 * 1000,
+    enabled: false, // Disabled — user found recovery prompts disruptive
   });
 
   // Morning/Evening bookend system
@@ -460,26 +460,29 @@ function AuthenticatedAppInner() {
     dismissReminder,
   } = useReminders();
 
-  // Pattern catch notifications - proactive pattern awareness
-  usePatternNotifications({ enabled: true });
+  // Pattern notifications disabled — user found pop-ups disruptive
+  usePatternNotifications({ enabled: false });
 
   // Dopamine delivery system - delayed rewards + periodic notifications
-  useDopamineNotifications();
+  // Dopamine notifications disabled — user found pop-ups disruptive
+  // useDopamineNotifications();
 
   // Orchestrated modals - prevents modal stacking, shows one at a time
+  // Orchestrated modals — reminders and recovery disabled (user found pop-ups disruptive)
+  // Only event-driven modals remain: interventions, milestones, achievements, level-ups
   useOrchestratedModals({
-    currentReminder,
+    currentReminder: null, // Disabled
     onRespondReminder: respondToReminder,
     onSkipReminder: skipReminder,
     onDismissReminder: dismissReminder,
-    currentIntervention,
+    currentIntervention: null, // Disabled — Handler chat replaces interventions
     onCompleteIntervention: completeIntervention,
     onDismissIntervention: dismissIntervention,
     onRespondIntervention: respondToIntervention,
-    recoveryTriggered: recovery.isTriggered,
-    recoveryPrompt: recovery.currentPrompt,
-    recoveryEscalationLevel: recovery.escalationLevel,
-    recoveryConsecutiveIgnores: recovery.consecutiveIgnores,
+    recoveryTriggered: false, // Disabled
+    recoveryPrompt: null,
+    recoveryEscalationLevel: 1,
+    recoveryConsecutiveIgnores: 0,
     onCompleteRecovery: recovery.completeRecovery,
     onDismissRecovery: recovery.dismissRecovery,
     investmentMilestone,
@@ -985,14 +988,7 @@ function AuthenticatedAppInner() {
         </div>
       )}
 
-      {/* Micro-task card overlay */}
-      {microTasks.activeMicro && (
-        <MicroTaskCard
-          micro={microTasks.activeMicro}
-          onComplete={microTasks.completeMicro}
-          onSkip={microTasks.skipMicro}
-        />
-      )}
+      {/* Micro-task card overlay — disabled, user found pop-ups disruptive */}
 
       {/* Evening Debrief overlay */}
       {bookends.showEveningBookend && bookends.daySummary && bookends.config && (
@@ -1067,7 +1063,7 @@ function AuthenticatedApp() {
               enableBackgroundChecks={true}
             >
               <ModalOrchestratorProvider>
-                <AmbushProvider>
+                <AmbushProvider enabled={false}>
                   <AuthenticatedAppInner />
                 </AmbushProvider>
               </ModalOrchestratorProvider>
