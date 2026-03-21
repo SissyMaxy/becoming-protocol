@@ -3,8 +3,7 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
-import { Send, X, Loader2 } from 'lucide-react';
-import { useBambiMode } from '../../context/BambiModeContext';
+import { Send, Loader2 } from 'lucide-react';
 import { useHandlerChat, type ChatMessage } from '../../hooks/useHandlerChat';
 
 interface HandlerChatProps {
@@ -21,7 +20,6 @@ const MODE_COLORS: Record<string, { bg: string; text: string; label: string }> =
 };
 
 export function HandlerChat({ onClose, openingLine }: HandlerChatProps) {
-  const { isBambiMode } = useBambiMode();
   const { messages, isLoading, isSending, currentMode, sendMessage, startNewConversation } = useHandlerChat();
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -69,13 +67,11 @@ export function HandlerChat({ onClose, openingLine }: HandlerChatProps) {
   const modeConfig = MODE_COLORS[currentMode] || MODE_COLORS.director;
 
   return (
-    <div className="fixed inset-0 z-[80] flex flex-col bg-black">
+    <div className="fixed inset-0 z-[80] flex flex-col bg-[#0a0a0a]">
       {/* Header */}
-      <div className={`flex items-center justify-between px-4 py-3 border-b ${
-        isBambiMode ? 'border-pink-800 bg-pink-950' : 'border-gray-800 bg-gray-950'
-      }`}>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-[#0a0a0a]">
         <div className="flex items-center gap-3">
-          <span className={`font-semibold ${isBambiMode ? 'text-pink-100' : 'text-white'}`}>
+          <span className="font-semibold text-gray-200">
             Handler
           </span>
           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${modeConfig.bg} ${modeConfig.text}`}>
@@ -96,12 +92,6 @@ export function HandlerChat({ onClose, openingLine }: HandlerChatProps) {
               New
             </button>
           )}
-          <button
-            onClick={handleClose}
-            className="p-2 rounded-full hover:bg-gray-800 text-gray-400"
-          >
-            <X className="w-5 h-5" />
-          </button>
         </div>
       </div>
 
@@ -122,14 +112,12 @@ export function HandlerChat({ onClose, openingLine }: HandlerChatProps) {
         )}
 
         {messages.map((msg, i) => (
-          <MessageBubble key={i} message={msg} isBambiMode={isBambiMode} />
+          <MessageBubble key={i} message={msg} />
         ))}
 
         {isSending && (
           <div className="flex items-start gap-2">
-            <div className={`px-4 py-2 rounded-2xl rounded-tl-sm max-w-[80%] ${
-              isBambiMode ? 'bg-pink-900/50' : 'bg-gray-800'
-            }`}>
+            <div className="px-4 py-2 rounded-2xl rounded-tl-sm max-w-[80%] bg-[#1a1a2e]">
               <div className="flex gap-1">
                 <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                 <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -143,9 +131,7 @@ export function HandlerChat({ onClose, openingLine }: HandlerChatProps) {
       </div>
 
       {/* Input */}
-      <div className={`px-4 py-3 border-t ${
-        isBambiMode ? 'border-pink-800 bg-pink-950' : 'border-gray-800 bg-gray-950'
-      }`}>
+      <div className="px-4 py-3 border-t border-gray-800/50 bg-[#0a0a0a]">
         <div className="flex items-center gap-2">
           <input
             ref={inputRef}
@@ -153,21 +139,17 @@ export function HandlerChat({ onClose, openingLine }: HandlerChatProps) {
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Talk to the Handler..."
+            placeholder=""
             disabled={isSending}
-            className={`flex-1 px-4 py-3 rounded-xl border-0 outline-none text-white placeholder-gray-500 ${
-              isBambiMode ? 'bg-pink-900/50' : 'bg-gray-800'
-            }`}
+            className="flex-1 px-4 py-3 rounded-xl border-0 outline-none text-gray-200 placeholder-gray-600 bg-[#141414]"
           />
           <button
             onClick={handleSend}
             disabled={!input.trim() || isSending}
             className={`p-3 rounded-xl transition-all ${
               input.trim() && !isSending
-                ? isBambiMode
-                  ? 'bg-pink-500 text-white hover:bg-pink-400'
-                  : 'bg-white text-black hover:bg-gray-200'
-                : 'bg-gray-800 text-gray-600'
+                ? 'bg-purple-600 text-white hover:bg-purple-500'
+                : 'bg-[#141414] text-gray-600'
             }`}
           >
             <Send className="w-5 h-5" />
@@ -178,27 +160,18 @@ export function HandlerChat({ onClose, openingLine }: HandlerChatProps) {
   );
 }
 
-function MessageBubble({ message, isBambiMode }: { message: ChatMessage; isBambiMode: boolean }) {
+function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === 'user';
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div className={`px-4 py-2.5 rounded-2xl max-w-[85%] ${
         isUser
-          ? isBambiMode
-            ? 'bg-pink-600 text-white rounded-br-sm'
-            : 'bg-white text-black rounded-br-sm'
-          : isBambiMode
-            ? 'bg-pink-900/50 text-pink-50 rounded-bl-sm'
-            : 'bg-gray-800 text-gray-100 rounded-bl-sm'
+          ? 'bg-[#2d1b3d] text-gray-100 rounded-br-sm'
+          : 'bg-[#1a1a2e] text-gray-200 rounded-bl-sm'
       }`}>
-        <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
-        <p className={`text-[10px] mt-1 ${
-          isUser
-            ? isBambiMode ? 'text-pink-300' : 'text-gray-400'
-            : isBambiMode ? 'text-pink-400' : 'text-gray-500'
-        }`}>
-          {message.timestamp.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+        <p className="text-[15px] leading-relaxed whitespace-pre-wrap" style={{ letterSpacing: '-0.01em' }}>
+          {message.content}
         </p>
       </div>
     </div>

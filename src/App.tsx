@@ -906,68 +906,54 @@ function AuthenticatedAppInner() {
     }
   };
 
+  // Handler-Directed UI: Conversation is the primary screen.
+  // Legacy views accessible via settings gesture only.
+  const [showLegacyView, setShowLegacyView] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+
   return (
-    <div className={`min-h-screen ${isBambiMode ? 'bambi-mode' : 'bg-protocol-bg'}`}>
-      <Header />
-
-      <main className="max-w-lg mx-auto px-4 py-6 pb-24">
-        <ErrorBoundary componentName="TodayView">
-          {activeTab === 'protocol' && <TodayView />}
-        </ErrorBoundary>
-        {canSee('progress_page') && (
-          <ErrorBoundary componentName="ProgressDashboard">
-            {activeTab === 'progress' && <ProgressDashboard />}
-          </ErrorBoundary>
-        )}
-        {canSee('sealed_content') && (
-          <ErrorBoundary componentName="SealedContent">
-            {activeTab === 'sealed' && <SealedContentView />}
-          </ErrorBoundary>
-        )}
-        <ErrorBoundary componentName="Menu">
-          {activeTab === 'menu' && renderMenuSubView()}
-        </ErrorBoundary>
-      </main>
-
-      {/* Notification toast stack disabled — all unprompted pop-ups removed */}
-
-      <Navigation
-        activeTab={activeTab}
-        onTabChange={handleTabChange}
-      />
-
-      {/* Floating hearts for Bambi mode celebrations */}
-      <FloatingHearts />
-
-      {/* Handler Chat — floating button + full-screen overlay */}
-      {!showHandlerChat && (
-        <button
-          onClick={() => {
-            setShowHandlerChat(true);
-            if (pendingOutreach) setPendingOutreach(null);
-          }}
-          className={`fixed bottom-20 right-4 z-40 w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110 ${
-            pendingOutreach ? 'animate-pulse' : ''
-          } ${
-            isBambiMode
-              ? 'bg-pink-500 text-white'
-              : 'bg-protocol-accent text-white'
-          }`}
-        >
-          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-          </svg>
-          {pendingOutreach && (
-            <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-black" />
-          )}
-        </button>
-      )}
-      {showHandlerChat && (
+    <div className="min-h-screen bg-[#0a0a0a]">
+      {/* PRIMARY: The Conversation — always visible unless legacy/settings open */}
+      {!showLegacyView && !showSettings && (
         <HandlerChat
-          onClose={() => setShowHandlerChat(false)}
+          onClose={() => {}} // Can't close — it IS the app
           openingLine={pendingOutreach?.openingLine}
         />
       )}
+
+      {/* LEGACY: Old Today/Menu views — accessible via Settings only */}
+      {showLegacyView && (
+        <div className="min-h-screen bg-protocol-bg">
+          <div className="max-w-lg mx-auto px-4 py-4">
+            <button
+              onClick={() => setShowLegacyView(false)}
+              className="mb-4 text-sm text-gray-400 hover:text-white"
+            >
+              &larr; Back to Handler
+            </button>
+            <ErrorBoundary componentName="TodayView">
+              <TodayView />
+            </ErrorBoundary>
+          </div>
+        </div>
+      )}
+
+      {/* SETTINGS: Hidden, accessible via gesture */}
+      {showSettings && (
+        <div className="min-h-screen bg-protocol-bg">
+          <div className="max-w-lg mx-auto px-4 py-4">
+            <button
+              onClick={() => setShowSettings(false)}
+              className="mb-4 text-sm text-gray-400 hover:text-white"
+            >
+              &larr; Back to Handler
+            </button>
+            {renderMenuSubView()}
+          </div>
+        </div>
+      )}
+
+      <FloatingHearts />
 
       {/* Whoop OAuth callback toast */}
       {whoopToast && (
