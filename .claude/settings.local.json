@@ -94,7 +94,19 @@
       "Bash(vercel:*)",
       "WebFetch(domain:voxfemina.vercel.app)",
       "Bash(del \"D:\\\\Projects\\\\vox-femina\\\\client\\\\vercel.json\")",
-      "Bash(git fetch:*)"
+      "Bash(git fetch:*)",
+      "Bash(cd \"D:/Projects/Becoming Protocol\" && git reflog expire --expire=now --all && git gc --prune=now --aggressive 2>&11)",
+      "Bash(gh api:*)",
+      "Bash(cd \"D:/Projects/Becoming Protocol\" && npx vite dev --host 2>&1)",
+      "Bash(kill %1:*)",
+      "Bash(find \"/d/Projects/Becoming Protocol\" -type f \\\\\\( -name \"*vault*\" -o -name \"*VaultView*\" -o -name \"*VaultSwipe*\" -o -name \"*PostingQueue*\" \\\\\\) 2>/dev/null | head -20)",
+      "Bash(cd \"D:\\\\Projects\\\\Becoming Protocol\" && for i in 071 072 073 074 075 076 077 078 079 080 081 082 083 084 085 086 087 088 089 090 091 092 093 094 095 096 097 098 099 100 101 102 103 104 105 106 107 108 109 110 111 112 113; do npx supabase migration repair --status applied $i 2>&1 | grep -v \"^Initialising\\\\|^Connecting\\\\|^Finished\\\\|^Run\"; done)",
+      "Bash(cd \"D:\\\\Projects\\\\Becoming Protocol\" && mv supabase/migrations/086_sprint5_creator_outreach.sql supabase/migrations/086b_sprint5_creator_outreach.sql)",
+      "Bash(cd \"D:\\\\Projects\\\\Becoming Protocol\" && rm -rf dist && npm run build 2>&1 | grep -i \"error\\\\|Error\\\\|ERR\\\\|fail\" | head -20)",
+      "WebFetch(domain:developer.whoop.com)",
+      "Bash(cd \"D:\\\\Projects\\\\Becoming Protocol\\\\scripts\\\\auto-poster\" && mkdir -p .browser-profiles/sniffies && npx playwright open --browser chromium --save-storage .browser-profiles/sniffies/state.json https://sniffies.com 2>&1)",
+      "Bash(/tmp/analysis.txt:*)",
+      "Read(//tmp/**)"
     ]
   }
 }

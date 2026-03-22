@@ -200,6 +200,14 @@ export function HandlerProvider({
   const currentAttemptIdRef = useRef<string | null>(null);
   const lastNotifiedSignalRef = useRef<string | null>(null);
 
+  // Stable refs to break circular dependency chains
+  // handlerAI returns a new object every render; using a ref prevents
+  // all dependent useCallbacks from being recreated on every render.
+  const handlerAIRef = useRef(handlerAI);
+  handlerAIRef.current = handlerAI;
+  const userStateRef = useRef(userState);
+  userStateRef.current = userState;
+
   // Generate daily plan on mount
   const generateDailyPlan = useCallback(async () => {
     if (!user) return;
@@ -240,12 +248,12 @@ export function HandlerProvider({
       return;
     }
 
-    const plan = await handlerAI.generateTodaysPlan({
-      denialDay: userState?.denialDay ?? 0,
-      lastStateScore: userState?.estimatedExecFunction === 'high' ? 8
-        : userState?.estimatedExecFunction === 'medium' ? 5
-        : userState?.estimatedExecFunction === 'low' ? 3 : 1,
-      currentStreak: userState?.streakDays ?? 0,
+    const plan = await handlerAIRef.current.generateTodaysPlan({
+      denialDay: userStateRef.current?.denialDay ?? 0,
+      lastStateScore: userStateRef.current?.estimatedExecFunction === 'high' ? 8
+        : userStateRef.current?.estimatedExecFunction === 'medium' ? 5
+        : userStateRef.current?.estimatedExecFunction === 'low' ? 3 : 1,
+      currentStreak: userStateRef.current?.streakDays ?? 0,
     });
 
     if (plan) {
@@ -254,14 +262,15 @@ export function HandlerProvider({
     }
     // Mark as attempted regardless of success to prevent infinite retries
     setPlanAttempted(true);
-  }, [user, handlerAI]);
+  }, [user]);
 
   // Auto-generate plan on mount (only once)
   useEffect(() => {
     if (AI_ENABLED && autoGeneratePlan && user && !todaysPlan && !planAttempted) {
       generateDailyPlan();
     }
-  }, [autoGeneratePlan, user, todaysPlan, planAttempted, generateDailyPlan]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoGeneratePlan, user, todaysPlan, planAttempted]);
 
   // Check for intervention
   const checkForIntervention = useCallback(async (context: InterventionContext) => {
@@ -272,7 +281,7 @@ export function HandlerProvider({
 
     setLastCheckTime(now);
 
-    const decision = await handlerAI.checkForIntervention({
+    const decision = await handlerAIRef.current.checkForIntervention({
       arousalState: context.arousalState,
       denialDays: context.denialDays,
       isLocked: context.isLocked,
@@ -283,11 +292,12 @@ export function HandlerProvider({
       setCurrentIntervention(decision.intervention);
       setInterventionCount(prev => prev + 1);
     }
-  }, [user, currentIntervention, lastCheckTime, handlerAI]);
+  }, [user, currentIntervention, lastCheckTime]);
 
   // Evaluate timing signals (Feature 2)
   const evaluateTimingEngine = useCallback(async () => {
-    if (!user || !userState) return;
+    const currentUserState = userStateRef.current;
+    if (!user || !currentUserState) return;
 
     const now = Date.now();
     if (now - lastTimingCheck < 60000) return; // Don't check more than once per minute
@@ -297,16 +307,16 @@ export function HandlerProvider({
     // Note: UserState doesn't track mood or lastSessionAt directly, so we use defaults/alternatives
     const timingState: TimingUserState = {
       userId: user.id,
-      arousalLevel: userState.currentArousal ?? 0,
-      denialDay: userState.denialDay ?? 0,
-      streakDays: userState.streakDays ?? 0,
+      arousalLevel: currentUserState.currentArousal ?? 0,
+      denialDay: currentUserState.denialDay ?? 0,
+      streakDays: currentUserState.streakDays ?? 0,
       mood: 5, // Default mood (UserState doesn't track mood, it's logged to mood_checkins)
-      ginaPresent: userState.ginaHome ?? false,
-      completedToday: (userState.tasksCompletedToday ?? 0) > 0,
-      justCompletedTask: userState.lastTaskCategory ?? null,
-      justCompletedSession: !userState.inSession && userState.lastRelease !== null,
-      lastSessionCompletedAt: userState.lastRelease ?? null, // Use lastRelease as proxy
-      lastSessionType: userState.sessionType ?? null,
+      ginaPresent: currentUserState.ginaHome ?? false,
+      completedToday: (currentUserState.tasksCompletedToday ?? 0) > 0,
+      justCompletedTask: currentUserState.lastTaskCategory ?? null,
+      justCompletedSession: !currentUserState.inSession && currentUserState.lastRelease !== null,
+      lastSessionCompletedAt: currentUserState.lastRelease ?? null, // Use lastRelease as proxy
+      lastSessionType: currentUserState.sessionType ?? null,
       domainLastCompleted: {}, // Would need domain tracking from task completions
       engagementRating: 5, // Would need session engagement tracking
     };
@@ -348,7 +358,7 @@ export function HandlerProvider({
         }
       }
     }
-  }, [user, userState, lastTimingCheck, currentIntervention]);
+  }, [user, lastTimingCheck, currentIntervention]);
 
   // Acknowledge a timing signal
   const acknowledgeTimingSignal = useCallback((signal: TimingSignal) => {
@@ -379,12 +389,14 @@ export function HandlerProvider({
   }, [user?.id]);
 
   // Check and apply punishments (Feature 40)
+  const lastPunishmentCheckRef = useRef(lastPunishmentCheck);
+  lastPunishmentCheckRef.current = lastPunishmentCheck;
   const checkPunishments = useCallback(async () => {
     if (!user?.id) return;
 
     const now = Date.now();
     // Only check every 5 minutes
-    if (now - lastPunishmentCheck < 5 * 60 * 1000) return;
+    if (now - lastPunishmentCheckRef.current < 5 * 60 * 1000) return;
     setLastPunishmentCheck(now);
 
     // Process all pending punishment triggers
@@ -396,7 +408,18 @@ export function HandlerProvider({
     // Update active punishments state
     const active = await getActivePunishments(user.id);
     setActivePunishments(active);
-  }, [user?.id, lastPunishmentCheck]);
+  }, [user?.id]);
+
+  // Stable refs for background check callbacks — prevents setInterval from
+  // being torn down and recreated every time a callback identity changes.
+  const checkForInterventionRef = useRef(checkForIntervention);
+  checkForInterventionRef.current = checkForIntervention;
+  const evaluateTimingEngineRef = useRef(evaluateTimingEngine);
+  evaluateTimingEngineRef.current = evaluateTimingEngine;
+  const checkExpiredSessionsRef = useRef(checkExpiredSessions);
+  checkExpiredSessionsRef.current = checkExpiredSessions;
+  const checkPunishmentsRef = useRef(checkPunishments);
+  checkPunishmentsRef.current = checkPunishments;
 
   // Background intervention checking with timing engine
   useEffect(() => {
@@ -404,26 +427,27 @@ export function HandlerProvider({
 
     const checkPeriodically = async () => {
       // Evaluate timing engine signals
-      await evaluateTimingEngine();
+      await evaluateTimingEngineRef.current();
 
       // Check for expired Handler-initiated sessions (Feature 35)
-      await checkExpiredSessions();
+      await checkExpiredSessionsRef.current();
 
       // Check and apply punishments (Feature 40)
-      await checkPunishments();
+      await checkPunishmentsRef.current();
 
       // Also use the existing AI intervention checking if enabled
       if (AI_ENABLED) {
-        const arousalLevel = userState?.currentArousal ?? 0;
+        const currentUS = userStateRef.current;
+        const arousalLevel = currentUS?.currentArousal ?? 0;
         const arousalState: ArousalState = arousalLevel >= 4 ? 'sweet_spot'
           : arousalLevel >= 2 ? 'building'
           : 'baseline';
 
-        await checkForIntervention({
+        await checkForInterventionRef.current({
           arousalState,
-          denialDays: userState?.denialDay ?? 0,
+          denialDays: currentUS?.denialDay ?? 0,
           isLocked: false,
-          currentActivity: userState?.inSession ? `${userState.sessionType || 'session'}` : undefined,
+          currentActivity: currentUS?.inSession ? `${currentUS.sessionType || 'session'}` : undefined,
         });
       }
     };
@@ -435,34 +459,34 @@ export function HandlerProvider({
         clearInterval(interventionCheckRef.current);
       }
     };
-  }, [enableBackgroundChecks, user, interventionCheckIntervalMs, checkForIntervention, evaluateTimingEngine, checkExpiredSessions, checkPunishments]);
+  }, [enableBackgroundChecks, user, interventionCheckIntervalMs]);
 
   // Dismiss intervention
   const dismissIntervention = useCallback(() => {
     if (currentAttemptIdRef.current) {
-      handlerAI.recordResponse(currentAttemptIdRef.current, 'dismissed');
+      handlerAIRef.current.recordResponse(currentAttemptIdRef.current, 'dismissed');
     }
     setCurrentIntervention(null);
     currentAttemptIdRef.current = null;
-  }, [handlerAI]);
+  }, []);
 
   // Complete intervention
   const completeIntervention = useCallback(() => {
     if (currentAttemptIdRef.current) {
-      handlerAI.recordResponse(currentAttemptIdRef.current, 'completed');
+      handlerAIRef.current.recordResponse(currentAttemptIdRef.current, 'completed');
     }
     setCurrentIntervention(null);
     currentAttemptIdRef.current = null;
-  }, [handlerAI]);
+  }, []);
 
   // Respond to intervention
   const respondToIntervention = useCallback((response: 'completed' | 'dismissed' | 'ignored') => {
     if (currentAttemptIdRef.current) {
-      handlerAI.recordResponse(currentAttemptIdRef.current, response);
+      handlerAIRef.current.recordResponse(currentAttemptIdRef.current, response);
     }
     setCurrentIntervention(null);
     currentAttemptIdRef.current = null;
-  }, [handlerAI]);
+  }, []);
 
   // Request commitment prompt during session
   const requestCommitmentPrompt = useCallback(async (sessionData: SessionData): Promise<{
@@ -470,14 +494,14 @@ export function HandlerProvider({
     domain: string;
     escalationLevel: number;
   } | null> => {
-    return handlerAI.getCommitmentPrompt({
+    return handlerAIRef.current.getCommitmentPrompt({
       sessionId: sessionData.sessionId,
       arousalLevel: sessionData.arousalLevel,
       edgeCount: sessionData.edgeCount,
       denialDay: sessionData.denialDay,
       targetDomain: sessionData.targetDomain,
     });
-  }, [handlerAI]);
+  }, []);
 
   // Record commitment acceptance - pushes escalation
   const acceptCommitment = useCallback(async (
@@ -485,17 +509,17 @@ export function HandlerProvider({
     domain: string,
     arousalLevel: number
   ): Promise<void> => {
-    return handlerAI.acceptCommitment(commitmentText, domain, arousalLevel);
-  }, [handlerAI]);
+    return handlerAIRef.current.acceptCommitment(commitmentText, domain, arousalLevel);
+  }, []);
 
   // Notify session event
   const notifySessionEvent = useCallback(async (sessionEvent: SessionEvent): Promise<HandlerIntervention | null> => {
-    return handlerAI.handleSession(
+    return handlerAIRef.current.handleSession(
       sessionEvent.sessionId,
       sessionEvent.event,
       sessionEvent.data
     );
-  }, [handlerAI]);
+  }, []);
 
   // Computed timing engine values
   const topTimingSignal = timingSignals.length > 0 ? timingSignals[0] : null;
