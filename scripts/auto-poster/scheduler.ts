@@ -4,15 +4,16 @@
  * Keeps running in the background, checking for due posts.
  */
 
-import { processDuePosts } from './poster';
+import { processAllDuePosts } from './poster';
 import { POLL_INTERVAL_MS } from './config';
 
 async function tick() {
   const timestamp = new Date().toLocaleTimeString();
   try {
-    const count = await processDuePosts();
-    if (count > 0) {
-      console.log(`[${timestamp}] Posted ${count} item(s)`);
+    const { vault, ai } = await processAllDuePosts();
+    const total = vault + ai;
+    if (total > 0) {
+      console.log(`[${timestamp}] Posted ${vault} vault + ${ai} AI = ${total} item(s)`);
     }
   } catch (err) {
     console.error(`[${timestamp}] Tick error:`, err instanceof Error ? err.message : err);
