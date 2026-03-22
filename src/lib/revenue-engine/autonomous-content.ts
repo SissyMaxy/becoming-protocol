@@ -257,7 +257,7 @@ export async function getDueAIContent(): Promise<AIGeneratedContent[]> {
 
 export async function markAIContentPosted(
   contentId: string,
-  postUrl?: string,
+  _postUrl?: string,
 ): Promise<void> {
   await supabase
     .from('ai_generated_content')

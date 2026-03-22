@@ -44,13 +44,12 @@ import { DeletionInterceptModal } from './components/post-release/DeletionInterc
 import { usePostReleaseProtocol } from './hooks/usePostReleaseProtocol';
 import { useArousalState } from './hooks/useArousalState';
 import type { OrgasmLogInput } from './types/arousal';
-import { MicroTaskCard } from './components/micro-tasks';
-import { useMicroTasks } from './hooks/useMicroTasks';
+// MicroTaskCard, useMicroTasks removed — micro-tasks disabled
 // MomentLoggerFAB removed — absorbed by QuickStateStrip + JournalPrompt
 // ReminderModal now rendered via useOrchestratedModals
 import { useReminders } from './hooks/useReminders';
 import { usePatternNotifications } from './hooks/usePatternNotifications';
-import { useNotifications as useDopamineNotifications } from './hooks/useNotifications';
+// useDopamineNotifications removed — dopamine notifications disabled
 import { TimelineView } from './components/timeline';
 import { GinaEmergenceView, GinaPipelineView } from './components/gina';
 import { ServiceProgressionView, ServiceAnalyticsDashboard } from './components/service';
@@ -68,7 +67,7 @@ import { ContentDashboard } from './components/admin/ContentDashboard';
 import { DomainEscalationView } from './components/domains';
 import { PatternCatchView } from './components/patterns';
 import { TriggerAuditDashboard } from './components/triggers';
-import { NotificationToastStack } from './components/notifications';
+// NotificationToastStack removed — notifications disabled
 import { TaskCurationView } from './components/curation';
 import { SeedsView } from './components/seeds';
 import { VectorGridView } from './components/adaptive-feminization';
@@ -87,7 +86,6 @@ import { profileStorage, letterStorage } from './lib/storage';
 import type { UserProfile, SealedLetter } from './components/Onboarding/types';
 import {
   Loader2,
-  Settings,
 } from 'lucide-react';
 
 // Parse hash route for shared wishlist
@@ -99,196 +97,7 @@ function parseWishlistToken(): string | null {
 
 type Tab = 'protocol' | 'progress' | 'sealed' | 'menu';
 
-// Navigation removed — conversation IS the app. Settings via gear icon in chat header.
-function _Navigation({
-  activeTab: _activeTab,
-  onTabChange: _onTabChange,
-}: {
-  activeTab: Tab;
-  onTabChange: (tab: Tab) => void;
-}) {
-  const { isBambiMode } = useBambiMode();
-  const { level: opacityLevel } = useOpacity();
-
-  const navCls = `fixed bottom-0 left-0 right-0 backdrop-blur-lg border-t z-40 ${
-    isBambiMode ? 'bg-white/95 border-pink-200' : 'bg-protocol-surface/95 border-protocol-border'
-  }`;
-
-  const btnCls = (isActive: boolean) =>
-    `relative flex flex-col items-center gap-1 py-2 px-4 rounded-lg transition-colors ${
-      isActive
-        ? isBambiMode ? 'text-pink-500' : 'text-protocol-accent'
-        : isBambiMode ? 'text-pink-400 hover:text-pink-600' : 'text-protocol-text-muted hover:text-protocol-text'
-    }`;
-
-  // Level 0: Full 4-tab nav
-  if (opacityLevel === 0) {
-    const tabs: { id: Tab; icon: React.ElementType; bambiIcon?: React.ElementType }[] = [
-      { id: 'protocol', icon: CheckSquare, bambiIcon: Heart },
-      { id: 'progress', icon: TrendingUp },
-      { id: 'sealed', icon: Gift },
-      { id: 'menu', icon: Menu },
-    ];
-
-    return (
-      <nav aria-label="Main navigation" className={navCls}>
-        <div className="max-w-lg mx-auto px-4 py-2">
-          <div className="flex items-center justify-around">
-            {tabs.map(tab => {
-              const Icon = isBambiMode && tab.bambiIcon ? tab.bambiIcon : tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
-                <button key={tab.id} onClick={() => onTabChange(tab.id)} className={btnCls(isActive)}>
-                  <Icon className={`w-5 h-5 ${isActive ? 'stroke-2' : ''}`} />
-                  <span className="text-xs font-medium">
-                    {isBambiMode ? TAB_LABELS[tab.id].bambi : TAB_LABELS[tab.id].normal}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </nav>
-    );
-  }
-
-  // Level 1: Today + "..." More + Settings gear
-  if (opacityLevel === 1) {
-    const TodayIcon = isBambiMode ? Heart : CheckSquare;
-    return (
-      <nav aria-label="Main navigation" className={navCls}>
-        <div className="max-w-lg mx-auto px-4 py-2">
-          <div className="flex items-center justify-between">
-            <button onClick={() => onTabChange('protocol')} className={btnCls(activeTab === 'protocol')}>
-              <TodayIcon className={`w-5 h-5 ${activeTab === 'protocol' ? 'stroke-2' : ''}`} />
-              <span className="text-xs font-medium">{isBambiMode ? 'Instructions' : 'Today'}</span>
-            </button>
-            <button
-              onClick={() => onTabChange('menu')}
-              className={`p-2 rounded-lg transition-colors ${
-                activeTab === 'menu'
-                  ? isBambiMode ? 'text-pink-500' : 'text-protocol-accent'
-                  : isBambiMode ? 'text-pink-400 hover:text-pink-600' : 'text-protocol-text-muted hover:text-protocol-text'
-              }`}
-            >
-              <MoreHorizontal className={`w-5 h-5 ${activeTab === 'menu' ? 'stroke-2' : ''}`} />
-            </button>
-            <button
-              onClick={() => {
-                onTabChange('menu');
-                // Dispatch settings navigation after tab change
-                setTimeout(() => window.dispatchEvent(new CustomEvent('navigate-to-settings')), 0);
-              }}
-              className={`p-2 rounded-lg transition-colors ${
-                isBambiMode ? 'text-pink-400 hover:text-pink-600' : 'text-protocol-text-muted hover:text-protocol-text'
-              }`}
-            >
-              <Settings className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-      </nav>
-    );
-  }
-
-  // Level 2-3: Minimal — Today + Settings only
-  const TodayIcon = isBambiMode ? Heart : CheckSquare;
-  return (
-    <nav aria-label="Main navigation" className={navCls}>
-      <div className="max-w-lg mx-auto px-4 py-2">
-        <div className="flex items-center justify-between">
-          <button onClick={() => onTabChange('protocol')} className={btnCls(activeTab === 'protocol')}>
-            <TodayIcon className={`w-5 h-5 ${activeTab === 'protocol' ? 'stroke-2' : ''}`} />
-            <span className="text-xs font-medium">{isBambiMode ? 'Instructions' : 'Today'}</span>
-          </button>
-          <button
-            onClick={() => {
-              onTabChange('menu');
-              setTimeout(() => window.dispatchEvent(new CustomEvent('navigate-to-settings')), 0);
-            }}
-            className={`p-2 rounded-lg transition-colors ${
-              activeTab === 'menu'
-                ? isBambiMode ? 'text-pink-500' : 'text-protocol-accent'
-                : isBambiMode ? 'text-pink-400 hover:text-pink-600' : 'text-protocol-text-muted hover:text-protocol-text'
-            }`}
-          >
-            <Settings className={`w-5 h-5 ${activeTab === 'menu' ? 'stroke-2' : ''}`} />
-          </button>
-        </div>
-      </div>
-    </nav>
-  );
-}
-
-// Header removed — conversation UI has its own header.
-function _formatHeaderTime(): string {
-  const now = new Date();
-  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const day = days[now.getDay()];
-  const hours = now.getHours();
-  const minutes = now.getMinutes();
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  const h12 = hours % 12 || 12;
-  return `${day} ${h12}:${minutes.toString().padStart(2, '0')} ${ampm}`;
-}
-
-function _Header() {
-  const { userName } = useProtocol();
-  const { isBambiMode, getGreeting } = useBambiMode();
-  const [timeLabel, setTimeLabel] = useState(formatHeaderTime());
-
-  useEffect(() => {
-    const timer = setInterval(() => setTimeLabel(formatHeaderTime()), 60000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const handleSettingsClick = () => {
-    window.dispatchEvent(new CustomEvent('navigate-to-settings'));
-  };
-
-  return (
-    <header className={`sticky top-0 backdrop-blur-lg border-b z-40 ${
-      isBambiMode
-        ? 'bg-white/95 border-pink-200'
-        : 'bg-protocol-bg/95 border-protocol-border'
-    }`}>
-      <div className="max-w-lg mx-auto px-4 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-            isBambiMode
-              ? 'bg-gradient-to-br from-pink-400 to-pink-600'
-              : 'bg-gradient-to-br from-protocol-accent to-protocol-accent-soft'
-          }`}>
-            <span className="text-white text-lg">{isBambiMode ? '💕' : '✨'}</span>
-          </div>
-          <div>
-            <span className={`text-lg font-semibold block ${
-              isBambiMode ? 'text-pink-700' : 'text-protocol-text'
-            }`}>
-              {isBambiMode ? getGreeting() : 'Becoming'}
-            </span>
-            <p className={`text-xs ${
-              isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'
-            }`}>
-              {isBambiMode && userName ? userName : timeLabel}
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={handleSettingsClick}
-          aria-label="Settings"
-          className={`p-2 rounded-lg transition-colors ${
-            isBambiMode ? 'hover:bg-pink-100' : 'hover:bg-protocol-surface'
-          }`}
-        >
-          <Settings className={`w-5 h-5 ${
-            isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'
-          }`} />
-        </button>
-      </div>
-    </header>
-  );
-}
+// Navigation, Header removed — conversation IS the app.
 
 function LoadingScreen() {
   return (
@@ -356,10 +165,10 @@ function SessionPickerOrContainer({ onBack }: { onBack: () => void }) {
 
 function AuthenticatedAppInner() {
   const { currentEntry, isLoading, investmentMilestone, dismissInvestmentMilestone, userName, progress } = useProtocol();
-  const { isBambiMode } = useBambiMode();
+  const { isBambiMode: _isBambiMode } = useBambiMode();
   const { canSee } = useOpacity();
   const rewardContext = useRewardOptional();
-  const { currentIntervention, dismissIntervention, completeIntervention, respondToIntervention } = useHandlerContext();
+  const { currentIntervention: _currentIntervention, dismissIntervention, completeIntervention, respondToIntervention } = useHandlerContext();
 
   // Calculate days on protocol from total days in progress (minimum of 1)
   const daysOnProtocol = Math.max(1, progress?.totalDays ?? 1);
@@ -419,7 +228,7 @@ function AuthenticatedAppInner() {
   const [editIntakeMode, setEditIntakeMode] = useState(false);
   const [editIntakeProfile, setEditIntakeProfile] = useState<Partial<UserProfile> | null>(null);
   const [showSleepContent, setShowSleepContent] = useState(false);
-  const [showHandlerChat, setShowHandlerChat] = useState(false);
+  const [_showHandlerChat, _setShowHandlerChat] = useState(false);
   const [pendingOutreach, setPendingOutreach] = useState<{ id: string; openingLine: string } | null>(null);
 
   // Check for pending Handler outreach on load
@@ -442,7 +251,7 @@ function AuthenticatedAppInner() {
 
   // Feminization reminders - all day presence
   const {
-    currentReminder,
+    currentReminder: _currentReminder,
     respondToReminder,
     skipReminder,
     dismissReminder,
@@ -582,13 +391,7 @@ function AuthenticatedAppInner() {
     return () => window.removeEventListener('popstate', handlePop);
   }, []);
 
-  // Handle tab change - no restrictions, all tabs accessible
-  const handleTabChange = (newTab: Tab) => {
-    // Reset menu sub-view when switching tabs
-    setMenuSubView(null);
-    setActiveTab(newTab);
-    window.history.pushState({ tab: newTab, subView: null }, '');
-  };
+
 
   // Handle menu navigation — special cases for progress/sealed pages
   const handleMenuNavigate = (view: MenuSubView) => {
