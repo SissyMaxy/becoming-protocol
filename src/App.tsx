@@ -19,10 +19,10 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { Auth } from './components/Auth';
 import { MorningBriefing } from './components/MorningBriefing';
 import { CompulsoryGateScreen } from './components/CompulsoryGateScreen';
-import { TodayView } from './components/today';
+// TodayView removed — conversation is now the primary interface
 import { ProgressDashboard } from './components/ProgressDashboard';
 import { History } from './components/History';
-import { SealedContentView } from './components/SealedContent';
+// SealedContentView removed — accessible via Handler conversation
 import { MenuView } from './components/MenuView';
 import { OnboardingFlow } from './components/Onboarding';
 // DayIncompleteModal removed - navigation is now unrestricted
@@ -86,14 +86,8 @@ import { profileStorage, letterStorage } from './lib/storage';
 // useTaskBank, useGoals, useWeekend — now used only inside TodayView (badge removed)
 import type { UserProfile, SealedLetter } from './components/Onboarding/types';
 import {
-  CheckSquare,
-  TrendingUp,
   Loader2,
   Settings,
-  Gift,
-  Menu,
-  Heart,
-  MoreHorizontal,
 } from 'lucide-react';
 
 // Parse hash route for shared wishlist
@@ -105,17 +99,10 @@ function parseWishlistToken(): string | null {
 
 type Tab = 'protocol' | 'progress' | 'sealed' | 'menu';
 
-// Tab labels for full nav (level 0)
-const TAB_LABELS: Record<Tab, { normal: string; bambi: string }> = {
-  protocol: { normal: 'Today', bambi: 'Instructions' },
-  progress: { normal: 'Progress', bambi: 'Conditioning' },
-  sealed: { normal: 'Sealed', bambi: 'Secrets' },
-  menu: { normal: 'More', bambi: 'More' },
-};
-
-function Navigation({
-  activeTab,
-  onTabChange,
+// Navigation removed — conversation IS the app. Settings via gear icon in chat header.
+function _Navigation({
+  activeTab: _activeTab,
+  onTabChange: _onTabChange,
 }: {
   activeTab: Tab;
   onTabChange: (tab: Tab) => void;
@@ -233,7 +220,8 @@ function Navigation({
   );
 }
 
-function formatHeaderTime(): string {
+// Header removed — conversation UI has its own header.
+function _formatHeaderTime(): string {
   const now = new Date();
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const day = days[now.getDay()];
@@ -244,7 +232,7 @@ function formatHeaderTime(): string {
   return `${day} ${h12}:${minutes.toString().padStart(2, '0')} ${ampm}`;
 }
 
-function Header() {
+function _Header() {
   const { userName } = useProtocol();
   const { isBambiMode, getGreeting } = useBambiMode();
   const [timeLabel, setTimeLabel] = useState(formatHeaderTime());
@@ -907,44 +895,30 @@ function AuthenticatedAppInner() {
   };
 
   // Handler-Directed UI: Conversation is the primary screen.
-  // Legacy views accessible via settings gesture only.
-  const [showLegacyView, setShowLegacyView] = useState(false);
+  // Settings accessible via gear icon in chat header.
   const [showSettings, setShowSettings] = useState(false);
 
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
-      {/* PRIMARY: The Conversation — always visible unless legacy/settings open */}
-      {!showLegacyView && !showSettings && (
+      {/* PRIMARY: The Conversation — always visible unless settings open */}
+      {!showSettings && (
         <HandlerChat
           onClose={() => {}} // Can't close — it IS the app
           openingLine={pendingOutreach?.openingLine}
+          onOpenSettings={() => {
+            setShowSettings(true);
+            setMenuSubView(null);
+          }}
         />
       )}
 
-      {/* LEGACY: Old Today/Menu views — accessible via Settings only */}
-      {showLegacyView && (
-        <div className="min-h-screen bg-protocol-bg">
-          <div className="max-w-lg mx-auto px-4 py-4">
-            <button
-              onClick={() => setShowLegacyView(false)}
-              className="mb-4 text-sm text-gray-400 hover:text-white"
-            >
-              &larr; Back to Handler
-            </button>
-            <ErrorBoundary componentName="TodayView">
-              <TodayView />
-            </ErrorBoundary>
-          </div>
-        </div>
-      )}
-
-      {/* SETTINGS: Hidden, accessible via gesture */}
+      {/* SETTINGS: Accessed via gear icon in chat header */}
       {showSettings && (
-        <div className="min-h-screen bg-protocol-bg">
+        <div className="min-h-screen bg-[#0a0a0a]">
           <div className="max-w-lg mx-auto px-4 py-4">
             <button
               onClick={() => setShowSettings(false)}
-              className="mb-4 text-sm text-gray-400 hover:text-white"
+              className="mb-4 text-sm text-gray-400 hover:text-white transition-colors"
             >
               &larr; Back to Handler
             </button>

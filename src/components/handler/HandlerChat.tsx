@@ -3,12 +3,13 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
-import { Send, Loader2 } from 'lucide-react';
+import { Send, Loader2, Settings } from 'lucide-react';
 import { useHandlerChat, type ChatMessage } from '../../hooks/useHandlerChat';
 
 interface HandlerChatProps {
   onClose: () => void;
   openingLine?: string;
+  onOpenSettings?: () => void;
 }
 
 const MODE_COLORS: Record<string, { bg: string; text: string; label: string }> = {
@@ -19,7 +20,7 @@ const MODE_COLORS: Record<string, { bg: string; text: string; label: string }> =
   architect: { bg: 'bg-purple-500/20', text: 'text-purple-400', label: 'Architect' },
 };
 
-export function HandlerChat({ onClose, openingLine }: HandlerChatProps) {
+export function HandlerChat({ onClose, openingLine, onOpenSettings }: HandlerChatProps) {
   const { messages, isLoading, isSending, currentMode, sendMessage, startNewConversation } = useHandlerChat();
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -90,6 +91,15 @@ export function HandlerChat({ onClose, openingLine }: HandlerChatProps) {
               className="text-xs px-2 py-1 rounded-lg hover:bg-gray-800 text-gray-400"
             >
               New
+            </button>
+          )}
+          {onOpenSettings && (
+            <button
+              onClick={onOpenSettings}
+              className="p-1.5 rounded-lg hover:bg-gray-800 text-gray-500 transition-colors"
+              aria-label="Settings"
+            >
+              <Settings className="w-4 h-4" />
             </button>
           )}
         </div>
