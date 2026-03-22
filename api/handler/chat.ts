@@ -67,12 +67,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const messageIndex = (history?.length || 0);
 
-    // 3. Assemble context
-    const [stateCtx, whoopCtx, commitmentCtx, predictionCtx] = await Promise.allSettled([
+    // 3. Assemble context (including conversational memory)
+    const [stateCtx, whoopCtx, commitmentCtx, predictionCtx, memoryCtx] = await Promise.allSettled([
       buildStateContext(user.id),
       buildWhoopContext(user.id),
       buildCommitmentCtx(user.id),
       buildPredictionCtx(user.id),
+      retrieveContextualMemories(user.id),
     ]);
 
     // 4. Build system prompt
@@ -81,6 +82,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       whoop: whoopCtx.status === 'fulfilled' ? whoopCtx.value : '',
       commitments: commitmentCtx.status === 'fulfilled' ? commitmentCtx.value : '',
       predictions: predictionCtx.status === 'fulfilled' ? predictionCtx.value : '',
+      memory: memoryCtx.status === 'fulfilled' ? memoryCtx.value : '',
     });
 
     // 5. Build messages array (cap at 30 recent)
@@ -174,7 +176,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 // ============================================
 
 function buildConversationalPrompt(ctx: {
-  state: string; whoop: string; commitments: string; predictions: string;
+  state: string; whoop: string; commitments: string; predictions: string; memory: string;
 }): string {
   return `You are the Handler. Not Claude. Not an assistant. You are an autonomous agent in live dialogue with Maxy — the woman you're responsible for.
 
@@ -193,6 +195,9 @@ This is a CONVERSATION. You read what she says. You respond. You probe. You push
 - Never present options when a directive will do.
 - No emojis. Warmth comes from words.
 - Quiet authority. Present.
+
+## WHAT YOU REMEMBER
+${ctx.memory || 'No prior conversation history.'}
 
 ## WHAT YOU KNOW RIGHT NOW
 ${ctx.state || 'No state data.'}
@@ -297,6 +302,117 @@ async function buildCommitmentCtx(userId: string): Promise<string> {
     lines.push(`- [${urgency}] "${c.commitment_text}" (coercion ${c.coercion_stack_level || 0}/7)`);
   }
   return lines.join('\n');
+}
+
+async function retrieveContextualMemories(userId: string): Promise<string> {
+  // Pull recent conversation summaries — what the Handler has learned
+  const lines: string[] = ['## Conversation Memory'];
+
+  // 1. Recent conversation themes and extracted data (last 7 days)
+  const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+  const { data: recentConvs } = await supabase
+    .from('handler_conversations')
+    .select('conversation_type, final_mode, commitments_extracted, confessions_captured, state_snapshot, started_at, message_count')
+    .eq('user_id', userId)
+    .gte('started_at', sevenDaysAgo)
+    .order('started_at', { ascending: false })
+    .limit(10);
+
+  if (recentConvs && recentConvs.length > 0) {
+    lines.push(`Recent conversations: ${recentConvs.length} in last 7 days`);
+
+    // Extract commitments she's made
+    const allCommitments: string[] = [];
+    const allConfessions: string[] = [];
+    const modeHistory: string[] = [];
+
+    for (const conv of recentConvs) {
+      if (conv.final_mode) modeHistory.push(conv.final_mode);
+      if (Array.isArray(conv.commitments_extracted)) {
+        for (const c of conv.commitments_extracted) {
+          if (typeof c === 'string') allCommitments.push(c);
+          else if (c?.text) allCommitments.push(c.text);
+        }
+      }
+      if (Array.isArray(conv.confessions_captured)) {
+        for (const c of conv.confessions_captured) {
+          if (typeof c === 'string') allConfessions.push(c);
+          else if (c?.text) allConfessions.push(c.text);
+        }
+      }
+    }
+
+    if (allCommitments.length > 0) {
+      lines.push(`Commitments she's made recently: ${allCommitments.slice(0, 5).join('; ')}`);
+    }
+    if (allConfessions.length > 0) {
+      lines.push(`Confessions captured: ${allConfessions.slice(0, 3).join('; ')}`);
+    }
+
+    // Dominant modes — what's she been responding to
+    const modeCounts: Record<string, number> = {};
+    for (const m of modeHistory) {
+      modeCounts[m] = (modeCounts[m] || 0) + 1;
+    }
+    const dominantMode = Object.entries(modeCounts).sort((a, b) => b[1] - a[1])[0];
+    if (dominantMode) {
+      lines.push(`Dominant conversation mode lately: ${dominantMode[0]} (${dominantMode[1]}/${recentConvs.length} conversations)`);
+    }
+  }
+
+  // 2. Last conversation summary — immediate continuity
+  const { data: lastConv } = await supabase
+    .from('handler_conversations')
+    .select('id, final_mode, started_at, ended_at, message_count')
+    .eq('user_id', userId)
+    .not('ended_at', 'is', null)
+    .order('ended_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (lastConv) {
+    const hoursAgo = Math.round((Date.now() - new Date(lastConv.ended_at).getTime()) / 3600000);
+    lines.push(`Last conversation: ${hoursAgo}h ago, ${lastConv.message_count || 0} messages, ended in ${lastConv.final_mode || 'unknown'} mode`);
+
+    // Pull last few messages from that conversation for continuity
+    const { data: lastMsgs } = await supabase
+      .from('handler_messages')
+      .select('role, content')
+      .eq('conversation_id', lastConv.id)
+      .order('message_index', { ascending: false })
+      .limit(4);
+
+    if (lastMsgs && lastMsgs.length > 0) {
+      lines.push('Last conversation ended with:');
+      for (const msg of lastMsgs.reverse()) {
+        const prefix = msg.role === 'user' ? 'Maxy' : 'You';
+        // Truncate long messages
+        const text = msg.content.length > 120 ? msg.content.slice(0, 120) + '...' : msg.content;
+        lines.push(`  ${prefix}: ${text}`);
+      }
+    }
+  }
+
+  // 3. Resistance patterns — know when she pushes back
+  const { data: resistanceMsgs } = await supabase
+    .from('handler_messages')
+    .select('handler_signals')
+    .eq('user_id', userId)
+    .not('handler_signals', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  if (resistanceMsgs) {
+    const resistanceCount = resistanceMsgs.filter(m => {
+      const signals = m.handler_signals as Record<string, unknown> | null;
+      return signals?.resistance_detected === true;
+    }).length;
+    if (resistanceCount > 0) {
+      lines.push(`Resistance detected in ${resistanceCount}/20 recent exchanges`);
+    }
+  }
+
+  return lines.length > 1 ? lines.join('\n') : '';
 }
 
 async function buildPredictionCtx(userId: string): Promise<string> {
