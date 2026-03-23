@@ -20,27 +20,32 @@ const MAXY_TWEETS = [
 ];
 
 async function main() {
-  // Get the two scheduled tweets
-  const { data: scheduled } = await supabase
+  // Get ALL scheduled tweets
+  const { data: scheduled, error } = await supabase
     .from('ai_generated_content')
-    .select('id, content')
+    .select('id, content, scheduled_at, status')
     .eq('status', 'scheduled')
-    .eq('platform', 'twitter')
     .order('scheduled_at', { ascending: true });
 
-  if (!scheduled || scheduled.length === 0) {
-    console.log('No scheduled tweets found.');
+  if (error) {
+    console.error('Query error:', error.message);
     return;
   }
 
-  // Reschedule to now + stagger
+  if (!scheduled || scheduled.length === 0) {
+    console.log('No scheduled posts found.');
+    return;
+  }
+
+  console.log(`Found ${scheduled.length} scheduled post(s). Updating...\n`);
+
   const now = new Date();
 
   for (let i = 0; i < Math.min(scheduled.length, MAXY_TWEETS.length); i++) {
     const tweet = MAXY_TWEETS[i];
     const scheduledAt = new Date(now.getTime() + (i * 45 * 60000)); // 45 min apart
 
-    await supabase
+    const { error: updateErr, count } = await supabase
       .from('ai_generated_content')
       .update({
         content: tweet.content,
@@ -48,11 +53,17 @@ async function main() {
         generation_strategy: tweet.strategy,
         scheduled_at: scheduledAt.toISOString(),
       })
-      .eq('id', scheduled[i].id);
+      .eq('id', scheduled[i].id)
+      .select('id', { count: 'exact', head: true });
 
-    console.log(`✓ Replaced: "${scheduled[i].content?.substring(0, 40)}..."`);
-    console.log(`  With: "${tweet.content.substring(0, 60)}..."`);
-    console.log(`  Scheduled: ${scheduledAt.toISOString()}\n`);
+    if (updateErr) {
+      console.error(`✗ Update failed for ${scheduled[i].id}: ${updateErr.message}`);
+    } else {
+      console.log(`✓ Updated row ${scheduled[i].id}`);
+      console.log(`  Old: "${scheduled[i].content?.substring(0, 50)}..."`);
+      console.log(`  New: "${tweet.content.substring(0, 60)}..."`);
+      console.log(`  Scheduled: ${scheduledAt.toISOString()}\n`);
+    }
   }
 
   console.log('Done. Run "npm run post" to post the first one now.');
