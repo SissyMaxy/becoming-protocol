@@ -179,7 +179,6 @@ export async function runReplyCycle(maxReplies: number = 5): Promise<{
     .select('*')
     .eq('user_id', USER_ID)
     .eq('platform', 'twitter')
-    .eq('status', 'active')
     .order('last_interaction_at', { ascending: true, nullsFirst: true })
     .limit(maxReplies * 2); // Fetch extra in case some fail
 
@@ -206,13 +205,13 @@ export async function runReplyCycle(maxReplies: number = 5): Promise<{
     for (const target of targets) {
       if (posted >= maxReplies) break;
 
-      console.log(`[Reply] Visiting @${target.target_username}...`);
+      console.log(`[Reply] Visiting @${target.target_handle}...`);
       attempted++;
 
       // 1. Scrape latest tweet
-      const tweet = await scrapeLatestTweet(page, target.target_username);
+      const tweet = await scrapeLatestTweet(page, target.target_handle);
       if (!tweet) {
-        console.log(`  ⊘ No tweet found for @${target.target_username}`);
+        console.log(`  ⊘ No tweet found for @${target.target_handle}`);
         continue;
       }
 
@@ -232,13 +231,13 @@ export async function runReplyCycle(maxReplies: number = 5): Promise<{
       if (tweet.url) {
         const success = await postReply(page, tweet.url, reply);
         if (success) {
-          console.log(`  ✓ Posted reply to @${target.target_username}`);
+          console.log(`  ✓ Posted reply to @${target.target_handle}`);
           posted++;
 
           // 4. Log interaction
           await supabase.from('engagement_targets').update({
             last_interaction_at: new Date().toISOString(),
-            interaction_count: (target.interaction_count || 0) + 1,
+            interactions_count: (target.interactions_count || 0) + 1,
           }).eq('id', target.id);
 
           // Also log as ai_generated_content for tracking
@@ -248,7 +247,7 @@ export async function runReplyCycle(maxReplies: number = 5): Promise<{
             platform: 'twitter',
             content: reply,
             generation_strategy: 'contextual_reply',
-            target_account: target.target_username,
+            target_account: target.target_handle,
             status: 'posted',
             posted_at: new Date().toISOString(),
           });
