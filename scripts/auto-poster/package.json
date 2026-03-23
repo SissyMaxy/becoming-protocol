@@ -7,6 +7,8 @@
     "post": "npx tsx poster.ts",
     "read-dms": "npx tsx dm-reader.ts",
     "dm:send": "npx tsx dm-sender.ts",
+    "generate": "npx tsx generate-now.ts",
+    "kill": "npx tsx kill-switch.ts",
     "start": "npx tsx scheduler.ts"
   },
   "dependencies": {

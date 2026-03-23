@@ -67,22 +67,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const messageIndex = (history?.length || 0);
 
-    // 3. Assemble context (including conversational memory)
-    const [stateCtx, whoopCtx, commitmentCtx, predictionCtx, memoryCtx] = await Promise.allSettled([
+    // 3. Assemble context (including long-term memory + conversational memory)
+    const [stateCtx, whoopCtx, commitmentCtx, predictionCtx, convMemoryCtx, longTermMemoryCtx] = await Promise.allSettled([
       buildStateContext(user.id),
       buildWhoopContext(user.id),
       buildCommitmentCtx(user.id),
       buildPredictionCtx(user.id),
       retrieveContextualMemories(user.id),
+      buildLongTermMemory(user.id),
     ]);
 
-    // 4. Build system prompt
+    // 4. Build system prompt — merge both memory sources
+    const memoryBlock = [
+      longTermMemoryCtx.status === 'fulfilled' ? longTermMemoryCtx.value : '',
+      convMemoryCtx.status === 'fulfilled' ? convMemoryCtx.value : '',
+    ].filter(Boolean).join('\n\n');
+
     const systemPrompt = buildConversationalPrompt({
       state: stateCtx.status === 'fulfilled' ? stateCtx.value : '',
       whoop: whoopCtx.status === 'fulfilled' ? whoopCtx.value : '',
       commitments: commitmentCtx.status === 'fulfilled' ? commitmentCtx.value : '',
       predictions: predictionCtx.status === 'fulfilled' ? predictionCtx.value : '',
-      memory: memoryCtx.status === 'fulfilled' ? memoryCtx.value : '',
+      memory: memoryBlock,
     });
 
     // 5. Build messages array (cap at 30 recent)
@@ -435,5 +441,68 @@ async function buildPredictionCtx(userId: string): Promise<string> {
   if (data.predicted_energy) lines.push(`Energy: ${data.predicted_energy}`);
   if (data.predicted_resistance_risk > 0.5) lines.push(`Resistance risk: ${(data.predicted_resistance_risk * 100).toFixed(0)}%`);
   if (data.suggested_handler_mode) lines.push(`Suggested mode: ${data.suggested_handler_mode}`);
+  return lines.join('\n');
+}
+
+// Long-term memory from handler_memory table (formal memory system)
+async function buildLongTermMemory(userId: string): Promise<string> {
+  const { data } = await supabase
+    .from('handler_memory')
+    .select('memory_type, content, importance, reinforcement_count, decay_rate, last_reinforced_at, last_retrieved_at, created_at')
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .gte('importance', 2)
+    .order('importance', { ascending: false })
+    .order('last_reinforced_at', { ascending: false })
+    .limit(100);
+
+  if (!data || data.length === 0) return '';
+
+  // Score and rank
+  const now = Date.now();
+  const scored = data.map(m => {
+    const importanceScore = m.importance / 5;
+    const hoursSinceReinforced = (now - new Date(m.last_reinforced_at).getTime()) / 3600000;
+    const recencyScore = Math.exp(-m.decay_rate * hoursSinceReinforced / 24);
+    const reinforcementScore = Math.min(1, Math.log2(m.reinforcement_count + 1) / 5);
+    let retrievalFreshness = 1;
+    if (m.last_retrieved_at) {
+      const hoursSinceRetrieved = (now - new Date(m.last_retrieved_at).getTime()) / 3600000;
+      retrievalFreshness = Math.min(1, hoursSinceRetrieved / 168);
+    }
+    const score = importanceScore * 0.40 + recencyScore * 0.35 + reinforcementScore * 0.15 + retrievalFreshness * 0.10;
+    return { ...m, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  const top = scored.slice(0, 25);
+
+  // Group by type
+  const grouped: Record<string, typeof top> = {};
+  for (const m of top) {
+    if (!grouped[m.memory_type]) grouped[m.memory_type] = [];
+    grouped[m.memory_type].push(m);
+  }
+
+  const lines = ['## Long-Term Memory'];
+  for (const [type, mems] of Object.entries(grouped)) {
+    const label = type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    lines.push(`\n### ${label}`);
+    for (const m of mems) {
+      const tag = m.importance >= 4 ? ' [HIGH]' : '';
+      lines.push(`- ${m.content}${tag}`);
+    }
+  }
+
+  // Fire-and-forget: mark as retrieved
+  const ids = top.map(m => (m as Record<string, unknown>).id as string).filter(Boolean);
+  if (ids.length > 0) {
+    supabase
+      .from('handler_memory')
+      .update({ last_retrieved_at: new Date().toISOString() })
+      .in('id', ids)
+      .then(() => {});
+  }
+
   return lines.join('\n');
 }
