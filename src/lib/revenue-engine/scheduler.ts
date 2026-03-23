@@ -7,7 +7,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { supabase } from '../supabase';
-import { generateDailyContentPlan, getDueAIContent, markAIContentPosted, markAIContentFailed } from './autonomous-content';
+import { generateDailyContentPlan, getDueAIContent } from './autonomous-content';
 import { runEngagementCycle } from './engagement';
 import { sendGFEMessages } from './gfe';
 import { multiplyContent } from './content-multiplier';

@@ -14,7 +14,7 @@ import type { ContentDerivative } from '../../types/revenue-engine';
 
 async function generateCaption(
   client: Anthropic,
-  userId: string,
+  _userId: string,
   item: Record<string, unknown>,
   derivative: ContentDerivative,
 ): Promise<string> {

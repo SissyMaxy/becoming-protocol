@@ -8,7 +8,6 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { supabase } from '../supabase';
-import { MAXY_VOICE_PROMPT } from './voice';
 import type { EngagementTarget, EngagementTargetType } from '../../types/revenue-engine';
 
 // ── Engagement cycle ────────────────────────────────────────────────
@@ -18,7 +17,7 @@ import type { EngagementTarget, EngagementTargetType } from '../../types/revenue
  * Scheduled every 3 hours.
  */
 export async function runEngagementCycle(
-  client: Anthropic,
+  _client: Anthropic,
   userId: string,
 ): Promise<{ targetsEngaged: number }> {
   const { data: targets } = await supabase

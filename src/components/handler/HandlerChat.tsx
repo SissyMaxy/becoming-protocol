@@ -20,7 +20,7 @@ const MODE_COLORS: Record<string, { bg: string; text: string; label: string }> =
   architect: { bg: 'bg-purple-500/20', text: 'text-purple-400', label: 'Architect' },
 };
 
-export function HandlerChat({ onClose, openingLine, onOpenSettings }: HandlerChatProps) {
+export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
   const { messages, isLoading, isSending, currentMode, sendMessage, startNewConversation } = useHandlerChat();
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -58,11 +58,6 @@ export function HandlerChat({ onClose, openingLine, onOpenSettings }: HandlerCha
       e.preventDefault();
       handleSend();
     }
-  };
-
-  const handleClose = () => {
-    // Don't end conversation — just close the UI. It persists.
-    onClose();
   };
 
   const modeConfig = MODE_COLORS[currentMode] || MODE_COLORS.director;

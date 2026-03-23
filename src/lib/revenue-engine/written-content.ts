@@ -92,7 +92,7 @@ Output JSON:
  */
 export async function generateCaption(
   client: Anthropic,
-  userId: string,
+  _userId: string,
   theme?: string,
 ): Promise<{ caption: string; hashtags: string[] } | null> {
   const prompt = `

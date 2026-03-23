@@ -13,7 +13,6 @@ import type {
   GFESubscriber,
   GFETier,
   IncomingDM,
-  PaidConversation,
 } from '../../types/revenue-engine';
 
 // ── GFE message generation ──────────────────────────────────────────
