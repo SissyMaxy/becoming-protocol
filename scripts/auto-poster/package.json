@@ -9,6 +9,10 @@
     "dm:send": "npx tsx dm-sender.ts",
     "generate": "npx tsx generate-now.ts",
     "kill": "npx tsx kill-switch.ts",
+    "seed-targets": "npx tsx seed-targets.ts",
+    "replies": "npx tsx reply-engine.ts",
+    "fix-tweets": "npx tsx fix-tweets.ts",
+    "status": "npx tsx check-status.ts",
     "start": "npx tsx scheduler.ts"
   },
   "dependencies": {

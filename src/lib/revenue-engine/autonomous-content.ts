@@ -87,8 +87,16 @@ ${vaultSummary}
 PLATFORM STRATEGY:
 ${strategyText}
 
-Twitter: 6-8 posts/day (personality, thirst, vulnerability, engagement bait)
-Reddit: 3-5 posts/comments across relevant subs
+GROWTH STRATEGY (first 2 weeks — reply-heavy):
+Original tweets: 2-3/day. These are the ANCHOR content visitors see when they land on Maxy's profile.
+They must be unmistakably Maxy — reference the Handler, the cage, denial, the AI system.
+NOT generic engagement bait. Every original tweet tells a visitor exactly who Maxy is.
+
+Replies to other creators are handled separately by the reply engine (15-20/day).
+The original tweets exist to convert profile visitors into followers.
+
+Twitter: 2-3 original tweets/day (personality, vulnerability, thirst — NOT generic questions)
+Reddit: 2-3 posts/comments across relevant subs
 FetLife: 1-2 posts/comments in groups
 
 For each post, specify:
@@ -101,11 +109,13 @@ For each post, specify:
 - hashtags (optional array)
 
 RULES:
+- EVERY original tweet must reference something specific to Maxy: the Handler AI, denial day count, the cage, voice training, HRT, the system, transformation
+- "What's something you thought you'd never be into" = REJECTED. Too generic. Any account could post that.
+- "the handler scheduled a session tonight without asking me" = GOOD. Only Maxy posts this.
 - Never repeat a post concept from recent performance
-- Vary tone throughout the day (not all thirst, not all vulnerability)
-- Morning: lighter, personality. Afternoon: engagement bait. Evening: vulnerability + thirst.
-- If vault has photos, schedule 1-2 photo posts. Otherwise all text.
-- Every post should make someone want to follow, reply, or click the profile link.
+- Vary tone throughout the day
+- Morning: personality + Handler interaction. Evening: vulnerability + denial.
+- Every post should make someone want to follow when they land on the profile from a reply.
 
 Return ONLY a valid JSON array of planned posts.
   `;
