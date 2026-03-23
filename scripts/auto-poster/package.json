@@ -5,6 +5,8 @@
   "scripts": {
     "login": "npx tsx login.ts",
     "post": "npx tsx poster.ts",
+    "read-dms": "npx tsx dm-reader.ts",
+    "dm:send": "npx tsx dm-sender.ts",
     "start": "npx tsx scheduler.ts"
   },
   "dependencies": {

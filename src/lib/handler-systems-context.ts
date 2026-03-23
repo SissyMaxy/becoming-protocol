@@ -63,6 +63,7 @@ import { buildFeminizationContext, buildShootEscalationContext } from './feminiz
 import { buildConfrontationContext } from './evidence-confrontation';
 import { buildContentIntelligenceContext, buildCalendarContext, buildOvernightSummaryForBriefing } from './content-intelligence-context';
 import { buildDopamineContext } from './dopamine-context';
+import { buildMemoryContextBlock } from './handler-memory';
 
 // ============================================
 // TYPES
@@ -642,7 +643,7 @@ async function buildIndustryContext(userId: string): Promise<string> {
  * All systems, maximum data density.
  */
 export async function buildFullSystemsContext(userId: string): Promise<string> {
-  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social] = await Promise.allSettled([
+  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social, memory] = await Promise.allSettled([
     buildGinaContext(userId),
     buildContentContext(userId),
     buildVoiceContext(userId),
@@ -673,6 +674,7 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     getRevenueContext(userId),
     getDavidEliminationContext(userId),
     getSocialContext(userId),
+    buildMemoryContextBlock(userId),
   ]);
 
   const blocks = [
@@ -706,6 +708,7 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     revenue.status === 'fulfilled' ? revenue.value : '',
     davidElim.status === 'fulfilled' ? davidElim.value : '',
     social.status === 'fulfilled' ? social.value : '',
+    memory.status === 'fulfilled' ? memory.value : '',
   ].filter(Boolean);
 
   if (blocks.length === 0) return '';
