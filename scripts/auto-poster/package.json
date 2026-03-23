@@ -11,6 +11,9 @@
     "kill": "npx tsx kill-switch.ts",
     "seed-targets": "npx tsx seed-targets.ts",
     "replies": "npx tsx reply-engine.ts",
+    "reddit-engage": "npx tsx platforms/reddit-engage.ts",
+    "fetlife-engage": "npx tsx platforms/fetlife-engage.ts",
+    "subscriber-replies": "npx tsx platforms/subscriber-engage.ts",
     "fix-tweets": "npx tsx fix-tweets.ts",
     "status": "npx tsx check-status.ts",
     "start": "npx tsx scheduler.ts"
