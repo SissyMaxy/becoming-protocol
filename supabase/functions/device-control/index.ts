@@ -156,6 +156,65 @@ async function generateDailySchedule(
     })
   }
 
+  // 4. Vulnerability mode — low background stimulation during predicted vulnerability windows
+  // Check timing predictions for vulnerability
+  const { data: predictions } = await supabase
+    .from('state_predictions')
+    .select('time_block, resistance_risk')
+    .eq('user_id', userId)
+    .eq('prediction_date', today)
+    .gt('resistance_risk', 0.5)
+
+  for (const pred of predictions || []) {
+    // Parse time block (e.g., "18-21") to get start hour
+    const blockStart = parseInt(pred.time_block.split('-')[0], 10)
+    if (isNaN(blockStart)) continue
+
+    const vulnHourUTC = (blockStart + utcAdjust + 24) % 24
+
+    schedules.push({
+      user_id: userId,
+      schedule_type: 'vulnerability',
+      scheduled_at: `${today}T${String(vulnHourUTC).padStart(2, '0')}:00:00Z`,
+      duration_seconds: 10,
+      intensity: Math.min(4 + Math.floor(denialDay / 4), 8), // Low, persistent
+      pattern: 'pulse',
+      pattern_data: { note: 'vulnerability_window', resistance_risk: pred.resistance_risk },
+      trigger_source: 'prediction',
+      denial_day: denialDay,
+      status: 'scheduled',
+    })
+  }
+
+  // 5. Session pull — 5 minutes before any scheduled session, start gentle build
+  const { data: upcomingSessions } = await supabase
+    .from('handler_calendar')
+    .select('id, scheduled_at, event_type')
+    .eq('user_id', userId)
+    .in('event_type', ['session', 'conditioning'])
+    .in('status', ['scheduled', 'reminded'])
+    .gte('scheduled_at', `${today}T00:00:00`)
+    .lte('scheduled_at', `${today}T23:59:59`)
+
+  for (const session of upcomingSessions || []) {
+    const sessionTime = new Date(session.scheduled_at)
+    const pullTime = new Date(sessionTime.getTime() - 5 * 60000) // 5 min before
+
+    schedules.push({
+      user_id: userId,
+      schedule_type: 'session_pull',
+      scheduled_at: pullTime.toISOString(),
+      duration_seconds: 60, // 1 minute gentle build
+      intensity: Math.min(6 + Math.floor(denialDay / 5), 12),
+      pattern: 'wave',
+      pattern_data: { session_id: session.id, session_type: session.event_type },
+      trigger_source: 'calendar',
+      trigger_id: session.id,
+      denial_day: denialDay,
+      status: 'scheduled',
+    })
+  }
+
   // Insert all schedules
   if (schedules.length > 0) {
     await supabase.from('device_schedule').insert(schedules)

@@ -9,6 +9,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { supabase } from '../supabase';
 import { MAXY_VOICE_PROMPT } from './voice';
+import { stripAIHedging } from './content-safety';
 import type {
   GFESubscriber,
   GFETier,
@@ -66,8 +67,9 @@ Output ONLY the message text.
         messages: [{ role: 'user', content: prompt }],
       });
 
-      const message = response.content[0].type === 'text' ? response.content[0].text : '';
-      if (!message.trim()) continue;
+      const rawMessage = response.content[0].type === 'text' ? response.content[0].text : '';
+      if (!rawMessage.trim()) continue;
+      const message = stripAIHedging(rawMessage);
 
       // Queue for sending via auto-poster DM function
       await supabase.from('paid_conversations').insert({
@@ -76,7 +78,7 @@ Output ONLY the message text.
         subscriber_id: sub.subscriber_id,
         subscriber_name: sub.subscriber_name,
         conversation_type: 'gfe_daily',
-        handler_response: message.trim(),
+        handler_response: message,
         revenue: sub.monthly_rate / 30, // Daily revenue attribution
         revenue_type: 'subscription_tier',
       });
@@ -149,7 +151,8 @@ Output ONLY the response text.
     messages: [{ role: 'user', content: prompt }],
   });
 
-  const reply = response.content[0].type === 'text' ? response.content[0].text : '';
+  const rawReply = response.content[0].type === 'text' ? response.content[0].text : '';
+  const reply = stripAIHedging(rawReply);
 
   await supabase.from('paid_conversations').insert({
     user_id: userId,
@@ -157,12 +160,12 @@ Output ONLY the response text.
     subscriber_id: dm.senderId,
     subscriber_name: dm.senderName,
     conversation_type: 'dm_response',
-    handler_response: reply.trim(),
+    handler_response: reply,
     revenue: dm.tipAmount || 0,
     revenue_type: dm.tipAmount ? 'tip' : 'per_message',
   });
 
-  return reply.trim();
+  return reply;
 }
 
 // ── Subscriber management ───────────────────────────────────────────

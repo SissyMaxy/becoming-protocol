@@ -13,6 +13,7 @@ import type {
   AIGeneratedContent,
   PlannedPost,
 } from '../../types/revenue-engine';
+import { critiqueMaxyPost, getReviewDelay, applyReviewDelay } from './content-safety';
 
 // ── Vault summary helper ────────────────────────────────────────────
 
@@ -145,11 +146,29 @@ Return ONLY a valid JSON array of planned posts.
     }, { onConflict: 'user_id,date,platform' });
   }
 
-  // Generate and schedule each post as ai_generated_content
+  // Critique and schedule each post
+  const reviewDelayMs = await getReviewDelay(userId);
+
   for (const post of posts) {
+    // Critique every post before scheduling
+    const critique = await critiqueMaxyPost(post.text, post.platform, client);
+
+    if (!critique.approved) {
+      console.log(`[autonomous-content] Post rejected (score ${critique.score}): ${critique.issues.join(', ')}`);
+      // Use the suggestion if available, otherwise skip
+      if (critique.suggestion) {
+        post.text = critique.suggestion;
+      } else {
+        continue;
+      }
+    }
+
     const [hours, minutes] = (post.time || '12:00').split(':').map(Number);
     const scheduledAt = new Date(tomorrow);
     scheduledAt.setHours(hours || 12, minutes || 0, 0, 0);
+
+    // Apply review buffer delay
+    const finalScheduledAt = applyReviewDelay(scheduledAt, reviewDelayMs);
 
     await supabase.from('ai_generated_content').insert({
       user_id: userId,
@@ -159,8 +178,8 @@ Return ONLY a valid JSON array of planned posts.
       target_subreddit: post.subreddit || null,
       target_hashtags: post.hashtags || [],
       generation_strategy: post.strategy || post.content_type,
-      status: 'scheduled',
-      scheduled_at: scheduledAt.toISOString(),
+      status: reviewDelayMs > 0 ? 'pending_review' : 'scheduled',
+      scheduled_at: finalScheduledAt.toISOString(),
     });
   }
 
