@@ -831,10 +831,7 @@ function AuthenticatedApp() {
   );
 }
 
-export default function App() {
-  // Standalone pages (no auth required)
-  if (window.location.pathname === '/privacy') return <PrivacyPage />;
-
+function AppInner() {
   const { user, isLoading } = useAuth();
   const [wishlistToken, setWishlistToken] = useState<string | null>(() => parseWishlistToken());
   const [passwordRecovery, setPasswordRecovery] = useState(() =>
@@ -886,4 +883,11 @@ export default function App() {
       </ProtocolProvider>
     </ErrorBoundary>
   );
+}
+
+export default function App() {
+  // Standalone pages (no auth required) — must be outside hook-using component
+  if (window.location.pathname === '/privacy') return <PrivacyPage />;
+
+  return <AppInner />;
 }
