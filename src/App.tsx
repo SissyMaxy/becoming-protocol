@@ -703,6 +703,24 @@ function AuthenticatedAppInner() {
   // Settings accessible via gear icon in chat header.
   const [showSettings, setShowSettings] = useState(false);
 
+  // Debug #310: log all render values to find the object being rendered as a child
+  console.log('[#310 Debug] Render values:', {
+    showSettings,
+    showSleepContent,
+    whoopToast: typeof whoopToast, whoopToastVal: whoopToast,
+    pendingOutreach: typeof pendingOutreach?.openingLine,
+    bookendsMorning: bookends.showMorningBookend,
+    bookendsEvening: bookends.showEveningBookend,
+    bookendsConfig: !!bookends.config,
+    daySummary: !!bookends.daySummary,
+    morningMessage: typeof bookends.morningMessage,
+    eveningMessage: typeof bookends.eveningMessage,
+    postReleaseActive: !!postRelease.activeProtocol,
+    deletionIntercept: typeof deletionIntercept,
+    arousalMetrics: typeof arousalMetrics?.currentStreakDays,
+    progressStreak: typeof progress?.overallStreak,
+  });
+
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
       {/* PRIMARY: The Conversation — always visible unless settings open */}
