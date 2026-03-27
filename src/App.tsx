@@ -227,6 +227,7 @@ function AuthenticatedAppInner() {
   const [showSleepContent, setShowSleepContent] = useState(false);
   // showHandlerChat removed — chat is now always visible as primary UI
   const [pendingOutreach, setPendingOutreach] = useState<{ id: string; openingLine: string } | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
 
   // Check for pending Handler outreach on load
   const { user: authUser } = useAuth();
@@ -701,25 +702,7 @@ function AuthenticatedAppInner() {
 
   // Handler-Directed UI: Conversation is the primary screen.
   // Settings accessible via gear icon in chat header.
-  const [showSettings, setShowSettings] = useState(false);
-
-  // Debug #310: log all render values to find the object being rendered as a child
-  console.log('[#310 Debug] Render values:', {
-    showSettings,
-    showSleepContent,
-    whoopToast: typeof whoopToast, whoopToastVal: whoopToast,
-    pendingOutreach: typeof pendingOutreach?.openingLine,
-    bookendsMorning: bookends.showMorningBookend,
-    bookendsEvening: bookends.showEveningBookend,
-    bookendsConfig: !!bookends.config,
-    daySummary: !!bookends.daySummary,
-    morningMessage: typeof bookends.morningMessage,
-    eveningMessage: typeof bookends.eveningMessage,
-    postReleaseActive: !!postRelease.activeProtocol,
-    deletionIntercept: typeof deletionIntercept,
-    arousalMetrics: typeof arousalMetrics?.currentStreakDays,
-    progressStreak: typeof progress?.overallStreak,
-  });
+  // NOTE: showSettings useState moved above early returns (was causing Rules of Hooks violation / #310)
 
   return (
     <div className="min-h-screen bg-[#0a0a0a]">

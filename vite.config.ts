@@ -22,8 +22,8 @@ export default defineConfig({
     port: 5173,
   },
   build: {
-    // Source maps enabled temporarily for #310 debugging
-    sourcemap: true,
+    // Source maps disabled in production for operational opacity
+    sourcemap: false,
     // Optimize chunk size
     chunkSizeWarningLimit: 500,
     rollupOptions: {
@@ -52,8 +52,8 @@ export default defineConfig({
     // Minification options
     minify: 'terser',
     terserOptions: {
-      keep_fnames: true,
       compress: {
+        drop_console: true,
         drop_debugger: true,
       },
     },
