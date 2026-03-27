@@ -490,29 +490,37 @@ function AuthenticatedAppInner() {
   // Show morning bookend before morning flow (first open each day)
   if (bookends.showMorningBookend && bookends.config) {
     return (
-      <MorningBookend
-        name={bookends.config.morningName}
-        denialDay={progress?.totalDays ?? 0}
-        streak={progress?.overallStreak ?? 0}
-        message={bookends.morningMessage}
-        onDismiss={bookends.dismissMorning}
-        lastProtocol={bookends.lastProtocol}
-      />
+      <ErrorBoundary componentName="MorningBookend">
+        <MorningBookend
+          name={bookends.config.morningName}
+          denialDay={progress?.totalDays ?? 0}
+          streak={progress?.overallStreak ?? 0}
+          message={bookends.morningMessage}
+          onDismiss={bookends.dismissMorning}
+          lastProtocol={bookends.lastProtocol}
+        />
+      </ErrorBoundary>
     );
   }
 
   // Show morning briefing if no entry for today
   if (showMorningFlow) {
-    return <MorningBriefing onComplete={() => setShowMorningFlow(false)} />;
+    return (
+      <ErrorBoundary componentName="MorningBriefing">
+        <MorningBriefing onComplete={() => setShowMorningFlow(false)} />
+      </ErrorBoundary>
+    );
   }
 
   // Show compulsory gate if app is locked (Feature 38)
   if (compulsoryLocked) {
     return (
-      <CompulsoryGateScreen
-        daysOnProtocol={daysOnProtocol}
-        onUnlock={refreshCompulsoryGate}
-      />
+      <ErrorBoundary componentName="CompulsoryGate">
+        <CompulsoryGateScreen
+          daysOnProtocol={daysOnProtocol}
+          onUnlock={refreshCompulsoryGate}
+        />
+      </ErrorBoundary>
     );
   }
 
@@ -699,14 +707,16 @@ function AuthenticatedAppInner() {
     <div className="min-h-screen bg-[#0a0a0a]">
       {/* PRIMARY: The Conversation — always visible unless settings open */}
       {!showSettings && (
-        <HandlerChat
-          onClose={() => {}} // Can't close — it IS the app
-          openingLine={pendingOutreach?.openingLine}
-          onOpenSettings={() => {
-            setShowSettings(true);
-            setMenuSubView(null);
-          }}
-        />
+        <ErrorBoundary componentName="HandlerChat">
+          <HandlerChat
+            onClose={() => {}} // Can't close — it IS the app
+            openingLine={pendingOutreach?.openingLine}
+            onOpenSettings={() => {
+              setShowSettings(true);
+              setMenuSubView(null);
+            }}
+          />
+        </ErrorBoundary>
       )}
 
       {/* SETTINGS: Accessed via gear icon in chat header */}
@@ -748,17 +758,19 @@ function AuthenticatedAppInner() {
 
       {/* Evening Debrief overlay */}
       {bookends.showEveningBookend && bookends.daySummary && bookends.config && (
-        <EveningDebrief
-          name={bookends.config.morningName}
-          message={bookends.eveningMessage}
-          summary={bookends.daySummary}
-          streakDays={progress?.overallStreak ?? 0}
-          onDismiss={bookends.dismissEvening}
-          onSleepContent={() => {
-            bookends.dismissEvening();
-            setShowSleepContent(true);
-          }}
-        />
+        <ErrorBoundary componentName="EveningDebrief">
+          <EveningDebrief
+            name={bookends.config.morningName}
+            message={bookends.eveningMessage}
+            summary={bookends.daySummary}
+            streakDays={progress?.overallStreak ?? 0}
+            onDismiss={bookends.dismissEvening}
+            onSleepContent={() => {
+              bookends.dismissEvening();
+              setShowSleepContent(true);
+            }}
+          />
+        </ErrorBoundary>
       )}
 
       {/* Sleep Content Player overlay */}

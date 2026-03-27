@@ -70,8 +70,15 @@ export class ErrorBoundary extends Component<Props, State> {
               : 'An error occurred in this component'}
           </p>
           {this.state.error && (
-            <pre className="text-xs text-red-300/50 bg-red-900/30 p-2 rounded mb-4 max-w-full overflow-auto">
+            <pre className="text-xs text-red-300/50 bg-red-900/30 p-2 rounded mb-4 max-w-full overflow-auto max-h-48">
               {this.state.error.message}
+              {'\n\n'}
+              {this.state.error.stack}
+            </pre>
+          )}
+          {this.state.errorInfo?.componentStack && (
+            <pre className="text-xs text-red-300/40 bg-red-900/20 p-2 rounded mb-4 max-w-full overflow-auto max-h-32">
+              {this.state.errorInfo.componentStack}
             </pre>
           )}
           <button
