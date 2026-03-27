@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
+import { weaveTriggers } from '../../src/lib/conditioning/trigger-insertion';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
@@ -136,6 +137,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 7. Parse visible response and handler signals
     const { visibleResponse, signals } = parseResponse(fullText);
 
+    // 7b. Weave conditioning triggers (non-blocking — original message on failure)
+    let finalResponse = visibleResponse;
+    try {
+      finalResponse = await weaveTriggers(visibleResponse, user.id);
+    } catch {
+      finalResponse = visibleResponse;
+    }
+
     // 8. Save messages
     await supabase.from('handler_messages').insert([
       {
@@ -149,7 +158,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         conversation_id: convId,
         user_id: user.id,
         role: 'assistant',
-        content: visibleResponse,
+        content: finalResponse,
         handler_signals: signals,
         detected_mode: signals?.detected_mode || null,
         message_index: messageIndex + 1,
@@ -165,7 +174,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 10. Return
     return res.status(200).json({
       conversationId: convId,
-      message: visibleResponse,
+      message: finalResponse,
       mode: signals?.detected_mode || 'director',
       vulnerabilityWindow: signals?.vulnerability_window || false,
       commitmentOpportunity: signals?.commitment_opportunity || false,
