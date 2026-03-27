@@ -3,7 +3,7 @@
  * Handles connection status, sync, and data access.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 
@@ -127,6 +127,8 @@ export function useWhoop(): UseWhoopReturn {
     setSnapshot(null);
   }, [user?.id]);
 
+  const syncAttempted = useRef(false);
+
   const sync = useCallback(async (): Promise<WhoopSnapshot | null> => {
     if (!user?.id) return null;
 
@@ -141,7 +143,10 @@ export function useWhoop(): UseWhoopReturn {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!res.ok) return null;
+      if (!res.ok) {
+        console.warn('[useWhoop] Sync returned', res.status);
+        return null;
+      }
 
       const data: WhoopSnapshot = await res.json();
       setSnapshot(data);
@@ -161,9 +166,10 @@ export function useWhoop(): UseWhoopReturn {
     }
   }, [user?.id]);
 
-  // Auto-sync on mount if connected
+  // Auto-sync on mount if connected (once only)
   useEffect(() => {
-    if (isConnected && !snapshot && !isSyncing) {
+    if (isConnected && !snapshot && !isSyncing && !syncAttempted.current) {
+      syncAttempted.current = true;
       sync();
     }
   }, [isConnected, snapshot, isSyncing, sync]);
