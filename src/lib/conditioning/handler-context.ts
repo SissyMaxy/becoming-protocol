@@ -30,8 +30,8 @@ export async function buildConditioningEngineContext(userId: string): Promise<st
       lines.push('');
       lines.push('### Recent Sessions');
       for (const s of sessions) {
-        const date = s.created_at ? new Date(s.created_at).toLocaleDateString() : 'unknown';
-        lines.push(`- ${s.session_type} (${date}) — depth: ${s.trance_depth ?? 'n/a'}, intensity: ${s.intensity ?? 'n/a'}, outcome: ${s.outcome ?? 'completed'}`);
+        const date = s.started_at ? new Date(s.started_at).toLocaleDateString() : 'unknown';
+        lines.push(`- ${s.session_type} (${date}) — depth: ${s.trance_depth_estimated ?? 'n/a'}, arousal: ${s.arousal_level_estimated ?? 'n/a'}, completed: ${s.completed ?? false}`);
       }
     }
 
@@ -40,8 +40,8 @@ export async function buildConditioningEngineContext(userId: string): Promise<st
       lines.push('');
       lines.push('### Trance Progression');
       for (const t of trance) {
-        const date = t.created_at ? new Date(t.created_at).toLocaleDateString() : 'unknown';
-        lines.push(`- ${date}: depth ${t.depth_achieved ?? 'n/a'}, induction ${t.induction_method ?? 'standard'}, time-to-depth ${t.time_to_depth_seconds ? `${t.time_to_depth_seconds}s` : 'n/a'}`);
+        const date = t.recorded_at ? new Date(t.recorded_at).toLocaleDateString() : 'unknown';
+        lines.push(`- ${date}: depth ${t.peak_depth ?? 'n/a'}, induction ${t.induction_time_seconds ? `${t.induction_time_seconds}s` : 'n/a'}, sustained ${t.sustained_depth_minutes ? `${t.sustained_depth_minutes}min` : 'n/a'}`);
       }
     }
 
@@ -71,7 +71,7 @@ export async function buildConditioningEngineContext(userId: string): Promise<st
       lines.push('');
       lines.push('### Scent Conditioning');
       for (const sc of scent) {
-        lines.push(`- ${sc.scent_name}: ${sc.pairing_count ?? 0} pairings, associated with ${sc.associated_state ?? 'trance'}, strength: ${sc.conditioning_strength ?? 'forming'}`);
+        lines.push(`- ${sc.scent_name}: ${sc.sessions_paired ?? 0} pairings, strength: ${sc.association_strength ?? 'none'}`);
       }
     }
 
@@ -87,9 +87,9 @@ export async function buildConditioningEngineContext(userId: string): Promise<st
 async function fetchRecentSessions(userId: string) {
   const { data, error } = await supabase
     .from('conditioning_sessions_v2')
-    .select('session_type, trance_depth, intensity, outcome, created_at')
+    .select('session_type, trance_depth_estimated, arousal_level_estimated, completed, started_at')
     .eq('user_id', userId)
-    .order('created_at', { ascending: false })
+    .order('started_at', { ascending: false })
     .limit(5);
 
   if (error) {
@@ -102,9 +102,9 @@ async function fetchRecentSessions(userId: string) {
 async function fetchTranceProgression(userId: string) {
   const { data, error } = await supabase
     .from('trance_progression')
-    .select('depth_achieved, induction_method, time_to_depth_seconds, created_at')
+    .select('peak_depth, induction_time_seconds, sustained_depth_minutes, recorded_at')
     .eq('user_id', userId)
-    .order('created_at', { ascending: false })
+    .order('recorded_at', { ascending: false })
     .limit(5);
 
   if (error) {
@@ -148,9 +148,9 @@ async function fetchPendingPostHypnotics(userId: string) {
 async function fetchScentConditioning(userId: string) {
   const { data, error } = await supabase
     .from('scent_conditioning')
-    .select('scent_name, pairing_count, associated_state, conditioning_strength')
+    .select('scent_name, sessions_paired, association_strength')
     .eq('user_id', userId)
-    .order('pairing_count', { ascending: false });
+    .order('sessions_paired', { ascending: false });
 
   if (error) {
     console.error('[conditioning-context] fetchScentConditioning error:', error.message);
