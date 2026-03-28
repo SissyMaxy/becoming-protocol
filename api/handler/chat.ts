@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import { weaveTriggers } from '../../src/lib/conditioning/trigger-insertion';
+// NOTE: Cannot import from src/lib/ — those use import.meta.env (Vite-only)
+// weaveTriggers is inlined below instead
 
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
@@ -137,12 +138,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 7. Parse visible response and handler signals
     const { visibleResponse, signals } = parseResponse(fullText);
 
-    // 7b. Weave conditioning triggers (non-blocking — original message on failure)
+    // 7b. Weave conditioning triggers inline (can't import src/lib/ in Vercel functions)
     let finalResponse = visibleResponse;
     try {
-      finalResponse = await weaveTriggers(visibleResponse, user.id);
+      const { data: triggers } = await supabase
+        .from('conditioned_triggers')
+        .select('trigger_phrase, estimated_strength')
+        .eq('user_id', user.id)
+        .in('estimated_strength', ['established', 'conditioned']);
+
+      if (triggers && triggers.length > 0 && Math.random() < 0.3) {
+        const trigger = triggers[Math.floor(Math.random() * triggers.length)];
+        const phrase = trigger.trigger_phrase;
+        const templates: Record<string, string[]> = {
+          'good girl': ['Good girl.', 'That\'s my good girl.'],
+          'let go': ['Let go of that.', 'You can let go now.'],
+          'drop': ['Drop that resistance.', 'Let that drop.'],
+        };
+        const options = templates[phrase];
+        if (options) {
+          const insert = options[Math.floor(Math.random() * options.length)];
+          finalResponse = Math.random() > 0.5 ? `${insert} ${visibleResponse}` : `${visibleResponse} ${insert}`;
+        }
+      }
     } catch {
-      finalResponse = visibleResponse;
+      // Trigger weaving is non-critical — use original response on any failure
     }
 
     // 8. Save messages
