@@ -4,6 +4,11 @@ import { createClient } from '@supabase/supabase-js';
 const WHOOP_API = 'https://api.prod.whoop.com/developer';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // DIAGNOSTIC: Return immediately to test if function executes at all
+  if (req.headers['x-debug'] === 'ping') {
+    return res.status(200).json({ ping: true, method: req.method });
+  }
+
   try {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
