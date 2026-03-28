@@ -51,14 +51,12 @@ export function useHandlerChat(): UseHandlerChatReturn {
     async function loadRecent() {
       setIsLoading(true);
       try {
-        // Find most recent conversation from today that isn't ended
-        const today = new Date().toISOString().split('T')[0];
+        // Find most recent conversation that isn't ended (any date)
         const { data: conv } = await supabase
           .from('handler_conversations')
           .select('id, final_mode')
           .eq('user_id', user!.id)
           .is('ended_at', null)
-          .gte('started_at', `${today}T00:00:00`)
           .order('started_at', { ascending: false })
           .limit(1)
           .maybeSingle();
