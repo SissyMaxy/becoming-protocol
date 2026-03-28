@@ -144,7 +144,8 @@ export function useWhoop(): UseWhoopReturn {
       });
 
       if (!res.ok) {
-        console.warn('[useWhoop] Sync returned', res.status);
+        const errBody = await res.json().catch(() => ({}));
+        console.warn('[useWhoop] Sync returned', res.status, errBody);
         return null;
       }
 

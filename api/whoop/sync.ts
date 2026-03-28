@@ -169,7 +169,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ connected: false, reason: 'token_expired' });
     }
     console.error('[Whoop Sync] Error:', err);
-    return res.status(500).json({ error: message });
+    return res.status(500).json({ error: message, stack: err instanceof Error ? err.stack : undefined });
   }
 }
 
