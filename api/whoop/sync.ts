@@ -4,14 +4,19 @@ import { createClient } from '@supabase/supabase-js';
 const WHOOP_API = 'https://api.prod.whoop.com/developer';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  try {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const supabase = createClient(
-    process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '',
-    process.env.SUPABASE_SERVICE_ROLE_KEY || '',
-  );
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+  if (!supabaseUrl || !supabaseKey) {
+    return res.status(500).json({ error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY' });
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseKey);
 
   // Authenticate user from Authorization header
   const authHeader = req.headers.authorization;
@@ -23,7 +28,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     authHeader.replace('Bearer ', '')
   );
   if (userError || !user) {
-    return res.status(401).json({ error: 'Invalid token' });
+    return res.status(401).json({ error: 'Invalid token', detail: userError?.message });
   }
 
   try {
@@ -170,6 +175,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     console.error('[Whoop Sync] Error:', err);
     return res.status(500).json({ error: message, stack: err instanceof Error ? err.stack : undefined });
+  }
+  } catch (outerErr: unknown) {
+    // Catch-all for any crash outside the inner try (auth, imports, etc.)
+    const msg = outerErr instanceof Error ? outerErr.message : 'Unknown crash';
+    console.error('[Whoop Sync] OUTER crash:', outerErr);
+    return res.status(500).json({ error: msg, outer: true, stack: outerErr instanceof Error ? outerErr.stack : undefined });
   }
 }
 
