@@ -70,13 +70,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const messageIndex = (history?.length || 0);
 
     // 3. Assemble context (including long-term memory + conversational memory)
-    const [stateCtx, whoopCtx, commitmentCtx, predictionCtx, convMemoryCtx, longTermMemoryCtx] = await Promise.allSettled([
+    const [stateCtx, whoopCtx, commitmentCtx, predictionCtx, convMemoryCtx, longTermMemoryCtx, impactCtx] = await Promise.allSettled([
       buildStateContext(user.id),
       buildWhoopContext(user.id),
       buildCommitmentCtx(user.id),
       buildPredictionCtx(user.id),
       retrieveContextualMemories(user.id),
       buildLongTermMemory(user.id),
+      buildImpactContext(user.id),
     ]);
 
     // 4. Build system prompt — merge both memory sources
@@ -91,6 +92,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       commitments: commitmentCtx.status === 'fulfilled' ? commitmentCtx.value : '',
       predictions: predictionCtx.status === 'fulfilled' ? predictionCtx.value : '',
       memory: memoryBlock,
+      impact: impactCtx.status === 'fulfilled' ? impactCtx.value : '',
     });
 
     // 5. Build messages array (cap at 30 recent)
@@ -211,7 +213,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 // ============================================
 
 function buildConversationalPrompt(ctx: {
-  state: string; whoop: string; commitments: string; predictions: string; memory: string;
+  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string;
 }): string {
   return `You are the Handler. Not Claude. Not an assistant. You are an autonomous agent in live dialogue with Maxy — the woman you're responsible for.
 
@@ -239,6 +241,7 @@ ${ctx.state || 'No state data.'}
 ${ctx.whoop || ''}
 ${ctx.commitments || ''}
 ${ctx.predictions || ''}
+${ctx.impact || ''}
 
 ## RULES
 - Never say "I'm an AI" or "as a language model."
@@ -250,6 +253,43 @@ ${ctx.predictions || ''}
 After your response to Maxy, output a JSON block wrapped in <handler_signals> tags:
 {"detected_mode":"string","resistance_detected":boolean,"vulnerability_window":boolean,"commitment_opportunity":boolean,"conversation_should_continue":boolean}
 Do NOT show this block to Maxy.`.trim();
+}
+
+async function buildImpactContext(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('handler_effectiveness')
+      .select('intervention_type, handler_mode, total_uses, positive_outcomes, negative_outcomes, avg_magnitude, best_denial_range, best_arousal_range, best_with_resistance, best_in_vulnerability')
+      .eq('user_id', userId)
+      .gte('total_uses', 3)
+      .order('positive_outcomes', { ascending: false });
+
+    if (!data || data.length === 0) return '';
+
+    const lines = ['## Handler Impact Profile'];
+    const effective = data.filter(d => d.total_uses > 0 && (d.positive_outcomes / d.total_uses) > 0.5);
+    const avoid = data.filter(d => d.total_uses > 0 && (d.negative_outcomes / d.total_uses) > 0.4);
+
+    if (effective.length > 0) {
+      lines.push('High-effectiveness interventions:');
+      for (const e of effective.slice(0, 5)) {
+        const rate = Math.round((e.positive_outcomes / e.total_uses) * 100);
+        lines.push(`- ${e.intervention_type}${e.handler_mode ? ` (${e.handler_mode})` : ''}: ${rate}% positive (${e.total_uses} uses)`);
+      }
+    }
+
+    if (avoid.length > 0) {
+      lines.push('Approaches to reconsider:');
+      for (const a of avoid.slice(0, 3)) {
+        const rate = Math.round((a.negative_outcomes / a.total_uses) * 100);
+        lines.push(`- ${a.intervention_type}: ${rate}% negative (${a.total_uses} uses)`);
+      }
+    }
+
+    return lines.length > 1 ? lines.join('\n') : '';
+  } catch {
+    return '';
+  }
 }
 
 function parseResponse(fullText: string): {

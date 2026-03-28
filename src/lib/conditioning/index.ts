@@ -13,3 +13,18 @@ export * from './script-generator';
 export * from './adaptive-session';
 export * from './goon-session';
 export * from './pmv-generator';
+export {
+  recordIntervention,
+  recordOutcome,
+  computeEffectiveness,
+  getEffectivenessProfile,
+  buildImpactContext,
+} from './impact-tracking';
+export type {
+  InterventionType,
+  OutcomeType,
+  OutcomeDirection,
+  InterventionInput,
+  OutcomeInput,
+  EffectivenessRow,
+} from './impact-tracking';

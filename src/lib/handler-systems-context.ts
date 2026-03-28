@@ -65,6 +65,7 @@ import { buildContentIntelligenceContext, buildCalendarContext, buildOvernightSu
 import { buildDopamineContext } from './dopamine-context';
 import { buildMemoryContextBlock } from './handler-memory';
 import { buildConditioningEngineContext } from './conditioning/handler-context';
+import { buildImpactContext } from './conditioning/impact-tracking';
 
 // ============================================
 // TYPES
@@ -93,6 +94,7 @@ export interface SystemsContext {
   overnightSummary: string;
   dopamine: string;
   conditioningEngine: string;
+  impactTracking: string;
 }
 
 // ============================================
@@ -645,7 +647,7 @@ async function buildIndustryContext(userId: string): Promise<string> {
  * All systems, maximum data density.
  */
 export async function buildFullSystemsContext(userId: string): Promise<string> {
-  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social, memory, conditioningEngine] = await Promise.allSettled([
+  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social, memory, conditioningEngine, impactTracking] = await Promise.allSettled([
     buildGinaContext(userId),
     buildContentContext(userId),
     buildVoiceContext(userId),
@@ -678,6 +680,7 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     getSocialContext(userId),
     buildMemoryContextBlock(userId),
     buildConditioningEngineContext(userId),
+    buildImpactContext(userId),
   ]);
 
   const blocks = [
@@ -713,6 +716,7 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     davidElim.status === 'fulfilled' ? davidElim.value : '',
     social.status === 'fulfilled' ? social.value : '',
     memory.status === 'fulfilled' ? memory.value : '',
+    impactTracking.status === 'fulfilled' ? impactTracking.value : '',
   ].filter(Boolean);
 
   if (blocks.length === 0) return '';
