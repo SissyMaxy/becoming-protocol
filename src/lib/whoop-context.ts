@@ -117,3 +117,59 @@ export async function buildWhoopContext(userId: string): Promise<WhoopBiometricC
     dayStrain: metrics.day_strain,
   };
 }
+
+/**
+ * Fetch recent session biometrics for a live session and build a context block.
+ * Returns empty string if no data or sessionId is null.
+ */
+export async function buildSessionBiometricsContext(
+  userId: string,
+  sessionId: string | null,
+): Promise<string> {
+  if (!sessionId) return '';
+
+  const { data: snapshots } = await supabase
+    .from('session_biometrics')
+    .select('strain_delta, avg_heart_rate, max_heart_rate, created_at')
+    .eq('session_id', sessionId)
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(5);
+
+  if (!snapshots || snapshots.length === 0) return '';
+
+  // Latest values
+  const latest = snapshots[0];
+  const totalStrainDelta = snapshots.reduce(
+    (max, s) => Math.max(max, s.strain_delta ?? 0),
+    0,
+  );
+  const peakHR = Math.max(...snapshots.map((s) => s.max_heart_rate ?? 0));
+  const avgHR = Math.round(
+    snapshots.reduce((sum, s) => sum + (s.avg_heart_rate ?? 0), 0) / snapshots.length,
+  );
+
+  // Compute trend from last 3 avg_heart_rate values (oldest-to-newest)
+  let trend = 'stable';
+  if (snapshots.length >= 3) {
+    const recent = snapshots.slice(0, 3).reverse(); // oldest first
+    const [a, b, c] = recent.map((s) => s.avg_heart_rate ?? 0);
+    if (c > b && b > a) trend = 'rising';
+    else if (c < b && b < a) trend = 'falling';
+  }
+
+  // Duration span
+  const oldest = snapshots[snapshots.length - 1];
+  const spanMs =
+    new Date(latest.created_at).getTime() - new Date(oldest.created_at).getTime();
+  const spanMinutes = (spanMs / 60000).toFixed(1);
+
+  const lines = [
+    '## Session Biometrics (Whoop Live)',
+    `Strain delta: +${totalStrainDelta.toFixed(1)} (session total)`,
+    `Avg HR: ${avgHR}, Max HR: ${peakHR}, Trend: ${trend}`,
+    `Snapshots: ${snapshots.length} over ${spanMinutes} minutes`,
+  ];
+
+  return lines.join('\n');
+}

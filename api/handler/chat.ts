@@ -297,6 +297,44 @@ async function buildWhoopContext(userId: string): Promise<string> {
   if (data.hrv_rmssd_milli) lines.push(`HRV: ${data.hrv_rmssd_milli.toFixed(1)}ms`);
   if (data.sleep_performance_percentage) lines.push(`Sleep: ${data.sleep_performance_percentage.toFixed(0)}%`);
   if (data.day_strain) lines.push(`Day strain: ${data.day_strain.toFixed(1)}/21`);
+
+  // Append live session biometrics if there's an active polling session (data within last 2 min)
+  const recentCutoff = new Date(Date.now() - 120000).toISOString();
+  const { data: recentBio } = await supabase
+    .from('session_biometrics')
+    .select('session_id, strain_delta, avg_heart_rate, max_heart_rate, created_at')
+    .eq('user_id', userId)
+    .gte('created_at', recentCutoff)
+    .order('created_at', { ascending: false })
+    .limit(5);
+
+  if (recentBio && recentBio.length > 0) {
+    const sessionId = recentBio[0].session_id;
+    const sessionSnapshots = recentBio.filter((s) => s.session_id === sessionId);
+    const peakHR = Math.max(...sessionSnapshots.map((s) => s.max_heart_rate ?? 0));
+    const avgHR = Math.round(
+      sessionSnapshots.reduce((sum, s) => sum + (s.avg_heart_rate ?? 0), 0) / sessionSnapshots.length,
+    );
+    const totalStrainDelta = Math.max(...sessionSnapshots.map((s) => s.strain_delta ?? 0));
+
+    let trend = 'stable';
+    if (sessionSnapshots.length >= 3) {
+      const recent3 = sessionSnapshots.slice(0, 3).reverse();
+      const [a, b, c] = recent3.map((s) => s.avg_heart_rate ?? 0);
+      if (c > b && b > a) trend = 'rising';
+      else if (c < b && b < a) trend = 'falling';
+    }
+
+    const oldest = sessionSnapshots[sessionSnapshots.length - 1];
+    const spanMin = ((new Date(recentBio[0].created_at).getTime() - new Date(oldest.created_at).getTime()) / 60000).toFixed(1);
+
+    lines.push('');
+    lines.push('## Session Biometrics (Whoop Live)');
+    lines.push(`Strain delta: +${totalStrainDelta.toFixed(1)} (session total)`);
+    lines.push(`Avg HR: ${avgHR}, Max HR: ${peakHR}, Trend: ${trend}`);
+    lines.push(`Snapshots: ${sessionSnapshots.length} over ${spanMin} minutes`);
+  }
+
   return lines.join('\n');
 }
 

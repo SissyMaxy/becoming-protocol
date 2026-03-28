@@ -47,6 +47,11 @@ export function SessionContainer({ config, denialDay = 0, onComplete, onCancel }
   // Haptic integration — maps phase transitions to Lovense patterns
   useSessionHaptics(state);
 
+  // TODO: Whoop biometrics integration — useSessionBiometrics
+  // To integrate: expose state.id from useEdgeSession, call startPolling(state.id) when
+  // phase transitions to 'active', call stopPolling() when phase transitions to 'post',
+  // and write bioSummary to the session record in completeSession().
+
   // Auto-start session on mount
   useEffect(() => {
     startSession(config);

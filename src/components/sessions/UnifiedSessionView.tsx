@@ -6,6 +6,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Play, Pause, Volume2, VolumeX, SkipForward, MessageSquare, MessageSquareOff } from 'lucide-react';
 import { useLovense } from '../../hooks/useLovense';
+import { useSessionBiometrics } from '../../hooks/useSessionBiometrics';
 
 export type SessionType = 'edge' | 'goon' | 'conditioning' | 'freestyle' | 'denial';
 
@@ -17,6 +18,13 @@ interface UnifiedSessionProps {
 
 export interface SessionStats {
   duration: number;
+  biometrics?: {
+    total_strain_delta: number;
+    peak_heart_rate: number;
+    avg_heart_rate: number;
+    snapshots_count: number;
+    duration_seconds: number;
+  } | null;
 }
 
 // Affirmations by session type
@@ -78,6 +86,9 @@ export function UnifiedSessionView({
 }: UnifiedSessionProps) {
   // Lovense integration
   const lovense = useLovense();
+
+  // Whoop biometrics polling
+  const biometrics = useSessionBiometrics();
 
   // Content state - loads from public/videos/
   const [videos, setVideos] = useState<string[]>([]);
@@ -214,6 +225,10 @@ export function UnifiedSessionView({
       videoRef.current.play();
     }
 
+    // Start Whoop biometrics polling with a unique session ID
+    const sessionId = crypto.randomUUID();
+    biometrics.startPolling(sessionId);
+
     // Start appropriate Lovense mode based on session type
     if (lovense.status === 'connected' || lovense.cloudConnected) {
       switch (sessionType) {
@@ -249,6 +264,9 @@ export function UnifiedSessionView({
     if (timerRef.current) clearInterval(timerRef.current);
     if (textTimerRef.current) clearInterval(textTimerRef.current);
 
+    // Stop Whoop biometrics polling and capture summary
+    const bioSummary = biometrics.stopPolling();
+
     // Stop Lovense
     switch (sessionType) {
       case 'denial':
@@ -266,6 +284,7 @@ export function UnifiedSessionView({
 
     onComplete?.({
       duration,
+      biometrics: bioSummary,
     });
   };
 
