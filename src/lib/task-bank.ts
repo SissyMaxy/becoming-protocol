@@ -4,6 +4,7 @@
 import { supabase } from './supabase';
 import { getTodayDate } from './protocol';
 import { invokeWithAuth, isHandlerAIDisabled } from './handler-ai';
+import { extractMemoriesFromTask } from './handler-memory';
 import type {
   Task,
   DbTask,
@@ -560,6 +561,17 @@ export async function completeTask(
   // Record task at domain level for infinite escalation tracking (fire-and-forget)
   recordTaskAtLevel(dailyTask.user_id, task.domain, task.intensity, true).catch(err => {
     console.warn('[TaskBank] Escalation tracking failed:', err);
+  });
+
+  // Extract memories from task completion for Handler long-term memory (fire-and-forget)
+  extractMemoriesFromTask(dailyTask.user_id, {
+    id: dailyTaskId,
+    category: task.category,
+    domain: task.domain,
+    notes: context.notes,
+    resistanceLevel: undefined, // Could be enhanced later with resistance tracking
+  }).catch(err => {
+    console.warn('[TaskBank] Memory extraction failed:', err);
   });
 
   // Dopamine: delayed reward after task completion (10-20 min)

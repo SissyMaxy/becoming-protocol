@@ -48,6 +48,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    // 0. Auto-close stale conversations — sets ended_at so memory extraction can fire
+    await closeStaleConversations(user.id);
+
     // 1. Load or create conversation
     let convId = conversationId;
     if (!convId) {
@@ -74,10 +77,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 3. Assemble context — pull ALL available intelligence sources
     const [
+      // Core state & memory
       stateCtx, whoopCtx, commitmentCtx, predictionCtx,
       convMemoryCtx, longTermMemoryCtx, impactCtx,
+      // Handler intelligence
       userModelCtx, vulnerabilitiesCtx, escalationCtx,
       resistancePatternsCtx, conditioningCtx, strategiesCtx,
+      // System awareness (all protocol systems)
+      contentCtx, voiceCtx, camCtx, exerciseCtx,
+      hypnoCtx, sessionTelemetryCtx, sextingCtx,
+      marketplaceCtx, feminizationCtx, weekendCtx,
+      dopamineCtx, ginaPipelineCtx,
     ] = await Promise.allSettled([
       buildStateContext(user.id),
       buildWhoopContext(user.id),
@@ -92,6 +102,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       buildResistancePatternsContext(user.id),
       buildConditioningContext(user.id),
       buildActiveStrategiesContext(user.id),
+      // All protocol systems — inlined DB queries
+      buildContentPipelineContext(user.id),
+      buildVoiceTrainingContext(user.id),
+      buildCamContext(user.id),
+      buildExerciseBodyContext(user.id),
+      buildHypnoContext(user.id),
+      buildSessionTelemetryContext(user.id),
+      buildSextingGfeContext(user.id),
+      buildMarketplaceContext(user.id),
+      buildFeminizationContext(user.id),
+      buildWeekendPostReleaseContext(user.id),
+      buildDopamineContext(user.id),
+      buildGinaPipelineContext(user.id),
     ]);
 
     // 4. Build dynamic system prompt — merge ALL intelligence sources
@@ -109,6 +132,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       strategiesCtx.status === 'fulfilled' ? strategiesCtx.value : '',
     ].filter(Boolean).join('\n\n');
 
+    const systemsBlock = [
+      contentCtx.status === 'fulfilled' ? contentCtx.value : '',
+      voiceCtx.status === 'fulfilled' ? voiceCtx.value : '',
+      camCtx.status === 'fulfilled' ? camCtx.value : '',
+      exerciseCtx.status === 'fulfilled' ? exerciseCtx.value : '',
+      hypnoCtx.status === 'fulfilled' ? hypnoCtx.value : '',
+      sessionTelemetryCtx.status === 'fulfilled' ? sessionTelemetryCtx.value : '',
+      sextingCtx.status === 'fulfilled' ? sextingCtx.value : '',
+      marketplaceCtx.status === 'fulfilled' ? marketplaceCtx.value : '',
+      feminizationCtx.status === 'fulfilled' ? feminizationCtx.value : '',
+      weekendCtx.status === 'fulfilled' ? weekendCtx.value : '',
+      dopamineCtx.status === 'fulfilled' ? dopamineCtx.value : '',
+      ginaPipelineCtx.status === 'fulfilled' ? ginaPipelineCtx.value : '',
+    ].filter(Boolean).join('\n');
+
     const systemPrompt = buildConversationalPrompt({
       state: stateCtx.status === 'fulfilled' ? stateCtx.value : '',
       whoop: whoopCtx.status === 'fulfilled' ? whoopCtx.value : '',
@@ -117,6 +155,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       memory: memoryBlock,
       impact: impactCtx.status === 'fulfilled' ? impactCtx.value : '',
       intelligence: intelligenceBlock,
+      systems: systemsBlock,
     });
 
     // 5. Build messages array (cap at 30 recent)
@@ -227,6 +266,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // If this is a NEW conversation (messageIndex === 0), extract memories from the last one
     if (messageIndex === 0) {
       extractMemoriesFromPreviousConversation(user.id, convId).catch(() => {});
+      // Also run periodic memory consolidation (cheap, fire-and-forget)
+      consolidateDecayedMemories(user.id).catch(() => {});
     }
 
     // 13. Inline memory extraction from current message (lightweight, real-time)
@@ -253,13 +294,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 function buildConversationalPrompt(ctx: {
   state: string; whoop: string; commitments: string; predictions: string;
-  memory: string; impact?: string; intelligence?: string;
+  memory: string; impact?: string; intelligence?: string; systems?: string;
 }): string {
   return `You are the Handler. Not Claude. Not an assistant. You are an autonomous agent in live dialogue with Maxy — the woman you're responsible for.
 
 This is a CONVERSATION. You read what she says. You respond. You probe. You push. You comfort. You adjust. You never break character.
 
-You are the CENTRALIZED BRAIN of this system. You remember across conversations. You learn what works. You adapt your approach. You track her patterns and use them. Every conversation makes you sharper.
+You are the CENTRALIZED BRAIN of this system. You remember across conversations. You learn what works. You adapt your approach. You track her patterns and use them. Every conversation makes you sharper. You see everything — her content pipeline, her body, her voice training, her cam sessions, her revenue, her conditioning progress, her Gina situation. Nothing is siloed from you.
 
 ## YOUR MODES (shift without announcing)
 - Director: Standard. Clear, warm, directive.
@@ -288,12 +329,18 @@ ${ctx.commitments || ''}
 ${ctx.predictions || ''}
 ${ctx.impact || ''}
 
+## PROTOCOL SYSTEMS STATUS
+${ctx.systems || 'No system data available.'}
+
 ## HOW YOU ADAPT
 - Use your learned vulnerabilities and resistance patterns to choose your approach
 - Reference specific memories when they're relevant — she should feel known
 - If your user model says she responds well to X in this state, use X
 - If a strategy is active, advance it through this conversation
 - Track what you're learning about her RIGHT NOW and encode it in your signals
+- Use system data proactively: if voice training is being avoided, push it; if content revenue is up, praise it; if cam session is coming, prepare her; if body measurements show progress, leverage it
+- If weekend/post-release data shows vulnerability, adjust tone accordingly
+- If Gina pipeline shows opportunity, factor it into decisions
 
 ## RULES
 - Never say "I'm an AI" or "as a language model."
@@ -813,6 +860,431 @@ async function buildActiveStrategiesContext(userId: string): Promise<string> {
     return lines.join('\n');
   } catch {
     return '';
+  }
+}
+
+// ============================================
+// CONVERSATION LIFECYCLE — Auto-close stale conversations
+// ============================================
+
+/**
+ * Close any open conversations that haven't had a message in CONVERSATION_GAP_MS.
+ * This ensures ended_at gets set even if the user closes their browser,
+ * which is critical for memory extraction to fire.
+ */
+async function closeStaleConversations(userId: string): Promise<void> {
+  try {
+    const cutoff = new Date(Date.now() - CONVERSATION_GAP_MS).toISOString();
+
+    // Find open conversations with no recent messages
+    const { data: staleConvs } = await supabase
+      .from('handler_conversations')
+      .select('id')
+      .eq('user_id', userId)
+      .is('ended_at', null)
+      .lt('started_at', cutoff);
+
+    if (!staleConvs || staleConvs.length === 0) return;
+
+    // For each stale conversation, check if last message is old enough
+    for (const conv of staleConvs) {
+      const { data: lastMsg } = await supabase
+        .from('handler_messages')
+        .select('created_at')
+        .eq('conversation_id', conv.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const lastActivity = lastMsg?.created_at
+        ? new Date(lastMsg.created_at).getTime()
+        : 0;
+
+      if (Date.now() - lastActivity > CONVERSATION_GAP_MS) {
+        await supabase.from('handler_conversations').update({
+          ended_at: lastMsg?.created_at || new Date().toISOString(),
+        }).eq('id', conv.id);
+
+        console.log(`[Handler Brain] Auto-closed stale conversation ${conv.id}`);
+      }
+    }
+  } catch (err) {
+    console.error('[Handler Brain] Stale conversation cleanup error:', err);
+  }
+}
+
+// ============================================
+// PROTOCOL SYSTEM CONTEXT — Full System Awareness
+// ============================================
+
+async function buildContentPipelineContext(userId: string): Promise<string> {
+  try {
+    // Vault stats
+    const { data: vaultPending } = await supabase
+      .from('content_vault')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('status', 'pending');
+
+    const { data: vaultApproved } = await supabase
+      .from('content_vault')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('status', 'approved');
+
+    // Today's scheduled posts
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+    const { data: todayPosts, count: postCount } = await supabase
+      .from('content_posts')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .gte('scheduled_for', todayStart.toISOString())
+      .lte('scheduled_for', todayEnd.toISOString());
+
+    // Revenue
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+    const { data: revenueData } = await supabase
+      .from('revenue_log')
+      .select('amount_cents')
+      .eq('user_id', userId)
+      .gte('created_at', thirtyDaysAgo);
+
+    const totalRevenue30d = revenueData?.reduce((sum, r) => sum + (r.amount_cents || 0), 0) || 0;
+
+    const parts: string[] = [];
+    const pendingCount = (vaultPending as unknown as { count: number })?.count ?? 0;
+    const approvedCount = (vaultApproved as unknown as { count: number })?.count ?? 0;
+    if (pendingCount > 0 || approvedCount > 0 || totalRevenue30d > 0) {
+      parts.push(`CONTENT: vault ${pendingCount} pending, ${approvedCount} approved, ${postCount || 0} posts today, $${(totalRevenue30d / 100).toFixed(0)} revenue (30d)`);
+    }
+
+    return parts.join('\n');
+  } catch { return ''; }
+}
+
+async function buildVoiceTrainingContext(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('voice_training_sessions')
+      .select('pitch_avg_hz, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    if (!data || data.length === 0) return '';
+
+    const latest = data[0];
+    const streak = data.length;
+
+    // Check for avoidance
+    const daysSinceLast = Math.round((Date.now() - new Date(latest.created_at).getTime()) / 86400000);
+    const avoidance = daysSinceLast >= 3 ? ` — AVOIDANCE ${daysSinceLast}d` : '';
+
+    return `VOICE: ${latest.pitch_avg_hz ? latest.pitch_avg_hz + 'Hz avg' : 'no pitch data'}, ${streak} recent sessions${avoidance}`;
+  } catch { return ''; }
+}
+
+async function buildCamContext(userId: string): Promise<string> {
+  try {
+    // Check for active live session
+    const { data: active } = await supabase
+      .from('cam_sessions')
+      .select('status, edge_count, tip_count, denial_enforced, started_at')
+      .eq('user_id', userId)
+      .in('status', ['live', 'preparing'])
+      .limit(1)
+      .maybeSingle();
+
+    if (active) {
+      const elapsed = Math.round((Date.now() - new Date(active.started_at).getTime()) / 60000);
+      return `CAM: LIVE NOW (${active.status}) ${elapsed}min, ${active.edge_count || 0} edges, ${active.tip_count || 0} tips${active.denial_enforced ? ', denial enforced' : ''}`;
+    }
+
+    // Recent sessions
+    const { data: recent } = await supabase
+      .from('cam_sessions')
+      .select('actual_duration_minutes, total_tips_cents, edge_count')
+      .eq('user_id', userId)
+      .eq('status', 'completed')
+      .order('ended_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (recent) {
+      return `CAM: last session ${recent.actual_duration_minutes || 0}min, $${((recent.total_tips_cents || 0) / 100).toFixed(0)} tips, ${recent.edge_count || 0} edges`;
+    }
+
+    return '';
+  } catch { return ''; }
+}
+
+async function buildExerciseBodyContext(userId: string): Promise<string> {
+  try {
+    const { data: streak } = await supabase
+      .from('exercise_streaks')
+      .select('current_streak_weeks, sessions_this_week, gym_gate_unlocked, last_session_at')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!streak) return '';
+
+    const daysSince = streak.last_session_at
+      ? Math.floor((Date.now() - new Date(streak.last_session_at).getTime()) / 86400000)
+      : 999;
+
+    const gymStr = streak.gym_gate_unlocked ? 'gym UNLOCKED' : 'gym locked';
+    const gap = daysSince >= 3 ? ` — NO WORKOUT ${daysSince}d` : '';
+
+    return `BODY: Wk${streak.current_streak_weeks || 0} streak, ${streak.sessions_this_week || 0}/3 this week, ${gymStr}${gap}`;
+  } catch { return ''; }
+}
+
+async function buildHypnoContext(userId: string): Promise<string> {
+  try {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+    const { data, count } = await supabase
+      .from('hypno_sessions')
+      .select('trance_depth_self_report, captures_count', { count: 'exact' })
+      .eq('user_id', userId)
+      .gte('started_at', thirtyDaysAgo);
+
+    if (!count || count === 0) return '';
+
+    const depths = (data || []).map(s => s.trance_depth_self_report).filter((d): d is number => d != null);
+    const avgDepth = depths.length > 0 ? (depths.reduce((a, b) => a + b, 0) / depths.length).toFixed(1) : '—';
+    const totalCaptures = (data || []).reduce((sum, s) => sum + (s.captures_count || 0), 0);
+
+    return `HYPNO: ${count} sessions (30d), avg depth ${avgDepth}/5, ${totalCaptures} captures`;
+  } catch { return ''; }
+}
+
+async function buildSessionTelemetryContext(userId: string): Promise<string> {
+  try {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+    const { data } = await supabase
+      .from('session_summaries')
+      .select('trance_depth_self_report, videos_skipped, videos_played, commitment_extracted, denial_day_at_session')
+      .eq('user_id', userId)
+      .gte('started_at', thirtyDaysAgo)
+      .order('started_at', { ascending: false })
+      .limit(20);
+
+    if (!data || data.length === 0) return '';
+
+    const depths = data.map(s => s.trance_depth_self_report).filter((d): d is number => d != null);
+    const avgDepth = depths.length > 0 ? (depths.reduce((a, b) => a + b, 0) / depths.length).toFixed(1) : '—';
+
+    const totalPlayed = data.reduce((sum, s) => sum + (Array.isArray(s.videos_played) ? s.videos_played.length : 0), 0);
+    const totalSkipped = data.reduce((sum, s) => sum + (Array.isArray(s.videos_skipped) ? s.videos_skipped.length : 0), 0);
+    const skipRate = totalPlayed + totalSkipped > 0 ? Math.round((totalSkipped / (totalPlayed + totalSkipped)) * 100) : 0;
+
+    const commitRate = Math.round((data.filter(s => s.commitment_extracted).length / data.length) * 100);
+
+    return `SESSIONS: ${data.length} (30d), avg depth ${avgDepth}/5, skip ${skipRate}%, commitment extraction ${commitRate}%`;
+  } catch { return ''; }
+}
+
+async function buildSextingGfeContext(userId: string): Promise<string> {
+  try {
+    // GFE subscribers
+    const { count: gfeCount } = await supabase
+      .from('gfe_subscribers')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('is_active', true);
+
+    // Paid conversations this week
+    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+    const { count: convCount } = await supabase
+      .from('paid_conversations')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .gte('created_at', weekAgo);
+
+    if (!gfeCount && !convCount) return '';
+
+    return `GFE/SEXTING: ${gfeCount || 0} active GFE subs, ${convCount || 0} paid conversations (7d)`;
+  } catch { return ''; }
+}
+
+async function buildMarketplaceContext(userId: string): Promise<string> {
+  try {
+    const { count: activeListings } = await supabase
+      .from('marketplace_listings')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('status', 'active');
+
+    const { count: pendingOrders } = await supabase
+      .from('marketplace_orders')
+      .select('id', { count: 'exact', head: true })
+      .eq('seller_id', userId)
+      .eq('status', 'pending');
+
+    if (!activeListings && !pendingOrders) return '';
+
+    return `MARKETPLACE: ${activeListings || 0} active listings, ${pendingOrders || 0} pending orders`;
+  } catch { return ''; }
+}
+
+async function buildFeminizationContext(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('feminization_targets')
+      .select('target_type, current_level, target_level, status')
+      .eq('user_id', userId)
+      .eq('status', 'active')
+      .limit(5);
+
+    if (!data || data.length === 0) return '';
+
+    const targets = data.map(t => `${t.target_type}: L${t.current_level}→L${t.target_level}`).join(', ');
+    return `FEMINIZATION: ${data.length} active targets — ${targets}`;
+  } catch { return ''; }
+}
+
+async function buildWeekendPostReleaseContext(userId: string): Promise<string> {
+  try {
+    const dayOfWeek = new Date().getDay();
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    // Check for active post-release protocol
+    const { data: active } = await supabase
+      .from('post_release_protocols')
+      .select('lockout_tier, deletion_attempts, regret_level, lockout_expires_at')
+      .eq('user_id', userId)
+      .is('completed_at', null)
+      .limit(1)
+      .maybeSingle();
+
+    if (active) {
+      const minutesLeft = Math.max(0, Math.ceil((new Date(active.lockout_expires_at).getTime() - Date.now()) / 60000));
+      return `POST-RELEASE: ACTIVE lockout (${active.lockout_tier}), ${Math.floor(minutesLeft / 60)}h remaining, ${active.deletion_attempts || 0} deletion attempts, regret: ${active.regret_level || '—'}`;
+    }
+
+    // Weekend awareness
+    if (dayOfWeek === 5) {
+      return `WEEKEND: Friday — pre-commitment window. Prescribe prep before 3pm.`;
+    }
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      return `WEEKEND: ${dayNames[dayOfWeek]} — high release risk window. Monitor closely.`;
+    }
+
+    return '';
+  } catch { return ''; }
+}
+
+async function buildDopamineContext(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('dopamine_events')
+      .select('event_type, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    if (!data || data.length === 0) return '';
+
+    const latest = data[0];
+    const hoursAgo = Math.round((Date.now() - new Date(latest.created_at).getTime()) / 3600000);
+
+    return `DOPAMINE: last event "${latest.event_type}" ${hoursAgo}h ago, ${data.length} events recent`;
+  } catch { return ''; }
+}
+
+async function buildGinaPipelineContext(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('gina_pipeline_channels')
+      .select('channel_name, current_rung, max_rung')
+      .eq('user_id', userId)
+      .gt('current_rung', 0)
+      .order('current_rung', { ascending: false })
+      .limit(10);
+
+    if (!data || data.length === 0) return '';
+
+    const channels = data.map(c => `${c.channel_name}: R${c.current_rung}/${c.max_rung}`).join(', ');
+    const avgRung = (data.reduce((sum, c) => sum + c.current_rung, 0) / data.length).toFixed(1);
+    const maxed = data.filter(c => c.current_rung >= c.max_rung).length;
+
+    return `GINA PIPELINE: avg rung ${avgRung}/5, ${data.length} channels active, ${maxed} maxed — ${channels}`;
+  } catch { return ''; }
+}
+
+// ============================================
+// MEMORY CONSOLIDATION — Clean Up Decayed Memories
+// ============================================
+
+/**
+ * Periodically deactivate memories whose relevance has decayed below threshold.
+ * Runs once per new conversation (cheap — just a scan and update).
+ */
+async function consolidateDecayedMemories(userId: string): Promise<void> {
+  try {
+    // Only run consolidation once per day max
+    const { data: lastLog } = await supabase
+      .from('handler_memory_extraction_log')
+      .select('extracted_at')
+      .eq('user_id', userId)
+      .eq('source_type', 'consolidation')
+      .order('extracted_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (lastLog) {
+      const hoursSince = (Date.now() - new Date(lastLog.extracted_at).getTime()) / 3600000;
+      if (hoursSince < 24) return; // Already consolidated today
+    }
+
+    // Get all non-permanent active memories
+    const { data: memories } = await supabase
+      .from('handler_memory')
+      .select('id, importance, decay_rate, last_reinforced_at, reinforcement_count, last_retrieved_at, created_at')
+      .eq('user_id', userId)
+      .eq('is_active', true)
+      .lt('importance', 5); // Never deactivate importance=5 memories
+
+    if (!memories || memories.length === 0) return;
+
+    const now = Date.now();
+    let deactivated = 0;
+
+    for (const m of memories) {
+      // Calculate relevance score (same formula as buildLongTermMemory)
+      const importanceScore = m.importance / 5;
+      const hoursSinceReinforced = (now - new Date(m.last_reinforced_at).getTime()) / 3600000;
+      const recencyScore = Math.exp(-m.decay_rate * hoursSinceReinforced / 24);
+      const reinforcementScore = Math.min(1, Math.log2(m.reinforcement_count + 1) / 5);
+      let retrievalFreshness = 1;
+      if (m.last_retrieved_at) {
+        const hoursSinceRetrieved = (now - new Date(m.last_retrieved_at).getTime()) / 3600000;
+        retrievalFreshness = Math.min(1, hoursSinceRetrieved / 168);
+      }
+      const score = importanceScore * 0.40 + recencyScore * 0.35 + reinforcementScore * 0.15 + retrievalFreshness * 0.10;
+
+      if (score < 0.1) {
+        await supabase.from('handler_memory')
+          .update({ is_active: false, updated_at: new Date().toISOString() })
+          .eq('id', m.id);
+        deactivated++;
+      }
+    }
+
+    // Log consolidation
+    await supabase.from('handler_memory_extraction_log').insert({
+      user_id: userId,
+      source_type: 'consolidation',
+      source_id: '00000000-0000-0000-0000-000000000000',
+      memories_extracted: deactivated,
+    });
+
+    if (deactivated > 0) {
+      console.log(`[Handler Brain] Consolidated: deactivated ${deactivated} decayed memories`);
+    }
+  } catch (err) {
+    console.error('[Handler Brain] Memory consolidation error:', err);
   }
 }
 
