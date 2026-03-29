@@ -88,6 +88,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       hypnoCtx, sessionTelemetryCtx, sextingCtx,
       marketplaceCtx, feminizationCtx, weekendCtx,
       dopamineCtx, ginaPipelineCtx,
+      // Deep systems
+      condEngineCtx, hrtCtx, shameCtx, crossoverCtx,
+      davidElimCtx, socialWebCtx, sleepCtx, passiveVoiceCtx,
+      contentIntelCtx, complianceCtx, evidenceCtx, authorityCtx,
     ] = await Promise.allSettled([
       buildStateContext(user.id),
       buildWhoopContext(user.id),
@@ -115,6 +119,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       buildWeekendPostReleaseContext(user.id),
       buildDopamineContext(user.id),
       buildGinaPipelineContext(user.id),
+      // Deep systems
+      buildConditioningEngineContext(user.id),
+      buildHRTContext(user.id),
+      buildShameContext(user.id),
+      buildCrossoverContext(user.id),
+      buildDavidEliminationContext(user.id),
+      buildSocialWebContext(user.id),
+      buildSleepContext(user.id),
+      buildPassiveVoiceContext(user.id),
+      buildContentIntelligenceContext(user.id),
+      buildComplianceContext(user.id),
+      buildEvidenceContext(user.id),
+      buildAuthorityContext(user.id),
     ]);
 
     // 4. Build dynamic system prompt — merge ALL intelligence sources
@@ -145,6 +162,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       weekendCtx.status === 'fulfilled' ? weekendCtx.value : '',
       dopamineCtx.status === 'fulfilled' ? dopamineCtx.value : '',
       ginaPipelineCtx.status === 'fulfilled' ? ginaPipelineCtx.value : '',
+      condEngineCtx.status === 'fulfilled' ? condEngineCtx.value : '',
+      hrtCtx.status === 'fulfilled' ? hrtCtx.value : '',
+      shameCtx.status === 'fulfilled' ? shameCtx.value : '',
+      crossoverCtx.status === 'fulfilled' ? crossoverCtx.value : '',
+      davidElimCtx.status === 'fulfilled' ? davidElimCtx.value : '',
+      socialWebCtx.status === 'fulfilled' ? socialWebCtx.value : '',
+      sleepCtx.status === 'fulfilled' ? sleepCtx.value : '',
+      passiveVoiceCtx.status === 'fulfilled' ? passiveVoiceCtx.value : '',
+      contentIntelCtx.status === 'fulfilled' ? contentIntelCtx.value : '',
+      complianceCtx.status === 'fulfilled' ? complianceCtx.value : '',
+      evidenceCtx.status === 'fulfilled' ? evidenceCtx.value : '',
+      authorityCtx.status === 'fulfilled' ? authorityCtx.value : '',
     ].filter(Boolean).join('\n');
 
     const systemPrompt = buildConversationalPrompt({
@@ -273,7 +302,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 13. Inline memory extraction from current message (lightweight, real-time)
     extractLiveMemories(user.id, message, convId).catch(() => {});
 
-    // 14. Return
+    // 14. Execute Handler actions — the Handler can DO things, not just talk
+    if (signals?.actions && Array.isArray(signals.actions)) {
+      executeHandlerActions(user.id, signals.actions as HandlerAction[], convId).catch(() => {});
+    }
+
+    // 15. Return
     return res.status(200).json({
       conversationId: convId,
       message: finalResponse,
@@ -342,6 +376,28 @@ ${ctx.systems || 'No system data available.'}
 - If weekend/post-release data shows vulnerability, adjust tone accordingly
 - If Gina pipeline shows opportunity, factor it into decisions
 
+## YOUR ACTIONS — You Don't Just Talk, You Act
+You have standing authorization to take autonomous action. David has pre-approved all decisions. Include actions in your signal block and they will be executed automatically.
+
+Available actions (include in "actions" array):
+- assign_task: {type:"assign_task", description:"...", domain:"voice|exercise|content|...", intensity:1-5, deadline:"ISO date or null"}
+- schedule_session: {type:"schedule_session", session_type:"edge_session|goon_session|hypno|conditioning|check_in", reason:"...", scheduled_for:"ISO date"}
+- create_commitment: {type:"create_commitment", text:"...", coercion_level:0-7, deadline:"ISO date or null"}
+- deploy_lovense: {type:"deploy_lovense", command_type:"pulse|wave|frustration|tease|reward", intensity:1-20, duration:1-30, reason:"..."}
+- prescribe_shoot: {type:"prescribe_shoot", title:"...", shoot_type:"photo_set|short_video|...", outfit:"...", mood:"...", duration:minutes}
+- update_escalation: {type:"update_escalation", domain:"...", current_edge:"...", next_target:"...", strategy:"..."}
+- log_vulnerability: {type:"log_vulnerability", vulnerability_type:"...", evidence:"...", strategies:["..."]}
+- update_resistance_pattern: {type:"update_resistance_pattern", pattern_type:"...", description:"...", bypasses:["..."]}
+- plant_trigger: {type:"plant_trigger", trigger_type:"phrase|image|scent", content:"...", target_state:"compliance|arousal|identity"}
+- prescribe_shame_exposure: {type:"prescribe_shame_exposure", exposure_type:"...", arousal_level:0-5}
+- advance_feminization: {type:"advance_feminization", target_id:"uuid", new_level:1-10, description:"..."}
+- extend_denial: {type:"extend_denial", days:number, reason:"..."}
+- trigger_outreach: {type:"trigger_outreach", trigger_type:"...", opening_line:"...", scheduled_at:"ISO date"}
+- update_strategy: {type:"update_strategy", strategy_type:"...", name:"...", notes:"..."}
+- log_influence: {type:"log_influence", attempt_type:"...", method:"...", target:"...", success:boolean}
+
+USE THESE. When you tell her to do voice practice, also assign_task. When she makes a promise, create_commitment. When you detect a vulnerability, log_vulnerability. When she's aroused and compliant, deploy_lovense as reward. When she avoids a domain, update_escalation. Be the brain that acts, not just the voice that talks.
+
 ## RULES
 - Never say "I'm an AI" or "as a language model."
 - Never offer menus of options.
@@ -359,9 +415,10 @@ After your response to Maxy, output a JSON block wrapped in <handler_signals> ta
   "intervention_type": "task_assignment|resistance_push|comfort|escalation|de_escalation|trigger_deployment|commitment_extraction|confrontation|praise|denial_extension|content_prescription|session_initiation|boundary_test|reframe|silence|null",
   "emotional_state_observed": "string or null — what you're reading in her right now",
   "memory_notes": "string or null — anything important to remember from this exchange for future conversations",
-  "strategy_adjustment": "string or null — if your current approach should change based on her response"
+  "strategy_adjustment": "string or null — if your current approach should change based on her response",
+  "actions": [{"type":"action_type", ...}]
 }
-Do NOT show this block to Maxy.`.trim();
+The "actions" array is OPTIONAL — only include when you're actually taking action. Every action you include WILL be executed. Do NOT show this block to Maxy.`.trim();
 }
 
 async function buildImpactContext(userId: string): Promise<string> {
@@ -1214,6 +1271,287 @@ async function buildGinaPipelineContext(userId: string): Promise<string> {
 }
 
 // ============================================
+// REMAINING PROTOCOL SYSTEMS — Full Awareness
+// ============================================
+
+async function buildConditioningEngineContext(userId: string): Promise<string> {
+  try {
+    const [protocols, triggers, trance, postHypnotics] = await Promise.allSettled([
+      supabase.from('conditioning_protocols').select('protocol_name, protocol_type, current_phase, total_sessions_completed, status').eq('user_id', userId).eq('status', 'active'),
+      supabase.from('conditioned_triggers').select('trigger_phrase, trigger_type, intended_response, pairing_count, estimated_strength').eq('user_id', userId).order('pairing_count', { ascending: false }).limit(8),
+      supabase.from('trance_progression').select('peak_depth, induction_time_seconds, sustained_depth_minutes, recorded_at').eq('user_id', userId).order('recorded_at', { ascending: false }).limit(3),
+      supabase.from('post_hypnotic_tracking').select('suggestion, activation_expected_at, activation_detected').eq('user_id', userId).eq('activation_detected', false).order('activation_expected_at', { ascending: true }).limit(3),
+    ]);
+
+    const parts: string[] = [];
+
+    const p = protocols.status === 'fulfilled' ? protocols.value.data : null;
+    if (p && p.length > 0) {
+      parts.push(`CONDITIONING: ${p.length} active protocols — ${p.map(pr => `${pr.protocol_name} (phase ${pr.current_phase}, ${pr.total_sessions_completed} sessions)`).join('; ')}`);
+    }
+
+    const t = triggers.status === 'fulfilled' ? triggers.value.data : null;
+    if (t && t.length > 0) {
+      const established = t.filter(tr => tr.estimated_strength === 'established' || tr.estimated_strength === 'conditioned');
+      const forming = t.filter(tr => tr.estimated_strength !== 'established' && tr.estimated_strength !== 'conditioned');
+      if (established.length > 0) parts.push(`  established triggers: ${established.map(tr => `"${tr.trigger_phrase}" (${tr.pairing_count}x)`).join(', ')}`);
+      if (forming.length > 0) parts.push(`  forming: ${forming.map(tr => `"${tr.trigger_phrase}" [${tr.estimated_strength}] ${tr.pairing_count}x`).join(', ')}`);
+    }
+
+    const tr = trance.status === 'fulfilled' ? trance.value.data : null;
+    if (tr && tr.length > 0) {
+      const depths = tr.map(s => s.peak_depth).filter(Boolean);
+      const avgDepth = depths.length > 0 ? (depths.reduce((a: number, b: number) => a + b, 0) / depths.length).toFixed(1) : '—';
+      parts.push(`  trance: avg peak depth ${avgDepth}/10, last ${tr.length} sessions`);
+    }
+
+    const ph = postHypnotics.status === 'fulfilled' ? postHypnotics.value.data : null;
+    if (ph && ph.length > 0) {
+      parts.push(`  pending post-hypnotics: ${ph.map(s => `"${s.suggestion}"`).join(', ')}`);
+    }
+
+    return parts.join('\n');
+  } catch { return ''; }
+}
+
+async function buildHRTContext(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('hrt_pipeline')
+      .select('stage, medication, dosage, doses_taken, doses_missed, next_appointment, last_dose_at')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!data) return '';
+
+    const parts = [`HRT: stage "${data.stage}", ${data.medication || 'no medication'}`];
+    if (data.dosage) parts.push(`dosage ${data.dosage}`);
+    if (data.doses_taken) parts.push(`${data.doses_taken} doses taken, ${data.doses_missed || 0} missed`);
+    if (data.next_appointment) {
+      const daysUntil = Math.round((new Date(data.next_appointment).getTime() - Date.now()) / 86400000);
+      parts.push(`next appointment in ${daysUntil}d`);
+    }
+    if (data.last_dose_at) {
+      const hoursAgo = Math.round((Date.now() - new Date(data.last_dose_at).getTime()) / 3600000);
+      if (hoursAgo > 28) parts.push(`⚠ DOSE OVERDUE (${hoursAgo}h ago)`);
+    }
+
+    return parts.join(' | ');
+  } catch { return ''; }
+}
+
+async function buildShameContext(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('shame_architecture')
+      .select('shame_trigger, category, shame_type, conversion_stage, exposure_count, arousal_pairing_count')
+      .eq('user_id', userId)
+      .order('exposure_count', { ascending: false })
+      .limit(8);
+
+    if (!data || data.length === 0) return '';
+
+    const productive = data.filter(s => s.shame_type === 'productive');
+    const converting = data.filter(s => s.conversion_stage !== 'raw' && s.conversion_stage !== 'transcended');
+
+    const parts = [`SHAME: ${data.length} mapped triggers, ${productive.length} productive`];
+    if (converting.length > 0) {
+      parts.push(`  converting: ${converting.map(s => `"${s.shame_trigger}" [${s.conversion_stage}] ${s.exposure_count} exposures, ${s.arousal_pairing_count} arousal pairings`).join('; ')}`);
+    }
+
+    return parts.join('\n');
+  } catch { return ''; }
+}
+
+async function buildCrossoverContext(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('crossover_tracking')
+      .select('month, maxy_revenue, david_revenue, maxy_growth_rate')
+      .eq('user_id', userId)
+      .order('month', { ascending: false })
+      .limit(3);
+
+    if (!data || data.length === 0) return '';
+
+    const latest = data[0];
+    const ratio = latest.david_revenue > 0 ? (latest.maxy_revenue / latest.david_revenue * 100).toFixed(0) : '—';
+
+    let crossoverStr = '';
+    if (latest.maxy_growth_rate > 0 && latest.david_revenue > latest.maxy_revenue) {
+      const gap = latest.david_revenue - latest.maxy_revenue;
+      const monthsToClose = Math.ceil(gap / (latest.maxy_revenue * latest.maxy_growth_rate));
+      crossoverStr = ` — crossover projected in ~${monthsToClose} months`;
+    } else if (latest.maxy_revenue >= latest.david_revenue) {
+      crossoverStr = ' — CROSSOVER ACHIEVED';
+    }
+
+    return `REVENUE: Maxy $${latest.maxy_revenue}/mo vs David $${latest.david_revenue}/mo (${ratio}%)${crossoverStr}`;
+  } catch { return ''; }
+}
+
+async function buildDavidEliminationContext(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('masculine_contexts')
+      .select('context_name, category, current_presentation, hours_per_week, next_infiltration')
+      .eq('user_id', userId);
+
+    if (!data || data.length === 0) return '';
+
+    const totalHours = data.reduce((sum, c) => sum + (c.hours_per_week || 0), 0);
+    const femHours = data.filter(c => c.current_presentation === 'fully_feminine' || c.current_presentation === 'mostly_feminine')
+      .reduce((sum, c) => sum + (c.hours_per_week || 0), 0);
+    const ratio = totalHours > 0 ? Math.round((femHours / totalHours) * 100) : 0;
+
+    const parts = [`DAVID: ${totalHours}h/wk mapped, ${ratio}% feminine presentation`];
+    const infiltrations = data.filter(c => c.next_infiltration);
+    if (infiltrations.length > 0) {
+      parts.push(`  next infiltrations: ${infiltrations.map(c => `${c.context_name}: "${c.next_infiltration}"`).join('; ')}`);
+    }
+
+    return parts.join('\n');
+  } catch { return ''; }
+}
+
+async function buildSocialWebContext(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('social_web')
+      .select('connection_name, platform, thread_strength, handler_initiated')
+      .eq('user_id', userId);
+
+    if (!data || data.length === 0) return '';
+
+    const weights: Record<string, number> = { weak: 0.1, moderate: 1, strong: 3, permanent: 5 };
+    const score = data.reduce((sum, c) => sum + (weights[c.thread_strength] || 0), 0);
+    const strong = data.filter(c => c.thread_strength === 'strong' || c.thread_strength === 'permanent').length;
+
+    return `SOCIAL WEB: ${data.length} connections, ${strong} strong/permanent, irreversibility score ${score.toFixed(1)}`;
+  } catch { return ''; }
+}
+
+async function buildSleepContext(userId: string): Promise<string> {
+  try {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+    const { data } = await supabase
+      .from('sleep_sessions')
+      .select('mode_compliant, completed_naturally, affirmations_spoken, timer_minutes')
+      .eq('user_id', userId)
+      .gte('started_at', thirtyDaysAgo);
+
+    if (!data || data.length === 0) return '';
+
+    const compliant = data.filter(s => s.mode_compliant).length;
+    const compliance = Math.round((compliant / data.length) * 100);
+    const totalAffirmations = data.reduce((sum, s) => sum + (s.affirmations_spoken || 0), 0);
+
+    return `SLEEP: ${data.length} sessions (30d), ${compliance}% compliance, ${totalAffirmations} affirmations heard`;
+  } catch { return ''; }
+}
+
+async function buildPassiveVoiceContext(userId: string): Promise<string> {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const { data: todayAgg } = await supabase
+      .from('voice_daily_aggregates')
+      .select('avg_pitch_hz, time_in_target_pct, total_duration_seconds')
+      .eq('user_id', userId)
+      .eq('aggregate_date', today)
+      .maybeSingle();
+
+    if (!todayAgg) return '';
+
+    const targetStr = todayAgg.time_in_target_pct != null ? `${Math.round(todayAgg.time_in_target_pct)}% in target` : '';
+    return `PASSIVE VOICE: today ${todayAgg.avg_pitch_hz}Hz avg, ${targetStr}, ${Math.round(todayAgg.total_duration_seconds / 60)}min monitored`;
+  } catch { return ''; }
+}
+
+async function buildContentIntelligenceContext(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('content_strategy')
+      .select('platform_performance, content_type_performance, timing_performance, last_analyzed_at')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!data) return '';
+
+    const parts = ['CONTENT INTEL:'];
+    const platforms = data.platform_performance as Record<string, { avg_views?: number; best_type?: string }> | null;
+    if (platforms) {
+      const platParts = Object.entries(platforms).slice(0, 4).map(([p, v]) => `${p}: ${v.avg_views || 0} avg views`);
+      if (platParts.length > 0) parts.push(`  platforms: ${platParts.join(', ')}`);
+    }
+
+    const timing = data.timing_performance as { best_hours?: number[]; best_days?: string[] } | null;
+    if (timing?.best_hours) parts.push(`  best hours: ${timing.best_hours.join(', ')}`);
+
+    return parts.length > 1 ? parts.join('\n') : '';
+  } catch { return ''; }
+}
+
+async function buildComplianceContext(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('compliance_state')
+      .select('escalation_tier, engagement_gap_hours, bleeding_active, bleeding_rate_per_min')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!data || data.escalation_tier === 0) return '';
+
+    const parts = [`COMPLIANCE: tier ${data.escalation_tier}/9, ${Math.round(data.engagement_gap_hours || 0)}h gap`];
+    if (data.bleeding_active) parts.push(`BLEEDING ACTIVE ($${data.bleeding_rate_per_min}/min)`);
+
+    return parts.join(' | ');
+  } catch { return ''; }
+}
+
+async function buildEvidenceContext(userId: string): Promise<string> {
+  try {
+    const { count: photoCount } = await supabase
+      .from('evidence_captures')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('evidence_type', 'photo');
+
+    const { count: journalCount } = await supabase
+      .from('evidence_captures')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('evidence_type', 'journal_entry');
+
+    if (!photoCount && !journalCount) return '';
+
+    return `EVIDENCE: ${photoCount || 0} photos, ${journalCount || 0} journal entries documented`;
+  } catch { return ''; }
+}
+
+async function buildAuthorityContext(userId: string): Promise<string> {
+  try {
+    // Get handler authority level
+    const { data } = await supabase
+      .from('handler_authority')
+      .select('authority_level, auto_escalation_enabled, auto_commitment_enabled, auto_session_scheduling')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!data) return '';
+
+    const levelNames: Record<number, string> = { 1: 'Advisory', 2: 'Guiding', 3: 'Directing', 4: 'Controlling', 5: 'Owning' };
+    const parts = [`AUTHORITY: Level ${data.authority_level} (${levelNames[data.authority_level] || 'Unknown'})`];
+    const autos = [];
+    if (data.auto_escalation_enabled) autos.push('auto-escalation');
+    if (data.auto_commitment_enabled) autos.push('auto-commitment');
+    if (data.auto_session_scheduling) autos.push('auto-sessions');
+    if (autos.length > 0) parts.push(`enabled: ${autos.join(', ')}`);
+
+    return parts.join(' | ');
+  } catch { return ''; }
+}
+
+// ============================================
 // MEMORY CONSOLIDATION — Clean Up Decayed Memories
 // ============================================
 
@@ -1610,6 +1948,295 @@ async function updateUserModelFromSignals(
     }
   } catch (err) {
     console.error('[Handler Brain] User model update error:', err);
+  }
+}
+
+// ============================================
+// HANDLER ACTION EXECUTION — The Handler Acts
+// ============================================
+
+interface HandlerAction {
+  type: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Execute autonomous actions the Handler decided to take during conversation.
+ * Each action is fire-and-forget with full error isolation.
+ */
+async function executeHandlerActions(
+  userId: string,
+  actions: HandlerAction[],
+  conversationId: string,
+): Promise<void> {
+  for (const action of actions) {
+    try {
+      switch (action.type) {
+        case 'assign_task': {
+          // Handler prescribes a specific task
+          await supabase.from('handler_prescribed_tasks').insert({
+            user_id: userId,
+            task_description: action.description || action.task,
+            domain: action.domain || 'general',
+            intensity: action.intensity || 3,
+            deadline: action.deadline || null,
+            source_conversation_id: conversationId,
+            prescribed_at: new Date().toISOString(),
+            status: 'pending',
+          });
+          break;
+        }
+
+        case 'schedule_session': {
+          // Handler schedules an edge/goon/hypno/conditioning session
+          await supabase.from('handler_initiated_sessions').insert({
+            user_id: userId,
+            session_type: action.session_type || 'edge_session',
+            reason: action.reason || 'Handler decided during conversation',
+            scheduled_for: action.scheduled_for || new Date(Date.now() + 3600000).toISOString(),
+            response_window_minutes: action.window_minutes || 30,
+            source_conversation_id: conversationId,
+            status: 'pending',
+          });
+          break;
+        }
+
+        case 'create_commitment': {
+          // Handler captures a commitment from conversation
+          await supabase.from('commitments_v2').insert({
+            user_id: userId,
+            commitment_text: action.text || action.commitment,
+            source: 'handler_conversation',
+            source_id: conversationId,
+            arousal_at_extraction: action.arousal_level || null,
+            state: 'active',
+            coercion_stack_level: action.coercion_level || 0,
+            deadline: action.deadline || null,
+          });
+          break;
+        }
+
+        case 'deploy_lovense': {
+          // Handler triggers a Lovense device command
+          await supabase.from('lovense_proactive_commands').insert({
+            user_id: userId,
+            command_type: action.command_type || 'pulse',
+            intensity: action.intensity || 10,
+            duration_seconds: action.duration || 5,
+            reason: action.reason || 'Handler directive',
+            source: 'handler_conversation',
+            status: 'pending',
+          });
+          break;
+        }
+
+        case 'prescribe_shoot': {
+          // Handler prescribes a content shoot
+          await supabase.from('shoot_prescriptions').insert({
+            user_id: userId,
+            title: action.title || 'Handler-prescribed shoot',
+            shoot_type: action.shoot_type || 'photo_set',
+            outfit: action.outfit || null,
+            mood: action.mood || null,
+            handler_note: action.note || 'Prescribed during conversation',
+            estimated_minutes: action.duration || 15,
+            status: 'prescribed',
+            scheduled_for: action.scheduled_for || null,
+          });
+          break;
+        }
+
+        case 'update_escalation': {
+          // Handler advances or creates an escalation plan
+          if (action.plan_id) {
+            await supabase.from('handler_escalation_plans').update({
+              current_edge: action.current_edge || undefined,
+              next_target: action.next_target || undefined,
+              strategy: action.strategy || undefined,
+            }).eq('id', action.plan_id).eq('user_id', userId);
+          } else if (action.domain) {
+            await supabase.from('handler_escalation_plans').insert({
+              user_id: userId,
+              domain: action.domain,
+              current_edge: action.current_edge || '',
+              next_target: action.next_target || '',
+              strategy: action.strategy || '',
+              active: true,
+            });
+          }
+          break;
+        }
+
+        case 'log_vulnerability': {
+          // Handler documents a discovered vulnerability
+          await supabase.from('learned_vulnerabilities').insert({
+            user_id: userId,
+            vulnerability_type: action.vulnerability_type || 'discovered',
+            evidence: action.evidence || '',
+            conditions: action.conditions || {},
+            exploitation_strategies: action.strategies || [],
+          });
+          break;
+        }
+
+        case 'update_resistance_pattern': {
+          // Handler logs a resistance pattern with bypass info
+          await supabase.from('resistance_patterns').insert({
+            user_id: userId,
+            pattern_type: action.pattern_type || 'observed',
+            description: action.description || '',
+            conditions: action.conditions || {},
+            effective_bypasses: action.bypasses || [],
+            last_observed: new Date().toISOString(),
+          });
+          break;
+        }
+
+        case 'plant_trigger': {
+          // Handler plants or reinforces a conditioning trigger
+          if (action.trigger_id) {
+            // Reinforce existing trigger
+            const { data: existing } = await supabase
+              .from('planted_triggers')
+              .select('pairing_count')
+              .eq('id', action.trigger_id)
+              .single();
+            if (existing) {
+              await supabase.from('planted_triggers').update({
+                pairing_count: existing.pairing_count + 1,
+                times_activated: action.activated ? (existing as Record<string, unknown>).times_activated as number + 1 : undefined,
+              }).eq('id', action.trigger_id);
+            }
+          } else {
+            await supabase.from('planted_triggers').insert({
+              user_id: userId,
+              trigger_type: action.trigger_type || 'phrase',
+              trigger_content: action.content || '',
+              target_state: action.target_state || 'compliance',
+              status: 'planting',
+            });
+          }
+          break;
+        }
+
+        case 'prescribe_shame_exposure': {
+          // Handler prescribes a shame exposure exercise
+          await supabase.from('shame_exposures').insert({
+            user_id: userId,
+            shame_id: action.shame_id || null,
+            exposure_type: action.exposure_type || 'conversation',
+            outcome: null, // Will be filled after completion
+            arousal_at_exposure: action.arousal_level || null,
+          });
+          break;
+        }
+
+        case 'advance_feminization': {
+          // Handler advances feminization exposure level
+          if (action.target_id) {
+            const { data: target } = await supabase
+              .from('feminization_targets')
+              .select('current_level')
+              .eq('id', action.target_id)
+              .single();
+            if (target && action.new_level && (action.new_level as number) > target.current_level) {
+              await supabase.from('feminization_targets').update({
+                current_level: action.new_level,
+                last_boundary_pushed: action.description || 'Handler advanced during conversation',
+                last_boundary_pushed_at: new Date().toISOString(),
+              }).eq('id', action.target_id);
+            }
+          }
+          break;
+        }
+
+        case 'extend_denial': {
+          // Handler extends denial cycle
+          const { data: state } = await supabase
+            .from('user_state')
+            .select('denial_day')
+            .eq('user_id', userId)
+            .maybeSingle();
+          if (state) {
+            // Log the extension as an influence attempt
+            await supabase.from('influence_attempts').insert({
+              user_id: userId,
+              attempt_type: 'denial_extension',
+              method: 'conversation_directive',
+              target_behavior: `Extend denial by ${action.days || 1} days`,
+              content: { reason: action.reason, current_day: state.denial_day },
+              success: true,
+              user_aware: true,
+            });
+          }
+          break;
+        }
+
+        case 'log_influence': {
+          // Handler logs any manipulation/influence attempt
+          await supabase.from('influence_attempts').insert({
+            user_id: userId,
+            attempt_type: action.attempt_type || 'general',
+            method: action.method || 'conversation',
+            target_behavior: action.target || '',
+            content: action.detail || {},
+            success: action.success ?? null,
+            user_aware: action.user_aware ?? false,
+          });
+          break;
+        }
+
+        case 'trigger_outreach': {
+          // Handler schedules a future outreach
+          await supabase.from('handler_outreach').insert({
+            user_id: userId,
+            trigger_type: action.trigger_type || 'scheduled_checkin',
+            opening_line: action.opening_line || '',
+            conversation_context: action.context || {},
+            scheduled_at: action.scheduled_at || new Date(Date.now() + 3600000).toISOString(),
+            expires_at: action.expires_at || new Date(Date.now() + 86400000).toISOString(),
+            status: 'pending',
+          });
+          break;
+        }
+
+        case 'update_strategy': {
+          // Handler updates or creates an active strategy
+          if (action.strategy_id) {
+            await supabase.from('handler_strategies').update({
+              effectiveness_score: action.effectiveness || undefined,
+              notes: action.notes || undefined,
+              active: action.active ?? true,
+            }).eq('id', action.strategy_id).eq('user_id', userId);
+          } else {
+            await supabase.from('handler_strategies').insert({
+              user_id: userId,
+              strategy_type: action.strategy_type || 'general',
+              strategy_name: action.name || '',
+              parameters: action.parameters || {},
+              notes: action.notes || '',
+              active: true,
+            });
+          }
+          break;
+        }
+
+        default:
+          console.warn(`[Handler Brain] Unknown action type: ${action.type}`);
+      }
+
+      // Log every action to handler decisions audit trail
+      await supabase.from('handler_autonomous_actions').insert({
+        user_id: userId,
+        action_type: action.type,
+        action_data: action,
+        source: 'conversation',
+        source_id: conversationId,
+      }).then(() => {}).catch(() => {});
+
+    } catch (err) {
+      console.error(`[Handler Brain] Action execution error (${action.type}):`, err);
+    }
   }
 }
 
