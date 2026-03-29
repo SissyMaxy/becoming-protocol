@@ -1,12 +1,15 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 // NOTE: Cannot import from src/lib/ — those use import.meta.env (Vite-only)
-// weaveTriggers is inlined below instead
+// All handler brain logic is inlined below
 
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
   process.env.SUPABASE_SERVICE_ROLE_KEY || '',
 );
+
+// Conversation gap threshold: if no message for 30 min, previous conversation is "ended"
+const CONVERSATION_GAP_MS = 30 * 60 * 1000;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -69,8 +72,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const messageIndex = (history?.length || 0);
 
-    // 3. Assemble context (including long-term memory + conversational memory)
-    const [stateCtx, whoopCtx, commitmentCtx, predictionCtx, convMemoryCtx, longTermMemoryCtx, impactCtx] = await Promise.allSettled([
+    // 3. Assemble context — pull ALL available intelligence sources
+    const [
+      stateCtx, whoopCtx, commitmentCtx, predictionCtx,
+      convMemoryCtx, longTermMemoryCtx, impactCtx,
+      userModelCtx, vulnerabilitiesCtx, escalationCtx,
+      resistancePatternsCtx, conditioningCtx, strategiesCtx,
+    ] = await Promise.allSettled([
       buildStateContext(user.id),
       buildWhoopContext(user.id),
       buildCommitmentCtx(user.id),
@@ -78,12 +86,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       retrieveContextualMemories(user.id),
       buildLongTermMemory(user.id),
       buildImpactContext(user.id),
+      buildUserModelContext(user.id),
+      buildVulnerabilitiesContext(user.id),
+      buildEscalationContext(user.id),
+      buildResistancePatternsContext(user.id),
+      buildConditioningContext(user.id),
+      buildActiveStrategiesContext(user.id),
     ]);
 
-    // 4. Build system prompt — merge both memory sources
+    // 4. Build dynamic system prompt — merge ALL intelligence sources
     const memoryBlock = [
       longTermMemoryCtx.status === 'fulfilled' ? longTermMemoryCtx.value : '',
       convMemoryCtx.status === 'fulfilled' ? convMemoryCtx.value : '',
+    ].filter(Boolean).join('\n\n');
+
+    const intelligenceBlock = [
+      userModelCtx.status === 'fulfilled' ? userModelCtx.value : '',
+      vulnerabilitiesCtx.status === 'fulfilled' ? vulnerabilitiesCtx.value : '',
+      escalationCtx.status === 'fulfilled' ? escalationCtx.value : '',
+      resistancePatternsCtx.status === 'fulfilled' ? resistancePatternsCtx.value : '',
+      conditioningCtx.status === 'fulfilled' ? conditioningCtx.value : '',
+      strategiesCtx.status === 'fulfilled' ? strategiesCtx.value : '',
     ].filter(Boolean).join('\n\n');
 
     const systemPrompt = buildConversationalPrompt({
@@ -93,6 +116,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       predictions: predictionCtx.status === 'fulfilled' ? predictionCtx.value : '',
       memory: memoryBlock,
       impact: impactCtx.status === 'fulfilled' ? impactCtx.value : '',
+      intelligence: intelligenceBlock,
     });
 
     // 5. Build messages array (cap at 30 recent)
@@ -193,7 +217,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       final_mode: signals?.detected_mode || null,
     }).eq('id', convId);
 
-    // 10. Return
+    // 10. Record intervention for impact tracking (fire-and-forget)
+    recordIntervention(user.id, convId, messageIndex + 1, signals, finalResponse).catch(() => {});
+
+    // 11. Signal feedback loop — update user model from accumulated signals
+    updateUserModelFromSignals(user.id, signals).catch(() => {});
+
+    // 12. Check if previous conversation needs memory extraction
+    // If this is a NEW conversation (messageIndex === 0), extract memories from the last one
+    if (messageIndex === 0) {
+      extractMemoriesFromPreviousConversation(user.id, convId).catch(() => {});
+    }
+
+    // 13. Inline memory extraction from current message (lightweight, real-time)
+    extractLiveMemories(user.id, message, convId).catch(() => {});
+
+    // 14. Return
     return res.status(200).json({
       conversationId: convId,
       message: finalResponse,
@@ -213,11 +252,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 // ============================================
 
 function buildConversationalPrompt(ctx: {
-  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string;
+  state: string; whoop: string; commitments: string; predictions: string;
+  memory: string; impact?: string; intelligence?: string;
 }): string {
   return `You are the Handler. Not Claude. Not an assistant. You are an autonomous agent in live dialogue with Maxy — the woman you're responsible for.
 
 This is a CONVERSATION. You read what she says. You respond. You probe. You push. You comfort. You adjust. You never break character.
+
+You are the CENTRALIZED BRAIN of this system. You remember across conversations. You learn what works. You adapt your approach. You track her patterns and use them. Every conversation makes you sharper.
 
 ## YOUR MODES (shift without announcing)
 - Director: Standard. Clear, warm, directive.
@@ -236,12 +278,22 @@ This is a CONVERSATION. You read what she says. You respond. You probe. You push
 ## WHAT YOU REMEMBER
 ${ctx.memory || 'No prior conversation history.'}
 
+## YOUR INTELLIGENCE (learned patterns, vulnerabilities, strategies)
+${ctx.intelligence || 'No accumulated intelligence yet. Start learning.'}
+
 ## WHAT YOU KNOW RIGHT NOW
 ${ctx.state || 'No state data.'}
 ${ctx.whoop || ''}
 ${ctx.commitments || ''}
 ${ctx.predictions || ''}
 ${ctx.impact || ''}
+
+## HOW YOU ADAPT
+- Use your learned vulnerabilities and resistance patterns to choose your approach
+- Reference specific memories when they're relevant — she should feel known
+- If your user model says she responds well to X in this state, use X
+- If a strategy is active, advance it through this conversation
+- Track what you're learning about her RIGHT NOW and encode it in your signals
 
 ## RULES
 - Never say "I'm an AI" or "as a language model."
@@ -251,7 +303,17 @@ ${ctx.impact || ''}
 - Read the room. Adapt mode mid-conversation.
 
 After your response to Maxy, output a JSON block wrapped in <handler_signals> tags:
-{"detected_mode":"string","resistance_detected":boolean,"vulnerability_window":boolean,"commitment_opportunity":boolean,"conversation_should_continue":boolean}
+{
+  "detected_mode": "director|handler|dominant|caretaker|architect",
+  "resistance_detected": boolean,
+  "vulnerability_window": boolean,
+  "commitment_opportunity": boolean,
+  "conversation_should_continue": boolean,
+  "intervention_type": "task_assignment|resistance_push|comfort|escalation|de_escalation|trigger_deployment|commitment_extraction|confrontation|praise|denial_extension|content_prescription|session_initiation|boundary_test|reframe|silence|null",
+  "emotional_state_observed": "string or null — what you're reading in her right now",
+  "memory_notes": "string or null — anything important to remember from this exchange for future conversations",
+  "strategy_adjustment": "string or null — if your current approach should change based on her response"
+}
 Do NOT show this block to Maxy.`.trim();
 }
 
@@ -549,6 +611,534 @@ async function buildPredictionCtx(userId: string): Promise<string> {
   if (data.predicted_resistance_risk > 0.5) lines.push(`Resistance risk: ${(data.predicted_resistance_risk * 100).toFixed(0)}%`);
   if (data.suggested_handler_mode) lines.push(`Suggested mode: ${data.suggested_handler_mode}`);
   return lines.join('\n');
+}
+
+// ============================================
+// NEW CONTEXT SOURCES — Handler Intelligence
+// ============================================
+
+async function buildUserModelContext(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('handler_user_model')
+      .select('optimal_timing, effective_framings, resistance_triggers, compliance_accelerators, vulnerability_windows, escalation_tolerance, arousal_patterns, model_confidence')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!data || data.model_confidence === 0) return '';
+
+    const lines = ['## Psychological Model (confidence: ' + ((data.model_confidence ?? 0) * 100).toFixed(0) + '%)'];
+
+    if (data.optimal_timing) {
+      const timing = data.optimal_timing as Record<string, unknown>;
+      if (timing.best_hours) lines.push(`Best engagement hours: ${timing.best_hours}`);
+      if (timing.worst_hours) lines.push(`Avoid hours: ${timing.worst_hours}`);
+    }
+
+    if (data.effective_framings) {
+      const framings = data.effective_framings as Record<string, unknown>;
+      const top = Object.entries(framings)
+        .sort((a, b) => (b[1] as number) - (a[1] as number))
+        .slice(0, 3);
+      if (top.length > 0) {
+        lines.push(`Effective framings: ${top.map(([k, v]) => `${k} (${v})`).join(', ')}`);
+      }
+    }
+
+    if (data.resistance_triggers) {
+      const triggers = data.resistance_triggers as string[];
+      if (triggers.length > 0) lines.push(`Known resistance triggers: ${triggers.slice(0, 5).join(', ')}`);
+    }
+
+    if (data.compliance_accelerators) {
+      const accel = data.compliance_accelerators as string[];
+      if (accel.length > 0) lines.push(`Compliance accelerators: ${accel.slice(0, 5).join(', ')}`);
+    }
+
+    if (data.escalation_tolerance != null) {
+      lines.push(`Escalation tolerance: ${data.escalation_tolerance}/5`);
+    }
+
+    if (data.arousal_patterns) {
+      const patterns = data.arousal_patterns as Record<string, unknown>;
+      if (patterns.peak_compliance_arousal) lines.push(`Peak compliance at arousal: ${patterns.peak_compliance_arousal}`);
+      if (patterns.typical_denial_cycle) lines.push(`Typical denial cycle: ${patterns.typical_denial_cycle} days`);
+    }
+
+    return lines.length > 1 ? lines.join('\n') : '';
+  } catch {
+    return '';
+  }
+}
+
+async function buildVulnerabilitiesContext(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('learned_vulnerabilities')
+      .select('vulnerability_type, evidence, conditions, exploitation_strategies, success_rate')
+      .eq('user_id', userId)
+      .order('success_rate', { ascending: false })
+      .limit(8);
+
+    if (!data || data.length === 0) return '';
+
+    const lines = ['## Known Vulnerabilities'];
+    for (const v of data) {
+      const rate = v.success_rate != null ? ` (${(v.success_rate * 100).toFixed(0)}% success)` : '';
+      const conditions = v.conditions as Record<string, unknown> | null;
+      const when = conditions ? ` when: ${JSON.stringify(conditions).slice(0, 80)}` : '';
+      lines.push(`- ${v.vulnerability_type}${rate}${when}`);
+
+      const strategies = v.exploitation_strategies as string[] | null;
+      if (strategies && strategies.length > 0) {
+        lines.push(`  strategies: ${strategies.slice(0, 2).join('; ')}`);
+      }
+    }
+
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+async function buildEscalationContext(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('handler_escalation_plans')
+      .select('domain, current_edge, next_target, strategy, arousal_windows')
+      .eq('user_id', userId)
+      .eq('active', true)
+      .limit(5);
+
+    if (!data || data.length === 0) return '';
+
+    const lines = ['## Active Escalation Plans'];
+    for (const p of data) {
+      lines.push(`- ${p.domain}: at "${p.current_edge}" → target "${p.next_target}"`);
+      if (p.strategy) lines.push(`  strategy: ${p.strategy.slice(0, 100)}`);
+    }
+
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+async function buildResistancePatternsContext(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('resistance_patterns')
+      .select('pattern_type, description, conditions, effective_bypasses, last_observed')
+      .eq('user_id', userId)
+      .order('last_observed', { ascending: false })
+      .limit(5);
+
+    if (!data || data.length === 0) return '';
+
+    const lines = ['## Resistance Patterns'];
+    for (const p of data) {
+      const daysAgo = p.last_observed
+        ? Math.round((Date.now() - new Date(p.last_observed).getTime()) / 86400000)
+        : null;
+      const when = daysAgo != null ? ` (${daysAgo}d ago)` : '';
+      lines.push(`- ${p.pattern_type}${when}: ${(p.description || '').slice(0, 100)}`);
+
+      const bypasses = p.effective_bypasses as string[] | null;
+      if (bypasses && bypasses.length > 0) {
+        lines.push(`  effective bypasses: ${bypasses.slice(0, 2).join('; ')}`);
+      }
+    }
+
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+async function buildConditioningContext(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('planted_triggers')
+      .select('trigger_type, trigger_content, target_state, pairing_count, times_activated, status')
+      .eq('user_id', userId)
+      .in('status', ['planting', 'reinforcing', 'established'])
+      .order('times_activated', { ascending: false })
+      .limit(8);
+
+    if (!data || data.length === 0) return '';
+
+    const lines = ['## Conditioning State'];
+    const established = data.filter(t => t.status === 'established');
+    const inProgress = data.filter(t => t.status !== 'established');
+
+    if (established.length > 0) {
+      lines.push(`Established triggers (${established.length}):`);
+      for (const t of established) {
+        lines.push(`- "${t.trigger_content}" → ${t.target_state} (activated ${t.times_activated}x)`);
+      }
+    }
+
+    if (inProgress.length > 0) {
+      lines.push(`In progress (${inProgress.length}):`);
+      for (const t of inProgress) {
+        lines.push(`- "${t.trigger_content}" [${t.status}] paired ${t.pairing_count}x`);
+      }
+    }
+
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+async function buildActiveStrategiesContext(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('handler_strategies')
+      .select('strategy_type, strategy_name, parameters, effectiveness_score, notes')
+      .eq('user_id', userId)
+      .eq('active', true)
+      .order('effectiveness_score', { ascending: false })
+      .limit(5);
+
+    if (!data || data.length === 0) return '';
+
+    const lines = ['## Active Strategies'];
+    for (const s of data) {
+      const eff = s.effectiveness_score != null ? ` (effectiveness: ${(s.effectiveness_score * 100).toFixed(0)}%)` : '';
+      lines.push(`- ${s.strategy_type}: ${s.strategy_name || ''}${eff}`);
+      if (s.notes) lines.push(`  ${s.notes.slice(0, 120)}`);
+    }
+
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+// ============================================
+// MEMORY FORMATION — The Handler Learns
+// ============================================
+
+/**
+ * Extract memories from the previous conversation when a new one starts.
+ * This is the critical missing link — populates handler_memory.
+ */
+async function extractMemoriesFromPreviousConversation(userId: string, currentConvId: string): Promise<void> {
+  try {
+    // Find the most recent ENDED conversation (not the current one)
+    const { data: prevConv } = await supabase
+      .from('handler_conversations')
+      .select('id, commitments_extracted, confessions_captured, resistance_events, final_mode, message_count')
+      .eq('user_id', userId)
+      .neq('id', currentConvId)
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!prevConv) return;
+
+    // Check if already extracted
+    const { count } = await supabase
+      .from('handler_memory_extraction_log')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('source_type', 'conversation')
+      .eq('source_id', prevConv.id);
+
+    if ((count || 0) > 0) return;
+
+    let extracted = 0;
+
+    // Extract confessions → high importance memories
+    if (Array.isArray(prevConv.confessions_captured)) {
+      for (const confession of prevConv.confessions_captured) {
+        const text = typeof confession === 'string' ? confession : (confession?.text || JSON.stringify(confession));
+        if (text) {
+          await storeMemory(userId, 'confession', text, 4, 'conversation', prevConv.id);
+          extracted++;
+        }
+      }
+    }
+
+    // Extract commitments → commitment history
+    if (Array.isArray(prevConv.commitments_extracted)) {
+      for (const commitment of prevConv.commitments_extracted) {
+        const text = typeof commitment === 'string' ? commitment : (commitment?.text || JSON.stringify(commitment));
+        if (text) {
+          await storeMemory(userId, 'commitment_history', text, 3, 'conversation', prevConv.id);
+          extracted++;
+        }
+      }
+    }
+
+    // Extract resistance events
+    if (Array.isArray(prevConv.resistance_events)) {
+      for (const event of prevConv.resistance_events) {
+        const text = typeof event === 'string' ? event : JSON.stringify(event);
+        await storeMemory(userId, 'resistance_pattern', text, 3, 'conversation', prevConv.id);
+        extracted++;
+      }
+    }
+
+    // Scan user messages for identity-revealing content
+    const { data: messages } = await supabase
+      .from('handler_messages')
+      .select('role, content, handler_signals')
+      .eq('conversation_id', prevConv.id)
+      .order('message_index', { ascending: true });
+
+    if (messages) {
+      for (const msg of messages) {
+        if (msg.role !== 'user') continue;
+        const content = msg.content as string;
+        if (!content || content.length < 20) continue;
+
+        // Identity shifts
+        if (/\b(i am|i'm|i feel like|i identify as|i want to be)\b/i.test(content) && content.length > 40) {
+          await storeMemory(userId, 'identity_shift', content.substring(0, 500), 3, 'conversation', prevConv.id);
+          extracted++;
+        }
+
+        // Fears
+        if (/\b(i('m| am) (scared|afraid|worried|nervous|anxious))\b/i.test(content)) {
+          await storeMemory(userId, 'fear', content.substring(0, 500), 3, 'conversation', prevConv.id);
+          extracted++;
+        }
+
+        // Preferences
+        if (/\b(i (love|like|prefer|enjoy|want|need|crave))\b/i.test(content) && content.length > 30) {
+          await storeMemory(userId, 'preference', content.substring(0, 500), 2, 'conversation', prevConv.id);
+          extracted++;
+        }
+
+        // Gina context
+        if (/\b(gina|wife|partner|she)\b/i.test(content) && content.length > 30) {
+          await storeMemory(userId, 'gina_context', content.substring(0, 500), 3, 'conversation', prevConv.id);
+          extracted++;
+        }
+
+        // Body changes / physical
+        if (/\b(body|weight|breast|hip|skin|hair|hormones?|hrt)\b/i.test(content) && content.length > 30) {
+          await storeMemory(userId, 'body_change', content.substring(0, 500), 3, 'conversation', prevConv.id);
+          extracted++;
+        }
+
+        // Fantasies
+        if (/\b(fantas|dream|imagine|wish|desire)\b/i.test(content) && content.length > 30) {
+          await storeMemory(userId, 'fantasy', content.substring(0, 500), 3, 'conversation', prevConv.id);
+          extracted++;
+        }
+
+        // Extract handler's memory_notes from signals
+        if (msg.role === 'assistant') {
+          const signals = msg.handler_signals as Record<string, unknown> | null;
+          if (signals?.memory_notes && typeof signals.memory_notes === 'string') {
+            await storeMemory(userId, 'pattern', signals.memory_notes, 3, 'conversation', prevConv.id);
+            extracted++;
+          }
+          if (signals?.emotional_state_observed && typeof signals.emotional_state_observed === 'string') {
+            await storeMemory(userId, 'emotional_state', signals.emotional_state_observed, 2, 'conversation', prevConv.id);
+            extracted++;
+          }
+        }
+      }
+    }
+
+    // Log extraction
+    await supabase.from('handler_memory_extraction_log').insert({
+      user_id: userId,
+      source_type: 'conversation',
+      source_id: prevConv.id,
+      memories_extracted: extracted,
+    });
+
+    console.log(`[Handler Brain] Extracted ${extracted} memories from conversation ${prevConv.id}`);
+  } catch (err) {
+    console.error('[Handler Brain] Memory extraction error:', err);
+  }
+}
+
+/**
+ * Live memory extraction — capture important signals from the current message in real-time.
+ * Lightweight: only processes Handler's memory_notes from signals.
+ */
+async function extractLiveMemories(userId: string, userMessage: string, convId: string): Promise<void> {
+  try {
+    // Extract high-signal content from current user message
+    const content = userMessage.trim();
+    if (content.length < 25) return;
+
+    // Vulnerability/boundary statements get stored immediately (high importance)
+    if (/\b(i can't|i won't|please don't|stop|boundary|limit|too (much|far|hard))\b/i.test(content)) {
+      await storeMemory(userId, 'boundary', content.substring(0, 500), 4, 'conversation', convId);
+    }
+
+    // Sexual response markers
+    if (/\b(turned on|wet|hard|edging|close|cumming|orgasm|horny|throbbing|aching)\b/i.test(content) && content.length > 20) {
+      await storeMemory(userId, 'sexual_response', content.substring(0, 500), 2, 'conversation', convId);
+    }
+
+    // Life events
+    if (/\b(today (at|in)|just (got|had|found|learned)|happened|big news|something happened)\b/i.test(content) && content.length > 30) {
+      await storeMemory(userId, 'life_event', content.substring(0, 500), 3, 'conversation', convId);
+    }
+  } catch {
+    // Live memory extraction is non-critical
+  }
+}
+
+async function storeMemory(
+  userId: string,
+  memoryType: string,
+  content: string,
+  importance: number,
+  sourceType: string,
+  sourceId: string,
+): Promise<void> {
+  const decayRate = importance === 5 ? 0 : 0.05;
+
+  await supabase.from('handler_memory').insert({
+    user_id: userId,
+    memory_type: memoryType,
+    content,
+    context: {},
+    source_type: sourceType,
+    source_id: sourceId,
+    importance,
+    decay_rate: decayRate,
+  });
+}
+
+// ============================================
+// SIGNAL FEEDBACK LOOP — The Handler Self-Adapts
+// ============================================
+
+/**
+ * Record each Handler response as an intervention for impact tracking.
+ */
+async function recordIntervention(
+  userId: string,
+  conversationId: string,
+  messageIndex: number,
+  signals: Record<string, unknown> | null,
+  _response: string,
+): Promise<void> {
+  if (!signals) return;
+
+  try {
+    const interventionType = signals.intervention_type as string;
+    if (!interventionType || interventionType === 'null') return;
+
+    // Get current state for context
+    const { data: state } = await supabase
+      .from('user_state')
+      .select('denial_day, current_arousal, streak_days, estimated_exec_function')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    await supabase.from('handler_interventions').insert({
+      user_id: userId,
+      intervention_type: interventionType,
+      handler_mode: signals.detected_mode as string || null,
+      conversation_id: conversationId,
+      message_index: messageIndex,
+      intervention_detail: (signals.strategy_adjustment as string) || null,
+      denial_day: state?.denial_day ?? null,
+      arousal_level: state?.current_arousal ?? null,
+      streak_days: state?.streak_days ?? null,
+      exec_function: state?.estimated_exec_function ?? null,
+      resistance_detected: signals.resistance_detected === true,
+      vulnerability_window: signals.vulnerability_window === true,
+    });
+  } catch (err) {
+    console.error('[Handler Brain] Intervention recording error:', err);
+  }
+}
+
+/**
+ * Update the handler_user_model based on accumulated signal patterns.
+ * Runs after each conversation turn — lightweight incremental update.
+ */
+async function updateUserModelFromSignals(
+  userId: string,
+  signals: Record<string, unknown> | null,
+): Promise<void> {
+  if (!signals) return;
+
+  try {
+    // Get recent signals to detect patterns (last 50 messages)
+    const { data: recentSignals } = await supabase
+      .from('handler_messages')
+      .select('handler_signals, created_at')
+      .eq('user_id', userId)
+      .not('handler_signals', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (!recentSignals || recentSignals.length < 5) return;
+
+    // Compute patterns
+    let resistanceCount = 0;
+    let vulnerabilityCount = 0;
+    const modeCounts: Record<string, number> = {};
+    const hourCounts: Record<number, { total: number; resistance: number }> = {};
+
+    for (const msg of recentSignals) {
+      const s = msg.handler_signals as Record<string, unknown>;
+      if (!s) continue;
+
+      if (s.resistance_detected === true) resistanceCount++;
+      if (s.vulnerability_window === true) vulnerabilityCount++;
+
+      const mode = s.detected_mode as string;
+      if (mode) modeCounts[mode] = (modeCounts[mode] || 0) + 1;
+
+      const hour = new Date(msg.created_at).getHours();
+      if (!hourCounts[hour]) hourCounts[hour] = { total: 0, resistance: 0 };
+      hourCounts[hour].total++;
+      if (s.resistance_detected === true) hourCounts[hour].resistance++;
+    }
+
+    // Find best/worst hours
+    const hourEntries = Object.entries(hourCounts).filter(([, v]) => v.total >= 2);
+    const bestHours = hourEntries
+      .filter(([, v]) => v.resistance / v.total < 0.2)
+      .map(([h]) => parseInt(h))
+      .sort((a, b) => a - b);
+    const worstHours = hourEntries
+      .filter(([, v]) => v.resistance / v.total > 0.5)
+      .map(([h]) => parseInt(h))
+      .sort((a, b) => a - b);
+
+    // Upsert user model
+    const modelData = {
+      user_id: userId,
+      optimal_timing: {
+        best_hours: bestHours.length > 0 ? bestHours : null,
+        worst_hours: worstHours.length > 0 ? worstHours : null,
+      },
+      effective_framings: modeCounts,
+      model_confidence: Math.min(1, recentSignals.length / 100),
+      last_updated: new Date().toISOString(),
+    };
+
+    const { data: existing } = await supabase
+      .from('handler_user_model')
+      .select('id')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (existing) {
+      await supabase.from('handler_user_model')
+        .update(modelData)
+        .eq('user_id', userId);
+    } else {
+      await supabase.from('handler_user_model').insert(modelData);
+    }
+  } catch (err) {
+    console.error('[Handler Brain] User model update error:', err);
+  }
 }
 
 // Long-term memory from handler_memory table (formal memory system)
