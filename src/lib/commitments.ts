@@ -2,6 +2,7 @@
 // Arousal-gated commitment management
 
 import { supabase } from './supabase';
+import { recordOutcome } from './conditioning/impact-tracking';
 import type {
   ArousalGatedCommitment,
   DbArousalGatedCommitment,
@@ -230,6 +231,31 @@ export async function fulfillCommitment(
     .eq('id', commitmentId);
 
   if (error) throw error;
+
+  // Record positive outcome for Handler impact tracking (fire-and-forget)
+  (async () => {
+    try {
+      const { data: commitment } = await supabase
+        .from('user_commitments').select('user_id').eq('id', commitmentId).single();
+      if (!commitment) return;
+      const { data: intervention } = await supabase
+        .from('handler_interventions')
+        .select('id')
+        .eq('user_id', commitment.user_id)
+        .eq('intervention_type', 'commitment_extraction')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (intervention) {
+        await recordOutcome(commitment.user_id, intervention.id, {
+          outcome_type: 'commitment_honored',
+          direction: 'positive',
+          magnitude: 0.8,
+          description: `Commitment fulfilled: ${commitmentId}`,
+        });
+      }
+    } catch { /* non-critical */ }
+  })();
 }
 
 export async function breakCommitment(
@@ -265,6 +291,31 @@ export async function breakCommitment(
     .eq('id', commitmentId);
 
   if (error) throw error;
+
+  // Record negative outcome for Handler impact tracking (fire-and-forget)
+  (async () => {
+    try {
+      const { data: comm } = await supabase
+        .from('user_commitments').select('user_id').eq('id', commitmentId).single();
+      if (!comm) return;
+      const { data: intervention } = await supabase
+        .from('handler_interventions')
+        .select('id')
+        .eq('user_id', comm.user_id)
+        .eq('intervention_type', 'commitment_extraction')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (intervention) {
+        await recordOutcome(comm.user_id, intervention.id, {
+          outcome_type: 'commitment_broken',
+          direction: 'negative',
+          magnitude: 0.7,
+          description: `Commitment broken: ${commitmentId}${reason ? ` — ${reason}` : ''}`,
+        });
+      }
+    } catch { /* non-critical */ }
+  })();
 
   return {
     success: true,

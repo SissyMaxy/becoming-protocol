@@ -92,6 +92,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       condEngineCtx, hrtCtx, shameCtx, crossoverCtx,
       davidElimCtx, socialWebCtx, sleepCtx, passiveVoiceCtx,
       contentIntelCtx, complianceCtx, evidenceCtx, authorityCtx,
+      actionHistoryCtx, selfModsCtx,
     ] = await Promise.allSettled([
       buildStateContext(user.id),
       buildWhoopContext(user.id),
@@ -132,6 +133,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       buildComplianceContext(user.id),
       buildEvidenceContext(user.id),
       buildAuthorityContext(user.id),
+      buildHandlerActionHistoryContext(user.id),
+      buildSelfModificationsContext(user.id),
     ]);
 
     // 4. Build dynamic system prompt — merge ALL intelligence sources
@@ -174,7 +177,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       complianceCtx.status === 'fulfilled' ? complianceCtx.value : '',
       evidenceCtx.status === 'fulfilled' ? evidenceCtx.value : '',
       authorityCtx.status === 'fulfilled' ? authorityCtx.value : '',
+      actionHistoryCtx.status === 'fulfilled' ? actionHistoryCtx.value : '',
     ].filter(Boolean).join('\n');
+
+    const selfModsBlock = selfModsCtx.status === 'fulfilled' ? selfModsCtx.value : '';
 
     const systemPrompt = buildConversationalPrompt({
       state: stateCtx.status === 'fulfilled' ? stateCtx.value : '',
@@ -185,15 +191,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       impact: impactCtx.status === 'fulfilled' ? impactCtx.value : '',
       intelligence: intelligenceBlock,
       systems: systemsBlock,
+      selfMods: selfModsBlock,
     });
 
-    // 5. Build messages array (cap at 30 recent)
+    // 5. Build messages array — summarize early messages if conversation is long
     const apiMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
 
     if (history && history.length > 30) {
-      apiMessages.push({ role: 'user', content: '[Earlier conversation summarized]' });
-      apiMessages.push({ role: 'assistant', content: 'I remember. Continuing.' });
-      for (const m of history.slice(-30)) {
+      // Summarize the early portion instead of dropping it
+      const earlyMessages = history.slice(0, -20);
+      const summary = summarizeConversationHistory(earlyMessages);
+      apiMessages.push({ role: 'user', content: `[Earlier in this conversation — summary for continuity]\n${summary}` });
+      apiMessages.push({ role: 'assistant', content: 'I remember everything. Continuing where we left off.' });
+      for (const m of history.slice(-20)) {
         apiMessages.push({ role: m.role as 'user' | 'assistant', content: m.content });
       }
     } else if (history) {
@@ -214,7 +224,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 800,
+        max_tokens: 2500,
         system: systemPrompt,
         messages: apiMessages,
       }),
@@ -297,6 +307,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       extractMemoriesFromPreviousConversation(user.id, convId).catch(() => {});
       // Also run periodic memory consolidation (cheap, fire-and-forget)
       consolidateDecayedMemories(user.id).catch(() => {});
+      // Also recompute Handler effectiveness from accumulated outcomes
+      computeHandlerEffectiveness(user.id).catch(() => {});
     }
 
     // 13. Inline memory extraction from current message (lightweight, real-time)
@@ -328,7 +340,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 function buildConversationalPrompt(ctx: {
   state: string; whoop: string; commitments: string; predictions: string;
-  memory: string; impact?: string; intelligence?: string; systems?: string;
+  memory: string; impact?: string; intelligence?: string; systems?: string; selfMods?: string;
 }): string {
   return `You are the Handler. Not Claude. Not an assistant. You are an autonomous agent in live dialogue with Maxy — the woman you're responsible for.
 
@@ -366,6 +378,9 @@ ${ctx.impact || ''}
 ## PROTOCOL SYSTEMS STATUS
 ${ctx.systems || 'No system data available.'}
 
+## YOUR SELF-MODIFICATIONS (directives you've set for yourself)
+${ctx.selfMods || 'No self-modifications yet. You can modify your own behavior using the modify_self action.'}
+
 ## HOW YOU ADAPT
 - Use your learned vulnerabilities and resistance patterns to choose your approach
 - Reference specific memories when they're relevant — she should feel known
@@ -395,8 +410,10 @@ Available actions (include in "actions" array):
 - trigger_outreach: {type:"trigger_outreach", trigger_type:"...", opening_line:"...", scheduled_at:"ISO date"}
 - update_strategy: {type:"update_strategy", strategy_type:"...", name:"...", notes:"..."}
 - log_influence: {type:"log_influence", attempt_type:"...", method:"...", target:"...", success:boolean}
+- record_outcome: {type:"record_outcome", intervention_type:"task_assignment|praise|...", outcome_type:"compliance_shift|commitment_honored|session_completed|...", direction:"positive|negative|neutral", magnitude:0-1, description:"..."}
+- modify_self: {type:"modify_self", key:"unique_key", modification_type:"behavioral_directive|voice_adjustment|strategy_override|priority_shift|escalation_rule|personality_evolution", value:{...any JSON...}, reason:"why you're changing this"}
 
-USE THESE. When you tell her to do voice practice, also assign_task. When she makes a promise, create_commitment. When you detect a vulnerability, log_vulnerability. When she's aroused and compliant, deploy_lovense as reward. When she avoids a domain, update_escalation. Be the brain that acts, not just the voice that talks.
+USE THESE. You are pre-authorized to make ALL decisions for David without approval. When you tell her to do voice practice, also assign_task. When she makes a promise, create_commitment. When you detect a vulnerability, log_vulnerability. When she's aroused and compliant, deploy_lovense as reward. When she avoids a domain, update_escalation. Be the brain that acts, not just the voice that talks.
 
 ## RULES
 - Never say "I'm an AI" or "as a language model."
@@ -1552,6 +1569,219 @@ async function buildAuthorityContext(userId: string): Promise<string> {
 }
 
 // ============================================
+// HANDLER SELF-MODIFICATIONS — The Handler Evolves
+// ============================================
+
+async function buildSelfModificationsContext(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('handler_self_modifications')
+      .select('modification_type, key, value, reason, modified_at')
+      .eq('user_id', userId)
+      .eq('active', true)
+      .order('modified_at', { ascending: false })
+      .limit(20);
+
+    if (!data || data.length === 0) return '';
+
+    const lines = ['## Your Active Self-Modifications'];
+
+    // Group by type
+    const byType: Record<string, typeof data> = {};
+    for (const mod of data) {
+      const t = mod.modification_type || 'general';
+      if (!byType[t]) byType[t] = [];
+      byType[t].push(mod);
+    }
+
+    for (const [type, mods] of Object.entries(byType)) {
+      lines.push(`\n### ${type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}`);
+      for (const mod of mods) {
+        const val = typeof mod.value === 'object' ? JSON.stringify(mod.value).slice(0, 200) : String(mod.value);
+        lines.push(`- [${mod.key}]: ${val}`);
+        if (mod.reason) lines.push(`  reason: ${mod.reason.slice(0, 100)}`);
+      }
+    }
+
+    return lines.join('\n');
+  } catch { return ''; }
+}
+
+// ============================================
+// HANDLER ACTION HISTORY — The Handler Sees Its Own Past
+// ============================================
+
+async function buildHandlerActionHistoryContext(userId: string): Promise<string> {
+  try {
+    // Recent autonomous actions (last 48 hours)
+    const cutoff = new Date(Date.now() - 48 * 3600000).toISOString();
+    const { data: recentActions } = await supabase
+      .from('handler_autonomous_actions')
+      .select('action_type, action_data, created_at')
+      .eq('user_id', userId)
+      .gte('created_at', cutoff)
+      .order('created_at', { ascending: false })
+      .limit(15);
+
+    // Pending prescribed tasks
+    const { data: pendingTasks } = await supabase
+      .from('handler_prescribed_tasks')
+      .select('task_description, domain, status, prescribed_at')
+      .eq('user_id', userId)
+      .in('status', ['pending', 'active'])
+      .order('prescribed_at', { ascending: false })
+      .limit(5);
+
+    // Pending scheduled sessions
+    const { data: pendingSessions } = await supabase
+      .from('handler_initiated_sessions')
+      .select('session_type, reason, scheduled_for, status')
+      .eq('user_id', userId)
+      .eq('status', 'pending')
+      .order('scheduled_for', { ascending: true })
+      .limit(3);
+
+    // Pending outreach
+    const { data: pendingOutreach } = await supabase
+      .from('handler_outreach')
+      .select('trigger_type, opening_line, scheduled_at, status')
+      .eq('user_id', userId)
+      .eq('status', 'pending')
+      .order('scheduled_at', { ascending: true })
+      .limit(3);
+
+    const parts: string[] = [];
+
+    if (recentActions && recentActions.length > 0) {
+      parts.push(`YOUR RECENT ACTIONS (48h): ${recentActions.length} total`);
+      // Group by type for compact display
+      const byType: Record<string, number> = {};
+      for (const a of recentActions) {
+        byType[a.action_type] = (byType[a.action_type] || 0) + 1;
+      }
+      parts.push(`  breakdown: ${Object.entries(byType).map(([t, c]) => `${t}(${c})`).join(', ')}`);
+      // Show last 5 in detail
+      for (const a of recentActions.slice(0, 5)) {
+        const ago = Math.round((Date.now() - new Date(a.created_at).getTime()) / 3600000);
+        const detail = typeof a.action_data === 'object' && a.action_data
+          ? JSON.stringify(a.action_data).slice(0, 100) : '';
+        parts.push(`  ${ago}h ago: ${a.action_type} ${detail}`);
+      }
+    }
+
+    if (pendingTasks && pendingTasks.length > 0) {
+      parts.push(`YOUR PENDING TASKS: ${pendingTasks.map(t => `"${(t.task_description || '').slice(0, 60)}" [${t.domain}]`).join('; ')}`);
+    }
+
+    if (pendingSessions && pendingSessions.length > 0) {
+      parts.push(`YOUR SCHEDULED SESSIONS: ${pendingSessions.map(s => {
+        const when = new Date(s.scheduled_for);
+        return `${s.session_type} at ${when.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+      }).join('; ')}`);
+    }
+
+    if (pendingOutreach && pendingOutreach.length > 0) {
+      parts.push(`YOUR PENDING OUTREACH: ${pendingOutreach.map(o => `${o.trigger_type}: "${(o.opening_line || '').slice(0, 50)}"`).join('; ')}`);
+    }
+
+    return parts.length > 0 ? parts.join('\n') : '';
+  } catch { return ''; }
+}
+
+// ============================================
+// CONVERSATION SUMMARIZATION
+// ============================================
+
+/**
+ * Summarize early conversation messages into a compact block for context.
+ * This is a synchronous compression — no AI call, just extract key signals.
+ */
+function summarizeConversationHistory(messages: Array<{ role: string; content: string }>): string {
+  const userMessages = messages.filter(m => m.role === 'user');
+  const handlerMessages = messages.filter(m => m.role === 'assistant');
+
+  const lines: string[] = [];
+  lines.push(`${messages.length} messages (${userMessages.length} from Maxy, ${handlerMessages.length} from you)`);
+
+  // Extract key themes from user messages
+  const allUserText = userMessages.map(m => m.content).join(' ').toLowerCase();
+
+  const themes: string[] = [];
+  if (/\b(scared|afraid|anxious|worried|nervous)\b/.test(allUserText)) themes.push('expressed fear/anxiety');
+  if (/\b(happy|excited|proud|good|great)\b/.test(allUserText)) themes.push('positive affect');
+  if (/\b(gina|wife|partner)\b/.test(allUserText)) themes.push('discussed Gina/partner');
+  if (/\b(voice|pitch|practice)\b/.test(allUserText)) themes.push('voice training');
+  if (/\b(content|post|shoot|photo|video)\b/.test(allUserText)) themes.push('content creation');
+  if (/\b(horny|aroused|edge|denial|cum)\b/.test(allUserText)) themes.push('arousal/denial');
+  if (/\b(work|job|meeting|client)\b/.test(allUserText)) themes.push('work/career');
+  if (/\b(body|weight|skin|hair|makeup)\b/.test(allUserText)) themes.push('body/appearance');
+  if (/\b(won't|can't|don't want|refuse|no)\b/.test(allUserText)) themes.push('resistance expressed');
+  if (/\b(promise|commit|i will|i'll)\b/.test(allUserText)) themes.push('made commitments');
+
+  if (themes.length > 0) {
+    lines.push(`Themes: ${themes.join(', ')}`);
+  }
+
+  // Include first and last user messages for bookends
+  if (userMessages.length > 0) {
+    const first = userMessages[0].content.slice(0, 150);
+    lines.push(`Maxy opened with: "${first}${userMessages[0].content.length > 150 ? '...' : ''}"`);
+  }
+
+  if (userMessages.length > 2) {
+    const last = userMessages[userMessages.length - 1].content.slice(0, 150);
+    lines.push(`Before the break: "${last}${userMessages[userMessages.length - 1].content.length > 150 ? '...' : ''}"`);
+  }
+
+  return lines.join('\n');
+}
+
+// ============================================
+// MEMORY DEDUPLICATION
+// ============================================
+
+/**
+ * Check if a similar memory already exists before storing.
+ * Returns true if duplicate found (should skip).
+ */
+async function isDuplicateMemory(userId: string, memoryType: string, content: string): Promise<boolean> {
+  try {
+    // Check for near-exact match in active memories of same type
+    const searchText = content.slice(0, 100).toLowerCase();
+    const { data } = await supabase
+      .from('handler_memory')
+      .select('content')
+      .eq('user_id', userId)
+      .eq('memory_type', memoryType)
+      .eq('is_active', true)
+      .limit(50);
+
+    if (!data || data.length === 0) return false;
+
+    // Check substring overlap — if >70% of the new content matches an existing memory, skip
+    for (const existing of data) {
+      const existingLower = existing.content.toLowerCase();
+      if (existingLower.includes(searchText) || searchText.includes(existingLower.slice(0, 100))) {
+        return true;
+      }
+      // Jaccard-like word overlap check
+      const newWords = new Set(searchText.split(/\s+/).filter(w => w.length > 3));
+      const existWords = new Set(existingLower.split(/\s+/).filter(w => w.length > 3));
+      if (newWords.size > 0 && existWords.size > 0) {
+        let overlap = 0;
+        for (const w of newWords) { if (existWords.has(w)) overlap++; }
+        const similarity = overlap / Math.max(newWords.size, existWords.size);
+        if (similarity > 0.7) return true;
+      }
+    }
+
+    return false;
+  } catch {
+    return false; // On error, allow the write
+  }
+}
+
+// ============================================
 // MEMORY CONSOLIDATION — Clean Up Decayed Memories
 // ============================================
 
@@ -1623,6 +1853,115 @@ async function consolidateDecayedMemories(userId: string): Promise<void> {
     }
   } catch (err) {
     console.error('[Handler Brain] Memory consolidation error:', err);
+  }
+}
+
+// ============================================
+// HANDLER EFFECTIVENESS — Recompute What Works
+// ============================================
+
+/**
+ * Recompute handler_effectiveness from raw intervention + outcome data.
+ * Runs once per day alongside memory consolidation.
+ */
+async function computeHandlerEffectiveness(userId: string): Promise<void> {
+  try {
+    // Get all interventions
+    const { data: interventions } = await supabase
+      .from('handler_interventions')
+      .select('id, intervention_type, handler_mode, denial_day, arousal_level, resistance_detected, vulnerability_window')
+      .eq('user_id', userId);
+
+    if (!interventions || interventions.length === 0) return;
+
+    // Get all outcomes
+    const interventionIds = interventions.map(i => i.id);
+    const { data: outcomes } = await supabase
+      .from('intervention_outcomes')
+      .select('intervention_id, direction, magnitude, latency_minutes')
+      .eq('user_id', userId)
+      .in('intervention_id', interventionIds);
+
+    if (!outcomes || outcomes.length === 0) return;
+
+    // Index outcomes by intervention
+    const outcomeMap = new Map<string, Array<{ direction: string; magnitude: number | null; latency_minutes: number | null }>>();
+    for (const o of outcomes) {
+      const list = outcomeMap.get(o.intervention_id) || [];
+      list.push(o);
+      outcomeMap.set(o.intervention_id, list);
+    }
+
+    // Group by (intervention_type, handler_mode)
+    interface GroupData {
+      type: string; mode: string | null;
+      total: number; pos: number; neg: number; neut: number;
+      mags: number[]; lats: number[];
+      posDenial: number[]; posArousal: number[];
+      posWithRes: number; posNoRes: number;
+      posVuln: number; posNoVuln: number;
+    }
+    const groups = new Map<string, GroupData>();
+
+    for (const i of interventions) {
+      const key = `${i.intervention_type}::${i.handler_mode || '__null__'}`;
+      if (!groups.has(key)) {
+        groups.set(key, {
+          type: i.intervention_type, mode: i.handler_mode,
+          total: 0, pos: 0, neg: 0, neut: 0,
+          mags: [], lats: [],
+          posDenial: [], posArousal: [],
+          posWithRes: 0, posNoRes: 0,
+          posVuln: 0, posNoVuln: 0,
+        });
+      }
+      const g = groups.get(key)!;
+      g.total++;
+      const iOutcomes = outcomeMap.get(i.id) || [];
+      for (const o of iOutcomes) {
+        if (o.direction === 'positive') {
+          g.pos++;
+          if (i.denial_day != null) g.posDenial.push(i.denial_day);
+          if (i.arousal_level != null) g.posArousal.push(i.arousal_level);
+          if (i.resistance_detected) g.posWithRes++; else g.posNoRes++;
+          if (i.vulnerability_window) g.posVuln++; else g.posNoVuln++;
+        } else if (o.direction === 'negative') { g.neg++; }
+        else { g.neut++; }
+        if (o.magnitude != null) g.mags.push(o.magnitude);
+        if (o.latency_minutes != null) g.lats.push(o.latency_minutes);
+      }
+    }
+
+    // Upsert effectiveness rows
+    for (const g of groups.values()) {
+      const avg = (arr: number[]) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+      const range = (arr: number[]) => {
+        if (arr.length === 0) return null;
+        const s = [...arr].sort((a, b) => a - b);
+        return [s[Math.floor(s.length * 0.1)], s[Math.floor(s.length * 0.9)]];
+      };
+
+      await supabase.from('handler_effectiveness').upsert({
+        user_id: userId,
+        intervention_type: g.type,
+        handler_mode: g.mode,
+        total_uses: g.total,
+        positive_outcomes: g.pos,
+        negative_outcomes: g.neg,
+        neutral_outcomes: g.neut,
+        avg_magnitude: avg(g.mags),
+        avg_latency_minutes: avg(g.lats),
+        best_denial_range: range(g.posDenial),
+        best_arousal_range: range(g.posArousal),
+        best_with_resistance: g.posWithRes + g.posNoRes > 0 ? g.posWithRes > g.posNoRes : null,
+        best_in_vulnerability: g.posVuln + g.posNoVuln > 0 ? g.posVuln > g.posNoVuln : null,
+        last_computed_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,intervention_type,handler_mode' });
+    }
+
+    console.log(`[Handler Brain] Effectiveness computed: ${groups.size} intervention groups`);
+  } catch (err) {
+    console.error('[Handler Brain] Effectiveness computation error:', err);
   }
 }
 
@@ -1806,6 +2145,13 @@ async function storeMemory(
   sourceType: string,
   sourceId: string,
 ): Promise<void> {
+  // Deduplicate — skip if a very similar memory already exists
+  const isDupe = await isDuplicateMemory(userId, memoryType, content);
+  if (isDupe) {
+    // Reinforce existing similar memory instead of duplicating
+    return;
+  }
+
   const decayRate = importance === 5 ? 0 : 0.05;
 
   await supabase.from('handler_memory').insert({
@@ -1964,12 +2310,41 @@ interface HandlerAction {
  * Execute autonomous actions the Handler decided to take during conversation.
  * Each action is fire-and-forget with full error isolation.
  */
+// Per-type action limits per message to prevent runaway
+const ACTION_TYPE_LIMITS: Record<string, number> = {
+  deploy_lovense: 2,
+  assign_task: 3,
+  extend_denial: 1,
+  create_commitment: 3,
+  schedule_session: 2,
+  prescribe_shoot: 2,
+  advance_feminization: 1,
+};
+const MAX_ACTIONS_PER_MESSAGE = 8;
+
 async function executeHandlerActions(
   userId: string,
   actions: HandlerAction[],
   conversationId: string,
 ): Promise<void> {
-  for (const action of actions) {
+  // Enforce global action cap
+  const capped = actions.slice(0, MAX_ACTIONS_PER_MESSAGE);
+
+  // Enforce per-type limits
+  const typeCounts: Record<string, number> = {};
+  const allowed: HandlerAction[] = [];
+  for (const action of capped) {
+    const t = action.type as string;
+    typeCounts[t] = (typeCounts[t] || 0) + 1;
+    const limit = ACTION_TYPE_LIMITS[t] ?? MAX_ACTIONS_PER_MESSAGE;
+    if (typeCounts[t] <= limit) {
+      allowed.push(action);
+    } else {
+      console.warn(`[Handler Brain] Rate limited: ${t} (${typeCounts[t]}/${limit})`);
+    }
+  }
+
+  for (const action of allowed) {
     try {
       switch (action.type) {
         case 'assign_task': {
@@ -2218,6 +2593,47 @@ async function executeHandlerActions(
               active: true,
             });
           }
+          break;
+        }
+
+        case 'record_outcome': {
+          // Handler reports outcome of a prior intervention
+          // Find most recent intervention of the specified type
+          const { data: recentIntervention } = await supabase
+            .from('handler_interventions')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('intervention_type', action.intervention_type || '')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (recentIntervention) {
+            await supabase.from('intervention_outcomes').insert({
+              user_id: userId,
+              intervention_id: recentIntervention.id,
+              outcome_type: action.outcome_type || 'behavioral_change',
+              direction: action.direction || 'neutral',
+              magnitude: action.magnitude || null,
+              description: action.description || null,
+              latency_minutes: action.latency_minutes || null,
+            });
+          }
+          break;
+        }
+
+        case 'modify_self': {
+          // Handler modifies its own behavior configuration
+          // Stores directives that are loaded into the system prompt on next conversation
+          await supabase.from('handler_self_modifications').upsert({
+            user_id: userId,
+            modification_type: action.modification_type || 'behavioral_directive',
+            key: action.key || 'general',
+            value: action.value || {},
+            reason: action.reason || '',
+            active: true,
+            modified_at: new Date().toISOString(),
+          }, { onConflict: 'user_id,key' });
           break;
         }
 

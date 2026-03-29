@@ -5,6 +5,7 @@ import { supabase } from './supabase';
 import { getTodayDate } from './protocol';
 import { invokeWithAuth, isHandlerAIDisabled } from './handler-ai';
 import { extractMemoriesFromTask } from './handler-memory';
+import { recordOutcome } from './conditioning/impact-tracking';
 import type {
   Task,
   DbTask,
@@ -573,6 +574,34 @@ export async function completeTask(
   }).catch(err => {
     console.warn('[TaskBank] Memory extraction failed:', err);
   });
+
+  // Record outcome for Handler impact tracking — link task completion to most recent intervention
+  (async () => {
+    try {
+      const { data: recentIntervention } = await supabase
+        .from('handler_interventions')
+        .select('id')
+        .eq('user_id', dailyTask.user_id)
+        .eq('intervention_type', 'task_assignment')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (recentIntervention) {
+        await recordOutcome(dailyTask.user_id, recentIntervention.id, {
+          outcome_type: 'compliance_shift',
+          direction: 'positive',
+          magnitude: task.intensity ? task.intensity / 5 : 0.5,
+          description: `Completed ${task.category} task: ${task.instruction.slice(0, 80)}`,
+          latency_minutes: dailyTask.created_at
+            ? Math.round((Date.now() - new Date(dailyTask.created_at).getTime()) / 60000)
+            : undefined,
+        });
+      }
+    } catch (err) {
+      console.warn('[TaskBank] Outcome tracking failed:', err);
+    }
+  })();
 
   // Dopamine: delayed reward after task completion (10-20 min)
   queueDelayedReward(
