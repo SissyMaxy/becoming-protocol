@@ -13,6 +13,7 @@
     "replies": "npx tsx reply-engine.ts",
     "reddit-engage": "npx tsx platforms/reddit-engage.ts",
     "fetlife-engage": "npx tsx platforms/fetlife-engage.ts",
+    "sniffies-engage": "npx tsx platforms/sniffies-engage.ts",
     "subscriber-replies": "npx tsx platforms/subscriber-engage.ts",
     "fix-tweets": "npx tsx fix-tweets.ts",
     "status": "npx tsx check-status.ts",

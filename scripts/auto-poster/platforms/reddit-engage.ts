@@ -9,14 +9,27 @@
  */
 
 import 'dotenv/config';
+import path from 'path';
 import { chromium, type BrowserContext, type Page } from 'playwright';
 import Anthropic from '@anthropic-ai/sdk';
 import { supabase, PLATFORMS } from '../config';
 import { checkBudget, incrementBudget } from '../engagement-budget';
+import { extractSafeText } from '../refusal-filter';
+import { patternSlopCheck } from '../slop-detector';
 
 const USER_ID = process.env.USER_ID || '';
 
-const MAXY_VOICE = `You are Maxy (@softmaxy) — a 40-year-old woman in transformation. Controlled by an AI Handler. Locked in chastity. On HRT. Voice training daily. The Handler decides everything — sessions, denial schedule, what she posts, when she's allowed to cum. She gave it permission and now she can't take it back.`;
+// Full voice for kink-friendly subs
+const MAXY_VOICE_KINK = `You are Maxy (@softmaxy) — a 40-year-old woman in transformation who uses an AI accountability system she calls "the Handler" to manage her daily routines, goals, and personal development. She's on HRT, does voice training daily, and is open about her kink life (chastity, denial, feminization). She chose this structure voluntarily and enthusiastically. She's playful, vulnerable, and real.`;
+
+// Clean voice for trans support, selfie, and general subs
+const MAXY_VOICE_SFW = `You are Maxy (@softmaxy) — a 40-year-old trans woman early in her transition. On HRT, doing voice training daily. Starting later in life and figuring it out. Warm, genuine, a little self-deprecating. You love hyping up other trans people because you know how much it matters.`;
+
+const KINK_SUBS = new Set(['sissification', 'feminization', 'chastity', 'sissyhypno']);
+
+function getMaxyVoice(subreddit: string): string {
+  return KINK_SUBS.has(subreddit) ? MAXY_VOICE_KINK : MAXY_VOICE_SFW;
+}
 
 // --- Subreddit voice calibration ---
 
@@ -72,9 +85,40 @@ const SUBREDDIT_VOICES: Record<string, SubredditVoice> = {
     topics: ['hypno sessions', 'mental conditioning', 'handler-directed sessions', 'trance experiences'],
     rules: 'Share experiences with hypno content. Reference the Handler directing sessions. Be open but not gratuitous. Community appropriate.',
   },
+  MTFSelfieTrain: {
+    tone: 'warm, encouraging, genuinely excited for them',
+    topics: ['outfit compliments', 'makeup tips', 'confidence', 'transition glow-ups'],
+    rules: 'Be genuinely supportive. Compliment something SPECIFIC — the outfit, the hair, the confidence, the vibe. Keep it short (1-2 sentences). Can mention your own journey briefly ("I\'m early in mine and this gives me hope" etc). No sexual content. No generic "you look great!" — name what looks great.',
+  },
+  TransTimelines: {
+    tone: 'warm, encouraging, inspired by their progress',
+    topics: ['transition progress', 'HRT results', 'confidence', 'glow-ups'],
+    rules: 'Compliment something specific about their progress or look. Can briefly relate to your own early journey. Keep it short and genuine. No sexual content. This is a support/celebration space.',
+  },
+  transadorable: {
+    tone: 'sweet, hyping them up, genuine warmth',
+    topics: ['cute outfits', 'selfies', 'gender euphoria', 'confidence'],
+    rules: 'Short and sweet encouragement. Compliment something specific. Can relate briefly to your own experience. No sexual content.',
+  },
+  TransDIY: {
+    tone: 'curious, learning, asking genuine questions',
+    topics: ['HRT regimens', 'self-medding experiences', 'bloodwork', 'dosages'],
+    rules: 'Be respectful. Ask genuine questions or share your own research. Never give medical advice. This community values harm reduction. No kink content.',
+  },
+  MTF: {
+    tone: 'supportive, relatable, sharing the journey',
+    topics: ['transition experiences', 'coming out', 'HRT', 'passing', 'voice training', 'fashion'],
+    rules: 'Be genuinely supportive. For selfie/pic posts: compliment something specific. For advice posts: share real experience. Can mention starting later in life. No sexual or kink content.',
+  },
+  TransLater: {
+    tone: 'warm, relatable, sharing the "starting later" experience',
+    topics: ['starting transition at 40', 'HRT effects', 'social challenges', 'self-acceptance'],
+    rules: 'Be supportive and real. Share experiences of transitioning later in life. No explicit content. This is a support community first.',
+  },
 };
 
-const KARMA_BUILDING_SUBS = ['ChatGPT', 'ADHD', 'selfimprovement', 'AskReddit'];
+const KARMA_BUILDING_SUBS = ['MTFSelfieTrain', 'TransTimelines', 'transadorable', 'MTF', 'TransLater', 'TransDIY', 'ChatGPT', 'selfimprovement', 'AskReddit'];
+const SELFIE_SUBS = new Set(['MTFSelfieTrain', 'TransTimelines', 'transadorable']);
 const NICHE_SUBS = ['sissification', 'feminization', 'chastity', 'TransLater', 'sissyhypno'];
 
 function getSubredditVoice(subreddit: string): SubredditVoice {
@@ -92,6 +136,10 @@ interface ScrapedRedditPost {
   author: string;
   commentCount: number;
   upvotes: string;
+  /** Base64-encoded screenshot of the post (for vision on image posts) */
+  imageBase64?: string;
+  /** Whether the post is an image/media post */
+  isImagePost?: boolean;
 }
 
 /**
@@ -203,7 +251,7 @@ export async function generateRedditComment(
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 300,
-      system: `${MAXY_VOICE}
+      system: `${getMaxyVoice(subreddit)}
 
 You are commenting on a Reddit post in r/${subreddit}.
 
@@ -212,27 +260,88 @@ Voice calibration for this subreddit:
 - Relevant topics: ${voice.topics.join(', ')}
 - Rules: ${voice.rules}
 
-Write a Reddit comment that:
-1. DIRECTLY responds to the specific post content — reference their words or ideas
-2. Adds value — share a personal experience, insight, or genuine reaction
-3. Sounds like a real person, not a bot — lowercase is fine, casual is fine
-4. Is 2-5 sentences for most subs, can be shorter for casual subs
-5. Never uses hashtags, never sounds like marketing
-6. Never links to external sites or promotes anything
-7. Matches the community culture
+Write a Reddit comment like a real person would. Think "girl typing on her phone", not "AI writing a response".
 
-${state.denialDay ? `Current state: day ${state.denialDay} of denial.` : ''}
-${state.hrtDay ? `HRT day: ${state.hrtDay}.` : ''}`,
+DO:
+- React to what they said like you actually read it
+- Share a quick personal detail or opinion
+- Use lowercase, fragments, casual punctuation
+- 1-3 sentences max. Most comments should be SHORT.
+- Sound like you're talking to a friend, not answering a question
+
+DO NOT — these are the things that make you sound like an AI:
+- "I appreciate..." / "I want to be direct..." / "That's a great question..."
+- Structuring your response with categories or frameworks
+- Offering balanced perspectives with multiple options
+- Ending with a perfectly worded follow-up question
+- Using em dashes, semicolons, or "rather than"
+- Sounding helpful, advisory, or therapeutic
+- Being comprehensive. Real people are specific and incomplete.
+
+BANNED PHRASES (overused crutches — using these = failure):
+- "hits different"
+- "the way [thing]..." as sentence opener
+- "energy" as lazy descriptor
+- "ngl" / "not gonna lie"
+- "honestly" as sentence starter
+- "*chef's kiss*"
+- "i respect it/that"
+- "confidence" as a compliment
+
+`,
       messages: [{
         role: 'user',
-        content: `Post title: "${post.title}"\n\nPost body: "${post.body || '(no body text)'}"\n\nAuthor: u/${post.author}\n\nWrite Maxy's comment. Output ONLY the comment text.`,
+        content: (() => {
+          const blocks: any[] = [];
+
+          // Add image if available (selfie posts, image posts)
+          if (post.imageBase64) {
+            blocks.push({
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: 'image/png',
+                data: post.imageBase64,
+              },
+            });
+          }
+
+          const imageInstruction = post.imageBase64
+            ? 'The screenshot above shows the post including any images. For selfie/photo posts: reference what you SEE — the outfit, the look, the hair, the vibe, specific visual details. Be specific, not generic.'
+            : post.isImagePost
+            ? '(This is an image post but screenshot failed — respond to the title. For selfie subs, be encouraging about their journey.)'
+            : '';
+
+          blocks.push({
+            type: 'text',
+            text: `Post title: "${post.title}"\n\nPost body:\n${post.body ? `"${post.body}"` : '(image/link post — no body text)'}\n\nAuthor: u/${post.author}\n\n${imageInstruction}\n\nIMPORTANT: If there is body text, you MUST respond to the actual content of the body, not just the title. The title is often vague — the real substance is in the body.\n\nWrite Maxy's comment. Output ONLY the comment text.`,
+          });
+
+          return blocks;
+        })(),
       }],
     });
 
-    const text = response.content[0].type === 'text' ? response.content[0].text.trim() : '';
-    if (!text || text.length < 10) return null;
+    const text = extractSafeText(response, 10, `Reddit r/${subreddit}`);
+    if (!text) return null;
 
-    return text.replace(/^["']|["']$/g, '').trim();
+    // Fast slop check — retry once if it fails
+    const slopResult = patternSlopCheck(text);
+    if (!slopResult.pass) {
+      console.log(`  [SlopCheck] Reddit reply failed pattern check: ${slopResult.reasons.join(', ')} — retrying`);
+      const retry = await client.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 300,
+        system: `${getMaxyVoice(subreddit)}\n\nYou are commenting on a Reddit post in r/${subreddit}.\nVoice: ${voice.tone}\nRules: ${voice.rules}\n\nYour previous reply was rejected for sounding like AI. Issues: ${slopResult.reasons.join('; ')}.\nWrite a COMPLETELY different reply — different words, different angle, different structure. 1-3 sentences. Lowercase, casual. Output ONLY the comment.`,
+        messages: [{
+          role: 'user',
+          content: `Post title: "${post.title}"\nPost body: "${post.body || '(no body)'}"\nAuthor: u/${post.author}\n\nWrite Maxy's comment. Output ONLY the comment text.`,
+        }],
+      });
+      return extractSafeText(retry, 10, `Reddit r/${subreddit} (retry)`);
+    }
+
+    return text;
   } catch (err) {
     console.error('[Reddit] Comment generation failed:', err instanceof Error ? err.message : err);
     return null;
@@ -248,26 +357,118 @@ export async function postRedditComment(
   comment: string,
 ): Promise<boolean> {
   try {
-    // Use old.reddit for posting — more reliable selectors
+    // Try old.reddit first, fall back to new reddit
     const oldUrl = postUrl.replace('www.reddit.com', 'old.reddit.com');
     await page.goto(oldUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.waitForTimeout(3000);
 
-    // Find the comment box
-    const commentBox = page.locator('.commentarea textarea[name="text"]').first();
-    await commentBox.waitFor({ timeout: 8000 });
+    // Handle NSFW age gate / content warning (old reddit)
+    const overAge = page.locator('button:has-text("Yes"), a:has-text("proceed"), button:has-text("Continue"), a:has-text("are you sure"), button:has-text("I agree")').first();
+    if (await overAge.isVisible().catch(() => false)) {
+      await overAge.click();
+      await page.waitForTimeout(2000);
+    }
+
+    // Scroll down to ensure comment section is in view
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await page.waitForTimeout(1500);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForTimeout(500);
+
+    // Try old reddit comment box first
+    let commentBox = page.locator('.commentarea textarea[name="text"]').first();
+    let isOldReddit = await commentBox.isVisible().catch(() => false);
+
+    if (!isOldReddit) {
+      // Fall back to new reddit URL
+      const newUrl = postUrl.replace('old.reddit.com', 'www.reddit.com');
+      await page.goto(newUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await page.waitForTimeout(4000);
+
+      // Handle NSFW age gate (new reddit)
+      const nsfwGate = page.locator(
+        'button:has-text("Yes"), ' +
+        'button:has-text("Continue"), ' +
+        'button:has-text("I agree"), ' +
+        'button:has-text("Click to see nsfw"), ' +
+        '[id*="over18"] button'
+      ).first();
+      if (await nsfwGate.isVisible().catch(() => false)) {
+        await nsfwGate.click();
+        await page.waitForTimeout(2000);
+      }
+
+      // Scroll to load lazy comment section
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      await page.waitForTimeout(2000);
+
+      // Try shreddit (new new reddit) selectors
+      commentBox = page.locator(
+        'shreddit-composer textarea, ' +
+        'div[contenteditable="true"][role="textbox"], ' +
+        '[contenteditable="true"][data-lexical-editor], ' +
+        '[placeholder*="comment" i], ' +
+        'textarea[placeholder*="Add a comment" i]'
+      ).first();
+
+      // If still not visible, try clicking into the comment area to activate it
+      const hasNewBox = await commentBox.isVisible().catch(() => false);
+      if (!hasNewBox) {
+        // New reddit sometimes shows a collapsed "Add a comment" bar that needs clicking
+        const commentTrigger = page.locator(
+          '[placeholder*="Add a comment"], ' +
+          'div:has-text("Add a comment"), ' +
+          'shreddit-composer'
+        ).first();
+        if (await commentTrigger.isVisible().catch(() => false)) {
+          await commentTrigger.click();
+          await page.waitForTimeout(1500);
+        }
+
+        // Re-check for the input
+        commentBox = page.locator(
+          'shreddit-composer textarea, ' +
+          'div[contenteditable="true"][role="textbox"], ' +
+          '[contenteditable="true"][data-lexical-editor], ' +
+          'textarea'
+        ).first();
+
+        const lastTry = await commentBox.isVisible().catch(() => false);
+        if (!lastTry) {
+          const screenshotPath = path.join(__dirname, '..', '.debug-reddit-fail.png');
+          await page.screenshot({ path: screenshotPath, fullPage: true });
+          console.error(`[Reddit] No comment box found. Screenshot: .debug-reddit-fail.png`);
+          return false;
+        }
+      }
+    }
+
     await commentBox.click();
     await page.waitForTimeout(500);
-    await commentBox.fill(comment);
-    await page.waitForTimeout(1000);
 
-    // Click save/submit
-    const saveButton = page.locator('.commentarea button[type="submit"], .commentarea .save-button button').first();
+    // Use pressSequentially for old reddit textarea, but new reddit contenteditable may need different approach
+    const tagName = await commentBox.evaluate(el => el.tagName.toLowerCase()).catch(() => 'unknown');
+    if (tagName === 'textarea') {
+      await commentBox.pressSequentially(comment, { delay: 25 });
+    } else {
+      // contenteditable — type via keyboard
+      await page.keyboard.type(comment, { delay: 25 });
+    }
+    await page.waitForTimeout(1500);
+
+    // Click submit — handle both old and new reddit
+    const saveButton = page.locator(
+      '.commentarea button[type="submit"], ' +
+      '.commentarea .save-button button, ' +
+      'button:has-text("Comment"), ' +
+      'button[type="submit"][slot="submit-button"], ' +
+      'shreddit-composer button[type="submit"]'
+    ).first();
     await saveButton.click();
     await page.waitForTimeout(3000);
 
     // Check for errors
-    const errorEl = page.locator('.error, .status-msg.error').first();
+    const errorEl = page.locator('.error, .status-msg.error, [class*="error"]').first();
     const hasError = await errorEl.isVisible().catch(() => false);
     if (hasError) {
       const errorText = await errorEl.textContent().catch(() => 'unknown error');
@@ -285,10 +486,12 @@ export async function postRedditComment(
 /**
  * Pick the best post to comment on — prefer posts with moderate engagement.
  */
-function pickCommentTarget(posts: ScrapedRedditPost[]): ScrapedRedditPost | null {
-  // Filter out mega-threads and dead posts
+function pickCommentTarget(posts: ScrapedRedditPost[], subreddit?: string): ScrapedRedditPost | null {
+  // Selfie subs: low-comment posts are ideal — be one of the first to encourage
+  const minComments = subreddit && SELFIE_SUBS.has(subreddit) ? 0 : 2;
+
   const viable = posts.filter(p => {
-    return p.commentCount >= 2 && p.commentCount <= 200 && p.author !== '[deleted]';
+    return p.commentCount >= minComments && p.commentCount <= 200 && p.author !== '[deleted]';
   });
 
   if (viable.length === 0) return posts[0] || null;
@@ -353,7 +556,7 @@ export async function runRedditComments(
     }
 
     // Pick a target post
-    const target = pickCommentTarget(posts);
+    const target = pickCommentTarget(posts, subreddit);
     if (!target) {
       console.log(`  No viable comment targets in r/${subreddit}`);
       continue;
@@ -361,6 +564,48 @@ export async function runRedditComments(
 
     console.log(`  Target: "${target.title.substring(0, 60)}..." (${target.commentCount} comments)`);
     attempted++;
+
+    // Fetch full post body + screenshot for image posts
+    if (!target.body || target.body === '') {
+      try {
+        const postUrl = target.url.replace('www.reddit.com', 'old.reddit.com');
+        await page.goto(postUrl, { waitUntil: 'domcontentloaded', timeout: 12000 });
+        await page.waitForTimeout(2000);
+
+        // On the post page, the body is visible
+        const bodyEl = page.locator('.expando .usertext-body, [data-test-id="post-content"] p, .post-content p, .thing .usertext-body').first();
+        const fullBody = await bodyEl.textContent().catch(() => '') || '';
+        if (fullBody.trim()) {
+          target.body = fullBody.trim().substring(0, 1500);
+          console.log(`  Body: "${target.body.substring(0, 80)}..."`);
+        }
+
+        // Check for image post and screenshot it
+        const imageEl = page.locator('.expando img, .media-preview-content img, [data-test-id="post-content"] img, .thing .thumbnail[href]').first();
+        const hasImage = await imageEl.isVisible().catch(() => false);
+        if (hasImage || SELFIE_SUBS.has(subreddit)) {
+          target.isImagePost = true;
+          // Screenshot the post area for vision
+          const postArea = page.locator('.thing.link, [data-test-id="post-content"], .expando, .sitetable .thing').first();
+          try {
+            const screenshotBuffer = await postArea.screenshot({ timeout: 5000 });
+            target.imageBase64 = screenshotBuffer.toString('base64');
+            console.log(`  [vision] Screenshot captured for image post`);
+          } catch {
+            // Try full page screenshot as fallback
+            try {
+              const fullScreenshot = await page.screenshot({ clip: { x: 0, y: 0, width: 1280, height: 800 } });
+              target.imageBase64 = fullScreenshot.toString('base64');
+              console.log(`  [vision] Page screenshot captured`);
+            } catch {
+              // Proceed without image
+            }
+          }
+        }
+      } catch {
+        // Continue with title-only if body fetch fails
+      }
+    }
 
     // Generate comment
     const comment = await generateRedditComment(client, target, subreddit, state);
@@ -428,9 +673,13 @@ if (require.main === module) {
 
     try {
       context = await chromium.launchPersistentContext(config.profileDir, {
-        headless: true,
+        headless: false,
         viewport: { width: 1280, height: 800 },
-        args: ['--disable-blink-features=AutomationControlled'],
+        args: [
+          '--disable-blink-features=AutomationControlled',
+          '--window-position=-2400,-2400',
+        ],
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
       });
 
       const page = context.pages()[0] || await context.newPage();

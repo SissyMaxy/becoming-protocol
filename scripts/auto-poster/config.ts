@@ -45,6 +45,10 @@ export const PLATFORMS = {
     enabled: process.env.ENABLE_SNIFFIES === 'true',
     url: 'https://sniffies.com',
     profileDir: path.join(PROFILE_DIR, 'sniffies'),
+    geolocation: {
+      latitude: parseFloat(process.env.GEO_LAT || '43.0495'),
+      longitude: parseFloat(process.env.GEO_LON || '-88.0076'),
+    },
   },
 };
 

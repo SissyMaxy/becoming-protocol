@@ -26,7 +26,9 @@ import { runReplyCycle } from './reply-engine';
 import { runRedditComments } from './platforms/reddit-engage';
 import { runFetLifeEngagement } from './platforms/fetlife-engage';
 import { runSubscriberReplies } from './platforms/subscriber-engage';
+import { runSniffiesEngagement } from './platforms/sniffies-engage';
 import { checkBudget } from './engagement-budget';
+import { runDMOutreach } from './dm-outreach';
 import { supabase, PLATFORMS, POLL_INTERVAL_MS } from './config';
 
 const USER_ID = process.env.USER_ID || '';
@@ -59,20 +61,51 @@ async function loadState(): Promise<Record<string, unknown>> {
  * Launch a persistent browser context for a platform.
  * Returns null if platform is disabled.
  */
-async function launchPlatform(platform: keyof typeof PLATFORMS): Promise<BrowserContext | null> {
+// Platforms that need real Chrome instead of Playwright's Chromium (bot detection)
+const STEALTH_PLATFORMS = new Set(['onlyfans', 'sniffies']);
+
+async function launchPlatform(platform: keyof typeof PLATFORMS, retries = 2): Promise<BrowserContext | null> {
   const config = PLATFORMS[platform];
   if (!config.enabled) return null;
 
-  try {
-    return await chromium.launchPersistentContext(config.profileDir, {
-      headless: true,
-      viewport: { width: 1280, height: 800 },
-      args: ['--disable-blink-features=AutomationControlled'],
-    });
-  } catch (err) {
-    console.error(`[Scheduler] Failed to launch ${platform}:`, err instanceof Error ? err.message : err);
-    return null;
+  const useStealth = STEALTH_PLATFORMS.has(platform);
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const context = await chromium.launchPersistentContext(config.profileDir, {
+        ...(useStealth ? { channel: 'chrome' } : {}), // Real Chrome for stealth platforms
+        headless: false,
+        viewport: { width: 1280, height: 800 },
+        args: [
+          '--disable-blink-features=AutomationControlled',
+          '--window-position=-2400,-2400',
+        ],
+        ...(useStealth ? {
+          ignoreDefaultArgs: ['--enable-automation'],
+        } : {}),
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      });
+
+      // Hide webdriver for stealth platforms
+      if (useStealth) {
+        const page = context.pages()[0] || await context.newPage();
+        await page.addInitScript(() => {
+          Object.defineProperty(navigator, 'webdriver', { get: () => false });
+        });
+      }
+
+      return context;
+    } catch (err) {
+      if (attempt < retries) {
+        console.log(`[Scheduler] ${platform} launch failed, retrying in 3s (attempt ${attempt + 1}/${retries})...`);
+        await new Promise(r => setTimeout(r, 3000));
+      } else {
+        console.error(`[Scheduler] Failed to launch ${platform} after ${retries + 1} attempts:`, err instanceof Error ? err.message : err);
+        return null;
+      }
+    }
   }
+  return null;
 }
 
 async function tick() {
@@ -172,7 +205,38 @@ async function tick() {
       }
     }
 
-    // --- Every 2nd tick: DMs ---
+    // --- Every 2nd tick: Sniffies chats (5) ---
+    if (tickCount % 2 === 0 && PLATFORMS.sniffies.enabled) {
+      const hasBudget = await checkBudget(supabase, USER_ID, 'sniffies', 'chat');
+      if (hasBudget) {
+        const sniffiesCtx = await launchPlatform('sniffies');
+        if (sniffiesCtx) {
+          contexts.push(sniffiesCtx);
+          const sniffiesPage = sniffiesCtx.pages()[0] || await sniffiesCtx.newPage();
+          const sniffResult = await runSniffiesEngagement(sniffiesPage, supabase, anthropic, USER_ID, state, 5);
+          if (sniffResult.posted > 0) {
+            console.log(`[${timestamp}] Sniffies chats: ${sniffResult.posted} sent`);
+          }
+        }
+      } else {
+        console.log(`[${timestamp}] Sniffies chat budget exhausted`);
+      }
+    }
+
+    // --- Every 2nd tick: DM Outreach (cold DMs to hot targets) ---
+    if (tickCount % 2 === 0 && PLATFORMS.twitter.enabled) {
+      const hasBudget = await checkBudget(supabase, USER_ID, 'twitter', 'dm');
+      if (hasBudget) {
+        const outreachResult = await runDMOutreach(3);
+        if (outreachResult.sent > 0) {
+          console.log(`[${timestamp}] DM outreach: ${outreachResult.sent} sent`);
+        }
+      } else {
+        console.log(`[${timestamp}] DM outreach budget exhausted`);
+      }
+    }
+
+    // --- Every 2nd tick: DMs (read + reply) ---
     if (tickCount % 2 === 0) {
       const dmResult = await readAllDMs();
       if (dmResult.stored > 0) {

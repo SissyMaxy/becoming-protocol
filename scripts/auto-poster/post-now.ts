@@ -8,6 +8,7 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import Anthropic from '@anthropic-ai/sdk';
+import { extractSafeText } from './refusal-filter';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
@@ -67,7 +68,7 @@ async function main() {
     }],
   });
 
-  const tweetText = response.content[0].type === 'text' ? response.content[0].text.trim() : '';
+  const tweetText = extractSafeText(response, 10, 'post-now');
 
   if (!tweetText) {
     console.error('Failed to generate content');

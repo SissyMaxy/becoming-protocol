@@ -9,12 +9,12 @@ import { supabase } from './config';
 const MAXY_TWEETS = [
   {
     content: "the handler scheduled a session tonight without asking me. found out from my own calendar. this is what I get for giving an AI access to my google calendar",
-    content_type: 'personality',
+    content_type: 'tweet',
     strategy: 'personality_handler',
   },
   {
     content: "day 1 of denial and I already know I'm going to regret every decision I make by day 7. the handler knows too. it's already planning what to ask me when my defenses are down",
-    content_type: 'vulnerability',
+    content_type: 'tweet',
     strategy: 'vulnerability_denial',
   },
 ];

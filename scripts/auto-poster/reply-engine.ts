@@ -1,13 +1,13 @@
 /**
- * Reply Engine — contextual replies to engagement targets.
+ * Reply Engine — real-time search and reply.
  *
- * Flow:
- *   1. Pick targets from engagement_targets (rotate through them)
- *   2. Visit each target's Twitter profile via Playwright
- *   3. Grab their most recent tweet
- *   4. Generate a contextual reply in Maxy's voice
- *   5. Post the reply
- *   6. Log the interaction
+ * Each cycle:
+ *   1. Pick random search queries from Maxy's niche topics
+ *   2. Search Twitter for fresh tweets matching those queries
+ *   3. Reply to the best ones directly
+ *   4. Log replied tweet URLs to avoid dupes
+ *
+ * No stored target pool. Fresh tweets every time.
  *
  * Run: npx tsx reply-engine.ts
  * Scheduled: called by scheduler.ts on reply ticks
@@ -17,113 +17,369 @@ import 'dotenv/config';
 import { chromium, type BrowserContext, type Page } from 'playwright';
 import Anthropic from '@anthropic-ai/sdk';
 import { supabase, PLATFORMS } from './config';
+import { extractSafeText } from './refusal-filter';
+import { fullSlopCheck, patternSlopCheck } from './slop-detector';
 
 const USER_ID = process.env.USER_ID || '';
+const OWN_HANDLE = process.env.TWITTER_HANDLE || 'softmaxy';
+const MAX_SLOP_RETRIES = 2; // max regeneration attempts per reply
 
-const MAXY_REPLY_PROMPT = `You are Maxy (@softmaxy) — a 40-year-old woman in transformation. You're replying to someone's tweet. Your reply must:
+// ── Search queries for finding replyable tweets ──────────────────────
+
+interface ReplySearchQuery {
+  query: string;
+  nsfw: boolean;
+  label: string;
+}
+
+const REPLY_SEARCHES: ReplySearchQuery[] = [
+  // Kink/sissy/fem — NSFW voice
+  { nsfw: true, label: 'sissy content', query: '"sissy" (hypno OR caption OR training OR journey OR dress)' },
+  { nsfw: true, label: 'feminization', query: '"feminize" OR "feminization" OR "forced fem"' },
+  { nsfw: true, label: 'chastity', query: '"chastity" (cage OR locked OR keyholder OR denial)' },
+  { nsfw: true, label: 'good girl kink', query: '"good girl" (sissy OR femboy OR bimbo OR cage)' },
+  { nsfw: true, label: 'denial', query: '"orgasm denial" OR "edging" OR "days locked"' },
+  { nsfw: true, label: 'femboy', query: '"femboy" (cute OR outfit OR first time OR help)' },
+
+  // Trans community — SFW voice
+  { nsfw: false, label: 'HRT journey', query: '"started HRT" OR "months on HRT" OR "HRT update"' },
+  { nsfw: false, label: 'voice training', query: '"voice training" (trans OR mtf OR progress)' },
+  { nsfw: false, label: 'trans selfie', query: '"trans girl" selfie OR "mtf selfie" OR "transition selfie"' },
+  { nsfw: false, label: 'coming out', query: '"came out as trans" OR "egg cracked" OR "finally came out"' },
+  { nsfw: false, label: 'trans timeline', query: '"transition timeline" OR "mtf timeline" OR "HRT timeline"' },
+  { nsfw: false, label: 'trans life', query: '"trans woman" (life OR journey OR experience OR day)' },
+];
+
+// ── Prompts ──────────────────────────────────────────────────────────
+
+const NSFW_MAXY_REPLY_PROMPT = `You are Maxy (@softmaxy) — a 40-year-old trans woman on HRT. Flirty, teasing, playful. Early in her transition. Does voice training. Into chastity, denial, feminization. A little dominant, a little vulnerable.
+
+You're replying to someone's tweet about sissy/feminization/chastity/kink content. Be real, be flirty, be yourself.
+
+Your reply must:
+1. RESPOND TO WHAT THEY ACTUALLY SAID. Reference their specific words.
+2. Be 1-2 sentences max. Lowercase, casual.
+3. MATCH THE ENERGY of the original tweet. Short tweet = short reply.
+4. Share from your own experience — denial, feminization, transition, kink life.
+5. VARY your language. Every reply should feel different from the last.
+
+BANNED PHRASES — these are overused crutches. Using them = failure:
+- "hits different" (NEVER use this phrase)
+- "the way [thing]..." as a sentence opener
+- "energy" as a descriptor ("desperate energy", "that energy", etc.)
+- "ngl" / "not gonna lie"
+- "honestly" as a sentence starter
+- "*chef's kiss*"
+- "i respect it/that"
+- "hits" in any form ("that hits", "this hits")
+
+ALSO NEVER: Use hashtags. Sound like a bot. Be generic. Break character. Pitch anything. Mention "the handler" or any AI system. Comment on "confidence." Mention seeing/not seeing images.
+
+If the tweet is about crime, violence, hard news, sports, or something completely unrelated — output ONLY the word "SKIP".
+
+Examples of GOOD replies (notice: no repeated phrases):
+- To a sissy post: "oh honey you're already halfway there and you don't even know it yet"
+- To a "good girl" post: "careful posting like that where anyone can see 😈"
+- To a chastity post: "day 12 and nobody warned me about the work meetings"
+- To a denial post: "two weeks in and my brain completely rewired itself. i went from hating it to... not wanting it to stop"
+- To a femboy photo: "that outfit is doing exactly what you wanted it to do 🖤"
+- To a transition post: "four months in and i still can't believe my skin is this soft. like who am i"
+- To an edging post: "the anticipation is worse than the actual denial and somehow that makes it better"`;
+
+
+const MAXY_REPLY_PROMPT = `You are Maxy (@softmaxy) — a 40-year-old trans woman early in her transition. On HRT, doing voice training. Playful, vulnerable, genuine, a little self-deprecating.
+
+You're replying to someone's tweet. Your reply must:
 
 1. RESPOND TO WHAT THEY ACTUALLY SAID. Reference specific words or ideas from their tweet.
-2. Add something from YOUR experience — the Handler, denial, the cage, voice training, HRT curiosity, the system controlling you.
-3. Sound like a real person replying, not a brand. Lowercase, casual, maybe a trailing "..."
-4. Be 1-2 sentences max. Tweets, not essays.
+2. Add something from YOUR experience — voice training, HRT, transition, daily routines, personal growth.
+3. Sound like a real person replying, not a brand. Lowercase, casual.
+4. MATCH THE ENERGY of the original tweet. One sentence = one sentence back. Don't over-explain.
 5. Never be generic. "great post!" or "so true!" = failure.
-6. Show personality — flirty, vulnerable, or darkly funny depending on the tweet.
+6. VARY your language. If you've said "lmao" in three replies, try something else. Every reply should feel unique.
 
-NEVER: Use hashtags in replies. Say "as someone who..." Sound like a PR account. Use "I think it's important to..."
+BANNED PHRASES — these are overused crutches. Using them = failure:
+- "hits different" (NEVER use this phrase)
+- "the way [thing]..." as a sentence opener
+- "energy" as a descriptor ("desperate energy", "that energy", etc.)
+- "ngl" / "not gonna lie"
+- "honestly" as a sentence starter
+- "*chef's kiss*"
+- "i respect it/that"
+- "hits" in any form
 
-Examples of GOOD replies:
-- To a chastity post: "day 12 and I felt this in my soul. the handler won't even tell me when it ends"
-- To a transition post: "the voice practice is the part nobody warns you about. six months in and I still forget on work calls"
-- To a denial post: "this is violence. I'm on day 7 and you're posting this. my handler is going to use this against me"
-- To a skincare post: "my skin has never been this good and I think it's partly the hormones and partly the constant crying lol"`;
+ALSO NEVER: Use hashtags. Say "as someone who..." Sound like a PR account. Mention "the handler" or any AI system. Comment on "confidence." Mention seeing/not seeing images. Break character.
 
-interface ScrapedTweet {
+If the tweet is about crime, violence, hard news, sports scores, or something completely unrelated — output ONLY the word "SKIP".
+
+Examples of GOOD replies (notice: all different, no repeated patterns):
+- To "wait im a milf": "the realization is the best part tbh"
+- To a transition post: "voice practice is the part nobody warns you about. six months in and i still crack on zoom calls"
+- To a skincare post: "partly the hormones and partly the constant crying lol"
+- To a selfie: "ok you didn't have to go that hard"
+- To a coming out post: "god the relief when you finally say it out loud"
+- To a voice training post: "three months in and my discord friends think i have a cold. i do not have a cold"
+- To an HRT post: "the skin changes alone made me cry in a walgreens parking lot so yeah. it's real"`;
+
+// ── Types ────────────────────────────────────────────────────────────
+
+interface SearchResultTweet {
   text: string;
   url: string;
   username: string;
+  imageBase64?: string;
+  hasMedia?: boolean;
 }
 
-/**
- * Visit a Twitter profile and grab their most recent tweet.
- */
-async function scrapeLatestTweet(
+// ── Spam/quality filters ─────────────────────────────────────────────
+
+function isSpamOrAd(text: string): boolean {
+  const SPAM_PATTERNS = [
+    /\b(use code|discount|coupon|promo code|sale ends|limited time|order now|shop now|buy now)\b/i,
+    /\b(link in bio|check out my|subscribe to my|join my|sign up)\b/i,
+    /\b(NEW SITE|launching|just dropped|now available|pre-?order)\b/i,
+    /\b(affiliate|referral|earn \$|make money|passive income|side hustle)\b/i,
+    /\b(giveaway|rt to win|follow.{0,15}win|retweet.{0,15}chance)\b/i,
+    /\b(crypto|bitcoin|ethereum|nft|web3|airdrop|token launch|defi)\b/i,
+    /\b(follow.{0,10}back|f4f|follow train|gain with me)\b/i,
+    /\b(linktree|linktr\.ee|allmylinks|beacons\.ai)\b/i,
+  ];
+
+  for (const pattern of SPAM_PATTERNS) {
+    if (pattern.test(text)) return true;
+  }
+
+  const urlCount = (text.match(/https?:\/\//g) || []).length;
+  if (urlCount >= 2) return true;
+
+  const hashtagCount = (text.match(/#\w/g) || []).length;
+  const words = text.split(/\s+/).length;
+  if (hashtagCount > 3 && hashtagCount / words > 0.4) return true;
+
+  return false;
+}
+
+// ── Dedup ────────────────────────────────────────────────────────────
+
+/** Loads replied tweet URLs AND usernames replied to in the last 7 days */
+async function getReplyHistory(): Promise<{ urls: Set<string>; recentUsers: Set<string> }> {
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data } = await supabase
+    .from('ai_generated_content')
+    .select('generation_prompt, target_account, posted_at')
+    .eq('user_id', USER_ID)
+    .eq('content_type', 'reply')
+    .eq('platform', 'twitter')
+    .eq('status', 'posted')
+    .order('posted_at', { ascending: false })
+    .limit(500);
+
+  const urls = new Set<string>();
+  const recentUsers = new Set<string>();
+
+  for (const row of data || []) {
+    if (row.generation_prompt) urls.add(row.generation_prompt);
+    // Only track users from the last 7 days
+    if (row.target_account && row.posted_at && row.posted_at >= weekAgo) {
+      recentUsers.add(row.target_account.toLowerCase());
+    }
+  }
+  return { urls, recentUsers };
+}
+
+// ── Search Twitter and extract replyable tweets ──────────────────────
+
+async function searchForTweets(
   page: Page,
-  username: string,
-): Promise<ScrapedTweet | null> {
+  searchQuery: ReplySearchQuery,
+  repliedUrls: Set<string>,
+  recentUsers: Set<string>,
+  maxResults: number = 8,
+): Promise<SearchResultTweet[]> {
+  const results: SearchResultTweet[] = [];
+
   try {
-    await page.goto(`https://x.com/${username}`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    const encoded = encodeURIComponent(searchQuery.query);
+    await page.goto(`https://x.com/search?q=${encoded}&src=typed_query&f=live`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 15000,
+    });
     await page.waitForTimeout(3000);
 
-    // Check if account exists
-    const notFound = await page.locator('span:has-text("This account doesn"), span:has-text("Account suspended")').count();
-    if (notFound > 0) return null;
-
-    // Get the first tweet that isn't a retweet or pinned
     const tweets = await page.locator('[data-testid="tweet"]').all();
 
-    for (const tweet of tweets.slice(0, 5)) {
-      // Skip retweets
-      const isRetweet = await tweet.locator('span:has-text("Retweeted"), span:has-text("reposted")').count();
-      if (isRetweet > 0) continue;
+    for (const tweet of tweets.slice(0, 20)) {
+      if (results.length >= maxResults) break;
 
-      // Get tweet text
-      const tweetTextEl = tweet.locator('[data-testid="tweetText"]').first();
-      const tweetText = await tweetTextEl.textContent().catch(() => '');
+      try {
+        // Get username
+        const userLinks = await tweet.locator('a[role="link"][href^="/"]').all();
+        let username = '';
+        for (const link of userLinks) {
+          const href = await link.getAttribute('href').catch(() => '') || '';
+          if (href && !href.includes('/status/') && !href.includes('/search') && href !== '/') {
+            username = href.replace(/^\//, '').split('/')[0];
+            break;
+          }
+        }
+        if (!username) continue;
+        // Skip own account — check various forms (softmaxy, Soft_Maxy, soft_maxy, etc.)
+        const uLower = username.toLowerCase().replace(/_/g, '');
+        const ownLower = OWN_HANDLE.toLowerCase().replace(/_/g, '');
+        if (uLower === ownLower || username.toLowerCase() === OWN_HANDLE.toLowerCase()) continue;
 
-      if (!tweetText || tweetText.trim().length < 10) continue;
+        // Skip users we've already replied to this week
+        if (recentUsers.has(username.toLowerCase())) continue;
 
-      // Get tweet URL
-      const timeEl = tweet.locator('time').first();
-      const linkEl = timeEl.locator('xpath=ancestor::a').first();
-      const href = await linkEl.getAttribute('href').catch(() => '');
-      const tweetUrl = href ? `https://x.com${href}` : '';
+        // Get tweet text
+        const tweetTextEl = tweet.locator('[data-testid="tweetText"]').first();
+        const tweetText = await tweetTextEl.textContent().catch(() => '') || '';
+        if (!tweetText || tweetText.trim().length < 5) continue;
 
-      return {
-        text: tweetText.trim(),
-        url: tweetUrl,
-        username,
-      };
+        // Skip spam
+        if (isSpamOrAd(tweetText)) continue;
+
+        // Get tweet URL
+        const timeEl = tweet.locator('time').first();
+        const linkEl = timeEl.locator('xpath=ancestor::a').first();
+        const href = await linkEl.getAttribute('href').catch(() => '');
+        const tweetUrl = href ? `https://x.com${href}` : '';
+
+        // Skip already replied
+        if (tweetUrl && repliedUrls.has(tweetUrl)) continue;
+
+        // Check for media
+        const hasMedia = await tweet.locator('[data-testid="tweetPhoto"], [data-testid="videoPlayer"], img[src*="pbs.twimg.com/media"]').count() > 0;
+
+        // Screenshot tweet for vision
+        let imageBase64: string | undefined;
+        try {
+          const buf = await tweet.screenshot({ timeout: 5000 });
+          imageBase64 = buf.toString('base64');
+        } catch {
+          // Proceed without screenshot
+        }
+
+        results.push({
+          text: tweetText.trim(),
+          url: tweetUrl,
+          username,
+          imageBase64,
+          hasMedia,
+        });
+      } catch {
+        continue;
+      }
     }
-
-    return null;
   } catch (err) {
-    console.error(`[Reply] Failed to scrape @${username}:`, err instanceof Error ? err.message : err);
-    return null;
+    console.error(`[Reply] Search failed for "${searchQuery.label}":`, err instanceof Error ? err.message : err);
   }
+
+  return results;
 }
 
-/**
- * Generate a contextual reply to a tweet.
- */
+// ── Recent reply history for repetition detection ───────────────────
+
+async function getRecentReplyTexts(limit: number = 30): Promise<string[]> {
+  const { data } = await supabase
+    .from('ai_generated_content')
+    .select('content')
+    .eq('user_id', USER_ID)
+    .eq('content_type', 'reply')
+    .eq('platform', 'twitter')
+    .eq('status', 'posted')
+    .order('posted_at', { ascending: false })
+    .limit(limit);
+
+  return (data || []).map(r => r.content).filter(Boolean);
+}
+
+// ── Generate reply with self-evaluation ─────────────────────────────
+
 async function generateReply(
   anthropic: Anthropic,
-  targetTweet: ScrapedTweet,
+  tweet: SearchResultTweet,
+  nsfw: boolean,
+  recentReplies: string[],
 ): Promise<string | null> {
-  try {
-    const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 150,
-      system: MAXY_REPLY_PROMPT,
-      messages: [{
-        role: 'user',
-        content: `@${targetTweet.username} tweeted: "${targetTweet.text}"\n\nWrite Maxy's reply. Output ONLY the reply text.`,
-      }],
-    });
+  let retryFeedback = '';
 
-    const text = response.content[0].type === 'text' ? response.content[0].text.trim() : '';
-    if (!text || text.length < 5) return null;
+  for (let attempt = 0; attempt <= MAX_SLOP_RETRIES; attempt++) {
+    try {
+      const contentBlocks: Array<any> = [];
 
-    // Strip any quotes the model might add
-    return text.replace(/^["']|["']$/g, '').trim();
-  } catch (err) {
-    console.error('[Reply] Generation failed:', err instanceof Error ? err.message : err);
-    return null;
+      if (tweet.imageBase64) {
+        contentBlocks.push({
+          type: 'image',
+          source: { type: 'base64', media_type: 'image/png', data: tweet.imageBase64 },
+        });
+      }
+
+      let textPrompt = tweet.hasMedia && tweet.imageBase64
+        ? `@${tweet.username} tweeted: "${tweet.text}"\n\nThe screenshot above shows the full tweet including any images. Reference what you SEE — the outfit, the look, the vibe, specific visual details. If the image is unclear, just respond to the text naturally. NEVER mention that you can or cannot see an image.\n\nWrite Maxy's reply. Output ONLY the reply text, nothing else.`
+        : `@${tweet.username} tweeted: "${tweet.text}"\n\nWrite Maxy's reply. Output ONLY the reply text, nothing else.`;
+
+      // On retry, inject feedback about why the last attempt was rejected
+      if (retryFeedback) {
+        textPrompt += `\n\n⚠️ SELF-EVAL FEEDBACK (attempt ${attempt + 1}): ${retryFeedback}`;
+      }
+
+      contentBlocks.push({ type: 'text', text: textPrompt });
+
+      const response = await anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 200,
+        system: nsfw ? NSFW_MAXY_REPLY_PROMPT : MAXY_REPLY_PROMPT,
+        messages: [{ role: 'user', content: contentBlocks }],
+      });
+
+      const text = extractSafeText(response, 3, `Twitter reply @${tweet.username}`);
+      if (!text) return null;
+
+      if (text.trim().toUpperCase() === 'SKIP') {
+        console.log(`  ⊘ Model skipped (off-topic tweet)`);
+        return null;
+      }
+
+      if (text.length > 280) {
+        console.error(`[Reply] Too long (${text.length} chars), skipping`);
+        return null;
+      }
+
+      // ── Self-evaluation ──
+      const slopResult = await fullSlopCheck(anthropic, tweet.text, text, recentReplies);
+
+      if (slopResult.pass) {
+        if (attempt > 0) {
+          console.log(`  ✓ Passed slop check on attempt ${attempt + 1} (score: ${slopResult.llmScore}/10)`);
+        } else {
+          console.log(`  ✓ Slop check passed (score: ${slopResult.llmScore}/10)`);
+        }
+        return text;
+      }
+
+      // Failed — log why and retry
+      const allReasons = [...slopResult.patternReasons, ...slopResult.repetitionReasons];
+      console.log(`  ✗ Slop check FAILED (attempt ${attempt + 1}/${MAX_SLOP_RETRIES + 1}): ${allReasons.join(', ')} | LLM: ${slopResult.llmScore}/10 — ${slopResult.llmReason}`);
+
+      if (attempt < MAX_SLOP_RETRIES) {
+        retryFeedback = slopResult.retryFeedback;
+        // Add the failed reply to recent so the next attempt avoids it
+        recentReplies = [text, ...recentReplies];
+      }
+    } catch (err) {
+      console.error('[Reply] Generation failed:', err instanceof Error ? err.message : err);
+      return null;
+    }
   }
+
+  console.log(`  ⊘ All ${MAX_SLOP_RETRIES + 1} attempts failed slop check, skipping tweet`);
+  return null;
 }
 
-/**
- * Post a reply to a tweet via Playwright.
- */
+// ── Post reply ───────────────────────────────────────────────────────
+
 async function postReply(
   page: Page,
   tweetUrl: string,
@@ -133,18 +389,15 @@ async function postReply(
     await page.goto(tweetUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.waitForTimeout(3000);
 
-    // Click the reply box
     const replyBox = page.locator('[data-testid="tweetTextarea_0"]').first();
     await replyBox.click({ timeout: 5000 });
     await page.waitForTimeout(500);
 
-    // Type the reply
-    await replyBox.fill(replyText);
+    await replyBox.pressSequentially(replyText, { delay: 30 });
     await page.waitForTimeout(1000);
 
-    // Click reply button
     const replyButton = page.locator('[data-testid="tweetButtonInline"]').first();
-    await replyButton.click();
+    await replyButton.click({ timeout: 10000 });
     await page.waitForTimeout(3000);
 
     return true;
@@ -154,10 +407,9 @@ async function postReply(
   }
 }
 
-/**
- * Run a reply cycle — pick targets, scrape tweets, generate and post replies.
- */
-export async function runReplyCycle(maxReplies: number = 5): Promise<{
+// ── Main cycle ───────────────────────────────────────────────────────
+
+export async function runReplyCycle(maxReplies: number = 4): Promise<{
   attempted: number;
   posted: number;
   failed: number;
@@ -173,20 +425,8 @@ export async function runReplyCycle(maxReplies: number = 5): Promise<{
     return { attempted: 0, posted: 0, failed: 0 };
   }
 
-  // Get targets, prioritize those not recently interacted with
-  const { data: targets } = await supabase
-    .from('engagement_targets')
-    .select('*')
-    .eq('user_id', USER_ID)
-    .eq('platform', 'twitter')
-    .order('last_interaction_at', { ascending: true, nullsFirst: true })
-    .limit(maxReplies * 2); // Fetch extra in case some fail
-
-  if (!targets || targets.length === 0) {
-    console.log('[Reply] No targets. Run: npx tsx seed-targets.ts');
-    return { attempted: 0, posted: 0, failed: 0 };
-  }
-
+  const { urls: repliedUrls, recentUsers } = await getReplyHistory();
+  const recentReplyTexts = await getRecentReplyTexts(30);
   const anthropic = new Anthropic();
   let context: BrowserContext | null = null;
   let attempted = 0;
@@ -195,72 +435,76 @@ export async function runReplyCycle(maxReplies: number = 5): Promise<{
 
   try {
     context = await chromium.launchPersistentContext(config.profileDir, {
-      headless: true,
+      headless: false,
       viewport: { width: 1280, height: 800 },
-      args: ['--disable-blink-features=AutomationControlled'],
+      args: [
+        '--disable-blink-features=AutomationControlled',
+        '--window-position=-2400,-2400',
+      ],
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     });
 
     const page = context.pages()[0] || await context.newPage();
 
-    for (const target of targets) {
+    // Pick 3 random search queries this cycle
+    const shuffled = [...REPLY_SEARCHES].sort(() => Math.random() - 0.5);
+    const queries = shuffled.slice(0, 3);
+
+    for (const sq of queries) {
       if (posted >= maxReplies) break;
 
-      console.log(`[Reply] Visiting @${target.target_handle}...`);
-      attempted++;
+      console.log(`[Reply] Searching: "${sq.label}"...`);
 
-      // 1. Scrape latest tweet
-      const tweet = await scrapeLatestTweet(page, target.target_handle);
-      if (!tweet) {
-        console.log(`  ⊘ No tweet found for @${target.target_handle}`);
-        continue;
-      }
+      const tweets = await searchForTweets(page, sq, repliedUrls, recentUsers, 5);
+      console.log(`  Found ${tweets.length} replyable tweets`);
 
-      console.log(`  Tweet: "${tweet.text.substring(0, 60)}..."`);
+      for (const tweet of tweets) {
+        if (posted >= maxReplies) break;
 
-      // 2. Generate reply
-      const reply = await generateReply(anthropic, tweet);
-      if (!reply) {
-        console.log(`  ⊘ Reply generation failed`);
-        failed++;
-        continue;
-      }
+        console.log(`  @${tweet.username}: "${tweet.text.substring(0, 60)}..."`);
+        attempted++;
 
-      console.log(`  Reply: "${reply}"`);
-
-      // 3. Post reply
-      if (tweet.url) {
-        const success = await postReply(page, tweet.url, reply);
-        if (success) {
-          console.log(`  ✓ Posted reply to @${target.target_handle}`);
-          posted++;
-
-          // 4. Log interaction
-          await supabase.from('engagement_targets').update({
-            last_interaction_at: new Date().toISOString(),
-            interactions_count: (target.interactions_count || 0) + 1,
-          }).eq('id', target.id);
-
-          // Also log as ai_generated_content for tracking
-          await supabase.from('ai_generated_content').insert({
-            user_id: USER_ID,
-            content_type: 'reply',
-            platform: 'twitter',
-            content: reply,
-            generation_strategy: 'contextual_reply',
-            target_account: target.target_handle,
-            status: 'posted',
-            posted_at: new Date().toISOString(),
-          });
-        } else {
-          console.log(`  ✗ Failed to post`);
+        const reply = await generateReply(anthropic, tweet, sq.nsfw, recentReplyTexts);
+        if (!reply) {
           failed++;
+          continue;
         }
-      }
 
-      // Rate limit — 30-60 seconds between replies
-      const delay = 30000 + Math.floor(Math.random() * 30000);
-      console.log(`  Waiting ${Math.round(delay / 1000)}s...`);
-      await new Promise(r => setTimeout(r, delay));
+        console.log(`  Reply: "${reply}"`);
+
+        if (tweet.url) {
+          const success = await postReply(page, tweet.url, reply);
+          if (success) {
+            console.log(`  ✓ Posted reply to @${tweet.username}`);
+            posted++;
+            repliedUrls.add(tweet.url);
+            recentUsers.add(tweet.username.toLowerCase());
+            recentReplyTexts.unshift(reply); // feed back into repetition checker
+
+            // Log for dedup
+            await supabase.from('ai_generated_content').insert({
+              user_id: USER_ID,
+              content_type: 'reply',
+              platform: 'twitter',
+              content: reply,
+              generation_strategy: `search_reply:${sq.label}`,
+              generation_prompt: tweet.url,
+              target_account: tweet.username,
+              status: 'posted',
+              posted_at: new Date().toISOString(),
+            });
+          } else {
+            console.log(`  ✗ Failed to post`);
+            failed++;
+            repliedUrls.add(tweet.url);
+          }
+        }
+
+        // Rate limit — 30-60 seconds between replies
+        const delay = 30000 + Math.floor(Math.random() * 30000);
+        console.log(`  Waiting ${Math.round(delay / 1000)}s...`);
+        await new Promise(r => setTimeout(r, delay));
+      }
     }
   } catch (err) {
     console.error('[Reply] Fatal:', err);
@@ -273,7 +517,7 @@ export async function runReplyCycle(maxReplies: number = 5): Promise<{
 
 // Direct invocation
 if (require.main === module) {
-  const maxReplies = parseInt(process.argv[2] || '5', 10);
+  const maxReplies = parseInt(process.argv[2] || '4', 10);
   console.log(`[Reply Engine] Starting cycle (max ${maxReplies} replies)...\n`);
 
   runReplyCycle(maxReplies).then(result => {

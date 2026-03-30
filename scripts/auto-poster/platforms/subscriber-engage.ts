@@ -12,6 +12,7 @@ import { chromium, type BrowserContext, type Page } from 'playwright';
 import Anthropic from '@anthropic-ai/sdk';
 import { supabase, PLATFORMS } from '../config';
 import { checkBudget, incrementBudget } from '../engagement-budget';
+import { extractSafeText } from '../refusal-filter';
 
 const USER_ID = process.env.USER_ID || '';
 
@@ -39,8 +40,19 @@ export async function scrapeSubscriberComments(
       await page.goto('https://fansly.com/softmaxy', { waitUntil: 'domcontentloaded', timeout: 15000 });
       await page.waitForTimeout(4000);
 
+      // Auth check
+      const fanslyLogin = await page.locator('button:has-text("Log In"), a:has-text("Log In"), a:has-text("Sign Up")').count();
+      if (fanslyLogin > 0) {
+        console.error('[Subscriber/Fansly] Not logged in — session expired');
+        return [];
+      }
+
+      const fanslyUrl = page.url();
+      console.log(`  [debug] Fansly page: ${fanslyUrl}`);
+
       // Find posts with comments
       const postElements = await page.locator('[class*="post"], [class*="feed-item"], article').all();
+      console.log(`  [debug] Fansly posts found: ${postElements.length}`);
 
       for (const postEl of postElements.slice(0, 5)) {
         try {
@@ -83,27 +95,50 @@ export async function scrapeSubscriberComments(
       await page.goto('https://onlyfans.com/softmaxy', { waitUntil: 'domcontentloaded', timeout: 15000 });
       await page.waitForTimeout(4000);
 
+      // Auth check
+      const ofLogin = await page.locator('a[href="/"], button:has-text("Log in"), [class*="login"]').count();
+      const ofUrl = page.url();
+      if (ofUrl.includes('/login') || ofUrl.includes('/auth')) {
+        console.error('[Subscriber/OnlyFans] Not logged in — session expired');
+        return [];
+      }
+      console.log(`  [debug] OnlyFans page: ${ofUrl}`);
+
       // Find posts with comments
       const postElements = await page.locator('[class*="post"], article, [class*="feed"]').all();
+      console.log(`  [debug] OnlyFans posts found: ${postElements.length}`);
 
       for (const postEl of postElements.slice(0, 5)) {
         try {
-          // Expand comments
-          const commentToggle = postEl.locator('button:has-text("comment"), [class*="comment"]').first();
-          try {
-            await commentToggle.click({ timeout: 2000 });
-            await page.waitForTimeout(1500);
-          } catch {
-            // Already visible
-          }
-
-          // Get post URL
+          // Get post URL first for logging
           const postLink = postEl.locator('a[href*="/post/"], a[href*="/"]').first();
           const postHref = await postLink.getAttribute('href').catch(() => '') || '';
           const postUrl = postHref.startsWith('http') ? postHref : `https://onlyfans.com${postHref}`;
 
-          // Scrape comments
-          const commentEls = await postEl.locator('[class*="comment-item"], [class*="comment"]').all();
+          // Try to expand comments — look for a "View N comments" or comment count button
+          const commentToggle = postEl.locator(
+            'button:has-text("comment"), ' +
+            'button:has-text("View"), ' +
+            '[class*="comment-count"], ' +
+            '[class*="comments-count"]'
+          ).first();
+          try {
+            await commentToggle.click({ timeout: 2000 });
+            await page.waitForTimeout(1500);
+          } catch {
+            // Already visible or no toggle
+          }
+
+          // Scrape comments — try multiple selector patterns
+          const commentEls = await postEl.locator(
+            '[class*="comment-item"], ' +
+            '[class*="b-comments__item"], ' +
+            '[class*="comment__text"], ' +
+            'div[class*="comment"]:not(button):not([class*="count"]):not([class*="toggle"])'
+          ).all();
+          if (commentEls.length > 0) {
+            console.log(`  [debug] OF post ${postUrl}: ${commentEls.length} comment elements`);
+          }
 
           for (const commentEl of commentEls.slice(0, 5)) {
             const username = await commentEl.locator('[class*="username"], [class*="name"]').first().textContent().catch(() => '') || '';
@@ -164,10 +199,7 @@ ${state.hrtDay ? `HRT day: ${state.hrtDay}.` : ''}`,
       }],
     });
 
-    const text = response.content[0].type === 'text' ? response.content[0].text.trim() : '';
-    if (!text || text.length < 5) return null;
-
-    return text.replace(/^["']|["']$/g, '').trim();
+    return extractSafeText(response, 5, `Subscriber @${comment.username}`);
   } catch (err) {
     console.error('[Subscriber] Reply generation failed:', err instanceof Error ? err.message : err);
     return null;

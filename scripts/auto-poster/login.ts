@@ -21,7 +21,7 @@ async function loginToPlatform(name: string, config: { url: string; profileDir: 
   const context = await chromium.launchPersistentContext(config.profileDir, {
     headless: false,
     viewport: { width: 1280, height: 800 },
-    args: ['--disable-blink-features=AutomationControlled'],
+    args: ['--disable-blink-features=AutomationControlled', '--window-position=100,100', '--window-size=1280,800'],
   });
 
   const page = context.pages()[0] || await context.newPage();

@@ -95,7 +95,7 @@ async function main() {
     if (error) {
       console.error(`  ✗ ${target.username}: ${error.message}`);
     } else {
-      console.log(`  ✓ ${target.username} (${target.niche})`);
+      console.log(`  ✓ ${target.handle} (${target.type})`);
       inserted++;
     }
   }
