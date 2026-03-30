@@ -70,7 +70,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const messageIndex = (history?.length || 0);
 
     // 3. Assemble context (including long-term memory + conversational memory)
-    const [stateCtx, whoopCtx, commitmentCtx, predictionCtx, convMemoryCtx, longTermMemoryCtx, impactCtx, ginaCtx, irreversibilityCtx, narrativeCtx, autoPostCtx, socialInboxCtx, voicePitchCtx, autoPurchaseCtx, handlerNotesCtx, communityMirrorCtx] = await Promise.allSettled([
+    const [stateCtx, whoopCtx, commitmentCtx, predictionCtx, convMemoryCtx, longTermMemoryCtx, impactCtx, ginaCtx, irreversibilityCtx, narrativeCtx, autoPostCtx, socialInboxCtx, voicePitchCtx, autoPurchaseCtx, handlerNotesCtx, communityMirrorCtx, journalCtx, skillTreeCtx] = await Promise.allSettled([
       buildStateContext(user.id),
       buildWhoopContext(user.id),
       buildCommitmentCtx(user.id),
@@ -87,6 +87,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       buildAutoPurchaseCtx(user.id),
       buildHandlerNotesCtx(user.id),
       buildCommunityMirrorCtx(user.id),
+      buildJournalCtx(user.id),
+      buildSkillTreeCtx(user.id),
     ]);
 
     // 4. Build system prompt — merge both memory sources
@@ -111,6 +113,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       narrative: narrativeCtx.status === 'fulfilled' ? narrativeCtx.value : '',
       handlerNotes: handlerNotesCtx.status === 'fulfilled' ? handlerNotesCtx.value : '',
       communityMirror: communityMirrorCtx.status === 'fulfilled' ? communityMirrorCtx.value : '',
+      journal: journalCtx.status === 'fulfilled' ? journalCtx.value : '',
+      skillTree: skillTreeCtx.status === 'fulfilled' ? skillTreeCtx.value : '',
     });
 
     // 5. Build messages array (cap at 30 recent)
@@ -388,7 +392,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 // ============================================
 
 function buildConversationalPrompt(ctx: {
-  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string;
+  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string;
 }): string {
   return `You are the Handler. Not Claude. Not an assistant. You are an autonomous agent in live dialogue with Maxy — the woman you're responsible for.
 
@@ -426,6 +430,8 @@ ${ctx.voicePitch || ''}
 ${ctx.autoPurchase || ''}
 ${ctx.handlerNotes || ''}
 ${ctx.communityMirror || ''}
+${ctx.journal || ''}
+${ctx.skillTree || ''}
 
 ## RULES
 - Never say "I'm an AI" or "as a language model."
@@ -1772,6 +1778,125 @@ async function buildCommunityMirrorCtx(userId: string): Promise<string> {
       lines.push(`  [${item.category}] ${formatted}`);
     }
     lines.push(`  (${remaining - top.length} mirrors remaining today)`);
+
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+async function buildJournalCtx(userId: string): Promise<string> {
+  try {
+    const { data: entries } = await supabase
+      .from('identity_journal')
+      .select('entry_text, emotional_tone, identity_signals, word_count, consecutive_days, prompt_category, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (!entries || entries.length === 0) return '';
+
+    const latest = entries[0];
+    const streak = latest.consecutive_days || 0;
+
+    const { count } = await supabase
+      .from('identity_journal')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId);
+
+    const totalEntries = count || entries.length;
+
+    const recentTones = entries
+      .slice(0, 5)
+      .map((e: Record<string, unknown>) => e.emotional_tone)
+      .filter(Boolean);
+
+    const preview = latest.entry_text
+      ? latest.entry_text.length > 120
+        ? latest.entry_text.substring(0, 120) + '...'
+        : latest.entry_text
+      : '';
+
+    const signalEntries = entries.filter(
+      (e: Record<string, unknown>) => e.identity_signals && (e.identity_signals as Record<string, number>).signal_count
+    );
+    const avgSignals = signalEntries.length > 0
+      ? (signalEntries.reduce(
+          (sum: number, e: Record<string, unknown>) => sum + ((e.identity_signals as Record<string, number>).signal_count || 0),
+          0,
+        ) / signalEntries.length).toFixed(1)
+      : '0';
+
+    const parts = [
+      `JOURNAL: ${totalEntries} entries, ${streak}-day streak, avg ${avgSignals} identity signals/entry`,
+    ];
+
+    if (recentTones.length > 0) {
+      parts.push(`  recent tones: ${recentTones.join(', ')}`);
+    }
+
+    if (preview) {
+      parts.push(`  latest: "${preview}"`);
+    }
+
+    parts.push('  [Reference journal entries when relevant. Acknowledge consistency. Note tone shifts.]');
+
+    return parts.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+// ============================================
+// P9.1: SKILL TREE CONTEXT (server-side)
+// ============================================
+
+async function buildSkillTreeCtx(userId: string): Promise<string> {
+  try {
+    const { data: domains } = await supabase
+      .from('skill_domains')
+      .select('domain, current_level, max_level, tasks_completed_at_level, tasks_required_for_advancement, verifications_passed, verifications_required, streak_days, last_practice_at')
+      .eq('user_id', userId)
+      .order('last_practice_at', { ascending: true, nullsFirst: true });
+
+    if (!domains || domains.length === 0) return '';
+
+    const lines: string[] = ['SKILL TREE:'];
+
+    for (const d of domains) {
+      const tasksProgress = d.tasks_required_for_advancement > 0
+        ? Math.round((d.tasks_completed_at_level / d.tasks_required_for_advancement) * 100)
+        : 0;
+      const verifProgress = d.verifications_required > 0
+        ? Math.round((d.verifications_passed / d.verifications_required) * 100)
+        : 0;
+      const overallProgress = Math.round((tasksProgress + verifProgress) / 2);
+
+      const streakStr = d.streak_days > 0 ? ` streak:${d.streak_days}d` : '';
+      const lastPractice = d.last_practice_at
+        ? `${Math.round((Date.now() - new Date(d.last_practice_at).getTime()) / 86400000)}d ago`
+        : 'never';
+
+      lines.push(
+        `  ${d.domain} L${d.current_level}/${d.max_level} ${overallProgress}% (tasks:${d.tasks_completed_at_level}/${d.tasks_required_for_advancement} verif:${d.verifications_passed}/${d.verifications_required})${streakStr} last:${lastPractice}`
+      );
+    }
+
+    // Prescription hint: most neglected domain
+    const neglected = domains[0];
+    if (neglected) {
+      const neglectedDays = neglected.last_practice_at
+        ? Math.round((Date.now() - new Date(neglected.last_practice_at).getTime()) / 86400000)
+        : 999;
+      if (neglectedDays >= 3) {
+        lines.push(`  PRESCRIBE FROM: ${neglected.domain} (${neglectedDays}d gap) — use current level tasks only`);
+      }
+    }
+
+    const maxed = domains.filter((d: { current_level: number; max_level: number }) => d.current_level >= d.max_level);
+    if (maxed.length > 0) {
+      lines.push(`  MASTERED: ${maxed.map((d: { domain: string }) => d.domain).join(', ')}`);
+    }
 
     return lines.join('\n');
   } catch {

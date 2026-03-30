@@ -12,6 +12,8 @@
 import { supabase } from '../supabase';
 import { buildWhoopContext } from '../whoop-context';
 import { getHiddenParam } from './hidden-operations';
+import { getSkillDomains, getTasksForLevel } from '../skills/skill-tree-engine';
+import type { SkillDomain } from '../skills/skill-tree-engine';
 import type { FeminizationDomain } from '../../types/task-bank';
 
 // ============================================
@@ -108,8 +110,8 @@ export async function generateDailyPrescription(
   if (recoveryZone === 'RED') taskCount = 3;
   if (recoveryZone === 'GREEN' && state.denialDay >= 3) taskCount = 5;
 
-  // Query candidate tasks from task_bank
-  const candidates = await fetchCandidateTasks(userId, availableDomains, maxIntensity);
+  // Query candidate tasks — skill-tree-gated when available, fallback to flat pool
+  const candidates = await fetchSkillTreeGatedTasks(userId, availableDomains, maxIntensity);
 
   // Score and select tasks
   const scored = candidates.map(task => {
@@ -248,6 +250,77 @@ async function fetchRecentTaskIds(userId: string, days: number): Promise<string[
     .gte('assigned_date', since);
 
   return (data ?? []).map(r => r.task_id);
+}
+
+/**
+ * Fetch tasks gated by skill tree levels. Picks from domains with longest gap
+ * since last practice, respecting current level intensity caps.
+ * Falls back to flat pool if skill tree is empty.
+ */
+async function fetchSkillTreeGatedTasks(
+  _userId: string,
+  availableDomains: FeminizationDomain[],
+  maxIntensity: number
+): Promise<CandidateTask[]> {
+  try {
+    const skillDomains = await getSkillDomains(_userId);
+
+    if (skillDomains.length === 0) {
+      // Fallback to flat pool
+      return fetchCandidateTasks(_userId, availableDomains, maxIntensity);
+    }
+
+    // Sort by longest gap since last practice (most neglected first)
+    const sorted = [...skillDomains]
+      .filter(d => availableDomains.includes(d.domain as FeminizationDomain))
+      .sort((a, b) => {
+        const aTime = a.last_practice_at ? new Date(a.last_practice_at).getTime() : 0;
+        const bTime = b.last_practice_at ? new Date(b.last_practice_at).getTime() : 0;
+        return aTime - bTime;
+      });
+
+    // Fetch level-gated tasks from top 5 most neglected skill domains
+    const priorityDomains = sorted.slice(0, 5);
+    const allTasks: CandidateTask[] = [];
+
+    const taskPromises = priorityDomains.map(async (sd) => {
+      const levelTasks = await getTasksForLevel(_userId, sd.domain as SkillDomain);
+      return levelTasks
+        .filter(t => t.intensity <= maxIntensity)
+        .map(t => ({
+          id: t.id,
+          domain: t.domain,
+          instruction: t.instruction,
+          intensity: t.intensity,
+          duration_minutes: t.duration_minutes,
+          is_core: false, // level-gated tasks don't use is_core flag
+        }));
+    });
+
+    const results = await Promise.allSettled(taskPromises);
+    for (const r of results) {
+      if (r.status === 'fulfilled') {
+        allTasks.push(...r.value);
+      }
+    }
+
+    // If skill tree didn't yield enough, supplement with flat pool
+    if (allTasks.length < 20) {
+      const flatPool = await fetchCandidateTasks(_userId, availableDomains, maxIntensity);
+      // Add flat pool tasks that aren't already in skill tree results
+      const existingIds = new Set(allTasks.map(t => t.id));
+      for (const t of flatPool) {
+        if (!existingIds.has(t.id)) {
+          allTasks.push(t);
+        }
+      }
+    }
+
+    return allTasks;
+  } catch {
+    // Full fallback on any error
+    return fetchCandidateTasks(_userId, availableDomains, maxIntensity);
+  }
 }
 
 interface CandidateTask {

@@ -4,13 +4,16 @@
  * Replaces EveningBookend with a richer but still quick debrief.
  */
 
-import { useState } from 'react';
-import { Headphones, Moon, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Headphones, Moon, Loader2, BookOpen } from 'lucide-react';
 import { useBambiMode } from '../context/BambiModeContext';
 import { useAuth } from '../context/AuthContext';
 import { saveJournalEntry } from '../lib/dashboard-analytics';
 import { getTodayDate } from '../lib/protocol';
+import { getTodaysPrompt, processJournalEntry } from '../lib/journal';
+import { supabase } from '../lib/supabase';
 import type { DaySummary } from '../types/bookend';
+import type { JournalPromptResult } from '../lib/journal';
 
 const ALIGNMENT_EMOJIS = ['😔', '😐', '🙂', '😊', '😄'] as const;
 
@@ -36,6 +39,14 @@ export function EveningDebrief({
   const [alignment, setAlignment] = useState<number | null>(null);
   const [reflection, setReflection] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [journalPrompt, setJournalPrompt] = useState<JournalPromptResult | null>(null);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    getTodaysPrompt(user.id)
+      .then(setJournalPrompt)
+      .catch((err) => console.error('[EveningDebrief] prompt fetch failed:', err));
+  }, [user?.id]);
 
   const handleEndDay = async () => {
     if (!user?.id) {
@@ -45,9 +56,32 @@ export function EveningDebrief({
 
     setIsSaving(true);
     try {
-      // Save reflection if entered
+      // Save reflection to legacy daily_entries
       if (reflection.trim()) {
         await saveJournalEntry(user.id, getTodayDate(), { freeText: reflection.trim() });
+      }
+
+      // Save to identity_journal if there's a prompt and reflection
+      if (reflection.trim() && journalPrompt) {
+        const wordCount = reflection.trim().split(/\s+/).filter(Boolean).length;
+        const { data: entry, error: insertErr } = await supabase
+          .from('identity_journal')
+          .insert({
+            user_id: user.id,
+            prompt_category: journalPrompt.category,
+            prompt_text: journalPrompt.prompt,
+            entry_text: reflection.trim(),
+            word_count: wordCount,
+          })
+          .select('id')
+          .single();
+
+        if (!insertErr && entry?.id) {
+          // Fire-and-forget: process entry for signals + tone + streak
+          processJournalEntry(user.id, entry.id).catch((err) =>
+            console.error('[EveningDebrief] processJournalEntry failed:', err)
+          );
+        }
       }
     } catch (err) {
       console.error('[EveningDebrief] Save failed:', err);
@@ -132,7 +166,32 @@ export function EveningDebrief({
           </div>
         </div>
 
-        {/* Quick reflection */}
+        {/* Journal prompt */}
+        {journalPrompt && (
+          <div className={`rounded-xl p-4 ${
+            isBambiMode
+              ? 'bg-purple-50/80 border border-purple-200'
+              : 'bg-indigo-500/10 border border-indigo-500/20'
+          }`}>
+            <div className="flex items-center gap-2 mb-2">
+              <BookOpen className={`w-4 h-4 ${
+                isBambiMode ? 'text-purple-500' : 'text-indigo-400'
+              }`} />
+              <span className={`text-xs font-medium uppercase tracking-wide ${
+                isBambiMode ? 'text-purple-500' : 'text-indigo-400'
+              }`}>
+                {journalPrompt.category.replace('_', ' ')}
+              </span>
+            </div>
+            <p className={`text-sm italic ${
+              isBambiMode ? 'text-purple-700' : 'text-white/70'
+            }`}>
+              {journalPrompt.prompt}
+            </p>
+          </div>
+        )}
+
+        {/* Reflection / journal entry */}
         <div className={`rounded-xl p-4 ${
           isBambiMode
             ? 'bg-white/80 border border-pink-200'
@@ -141,8 +200,8 @@ export function EveningDebrief({
           <textarea
             value={reflection}
             onChange={(e) => setReflection(e.target.value)}
-            placeholder="Quick reflection (optional)..."
-            rows={2}
+            placeholder={journalPrompt ? "Write your journal entry..." : "Quick reflection (optional)..."}
+            rows={journalPrompt ? 4 : 2}
             className={`w-full bg-transparent resize-none text-sm outline-none placeholder:opacity-40 ${
               isBambiMode ? 'text-pink-800 placeholder:text-pink-400' : 'text-white/80 placeholder:text-white'
             }`}
