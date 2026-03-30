@@ -72,6 +72,7 @@ import { buildImpactContext } from './conditioning/impact-tracking';
 import { buildIrreversibilityContext } from './conditioning/irreversibility';
 import { buildNarrativeContext } from './conditioning/narrative-engine';
 import { buildVoicePitchContext } from './voice/pitch-tracker';
+import { buildVoiceEvolutionContext } from './voice/voice-evolution';
 import { buildInvestmentContext } from './handler-v2/auto-purchase';
 import { getFundBalance } from './handler-v2/auto-purchase';
 import { buildFeminizationPrescriptionContext } from './conditioning/feminization-prescriptions';
@@ -79,6 +80,7 @@ import { buildExercisePrescriptionContext } from './conditioning/exercise-prescr
 import { buildPostReleaseContext } from './conditioning/post-release-bridge';
 import { buildServiceAdvancementContext } from './conditioning/service-advancement';
 import { buildAmbushContext } from './conditioning/ambush-scheduler';
+import { buildCorruptionActivationContext } from './conditioning/corruption-engine';
 import { supabase } from './supabase';
 
 // ============================================
@@ -117,6 +119,8 @@ export interface SystemsContext {
   postReleaseBridge: string;
   serviceAdvancement: string;
   ambushScheduler: string;
+  voiceEvolution: string;
+  corruptionActivation: string;
 }
 
 // ============================================
@@ -839,7 +843,7 @@ async function buildAutoPurchaseCtx(userId: string): Promise<string> {
  * All systems, maximum data density.
  */
 export async function buildFullSystemsContext(userId: string): Promise<string> {
-  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social, memory, conditioningEngine, impactTracking, irreversibility, narrativeArc, autoPoster, socialInbox, voicePitch, autoPurchase, femPrescription, exerciseRx, postReleaseBridge, serviceAdvancement, ambushScheduler] = await Promise.allSettled([
+  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social, memory, conditioningEngine, impactTracking, irreversibility, narrativeArc, autoPoster, socialInbox, voicePitch, autoPurchase, femPrescription, exerciseRx, postReleaseBridge, serviceAdvancement, ambushScheduler, voiceEvolution, corruptionActivation] = await Promise.allSettled([
     buildGinaContext(userId),
     buildContentContext(userId),
     buildVoiceContext(userId),
@@ -884,6 +888,8 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     buildPostReleaseContext(userId),
     buildServiceAdvancementContext(userId),
     buildAmbushContext(userId),
+    buildVoiceEvolutionContext(userId),
+    buildCorruptionActivationContext(userId),
   ]);
 
   const blocks = [
@@ -931,6 +937,8 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     postReleaseBridge.status === 'fulfilled' ? postReleaseBridge.value : '',
     serviceAdvancement.status === 'fulfilled' ? serviceAdvancement.value : '',
     ambushScheduler.status === 'fulfilled' ? ambushScheduler.value : '',
+    voiceEvolution.status === 'fulfilled' ? voiceEvolution.value : '',
+    corruptionActivation.status === 'fulfilled' ? corruptionActivation.value : '',
   ].filter(Boolean);
 
   if (blocks.length === 0) return '';

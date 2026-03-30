@@ -76,7 +76,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       buildCommitmentCtx(user.id),
       buildPredictionCtx(user.id),
       retrieveContextualMemories(user.id),
-      buildLongTermMemory(user.id),
+      buildLongTermMemory(user.id, message),
       buildImpactContext(user.id),
       buildGinaIntelligenceContext(user.id),
       buildIrreversibilityCtx(user.id),
@@ -783,10 +783,12 @@ async function buildPredictionCtx(userId: string): Promise<string> {
 }
 
 // Long-term memory from handler_memory table (formal memory system)
-async function buildLongTermMemory(userId: string): Promise<string> {
+// Now enhanced with vector semantic search when OPENAI_API_KEY is available
+async function buildLongTermMemory(userId: string, queryText?: string): Promise<string> {
+  // 1. Existing relevance-scored retrieval
   const { data } = await supabase
     .from('handler_memory')
-    .select('memory_type, content, importance, reinforcement_count, decay_rate, last_reinforced_at, last_retrieved_at, created_at')
+    .select('id, memory_type, content, importance, reinforcement_count, decay_rate, last_reinforced_at, last_retrieved_at, created_at')
     .eq('user_id', userId)
     .eq('is_active', true)
     .gte('importance', 2)
@@ -813,7 +815,40 @@ async function buildLongTermMemory(userId: string): Promise<string> {
   });
 
   scored.sort((a, b) => b.score - a.score);
-  const top = scored.slice(0, 25);
+  let top = scored.slice(0, 25);
+
+  // 2. Semantic vector search — merge with relevance-scored results
+  if (queryText && process.env.OPENAI_API_KEY) {
+    try {
+      const vectorMemories = await semanticMemorySearch(userId, queryText, 10);
+      if (vectorMemories.length > 0) {
+        // Merge: add vector results not already in top set
+        const existingIds = new Set(top.map(m => m.id));
+        const novel = vectorMemories.filter(vm => !existingIds.has(vm.id));
+
+        // Convert vector results to same shape
+        const vectorScored = novel.map(vm => ({
+          id: vm.id,
+          memory_type: vm.memory_type,
+          content: vm.content,
+          importance: vm.importance,
+          reinforcement_count: vm.reinforcement_count,
+          decay_rate: 0,
+          last_reinforced_at: vm.created_at,
+          last_retrieved_at: null as string | null,
+          created_at: vm.created_at,
+          score: vm.similarity * 0.8, // Weight vector similarity into scoring
+        }));
+
+        // Merge, re-sort, take top 10
+        const merged = [...top, ...vectorScored];
+        merged.sort((a, b) => b.score - a.score);
+        top = merged.slice(0, 25);
+      }
+    } catch {
+      // Vector search failure is non-critical — continue with relevance-only results
+    }
+  }
 
   // Group by type
   const grouped: Record<string, typeof top> = {};
@@ -833,7 +868,7 @@ async function buildLongTermMemory(userId: string): Promise<string> {
   }
 
   // Fire-and-forget: mark as retrieved
-  const ids = top.map(m => (m as Record<string, unknown>).id as string).filter(Boolean);
+  const ids = top.map(m => m.id as string).filter(Boolean);
   if (ids.length > 0) {
     supabase
       .from('handler_memory')
@@ -843,6 +878,93 @@ async function buildLongTermMemory(userId: string): Promise<string> {
   }
 
   return lines.join('\n');
+}
+
+/**
+ * Semantic memory search via OpenAI embeddings + pgvector match_memories RPC.
+ * Returns empty array on any failure — never blocks the main flow.
+ */
+async function semanticMemorySearch(
+  userId: string,
+  queryText: string,
+  limit: number,
+): Promise<Array<{ id: string; memory_type: string; content: string; importance: number; reinforcement_count: number; created_at: string; similarity: number }>> {
+  if (!process.env.OPENAI_API_KEY) return [];
+
+  // Embed the query
+  const embeddingRes = await fetch('https://api.openai.com/v1/embeddings', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: 'text-embedding-3-small',
+      input: queryText.substring(0, 2000),
+    }),
+  });
+
+  if (!embeddingRes.ok) return [];
+
+  const embeddingData = await embeddingRes.json();
+  const embedding = embeddingData.data?.[0]?.embedding;
+  if (!embedding || !Array.isArray(embedding)) return [];
+
+  const vectorStr = `[${embedding.join(',')}]`;
+
+  const { data, error } = await supabase.rpc('match_memories', {
+    query_embedding: vectorStr,
+    match_user_id: userId,
+    match_count: limit,
+    match_threshold: 0.65,
+  });
+
+  if (error || !data) return [];
+  return data;
+}
+
+/**
+ * Fire-and-forget: embed a newly created memory via OpenAI.
+ * Called after memory extraction to populate the vector column.
+ */
+async function embedMemoryAsync(memoryId: string): Promise<void> {
+  if (!process.env.OPENAI_API_KEY) return;
+
+  const { data: mem } = await supabase
+    .from('handler_memory')
+    .select('id, content')
+    .eq('id', memoryId)
+    .single();
+
+  if (!mem) return;
+
+  try {
+    const embeddingRes = await fetch('https://api.openai.com/v1/embeddings', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'text-embedding-3-small',
+        input: mem.content.substring(0, 2000),
+      }),
+    });
+
+    if (!embeddingRes.ok) return;
+
+    const embeddingData = await embeddingRes.json();
+    const embedding = embeddingData.data?.[0]?.embedding;
+    if (!embedding || !Array.isArray(embedding)) return;
+
+    const vectorStr = `[${embedding.join(',')}]`;
+    await supabase
+      .from('handler_memory')
+      .update({ embedding: vectorStr })
+      .eq('id', memoryId);
+  } catch {
+    // Non-critical — embedding will be retried on next consolidation
+  }
 }
 
 // ============================================
@@ -1520,10 +1642,10 @@ async function extractMemoryFromMessage(
     return true;
   });
 
-  // Insert all matched memories
+  // Insert all matched memories and fire-and-forget embed them
   for (const match of unique) {
     try {
-      await supabase.from('handler_memory').insert({
+      const { data: inserted } = await supabase.from('handler_memory').insert({
         user_id: userId,
         memory_type: match.memoryType,
         content: match.content,
@@ -1536,7 +1658,12 @@ async function extractMemoryFromMessage(
           emotional_weight: match.emotionalWeight,
           detected_mode: signals?.detected_mode || null,
         },
-      });
+      }).select('id').single();
+
+      // Fire-and-forget: embed the new memory for vector search
+      if (inserted?.id) {
+        embedMemoryAsync(inserted.id).catch(() => {});
+      }
     } catch {
       // Non-critical — silently continue
     }

@@ -3,11 +3,17 @@
  *
  * Renders within the Handler chat flow when a conditioning session is initiated.
  * Manages HTML5 Audio playback with progress tracking and auto-play on mount.
+ * Optional binaural beat overlay via Web Audio API.
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, Pause, X, Headphones } from 'lucide-react';
+import { Play, Pause, X, Headphones, BrainCircuit } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
+import {
+  useBinauralBeat,
+  BINAURAL_PRESETS,
+  type BinauralPreset,
+} from '../../hooks/useBinauralBeat';
 
 interface ConditioningPlayerProps {
   audioUrl: string;
@@ -15,6 +21,26 @@ interface ConditioningPlayerProps {
   duration: number;
   onComplete: () => void;
   onClose: () => void;
+  /** Binaural beat preset or Hz value. null = no binaural. */
+  binauralFrequency?: BinauralPreset | number | null;
+  /** Session type — trance/sleep default binaural ON */
+  sessionType?: string;
+}
+
+/** Resolve a preset name or raw Hz to a numeric frequency. */
+function resolveBinauralFrequency(
+  input: BinauralPreset | number | null | undefined,
+): number | null {
+  if (input == null) return null;
+  if (typeof input === 'number') return input;
+  return BINAURAL_PRESETS[input] ?? null;
+}
+
+/** Should binaural default to ON for this session type? */
+function shouldDefaultBinaural(sessionType?: string): boolean {
+  if (!sessionType) return false;
+  const defaultOn = ['trance', 'sleep', 'combined', 'background'];
+  return defaultOn.includes(sessionType);
 }
 
 function formatTime(seconds: number): string {
@@ -29,6 +55,8 @@ export function ConditioningPlayer({
   duration,
   onComplete,
   onClose,
+  binauralFrequency: binauralProp,
+  sessionType,
 }: ConditioningPlayerProps) {
   const { isBambiMode } = useBambiMode();
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -37,7 +65,15 @@ export function ConditioningPlayer({
   const [audioDuration, setAudioDuration] = useState(duration);
   const [confirmEnd, setConfirmEnd] = useState(false);
 
-  // Parse phase from title (e.g., "Phase 1 — Identity" → "Phase 1")
+  // Binaural beat setup
+  const resolvedFreq = resolveBinauralFrequency(binauralProp);
+  const defaultOn = shouldDefaultBinaural(sessionType);
+  const hasBinaural = resolvedFreq !== null || defaultOn;
+  const beatHz = resolvedFreq ?? (defaultOn ? BINAURAL_PRESETS.theta : 6);
+  const binaural = useBinauralBeat(beatHz);
+  const [binauralEnabled, setBinauralEnabled] = useState(defaultOn || resolvedFreq !== null);
+
+  // Parse phase from title (e.g., "Phase 1 — Identity" -> "Phase 1")
   const phaseBadge = title.match(/^(Phase\s*\d+)/i)?.[1] ?? null;
 
   // Initialize audio element
@@ -57,6 +93,7 @@ export function ConditioningPlayer({
 
     const onEnded = () => {
       setIsPlaying(false);
+      binaural.stop();
       onComplete();
     };
 
@@ -70,7 +107,12 @@ export function ConditioningPlayer({
     audio.addEventListener('pause', onPause);
 
     // Auto-play on mount
-    audio.play().catch(() => {
+    audio.play().then(() => {
+      // Start binaural if enabled (AudioContext created after user gesture / autoplay)
+      if (binauralEnabled && hasBinaural) {
+        binaural.start(audio);
+      }
+    }).catch(() => {
       // Browser may block autoplay; user can tap play
     });
 
@@ -82,18 +124,40 @@ export function ConditioningPlayer({
       audio.removeEventListener('pause', onPause);
       audio.pause();
       audio.src = '';
+      binaural.stop();
     };
+    // binaural intentionally excluded — managed via toggle
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audioUrl, onComplete]);
 
   const togglePlayPause = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
     if (audio.paused) {
-      audio.play().catch(() => {});
+      audio.play().then(() => {
+        // Start binaural on first user-initiated play (browser autoplay policy)
+        if (binauralEnabled && hasBinaural && !binaural.isActive) {
+          binaural.start(audio);
+        }
+      }).catch(() => {});
     } else {
       audio.pause();
+      binaural.stop();
     }
-  }, []);
+  }, [binauralEnabled, hasBinaural, binaural]);
+
+  const toggleBinaural = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (binaural.isActive) {
+      binaural.stop();
+      setBinauralEnabled(false);
+    } else {
+      binaural.start(audio);
+      setBinauralEnabled(true);
+    }
+  }, [binaural]);
 
   const handleSeek = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const audio = audioRef.current;
@@ -113,8 +177,9 @@ export function ConditioningPlayer({
     if (audio) {
       audio.pause();
     }
+    binaural.stop();
     onClose();
-  }, [confirmEnd, onClose]);
+  }, [confirmEnd, onClose, binaural]);
 
   const progress = audioDuration > 0 ? (currentTime / audioDuration) * 100 : 0;
 
@@ -160,8 +225,30 @@ export function ConditioningPlayer({
         {title}
       </p>
 
-      {/* Play/Pause — large, centered */}
-      <div className="flex justify-center mb-5">
+      {/* Play/Pause + Binaural toggle — centered row */}
+      <div className="flex items-center justify-center gap-4 mb-5">
+        {/* Binaural toggle (left side, smaller) */}
+        {hasBinaural && (
+          <button
+            onClick={toggleBinaural}
+            title={
+              binaural.isActive
+                ? `Binaural ${beatHz}Hz ON — tap to disable`
+                : `Enable binaural ${beatHz}Hz`
+            }
+            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+              binaural.isActive
+                ? isBambiMode
+                  ? 'bg-pink-500/30 text-pink-300 ring-1 ring-pink-500/50'
+                  : 'bg-purple-500/30 text-purple-300 ring-1 ring-purple-500/50'
+                : 'bg-gray-800/50 text-gray-500 hover:text-gray-400'
+            }`}
+          >
+            <BrainCircuit className="w-5 h-5" />
+          </button>
+        )}
+
+        {/* Play/Pause — large */}
         <button
           onClick={togglePlayPause}
           className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${
@@ -176,7 +263,21 @@ export function ConditioningPlayer({
             <Play className="w-7 h-7 ml-0.5" />
           )}
         </button>
+
+        {/* Spacer to balance layout when binaural toggle is present */}
+        {hasBinaural && <div className="w-10 h-10" />}
       </div>
+
+      {/* Binaural status label */}
+      {hasBinaural && binaural.isActive && (
+        <p
+          className={`text-center text-[10px] uppercase tracking-wider mb-3 ${
+            isBambiMode ? 'text-pink-500/70' : 'text-purple-500/70'
+          }`}
+        >
+          Binaural {beatHz}Hz active
+        </p>
+      )}
 
       {/* Progress bar */}
       <div
