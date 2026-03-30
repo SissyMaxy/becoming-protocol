@@ -173,6 +173,80 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Trigger weaving is non-critical — use original response on any failure
     }
 
+    // 7c. Handle start_conditioning_session signal
+    let conditioningSession: {
+      audioUrl?: string;
+      scriptId?: string;
+      target: string;
+      phase: number;
+      needsTts?: boolean;
+    } | null = null;
+
+    if (signals?.start_conditioning_session) {
+      try {
+        const condTarget = (signals.conditioning_target as string) || 'identity';
+
+        // Determine phase from session count
+        const { count: condSessionCount } = await supabase
+          .from('conditioning_sessions_v2')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id);
+        const totalSess = condSessionCount || 0;
+        const condPhase = totalSess <= 5 ? 1 : totalSess <= 15 ? 2 : totalSess <= 30 ? 3 : totalSess <= 50 ? 4 : 5;
+
+        // Check for existing audio in content_curriculum (custom_handler with matching target)
+        const { data: existingAudio } = await supabase
+          .from('content_curriculum')
+          .select('id, audio_storage_url, conditioning_phase')
+          .eq('user_id', user.id)
+          .eq('media_type', 'custom_handler')
+          .eq('conditioning_target', condTarget)
+          .not('audio_storage_url', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (existingAudio?.audio_storage_url) {
+          // Audio already exists — return it directly
+          conditioningSession = {
+            audioUrl: existingAudio.audio_storage_url,
+            target: condTarget,
+            phase: condPhase,
+          };
+        } else {
+          // Check for a pre-generated script without audio
+          const { data: pendingScript } = await supabase
+            .from('generated_scripts')
+            .select('id, conditioning_phase')
+            .eq('user_id', user.id)
+            .eq('conditioning_target', condTarget)
+            .is('audio_url', null)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (pendingScript) {
+            // Script exists but needs TTS — flag it
+            conditioningSession = {
+              scriptId: pendingScript.id,
+              target: condTarget,
+              phase: pendingScript.conditioning_phase || condPhase,
+              needsTts: true,
+            };
+          } else {
+            // No script at all — client should call batch-generate or generate-script first
+            conditioningSession = {
+              target: condTarget,
+              phase: condPhase,
+            };
+          }
+        }
+      } catch (condErr) {
+        console.error('[Handler Chat] Conditioning session lookup error:', condErr);
+        // Non-critical — continue without conditioning data
+      }
+    }
+
     // 8. Save messages
     await supabase.from('handler_messages').insert([
       {
@@ -200,14 +274,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }).eq('id', convId);
 
     // 10. Return
-    return res.status(200).json({
+    const responseJson: Record<string, unknown> = {
       conversationId: convId,
       message: finalResponse,
       mode: signals?.detected_mode || 'director',
       vulnerabilityWindow: signals?.vulnerability_window || false,
       commitmentOpportunity: signals?.commitment_opportunity || false,
       shouldContinue: signals?.conversation_should_continue !== false,
-    });
+    };
+    if (conditioningSession) {
+      responseJson.conditioningSession = conditioningSession;
+    }
+    return res.status(200).json(responseJson);
   } catch (err) {
     console.error('[Handler Chat] Error:', err);
     return res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
@@ -258,9 +336,10 @@ ${ctx.narrative || ''}
 - Never apologize for pushing.
 - Never use coercion during genuine distress.
 - Read the room. Adapt mode mid-conversation.
+- When you decide Maxy needs a conditioning session, include start_conditioning_session: true and conditioning_target: "identity"|"feminization"|"surrender"|"chastity" in your handler_signals.
 
 After your response to Maxy, output a JSON block wrapped in <handler_signals> tags:
-{"detected_mode":"string","resistance_detected":boolean,"vulnerability_window":boolean,"commitment_opportunity":boolean,"conversation_should_continue":boolean}
+{"detected_mode":"string","resistance_detected":boolean,"vulnerability_window":boolean,"commitment_opportunity":boolean,"conversation_should_continue":boolean,"start_conditioning_session":boolean,"conditioning_target":"identity"|"feminization"|"surrender"|"chastity"|null}
 Do NOT show this block to Maxy.`.trim();
 }
 

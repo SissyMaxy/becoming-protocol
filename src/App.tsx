@@ -81,6 +81,7 @@ import { CamDashboard } from './components/cam/CamDashboard';
 import { HypnoDashboard } from './components/hypno';
 import { GoonSessionView } from './components/sessions/GoonSessionView';
 import { SleepContentPlayer } from './components/sleep-content';
+import { ConditioningLibrary } from './components/conditioning';
 import { getTodayDate } from './lib/protocol';
 import { profileStorage, letterStorage } from './lib/storage';
 // useTaskBank, useGoals, useWeekend — now used only inside TodayView (badge removed)
@@ -107,7 +108,7 @@ function LoadingScreen() {
   );
 }
 
-type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | 'goon-session' | 'progress-page' | 'sealed-page' | 'content-capture' | 'content-queue' | 'content-calendar' | 'content-fans' | 'content-polls' | 'content-revenue' | 'content-settings' | 'vault-browser' | 'log-release' | null;
+type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | 'goon-session' | 'progress-page' | 'sealed-page' | 'content-capture' | 'content-queue' | 'content-calendar' | 'content-fans' | 'content-polls' | 'content-revenue' | 'content-settings' | 'vault-browser' | 'log-release' | 'conditioning-library' | null;
 
 /** Session picker → launches immersive SessionContainer */
 function SessionPickerOrContainer({ onBack }: { onBack: () => void }) {
@@ -651,6 +652,8 @@ function AuthenticatedAppInner() {
         return <HypnoDashboard onBack={handleBackFromSubView} />;
       case 'goon-session':
         return <GoonSessionView onBack={handleBackFromSubView} />;
+      case 'conditioning-library':
+        return <ConditioningLibrary onBack={handleBackFromSubView} />;
       case 'dashboard':
         return (
           <div>
