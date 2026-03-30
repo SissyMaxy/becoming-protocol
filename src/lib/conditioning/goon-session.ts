@@ -11,6 +11,7 @@
  */
 
 import { supabase } from '../supabase';
+import { activateSessionDevice, deactivateSessionDevice } from './session-device';
 
 // ============================================
 // TYPES
@@ -176,6 +177,9 @@ export async function startGoonSession(
     throw new Error(`Failed to create goon session: ${error.message}`);
   }
 
+  // Activate Lovense device for build phase
+  activateSessionDevice('goon', 'build', intensityMultiplier).catch(() => {});
+
   return {
     sessionId: session.id,
     playlist,
@@ -245,13 +249,17 @@ export async function endGoonSession(
   sessionId: string,
   metrics: GoonSessionMetrics
 ): Promise<void> {
+  // Stop device
+  deactivateSessionDevice().catch(() => {});
+
   const { error } = await supabase
     .from('conditioning_sessions_v2')
     .update({
       ended_at: new Date().toISOString(),
-      duration_minutes: null, // Will be calculated by DB trigger or computed column
+      duration_minutes: null,
       metrics,
       completed: true,
+      device_active: false,
     })
     .eq('id', sessionId);
 

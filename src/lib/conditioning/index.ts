@@ -13,6 +13,7 @@ export * from './script-generator';
 export * from './adaptive-session';
 export * from './goon-session';
 export * from './pmv-generator';
+export { activateSessionDevice, deactivateSessionDevice, transitionSessionPhase } from './session-device';
 export {
   recordIntervention,
   recordOutcome,
