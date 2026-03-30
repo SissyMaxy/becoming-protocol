@@ -14,6 +14,14 @@ export interface ChatMessage {
   mode?: string;
 }
 
+interface ConditioningSessionSignal {
+  audioUrl?: string;
+  scriptId?: string;
+  target: string;
+  phase: number;
+  needsTts?: boolean;
+}
+
 interface ChatResponse {
   conversationId: string;
   message: string;
@@ -21,6 +29,7 @@ interface ChatResponse {
   vulnerabilityWindow: boolean;
   commitmentOpportunity: boolean;
   shouldContinue: boolean;
+  conditioningSession?: ConditioningSessionSignal;
 }
 
 interface UseHandlerChatReturn {
@@ -137,6 +146,19 @@ export function useHandlerChat(): UseHandlerChatReturn {
 
       conversationIdRef.current = data.conversationId;
       setCurrentMode(data.mode || 'director');
+
+      // P6.5: Dispatch conditioning session event if Handler triggered one
+      if (data.conditioningSession) {
+        try {
+          window.dispatchEvent(
+            new CustomEvent('handler-conditioning-session', {
+              detail: data.conditioningSession,
+            }),
+          );
+        } catch {
+          // Non-critical — conditioning dispatch failure doesn't block chat
+        }
+      }
 
       const assistantMsg: ChatMessage = {
         role: 'assistant',

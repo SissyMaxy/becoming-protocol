@@ -81,7 +81,7 @@ import { CamDashboard } from './components/cam/CamDashboard';
 import { HypnoDashboard } from './components/hypno';
 import { GoonSessionView } from './components/sessions/GoonSessionView';
 import { SleepContentPlayer } from './components/sleep-content';
-import { ConditioningLibrary } from './components/conditioning';
+import { ConditioningLibrary, ConditioningPlayer } from './components/conditioning';
 import { getTodayDate } from './lib/protocol';
 import { profileStorage, letterStorage } from './lib/storage';
 // useTaskBank, useGoals, useWeekend — now used only inside TodayView (badge removed)
@@ -230,6 +230,28 @@ function AuthenticatedAppInner() {
   // showHandlerChat removed — chat is now always visible as primary UI
   const [pendingOutreach, setPendingOutreach] = useState<{ id: string; openingLine: string } | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+
+  // P6.5: Conditioning session triggered by Handler conversation
+  const [conditioningSession, setConditioningSession] = useState<{
+    audioUrl?: string;
+    target: string;
+    phase: number;
+  } | null>(null);
+
+  useEffect(() => {
+    const handleConditioningSession = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.audioUrl) {
+        setConditioningSession({
+          audioUrl: detail.audioUrl,
+          target: detail.target || 'identity',
+          phase: detail.phase || 1,
+        });
+      }
+    };
+    window.addEventListener('handler-conditioning-session', handleConditioningSession);
+    return () => window.removeEventListener('handler-conditioning-session', handleConditioningSession);
+  }, []);
 
   // Check for pending Handler outreach on load
   const { user: authUser } = useAuth();
@@ -783,6 +805,21 @@ function AuthenticatedAppInner() {
       {/* Sleep Content Player overlay */}
       {showSleepContent && (
         <SleepContentPlayer onDismiss={() => setShowSleepContent(false)} />
+      )}
+
+      {/* P6.5: Handler-triggered Conditioning Session */}
+      {conditioningSession?.audioUrl && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="w-full max-w-md mx-4">
+            <ConditioningPlayer
+              audioUrl={conditioningSession.audioUrl}
+              title={`Phase ${conditioningSession.phase} — ${conditioningSession.target.charAt(0).toUpperCase() + conditioningSession.target.slice(1)}`}
+              duration={0}
+              onComplete={() => setConditioningSession(null)}
+              onClose={() => setConditioningSession(null)}
+            />
+          </div>
+        </div>
       )}
 
       {/* OrgasmLogModal — Log Release flow */}

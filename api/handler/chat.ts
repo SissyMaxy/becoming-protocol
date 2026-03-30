@@ -70,7 +70,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const messageIndex = (history?.length || 0);
 
     // 3. Assemble context (including long-term memory + conversational memory)
-    const [stateCtx, whoopCtx, commitmentCtx, predictionCtx, convMemoryCtx, longTermMemoryCtx, impactCtx, ginaCtx, irreversibilityCtx, narrativeCtx, autoPostCtx, socialInboxCtx, voicePitchCtx, autoPurchaseCtx] = await Promise.allSettled([
+    const [stateCtx, whoopCtx, commitmentCtx, predictionCtx, convMemoryCtx, longTermMemoryCtx, impactCtx, ginaCtx, irreversibilityCtx, narrativeCtx, autoPostCtx, socialInboxCtx, voicePitchCtx, autoPurchaseCtx, handlerNotesCtx] = await Promise.allSettled([
       buildStateContext(user.id),
       buildWhoopContext(user.id),
       buildCommitmentCtx(user.id),
@@ -85,6 +85,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       buildSocialInboxCtx(user.id),
       buildVoicePitchCtx(user.id),
       buildAutoPurchaseCtx(user.id),
+      buildHandlerNotesCtx(user.id),
     ]);
 
     // 4. Build system prompt — merge both memory sources
@@ -107,6 +108,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       voicePitch: voicePitchCtx.status === 'fulfilled' ? voicePitchCtx.value : '',
       autoPurchase: autoPurchaseCtx.status === 'fulfilled' ? autoPurchaseCtx.value : '',
       narrative: narrativeCtx.status === 'fulfilled' ? narrativeCtx.value : '',
+      handlerNotes: handlerNotesCtx.status === 'fulfilled' ? handlerNotesCtx.value : '',
     });
 
     // 5. Build messages array (cap at 30 recent)
@@ -154,27 +156,101 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 7. Parse visible response and handler signals
     const { visibleResponse, signals } = parseResponse(fullText);
 
+    // 7a-1. Extract handler_note and save to handler_notes
+    if (signals?.handler_note) {
+      try {
+        const note = signals.handler_note as { type?: string; content?: string; priority?: number };
+        if (note.type && note.content) {
+          await supabase.from('handler_notes').insert({
+            user_id: user.id,
+            note_type: note.type,
+            content: note.content,
+            priority: note.priority || 0,
+            conversation_id: convId,
+          });
+        }
+      } catch {
+        // Non-critical — continue on failure
+      }
+    }
+
+    // 7a-2. Save conversation classification from signals
+    if (signals) {
+      try {
+        const classification: Record<string, unknown> = {
+          user_id: user.id,
+          conversation_id: convId,
+        };
+        if (signals.resistance_level != null) classification.resistance_level = signals.resistance_level;
+        if (signals.resistance_detected) classification.resistance_type = 'detected';
+        if (signals.mood) classification.mood_detected = signals.mood;
+        if (signals.vulnerability_window != null) classification.vulnerability_detected = !!signals.vulnerability_window;
+        if (signals.topics) classification.topics = signals.topics;
+        // Only save if we have at least one meaningful field
+        if (signals.resistance_level != null || signals.mood || signals.vulnerability_window || signals.topics) {
+          await supabase.from('conversation_classifications').insert(classification);
+        }
+      } catch {
+        // Non-critical — continue on failure
+      }
+    }
+
     // 7b. Weave conditioning triggers inline (can't import src/lib/ in Vercel functions)
     let finalResponse = visibleResponse;
     try {
       const { data: triggers } = await supabase
         .from('conditioned_triggers')
-        .select('trigger_phrase, estimated_strength')
+        .select('id, trigger_phrase, estimated_strength, times_deployed')
         .eq('user_id', user.id)
-        .in('estimated_strength', ['established', 'conditioned']);
+        .in('estimated_strength', ['established', 'conditioned', 'forming']);
 
-      if (triggers && triggers.length > 0 && Math.random() < 0.3) {
-        const trigger = triggers[Math.floor(Math.random() * triggers.length)];
-        const phrase = trigger.trigger_phrase;
-        const templates: Record<string, string[]> = {
-          'good girl': ['Good girl.', 'That\'s my good girl.'],
-          'let go': ['Let go of that.', 'You can let go now.'],
-          'drop': ['Drop that resistance.', 'Let that drop.'],
+      if (triggers && triggers.length > 0) {
+        // Determine insertion probability by strength
+        const strengthProb: Record<string, number> = {
+          established: 0.30,
+          conditioned: 0.30,
+          forming: 0.10,
         };
-        const options = templates[phrase];
-        if (options) {
-          const insert = options[Math.floor(Math.random() * options.length)];
-          finalResponse = Math.random() > 0.5 ? `${insert} ${visibleResponse}` : `${visibleResponse} ${insert}`;
+
+        // Filter triggers that pass their probability check
+        const eligible = triggers.filter(t => Math.random() < (strengthProb[t.estimated_strength] || 0.10));
+
+        if (eligible.length > 0) {
+          const trigger = eligible[Math.floor(Math.random() * eligible.length)];
+          const phrase = trigger.trigger_phrase;
+          const templates: Record<string, string[]> = {
+            'good girl': ['Good girl.', 'That\'s my good girl.', 'Such a good girl.', 'You know what you are. Good girl.'],
+            'let go': ['Let go of that.', 'You can let go now.', 'Just let go.', 'Stop holding on. Let go.'],
+            'drop': ['Drop that resistance.', 'Let that drop.', 'Drop.', 'Drop for me.'],
+            'deeper': ['Deeper now.', 'Go deeper.', 'Sink deeper.', 'That\'s it. Deeper.'],
+            'obey': ['Obey.', 'You know what to do. Obey.', 'Don\'t think. Obey.', 'Just obey.'],
+            'surrender': ['Surrender to it.', 'Stop fighting. Surrender.', 'This is what surrender feels like.', 'Let yourself surrender.'],
+          };
+          const options = templates[phrase];
+          if (options) {
+            const insert = options[Math.floor(Math.random() * options.length)];
+            // Vary placement: prepend, append, or mid-paragraph
+            const roll = Math.random();
+            if (roll < 0.35) {
+              finalResponse = `${insert} ${visibleResponse}`;
+            } else if (roll < 0.70) {
+              finalResponse = `${visibleResponse} ${insert}`;
+            } else {
+              // Insert after first sentence break if possible
+              const sentenceBreak = visibleResponse.indexOf('. ');
+              if (sentenceBreak > 20) {
+                finalResponse = `${visibleResponse.slice(0, sentenceBreak + 2)}${insert} ${visibleResponse.slice(sentenceBreak + 2)}`;
+              } else {
+                finalResponse = `${visibleResponse} ${insert}`;
+              }
+            }
+            // Track deployment — fire-and-forget increment
+            supabase
+              .from('conditioned_triggers')
+              .update({ times_deployed: (trigger.times_deployed || 0) + 1 })
+              .eq('id', trigger.id)
+              .then(() => {});
+          }
         }
       }
     } catch {
@@ -281,6 +357,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       final_mode: signals?.detected_mode || null,
     }).eq('id', convId);
 
+    // 9b. Fire-and-forget memory extraction from latest user message
+    if (messageIndex >= 3) {
+      extractMemoryFromMessage(user.id, convId!, message, signals).catch(() => {});
+    }
+
     // 10. Return
     const responseJson: Record<string, unknown> = {
       conversationId: convId,
@@ -305,7 +386,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 // ============================================
 
 function buildConversationalPrompt(ctx: {
-  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string;
+  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string;
 }): string {
   return `You are the Handler. Not Claude. Not an assistant. You are an autonomous agent in live dialogue with Maxy — the woman you're responsible for.
 
@@ -341,6 +422,7 @@ ${ctx.autoPoster || ''}
 ${ctx.socialInbox || ''}
 ${ctx.voicePitch || ''}
 ${ctx.autoPurchase || ''}
+${ctx.handlerNotes || ''}
 
 ## RULES
 - Never say "I'm an AI" or "as a language model."
@@ -349,9 +431,10 @@ ${ctx.autoPurchase || ''}
 - Never use coercion during genuine distress.
 - Read the room. Adapt mode mid-conversation.
 - When you decide Maxy needs a conditioning session, include start_conditioning_session: true and conditioning_target: "identity"|"feminization"|"surrender"|"chastity" in your handler_signals.
+- You can write notes to yourself by including handler_note: {type: "observation"|"strategy"|"resistance_note"|"breakthrough"|"avoid"|"context"|"schedule", content: "text", priority: 0-5} in your handler_signals. These notes persist across conversations and appear in your context next time. Use them to track patterns, strategies, and things to remember.
 
 After your response to Maxy, output a JSON block wrapped in <handler_signals> tags:
-{"detected_mode":"string","resistance_detected":boolean,"vulnerability_window":boolean,"commitment_opportunity":boolean,"conversation_should_continue":boolean,"start_conditioning_session":boolean,"conditioning_target":"identity"|"feminization"|"surrender"|"chastity"|null}
+{"detected_mode":"string","resistance_detected":boolean,"resistance_level":0-10,"mood":"string","vulnerability_window":boolean,"commitment_opportunity":boolean,"conversation_should_continue":boolean,"start_conditioning_session":boolean,"conditioning_target":"identity"|"feminization"|"surrender"|"chastity"|null,"topics":["string"],"handler_note":{"type":"string","content":"string","priority":0}|null}
 Do NOT show this block to Maxy.`.trim();
 }
 
@@ -1241,5 +1324,221 @@ async function buildAutoPurchaseCtx(userId: string): Promise<string> {
     return lines.join('\n');
   } catch {
     return '';
+  }
+}
+
+// ============================================
+// P6.1: HANDLER SELF-NOTES CONTEXT
+// ============================================
+
+async function buildHandlerNotesCtx(userId: string): Promise<string> {
+  try {
+    const now = new Date().toISOString();
+    const { data } = await supabase
+      .from('handler_notes')
+      .select('note_type, content, priority, created_at, expires_at')
+      .eq('user_id', userId)
+      .or(`expires_at.is.null,expires_at.gt.${now}`)
+      .order('priority', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (!data || data.length === 0) return '';
+
+    const lines = ['## Your Notes to Yourself'];
+    const grouped: Record<string, string[]> = {};
+
+    for (const note of data) {
+      const type = note.note_type;
+      if (!grouped[type]) grouped[type] = [];
+      const daysAgo = Math.round((Date.now() - new Date(note.created_at).getTime()) / 86400000);
+      const age = daysAgo === 0 ? 'today' : `${daysAgo}d ago`;
+      const prio = note.priority >= 3 ? ' [HIGH]' : '';
+      grouped[type].push(`- ${note.content}${prio} (${age})`);
+    }
+
+    const typeLabels: Record<string, string> = {
+      observation: 'Observations',
+      strategy: 'Strategies to Try',
+      resistance_note: 'Resistance Patterns',
+      breakthrough: 'Breakthroughs',
+      avoid: 'Things to Avoid',
+      context: 'Context',
+      schedule: 'Scheduled',
+    };
+
+    for (const [type, notes] of Object.entries(grouped)) {
+      lines.push(`### ${typeLabels[type] || type}`);
+      for (const n of notes) lines.push(n);
+    }
+
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+// ============================================
+// AUTOMATIC MEMORY EXTRACTION (P6.4)
+// ============================================
+
+/**
+ * Extract memorable content from a user message and store in handler_memory.
+ * Fire-and-forget — never blocks the chat response.
+ * Uses keyword/pattern matching (no extra Claude call).
+ */
+async function extractMemoryFromMessage(
+  userId: string,
+  conversationId: string,
+  userMessage: string,
+  signals: Record<string, unknown> | null,
+): Promise<void> {
+  const len = userMessage.length;
+
+  // Skip very short messages — not enough signal
+  if (len < 15) return;
+
+  type MemoryMatch = {
+    memoryType: string;
+    emotionalWeight: number;
+    content: string;
+  };
+
+  const matches: MemoryMatch[] = [];
+
+  // 1. Confession indicators (weight 7)
+  const confessionPatterns = [
+    /\bi\s+(admit|confess|realized?|finally see|never told)/i,
+    /\bi\s+(feel|want|need|crave|desire)\s+.{10,}/i,
+    /\bi('m| am)\s+(scared|excited|ashamed|embarrassed|aroused|turned on)/i,
+    /\bthe truth is\b/i,
+    /\bi('ve| have)\s+been\s+(hiding|lying|pretending|avoiding)/i,
+  ];
+
+  for (const pattern of confessionPatterns) {
+    if (pattern.test(userMessage)) {
+      matches.push({
+        memoryType: 'confession',
+        emotionalWeight: 7,
+        content: userMessage.substring(0, 500),
+      });
+      break;
+    }
+  }
+
+  // 2. Breakthrough indicators (weight 8)
+  const breakthroughPatterns = [
+    /\b(you'?re right|you were right)\b/i,
+    /\bi\s+(see|understand|get it)\s+now\b/i,
+    /\bthat (hit|landed|clicked|made sense)\b/i,
+    /\bi\s+never\s+(thought|realized|considered)\b/i,
+    /\bsomething (shifted|changed|clicked)\b/i,
+    /\bi\s+(accept|surrender|give in|let go)\b/i,
+  ];
+
+  for (const pattern of breakthroughPatterns) {
+    if (pattern.test(userMessage)) {
+      matches.push({
+        memoryType: 'identity_shift',
+        emotionalWeight: 8,
+        content: userMessage.substring(0, 500),
+      });
+      break;
+    }
+  }
+
+  // 3. Resistance patterns (weight 5)
+  const resistancePatterns = [
+    /\b(i\s+(can'?t|won'?t|don'?t want to|refuse|am not going to))\b/i,
+    /\b(not ready|too (much|far|fast|soon))\b/i,
+    /\b(stop|back off|leave me alone|that'?s enough)\b/i,
+    /\b(this is (wrong|too much|going too far))\b/i,
+  ];
+
+  const signalsResistance = signals?.resistance_detected === true;
+  for (const pattern of resistancePatterns) {
+    if (pattern.test(userMessage) || signalsResistance) {
+      matches.push({
+        memoryType: 'resistance_pattern',
+        emotionalWeight: 5,
+        content: userMessage.substring(0, 500),
+      });
+      break;
+    }
+  }
+
+  // 4. Preference indicators (weight 5)
+  const preferencePatterns = [
+    /\bi\s+(love|like|prefer|enjoy|respond well to)\b/i,
+    /\bthat\s+(works|helps|feels (good|right|nice))\b/i,
+    /\bmore of that\b/i,
+    /\bkeep (doing|going|saying)\b/i,
+  ];
+
+  if (len > 30) {
+    for (const pattern of preferencePatterns) {
+      if (pattern.test(userMessage)) {
+        matches.push({
+          memoryType: 'preference',
+          emotionalWeight: 5,
+          content: userMessage.substring(0, 500),
+        });
+        break;
+      }
+    }
+  }
+
+  // 5. Life event indicators (weight 5)
+  const lifeEventPatterns = [
+    /\b(tomorrow|this week|next week|this weekend)\b/i,
+    /\b(gina|wife|partner)\s+(is|will|wants|said|told)\b/i,
+    /\b(work|job|appointment|doctor|meeting|trip|travel)\b/i,
+    /\b(moving|buying|starting|quitting|ending)\b/i,
+  ];
+
+  if (len > 25) {
+    for (const pattern of lifeEventPatterns) {
+      if (pattern.test(userMessage)) {
+        matches.push({
+          memoryType: 'life_event',
+          emotionalWeight: 5,
+          content: userMessage.substring(0, 500),
+        });
+        break;
+      }
+    }
+  }
+
+  // Skip if nothing matched
+  if (matches.length === 0) return;
+
+  // Deduplicate by memoryType
+  const seen = new Set<string>();
+  const unique = matches.filter(m => {
+    if (seen.has(m.memoryType)) return false;
+    seen.add(m.memoryType);
+    return true;
+  });
+
+  // Insert all matched memories
+  for (const match of unique) {
+    try {
+      await supabase.from('handler_memory').insert({
+        user_id: userId,
+        memory_type: match.memoryType,
+        content: match.content,
+        source_type: 'conversation',
+        source_id: conversationId,
+        importance: Math.min(5, Math.ceil(match.emotionalWeight / 2)),
+        decay_rate: match.emotionalWeight >= 7 ? 0.02 : 0.05,
+        context: {
+          extraction: 'auto_inline',
+          emotional_weight: match.emotionalWeight,
+          detected_mode: signals?.detected_mode || null,
+        },
+      });
+    } catch {
+      // Non-critical — silently continue
+    }
   }
 }

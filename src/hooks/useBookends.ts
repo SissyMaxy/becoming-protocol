@@ -15,6 +15,7 @@ import {
   getEveningMessage,
 } from '../lib/bookend';
 import { getLastCompletedProtocol, markMorningReframeShown } from '../lib/post-release-engine';
+import { detectWakeFromWhoop } from '../lib/conditioning/wake-detection';
 import type { BookendConfig, DaySummary } from '../types/bookend';
 import type { PostReleaseProtocol } from '../types/post-release';
 
@@ -66,14 +67,30 @@ export function useBookends(): UseBookendsReturn {
         // Check if morning bookend should show
         const morningViewed = await hasViewedBookendToday(userId, 'morning');
         if (!morningViewed) {
-          const msg = getMorningMessage(denialDay, streak);
-          setMorningMessage(msg);
-          setShowMorning(true);
+          // P6.6: Soft gate — if Whoop data is available and shows user
+          // is still asleep (no sleep completion recorded), delay the morning briefing.
+          // If Whoop isn't connected or errors, this returns awake=true (no blocking).
+          let showMorningNow = true;
+          try {
+            const wakeResult = await detectWakeFromWhoop(userId);
+            if (wakeResult.whoopAvailable && !wakeResult.awake) {
+              // User appears to still be asleep per Whoop — delay briefing
+              showMorningNow = false;
+            }
+          } catch {
+            // Wake detection failed — don't block, show normally
+          }
 
-          // Fetch last completed post-release protocol for morning reframe
-          const protocol = await getLastCompletedProtocol(userId);
-          if (protocol) {
-            setLastProtocol(protocol);
+          if (showMorningNow) {
+            const msg = getMorningMessage(denialDay, streak);
+            setMorningMessage(msg);
+            setShowMorning(true);
+
+            // Fetch last completed post-release protocol for morning reframe
+            const protocol = await getLastCompletedProtocol(userId);
+            if (protocol) {
+              setLastProtocol(protocol);
+            }
           }
         }
 
