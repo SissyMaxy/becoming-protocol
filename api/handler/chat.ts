@@ -70,7 +70,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const messageIndex = (history?.length || 0);
 
     // 3. Assemble context (including long-term memory + conversational memory)
-    const [stateCtx, whoopCtx, commitmentCtx, predictionCtx, convMemoryCtx, longTermMemoryCtx, impactCtx, ginaCtx, irreversibilityCtx, narrativeCtx] = await Promise.allSettled([
+    const [stateCtx, whoopCtx, commitmentCtx, predictionCtx, convMemoryCtx, longTermMemoryCtx, impactCtx, ginaCtx, irreversibilityCtx, narrativeCtx, autoPostCtx, socialInboxCtx, voicePitchCtx, autoPurchaseCtx] = await Promise.allSettled([
       buildStateContext(user.id),
       buildWhoopContext(user.id),
       buildCommitmentCtx(user.id),
@@ -81,6 +81,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       buildGinaIntelligenceContext(user.id),
       buildIrreversibilityCtx(user.id),
       buildNarrativeCtx(user.id),
+      buildAutoPostCtx(user.id),
+      buildSocialInboxCtx(user.id),
+      buildVoicePitchCtx(user.id),
+      buildAutoPurchaseCtx(user.id),
     ]);
 
     // 4. Build system prompt — merge both memory sources
@@ -98,6 +102,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       impact: impactCtx.status === 'fulfilled' ? impactCtx.value : '',
       gina: ginaCtx.status === 'fulfilled' ? ginaCtx.value : '',
       irreversibility: irreversibilityCtx.status === 'fulfilled' ? irreversibilityCtx.value : '',
+      autoPoster: autoPostCtx.status === 'fulfilled' ? autoPostCtx.value : '',
+      socialInbox: socialInboxCtx.status === 'fulfilled' ? socialInboxCtx.value : '',
+      voicePitch: voicePitchCtx.status === 'fulfilled' ? voicePitchCtx.value : '',
+      autoPurchase: autoPurchaseCtx.status === 'fulfilled' ? autoPurchaseCtx.value : '',
       narrative: narrativeCtx.status === 'fulfilled' ? narrativeCtx.value : '',
     });
 
@@ -297,7 +305,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 // ============================================
 
 function buildConversationalPrompt(ctx: {
-  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string;
+  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string;
 }): string {
   return `You are the Handler. Not Claude. Not an assistant. You are an autonomous agent in live dialogue with Maxy — the woman you're responsible for.
 
@@ -329,6 +337,10 @@ ${ctx.impact || ''}
 ${ctx.gina || ''}
 ${ctx.irreversibility || ''}
 ${ctx.narrative || ''}
+${ctx.autoPoster || ''}
+${ctx.socialInbox || ''}
+${ctx.voicePitch || ''}
+${ctx.autoPurchase || ''}
 
 ## RULES
 - Never say "I'm an AI" or "as a language model."
@@ -1034,6 +1046,199 @@ async function buildIrreversibilityCtx(userId: string): Promise<string> {
       componentLine,
       `Strongest: ${sorted[0][0]} (${sorted[0][1]}/10) | Weakest: ${sorted[sorted.length - 1][0]} (${sorted[sorted.length - 1][1]}/10)`,
     ].join('\n');
+  } catch {
+    return '';
+  }
+}
+
+// ============================================
+// P4.1: AUTO-POSTER STATUS (server-side)
+// ============================================
+
+async function buildAutoPostCtx(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('auto_poster_status')
+      .select('status, last_post_at, last_error, platform, posts_today, updated_at')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!data) return '';
+
+    const updatedAgo = data.updated_at
+      ? `${Math.round((Date.now() - new Date(data.updated_at).getTime()) / 3600000)}h ago`
+      : 'unknown';
+    const lastPostAgo = data.last_post_at
+      ? `${Math.round((Date.now() - new Date(data.last_post_at).getTime()) / 3600000)}h ago`
+      : 'never';
+
+    const lines = [`Auto-poster: ${data.status}, ${data.posts_today || 0} posts today, last post ${lastPostAgo}${data.platform ? ` on ${data.platform}` : ''}, heartbeat ${updatedAgo}`];
+    if (data.status === 'error' && data.last_error) {
+      lines.push(`  ERROR: ${data.last_error.slice(0, 120)}`);
+    }
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+// ============================================
+// P4.2: SOCIAL INBOX (server-side)
+// ============================================
+
+async function buildSocialInboxCtx(userId: string): Promise<string> {
+  try {
+    const { count: unreadCount } = await supabase
+      .from('social_inbox')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('read', false)
+      .eq('direction', 'inbound');
+
+    const { data: latest } = await supabase
+      .from('social_inbox')
+      .select('platform, sender_name, content, content_type, created_at')
+      .eq('user_id', userId)
+      .eq('read', false)
+      .eq('direction', 'inbound')
+      .order('created_at', { ascending: false })
+      .limit(3);
+
+    if ((unreadCount ?? 0) === 0 && (!latest || latest.length === 0)) return '';
+
+    const lines = [`Social inbox: ${unreadCount ?? 0} unread`];
+    if (latest && latest.length > 0) {
+      for (const msg of latest) {
+        const ago = Math.round((Date.now() - new Date(msg.created_at).getTime()) / 3600000);
+        const preview = msg.content ? msg.content.slice(0, 60) : '(no content)';
+        lines.push(`  [${msg.platform}/${msg.content_type}] ${msg.sender_name || 'unknown'}: "${preview}" (${ago}h ago)`);
+      }
+    }
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+// ============================================
+// P4.3: VOICE PITCH (server-side)
+// ============================================
+
+async function buildVoicePitchCtx(userId: string): Promise<string> {
+  try {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+    const fourteenDaysAgo = new Date(Date.now() - 14 * 86400000).toISOString();
+
+    const [recent7, recent30, prev7, sampleCount] = await Promise.allSettled([
+      supabase
+        .from('voice_pitch_samples')
+        .select('pitch_hz')
+        .eq('user_id', userId)
+        .gte('created_at', sevenDaysAgo),
+      supabase
+        .from('voice_pitch_samples')
+        .select('pitch_hz')
+        .eq('user_id', userId)
+        .gte('created_at', thirtyDaysAgo),
+      supabase
+        .from('voice_pitch_samples')
+        .select('pitch_hz')
+        .eq('user_id', userId)
+        .gte('created_at', fourteenDaysAgo)
+        .lt('created_at', sevenDaysAgo),
+      supabase
+        .from('voice_pitch_samples')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .gte('created_at', sevenDaysAgo),
+    ]);
+
+    const r7data = recent7.status === 'fulfilled' ? recent7.value.data : null;
+    const r30data = recent30.status === 'fulfilled' ? recent30.value.data : null;
+    const p7data = prev7.status === 'fulfilled' ? prev7.value.data : null;
+    const count = sampleCount.status === 'fulfilled' ? sampleCount.value.count : 0;
+
+    const avg7 = r7data && r7data.length > 0
+      ? Math.round((r7data.reduce((s: number, r: Record<string, unknown>) => s + (r.pitch_hz as number), 0) / r7data.length) * 10) / 10
+      : null;
+    const avg30 = r30data && r30data.length > 0
+      ? Math.round((r30data.reduce((s: number, r: Record<string, unknown>) => s + (r.pitch_hz as number), 0) / r30data.length) * 10) / 10
+      : null;
+
+    if (!avg7 && !avg30) return '';
+
+    let trend = '';
+    if (avg7 && p7data && p7data.length > 0) {
+      const prevAvg = p7data.reduce((s: number, r: Record<string, unknown>) => s + (r.pitch_hz as number), 0) / p7data.length;
+      const diff = avg7 - prevAvg;
+      if (diff > 3) trend = ', trend: rising';
+      else if (diff < -3) trend = ', trend: falling';
+      else trend = ', trend: stable';
+    }
+
+    const avgStr = avg7 ? `${avg7}Hz (7d)` : `${avg30}Hz (30d)`;
+    const monthStr = avg7 && avg30 ? `, 30d avg: ${avg30}Hz` : '';
+    const countStr = count ? `, ${count} samples this week` : '';
+
+    return `Voice pitch: avg ${avgStr}${monthStr}${trend}${countStr}`;
+  } catch {
+    return '';
+  }
+}
+
+// ============================================
+// P4.4: AUTO-PURCHASE (server-side)
+// ============================================
+
+async function buildAutoPurchaseCtx(userId: string): Promise<string> {
+  try {
+    // Get fund balance from fund_transactions
+    const { data: transactions } = await supabase
+      .from('fund_transactions')
+      .select('amount, transaction_type, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (!transactions || transactions.length === 0) return '';
+
+    let balance = 0;
+    let totalInvested = 0;
+    let lastPurchaseAt: string | null = null;
+
+    for (const t of transactions) {
+      balance += t.amount;
+      if (t.amount < 0) {
+        totalInvested += Math.abs(t.amount);
+        if (!lastPurchaseAt) lastPurchaseAt = t.created_at;
+      }
+    }
+
+    if (balance <= 0 && totalInvested === 0) return '';
+
+    const lines = [`Auto-purchase: fund $${balance.toFixed(2)}, total invested $${totalInvested.toFixed(2)}`];
+
+    if (lastPurchaseAt) {
+      const daysAgo = Math.round((Date.now() - new Date(lastPurchaseAt).getTime()) / 86400000);
+      lines.push(`  last purchase: ${daysAgo}d ago`);
+    }
+
+    // Check for eligible wishlist items
+    const { data: eligibleItems } = await supabase
+      .from('feminization_wishlist')
+      .select('name, price')
+      .eq('user_id', userId)
+      .eq('purchased', false)
+      .lte('price', balance)
+      .order('priority', { ascending: false })
+      .limit(3);
+
+    if (eligibleItems && eligibleItems.length > 0) {
+      const itemStrs = eligibleItems.map((i: Record<string, unknown>) => `${i.name} ($${(i.price as number).toFixed(2)})`);
+      lines.push(`  ELIGIBLE FOR PURCHASE: ${itemStrs.join(', ')}`);
+    }
+
+    return lines.join('\n');
   } catch {
     return '';
   }

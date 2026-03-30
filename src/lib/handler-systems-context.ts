@@ -71,6 +71,10 @@ import { buildConditioningEngineContext } from './conditioning/handler-context';
 import { buildImpactContext } from './conditioning/impact-tracking';
 import { buildIrreversibilityContext } from './conditioning/irreversibility';
 import { buildNarrativeContext } from './conditioning/narrative-engine';
+import { buildVoicePitchContext } from './voice/pitch-tracker';
+import { buildInvestmentContext } from './handler-v2/auto-purchase';
+import { getFundBalance } from './handler-v2/auto-purchase';
+import { supabase } from './supabase';
 
 // ============================================
 // TYPES
@@ -101,6 +105,10 @@ export interface SystemsContext {
   conditioningEngine: string;
   impactTracking: string;
   narrativeArc: string;
+  autoPoster: string;
+  socialInbox: string;
+  voicePitch: string;
+  autoPurchase: string;
 }
 
 // ============================================
@@ -701,6 +709,120 @@ async function buildIndustryContext(userId: string): Promise<string> {
 }
 
 // ============================================
+// P4 CONTEXT BUILDERS
+// ============================================
+
+async function buildAutoPostCtx(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('auto_poster_status')
+      .select('status, last_post_at, last_error, platform, posts_today, updated_at')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!data) return '';
+
+    const parts: string[] = [];
+    const updatedAgo = data.updated_at
+      ? `${Math.round((Date.now() - new Date(data.updated_at).getTime()) / 3600000)}h ago`
+      : 'unknown';
+    const lastPostAgo = data.last_post_at
+      ? `${Math.round((Date.now() - new Date(data.last_post_at).getTime()) / 3600000)}h ago`
+      : 'never';
+
+    parts.push(`AUTO-POSTER: ${data.status}, ${data.posts_today || 0} posts today, last post ${lastPostAgo}${data.platform ? ` on ${data.platform}` : ''}, heartbeat ${updatedAgo}`);
+
+    if (data.status === 'error' && data.last_error) {
+      parts.push(`  ERROR: ${data.last_error.slice(0, 120)}`);
+    }
+
+    return parts.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+async function buildSocialInboxCtx(userId: string): Promise<string> {
+  try {
+    // Unread count
+    const { count: unreadCount } = await supabase
+      .from('social_inbox')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('read', false)
+      .eq('direction', 'inbound');
+
+    // Latest 3 unread messages
+    const { data: latest } = await supabase
+      .from('social_inbox')
+      .select('platform, sender_name, content, content_type, created_at')
+      .eq('user_id', userId)
+      .eq('read', false)
+      .eq('direction', 'inbound')
+      .order('created_at', { ascending: false })
+      .limit(3);
+
+    if ((unreadCount ?? 0) === 0 && (!latest || latest.length === 0)) return '';
+
+    const parts: string[] = [];
+    parts.push(`SOCIAL INBOX: ${unreadCount ?? 0} unread`);
+
+    if (latest && latest.length > 0) {
+      for (const msg of latest) {
+        const ago = Math.round((Date.now() - new Date(msg.created_at).getTime()) / 3600000);
+        const preview = msg.content ? msg.content.slice(0, 60) : '(no content)';
+        parts.push(`  [${msg.platform}/${msg.content_type}] ${msg.sender_name || 'unknown'}: "${preview}" (${ago}h ago)`);
+      }
+    }
+
+    return parts.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+async function buildAutoPurchaseCtx(userId: string): Promise<string> {
+  try {
+    const fund = await getFundBalance(userId);
+
+    if (fund.balance <= 0 && fund.totalInvested === 0) return '';
+
+    const parts: string[] = [];
+    parts.push(`AUTO-PURCHASE: fund $${fund.balance.toFixed(2)}, total invested $${fund.totalInvested.toFixed(2)}`);
+
+    if (fund.lastPurchaseAt) {
+      const daysAgo = Math.round((Date.now() - new Date(fund.lastPurchaseAt).getTime()) / 86400000);
+      parts.push(`  last purchase: ${daysAgo}d ago`);
+    }
+
+    // Check for eligible wishlist items
+    const { data: eligibleItems } = await supabase
+      .from('feminization_wishlist')
+      .select('name, price')
+      .eq('user_id', userId)
+      .eq('purchased', false)
+      .lte('price', fund.balance)
+      .order('priority', { ascending: false })
+      .limit(3);
+
+    if (eligibleItems && eligibleItems.length > 0) {
+      const itemStrs = eligibleItems.map(i => `${i.name} ($${i.price.toFixed(2)})`);
+      parts.push(`  ELIGIBLE FOR PURCHASE: ${itemStrs.join(', ')}`);
+    }
+
+    // Also pull investment context for sunk cost data
+    const investmentStr = await buildInvestmentContext(userId);
+    if (investmentStr) {
+      parts.push(investmentStr);
+    }
+
+    return parts.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+// ============================================
 // MAIN CONTEXT BUILDERS
 // ============================================
 
@@ -709,7 +831,7 @@ async function buildIndustryContext(userId: string): Promise<string> {
  * All systems, maximum data density.
  */
 export async function buildFullSystemsContext(userId: string): Promise<string> {
-  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social, memory, conditioningEngine, impactTracking, irreversibility, narrativeArc] = await Promise.allSettled([
+  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social, memory, conditioningEngine, impactTracking, irreversibility, narrativeArc, autoPoster, socialInbox, voicePitch, autoPurchase] = await Promise.allSettled([
     buildGinaContext(userId),
     buildContentContext(userId),
     buildVoiceContext(userId),
@@ -745,6 +867,10 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     buildImpactContext(userId),
     buildIrreversibilityContext(userId),
     buildNarrativeContext(userId),
+    buildAutoPostCtx(userId),
+    buildSocialInboxCtx(userId),
+    buildVoicePitchContext(userId),
+    buildAutoPurchaseCtx(userId),
   ]);
 
   const blocks = [
@@ -783,6 +909,10 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     impactTracking.status === 'fulfilled' ? impactTracking.value : '',
     irreversibility.status === 'fulfilled' ? irreversibility.value : '',
     narrativeArc.status === 'fulfilled' ? narrativeArc.value : '',
+    autoPoster.status === 'fulfilled' ? autoPoster.value : '',
+    socialInbox.status === 'fulfilled' ? socialInbox.value : '',
+    voicePitch.status === 'fulfilled' ? voicePitch.value : '',
+    autoPurchase.status === 'fulfilled' ? autoPurchase.value : '',
   ].filter(Boolean);
 
   if (blocks.length === 0) return '';
