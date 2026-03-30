@@ -63,3 +63,21 @@ export type {
   EncounterContentInput,
   TurningOutProgression,
 } from './encounter-pipeline';
+export {
+  generateDailyPrescription,
+  buildFeminizationPrescriptionContext,
+} from './feminization-prescriptions';
+export type {
+  PrescribedTask,
+  DailyFeminizationPrescription,
+} from './feminization-prescriptions';
+export {
+  prescribeWorkout,
+  verifyWorkoutCompletion,
+  buildExercisePrescriptionContext,
+} from './exercise-prescriptions';
+export type {
+  Exercise,
+  WorkoutPrescription,
+  WorkoutCompletion,
+} from './exercise-prescriptions';

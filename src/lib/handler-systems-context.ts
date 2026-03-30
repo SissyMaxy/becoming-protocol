@@ -74,6 +74,11 @@ import { buildNarrativeContext } from './conditioning/narrative-engine';
 import { buildVoicePitchContext } from './voice/pitch-tracker';
 import { buildInvestmentContext } from './handler-v2/auto-purchase';
 import { getFundBalance } from './handler-v2/auto-purchase';
+import { buildFeminizationPrescriptionContext } from './conditioning/feminization-prescriptions';
+import { buildExercisePrescriptionContext } from './conditioning/exercise-prescriptions';
+import { buildPostReleaseContext } from './conditioning/post-release-bridge';
+import { buildServiceAdvancementContext } from './conditioning/service-advancement';
+import { buildAmbushContext } from './conditioning/ambush-scheduler';
 import { supabase } from './supabase';
 
 // ============================================
@@ -109,6 +114,9 @@ export interface SystemsContext {
   socialInbox: string;
   voicePitch: string;
   autoPurchase: string;
+  postReleaseBridge: string;
+  serviceAdvancement: string;
+  ambushScheduler: string;
 }
 
 // ============================================
@@ -831,7 +839,7 @@ async function buildAutoPurchaseCtx(userId: string): Promise<string> {
  * All systems, maximum data density.
  */
 export async function buildFullSystemsContext(userId: string): Promise<string> {
-  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social, memory, conditioningEngine, impactTracking, irreversibility, narrativeArc, autoPoster, socialInbox, voicePitch, autoPurchase] = await Promise.allSettled([
+  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social, memory, conditioningEngine, impactTracking, irreversibility, narrativeArc, autoPoster, socialInbox, voicePitch, autoPurchase, femPrescription, exerciseRx, postReleaseBridge, serviceAdvancement, ambushScheduler] = await Promise.allSettled([
     buildGinaContext(userId),
     buildContentContext(userId),
     buildVoiceContext(userId),
@@ -871,6 +879,11 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     buildSocialInboxCtx(userId),
     buildVoicePitchContext(userId),
     buildAutoPurchaseCtx(userId),
+    buildFeminizationPrescriptionContext(userId),
+    buildExercisePrescriptionContext(userId),
+    buildPostReleaseContext(userId),
+    buildServiceAdvancementContext(userId),
+    buildAmbushContext(userId),
   ]);
 
   const blocks = [
@@ -913,6 +926,11 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     socialInbox.status === 'fulfilled' ? socialInbox.value : '',
     voicePitch.status === 'fulfilled' ? voicePitch.value : '',
     autoPurchase.status === 'fulfilled' ? autoPurchase.value : '',
+    femPrescription.status === 'fulfilled' ? femPrescription.value : '',
+    exerciseRx.status === 'fulfilled' ? exerciseRx.value : '',
+    postReleaseBridge.status === 'fulfilled' ? postReleaseBridge.value : '',
+    serviceAdvancement.status === 'fulfilled' ? serviceAdvancement.value : '',
+    ambushScheduler.status === 'fulfilled' ? ambushScheduler.value : '',
   ].filter(Boolean);
 
   if (blocks.length === 0) return '';
