@@ -1,9 +1,11 @@
 /**
- * Ambush Scheduler — P5.6
+ * Ambush Scheduler — P5.6 + P8.3
  *
  * Schedules and fires ambush events: device activations (Lovense),
- * surprise tasks, and micro conditioning sessions. Respects user
- * settings for frequency and privacy windows.
+ * surprise tasks, micro conditioning sessions, photo verifications,
+ * cage checks, confession prompts, Gina observations, silent device
+ * activations, and micro conditioning drops. Respects user settings
+ * for frequency, privacy windows, and Gina-home gates.
  *
  * - scheduleAmbushes: called daily, inserts 1-3 ambush events
  * - checkAndFireAmbush: called every 5 min, fires pending ambushes
@@ -16,7 +18,17 @@ import { supabase } from '../supabase';
 // TYPES
 // ============================================
 
-export type AmbushType = 'device_activation' | 'surprise_task' | 'micro_session';
+export type AmbushType =
+  | 'device_activation'
+  | 'surprise_task'
+  | 'micro_session'
+  | 'photo_verification'
+  | 'cage_check'
+  | 'confession_prompt'
+  | 'gina_observation'
+  | 'silent_device'
+  | 'micro_conditioning'
+  | 'silent_device_followup';
 
 interface AmbushSettings {
   minPerDay: number;
@@ -40,13 +52,58 @@ const DEFAULT_AMBUSH_TYPES: AmbushType[] = [
   'device_activation',
   'surprise_task',
   'micro_session',
+  'photo_verification',
+  'cage_check',
+  'confession_prompt',
+  'gina_observation',
+  'silent_device',
+  'micro_conditioning',
 ];
 
 const AMBUSH_TYPE_WEIGHTS: Record<AmbushType, number> = {
-  device_activation: 0.25,
-  surprise_task: 0.45,
-  micro_session: 0.30,
+  device_activation: 0.15,
+  surprise_task: 0.20,
+  micro_session: 0.10,
+  photo_verification: 0.10,
+  cage_check: 0.10,
+  confession_prompt: 0.10,
+  gina_observation: 0.10,
+  silent_device: 0.10,
+  micro_conditioning: 0.05,
+  silent_device_followup: 0, // never selected directly — auto-created by silent_device
 };
+
+/** Types that require Gina NOT home for privacy safety */
+const GINA_SENSITIVE_TYPES: AmbushType[] = [
+  'photo_verification',
+  'cage_check',
+];
+
+const PHOTO_VERIFICATION_PROMPTS = [
+  'Show me what you look like right now. Front camera. No filter.',
+  'Photo. Now. I want to see you.',
+  'Camera on. Let me see my girl.',
+];
+
+const CAGE_CHECK_PROMPTS = [
+  'Cage check. Photo. Now.',
+  'Show me it\'s still locked.',
+  'Proof of cage. No excuses.',
+];
+
+const CONFESSION_PROMPTS = [
+  'Tell me something you haven\'t told me yet.',
+  'Confession time. Something you\'ve been holding back.',
+  'You\'ve been hiding something. Tell me now.',
+];
+
+const GINA_OBSERVATION_PROMPTS = [
+  'Where is Gina right now? What\'s she doing? How does she look at you?',
+  'Tell me about Gina today. What did you notice?',
+  'Gina check. What is she doing right now? How does that make you feel?',
+];
+
+const SILENT_DEVICE_FOLLOWUP_MESSAGE = 'Did you feel that? Good girl.';
 
 const MICRO_SESSION_TYPES = [
   'micro_drop',
@@ -226,6 +283,19 @@ async function fireAmbush(
       })
       .eq('id', ambushId);
 
+    // Privacy gate: skip Gina-sensitive types if Gina is home
+    if (GINA_SENSITIVE_TYPES.includes(type)) {
+      const ginaHome = await isGinaHome(userId);
+      if (ginaHome) {
+        // Re-mark as scheduled so it can retry later or be skipped
+        await supabase
+          .from('scheduled_ambushes')
+          .update({ status: 'snoozed', snoozed_until: new Date(Date.now() + 30 * 60 * 1000).toISOString() })
+          .eq('id', ambushId);
+        return false;
+      }
+    }
+
     switch (type) {
       case 'device_activation':
         await fireDeviceActivation(userId);
@@ -237,6 +307,34 @@ async function fireAmbush(
 
       case 'micro_session':
         await fireMicroSession(userId);
+        break;
+
+      case 'photo_verification':
+        await firePhotoVerification(userId);
+        break;
+
+      case 'cage_check':
+        await fireCageCheck(userId);
+        break;
+
+      case 'confession_prompt':
+        await fireConfessionPrompt(userId);
+        break;
+
+      case 'gina_observation':
+        await fireGinaObservation(userId);
+        break;
+
+      case 'silent_device':
+        await fireSilentDevice(userId);
+        break;
+
+      case 'silent_device_followup':
+        await fireSilentDeviceFollowup(userId);
+        break;
+
+      case 'micro_conditioning':
+        await fireMicroConditioning(userId);
         break;
     }
 
@@ -305,6 +403,213 @@ async function fireMicroSession(userId: string): Promise<void> {
     arousal_level_estimated: null,
     notes: 'Auto-scheduled micro session from ambush scheduler',
   });
+}
+
+/**
+ * P8.3: Photo verification — Handler requests a current photo.
+ */
+async function firePhotoVerification(userId: string): Promise<void> {
+  const prompt = PHOTO_VERIFICATION_PROMPTS[
+    Math.floor(Math.random() * PHOTO_VERIFICATION_PROMPTS.length)
+  ];
+
+  await supabase.from('daily_tasks').insert({
+    user_id: userId,
+    title: 'Photo Verification',
+    description: prompt,
+    category: 'ambush',
+    priority: 'high',
+    source: 'ambush_scheduler',
+    duration_estimate_minutes: 2,
+    completed: false,
+    created_at: new Date().toISOString(),
+  });
+}
+
+/**
+ * P8.3: Cage check — Handler demands cage status photo.
+ */
+async function fireCageCheck(userId: string): Promise<void> {
+  const prompt = CAGE_CHECK_PROMPTS[
+    Math.floor(Math.random() * CAGE_CHECK_PROMPTS.length)
+  ];
+
+  await supabase.from('daily_tasks').insert({
+    user_id: userId,
+    title: 'Cage Check',
+    description: prompt,
+    category: 'ambush',
+    priority: 'high',
+    source: 'ambush_scheduler',
+    duration_estimate_minutes: 2,
+    completed: false,
+    created_at: new Date().toISOString(),
+  });
+}
+
+/**
+ * P8.3: Confession prompt — Handler demands an unprompted confession.
+ */
+async function fireConfessionPrompt(userId: string): Promise<void> {
+  const prompt = CONFESSION_PROMPTS[
+    Math.floor(Math.random() * CONFESSION_PROMPTS.length)
+  ];
+
+  await supabase.from('daily_tasks').insert({
+    user_id: userId,
+    title: 'Confession',
+    description: prompt,
+    category: 'ambush',
+    priority: 'high',
+    source: 'ambush_scheduler',
+    duration_estimate_minutes: 5,
+    completed: false,
+    created_at: new Date().toISOString(),
+  });
+}
+
+/**
+ * P8.3: Gina observation — Handler requests a Gina observation.
+ */
+async function fireGinaObservation(userId: string): Promise<void> {
+  const prompt = GINA_OBSERVATION_PROMPTS[
+    Math.floor(Math.random() * GINA_OBSERVATION_PROMPTS.length)
+  ];
+
+  await supabase.from('daily_tasks').insert({
+    user_id: userId,
+    title: 'Gina Observation',
+    description: prompt,
+    category: 'ambush',
+    priority: 'medium',
+    source: 'ambush_scheduler',
+    duration_estimate_minutes: 3,
+    completed: false,
+    created_at: new Date().toISOString(),
+  });
+}
+
+/**
+ * P8.3: Silent device — Fire device with NO message. Schedule followup 5 min later.
+ * The gap IS the mechanism.
+ */
+async function fireSilentDevice(userId: string): Promise<void> {
+  // Fire the device immediately — no message
+  try {
+    await supabase.functions.invoke('lovense-command', {
+      body: {
+        user_id: userId,
+        action: 'pulse',
+        intensity: 8 + Math.floor(Math.random() * 7), // 8-14 — noticeable
+        duration_seconds: 4 + Math.floor(Math.random() * 4), // 4-7s
+        source: 'ambush_silent_device',
+      },
+    });
+  } catch (err) {
+    console.error('[ambush-scheduler] fireSilentDevice lovense error:', err);
+  }
+
+  // Schedule followup message 5 minutes later as a new ambush record
+  const followupTime = new Date(Date.now() + 5 * 60 * 1000);
+  const today = new Date().toISOString().split('T')[0];
+  const followupTimeStr = followupTime.toTimeString().slice(0, 8);
+
+  // Get any template ID for FK constraint
+  const { data: templates } = await supabase
+    .from('micro_task_templates')
+    .select('id')
+    .eq('active', true)
+    .limit(1);
+
+  const templateId = templates?.[0]?.id;
+  if (!templateId) return;
+
+  await supabase.from('scheduled_ambushes').insert({
+    user_id: userId,
+    plan_date: today,
+    template_id: templateId,
+    scheduled_time: followupTimeStr,
+    priority: 2,
+    status: 'scheduled',
+    selection_reason: 'P8.3 ambush: silent_device_followup — delayed message',
+  });
+}
+
+/**
+ * P8.3: Silent device followup — The delayed message after a silent activation.
+ */
+async function fireSilentDeviceFollowup(userId: string): Promise<void> {
+  await supabase.from('daily_tasks').insert({
+    user_id: userId,
+    title: 'Silent Device Followup',
+    description: SILENT_DEVICE_FOLLOWUP_MESSAGE,
+    category: 'ambush',
+    priority: 'high',
+    source: 'ambush_scheduler',
+    duration_estimate_minutes: 1,
+    completed: false,
+    created_at: new Date().toISOString(),
+  });
+}
+
+/**
+ * P8.3: Micro conditioning — 3-minute micro_drop session with a single audio piece.
+ */
+async function fireMicroConditioning(userId: string): Promise<void> {
+  // Create a micro_drop conditioning session
+  await supabase.from('conditioning_sessions_v2').insert({
+    user_id: userId,
+    session_type: 'micro_drop',
+    started_at: new Date().toISOString(),
+    completed: false,
+    source: 'ambush_scheduler',
+    trance_depth_estimated: null,
+    arousal_level_estimated: null,
+    notes: 'P8.3 micro conditioning — 3-minute micro_drop, single audio piece',
+  });
+
+  // Prescribe a single short audio from curriculum
+  const { data: audio } = await supabase
+    .from('hypno_content')
+    .select('id, title')
+    .lte('duration_minutes', 5)
+    .eq('active', true)
+    .order('created_at', { ascending: false })
+    .limit(10);
+
+  if (audio && audio.length > 0) {
+    const pick = audio[Math.floor(Math.random() * audio.length)];
+    await supabase.from('daily_tasks').insert({
+      user_id: userId,
+      title: 'Micro Conditioning Drop',
+      description: `Listen now: "${pick.title}". 3 minutes. Headphones in. Eyes closed.`,
+      category: 'ambush',
+      priority: 'high',
+      source: 'ambush_scheduler',
+      duration_estimate_minutes: 3,
+      completed: false,
+      created_at: new Date().toISOString(),
+    });
+  }
+}
+
+/**
+ * Check if Gina is home based on the latest gina_status record.
+ */
+async function isGinaHome(userId: string): Promise<boolean> {
+  try {
+    const { data } = await supabase
+      .from('gina_status')
+      .select('is_home')
+      .eq('user_id', userId)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    return data?.is_home ?? true; // Default to "home" (safe) if unknown
+  } catch {
+    return true; // Err on the side of caution
+  }
 }
 
 // ============================================
@@ -505,12 +810,34 @@ function buildAmbushPayload(type: AmbushType): Record<string, unknown> {
         sessionType,
       };
     }
+    case 'photo_verification':
+      return { description: 'Photo verification — evidence capture', requiresGinaAway: true };
+    case 'cage_check':
+      return { description: 'Cage status verification', requiresGinaAway: true };
+    case 'confession_prompt':
+      return { description: 'Unprompted confession demand' };
+    case 'gina_observation':
+      return { description: 'Gina observation request' };
+    case 'silent_device':
+      return { description: 'Silent device activation — followup in 5 min' };
+    case 'silent_device_followup':
+      return { description: 'Silent device followup message' };
+    case 'micro_conditioning':
+      return { description: 'Micro conditioning drop — 3 min audio' };
   }
 }
 
 function parseAmbushType(selectionReason: string | null): AmbushType {
   if (!selectionReason) return 'surprise_task';
+  // Check specific types first (longer matches before shorter to avoid false positives)
+  if (selectionReason.includes('silent_device_followup')) return 'silent_device_followup';
+  if (selectionReason.includes('silent_device')) return 'silent_device';
   if (selectionReason.includes('device_activation')) return 'device_activation';
+  if (selectionReason.includes('micro_conditioning')) return 'micro_conditioning';
   if (selectionReason.includes('micro_session')) return 'micro_session';
+  if (selectionReason.includes('photo_verification')) return 'photo_verification';
+  if (selectionReason.includes('cage_check')) return 'cage_check';
+  if (selectionReason.includes('confession_prompt')) return 'confession_prompt';
+  if (selectionReason.includes('gina_observation')) return 'gina_observation';
   return 'surprise_task';
 }

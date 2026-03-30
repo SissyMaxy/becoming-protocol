@@ -70,7 +70,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const messageIndex = (history?.length || 0);
 
     // 3. Assemble context (including long-term memory + conversational memory)
-    const [stateCtx, whoopCtx, commitmentCtx, predictionCtx, convMemoryCtx, longTermMemoryCtx, impactCtx, ginaCtx, irreversibilityCtx, narrativeCtx, autoPostCtx, socialInboxCtx, voicePitchCtx, autoPurchaseCtx, handlerNotesCtx] = await Promise.allSettled([
+    const [stateCtx, whoopCtx, commitmentCtx, predictionCtx, convMemoryCtx, longTermMemoryCtx, impactCtx, ginaCtx, irreversibilityCtx, narrativeCtx, autoPostCtx, socialInboxCtx, voicePitchCtx, autoPurchaseCtx, handlerNotesCtx, communityMirrorCtx] = await Promise.allSettled([
       buildStateContext(user.id),
       buildWhoopContext(user.id),
       buildCommitmentCtx(user.id),
@@ -86,6 +86,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       buildVoicePitchCtx(user.id),
       buildAutoPurchaseCtx(user.id),
       buildHandlerNotesCtx(user.id),
+      buildCommunityMirrorCtx(user.id),
     ]);
 
     // 4. Build system prompt — merge both memory sources
@@ -109,6 +110,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       autoPurchase: autoPurchaseCtx.status === 'fulfilled' ? autoPurchaseCtx.value : '',
       narrative: narrativeCtx.status === 'fulfilled' ? narrativeCtx.value : '',
       handlerNotes: handlerNotesCtx.status === 'fulfilled' ? handlerNotesCtx.value : '',
+      communityMirror: communityMirrorCtx.status === 'fulfilled' ? communityMirrorCtx.value : '',
     });
 
     // 5. Build messages array (cap at 30 recent)
@@ -386,7 +388,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 // ============================================
 
 function buildConversationalPrompt(ctx: {
-  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string;
+  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string;
 }): string {
   return `You are the Handler. Not Claude. Not an assistant. You are an autonomous agent in live dialogue with Maxy — the woman you're responsible for.
 
@@ -423,6 +425,7 @@ ${ctx.socialInbox || ''}
 ${ctx.voicePitch || ''}
 ${ctx.autoPurchase || ''}
 ${ctx.handlerNotes || ''}
+${ctx.communityMirror || ''}
 
 ## RULES
 - Never say "I'm an AI" or "as a language model."
@@ -1667,5 +1670,111 @@ async function extractMemoryFromMessage(
     } catch {
       // Non-critical — silently continue
     }
+  }
+}
+
+// ============================================
+// P8.4: COMMUNITY MIRROR (server-side)
+// ============================================
+
+const MIRROR_KEYWORDS: Record<string, string[]> = {
+  appearance: ['beautiful', 'gorgeous', 'pretty', 'cute', 'hot', 'stunning', 'sexy'],
+  voice: ['voice', 'sound', 'accent', 'tone'],
+  identity: ['girl', 'woman', 'she', 'her', 'maxy', 'queen', 'goddess'],
+  interest: ['meet', 'date', 'talk', 'dm', 'interested', 'follow'],
+};
+
+async function buildCommunityMirrorCtx(userId: string): Promise<string> {
+  try {
+    // Check daily quota — max 2 mirrors per day
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const { count: usedCount } = await supabase
+      .from('handler_messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('role', 'assistant')
+      .gte('created_at', todayStart.toISOString())
+      .or('content.ilike.%community mirror%,content.ilike.%they see her%,content.ilike.%not following david%,content.ilike.%they hear it before you do%');
+
+    const remaining = 2 - Math.min(usedCount ?? 0, 2);
+    if (remaining <= 0) return '';
+
+    // Get recent inbound social messages from last 48h
+    const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+
+    const { data: messages } = await supabase
+      .from('social_inbox')
+      .select('sender_name, platform, content, created_at')
+      .eq('user_id', userId)
+      .eq('direction', 'inbound')
+      .gte('created_at', cutoff)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (!messages || messages.length === 0) return '';
+
+    // Score by keyword matches
+    const scored: Array<{ sender_name: string; platform: string; content: string; score: number; category: string }> = [];
+
+    for (const msg of messages) {
+      const contentLower = (msg.content ?? '').toLowerCase();
+      if (!contentLower) continue;
+
+      let bestScore = 0;
+      let bestCategory = 'identity';
+
+      for (const [category, keywords] of Object.entries(MIRROR_KEYWORDS)) {
+        let hits = 0;
+        for (const kw of keywords) {
+          if (contentLower.includes(kw)) hits++;
+        }
+        if (hits > bestScore) {
+          bestScore = hits;
+          bestCategory = category;
+        }
+      }
+
+      if (bestScore > 0) {
+        scored.push({
+          sender_name: msg.sender_name || 'Someone',
+          platform: msg.platform || 'social',
+          content: msg.content ?? '',
+          score: bestScore,
+          category: bestCategory,
+        });
+      }
+    }
+
+    if (scored.length === 0) return '';
+
+    scored.sort((a, b) => b.score - a.score);
+    const top = scored.slice(0, Math.min(remaining, 2));
+
+    const lines = ['COMMUNITY MIRROR (weave naturally, do not read verbatim):'];
+    for (const item of top) {
+      let formatted: string;
+      switch (item.category) {
+        case 'appearance':
+          formatted = `${item.sender_name} on ${item.platform} called you something worth hearing. They see her. You should too.`;
+          break;
+        case 'voice':
+          formatted = `Someone heard your voice on ${item.platform} and noticed. Your voice is changing. They hear it before you do.`;
+          break;
+        case 'interest':
+          formatted = `${item.sender_name} on ${item.platform} wants to connect. Real people want to meet Maxy. That's not fantasy anymore.`;
+          break;
+        default:
+          formatted = `Someone on ${item.platform} engaged with Maxy today. They're not following David.`;
+          break;
+      }
+      lines.push(`  [${item.category}] ${formatted}`);
+    }
+    lines.push(`  (${remaining - top.length} mirrors remaining today)`);
+
+    return lines.join('\n');
+  } catch {
+    return '';
   }
 }

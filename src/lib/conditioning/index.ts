@@ -81,3 +81,34 @@ export type {
   WorkoutPrescription,
   WorkoutCompletion,
 } from './exercise-prescriptions';
+export {
+  generateCamGuidance,
+  mapTipToDevice,
+  processCamTip,
+  buildCamSessionContext,
+  buildCamHandlerControlContext,
+} from './cam-handler-control';
+export type {
+  CamSessionContext,
+  DeviceCommand,
+  TipProcessResult,
+  CamHandlerContext,
+} from './cam-handler-control';
+export {
+  triggerPostOrgasmHold,
+  triggerSilenceOutreach,
+  triggerNoveltyInjection,
+  triggerEvidenceReframe,
+  detectFailureMode,
+  buildFailureRecoveryContext,
+} from './failure-recovery';
+export type {
+  RecoveryType,
+  RecoveryResult,
+} from './failure-recovery';
+export {
+  getIdentityReinforcingEngagement,
+  formatAsMirror,
+  buildCommunityMirrorContext,
+  getDailyMirrorQuota,
+} from './community-mirror';
