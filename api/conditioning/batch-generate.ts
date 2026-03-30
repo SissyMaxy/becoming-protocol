@@ -204,30 +204,28 @@ function buildPrompt(
   const phaseNames: Record<number, string> = {
     1: 'Relaxation & Self-Discovery',
     2: 'Identity Affirmation',
-    3: 'Deepening Self-Trust',
-    4: 'Core Integration',
-    5: 'Authentic Self Reinforcement',
+    3: 'Guided Exploration of Sensuality & Embodied Feminine Experience',
+    4: 'Mindfulness Anchoring with Personalized Affirmation Phrases',
+    5: 'Confidence Building for Authentic Self-Expression',
+    6: 'Identity Consolidation & Self-Affirmation Practice',
   };
 
   const phaseTones: Record<number, string> = {
     1: 'Warm, gentle, nurturing. Build comfort and safety.',
     2: 'Confident, guiding. Affirm her authentic self.',
-    3: 'Supportive, empowering. Deepen self-acceptance.',
-    4: 'Intimate, focused. Direct connection to her truth.',
-    5: 'Grounded, certain. She knows who she is.',
+    3: 'Intimate, sensual. Guide her into body awareness, sensation, and self-discovery as a woman.',
+    4: 'Focused, rhythmic. Anchor specific phrases through repetition and association. Each phrase is a mindfulness anchor.',
+    5: 'Assured, social. Build confidence for expressing her authentic self in the world. She is seen.',
+    6: 'Deeply present. She is whole. Consolidate and celebrate what already exists.',
   };
-
-  const wordCounts: Record<number, number> = {
-    1: 1200, 2: 1800, 3: 2400, 4: 3000, 5: 3600,
-  };
-
-  const wc = wordCounts[phase] || 1800;
 
   return `Write a guided self-hypnosis and affirmation script for Maxy's personal audio library. This is her nightly ${target} practice.
 
+HARD CONSTRAINT: Keep the script under 500 words. Approximately 2.5-3 minutes spoken. This is a constraint, not a suggestion. Shorter scripts with precise language are more effective than long scripts that dilute impact. Every word must earn its place.
+
 ## SESSION LEVEL: ${phase} — ${phaseNames[phase] || 'Affirmation'}
 Tone: ${phaseTones[phase] || 'Warm and affirming.'}
-Focus area: ${target} — feminine identity affirmation and self-acceptance
+Focus area: ${target}
 
 ## ABOUT MAXY
 - Trans woman in her 40s, actively transitioning
@@ -246,14 +244,14 @@ ${other ? `## JOURNAL NOTES\n${other}\n` : ''}
 - Short, rhythmic sentences for audio pacing
 - Include [pause], [breathe in], [breathe out] markers
 - Affirmation phrases to weave in: "good girl", "let go", "she's here", "this is you"
-- Embed 2-3 gentle intentions for tomorrow in the middle section (e.g., "tomorrow when you look in the mirror, you'll see her more clearly")
-- Target length: ${wc} words (~${Math.round(wc / 120)} minutes at slow delivery)
+- Embed 1-2 gentle intentions for tomorrow in the middle (e.g., "tomorrow when you look in the mirror, you'll see her more clearly")
+- MAXIMUM 500 words. 2.5-3 minutes. Precision over length.
 
 ## STRUCTURE
-1. Relaxation induction (breathing, body scan, settling in)
-2. Main affirmation body (identity, self-acceptance, feminine presence)
-3. Tomorrow intentions (embedded during deepest relaxation)
-4. Gentle return (or drift into sleep if this is a sleep session)
+1. Brief induction (3-4 sentences: breathing, settling)
+2. Core affirmation (the concentrated message — this is the payload)
+3. One tomorrow intention (embedded during deepest relaxation)
+4. Gentle close (2-3 sentences: return or drift into sleep)
 
-Write the complete script now. No preamble, no metadata — just the script text for audio recording.`;
+Write the complete script now. No preamble, no metadata — just the script text. Under 500 words.`;
 }
