@@ -67,16 +67,18 @@ serve(async (req) => {
         result = { error: `Unknown action: ${body.action}` }
     }
 
-    // Log the orchestrator run
-    await supabase.from('handler_decisions').insert({
-      user_id: body.user_id || 'system',
-      decision_type: `orchestrator_${body.action}`,
-      decision_data: result,
-      reasoning: `Cron-triggered ${body.action}`,
-      executed: true,
-      executed_at: new Date().toISOString(),
-      outcome: { success: !result.error },
-    }).catch(() => {}) // Non-critical logging
+    // Log the orchestrator run (non-critical)
+    try {
+      await supabase.from('handler_decisions').insert({
+        user_id: body.user_id || 'system',
+        decision_type: `orchestrator_${body.action}`,
+        decision_data: result,
+        reasoning: `Cron-triggered ${body.action}`,
+        executed: true,
+        executed_at: new Date().toISOString(),
+        outcome: { success: !result.error },
+      })
+    } catch (_) { /* non-critical logging */ }
 
     return new Response(
       JSON.stringify(result),
@@ -237,7 +239,7 @@ async function executeEscalation(
       p_amount: -action.amount,
       p_type: 'penalty',
       p_description: `Tier ${tier} penalty: ${action.description}`,
-    }).catch(err => console.error('Fund penalty failed:', err))
+    }).then(({ error }) => { if (error) console.error('Fund penalty failed:', error.message) })
   }
 
   if (tier === 3) {
@@ -513,7 +515,7 @@ async function bleedingProcess(
           p_amount: -actualBleed,
           p_type: 'bleeding',
           p_description: `Financial bleeding: $${actualBleed.toFixed(2)} (${minutesBleeding.toFixed(0)} min at $${rate}/min)`,
-        }).catch(err => console.error('Bleeding deduction failed:', err))
+        }).then(({ error }) => { if (error) console.error('Bleeding deduction failed:', error.message) })
 
         // Update compliance state
         await supabase

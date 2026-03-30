@@ -98,7 +98,7 @@ serve(async (req) => {
         break
 
       default:
-        throw new Error(`Unknown action: ${body.action}`)
+        result = { ok: false, error: `Unknown action: ${body.action}`, available: ['process_ai_queue','engagement_cycle','daily_batch','gfe_morning','gfe_evening','weekly_batch','multiply_content','respond_dm','generate_post'] }
     }
 
     // Log the operation
