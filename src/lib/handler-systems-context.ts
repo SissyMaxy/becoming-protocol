@@ -9,6 +9,9 @@
  */
 
 import { getPipelineComposite } from './gina/ladder-engine';
+import { getChannelsInRecovery, getRecentSeeds } from './gina/seed-manager';
+import { getDueMeasurements } from './gina/measurement-engine';
+import { getDiscoveryState } from './gina/discovery-engine';
 import { buildWhoopContext } from './whoop-context';
 import { buildCommitmentContext } from './handler-v2/commitment-enforcement';
 import { getCurrentPrediction } from './handler-v2/predictive-model';
@@ -103,11 +106,67 @@ export interface SystemsContext {
 
 async function buildGinaContext(userId: string): Promise<string> {
   try {
-    const composite = await getPipelineComposite(userId);
-    if (composite.channelsStarted === 0) return '';
+    const [compositeResult, discoveryResult, recoveryResult, recentSeedsResult, dueMeasurementsResult] = await Promise.allSettled([
+      getPipelineComposite(userId),
+      getDiscoveryState(userId),
+      getChannelsInRecovery(userId),
+      getRecentSeeds(userId, 14),
+      getDueMeasurements(userId),
+    ]);
 
-    return `GINA PIPELINE: avg rung ${composite.average.toFixed(1)}/5, ${composite.channelsStarted}/10 channels active, ${composite.channelsAtMax} maxed
-  leading: ${composite.leading ? `${composite.leading.channel} R${composite.leading.rung}` : 'none'} | lagging: ${composite.lagging ? `${composite.lagging.channel} R${composite.lagging.rung}` : 'none'} | gap: ${composite.widestGap}`;
+    const composite = compositeResult.status === 'fulfilled' ? compositeResult.value : null;
+    const discovery = discoveryResult.status === 'fulfilled' ? discoveryResult.value : null;
+    const recovery = recoveryResult.status === 'fulfilled' ? recoveryResult.value : [];
+    const recentSeeds = recentSeedsResult.status === 'fulfilled' ? recentSeedsResult.value : [];
+    const dueMeasurements = dueMeasurementsResult.status === 'fulfilled' ? dueMeasurementsResult.value : [];
+
+    if (!composite && !discovery) return '';
+    if (composite && composite.channelsStarted === 0 && !discovery) return '';
+
+    const parts: string[] = [];
+
+    // Pipeline composite
+    if (composite && composite.channelsStarted > 0) {
+      parts.push(`GINA PIPELINE: avg rung ${composite.average.toFixed(1)}/5, ${composite.channelsStarted}/10 channels active, ${composite.channelsAtMax} maxed`);
+      parts.push(`  leading: ${composite.leading ? `${composite.leading.channel} R${composite.leading.rung}` : 'none'} | lagging: ${composite.lagging ? `${composite.lagging.channel} R${composite.lagging.rung}` : 'none'} | gap: ${composite.widestGap}`);
+    }
+
+    // Discovery state
+    if (discovery) {
+      parts.push(`  discovery phase: ${discovery.phase} | readiness: ${discovery.score}/100`);
+      if (discovery.recommendation) {
+        parts.push(`  recommendation: ${discovery.recommendation}`);
+      }
+    }
+
+    // Channels in recovery
+    if (recovery.length > 0) {
+      const recoveryStrs = recovery.map(r =>
+        `${r.channel} (${r.recoveryType}${r.cooldownDaysRemaining > 0 ? `, ${r.cooldownDaysRemaining}d cooldown` : ''})`
+      );
+      parts.push(`  IN RECOVERY: ${recoveryStrs.join(', ')}`);
+    }
+
+    // Recent seed activity summary
+    if (recentSeeds.length > 0) {
+      const positive = recentSeeds.filter(s => s.ginaResponse === 'positive').length;
+      const negative = recentSeeds.filter(s => s.ginaResponse === 'negative').length;
+      const callout = recentSeeds.filter(s => s.ginaResponse === 'callout').length;
+      parts.push(`  seeds (14d): ${recentSeeds.length} total, ${positive} positive, ${negative} negative${callout > 0 ? `, ${callout} CALLOUT` : ''}`);
+
+      // Last seed details
+      const last = recentSeeds[0];
+      const daysAgo = Math.floor((Date.now() - last.createdAt.getTime()) / 86400000);
+      parts.push(`  last seed: ${last.channel} R${last.rung} → ${last.ginaResponse}${last.ginaExactWords ? ` ("${last.ginaExactWords.slice(0, 60)}")` : ''} ${daysAgo}d ago`);
+    }
+
+    // Due measurements
+    if (dueMeasurements.length > 0) {
+      const dueStrs = dueMeasurements.map(d => d.type.replace(/_/g, ' ')).slice(0, 4);
+      parts.push(`  measurements due: ${dueStrs.join(', ')}`);
+    }
+
+    return parts.join('\n');
   } catch {
     return '';
   }

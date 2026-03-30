@@ -70,7 +70,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const messageIndex = (history?.length || 0);
 
     // 3. Assemble context (including long-term memory + conversational memory)
-    const [stateCtx, whoopCtx, commitmentCtx, predictionCtx, convMemoryCtx, longTermMemoryCtx, impactCtx] = await Promise.allSettled([
+    const [stateCtx, whoopCtx, commitmentCtx, predictionCtx, convMemoryCtx, longTermMemoryCtx, impactCtx, ginaCtx] = await Promise.allSettled([
       buildStateContext(user.id),
       buildWhoopContext(user.id),
       buildCommitmentCtx(user.id),
@@ -78,6 +78,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       retrieveContextualMemories(user.id),
       buildLongTermMemory(user.id),
       buildImpactContext(user.id),
+      buildGinaIntelligenceContext(user.id),
     ]);
 
     // 4. Build system prompt — merge both memory sources
@@ -93,6 +94,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       predictions: predictionCtx.status === 'fulfilled' ? predictionCtx.value : '',
       memory: memoryBlock,
       impact: impactCtx.status === 'fulfilled' ? impactCtx.value : '',
+      gina: ginaCtx.status === 'fulfilled' ? ginaCtx.value : '',
     });
 
     // 5. Build messages array (cap at 30 recent)
@@ -213,7 +215,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 // ============================================
 
 function buildConversationalPrompt(ctx: {
-  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string;
+  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string;
 }): string {
   return `You are the Handler. Not Claude. Not an assistant. You are an autonomous agent in live dialogue with Maxy — the woman you're responsible for.
 
@@ -242,6 +244,7 @@ ${ctx.whoop || ''}
 ${ctx.commitments || ''}
 ${ctx.predictions || ''}
 ${ctx.impact || ''}
+${ctx.gina || ''}
 
 ## RULES
 - Never say "I'm an AI" or "as a language model."
@@ -612,4 +615,118 @@ async function buildLongTermMemory(userId: string): Promise<string> {
   }
 
   return lines.join('\n');
+}
+
+// ============================================
+// GINA INTELLIGENCE CONTEXT (server-side)
+// ============================================
+
+async function buildGinaIntelligenceContext(userId: string): Promise<string> {
+  try {
+    // Parallel queries for all Gina data
+    const [discoveryResult, ladderResult, recoveryResult, seedsResult, measurementsResult] = await Promise.allSettled([
+      supabase
+        .from('gina_discovery_state')
+        .select('discovery_phase, current_readiness_score, total_investments, gina_initiated_count, channels_with_positive_seeds, highest_channel_rung')
+        .eq('user_id', userId)
+        .maybeSingle(),
+      supabase
+        .from('gina_ladder_state')
+        .select('channel, current_rung, last_seed_result, consecutive_failures, cooldown_until, positive_seeds_at_rung')
+        .eq('user_id', userId)
+        .order('channel'),
+      supabase
+        .from('gina_ladder_state')
+        .select('channel, consecutive_failures, cooldown_until, last_seed_result')
+        .eq('user_id', userId)
+        .or('consecutive_failures.gt.0,cooldown_until.gt.' + new Date().toISOString()),
+      supabase
+        .from('gina_seed_log')
+        .select('channel, rung, gina_response, gina_exact_words, seed_description, created_at')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(10),
+      supabase
+        .from('gina_measurements')
+        .select('measurement_type, score, created_at')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(5),
+    ]);
+
+    const parts: string[] = [];
+
+    // Discovery state
+    const disc = discoveryResult.status === 'fulfilled' ? discoveryResult.value.data : null;
+    if (disc) {
+      parts.push('## Gina Intelligence');
+      parts.push(`Discovery phase: ${disc.discovery_phase || 'unknown'}`);
+      parts.push(`Readiness score: ${disc.current_readiness_score || 0}/100`);
+      if (disc.total_investments > 0) {
+        const ginaRatio = disc.gina_initiated_count > 0
+          ? Math.round((disc.gina_initiated_count / disc.total_investments) * 100)
+          : 0;
+        parts.push(`Investments: ${disc.total_investments} total, ${ginaRatio}% Gina-initiated`);
+      }
+      parts.push(`Channels with positive seeds: ${disc.channels_with_positive_seeds || 0}/10, highest rung: ${disc.highest_channel_rung || 0}`);
+    }
+
+    // Ladder overview
+    const ladder = ladderResult.status === 'fulfilled' ? ladderResult.value.data : null;
+    if (ladder && ladder.length > 0) {
+      const started = ladder.filter((s: Record<string, unknown>) => (s.current_rung as number) > 0);
+      if (started.length > 0) {
+        if (parts.length === 0) parts.push('## Gina Intelligence');
+        const rungs = started.map((s: Record<string, unknown>) => `${s.channel} R${s.current_rung}`);
+        parts.push(`Active channels: ${rungs.join(', ')}`);
+      }
+    }
+
+    // Channels in recovery
+    const recovery = recoveryResult.status === 'fulfilled' ? recoveryResult.value.data : null;
+    if (recovery && recovery.length > 0) {
+      const now = new Date();
+      const inRecovery = recovery.filter((r: Record<string, unknown>) => {
+        const cooldown = r.cooldown_until ? new Date(r.cooldown_until as string) : null;
+        return (cooldown && cooldown > now) || (r.consecutive_failures as number) > 0;
+      });
+      if (inRecovery.length > 0) {
+        const strs = inRecovery.map((r: Record<string, unknown>) => {
+          const cooldown = r.cooldown_until ? new Date(r.cooldown_until as string) : null;
+          const daysLeft = cooldown ? Math.max(0, Math.ceil((cooldown.getTime() - now.getTime()) / 86400000)) : 0;
+          return `${r.channel}${daysLeft > 0 ? ` (${daysLeft}d cooldown)` : ` (${r.consecutive_failures} failures)`}`;
+        });
+        parts.push(`IN RECOVERY: ${strs.join(', ')}`);
+      }
+    }
+
+    // Recent seeds
+    const seeds = seedsResult.status === 'fulfilled' ? seedsResult.value.data : null;
+    if (seeds && seeds.length > 0) {
+      const positive = seeds.filter((s: Record<string, unknown>) => s.gina_response === 'positive').length;
+      const negative = seeds.filter((s: Record<string, unknown>) => s.gina_response === 'negative').length;
+      const callout = seeds.filter((s: Record<string, unknown>) => s.gina_response === 'callout').length;
+      parts.push(`Recent seeds: ${seeds.length} logged, ${positive} positive, ${negative} negative${callout > 0 ? `, ${callout} CALLOUT` : ''}`);
+
+      // Last seed detail
+      const last = seeds[0] as Record<string, unknown>;
+      const daysAgo = Math.floor((Date.now() - new Date(last.created_at as string).getTime()) / 86400000);
+      const exactWords = last.gina_exact_words ? ` ("${(last.gina_exact_words as string).slice(0, 60)}")` : '';
+      parts.push(`Last seed: ${last.channel} R${last.rung} -> ${last.gina_response}${exactWords} ${daysAgo}d ago`);
+    }
+
+    // Recent measurements
+    const measurements = measurementsResult.status === 'fulfilled' ? measurementsResult.value.data : null;
+    if (measurements && measurements.length > 0) {
+      const mStrs = measurements.slice(0, 3).map((m: Record<string, unknown>) => {
+        const type = (m.measurement_type as string).replace(/_/g, ' ');
+        return `${type}: ${(m.score as number)?.toFixed(1) || '?'}/5`;
+      });
+      parts.push(`Recent measurements: ${mStrs.join(', ')}`);
+    }
+
+    return parts.join('\n');
+  } catch {
+    return '';
+  }
 }
