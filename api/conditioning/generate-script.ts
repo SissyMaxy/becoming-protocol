@@ -30,10 +30,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: 'ElevenLabs not configured' });
     }
 
-    const { phase = 1, target = 'identity', includePostHypnotic = true } = req.body as {
+    const { phase = 1, target = 'identity', includePostHypnotic = true, step = 'full' } = req.body as {
       phase?: number;
       target?: string;
       includePostHypnotic?: boolean;
+      step?: 'script_only' | 'tts_only' | 'full';
+      scriptText?: string;
+      scriptId?: string;
     };
 
     // 1. Retrieve memories (confession-biased)
@@ -100,11 +103,38 @@ Write naturally in second person ("you"), include [pause] and [breathe in] / [br
 
     const claudeData = await claudeRes.json();
     const rawText = claudeData.content?.[0]?.text || '';
-    // Prepend the assistant prefill that was used to start the response
-    const scriptText = '[breathe in]\n\nClose your eyes. ' + rawText;
+    const scriptText = '[breathe in]\n\nClose your eyes, Maxy. Let everything else fall away. ' + rawText;
 
-    if (!scriptText) {
-      return res.status(500).json({ error: 'Empty script from Claude' });
+    if (!scriptText || scriptText.length < 100) {
+      return res.status(500).json({ error: 'Empty or refused script from Claude', preview: scriptText.substring(0, 200) });
+    }
+
+    // Step 1 complete — return script only if requested
+    if (step === 'script_only') {
+      const wordCount = scriptText.split(/\s+/).filter((w: string) => w.length > 0).length;
+      const durationSeconds = Math.round((wordCount / 120) * 60);
+      const knownTriggers = ['good girl', 'drop deeper', 'let go', 'sink down', 'surrender', 'obey', 'submit', 'deeper and deeper'];
+      const foundTriggers = knownTriggers.filter(t => scriptText.toLowerCase().includes(t));
+
+      // Save script to DB for later TTS
+      const { data: scriptRecord } = await supabase.from('generated_scripts').insert({
+        user_id: user.id,
+        script_text: scriptText,
+        conditioning_phase: phase,
+        conditioning_target: target,
+        binaural_frequency: phase >= 4 ? 'theta' : 'alpha',
+        subliminal_words: foundTriggers,
+      }).select('id').single();
+
+      return res.status(200).json({
+        step: 'script_only',
+        scriptId: scriptRecord?.id,
+        scriptText,
+        durationSeconds,
+        triggers: foundTriggers,
+        phase,
+        target,
+      });
     }
 
     // 4. Convert to speech via ElevenLabs
