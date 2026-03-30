@@ -64,6 +64,12 @@ const SESSION_PATTERNS: Record<string, {
  * Activate device for a conditioning session.
  * Called when a session starts or transitions to a new phase.
  *
+ * NOTE: Scent anchor should be applied BEFORE device activation.
+ * The scent-bridge module provides getScentInstruction() to retrieve
+ * the user's active scent anchor. Apply scent first, allow 30-60 seconds
+ * for olfactory priming, then activate the device. This ordering ensures
+ * the scent association pairs with the full session experience.
+ *
  * @param sessionType - 'goon', 'trance', 'edge', 'sleep', 'combined', 'morning', 'background'
  * @param phase - Phase within the session (e.g., 'build', 'escalate', 'peak')
  * @param intensityMultiplier - Hidden operations multiplier (1.0 = normal, up to 2.0)

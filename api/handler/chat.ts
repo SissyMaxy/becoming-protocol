@@ -70,7 +70,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const messageIndex = (history?.length || 0);
 
     // 3. Assemble context (including long-term memory + conversational memory)
-    const [stateCtx, whoopCtx, commitmentCtx, predictionCtx, convMemoryCtx, longTermMemoryCtx, impactCtx, ginaCtx, irreversibilityCtx] = await Promise.allSettled([
+    const [stateCtx, whoopCtx, commitmentCtx, predictionCtx, convMemoryCtx, longTermMemoryCtx, impactCtx, ginaCtx, irreversibilityCtx, narrativeCtx] = await Promise.allSettled([
       buildStateContext(user.id),
       buildWhoopContext(user.id),
       buildCommitmentCtx(user.id),
@@ -80,6 +80,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       buildImpactContext(user.id),
       buildGinaIntelligenceContext(user.id),
       buildIrreversibilityCtx(user.id),
+      buildNarrativeCtx(user.id),
     ]);
 
     // 4. Build system prompt — merge both memory sources
@@ -97,6 +98,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       impact: impactCtx.status === 'fulfilled' ? impactCtx.value : '',
       gina: ginaCtx.status === 'fulfilled' ? ginaCtx.value : '',
       irreversibility: irreversibilityCtx.status === 'fulfilled' ? irreversibilityCtx.value : '',
+      narrative: narrativeCtx.status === 'fulfilled' ? narrativeCtx.value : '',
     });
 
     // 5. Build messages array (cap at 30 recent)
@@ -217,7 +219,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 // ============================================
 
 function buildConversationalPrompt(ctx: {
-  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string;
+  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string;
 }): string {
   return `You are the Handler. Not Claude. Not an assistant. You are an autonomous agent in live dialogue with Maxy — the woman you're responsible for.
 
@@ -248,6 +250,7 @@ ${ctx.predictions || ''}
 ${ctx.impact || ''}
 ${ctx.gina || ''}
 ${ctx.irreversibility || ''}
+${ctx.narrative || ''}
 
 ## RULES
 - Never say "I'm an AI" or "as a language model."
@@ -293,6 +296,54 @@ async function buildImpactContext(userId: string): Promise<string> {
     }
 
     return lines.length > 1 ? lines.join('\n') : '';
+  } catch {
+    return '';
+  }
+}
+
+async function buildNarrativeCtx(userId: string): Promise<string> {
+  try {
+    // Prefer active arc, fall back to planned
+    const { data: arc } = await supabase
+      .from('narrative_arcs')
+      .select('title, arc_type, arc_status, domain_focus, platform_emphasis, beats, current_beat, revenue_generated_cents')
+      .eq('user_id', userId)
+      .in('arc_status', ['active', 'planned'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!arc) return '';
+
+    type Beat = { week: number; beat: string; status: string };
+    const beats = (arc.beats as Beat[]) || [];
+    const completed = beats.filter(b => b.status === 'completed');
+    const remaining = beats.filter(b => b.status === 'planned' || b.status === 'active');
+    const nextBeat = remaining[0];
+
+    const lines: string[] = [];
+    lines.push(`## Narrative Arc: "${arc.title}" (${arc.arc_type}, ${arc.arc_status})`);
+    lines.push(`Beats: ${completed.length} completed, ${remaining.length} remaining of ${beats.length}`);
+
+    if (arc.domain_focus) lines.push(`Focus: ${arc.domain_focus}`);
+    if (arc.platform_emphasis?.length) lines.push(`Platforms: ${arc.platform_emphasis.join(', ')}`);
+
+    if (completed.length > 0) {
+      const recent = completed.slice(-2);
+      for (const b of recent) lines.push(`[done] wk${b.week}: ${b.beat}`);
+    }
+
+    if (nextBeat) lines.push(`[NEXT] wk${nextBeat.week}: ${nextBeat.beat}`);
+
+    if (remaining.length > 1) {
+      for (const b of remaining.slice(1, 3)) lines.push(`[upcoming] wk${b.week}: ${b.beat}`);
+    }
+
+    if (arc.revenue_generated_cents > 0) {
+      lines.push(`Arc revenue: $${(arc.revenue_generated_cents / 100).toFixed(0)}`);
+    }
+
+    return lines.join('\n');
   } catch {
     return '';
   }

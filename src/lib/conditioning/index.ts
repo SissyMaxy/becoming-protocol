@@ -14,6 +14,14 @@ export * from './adaptive-session';
 export * from './goon-session';
 export * from './pmv-generator';
 export { activateSessionDevice, deactivateSessionDevice, transitionSessionPhase } from './session-device';
+export { getScentInstruction, recordScentPairing } from './scent-bridge';
+export {
+  getActiveNarrative,
+  createNarrative,
+  advanceNarrative,
+  getNextBeat,
+  buildNarrativeContext,
+} from './narrative-engine';
 export {
   recordIntervention,
   recordOutcome,

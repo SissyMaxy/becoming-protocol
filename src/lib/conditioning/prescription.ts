@@ -7,6 +7,7 @@
  */
 
 import { supabase } from '../supabase';
+import { getScentInstruction } from './scent-bridge';
 
 export type SessionContext = 'evening' | 'sleep' | 'morning' | 'background' | 'goon' | 'edge';
 
@@ -18,6 +19,7 @@ export interface SessionPrescription {
   duration_minutes: number;
   intensity: number;
   notes: string;
+  scentInstruction: string | null;
 }
 
 interface ContentCriteria {
@@ -84,6 +86,13 @@ export async function prescribeSession(
       limit: context === 'sleep' ? 5 : 3,
     });
 
+    // Query scent anchor for trance, combined, goon, evening, edge sessions
+    // (not background or morning — those are too brief/passive for scent pairing)
+    const scentContexts: SessionContext[] = ['evening', 'sleep', 'goon', 'edge'];
+    const scentInstruction = scentContexts.includes(context)
+      ? await getScentInstruction(userId)
+      : null;
+
     return {
       sessionType,
       context,
@@ -92,6 +101,7 @@ export async function prescribeSession(
       duration_minutes: duration,
       intensity,
       notes: buildPrescriptionNotes(context, tier, denialDay, streakDays, arousal),
+      scentInstruction,
     };
   } catch (err) {
     console.error('[prescription] prescribeSession exception:', err);

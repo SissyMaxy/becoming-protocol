@@ -70,6 +70,7 @@ import { buildMemoryContextBlock } from './handler-memory';
 import { buildConditioningEngineContext } from './conditioning/handler-context';
 import { buildImpactContext } from './conditioning/impact-tracking';
 import { buildIrreversibilityContext } from './conditioning/irreversibility';
+import { buildNarrativeContext } from './conditioning/narrative-engine';
 
 // ============================================
 // TYPES
@@ -99,6 +100,7 @@ export interface SystemsContext {
   dopamine: string;
   conditioningEngine: string;
   impactTracking: string;
+  narrativeArc: string;
 }
 
 // ============================================
@@ -707,7 +709,7 @@ async function buildIndustryContext(userId: string): Promise<string> {
  * All systems, maximum data density.
  */
 export async function buildFullSystemsContext(userId: string): Promise<string> {
-  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social, memory, conditioningEngine, impactTracking, irreversibility] = await Promise.allSettled([
+  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social, memory, conditioningEngine, impactTracking, irreversibility, narrativeArc] = await Promise.allSettled([
     buildGinaContext(userId),
     buildContentContext(userId),
     buildVoiceContext(userId),
@@ -742,6 +744,7 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     buildConditioningEngineContext(userId),
     buildImpactContext(userId),
     buildIrreversibilityContext(userId),
+    buildNarrativeContext(userId),
   ]);
 
   const blocks = [
@@ -779,6 +782,7 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     memory.status === 'fulfilled' ? memory.value : '',
     impactTracking.status === 'fulfilled' ? impactTracking.value : '',
     irreversibility.status === 'fulfilled' ? irreversibility.value : '',
+    narrativeArc.status === 'fulfilled' ? narrativeArc.value : '',
   ].filter(Boolean);
 
   if (blocks.length === 0) return '';
