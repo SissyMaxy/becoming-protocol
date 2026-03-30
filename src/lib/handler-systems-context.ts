@@ -69,6 +69,7 @@ import { buildDopamineContext } from './dopamine-context';
 import { buildMemoryContextBlock } from './handler-memory';
 import { buildConditioningEngineContext } from './conditioning/handler-context';
 import { buildImpactContext } from './conditioning/impact-tracking';
+import { buildIrreversibilityContext } from './conditioning/irreversibility';
 
 // ============================================
 // TYPES
@@ -706,7 +707,7 @@ async function buildIndustryContext(userId: string): Promise<string> {
  * All systems, maximum data density.
  */
 export async function buildFullSystemsContext(userId: string): Promise<string> {
-  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social, memory, conditioningEngine, impactTracking] = await Promise.allSettled([
+  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social, memory, conditioningEngine, impactTracking, irreversibility] = await Promise.allSettled([
     buildGinaContext(userId),
     buildContentContext(userId),
     buildVoiceContext(userId),
@@ -740,6 +741,7 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     buildMemoryContextBlock(userId),
     buildConditioningEngineContext(userId),
     buildImpactContext(userId),
+    buildIrreversibilityContext(userId),
   ]);
 
   const blocks = [
@@ -776,6 +778,7 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     social.status === 'fulfilled' ? social.value : '',
     memory.status === 'fulfilled' ? memory.value : '',
     impactTracking.status === 'fulfilled' ? impactTracking.value : '',
+    irreversibility.status === 'fulfilled' ? irreversibility.value : '',
   ].filter(Boolean);
 
   if (blocks.length === 0) return '';

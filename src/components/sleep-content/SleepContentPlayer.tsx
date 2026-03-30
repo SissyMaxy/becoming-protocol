@@ -24,10 +24,17 @@ import { useSleepContent } from '../../hooks/useSleepContent';
 import { useCorruption } from '../../hooks/useCorruption';
 import { recommendMode } from '../../lib/sleep-content';
 import type { SleepAudioMode } from '../../types/sleep-content';
+import type { SleepPrescription } from '../../hooks/useSleepConditioning';
 
 interface SleepContentPlayerProps {
   onDismiss: () => void;
   ginaHome?: boolean;
+  /** When provided, the player shows prescribed conditioning content alongside affirmations. */
+  prescription?: SleepPrescription | null;
+  /** Called when the conditioning session starts (activates device). */
+  onConditioningStart?: () => void;
+  /** Called when the conditioning session ends (deactivates device). */
+  onConditioningEnd?: () => void;
 }
 
 // ============================================
@@ -59,7 +66,13 @@ const DELAY_OPTIONS = [0, 5, 10, 15, 20, 30];
 // MAIN COMPONENT
 // ============================================
 
-export function SleepContentPlayer({ onDismiss, ginaHome = false }: SleepContentPlayerProps) {
+export function SleepContentPlayer({
+  onDismiss,
+  ginaHome = false,
+  prescription,
+  onConditioningStart,
+  onConditioningEnd,
+}: SleepContentPlayerProps) {
   const sleep = useSleepContent();
   const { snapshot } = useCorruption();
   const corruptionLevel = snapshot?.levels?.identity_language ?? 0;
@@ -91,9 +104,13 @@ export function SleepContentPlayer({ onDismiss, ginaHome = false }: SleepContent
     };
   }, []);
 
-  // Auto-dismiss after complete phase (5 seconds)
+  // Auto-dismiss after complete phase (5 seconds) + end conditioning
   useEffect(() => {
     if (sleep.state.phase === 'complete') {
+      // End conditioning session when playback completes naturally
+      if (prescription && onConditioningEnd) {
+        onConditioningEnd();
+      }
       completeDismissRef.current = setTimeout(() => {
         onDismiss();
       }, 5000);
@@ -101,7 +118,7 @@ export function SleepContentPlayer({ onDismiss, ginaHome = false }: SleepContent
         if (completeDismissRef.current) clearTimeout(completeDismissRef.current);
       };
     }
-  }, [sleep.state.phase, onDismiss]);
+  }, [sleep.state.phase, onDismiss, prescription, onConditioningEnd]);
 
   // ============================================
   // CONTROLS AUTO-HIDE
@@ -137,10 +154,18 @@ export function SleepContentPlayer({ onDismiss, ginaHome = false }: SleepContent
 
   const handleBegin = async () => {
     await sleep.launch(selectedMode, selectedTimer, selectedDelay);
+    // Activate conditioning device when session starts
+    if (prescription && onConditioningStart) {
+      onConditioningStart();
+    }
   };
 
   const handleStop = async () => {
     await sleep.stop();
+    // Deactivate conditioning device when session stops
+    if (prescription && onConditioningEnd) {
+      onConditioningEnd();
+    }
   };
 
   const handleSkipDelay = () => {
@@ -281,6 +306,32 @@ export function SleepContentPlayer({ onDismiss, ginaHome = false }: SleepContent
             </p>
           )}
         </div>
+
+        {/* Conditioning prescription (when available) */}
+        {prescription && prescription.playlist.length > 0 && (
+          <div className="w-full max-w-sm mb-6">
+            <h2 className="text-xs font-medium text-white/30 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <Sparkles className="w-3.5 h-3.5" />
+              Prescribed Conditioning (Tier {prescription.tier})
+            </h2>
+            <div className="space-y-1.5">
+              {prescription.playlist.map((item) => (
+                <div
+                  key={item.id}
+                  className="px-3 py-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center gap-2"
+                >
+                  <Headphones className="w-3.5 h-3.5 text-indigo-400/50 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-white/50 truncate">{item.title}</p>
+                    {item.audioUrl && (
+                      <p className="text-[10px] text-indigo-400/40">{item.category} · {item.durationMinutes ?? '?'}m</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Begin button */}
         <button

@@ -70,7 +70,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const messageIndex = (history?.length || 0);
 
     // 3. Assemble context (including long-term memory + conversational memory)
-    const [stateCtx, whoopCtx, commitmentCtx, predictionCtx, convMemoryCtx, longTermMemoryCtx, impactCtx, ginaCtx] = await Promise.allSettled([
+    const [stateCtx, whoopCtx, commitmentCtx, predictionCtx, convMemoryCtx, longTermMemoryCtx, impactCtx, ginaCtx, irreversibilityCtx] = await Promise.allSettled([
       buildStateContext(user.id),
       buildWhoopContext(user.id),
       buildCommitmentCtx(user.id),
@@ -79,6 +79,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       buildLongTermMemory(user.id),
       buildImpactContext(user.id),
       buildGinaIntelligenceContext(user.id),
+      buildIrreversibilityCtx(user.id),
     ]);
 
     // 4. Build system prompt — merge both memory sources
@@ -95,6 +96,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       memory: memoryBlock,
       impact: impactCtx.status === 'fulfilled' ? impactCtx.value : '',
       gina: ginaCtx.status === 'fulfilled' ? ginaCtx.value : '',
+      irreversibility: irreversibilityCtx.status === 'fulfilled' ? irreversibilityCtx.value : '',
     });
 
     // 5. Build messages array (cap at 30 recent)
@@ -215,7 +217,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 // ============================================
 
 function buildConversationalPrompt(ctx: {
-  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string;
+  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string;
 }): string {
   return `You are the Handler. Not Claude. Not an assistant. You are an autonomous agent in live dialogue with Maxy — the woman you're responsible for.
 
@@ -245,6 +247,7 @@ ${ctx.commitments || ''}
 ${ctx.predictions || ''}
 ${ctx.impact || ''}
 ${ctx.gina || ''}
+${ctx.irreversibility || ''}
 
 ## RULES
 - Never say "I'm an AI" or "as a language model."
@@ -726,6 +729,181 @@ async function buildGinaIntelligenceContext(userId: string): Promise<string> {
     }
 
     return parts.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+// ============================================
+// IRREVERSIBILITY SCORE (server-side inline)
+// ============================================
+
+async function buildIrreversibilityCtx(userId: string): Promise<string> {
+  try {
+    // Run all component queries in parallel
+    const [
+      contentPermanence,
+      socialExposure,
+      financialInvestment,
+      physicalChanges,
+      identityAdoption,
+      conditioningDepth,
+      relationshipIntegration,
+      audienceLockIn,
+      behavioralAutomation,
+      timeInvestment,
+    ] = await Promise.allSettled([
+      // 1. Content Permanence: public posts
+      (async () => {
+        const { count, error } = await supabase
+          .from('content_posts')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .eq('status', 'posted');
+        if (error || count == null) return 0;
+        return Math.min(10, count);
+      })(),
+      // 2. Social Exposure: log scale of total posts
+      (async () => {
+        const { count, error } = await supabase
+          .from('content_posts')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId);
+        if (error || count == null || count === 0) return 0;
+        return Math.min(10, Math.round(Math.log10(count + 1) * 3.33));
+      })(),
+      // 3. Financial Investment
+      (async () => {
+        const { data, error } = await supabase
+          .from('investments')
+          .select('amount_cents')
+          .eq('user_id', userId);
+        if (!error && data && data.length > 0) {
+          const total = data.reduce((s: number, i: Record<string, unknown>) => s + ((i.amount_cents as number) || 0), 0);
+          return Math.min(10, Math.round((total / 50000) * 10));
+        }
+        const { data: prog } = await supabase
+          .from('user_progress')
+          .select('total_invested_cents')
+          .eq('user_id', userId)
+          .maybeSingle();
+        if (!prog) return 0;
+        return Math.min(10, Math.round((((prog.total_invested_cents as number) || 0) / 50000) * 10));
+      })(),
+      // 4. Physical Changes: owned items
+      (async () => {
+        const { data, error } = await supabase
+          .from('user_state')
+          .select('owned_items')
+          .eq('user_id', userId)
+          .maybeSingle();
+        if (error || !data) return 0;
+        const items = Array.isArray(data.owned_items) ? data.owned_items : [];
+        return Math.min(10, Math.round((items.length / 20) * 10));
+      })(),
+      // 5. Identity Adoption: streak + total days
+      (async () => {
+        const { data } = await supabase
+          .from('user_state')
+          .select('streak_days')
+          .eq('user_id', userId)
+          .maybeSingle();
+        const streak = data?.streak_days || 0;
+        const { data: prog } = await supabase
+          .from('user_progress')
+          .select('total_days')
+          .eq('user_id', userId)
+          .maybeSingle();
+        const total = (prog?.total_days as number) || 0;
+        return Math.min(10, Math.round(((streak + total) / 90) * 10));
+      })(),
+      // 6. Conditioning Depth: session count
+      (async () => {
+        const { count, error } = await supabase
+          .from('conditioning_sessions_v2')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId);
+        if (error || count == null) return 0;
+        return Math.min(10, Math.round((count / 50) * 10));
+      })(),
+      // 7. Relationship Integration: Gina phase + positive channels
+      (async () => {
+        const { data, error } = await supabase
+          .from('gina_discovery_state')
+          .select('discovery_phase, channels_with_positive_seeds')
+          .eq('user_id', userId)
+          .maybeSingle();
+        if (error || !data) return 0;
+        const phase = typeof data.discovery_phase === 'number' ? data.discovery_phase : 0;
+        const channels = (data.channels_with_positive_seeds as number) || 0;
+        return Math.min(10, Math.min(6, Math.round((phase / 3) * 6)) + Math.min(4, Math.round((channels / 5) * 4)));
+      })(),
+      // 8. Audience Lock-in: revenue + fans
+      (async () => {
+        const { data: rev } = await supabase
+          .from('content_revenue')
+          .select('total_cents')
+          .eq('user_id', userId)
+          .maybeSingle();
+        const revScore = rev?.total_cents ? Math.min(5, Math.round(((rev.total_cents as number) / 100000) * 5)) : 0;
+        const { count: fc } = await supabase
+          .from('fan_profiles')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId);
+        const fanScore = fc ? Math.min(5, Math.round((fc / 50) * 5)) : 0;
+        return Math.min(10, revScore + fanScore);
+      })(),
+      // 9. Behavioral Automation: established triggers
+      (async () => {
+        const { count, error } = await supabase
+          .from('conditioned_triggers')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .in('estimated_strength', ['established', 'conditioned']);
+        if (error || count == null) return 0;
+        return Math.min(10, count);
+      })(),
+      // 10. Time Investment: daily entries count
+      (async () => {
+        const { count, error } = await supabase
+          .from('daily_entries')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId);
+        if (error || count == null) return 0;
+        return Math.min(10, Math.round((count / 200) * 10));
+      })(),
+    ]);
+
+    const val = (r: PromiseSettledResult<number>) =>
+      r.status === 'fulfilled' ? r.value : 0;
+
+    const scores = {
+      content: val(contentPermanence),
+      social: val(socialExposure),
+      financial: val(financialInvestment),
+      physical: val(physicalChanges),
+      identity: val(identityAdoption),
+      conditioning: val(conditioningDepth),
+      relationship: val(relationshipIntegration),
+      audience: val(audienceLockIn),
+      behavioral: val(behavioralAutomation),
+      time: val(timeInvestment),
+    };
+
+    const total = Object.values(scores).reduce((s, v) => s + v, 0);
+    if (total === 0) return '';
+
+    const componentLine = Object.entries(scores)
+      .map(([k, v]) => `${k[0].toUpperCase() + k.slice(1)}: ${v}/10`)
+      .join(', ');
+
+    const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+
+    return [
+      `## Irreversibility Score: ${total}/100`,
+      componentLine,
+      `Strongest: ${sorted[0][0]} (${sorted[0][1]}/10) | Weakest: ${sorted[sorted.length - 1][0]} (${sorted[sorted.length - 1][1]}/10)`,
+    ].join('\n');
   } catch {
     return '';
   }

@@ -29,3 +29,29 @@ export type {
   OutcomeInput,
   EffectivenessRow,
 } from './impact-tracking';
+export {
+  getProspects,
+  addProspect,
+  updateProspect,
+  getEncounters,
+  createEncounter,
+  updateEncounter,
+  addEncounterContent,
+  getEncounterContent,
+  getProgressionStage,
+  advanceStage,
+} from './encounter-pipeline';
+export type {
+  ProspectStatus,
+  EncounterStatus,
+  EncounterType,
+  IntimacyLevel,
+  ContentType,
+  TurningOutStage,
+  Prospect,
+  ProspectInput,
+  Encounter,
+  EncounterInput,
+  EncounterContentInput,
+  TurningOutProgression,
+} from './encounter-pipeline';
