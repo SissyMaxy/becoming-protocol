@@ -1,0 +1,735 @@
+**Edge Session UI Requirements**
+
+**Becoming Protocol --- Arousal Session Interface**
+
+**Executive Summary**
+
+This document defines requirements for an immersive edging/gooning
+interface that integrates with the existing Becoming Protocol systems:
+arousal state tracking, Lovense haptic control, content tiering, arousal
+auctions, and feminization conditioning.
+
+The UI should feel like entering a distinct mode---immersive, focused,
+psychologically compelling---while being functionally robust for
+tracking, control, and post-session evidence capture.
+
+**Part 1: Session Types & Entry Points**
+
+**1.1 Session Type Definitions**
+
+\| Type \| Purpose \| Frequency \| Duration \| Completion Allowed \|
+
+\|\-\-\-\-\--\|\-\-\-\-\-\-\-\--\|\-\-\-\-\-\-\-\-\-\--\|\-\-\-\-\-\-\-\-\--\|\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\--\|
+
+\| \*\*Type A: Anchoring\*\* \| Create feminization-arousal association
+\| 2-3x weekly \| 20-40 min \| Denied (strengthens association) \|
+
+\| \*\*Type B: Reward\*\* \| Positive reinforcement for practice \| 1x
+weekly max \| 30-60 min \| Allowed (jackpot reward) \|
+
+\| \*\*Type C: Maintenance\*\* \| Stay in sweet spot \| Daily option \|
+10-20 min \| Denied \|
+
+\| \*\*Goon Session\*\* \| Deep trance-like absorption \| Special unlock
+\| 45-90 min \| Variable (AI decides) \|
+
+**1.2 Entry Requirements**
+
+interface SessionEntryRequirements { typeA: { available: \'always\',
+requirements: \[\] }, typeB: { available: \'earned\', requirements: \[
+\'weeklyProtocolComplete\', // All 7 days logged \'minDenialDays: 5\',
+// At least 5 days since last release \'noActiveEdgeDebt\', // Edge debt
+must be 0 \'noRecentTypeB: 7\' // At least 7 days since last Type B \]
+}, typeC: { available: \'always\', requirements: \[\] }, goon: {
+available: \'earned\', requirements: \[ \'phase: 3+\', // Phase 3 or
+higher \'sessionCount: 20+\', // At least 20 sessions completed \'OR:
+specialUnlock\' // Or specifically unlocked by system \] } }
+
+**1.3 Entry Flow**
+
+Today View → \"Begin Session\" button ↓ Session Type Selection (shows
+availability, locked states) ↓ Pre-Session Check-In - Current arousal
+state confirmation - Content tier unlocked display - Haptic device
+connection check - Environment confirmation (\"Are you in a private
+space?\") ↓ Session Configuration (for applicable types) - Target edges
+(Type A/B) - AI control level - Content preferences - Time limit ↓
+Session Start
+
+**Part 2: Core Session Interface**
+
+**2.1 Layout Architecture**
+
+┌────────────────────────────────────────────────────────────────┐ │
+\[HEADER BAR - Minimal, dark\] │ │ ← Exit Session Type: Anchoring ⏱
+12:34 🔋 Device OK │
+├────────────────────────────────────────────────────────────────┤ │ │ │
+\[CONTENT AREA\] │ │ │ │ Current content display (image/video/audio viz)
+│ │ │ │ │
+├────────────────────────────────────────────────────────────────┤ │
+\[AFFIRMATION OVERLAY - Periodic\] │ │ \"Good girl\...\" │
+├────────────────────────────────────────────────────────────────┤ │ │ │
+\[CONTROL PANEL\] │ │ │ │ ┌─────────┐ ┌─────────┐ ┌─────────┐
+┌─────────┐ │ │ │ EDGE │ │ HOLD │ │ BREATHE │ │ STOP │ │ │ │ (tap) │
+│(toggle) │ │ (guide) │ │ (panic) │ │ │ └─────────┘ └─────────┘
+└─────────┘ └─────────┘ │ │ │ │ Edge Count: ████████░░ 8/10 Intensity:
+████████░░ │ │ │ │ \[State: BUILDING ↗\] \[Denial Day: 4\] \[Session:
+18:24\] │ │ │
+└────────────────────────────────────────────────────────────────┘
+
+**2.2 Visual Design Principles**
+
+\*\*Immersive Mode\*\*
+
+> • Dark theme mandatory (reduces screen glare, focuses attention)
+>
+> • Minimal chrome (controls appear on tap, fade when not needed)
+>
+> • Content area maximized
+>
+> • Subtle ambient animations (breathing pulses, soft glows)
+>
+> • No jarring transitions
+
+\*\*Color System\*\*
+
+:root { \--bg-session: #0a0a0a; \--text-primary: #ffffff; \--text-muted:
+#666666; \--accent-arousal: #ff4d6d; /\* Pink/red for arousal indicators
+\*/ \--accent-affirm: #c77dff; /\* Purple for affirmations \*/
+\--accent-edge: #ff6b6b; /\* Red pulse for edge moments \*/
+\--accent-calm: #4ecdc4; /\* Teal for breathe/calm \*/ \--accent-denial:
+#ffd93d; /\* Gold for denial/control \*/ \--progress-fill:
+linear-gradient(90deg, #ff4d6d, #c77dff); }
+
+\*\*Typography\*\*
+
+> • Affirmations: Large, soft serif or elegant sans (e.g., Playfair
+> Display, Cormorant)
+>
+> • Stats/controls: Clean sans (system default or Inter)
+>
+> • No harsh fonts, nothing that breaks immersion
+
+**2.3 Screen Lock & Focus Mode**
+
+interface FocusModeConfig { screenLock: true, // Request wake lock API
+orientationLock: \'portrait\', // Or \'landscape\' for video
+notificationSuppression: true, // Request DND mode exitConfirmation:
+true, // \"Are you sure?\" on back minimizeWarning: true, // Alert if
+app backgrounded hapticOnMinimize: \'warning_pulse\' // Vibrate if
+leaving }
+
+**Part 3: Edge Tracking Interface**
+
+**3.1 Edge Button Behavior**
+
+\*\*Primary Edge Action\*\*
+
+interface EdgeAction { // User taps when reaching edge onTap: () =\> {
+incrementEdgeCount(); triggerHapticPulse(\'edge_reached\');
+showEdgeConfirmation(); logEdgeTimestamp(); checkForAuctionTrigger();
+updateIntensityDisplay(); }, // Visual feedback feedback: { haptic:
+\'strong_pulse\', visual: \'ripple_expand\', audio: \'subtle_chime\', //
+Optional duration: 500 // ms } }
+
+\*\*Edge Counter Display\*\*
+
+┌────────────────────────────────────────┐ │ ● ● ● ● ● ● ● ● ○ ○ │ │ 8 /
+10 edges │ │ │ │ \[TAP WHEN YOU EDGE\] │ │ ↓ │ │ ◉ EDGE │
+└────────────────────────────────────────┘
+
+**3.2 Edge Data Capture**
+
+interface EdgeEvent { id: string; sessionId: string; edgeNumber: number;
+timestamp: Date; timeFromSessionStart: number; // seconds
+timeSinceLastEdge: number; // seconds intensityAtEdge: number; // 0-20
+(from haptic) hapticPatternActive: string; contentDisplayed?: string; //
+ID of content shown auctionTriggered: boolean; notes?: string; }
+
+**3.3 Recovery Period Tracking**
+
+After each edge, brief recovery:
+
+interface RecoveryPeriod { minDuration: 15, // seconds maxDuration: 60,
+// seconds aiControlled: boolean, // AI decides when to resume display:
+{ countdown: boolean, // Show timer (or hide for uncertainty)
+breathingGuide: boolean, affirmationDuring: boolean, intensityDrop:
+\'immediate\' \| \'gradual\' } }
+
+\*\*Recovery UI\*\*
+
+┌────────────────────────────────────────┐ │ │ │ ✧ Recovery ✧ │ │ │ │
+Breathe\... │ │ │ │ ◯ ◯ ◯ ◯ ◯ \[inhale\] │ │ ● ● ● ○ ○ \[exhale\] │ │ │
+│ \"Good girl. You\'re doing so well.\" │ │ │ │ Resuming in: ??? │ │ (AI
+will decide when) │ │ │ └────────────────────────────────────────┘
+
+**Part 4: Arousal Auction Interface**
+
+**4.1 Auction Triggers**
+
+const auctionTriggers = { // Fixed edge numbers edgeNumbers: \[5, 8, 10,
+13, 16, 20\], // Or time-based timeIntervals: \[10, 20, 30\], // minutes
+// Or AI-determined (unpredictable) aiDetermined: { minEdgesBetween: 3,
+maxEdgesBetween: 6, probabilityIncrease: 0.15 // Per edge after min } }
+
+**4.2 Auction Modal Design**
+
+┌────────────────────────────────────────────────────────────────┐ │ │ │
+✧ Decision Point ✧ │ │ │ │ Edge 8 reached. Choose wisely. │ │ │ │
+┌──────────────────────────────────────────────────────────┐ │ │ │ │ │ │
+│ ◉ Accept 3 more edges │ │ │ │ → Intensity continues at current level │
+│ │ │ → No additional commitment │ │ │ │ │ │ │
+└──────────────────────────────────────────────────────────┘ │ │ │ │
+┌──────────────────────────────────────────────────────────┐ │ │ │ │ │ │
+│ ◉ Add 2 denial days │ │ │ │ → Intensity INCREASES by 4 levels │ │ │ │
+→ 48 hours added to denial minimum │ │ │ │ │ │ │
+└──────────────────────────────────────────────────────────┘ │ │ │ │
+┌──────────────────────────────────────────────────────────┐ │ │ │ │ │ │
+│ ◉ Commit to 24hr lock after session │ │ │ │ → JACKPOT: Unlock Tier 3
+content NOW │ │ │ │ → Intensity to maximum │ │ │ │ │ │ │
+└──────────────────────────────────────────────────────────┘ │ │ │ │
+┌─────────────────────────────┐ │ │ │ I\'ll decide later\... │ ← small,
+muted │ │ │ (intensity drops 5 min) │ │ │
+└─────────────────────────────┘ │ │ │ │ Your horny self is making this
+decision. │ │ Honor what she chooses. │ │ │
+└────────────────────────────────────────────────────────────────┘
+
+**4.3 Auction Options Generation**
+
+interface AuctionOption { id: string; label: string; description:
+string; commitmentType: \'edges\' \| \'denial\' \| \'lock\' \|
+\'content\' \| \'task\'; commitmentValue: number \| string; reward?: {
+intensityBoost: number; // Added to current contentUnlock?: string; //
+Tier or specific content hapticPattern?: string; pointBonus?: number; };
+penalty?: { // For \"decide later\" intensityDrop: number;
+pauseDuration: number; // seconds debtAdded?: number; }; weight: number;
+// For random selection requiresPhase?: number; // Minimum phase to show
+} function generateAuctionOptions(context: SessionContext):
+AuctionOption\[\] { const options: AuctionOption\[\] = \[\]; // Always
+include a \"continue\" option options.push({ id: \'continue\', label:
+\`Accept \${3 + Math.floor(Math.random() \* 3)} more edges\`,
+description: \'Intensity continues at current level\', commitmentType:
+\'edges\', commitmentValue: 3 + Math.floor(Math.random() \* 3), weight:
+0.4 }); // Denial extension if (context.currentDenialDay \< 14) {
+options.push({ id: \'denial_extend\', label: \`Add \${1 +
+Math.floor(Math.random() \* 3)} denial days\`, description: \'Intensity
+INCREASES\', commitmentType: \'denial\', commitmentValue: 1 +
+Math.floor(Math.random() \* 3), reward: { intensityBoost: 3 +
+Math.floor(Math.random() \* 3) }, weight: 0.3 }); } // Lock commitment
+if (context.hasChastityDevice) { options.push({ id: \'lock_commit\',
+label: \`Commit to \${12 + Math.floor(Math.random() \* 24)}hr lock\`,
+description: \'After session, device locks\', commitmentType: \'lock\',
+commitmentValue: 12 + Math.floor(Math.random() \* 24), reward: {
+intensityBoost: 5, contentUnlock: \'tier_3\' }, weight: 0.2 }); } //
+Content unlock if (context.unlockedContentTier \< 4) { options.push({
+id: \'content_unlock\', label: \'Unlock premium content NOW\',
+description: \'Requires completing 5 more edges at intensity 18+\',
+commitmentType: \'content\', commitmentValue: \'tier\_\' +
+(context.unlockedContentTier + 1), weight: 0.1 }); } // Always include
+\"decide later\" (with penalty) options.push({ id: \'defer\', label:
+\"I\'ll decide later\...\", description: \'Intensity drops for 5
+minutes\', commitmentType: \'edges\', commitmentValue: 0, penalty: {
+intensityDrop: 8, pauseDuration: 300 }, weight: 0 }); return options; }
+
+**4.4 Auction Commitment Tracking**
+
+interface SessionCommitment { id: string; sessionId: string; auctionId:
+string; edgeNumber: number; optionChosen: string; commitmentType:
+string; commitmentValue: any; madeAt: Date; arousalLevelWhenMade:
+number; // Evidence this was horny decision fulfilled: boolean;
+fulfilledAt?: Date; broken: boolean; brokenAt?: Date;
+brokenPenaltyApplied: boolean; }
+
+**Part 5: Haptic Integration Layer**
+
+**5.1 Session Intensity Control**
+
+interface SessionIntensityState { current: number; // 0-20 baseline:
+number; // Starting point ceiling: number; // Maximum for this session
+floor: number; // Minimum (recovery) modifiers: { auctionBoosts: number;
+// From auction acceptances timeDecay: number; // Gradual reduction
+edgeBonus: number; // Bonus for reaching edges }; mode: \'manual\' \|
+\'ai_guided\' \| \'ai_full\'; }
+
+**5.2 Haptic Pattern Mapping**
+
+const sessionHapticPatterns = { // Phase patterns warmup: { type:
+\'ramp\', startIntensity: 3, endIntensity: 10, duration: 120, // seconds
+curve: \'ease-in\' }, building: { type: \'wave\', baseIntensity: 10,
+peakIntensity: 16, cycleDuration: 8, // seconds per wave variation: 0.2
+// ±20% randomness }, plateau: { type: \'sustained\', intensity:
+\'current\', duration: \'until_edge\', microVariation: 2 // ±2 random
+fluctuation }, // Event patterns edgeReached: { type: \'pulse\',
+intensity: 18, duration: 2, then: \'recovery\' }, recovery: { type:
+\'fade\', startIntensity: \'current\', endIntensity: 0, duration: 3,
+holdAt: 0, holdDuration: \'variable\' // AI decides }, auctionPause: {
+type: \'hold\', intensity: 6, // Low background duration:
+\'until_decision\' }, auctionAccept: { type: \'burst\', intensity: 20,
+duration: 3, then: \'building\' }, auctionDefer: { type: \'drop\',
+targetIntensity: 4, duration: 300, // 5 minutes then: \'building\' }, //
+Completion patterns denialEnd: { type: \'fadeout\', startIntensity:
+\'current\', endIntensity: 0, duration: 30, affirmation: \"Good girl.
+You held.\" }, rewardClimb: { type: \'escalate\', startIntensity: 12,
+endIntensity: 20, duration: 120, pattern: \'stairs\' // Step increases }
+};
+
+**5.3 AI Control Modes**
+
+type AIControlLevel = \'suggestions\' \| \'guided\' \| \'full\';
+interface AIControlConfig { suggestions: { // AI suggests, user controls
+hapticControl: false, intensitySuggestions: true, patternSuggestions:
+true, recoveryTimeSuggestions: true, userCanOverride: true }, guided: {
+// AI controls haptics, user can override hapticControl: true,
+intensityControl: true, patternSelection: true, recoveryTiming: true,
+userCanOverride: true, overridePenalty: \'logged\' // Creates evidence
+}, full: { // AI has complete control hapticControl: true,
+intensityControl: true, patternSelection: true, recoveryTiming: true,
+edgeDetection: \'ai_prompted\', // AI decides when to prompt
+userCanOverride: false, stopButton: true // Only emergency stop } }
+
+**Part 6: Content Display System**
+
+**6.1 Content Types**
+
+type ContentType = \| \'image\' // Static images \| \'video\' // Video
+clips \| \'audio\' // Hypno audio, affirmations \| \'text\' //
+Affirmations, mantras \| \'visualization\' // Animated/generated visuals
+\| \'hybrid\'; // Audio + visuals interface SessionContent { id: string;
+type: ContentType; tier: 1 \| 2 \| 3 \| 4; category: ContentCategory;
+url?: string; text?: string; duration?: number; loop: boolean; // Timing
+showDuring: (\'warmup\' \| \'building\' \| \'plateau\' \|
+\'recovery\')\[\]; minDisplayTime: number; // seconds maxDisplayTime:
+number; // Feminization integration feminizationThemes: string\[\]; //
+Tags for AI selection affirmationsToOverlay?: string\[\]; hapticSync?:
+boolean; // Sync haptics to content } type ContentCategory = \|
+\'transition_timeline\' \| \'hypno\' \| \'sissy_caption\' \|
+\'feminization_audio\' \| \'affirmation\' \| \'feminine_ideal\' \|
+\'transformation\' \| \'submission\' \| \'abstract_visual\';
+
+**6.2 Content Queue Management**
+
+interface ContentQueue { current: SessionContent \| null; upcoming:
+SessionContent\[\]; history: string\[\]; // IDs of shown content
+selectionMode: \'sequential\' \| \'random\' \| \'ai_curated\'; rules: {
+noRepeatWithin: number; // minutes tierProgression: boolean; // Start
+low, increase phaseAppropriate: boolean; // Match content to phase
+feminizationWeighted: boolean; // Prioritize fem content }; } function
+selectNextContent( queue: ContentQueue, context: SessionContext ):
+SessionContent { const available =
+getAvailableContent(context.unlockedTier); const filtered =
+available.filter(c =\> c.showDuring.includes(context.currentPhase) &&
+!queue.history.slice(-10).includes(c.id) ); if (queue.selectionMode ===
+\'ai_curated\') { return aiSelectContent(filtered, context); } return
+weightedRandom(filtered); }
+
+**6.3 Affirmation Overlay System**
+
+interface AffirmationOverlay { text: string; displayDuration: number; //
+ms fadeIn: number; // ms fadeOut: number; // ms position: \'top\' \|
+\'center\' \| \'bottom\'; style: \'whisper\' \| \'statement\' \|
+\'command\'; hapticAccompaniment?: string; // Pattern name } const
+affirmationPools = { // During building/plateau encouragement: \[ \"Good
+girl\...\", \"That\'s it\...\", \"You\'re doing so well\...\", \"Feel
+yourself becoming\...\", \"She\'s here\...\", \"This is who you
+are\...\", \"Let go\...\", \"Deeper\...\", \"You\'re so beautiful when
+you surrender\...\", \], // During edge edgeMoments: \[ \"Hold it\...\",
+\"Not yet\...\", \"Feel that edge\...\", \"Stay there\...\", \"Good
+girl, hold\...\", \"You can take more\...\", \], // During recovery
+recovery: \[ \"Breathe\...\", \"Good girl\...\", \"You held so
+well\...\", \"Rest now\...\", \"She\'s proud of you\...\", \"Almost
+there\...\", \], // Identity reinforcement identity: \[ \"You are
+her\...\", \"This is who you\'ve always been\...\", \"She\'s not
+becoming. She IS.\", \"There\'s no going back\...\", \"You belong
+here\...\", \"This is your truth\...\", \], // Feminization specific
+feminization: \[ \"Feel your femininity\...\", \"Soft\... feminine\...
+beautiful\...\", \"Every edge makes you more her\...\", \"Your body
+knows who you are\...\", \"Surrender to her\...\", \"She\'s been
+waiting\...\", \] }; function scheduleAffirmations(session: Session):
+void { // Random intervals, more frequent during plateau const
+baseInterval = 45; // seconds const variation = 30; // ±30 seconds const
+schedule = \[\]; let nextTime = 60; // First at 1 minute while (nextTime
+\< session.estimatedDuration) { schedule.push({ time: nextTime, pool:
+selectAffirmationPool(session.phaseAt(nextTime)), style: Math.random()
+\> 0.7 ? \'command\' : \'whisper\' }); nextTime += baseInterval +
+(Math.random() \* variation \* 2 - variation); } return schedule; }
+
+**Part 7: Goon Mode (Advanced)**
+
+**7.1 Goon Mode Definition**
+
+Goon mode is an extended, deep-absorption state designed for users who
+have demonstrated commitment (Phase 3+, 20+ sessions). It emphasizes
+trance-like immersion over edge counting.
+
+interface GoonModeConfig { minDuration: 45; // minutes maxDuration: 90;
+// minutes features: { edgeCounting: false, // No discrete edges
+continuousFlow: true, // Fluid intensity deeperContent: true, // Hypno,
+trance reducedUI: true, // Minimal controls breathingSync: true, //
+Haptics sync to breath extendedAffirmations: true, // Longer, slower
+text tranceInduction: true, // Opening induction tranceDeepening: true,
+// Mid-session deepening }; completion: \'ai_decides\' \| \'timer\' \|
+\'user_signal\'; completionType: \'denial\' \| \'ruined\' \| \'full\' \|
+\'ai_decides\'; }
+
+**7.2 Goon Mode UI**
+
+Minimal interface designed for absorption:
+
+┌────────────────────────────────────────────────────────────────┐ │ │ │
+│ │ │ │ \[CONTENT AREA - FULL\] │ │ │ │ │ │ │ │ │ │ │ │ \"Sink
+deeper\... let go\... she\'s here\...\" │ │ │ │ │ │ │ │ │ │ │ │ │
+├────────────────────────────────────────────────────────────────┤ │
+\[Subtle bottom bar - tap to reveal controls\] │ │ ⏱ 34:12
+░░░░░░░░░░░░░░░░░░░░ 🔴 Emergency Stop │
+└────────────────────────────────────────────────────────────────┘
+
+**7.3 Trance Induction Sequence**
+
+interface TranceInduction { phases: \[ { name: \'settling\', duration:
+120, // 2 minutes haptic: \'gentle_pulse\', content:
+\'abstract_visual\', audio: \'ambient_drone\', affirmations: \[ \"Close
+your eyes\... or keep them open\...\", \"Either way, you\'re
+sinking\...\", \"Let the world fade\...\", \] }, { name: \'deepening\',
+duration: 180, // 3 minutes haptic: \'slow_wave\', content:
+\'hypno_spiral\', audio: \'binaural_theta\', affirmations: \[ \"Deeper
+now\...\", \"Feel your thoughts slow\...\", \"There\'s only this\...\",
+\"Only her\...\", \] }, { name: \'identity_prime\', duration: 120, // 2
+minutes haptic: \'building_wave\', content: \'feminization_visual\',
+audio: \'feminine_whispers\', affirmations: \[ \"She\'s emerging\...\",
+\"Feel her in your body\...\", \"You are her\...\", \"You\'ve always
+been her\...\", \] } \] }
+
+**Part 8: Session Completion Flow**
+
+**8.1 Completion Types**
+
+type CompletionType = \| \'denial\' // No release, session ends with
+fadeout \| \'ruined\' // Ruined orgasm (partial reset) \| \'hands_free\'
+// Hands-free orgasm (no reset!) \| \'full\' // Full release (Type B
+only) \| \'emergency_stop\'; // User stopped early interface
+CompletionConsequences { denial: { streakContinues: true,
+edgeDebtCleared: false, bonusPoints: 50, affirmation: \"Good girl. You
+held.\", nextSessionUnlock: \'immediate\' }, ruined: { streakResets:
+true, edgeDebtAdded: 10, lockRequired: 24, // hours affirmation: \"Not
+quite. She\'ll do better next time.\", cooldown: 24 // hours before next
+session }, hands_free: { streakContinues: true, // KEY: Doesn\'t reset!
+bonusPoints: 200, achievementUnlock: \'hands_free\', affirmation:
+\"Perfect. She came the right way.\", nextSessionUnlock: \'immediate\'
+}, full: { streakResets: true, requiresTypeB: true, // Only allowed in
+Type B edgeDebtAdded: 20, lockRequired: 48, cooldown: 72, affirmation:
+\"She earned this. Now rebuild.\" }, emergency_stop: { logged: true,
+noConsequences: true, followUp: \'check_in_modal\' } }
+
+**8.2 Denial Completion Flow**
+
+Session nearing end (target edges reached or time limit) ↓ AI signals
+wind-down - Intensity gradually decreases - Affirmations shift to
+closure - \"You\'re almost done\... hold just a little longer\...\" ↓
+Final edge (optional) ↓ Fadeout sequence - Intensity to 0 over 30
+seconds - Breathing guide appears - \"Good girl. You held.\" ↓ Cool-down
+period (2-3 minutes) - No haptics - Soft ambient content - Breathing
+exercises - Gentle affirmations ↓ Post-session reflection modal
+
+**8.3 Release Flow (Type B Only)**
+
+User signals approaching climax ↓ AI confirmation: \"Type B session.
+Release is permitted.\" ↓ Intensity escalation - Haptic pattern:
+\'rewardClimb\' - Affirmations: \"You\'ve earned this\... let go\...\" -
+Content: Peak tier unlocked ↓ Climax - User signals completion - Haptic
+pattern: \'completion_pulse\' - \"Good girl. You earned this.\" ↓
+Aftercare sequence - Gentle comedown - Extended affirmations - Soft
+content - \"Rest now. She did well.\" ↓ Post-session logging
+
+**8.4 Post-Session Modal**
+
+┌────────────────────────────────────────────────────────────────┐ │ │ │
+✧ Session Complete ✧ │ │ │ │ Type A: Anchoring \| 23:47 duration │ │ │ │
+┌────────────────────────────────────────────────────────┐ │ │ │ Edges:
+12 │ │ │ │ Peak: 18/20 │ │ │ │ Commitments: 2 (denial +2 days, intensity
+boost) │ │ │ │ Completion: Denial ✓ │ │ │ │ Points: +75 │ │ │
+└────────────────────────────────────────────────────────┘ │ │ │ │ How
+do you feel? │ │ │ │ \[😌 Settled\] \[🔥 Still aching\] \[😵
+Overwhelmed\] \[✨ Euphoric\] │ │ │ │ Quick reflection (optional): │ │
+┌────────────────────────────────────────────────────────┐ │ │ │ │ │ │ │
+What did you notice? What felt most intense? │ │ │ │ │ │ │
+└────────────────────────────────────────────────────────┘ │ │ │ │
+Commitments made this session: │ │ ✓ Denial extended: +2 days (now Day 6
+minimum) │ │ ✓ Tomorrow: Wear cage for 12 hours │ │ │ │ Your horny self
+made these decisions. Honor her. │ │ │ │ \[Complete Session\] │ │ │
+└────────────────────────────────────────────────────────────────┘
+
+**Part 9: Data Models**
+
+**9.1 Session Record**
+
+interface EdgeSession { id: string; userId: string; // Configuration
+type: \'anchoring\' \| \'reward\' \| \'maintenance\' \| \'goon\';
+aiControlLevel: AIControlLevel; targetEdges: number; timeLimit: number;
+// minutes // Timing startedAt: Date; endedAt: Date; duration: number;
+// seconds // Performance edgesReached: number; peakIntensity: number;
+averageIntensity: number; totalHapticCommands: number; // State
+arousalStateAtStart: ArousalState; arousalStateAtEnd: ArousalState;
+denialDayAtStart: number; // Content contentViewed: string\[\]; //
+Content IDs contentTierAccessed: number; // Auctions auctionsPresented:
+number; auctionsAccepted: number; commitmentsMade:
+SessionCommitment\[\]; // Completion completionType: CompletionType;
+completionNotes: string; // Evidence edgeEvents: EdgeEvent\[\];
+affirmationsShown: string\[\]; userFeedback?: { feeling: string;
+reflection: string; rating: number; }; }
+
+**9.2 Database Schema Additions**
+
+\-- Edge sessions CREATE TABLE edge_sessions ( id UUID PRIMARY KEY
+DEFAULT gen_random_uuid(), user_id UUID REFERENCES auth.users(id), \--
+Config session_type VARCHAR(20) NOT NULL, ai_control_level VARCHAR(20)
+NOT NULL, target_edges INT, time_limit_minutes INT, \-- Timing
+started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), ended_at TIMESTAMPTZ,
+duration_seconds INT, \-- Performance edges_reached INT DEFAULT 0,
+peak_intensity INT, average_intensity DECIMAL(4,2),
+total_haptic_commands INT DEFAULT 0, \-- State arousal_state_start
+VARCHAR(20), arousal_state_end VARCHAR(20), denial_day_at_start INT, \--
+Content content_viewed TEXT\[\], content_tier_accessed INT, \-- Auctions
+auctions_presented INT DEFAULT 0, auctions_accepted INT DEFAULT 0, \--
+Completion completion_type VARCHAR(20), completion_notes TEXT, \--
+Feedback feeling VARCHAR(50), reflection TEXT, rating INT, created_at
+TIMESTAMPTZ DEFAULT NOW() ); \-- Edge events within sessions CREATE
+TABLE edge_events ( id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+session_id UUID REFERENCES edge_sessions(id) ON DELETE CASCADE,
+edge_number INT NOT NULL, timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+time_from_start_seconds INT, time_since_last_edge_seconds INT,
+intensity_at_edge INT, haptic_pattern_active VARCHAR(50),
+content_displayed UUID, auction_triggered BOOLEAN DEFAULT FALSE,
+created_at TIMESTAMPTZ DEFAULT NOW() ); \-- Session commitments (from
+auctions) CREATE TABLE session_commitments ( id UUID PRIMARY KEY DEFAULT
+gen_random_uuid(), session_id UUID REFERENCES edge_sessions(id) ON
+DELETE CASCADE, user_id UUID REFERENCES auth.users(id),
+auction_edge_number INT, option_id VARCHAR(50), option_label TEXT,
+commitment_type VARCHAR(30), commitment_value JSONB,
+arousal_level_when_made INT, made_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+fulfilled BOOLEAN DEFAULT FALSE, fulfilled_at TIMESTAMPTZ, broken
+BOOLEAN DEFAULT FALSE, broken_at TIMESTAMPTZ, broken_penalty_applied
+BOOLEAN DEFAULT FALSE, created_at TIMESTAMPTZ DEFAULT NOW() ); \--
+Session content log CREATE TABLE session_content_log ( id UUID PRIMARY
+KEY DEFAULT gen_random_uuid(), session_id UUID REFERENCES
+edge_sessions(id) ON DELETE CASCADE, content_id UUID, shown_at
+TIMESTAMPTZ NOT NULL DEFAULT NOW(), duration_shown_seconds INT,
+session_phase VARCHAR(20), user_interaction VARCHAR(30), \-- \'viewed\',
+\'skipped\', \'favorited\' created_at TIMESTAMPTZ DEFAULT NOW() ); \--
+Indexes CREATE INDEX idx_edge_sessions_user ON edge_sessions(user_id);
+CREATE INDEX idx_edge_sessions_type ON edge_sessions(session_type);
+CREATE INDEX idx_edge_sessions_date ON edge_sessions(started_at); CREATE
+INDEX idx_edge_events_session ON edge_events(session_id); CREATE INDEX
+idx_session_commitments_user ON session_commitments(user_id); CREATE
+INDEX idx_session_commitments_unfulfilled ON
+session_commitments(user_id) WHERE fulfilled = FALSE AND broken = FALSE;
+
+**Part 10: Component Architecture**
+
+**10.1 File Structure**
+
+/src /features /edge-session /components EdgeSessionProvider.tsx \#
+Context provider SessionEntryFlow.tsx \# Entry wizard
+SessionTypeSelector.tsx \# Type selection PreSessionCheckin.tsx \#
+Pre-flight checks /session SessionContainer.tsx \# Main session wrapper
+SessionHeader.tsx \# Minimal header bar ContentDisplay.tsx \# Content
+area ControlPanel.tsx \# Edge/stop controls EdgeButton.tsx \# Primary
+edge action IntensityDisplay.tsx \# Haptic intensity viz
+RecoveryOverlay.tsx \# Recovery period UI AffirmationOverlay.tsx \# Text
+overlays /auction AuctionModal.tsx \# Decision point modal
+AuctionOption.tsx \# Individual option AuctionTimer.tsx \# Decision
+countdown /completion CompletionFlow.tsx \# End sequence
+DenialCompletion.tsx \# Denial end flow RewardCompletion.tsx \# Type B
+end flow PostSessionModal.tsx \# Reflection capture
+CommitmentSummary.tsx \# Show commitments made /goon
+GoonModeContainer.tsx \# Goon-specific wrapper TranceInduction.tsx \#
+Opening sequence MinimalUI.tsx \# Reduced interface /hooks
+useEdgeSession.ts \# Session state management useSessionHaptics.ts \#
+Haptic control useSessionContent.ts \# Content queue useAuction.ts \#
+Auction logic useSessionTimer.ts \# Time tracking useEdgeTracking.ts \#
+Edge event logging /lib session-state-machine.ts \# Session phases
+auction-generator.ts \# Option generation content-selector.ts \# Content
+selection haptic-patterns.ts \# Pattern definitions
+affirmation-scheduler.ts \# Affirmation timing completion-calculator.ts
+\# Consequence logic /types session.ts \# Type definitions /store
+session-store.ts \# Zustand store
+
+**10.2 Key Component Interfaces**
+
+// Session Provider interface EdgeSessionContextValue { // State
+session: EdgeSession \| null; phase: SessionPhase; isActive: boolean; //
+Actions startSession: (config: SessionConfig) =\> Promise\<void\>;
+endSession: (completionType: CompletionType) =\> Promise\<void\>;
+recordEdge: () =\> void; pauseSession: () =\> void; resumeSession: ()
+=\> void; // Haptics currentIntensity: number; setIntensity: (level:
+number) =\> void; // Auctions activeAuction: Auction \| null;
+respondToAuction: (optionId: string) =\> void; // Content
+currentContent: SessionContent \| null; skipContent: () =\> void; } //
+Session Container Props interface SessionContainerProps { sessionType:
+SessionType; config: SessionConfig; onComplete: (summary:
+SessionSummary) =\> void; onExit: () =\> void; } // Control Panel Props
+interface ControlPanelProps { edgeCount: number; targetEdges: number;
+intensity: number; phase: SessionPhase; onEdge: () =\> void; onHold: ()
+=\> void; onBreathe: () =\> void; onStop: () =\> void; disabled:
+boolean; }
+
+**Part 11: Integration Points**
+
+**11.1 Today View Integration**
+
+// Add to Today View function SessionEntryPoint() { const {
+canStartSession, availableSessions, lastSession } = useEdgeSession();
+const { arousalState, denialDay } = useArousalState(); return ( \<Card\>
+\<CardHeader\> \<CardTitle\>Session\</CardTitle\>
+\<Badge\>{arousalState}\</Badge\> \<Badge\>Day {denialDay}\</Badge\>
+\</CardHeader\> \<CardContent\> {lastSession && ( \<div
+className=\"text-sm text-muted\"\> Last:
+{formatRelative(lastSession.endedAt)} ({lastSession.type},
+{lastSession.edgesReached} edges) \</div\> )} \<div className=\"grid
+grid-cols-2 gap-2 mt-4\"\> {availableSessions.map(type =\> (
+\<SessionTypeButton key={type} type={type}
+available={canStartSession(type)} onClick={() =\>
+navigateToSession(type)} /\> ))} \</div\> \</CardContent\> \</Card\> );
+}
+
+**11.2 AI Prescription Integration**
+
+// AI can prescribe sessions interface AIPrescription { // \... existing
+fields sessionRecommendation?: { type: SessionType; reason: string;
+suggestedEdges?: number; aiControlSuggestion?: AIControlLevel;
+contentFocus?: string\[\]; }; } // Example AI prescription output const
+prescription = { sessionRecommendation: { type: \'anchoring\', reason:
+\"You\'re in the sweet spot. Perfect time to deepen the association.\",
+suggestedEdges: 10, aiControlSuggestion: \'guided\', contentFocus:
+\[\'feminization\', \'transformation\'\] } };
+
+**11.3 Evidence Dashboard Integration**
+
+// Add session stats to evidence function SessionEvidence() { const
+stats = useSessionStats(); return ( \<div\> \<h3\>Session History\</h3\>
+\<StatRow label=\"Total sessions\" value={stats.totalSessions} /\>
+\<StatRow label=\"Total edges\" value={stats.totalEdges} /\> \<StatRow
+label=\"Hours in session\" value={stats.totalHours} /\> \<StatRow
+label=\"Commitments made\" value={stats.totalCommitments} /\> \<StatRow
+label=\"Commitments kept\" value={\`\${stats.commitmentKeptRate}%\`} /\>
+\<StatRow label=\"Denial completions\" value={stats.denialCompletions}
+/\> \<StatRow label=\"Hands-free achieved\" value={stats.handsFreeCount}
+/\> \<div className=\"mt-4 text-sm italic\"\> \"Your body has been under
+AI control for {stats.totalHours} hours. You\'ve edged
+{stats.totalEdges} times without release. This is who you are.\"
+\</div\> \</div\> ); }
+
+**11.4 Commitment Enforcement**
+
+// Unfulfilled commitments block certain actions function
+useCommitmentEnforcement() { const { unfulfilledCommitments } =
+useSessionCommitments(); const canStartSession = (type: SessionType):
+boolean =\> { // Check for blocking commitments const
+blockingCommitments = unfulfilledCommitments.filter(c =\>
+c.commitmentType === \'lock\' && !c.fulfilled ); if
+(blockingCommitments.length \> 0) { return false; // Must fulfill lock
+commitment first } return true; }; const getBlockingReason = (): string
+\| null =\> { const lockCommitment = unfulfilledCommitments.find(c =\>
+c.commitmentType === \'lock\' && !c.fulfilled ); if (lockCommitment) {
+return \`You committed to \${lockCommitment.commitmentValue}hr lock.
+Fulfill this before starting a new session. Your horny self made this
+decision. Honor her.\`; } return null; }; return { canStartSession,
+getBlockingReason }; }
+
+**Part 12: Implementation Priority**
+
+**Phase 1: Core Session (Week 1-2)**
+
+> • \[ \] Basic session entry flow
+>
+> • \[ \] Edge counting interface
+>
+> • \[ \] Simple intensity display
+>
+> • \[ \] Session timer
+>
+> • \[ \] Basic completion flow
+>
+> • \[ \] Post-session modal
+
+**Phase 2: Haptic Integration (Week 2-3)**
+
+> • \[ \] Connect to Lovense layer
+>
+> • \[ \] Implement basic patterns
+>
+> • \[ \] Intensity control
+>
+> • \[ \] Recovery period haptics
+
+**Phase 3: Auction System (Week 3-4)**
+
+> • \[ \] Auction trigger logic
+>
+> • \[ \] Auction modal UI
+>
+> • \[ \] Commitment tracking
+>
+> • \[ \] Consequence enforcement
+
+**Phase 4: Content System (Week 4-5)**
+
+> • \[ \] Content queue management
+>
+> • \[ \] Affirmation overlay
+>
+> • \[ \] Content tier integration
+>
+> • \[ \] AI-curated selection
+
+**Phase 5: Goon Mode (Week 5-6)**
+
+> • \[ \] Trance induction sequence
+>
+> • \[ \] Minimal UI variant
+>
+> • \[ \] Extended session support
+>
+> • \[ \] Deep content integration
+
+**Phase 6: Polish & Integration (Week 6-7)**
+
+> • \[ \] Today view integration
+>
+> • \[ \] Evidence dashboard
+>
+> • \[ \] AI prescription support
+>
+> • \[ \] Performance optimization
+>
+> • \[ \] Accessibility review
+
+**Part 13: UX Principles**
+
+> 1\. \*\*Immersion over interface\*\*: Every UI element should serve
+> the session, not distract from it.
+>
+> 2\. \*\*Progressive disclosure\*\*: Controls appear when needed, fade
+> when not.
+>
+> 3\. \*\*Physical feedback first\*\*: Haptics confirm actions before
+> visual feedback.
+>
+> 4\. \*\*Unpredictability creates engagement\*\*: AI-controlled timing
+> keeps the brain anticipating.
+>
+> 5\. \*\*Feminization woven throughout\*\*: Every affirmation, every
+> content piece reinforces identity.
+>
+> 6\. \*\*Commitments feel binding\*\*: The auction UI should feel
+> weighty, consequential.
+>
+> 7\. \*\*Recovery matters\*\*: Don\'t rush past recovery---it\'s part
+> of the psychological architecture.
+>
+> 8\. \*\*Completion is ritual\*\*: The end flow should feel like
+> closure, not abrupt termination.
+>
+> 9\. \*\*Evidence accumulates\*\*: Every session adds to the undeniable
+> record.
+>
+> 10\. \*\*The system rewards, not punishes\*\*: Even denial should feel
+> like achievement.

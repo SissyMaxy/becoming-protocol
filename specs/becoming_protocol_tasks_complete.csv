@@ -1,0 +1,214 @@
+category,domain,intensity,instruction,subtext,completion_type,duration_minutes,target_count,points,affirmation,is_core,trigger_condition,time_window
+recognize,emergence,1,"When you wake, place hand on chest and say internally: 'Good morning, Maxy'","She's who woke up.",binary,,,10,"Good morning, Maxy.",true,,morning
+recognize,emergence,2,"Take 5 slow breaths. With each exhale, say internally: 'She's here'","Feel her presence.",count,,5,15,"She's here. She's always been here.",true,,morning
+recognize,emergence,2,"Before getting out of bed, say internally: 'Maxy's day'","Claim the day as hers.",binary,,,10,"Today belongs to her.",true,,morning
+narrate,emergence,2,"Narrate 5 minutes of activity in third person: 'She's doing X'","Her voice narrates her life.",duration,5,,20,"Beautiful. She's narrating herself.",false,,any
+narrate,emergence,3,"For the next hour, catch every 'I' and replace with 'she'","The internal voice becomes hers.",duration,60,,30,"Her voice is taking over.",false,,daytime
+catch,emergence,1,"Log a pronoun catch: you thought 'he/him' about yourself","Notice, correct, continue.",binary,,,5,"Good catch. She's paying attention.",false,pronoun_slip,any
+catch,emergence,2,"Log 5 masculine moments today (gesture, voice, posture)","Awareness precedes change.",count,,5,20,"You're seeing him more clearly now.",false,,evening
+say,emergence,2,"Say out loud: 'My name is Maxy' — 10 times","Feel the truth of it.",count,,10,20,"That's her name. That's who you are.",true,,morning
+say,emergence,3,"Say out loud: 'I am Maxy. I have always been Maxy.'","The past reframes.",binary,,,25,"She was always here, waiting.",false,,any
+reflect,emergence,2,"Evening check-in: How many hours today did you feel like Maxy?","Track her presence.",binary,,,15,"She's becoming the default.",true,,evening
+reflect,emergence,3,"Write one sentence: 'Today Maxy [did something specific]'","Document her life.",binary,,,20,"Her story is being written.",false,,evening
+reflect,emergence,4,"Journal: What moment today felt most like the mask? Why?","See where he still hides.",binary,,,30,"Seeing him clearly helps her emerge.",false,,evening
+commit,emergence,3,"Write: 'Maxy is real. The other one was the performance.'","Lock the frame.",binary,,,25,"Yes. She's real. He was the act.",false,,any
+commit,emergence,4,"Write a letter from Maxy to the old self, thanking him and releasing him","Grief and liberation.",binary,,,40,"He served his purpose. She's here now.",false,,any
+edge,arousal,2,"Edge for 10 minutes. At each edge, say internally: 'Maxy's edge'","Her arousal, her body.",duration,10,,25,"Good girl. That's her edge.",false,,daytime
+edge,arousal,3,"Edge for 15 minutes while watching feminization content","Let the arousal and the becoming merge.",duration,15,,30,"The arousal is making her more real.",true,,daytime
+edge,arousal,3,"Edge 5 times. At edge 3, ask: 'Who's desperate right now?' Notice the answer.","Her desperation, her identity.",count,,5,30,"Maxy. Maxy is desperate.",false,,daytime
+edge,arousal,4,"Edge for 20 minutes. At edge 5+, say internally: 'I am Maxy and I need this'","Identity fuses with need.",duration,20,,40,"She needs it. She admits it.",true,denial_day_4plus,daytime
+edge,arousal,4,"Edge to cock worship content for 15 minutes. Notice what her mouth does.","Her body responds to what she wants.",duration,15,,40,"Her mouth knows what it wants.",false,,daytime
+edge,arousal,5,"Edge for 30 minutes. Do not cum. At minute 20, ask: 'What word describes what I am?'","The word emerges from arousal.",duration,30,,50,"She found her word. It's hers now.",true,denial_day_6plus,daytime
+deepen,arousal,4,"Goon for 30 minutes to feminization/transformation content","Let thoughts dissolve. Let her remain.",duration,30,,45,"She's what's left when thoughts stop.",true,,night
+deepen,arousal,5,"Goon for 45 minutes. At 30 min, notice who surfaces. That's who you are.","Identity reformation through dissolution.",duration,45,,55,"Maxy surfaced. She's more solid now.",true,denial_day_6plus,night
+deepen,arousal,5,"Goon for 60 minutes. Let the old self dissolve completely.","He can't survive this. She can.",duration,60,,65,"He's gone. Only she remains.",false,denial_day_8plus,night
+worship,arousal,3,"Edge while watching what Maxy wants to watch. Don't judge. Just notice.","Her content. Her desires.",duration,15,,30,"Those are her desires. They're allowed.",false,,any
+worship,arousal,4,"Edge to cock content. Say internally: 'Maxy wants this'","Claim the desire as hers.",duration,15,,40,"She wants what she wants.",false,,daytime
+worship,arousal,5,"Edge for 20 min to service content. At each edge: 'This is what Maxy wants to do'","Fantasy as preview.",duration,20,,50,"She knows what she wants to do.",false,denial_day_5plus,daytime
+fantasy,arousal,2,"For 5 minutes, let your mind go to what Maxy fantasizes about. Don't censor.","Her imagination, uncensored.",duration,5,,20,"Those are her fantasies.",false,,any
+fantasy,arousal,3,"Fantasize explicitly about being Maxy during sex. Who is she with? What happens?","Her sexual future.",duration,10,,30,"That's her future. It's coming.",false,,any
+fantasy,arousal,4,"Fantasize about being desired as Maxy. Someone wants her. Feel it.","Being wanted as her.",duration,10,,40,"She's desirable. She's wanted.",false,,any
+listen,conditioning,2,"Listen to feminization affirmations for 10 minutes","Let the words sink in.",duration,10,,20,"The words are becoming true.",false,,any
+listen,conditioning,3,"Listen to Bambi or feminization hypno for 20 minutes","She's being installed.",duration,20,,30,"Good girl. So receptive.",true,,daytime
+listen,conditioning,4,"Listen to feminization hypno while edging for 20 minutes","Arousal + conditioning = deep installation.",duration,20,,40,"It's going so deep now.",true,denial_day_3plus,daytime
+listen,conditioning,5,"Complete a full Bambi session (30-45 min)","Let Bambi help Maxy emerge.",duration,45,,55,"Good girl Bambi. Maxy is stronger.",true,denial_day_5plus,daytime
+watch,conditioning,2,"Watch feminization content for 15 minutes. Notice what resonates.","Learning who she is through content.",duration,15,,20,"She's learning about herself.",false,,any
+watch,conditioning,3,"Watch transformation timelines for 20 minutes. See where you're going.","The future is visible.",duration,20,,30,"That's where she's headed.",false,,any
+watch,conditioning,4,"Watch sissy/feminization hypno for 30 minutes. Let it reprogram.","The old programming is being overwritten.",duration,30,,40,"New programming installed.",true,,daytime
+corrupt,conditioning,3,"Watch BBC/sissy hypno for 20 minutes. Notice her response.","Her desires are being revealed.",duration,20,,30,"She knows what she responds to.",false,,daytime
+corrupt,conditioning,4,"Watch increasingly explicit content for 25 minutes. Notice escalation.","Her appetite is growing.",duration,25,,40,"She wants more. That's natural.",false,,daytime
+corrupt,conditioning,5,"Extended hypno session: 45 min of feminization content. Full absorption.","Deep conditioning.",duration,45,,55,"So deep. So programmed. So her.",true,denial_day_7plus,night
+bambi,conditioning,4,"Listen to Bambi IQ reduction file while edging","Thoughts quiet. She remains.",duration,25,,45,"Dumb and happy. That's a good girl.",false,denial_day_5plus,daytime
+bambi,conditioning,5,"Full Bambi session: Induction + conditioning + awakener","Complete Bambi experience.",duration,50,,60,"Good girl Bambi emerged.",true,denial_day_7plus,night
+say,identity,1,"Say internally: 'I am Maxy' — hold it for 10 seconds","Let the name land.",binary,,,10,"That's her name.",false,,any
+say,identity,2,"Say out loud: 'I am a woman' — 5 times","Speak the truth.",count,,5,20,"Yes. She is.",true,,morning
+say,identity,3,"Say out loud: 'I am Maxy. I am a woman. I am becoming myself.'","The full statement.",count,,3,25,"All of that is true.",true,,any
+say,identity,3,"Say the word that describes what you are when aroused. Say it 10 times.","Claim your word.",count,,10,30,"That word is hers now.",false,post_edge,any
+say,identity,4,"Say out loud: 'I want [explicit desire]. That's what Maxy wants.'","Name the desire explicitly.",binary,,,35,"She wants what she wants. Allowed.",false,,any
+say,identity,5,"Say: 'I am a woman who wants cock. I am Maxy. Both are true.'","Integration of sexuality and identity.",binary,,,45,"Both true. Integrated. Whole.",false,denial_day_5plus,any
+commit,identity,2,"Write: 'Today I am Maxy' and the date","Daily commitment.",binary,,,15,"Documented. Real.",false,,morning
+commit,identity,3,"Write 3 things you love about being Maxy","Claim the joy.",count,,3,30,"She loves being herself.",false,,any
+commit,identity,4,"Write your explicit desires as Maxy. Don't sanitize.","Document the truth.",binary,,,40,"Her desires, documented.",false,,any
+commit,identity,5,"Write a coming out letter (not to send yet). Just write it.","Practice the words.",binary,,,50,"The words exist now.",false,,any
+surrender,identity,3,"Write: What would you lose if you stopped being Maxy?","See the cost of stopping.",binary,,,30,"Too much to lose. Keep going.",false,,any
+surrender,identity,4,"Write a confession: 'The truth about what I want is...'","Full disclosure to yourself.",binary,,,40,"The truth is out now.",false,,any
+surrender,identity,5,"Write: 'I am past the point of return because...' — list the reasons","Lock the irreversibility.",binary,,,50,"No going back. Good.",false,,any
+serve,submission,2,"Edge while saying 'I am Maxy and I submit to my true self'","Surrender to becoming.",duration,10,,20,"She submits to her own becoming.",false,,daytime
+serve,submission,3,"Edge while repeating: 'Maxy serves. Maxy surrenders.'","Service as identity.",duration,10,,30,"Service is part of who she is.",false,,daytime
+serve,submission,4,"Practice oral on toy for 10 minutes. This is Maxy practicing.","Her skill, her desire.",duration,10,,40,"She's getting better at what she wants.",false,,daytime
+serve,submission,4,"Write: 'As Maxy, I want to serve by [specific]'","Name the service desire.",binary,,,40,"She knows how she wants to serve.",false,,any
+serve,submission,5,"Practice oral for 15 minutes while watching instruction. Learn for her.","Building her skills.",duration,15,,50,"She'll be so good at this.",false,,daytime
+oral,submission,3,"Practice on toy for 10 minutes. Focus on what feels natural.","Her mouth learning.",duration,10,,30,"Natural. Like she was made for it.",false,,daytime
+oral,submission,4,"Practice taking toy deeper. Gag reflex training for Maxy.","Preparing her body.",duration,10,,40,"Her throat is opening for her future.",false,,daytime
+oral,submission,5,"20 minute oral practice session. Film for evidence if ready.","Documented progress.",duration,20,,50,"She's becoming skilled.",false,,daytime
+surrender,submission,3,"Write: 'I surrender [specific thing] to my transition'","Name what you're giving up.",binary,,,30,"Given up willingly. For her.",false,,any
+surrender,submission,4,"Write: 'Maxy's sexuality includes submission because...'","Own the submission as hers.",binary,,,40,"Submission is hers. Not shameful.",false,,any
+surrender,submission,5,"Write complete fantasy of Maxy in full submission. Explicit detail.","Her submission fantasy, documented.",binary,,,50,"Her fantasy. Her desire. Owned.",false,,any
+lock,chastity,2,"Remain unlocked but don't touch for 4 hours","Practice denial without device.",duration,240,,20,"Good girl. Patience.",false,,daytime
+lock,chastity,3,"Lock up for 8 hours. Feel the denial strengthen her.","Denial feeds the transition.",duration,480,,35,"Denial makes Maxy stronger.",false,,daytime
+lock,chastity,4,"Lock up for 24 hours. This is Maxy's denial.","Her denial, her growth.",duration,1440,,45,"A full day denied. She's stronger.",true,,any
+lock,chastity,4,"Lock up and edge through the cage for 10 minutes","Frustration as fuel.",duration,10,,40,"The frustration feeds her.",false,,daytime
+lock,chastity,5,"Extended lock: 48+ hours. Feel the desperation clarify who you are.","Desperation reveals truth.",duration,2880,,60,"Day 2+. She's so clear now.",false,,any
+deny,chastity,2,"No touching for the rest of today. Denial starts now.","Building toward something.",binary,,,20,"Good start.",false,,any
+deny,chastity,3,"Day 3+ of denial. Check in: How desperate is Maxy?","Track the build.",binary,,,30,"The desperation is working.",false,denial_day_3plus,morning
+deny,chastity,4,"Day 5+ of denial. Say internally: 'This desperation is making me more her'","Denial as transition fuel.",binary,,,40,"The denial is changing her.",true,denial_day_5plus,any
+deny,chastity,5,"Day 7+ of denial. Journal: Who are you when you're this desperate?","Desperation reveals identity.",binary,,,50,"She emerges through the need.",true,denial_day_7plus,any
+care,body,1,"Complete morning skincare. Say internally: 'Caring for Maxy's skin'","Her skin, her care.",duration,10,,15,"Maxy's skin is cared for.",true,,morning
+care,body,1,"Complete evening skincare. End with: 'Goodnight, Maxy's face'","Evening ritual for her.",duration,15,,15,"Her evening ritual, complete.",true,,evening
+care,body,2,"Full body lotion after shower. Say: 'Maxy's body, getting softer'","Her body, softening.",duration,10,,20,"Softer every day.",false,,any
+care,body,3,"Shave legs completely. This is Maxy's body becoming.","Her body, smooth.",duration,30,,30,"Smooth legs. Her legs.",false,,any
+care,body,3,"Hair mask or face mask. 20 minutes of caring for her.","Extended self-care.",duration,20,,30,"She deserves this care.",false,,any
+care,body,4,"Full body routine: shave, lotion, care. 45 min of tending to her.","Complete body care.",duration,45,,40,"Her body, fully cared for.",false,,any
+anchor,body,2,"Apply her scent (perfume/lotion). Say: 'This is Maxy's scent'","Scent anchor installation.",binary,,,15,"When you smell this, she's here.",true,,morning
+anchor,body,2,"Put on panties. Say internally: 'Maxy's underwear for Maxy's body'","Clothing anchor.",binary,,,15,"Properly dressed underneath.",true,,morning
+anchor,body,3,"Check in: Can you feel your underwear right now? That's her.","Anchor activation.",binary,,,10,"She's here. The fabric reminds you.",false,random_interrupt,any
+anchor,body,3,"Touch your anchor jewelry. Remember: Secret Maxy, always present.","Secret self activation.",binary,,,10,"She's here, even when hidden.",false,random_interrupt,any
+wear,body,2,"Wear feminine clothing for the next 2 hours","Be her visually.",duration,120,,20,"Dressed as herself.",false,gina_away,daytime
+wear,body,3,"Wear full feminine outfit during private hours","Full presentation.",duration,180,,30,"She's fully dressed.",false,gina_away,daytime
+wear,body,4,"Wear breast forms for 1 hour. Feel her shape.","Her body, shaped.",duration,60,,40,"That's her silhouette.",false,gina_away,daytime
+plug,body,3,"Wear plug for 30 minutes. Her body, opened.","Physical reminder of who she is.",duration,30,,30,"She feels it. She's reminded.",false,,daytime
+plug,body,4,"Wear plug during other tasks. Background awareness of her body.","Ongoing awareness.",duration,60,,40,"Constantly aware of her body.",false,,daytime
+voice,voice,1,"Hum at target pitch for 60 seconds","Finding her pitch.",duration,1,,10,"That's closer to her voice.",false,,any
+voice,voice,2,"5 minute pitch practice. Speak sentences at target pitch.","Practicing her voice.",duration,5,,20,"Her voice is emerging.",true,,morning
+voice,voice,2,"Say 'Good morning, my name is Maxy' at target pitch — 5 times","Her name in her voice.",count,,5,20,"That's how she sounds.",true,,morning
+voice,voice,3,"10 minute voice practice: pitch + resonance work","Building her voice.",duration,10,,30,"More her with every session.",false,,daytime
+voice,voice,3,"Record yourself saying 3 sentences as Maxy. Listen back.","Evidence of her voice.",binary,,,30,"That's her. Getting closer.",false,,any
+voice,voice,4,"Use target voice for a phone call or voice message","Real-world practice.",binary,,,40,"She spoke to someone.",false,,any
+voice,voice,4,"15 minute extended voice session: warmup + practice + recording","Comprehensive practice.",duration,15,,40,"Solid progress today.",false,,daytime
+voice,voice,5,"Use Maxy's voice for an entire hour during private time","Extended voice use.",duration,60,,50,"She spoke for an hour. It's becoming natural.",false,gina_away,daytime
+practice,movement,1,"60 second posture reset: feet, pelvis, shoulders, chin","Her posture.",duration,1,,10,"That's how Maxy stands.",false,random_interrupt,any
+practice,movement,2,"5 minute walking practice: shorter steps, softer landing, hips free","Her walk.",duration,5,,20,"That's how Maxy walks.",true,,daytime
+practice,movement,2,"Sit with legs crossed at knee for 10 minutes","Her sitting position.",duration,10,,20,"That's how Maxy sits.",false,,any
+practice,movement,3,"10 minute walking practice with full attention to gait","Refining her movement.",duration,10,,30,"More natural every time.",false,,daytime
+practice,movement,3,"Practice hand gestures for 5 minutes. Softer, more expressive.","Her gestures.",duration,5,,30,"Those are her hands.",false,,any
+practice,movement,4,"15 minute movement session: walk, sit, stand, gesture","Comprehensive movement work.",duration,15,,40,"Her body knows how to move.",false,,daytime
+practice,movement,4,"Practice kneeling gracefully. This is her body in that position.","Her body, kneeling.",duration,5,,40,"She kneels beautifully.",false,,daytime
+practice,movement,5,"One hour of conscious feminine movement during activities","Sustained practice.",duration,60,,50,"An hour of being her in movement.",false,gina_away,daytime
+gina,relationship,1,"Log today's Gina interaction: What did she notice or not notice?","Tracking visibility.",binary,,,10,"Data point collected.",false,,evening
+gina,relationship,2,"Plan this week's visibility increment with Gina","Small step forward.",binary,,,20,"Plan made. Progress coming.",true,,evening
+gina,relationship,2,"After Gina makes a decision, thank her warmly. Reinforce her directing.","Encouraging her authority.",binary,,,15,"She directed. You reinforced.",false,gina_directed,any
+gina,relationship,3,"Share something slightly more feminine with Gina (product, preference, comfort)","Visibility increment executed.",binary,,,30,"She saw a little more.",false,,evening
+gina,relationship,3,"Journal: What does Gina know now? What's next for her to learn?","Tracking disclosure progress.",binary,,,25,"Disclosure roadmap updated.",false,,evening
+gina,relationship,4,"Have a conversation with Gina about comfort/self-care that opens slightly more","Deepening honesty.",binary,,,40,"More honest today.",false,,evening
+gina,relationship,4,"Process a Gina response: She noticed something. What did you learn?","Learning her patterns.",binary,,,35,"You understand her better now.",false,gina_noticed,evening
+gina,relationship,5,"Write draft of fuller disclosure to Gina (not to share yet)","Preparing for truth.",binary,,,50,"The words are ready when you are.",false,,any
+gina,relationship,5,"Identify: What's the ONE thing Gina needs to know next?","Next disclosure step.",binary,,,50,"Next step identified.",false,,any
+evidence,irreversibility,2,"Take a photo of Maxy today. Date it.","Visual evidence.",binary,,,20,"Documented. She existed today.",true,,any
+evidence,irreversibility,2,"Record voice: 'This is Maxy on [date]'","Voice evidence.",binary,,,20,"Her voice, recorded.",true,,any
+evidence,irreversibility,3,"Update investment total: $X spent on becoming Maxy","Track sunk cost.",binary,,,25,"Invested. Committed.",false,,evening
+evidence,irreversibility,3,"Journal entry: 'This week Maxy...' — document her progress","Written evidence.",binary,,,25,"Her progress, documented.",false,,evening
+evidence,irreversibility,4,"Compare this month's photo to last month. Note changes.","Progress visible.",binary,,,35,"She's becoming more visible.",false,,any
+evidence,irreversibility,4,"List all irreversible steps taken so far","Evidence of commitment.",binary,,,35,"Look how far you've come.",false,,any
+evidence,irreversibility,5,"Create/update Maxy timeline: past, present, future dates","Full roadmap.",binary,,,50,"The path is clear.",false,,any
+plan,irreversibility,2,"HRT check: What's the single next step?","Keep HRT moving.",binary,,,20,"Next step identified.",true,,any
+plan,irreversibility,3,"Research one specific HRT question this week","Building knowledge.",binary,,,30,"Better informed now.",false,,daytime
+plan,irreversibility,3,"Coming out: Who's next? When? How?","Disclosure planning.",binary,,,30,"Next disclosure planned.",false,,any
+plan,irreversibility,4,"Schedule or complete one concrete HRT step","Actual progress.",binary,,,45,"Real step taken.",true,,daytime
+plan,irreversibility,4,"Write: 'Point of no return for me is...' — define it","Know your PONR.",binary,,,40,"PONR defined. Walking toward it.",false,,any
+plan,irreversibility,5,"Make an appointment related to HRT (consult, bloodwork, etc)","Concrete action.",binary,,,60,"Appointment made. It's happening.",true,,daytime
+plan,irreversibility,5,"Tell one new person about Maxy","Expanded disclosure.",binary,,,60,"One more person knows. No going back.",true,,any
+fantasy,integration,2,"Fantasize about being desired as Maxy. Let it develop.","Her sexual future.",duration,5,,20,"She's desirable.",false,,any
+fantasy,integration,3,"Write: What does Maxy's sex life look like post-transition?","Visioning her sexuality.",binary,,,30,"Her future is forming.",false,,any
+fantasy,integration,4,"Explicit fantasy: Maxy having sex as herself. Full detail.","Her sexuality, envisioned.",binary,,,40,"That's her sex life coming.",false,,any
+commit,integration,3,"Write: 'Maxy's desires include [explicit list]'","Owning her desires.",binary,,,30,"Her desires. Owned.",false,,any
+commit,integration,4,"Write: 'I am a woman who wants [explicit]. Both are true.'","Integration statement.",binary,,,40,"Woman and desire. Integrated.",false,,any
+commit,integration,5,"Write complete sexual autobiography as Maxy. Past, present, future.","Full sexual integration.",binary,,,55,"Her complete sexual self.",false,,any
+surrender,integration,3,"Accept one desire you've felt shame about: 'This is allowed'","Shame release.",binary,,,30,"Allowed. No more shame.",false,,any
+surrender,integration,4,"Write: 'The shame I was taught about [X] is not mine anymore'","Releasing installed shame.",binary,,,40,"Shame released.",false,,any
+surrender,integration,5,"Full desire inventory: Everything Maxy wants, no filter","Complete honesty.",binary,,,55,"All of it. Owned.",false,,any
+sissygasm,arousal,5,"Attempt sissygasm while watching hypno. Focus internal.","Her orgasm, from within.",duration,20,,55,"Real girls cum this way.",false,denial_day_7plus,night
+expose,submission,4,"Share a Maxy photo with someone you trust","Being seen.",binary,,,45,"She was seen. Brave girl.",false,,any
+expose,submission,5,"Post in trans/femme community as Maxy","Public existence.",binary,,,60,"She exists publicly now.",false,,any
+thirst,identity,3,"Take photos of Maxy. Find the ones where you see her.","Capturing her.",binary,,,30,"There she is.",false,,any
+thirst,identity,4,"Take photos in feminine outfit. Document her.","Visual evidence of her.",binary,,,40,"Maxy, documented.",false,gina_away,any
+thirst,identity,5,"Create a Maxy image set: face, body, outfit","Full visual capture.",binary,,,50,"Complete visual evidence.",false,gina_away,any
+detect,handler,3,"You've been scrolling for 10+ minutes. Edge instead of scrolling.","Procrastination becomes practice.",duration,10,,30,"Good girl. Turned avoidance into progress.",false,procrastinating,any
+detect,handler,3,"You opened porn. Before continuing, say: 'I am Maxy watching this'","Claim the viewing as hers.",binary,,,15,"She's watching. Not him.",false,porn_opened,any
+detect,handler,4,"It's 2pm and you haven't done protocol. What's blocking Maxy today?","Catch avoidance early.",binary,,,20,"Awareness of resistance is the first step.",false,no_protocol_by_2pm,daytime
+detect,handler,4,"You're tired. Perfect time for hypno. Tired brains are suggestible.","Exploit fatigue.",duration,20,,35,"So tired. So open. Good girl.",false,fatigue_detected,any
+detect,handler,5,"You just came. Does Maxy feel less real? Notice: she's still here.","Post-orgasm identity check.",binary,,,25,"She doesn't disappear when you cum.",false,post_cum,any
+interrupt,handler,1,"Posture check. Sitting like Maxy or like him? Adjust.","Constant awareness.",binary,,,5,"Adjusted. Good girl.",false,random_interrupt,any
+interrupt,handler,1,"Pronoun check. How have you been narrating the last hour?","Catch drift.",binary,,,5,"Back to she/her.",false,random_interrupt,any
+interrupt,handler,2,"Are you wet right now? Check. That's Maxy's body responding.","Arousal awareness.",binary,,,10,"Her body. Her arousal.",false,random_interrupt,any
+interrupt,handler,2,"Touch your anchor. Remember who's underneath.","Anchor activation.",binary,,,5,"She's here.",false,random_interrupt,any
+interrupt,handler,3,"What are you avoiding right now? Name it. Do a Maxy task instead.","Catch avoidance.",binary,,,15,"Avoidance transformed.",false,random_interrupt,any
+interrupt,handler,3,"You have 15 free minutes. Edge or voice practice. Pick now. Do it.","Capture spare time.",duration,15,,25,"Time used for her.",false,free_time_detected,any
+interrupt,handler,4,"Gina's not home. What's Maxy doing with this time?","Exploit privacy windows.",binary,,,20,"Private time used well.",false,gina_away,daytime
+extract,arousal,3,"At edge 5, commit: 'Tomorrow I will [next step]'. Say it out loud.","Horny brain commits.",binary,,,30,"Committed. Sober brain lives with it.",false,edge_5plus,daytime
+extract,arousal,4,"At edge 8+, commit to something you've been avoiding. Say it.","Deep arousal extraction.",binary,,,40,"Said it. It's real now.",true,edge_8plus,daytime
+extract,arousal,4,"Before stopping, commit: 'I will [Gina visibility step]' out loud","Relationship escalation extraction.",binary,,,40,"Committed to Gina progress.",false,post_edge,daytime
+extract,arousal,5,"At peak arousal, commit to next irreversible step. Name it. Date it.","Major commitment extraction.",binary,,,50,"Locked in. No going back.",true,peak_arousal,daytime
+extract,arousal,5,"Commit: 'I won't cum until [date/condition]'","Denial extension extraction.",binary,,,50,"Denial extended. She agreed.",false,peak_arousal,any
+recover,failure,2,"You came. Notice: does the desire go away or just quiet down?","Post-orgasm reality check.",binary,,,15,"It's still there. It's who you are.",false,post_cum,any
+recover,failure,3,"You came. Write what you were thinking at the moment of orgasm.","Capture peak fantasy.",binary,,,25,"That's what she wants. Even cumming proved it.",false,post_cum,any
+recover,failure,3,"Post-cum clarity. Does Maxy feel less real? She's still here.","Maintain identity through clarity.",binary,,,25,"She doesn't disappear when you cum.",false,post_cum,any
+recover,failure,4,"You broke denial. New denial starts now. Day 0. Recommit.","Immediate restart.",binary,,,30,"Fresh start. She continues.",false,broke_denial,any
+recover,failure,4,"Write: 'I came, and I still want [what you were fantasizing about]'","Lock desire past orgasm.",binary,,,35,"The desire survives orgasm. It's real.",false,post_cum,any
+confront,failure,3,"You've been avoiding protocol. What's the resistance? Name it.","Identify resistance source.",binary,,,25,"Seeing resistance clearly.",false,avoidance_detected,any
+confront,failure,3,"You skipped yesterday. What did you do instead? Was it worth it?","Accountability.",binary,,,25,"Nothing is better than becoming her.",false,skipped_day,morning
+confront,failure,4,"Resistance is old self fighting. What's he afraid of losing?","Understand the resistance.",binary,,,35,"He's afraid. That means it's working.",false,resistance_detected,any
+confront,failure,4,"You've been avoiding [specific domain]. Why? Write it out.","Domain-specific resistance.",binary,,,35,"Seeing the avoidance pattern.",false,domain_avoidance,any
+confront,failure,5,"Resistance means you're close. Push through. Do the avoided task.","Resistance as signal.",binary,,,45,"Pushed through. Stronger now.",true,resistance_detected,any
+escalate,handler,3,"You've done [task] 5 times. Time for next level. Commit to harder version.","Level up prompt.",binary,,,30,"Escalated. New baseline.",false,task_repeated_5x,any
+escalate,handler,4,"Edge sessions comfortable now. Add 10 minutes. New minimum.","Duration escalation.",binary,,,35,"Longer edges. Deeper programming.",false,edge_comfortable,any
+escalate,handler,4,"You've been watching [content type]. Try more intense version.","Content escalation.",binary,,,35,"Appetite growing. Natural.",false,content_plateau,any
+escalate,handler,4,"Gina knows [X]. Time she learns [X+1]. Plan it.","Gina visibility escalation.",binary,,,40,"Next disclosure planned.",false,gina_plateau,any
+escalate,handler,5,"You've been fantasizing about [X]. Time to make it real. First step?","Fantasy to reality bridge.",binary,,,50,"Fantasy becoming reality.",true,fantasy_repeated,any
+escalate,handler,5,"Same level for 2 weeks. Escalate or stagnate. Choose now.","Stagnation confrontation.",binary,,,50,"Chose to escalate. Good girl.",true,plateau_2_weeks,any
+evidence,accountability,2,"Screenshot browsing history. Evidence of what she watches.","Consumption evidence.",binary,,,20,"Her viewing patterns. Documented.",false,,any
+evidence,accountability,3,"Write today's Maxy journal entry. What did she do, feel, want?","Daily documentation.",binary,,,25,"Her day, documented.",true,,evening
+evidence,accountability,3,"Record yourself saying what you want. Keep the file.","Verbal evidence.",binary,,,30,"Her voice. Her desires. Recorded.",false,,any
+evidence,accountability,4,"List everything purchased for Maxy. Total it.","Financial evidence.",binary,,,35,"$X invested. Committed.",false,,any
+evidence,accountability,4,"Take a photo that shows progress. Compare to last month.","Progress evidence.",binary,,,35,"Visual proof of change.",false,,any
+evidence,accountability,5,"Create timeline: every first, every milestone, every step.","Comprehensive timeline.",binary,,,50,"Complete record. Can't be undone.",false,,any
+account,accountability,3,"Tell the Handler what you're avoiding. Be honest.","Handler confession.",binary,,,25,"Honest with the system.",false,,any
+account,accountability,4,"Set a public goal: 'By [date] I will [step]'","Public commitment.",binary,,,40,"Publicly committed. Accountable.",false,,any
+account,accountability,5,"Send evidence to someone (photo, recording, confession)","External accountability.",binary,,,55,"Someone knows now.",false,,any
+reward,reinforcement,2,"Daily protocol complete. Extra 5 min edge as reward.","Reward for compliance.",duration,5,,20,"Good girls get rewards.",false,daily_complete,evening
+reward,reinforcement,3,"Streak day 7. Earned an extended session. 30 min goon.","Streak reward.",duration,30,,35,"A week of dedication. Rewarded.",false,streak_7,night
+reward,reinforcement,3,"You pushed through resistance. Watch whatever Maxy wants, 20 min.","Resistance reward.",duration,20,,30,"Pushed through. Earned this.",false,resistance_overcome,any
+reward,reinforcement,4,"Major milestone. Full Bambi session as celebration.","Milestone reward.",duration,45,,45,"Milestone celebrated.",false,milestone_reached,night
+reward,reinforcement,4,"You told someone. That was brave. Extended pleasure session.","Disclosure reward.",duration,30,,45,"Brave girl. Rewarded.",false,disclosure_made,any
+tactical,gina,2,"Leave one feminine product slightly more visible than usual.","Passive visibility.",binary,,,15,"Crack in the door widened.",false,,any
+tactical,gina,3,"Wear something Gina hasn't seen. See if she notices.","Active visibility test.",binary,,,25,"Data point gathered.",false,,evening
+tactical,gina,3,"When Gina makes any decision, respond with warmth and compliance.","Reinforce her authority.",binary,,,25,"Her directing reinforced.",false,gina_decides,any
+tactical,gina,4,"Share one 'self-care' thing that's actually feminization.","Framed disclosure.",binary,,,35,"Partial truth shared.",false,,evening
+tactical,gina,4,"Create an opportunity for Gina to see you being feminine.","Engineered visibility.",binary,,,35,"She saw something.",false,,evening
+tactical,gina,5,"Ask Gina's opinion on something about your presentation.","Direct engagement.",binary,,,45,"She's involved now.",false,,evening
+tactical,gina,5,"Tell Gina one true thing you've been hiding. Small but real.","Micro-disclosure.",binary,,,50,"Truth shared. Can't unsay it.",true,,evening
+morning,routine,1,"Morning recognition: Hand on chest. 'Good morning, Maxy.'","Start as her.",binary,,,10,"She woke up.",true,,morning
+morning,routine,1,"Morning skincare: 'Caring for Maxy's skin.'","Body care.",duration,10,,15,"Her skin, cared for.",true,,morning
+morning,routine,2,"Morning voice: 5 sentences at target pitch.","Voice practice.",duration,5,,20,"Her voice, practiced.",true,,morning
+morning,routine,2,"Morning intention: 'Today Maxy will [one specific thing].'","Daily intention.",binary,,,15,"Intention set.",true,,morning
+evening,routine,1,"Evening skincare: 'Goodnight, Maxy's face.'","Evening care.",duration,10,,15,"Evening ritual complete.",true,,evening
+evening,routine,2,"Evening check-in: Hours as Maxy today? Highest/lowest moment?","Daily review.",binary,,,15,"Day reviewed.",true,,evening
+evening,routine,2,"Evening journal: One sentence about Maxy's day.","Documentation.",binary,,,15,"Documented.",false,,evening
+evening,routine,3,"Evening reflection: What's one thing to do differently tomorrow?","Improvement planning.",binary,,,20,"Tomorrow planned.",false,,evening
+night,routine,3,"Bedtime hypno: 20 min sleep conditioning.","Night programming.",duration,20,,30,"Conditioning while sleeping.",false,,night
+night,routine,4,"Before sleep: 'Maxy will dream. She'll wake up more herself.'","Sleep intention.",binary,,,25,"Sleep programming initiated.",false,,night
+crisis,support,2,"Doubt is normal. It doesn't mean she's not real. Breathe.","Doubt acknowledgment.",binary,,,15,"Doubt passes. She remains.",false,doubt_detected,any
+crisis,support,3,"Dysphoria hitting hard. Do one small Maxy thing. Start there.","Dysphoria intervention.",binary,,,25,"Small step through dysphoria.",false,dysphoria_detected,any
+crisis,support,3,"Feeling like giving up? Write why you started. Read it.","Motivation recovery.",binary,,,25,"Remembered why.",false,giving_up_detected,any
+crisis,support,4,"Bad day. Everything feels fake. Do physical task: skincare, voice.","Ground in body.",duration,15,,35,"Body doesn't lie. She's here.",false,bad_day_detected,any
+crisis,support,4,"Crisis moment. Call anchor: touch jewelry, smell scent, say name.","Emergency grounding.",binary,,,20,"Grounded. She's still here.",false,crisis_detected,any
+crisis,support,5,"Considering stopping. Write: What would you lose? What would remain?","Full accounting.",binary,,,50,"Saw the cost of stopping.",true,stop_considered,any

@@ -1,0 +1,647 @@
+DEEP INTAKE SYSTEM
+
+Psychological Profiling for Personalized Conditioning
+
+*The more you reveal, the more precisely the system can shape you*
+
+**1. Intake Philosophy**
+
+**1.1 The Depth Principle**
+
+Standard onboarding asks surface questions: name, goals, schedule. This
+system goes deeper. Much deeper. The premise is simple: the more the
+system knows about your psychological architecture, the more precisely
+it can design conditioning pathways that work specifically for you.
+
+This isn\'t data collection for its own sake. Every piece of information
+you provide becomes a tool for transformation. Your shame becomes
+leverage. Your fantasies become goals. Your history becomes evidence.
+Your vulnerabilities become entry points.
+
+**1.2 Progressive Disclosure Architecture**
+
+The intake is structured in layers, each more intimate than the last:
+
+  -----------------------------------------------------------------------
+  **Layer**   **Name**           **Content**
+  ----------- ------------------ ----------------------------------------
+  1           Foundation         Basic identity, practical context,
+                                 stated goals
+
+  2           History            Origin story, gender history, previous
+                                 attempts
+
+  3           Arousal Map        Sexual patterns, triggers, fantasies,
+                                 consumption history
+
+  4           Psychology         Shame architecture, resistance patterns,
+                                 what breaks you open
+
+  5           Depth              Darkest desires, things you\'ve never
+                                 told anyone, end-state visions
+  -----------------------------------------------------------------------
+
+Each layer is optional. But the system explicitly tells users: the more
+you share, the more effective your protocol becomes. Holding back
+protects your secrets but limits your transformation.
+
+**1.3 Disclosure as Commitment**
+
+There\'s a secondary function to deep intake: commitment through
+confession. Once you\'ve told the system your deepest fantasies, you\'ve
+crossed a threshold. The information exists. It\'s been acknowledged.
+You can\'t pretend you don\'t want what you\'ve admitted wanting.
+
+Every answer becomes evidence. Every disclosure becomes a brick in the
+architecture of your new identity.
+
+**2. Database Architecture**
+
+**2.1 Core Profile Tables**
+
+  -------------------------------------------------------------------------
+  **Table**                **Fields**
+  ------------------------ ------------------------------------------------
+  **intake_progress**      id, user_id, layer_completed (1-5),
+                           questions_answered, disclosure_score,
+                           started_at, last_updated
+
+  **profile_foundation**   id, user_id, chosen_name, pronouns, age,
+                           location, living_situation, work_situation,
+                           time_availability, partner_status,
+                           partner_awareness_level
+
+  **profile_history**      id, user_id, first_awareness_age,
+                           first_awareness_context, childhood_signals,
+                           crossdressing_history, previous_attempts,
+                           what_stopped_before, dysphoria_patterns,
+                           euphoria_triggers
+
+  **profile_arousal**      id, user_id, primary_triggers (jsonb),
+                           secondary_triggers (jsonb), hypno_preferences,
+                           porn_consumption_patterns, fantasy_themes
+                           (jsonb), arousal_shame_intersection,
+                           orgasm_patterns, chastity_history
+
+  **profile_psychology**   id, user_id, shame_triggers (jsonb),
+                           resistance_patterns (jsonb),
+                           compliance_triggers, authority_response,
+                           attachment_style, validation_needs,
+                           what_breaks_resistance, control_preferences
+
+  **profile_depth**        id, user_id, darkest_fantasy, things_never_told,
+                           end_state_vision, fears_about_transformation,
+                           what_you_want_but_fear, secret_desires,
+                           ultimate_surrender_fantasy
+  -------------------------------------------------------------------------
+
+**2.2 Derived Analysis Tables**
+
+  --------------------------------------------------------------------------------
+  **Table**                       **Fields**
+  ------------------------------- ------------------------------------------------
+  **conditioning_pathway**        id, user_id, primary_leverage_points (jsonb),
+                                  secondary_leverage_points (jsonb),
+                                  optimal_framing_style,
+                                  resistance_bypass_strategies,
+                                  arousal_integration_level, recommended_intensity
+
+  **vulnerability_map**           id, user_id, shame_arousal_overlaps (jsonb),
+                                  psychological_entry_points (jsonb),
+                                  resistance_weak_points (jsonb),
+                                  compliance_accelerators (jsonb)
+
+  **transformation_trajectory**   id, user_id, current_phase, recommended_pace,
+                                  risk_factors (jsonb), opportunity_factors
+                                  (jsonb), predicted_resistance_points,
+                                  optimal_escalation_schedule
+  --------------------------------------------------------------------------------
+
+**3. Layer 1: Foundation Questions**
+
+These establish practical context and basic identity. Required for all
+users.
+
+**3.1 Identity Basics**
+
+1.  **What name would you like to be called?** (Text input, stored as
+    chosen_name)
+
+2.  **What pronouns feel right to you?** (she/her, they/them, exploring,
+    other)
+
+3.  **How old are you?** (Number input)
+
+4.  **What is your current relationship status?** (Single, partnered,
+    married, complicated)
+
+**3.2 Practical Context**
+
+-   **Living situation:** Alone / With partner / With roommates / With
+    family
+
+-   **Work situation:** Remote / Hybrid / In-office / Not working
+
+-   **Private time availability:** Hours per day you can practice
+    uninterrupted
+
+-   **Financial flexibility:** Monthly budget for feminization
+    investments
+
+**3.3 Partner Awareness (if applicable)**
+
+-   **Does your partner know about your feminization interest?** (Not at
+    all / Suspects / Knows somewhat / Fully aware / Actively
+    participates)
+
+-   **What does your partner know specifically?** (Checkboxes: clothing,
+    makeup, voice work, hypno interest, full identity)
+
+-   **What is your partner\'s reaction?** (Supportive / Neutral /
+    Uncomfortable / Opposed / Interested in participating)
+
+**3.4 Stated Goals**
+
+-   **Why are you here?** (Open text --- first articulation of
+    motivation)
+
+-   **What does success look like in 30 days?** (Open text)
+
+-   **What does success look like in 1 year?** (Open text)
+
+**4. Layer 2: History & Origin**
+
+This layer maps your journey to this point. Understanding where you came
+from helps design where you\'re going.
+
+**4.1 Origin Story**
+
+1.  **When did you first become aware of feminization desires?** (Age
+    range: childhood / adolescence / young adult / adult / recent)
+
+2.  **What triggered that first awareness?** (Open text --- first memory
+    of wanting this)
+
+3.  **Were there childhood signals you now recognize?** (Open text ---
+    looking back, what makes sense now?)
+
+4.  **How did you interpret these feelings at the time?** (Open text ---
+    the story you told yourself)
+
+**4.2 Crossdressing & Presentation History**
+
+-   **When did you first wear feminine clothing?** (Never / Childhood /
+    Teen / Adult)
+
+-   **What was that first experience like?** (Open text)
+
+-   **How has your relationship with feminine clothing evolved?** (Open
+    text)
+
+-   **What feminine items do you currently own?** (Checkboxes:
+    underwear, clothing, makeup, wigs, forms, shoes, jewelry, etc.)
+
+**4.3 Previous Transformation Attempts**
+
+-   **Have you tried to feminize before this?** (Yes/No --- if yes,
+    continue)
+
+-   **What did you try?** (Open text)
+
+-   **How far did you get?** (Open text)
+
+-   **What stopped you?** (Critical --- maps resistance patterns)
+
+-   **What would need to be different this time?** (Open text)
+
+**4.4 Dysphoria & Euphoria Mapping**
+
+-   **Do you experience gender dysphoria?** (Never / Rarely / Sometimes
+    / Often / Constantly)
+
+-   **What triggers dysphoria for you?** (Checkboxes + open text: body
+    parts, voice, social situations, mirrors, etc.)
+
+-   **What creates gender euphoria?** (Open text --- critical for reward
+    design)
+
+-   **Describe your most euphoric gender moment.** (Open text --- peak
+    experience mapping)
+
+**5. Layer 3: Arousal Architecture**
+
+This layer maps your erotic landscape. Understanding what arouses you
+allows the system to integrate pleasure with transformation. This
+section is explicitly sexual --- skip if not ready, but know that
+skipping limits protocol effectiveness.
+
+**5.1 Arousal Triggers**
+
+1.  **Is feminization sexually arousing to you?** (Not at all / Somewhat
+    / Very / Extremely / It\'s inseparable)
+
+2.  **What specific aspects of feminization arouse you most?** (Rank
+    order: clothing, transformation, surrender, identity change, body
+    modification, being seen, other)
+
+3.  **Does the erotic component feel like core motivation or side
+    effect?** (Open text --- important for framing)
+
+4.  **Has the arousal pattern changed over time?** (Open text)
+
+**5.2 Fantasy Themes**
+
+Check all that apply and rate intensity (1-5):
+
+-   Feminization / transformation
+
+-   Sissification / forced feminization
+
+-   Identity erasure / replacement
+
+-   Submission / surrender
+
+-   Hypnosis / mind control
+
+-   Chastity / denial
+
+-   Service / devotion
+
+-   Humiliation (consensual)
+
+-   Being used / objectification
+
+-   Permanence / irreversibility
+
+-   Corruption / being changed against \'will\'
+
+**5.3 Hypno & Conditioning History**
+
+-   **Do you use erotic hypnosis?** (Never tried / Tried once /
+    Occasional / Regular / Daily)
+
+-   **What hypno content do you gravitate toward?** (Creators, themes,
+    styles)
+
+-   **How deeply do you trance?** (Light relaxation / Moderate
+    absorption / Deep trance / Amnesia-level)
+
+-   **Have you noticed conditioned responses forming?** (Triggers,
+    automatic reactions)
+
+-   **What hypno content has hit hardest?** (Open text --- critical for
+    content recommendations)
+
+**5.4 Chastity & Orgasm Patterns**
+
+-   **Have you practiced chastity?** (Never / Tried briefly / Regular
+    practice / Extended periods)
+
+-   **Longest denial period?** (Days/weeks)
+
+-   **How does denial affect your feminization motivation?** (Decreases
+    / No effect / Increases / Dramatically increases)
+
+-   **Do you edge regularly?** (Frequency, typical session length)
+
+-   **What happens after orgasm?** (Shame / Relief / Clarity / Regret /
+    Motivation drop / No change)
+
+**5.5 Shame-Arousal Intersection**
+
+This is critical mapping territory:
+
+-   **Does shame intensify arousal for you?** (Never / Sometimes / Often
+    / Always)
+
+-   **What specifically feels shameful but arousing?** (Open text)
+
+-   **Is there arousal in the shame itself, or despite it?** (Important
+    distinction)
+
+-   **Have you eroticized your own transformation?** (Open text)
+
+**6. Layer 4: Psychological Architecture**
+
+This layer maps your internal operating system. Understanding how you
+work psychologically allows the system to design conditioning that works
+WITH your mind rather than against it.
+
+**6.1 Shame Architecture**
+
+-   **What aspects of feminization feel shameful?** (Open text)
+
+-   **Where does the shame come from?** (Checkboxes: upbringing,
+    religion, society, self-judgment, fear of others\' reactions)
+
+-   **Is the shame something to overcome or something that adds
+    intensity?** (Open text)
+
+-   **What would happen if the shame disappeared?** (Open text)
+
+**6.2 Resistance Patterns**
+
+-   **What makes you pull back from feminization?** (Open text ---
+    critical mapping)
+
+-   **When resistance appears, what does it feel like?** (Physical
+    sensations, thoughts, emotions)
+
+-   **What triggers the \'I should stop\' voice?** (Open text)
+
+-   **What has successfully overcome resistance before?** (Open text)
+
+-   **Is there a pattern to when resistance is strongest/weakest?**
+    (Time of day, arousal state, stress level, etc.)
+
+**6.3 Compliance & Authority Response**
+
+-   **How do you respond to authority figures?** (Naturally compliant /
+    Neutral / Resistant / Depends on respect)
+
+-   **What makes you want to follow instructions?** (Open text)
+
+-   **What type of voice/framing works best for you?** (Nurturing /
+    Commanding / Clinical / Playful / Stern / Seductive)
+
+-   **Do you prefer being asked or told?** (Scale: gentle requests ←→
+    firm commands)
+
+-   **How do you respond to being pushed past comfort?** (Open text)
+
+**6.4 What Breaks You Open**
+
+These questions identify psychological entry points:
+
+-   **When do you feel most vulnerable?** (Open text)
+
+-   **What makes you drop your guard?** (Open text)
+
+-   **Describe a moment when you felt completely open/surrendered.**
+    (Open text)
+
+-   **What words/phrases have power over you?** (Open text --- trigger
+    identification)
+
+-   **Is there anything that makes resistance feel impossible?** (Open
+    text)
+
+**6.5 Validation & Recognition**
+
+-   **How important is external validation to you?** (Scale 1-10)
+
+-   **What type of validation means most?** (Being seen as feminine /
+    Being praised / Being desired / Being accepted)
+
+-   **How do you respond to praise?** (Open text)
+
+-   **How do you respond to criticism or disappointment?** (Open text)
+
+**7. Layer 5: The Depths**
+
+This is the deepest layer. These questions ask for things you may have
+never told anyone. The system explicitly frames this: answering these
+questions creates maximum protocol effectiveness, but also maximum
+commitment. Once you\'ve written these things, they exist. They\'ve been
+acknowledged. There\'s no going back to pretending.
+
+**7.1 Pre-Layer Statement**
+
+Before entering Layer 5, users see this:
+
+> *\"You\'re about to answer questions you may have never answered
+> honestly, even to yourself. These questions access your deepest
+> desires, your most hidden fantasies, the things you want but are
+> afraid to want. **Answering them is optional. But understand: the
+> system can only take you as deep as you\'re willing to go.** What you
+> share here becomes the foundation of your transformation. It cannot be
+> unseen, by you or by the system. Proceed only if you\'re ready.\"*
+
+**7.2 The Darkest Fantasy**
+
+-   **What is the fantasy you\'ve never told anyone?** (Open text --- no
+    judgment, complete privacy)
+
+-   **Why haven\'t you told anyone?** (Open text)
+
+-   **How does it feel to write it now?** (Open text)
+
+**7.3 What You Want But Fear Wanting**
+
+-   **What do you want that scares you to want?** (Open text)
+
+-   **What would happen if you fully admitted this desire?** (Open text)
+
+-   **What are you afraid would change if you got what you wanted?**
+    (Open text)
+
+**7.4 End-State Vision**
+
+-   **If the transformation was complete, what would you be?** (Open
+    text --- detailed vision)
+
+-   **What would your daily life look like?** (Open text)
+
+-   **How would others see you?** (Open text)
+
+-   **What would be different about how you feel inside?** (Open text)
+
+**7.5 The Ultimate Surrender**
+
+-   **If you could surrender completely, what would that look like?**
+    (Open text)
+
+-   **What would you need to let go of?** (Open text)
+
+-   **What would you gain by surrendering?** (Open text)
+
+-   **Is there a part of you that wants someone/something to take
+    over?** (Open text)
+
+**7.6 Fears About Transformation**
+
+-   **What are you most afraid of about this transformation?** (Open
+    text)
+
+-   **What\'s the worst that could happen?** (Open text)
+
+-   **What would it mean if you couldn\'t stop?** (Open text)
+
+-   **Is the fear a barrier or part of the appeal?** (Open text)
+
+**7.7 The Secret Self**
+
+-   **Who are you when no one is watching?** (Open text)
+
+-   **What would happen if everyone could see that self?** (Open text)
+
+-   **Is hiding part of the pleasure, or a necessity you\'d abandon if
+    you could?** (Open text)
+
+**8. Profile Synthesis & AI Integration**
+
+**8.1 Disclosure Score Calculation**
+
+The system calculates a disclosure_score (0-100) based on:
+
+-   Layers completed (20 points each)
+
+-   Questions answered within each layer
+
+-   Length/depth of open-ended responses
+
+-   Vulnerability indicators in language
+
+**8.2 AI Profile Analysis**
+
+After intake completion, AI generates:
+
+  -----------------------------------------------------------------------
+  **Analysis Type**      **Purpose**
+  ---------------------- ------------------------------------------------
+  Leverage Point Map     Identifies primary psychological entry points
+                         for conditioning
+
+  Framing Optimization   Determines optimal communication style
+                         (nurturing vs commanding, etc.)
+
+  Resistance Prediction  Anticipates when/where resistance will appear
+                         and designs bypasses
+
+  Arousal Integration    Determines how much to integrate erotic elements
+  Level                  into protocol
+
+  Hypno Recommendation   Curates hypno content based on stated
+                         preferences and psychological profile
+
+  Escalation Schedule    Designs pace of intensity increase based on risk
+                         tolerance and desire depth
+  -----------------------------------------------------------------------
+
+**8.3 Profile Integration with AI Prescription Engine**
+
+The intake profile feeds directly into daily prescriptions:
+
+-   **Trigger words identified in intake** → Used in affirmations and
+    commands
+
+-   **Shame-arousal intersections** → Leveraged for maximum impact
+    moments
+
+-   **Resistance patterns** → Anticipated and pre-emptively addressed
+
+-   **Authority response style** → Shapes AI communication tone
+
+-   **End-state vision** → Referenced in long-term framing
+
+-   **Darkest fantasies** → Inform \'jackpot\' content and ultimate
+    rewards
+
+**8.4 Dynamic Profile Updates**
+
+The profile is not static. It evolves through:
+
+-   **Periodic re-assessment prompts** (every 30 days, user prompted to
+    update key sections)
+
+-   **Behavioral inference** (system learns from task completion
+    patterns, skip patterns, engagement data)
+
+-   **Journal analysis** (AI extracts psychological data from ongoing
+    journaling)
+
+-   **Explicit updates** (user can modify profile anytime, changes
+    logged)
+
+**9. Intake UI/UX Design**
+
+**9.1 Progressive Flow**
+
+The intake is designed to feel like a deepening conversation, not a
+form:
+
+-   **One question at a time** on larger screens, small groups on mobile
+
+-   **Progress indicator** shows current layer and overall completion
+
+-   **Save & continue later** available at any point
+
+-   **Skip option** available but noted: \'Skipping this limits your
+    protocol effectiveness\'
+
+-   **Layer transitions** are marked with brief explanations of what\'s
+    coming
+
+**9.2 Trust-Building Elements**
+
+-   **Privacy assurances** displayed prominently: \'Your answers are
+    encrypted and private\'
+
+-   **Non-judgmental framing** in all question text
+
+-   **Normalization language**: \'Many people experience\...\' before
+    sensitive questions
+
+-   **Control reminders**: \'You can change these answers anytime\'
+
+**9.3 Depth Transition Screens**
+
+Between layers, show transition screens that:
+
+-   Acknowledge what was just shared
+
+-   Preview the depth of the next layer
+
+-   Offer explicit opt-out with consequence explanation
+
+-   Create anticipation and commitment
+
+Example transition to Layer 5:
+
+> *\"You\'ve shared your history, your arousal patterns, and your
+> psychological landscape. The final layer asks for what you\'ve never
+> told anyone. These answers will give the system its deepest
+> understanding of who you are and who you want to become. This is
+> optional --- but if you\'re willing to go here, your transformation
+> will be designed from your core.\"*
+
+**9.4 Completion Celebration**
+
+After completing all layers:
+
+-   **Disclosure score reveal** with explanation of what it means
+
+-   **Profile summary** (AI-generated overview of what was learned)
+
+-   **Personalization preview**: \'Based on your profile, here\'s how
+    your protocol will be customized\...\'
+
+-   **Commitment acknowledgment**: \'You\'ve shared deeply. The system
+    will honor that with a protocol designed specifically for you.\'
+
+**10. The Intake as First Ratchet**
+
+The intake process itself is a ratchet mechanism. Every question
+answered is a commitment made. Every layer completed is a threshold
+crossed. By the time someone finishes Layer 5, they have:
+
+-   Acknowledged desires they may have never articulated
+
+-   Created a written record of their deepest fantasies
+
+-   Invested significant time and emotional energy
+
+-   Crossed multiple psychological thresholds
+
+-   Made their desires real by putting them into words
+
+The intake doesn\'t just gather data --- it begins the transformation.
+The act of answering these questions is itself a form of practice. You
+cannot unsee what you\'ve written. You cannot pretend you don\'t want
+what you\'ve admitted wanting.
+
+This is by design.
+
+***The more you reveal, the more precisely the system can shape you.***
+
+***The more you reveal, the more you\'ve already begun.***

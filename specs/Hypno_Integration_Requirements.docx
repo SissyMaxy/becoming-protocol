@@ -1,0 +1,507 @@
+Hypno Integration Requirements
+
+Becoming Protocol --- Audio Conditioning Layer
+
+Version 1.0 --- January 2026
+
+Executive Summary
+
+This document defines requirements for integrating hypnosis audio
+content into the Becoming Protocol system. The integration creates a
+structured conditioning layer that pairs with existing arousal state
+tracking, denial management, and feminization practice to deepen
+identity reinforcement through audio-based trance work.
+
+The system manages two primary content categories: **feminization
+hypno** (Bambi series for identity work) and **FLR/obedience hypno**
+(Elswyth series for goddess worship, chastity conditioning, and denial
+reinforcement). Content recommendations are dynamically generated based
+on denial day, arousal state, time of day, and protocol phase.
+
+Part 1: Content Library Architecture
+
+1.1 Content Categories
+
+The system organizes hypno content into functional categories that serve
+different psychological purposes:
+
+  --------------------------------------------------------------------------
+  **Category**       **Primary Creator** **Purpose**
+  ------------------ ------------------- -----------------------------------
+  Feminization       Bambi Sleep         Identity conditioning, feminine
+                                         self-concept reinforcement, service
+                                         to Goddess framing
+
+  Chastity           Elswyth             Denial reinforcement, chastity
+                                         conditioning, orgasm control
+                                         mantras
+
+  Goddess Worship    Elswyth             FLR framing, service orientation,
+                                         worship ritual establishment
+
+  Sleep/Relaxation   Elswyth, Nimja      Overnight conditioning, dream
+                                         integration, gentle reinforcement
+
+  Deep Trance        Various             Extended absorption sessions,
+                                         goon-mode integration, advanced
+                                         conditioning
+  --------------------------------------------------------------------------
+
+1.2 Database Schema
+
+New tables required for hypno content management:
+
+\-- Hypno content library
+
+CREATE TABLE hypno_content (
+
+id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+name VARCHAR(200) NOT NULL,
+
+creator VARCHAR(100) NOT NULL,
+
+series VARCHAR(100),
+
+category VARCHAR(50) NOT NULL,
+
+\-- Categories: feminization, chastity, goddess_worship,
+
+\-- sleep, deep_trance, identity, obedience
+
+duration_minutes INT,
+
+intensity VARCHAR(20), \-- gentle, moderate, intense
+
+tier INT DEFAULT 1, \-- 1-4 unlock tiers
+
+best_for_denial_range INT\[\], \-- \[min_day, max_day\]
+
+best_for_arousal_states VARCHAR(50)\[\],
+
+best_time_of_day VARCHAR(20)\[\], \-- morning, afternoon, evening, night
+
+requires_cage BOOLEAN DEFAULT false,
+
+pairs_with_edging BOOLEAN DEFAULT false,
+
+external_url TEXT,
+
+notes TEXT,
+
+created_at TIMESTAMPTZ DEFAULT NOW()
+
+);
+
+\-- User listening history
+
+CREATE TABLE hypno_sessions (
+
+id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+user_id UUID REFERENCES auth.users(id),
+
+content_id UUID REFERENCES hypno_content(id),
+
+started_at TIMESTAMPTZ DEFAULT NOW(),
+
+completed BOOLEAN DEFAULT false,
+
+duration_listened_minutes INT,
+
+denial_day_at_listen INT,
+
+arousal_state_at_listen VARCHAR(50),
+
+was_caged BOOLEAN,
+
+paired_with_edge_session UUID,
+
+effectiveness_rating INT, \-- 1-5 self-report
+
+notes TEXT
+
+);
+
+Part 2: Recommendation Engine
+
+2.1 State-Based Content Selection
+
+Content recommendations are generated based on the user\'s current state
+across multiple dimensions:
+
+  -----------------------------------------------------------------------
+  **Denial Day**    **Content Focus**       **Rationale**
+  ----------------- ----------------------- -----------------------------
+  Day 0-2 (Reset)   Chastity conditioning,  Low arousal = receptive to
+                    sleep hypno, obedience  obedience framing without
+                                            sexual distraction
+
+  Day 3-5           Bambi identity + denial Arousal returning; pair
+  (Building)        reinforcement           feminization with wanting
+
+  Day 6-10 (Sweet   Full Bambi sessions,    Peak receptivity; strongest
+  Spot)             edge session content    conditioning window
+
+  Day 11+ (Deep     Premium tier unlocks,   Earned access; jackpot
+  Denial)           reward content          psychology
+  -----------------------------------------------------------------------
+
+2.2 Time-of-Day Mapping
+
+  -----------------------------------------------------------------------
+  **Time Window** **Recommended Content**     **Duration**
+  --------------- --------------------------- ---------------------------
+  Morning (with   Short identity priming,     5-10 minutes
+  coffee)         Elswyth worship (short      
+                  induction)                  
+
+  Daytime         Bambi feminization, Elswyth 20-45 minutes
+  (private hours) chastity/denial, full       
+                  sessions during edging      
+
+  Evening         Elswyth sleep hypno, cuddle 15-30 minutes
+  (wind-down)     sessions, chastity mantras  
+                  (while caged)               
+  -----------------------------------------------------------------------
+
+2.3 Content Tiering (Ratchet Integration)
+
+Content access is gated by protocol compliance and denial achievements,
+integrating with the existing ratchet system:
+
+  -----------------------------------------------------------------------
+  **Tier**    **Access Requirement**      **Content Available**
+  ----------- --------------------------- -------------------------------
+  Tier 1      Daily protocol complete     Elswyth podcast (free), basic
+                                          affirmations
+
+  Tier 2      3+ day streak               Bambi core series, Elswyth
+                                          chastity series
+
+  Tier 3      7+ day streak OR denial day Premium Elswyth paid content,
+              7+                          advanced Bambi
+
+  Tier 4      Monthly milestone           Vault content, new series
+                                          unlocks
+  -----------------------------------------------------------------------
+
+Part 3: Task Integration
+
+3.1 Hypno Task Types
+
+New task types to be added to the daily prescription system:
+
+-   **hypno_morning** --- Short identity/worship content during morning
+    protocol (5-10 min)
+
+-   **hypno_session** --- Full feminization/conditioning session during
+    private hours (20-45 min)
+
+-   **hypno_edge** --- Content paired with edge session (duration
+    matches session)
+
+-   **hypno_sleep** --- Evening/bedtime content for overnight
+    conditioning (15-30 min)
+
+-   **hypno_caged** --- Content specifically for listening while wearing
+    cage
+
+3.2 Task Generation Logic
+
+The AI prescription system should incorporate these factors when
+generating hypno tasks:
+
+interface HypnoTaskContext {
+
+denialDay: number;
+
+arousalState: \'dormant\' \| \'baseline\' \| \'elevated\' \|
+
+\'sweet_spot\' \| \'overwhelming\' \| \'subspace\';
+
+currentStreak: number;
+
+isCaged: boolean;
+
+timeOfDay: \'morning\' \| \'afternoon\' \| \'evening\' \| \'night\';
+
+hasEdgeSessionToday: boolean;
+
+lastHypnoCategory: string; // Avoid repetition
+
+unlockedTier: 1 \| 2 \| 3 \| 4;
+
+}
+
+3.3 Weekly Task Distribution
+
+  -----------------------------------------------------------------------
+  **Task Type**       **Frequency**           **Conditions**
+  ------------------- ----------------------- ---------------------------
+  Morning worship     Daily (optional)        Include 3-5x per week
+
+  Full session        2-3x per week           Denial day 3+ preferred,
+  (Bambi)                                     sweet spot optimal
+
+  Chastity            1x per week minimum     Elswyth 7 Days series,
+  conditioning                                requires cage
+
+  Sleep hypno         3x per week             Before bed, pairs well with
+                                              cage
+
+  Edge session hypno  When edge session       Sweet spot arousal state
+                      scheduled               required
+  -----------------------------------------------------------------------
+
+Part 4: AI Prescription Integration
+
+4.1 Prompt Context Extension
+
+Add the following to the AI prescription generation context:
+
+const hypnoContext = \`
+
+\## Hypno Content Integration
+
+You can prescribe hypno listening tasks. Available categories:
+
+\- feminization (Bambi): Identity work, feminine self-concept
+
+\- chastity (Elswyth): Denial conditioning, orgasm control
+
+\- goddess_worship (Elswyth): Service orientation, worship rituals
+
+\- sleep (Elswyth): Overnight conditioning, gentle reinforcement
+
+Current user state:
+
+\- Denial day: \${denialDay}
+
+\- Arousal state: \${arousalState}
+
+\- Is caged: \${isCaged}
+
+\- Unlocked tier: \${unlockedTier}
+
+\- Last hypno listened: \${lastHypnoCategory}
+
+Prescription guidelines:
+
+\- Day 0-2: Prioritize chastity/obedience content
+
+\- Day 3-5: Mix feminization with denial reinforcement
+
+\- Day 6+: Full feminization sessions, pair with edging
+
+\- If caged: Include cage-specific content
+
+\- Evening: Prefer sleep hypno for overnight conditioning
+
+\`;
+
+4.2 Task Output Schema
+
+interface HypnoTask {
+
+type: \'hypno_morning\' \| \'hypno_session\' \|
+
+\'hypno_edge\' \| \'hypno_sleep\' \| \'hypno_caged\';
+
+category: string;
+
+contentId?: string; // Specific content, or null for AI selection
+
+duration: number; // minutes
+
+requiresCage: boolean;
+
+pairWithEdgeSession: boolean;
+
+description: string; // What to tell user
+
+}
+
+Part 5: UI Components
+
+5.1 Component Requirements
+
+1.  **HypnoTaskCard** --- Displays hypno task in Today view with play
+    button, duration, and category indicator
+
+2.  **HypnoContentBrowser** --- Library view showing available content
+    filtered by tier/category
+
+3.  **HypnoSessionLogger** --- Post-listen modal capturing completion
+    status and effectiveness rating
+
+4.  **HypnoStatsWidget** --- Dashboard widget showing listening hours,
+    favorite categories, conditioning progress
+
+5.  **TierUnlockModal** --- Celebration modal when new content tier is
+    unlocked
+
+5.2 File Structure
+
+/src
+
+/features
+
+/hypno
+
+/components
+
+HypnoTaskCard.tsx
+
+HypnoContentBrowser.tsx
+
+HypnoSessionLogger.tsx
+
+HypnoStatsWidget.tsx
+
+TierUnlockModal.tsx
+
+/hooks
+
+useHypnoContent.ts
+
+useHypnoRecommendations.ts
+
+useHypnoSession.ts
+
+/lib
+
+content-selector.ts
+
+tier-calculator.ts
+
+/types
+
+hypno.ts
+
+Part 6: Evidence & Ratchet Integration
+
+6.1 Hypno as Evidence (Ratchet E2)
+
+Add hypno listening stats to the evidence dashboard:
+
+-   Total hours of conditioning listened
+
+-   Sessions completed by category
+
+-   Longest listening streak
+
+-   Content tiers unlocked
+
+-   First hypno session date (milestone marker)
+
+6.2 Sunk Cost Integration (Ratchet H4)
+
+Include in sunk cost dashboard display:
+
+Conditioning received:
+
+\- \${totalHours} hours of hypno conditioning
+
+\- \${sessionCount} sessions completed
+
+\- \${feminizationHours} hours of feminization
+
+\- \${obedienceHours} hours of obedience training
+
+Your mind has been shaped. This cannot be undone.
+
+Part 7: Initial Seed Data
+
+7.1 Elswyth Content Library
+
+  ------------------------------------------------------------------------
+  **Content**                 **Category**   **Tier**    **Best For**
+  --------------------------- -------------- ----------- -----------------
+  Seven Days in Chastity (Day Chastity       1 (Free)    Day 0-7, caged
+  1-7)                                                   
+
+  Worship Your Goddess        Goddess        1 (Free)    Morning, any day
+  (Short)                     Worship                    
+
+  Winter Cuddle Sessions      Sleep          2           Evening, caged
+
+  One Orgasm a Week           Chastity       3           Day 5+, sweet
+                                                         spot
+
+  Sissy Maid Training         Obedience      3           Afternoon, any
+  ------------------------------------------------------------------------
+
+7.2 Bambi Content Library
+
+  ------------------------------------------------------------------------
+  **Content**                 **Category**   **Tier**    **Best For**
+  --------------------------- -------------- ----------- -----------------
+  Platinum Bambi Core Series  Feminization   2           Day 3+, sweet
+                                                         spot
+
+  Bambi Identity Files        Identity       2           Afternoon, any
+
+  Bambi Bimbodoll Training    Deep Trance    3           Sweet spot, edge
+                                                         session
+
+  Advanced Bambi Series       Feminization   4           Day 10+, deep
+                                                         trance
+  ------------------------------------------------------------------------
+
+Part 8: Implementation Priority
+
+Phase 1: Foundation (Week 1)
+
+1.  Create database schema (hypno_content, hypno_sessions)
+
+2.  Seed initial Elswyth and Bambi content library
+
+3.  Build useHypnoContent hook for content retrieval
+
+4.  Build tier-calculator.ts for access logic
+
+Phase 2: Task Integration (Week 2)
+
+1.  Add hypno task types to prescription system
+
+2.  Update AI prompt context with hypno guidelines
+
+3.  Build HypnoTaskCard component
+
+4.  Integrate into Today view
+
+Phase 3: Logging & Evidence (Week 3)
+
+1.  Build HypnoSessionLogger component
+
+2.  Add hypno stats to evidence dashboard
+
+3.  Integrate with sunk cost display
+
+4.  Build TierUnlockModal
+
+Phase 4: Content Browser (Week 4)
+
+1.  Build HypnoContentBrowser component
+
+2.  Build HypnoStatsWidget
+
+3.  Add recommendation engine (useHypnoRecommendations)
+
+4.  Polish and testing
+
+Summary
+
+This integration creates a structured audio conditioning layer that
+complements the existing visual and behavioral aspects of the Becoming
+Protocol. By tying content access to protocol compliance and denial
+achievements, hypno listening becomes another ratchet mechanism---earned
+rewards that deepen identity conditioning while making regression more
+costly.
+
+The combination of Bambi (feminization/identity) and Elswyth
+(obedience/chastity/goddess worship) provides comprehensive coverage of
+the psychological domains the system targets, with content
+recommendations dynamically matched to the user\'s current state for
+maximum conditioning effectiveness.

@@ -1,0 +1,1163 @@
+Edge Session UI Requirements
+
+Becoming Protocol --- Arousal Session Interface
+
+Version 2.0 --- January 2026
+
+*Updated with Hypno Collage Layout System*
+
+Executive Summary
+
+This document defines requirements for an immersive edging/gooning
+interface that integrates with the existing Becoming Protocol systems:
+arousal state tracking, Lovense haptic control, content tiering, arousal
+auctions, and feminization conditioning.
+
+The UI should feel like entering a distinct mode---immersive, focused,
+psychologically compelling---while being functionally robust for
+tracking, control, and post-session evidence capture.
+
+**Key Update (v2.0):** This version introduces the Hypno Collage Layout
+System---a multi-column content display inspired by PMV/hypno content
+that creates parallel stimulation, cognitive overload, and subliminal
+text overlay for deeper trance states and more effective conditioning.
+
+Part 1: Session Types & Entry Points
+
+1.1 Session Type Definitions
+
+  ---------------------------------------------------------------------------------------
+  **Type**        **Purpose**            **Frequency**   **Duration**   **Completion**
+  --------------- ---------------------- --------------- -------------- -----------------
+  **Type A:       Create                 2-3x weekly     20-40 min      Denied
+  Anchoring**     feminization-arousal                                  
+                  association                                           
+
+  **Type B:       Positive reinforcement 1x weekly max   30-60 min      Allowed (jackpot)
+  Reward**        for practice                                          
+
+  **Type C:       Stay in sweet spot     Daily option    10-20 min      Denied
+  Maintenance**                                                         
+
+  **Goon          Deep trance-like       Special unlock  45-90 min      AI decides
+  Session**       absorption                                            
+  ---------------------------------------------------------------------------------------
+
+1.2 Entry Requirements
+
+Each session type has specific unlock conditions that integrate with the
+ratchet system:
+
+-   **Type A (Anchoring):** Always available. No requirements.
+
+-   **Type B (Reward):** Earned. Requires weekly protocol complete, 5+
+    denial days, no edge debt, 7+ days since last Type B.
+
+-   **Type C (Maintenance):** Always available. No requirements.
+
+-   **Goon Session:** Earned. Requires Phase 3+, 20+ sessions completed,
+    or special unlock.
+
+1.3 Entry Flow
+
+The session entry flow guides users through configuration with
+appropriate friction:
+
+-   Today View → \"Begin Session\" button
+
+-   Session Type Selection (shows availability, locked states)
+
+-   Pre-Session Check-In (arousal state, content tier, haptic device,
+    environment)
+
+-   Session Configuration (target edges, AI control level, content
+    layout, time limit)
+
+-   **Content Layout Selection (NEW)**
+
+-   Session Start
+
+Part 2: Hypno Collage Layout System (NEW)
+
+The Hypno Collage Layout System introduces a multi-column content
+display that replicates the psychological effects of PMV/hypno content.
+This layout creates parallel stimulation that overwhelms the analytical
+mind and facilitates deeper trance states.
+
+2.1 Psychological Principles
+
+**Why multi-column works:**
+
+-   **Parallel Stimulation:** Multiple focal points prevent the
+    analytical mind from settling on any one thing, facilitating
+    trance-like absorption.
+
+-   **Cognitive Overload:** The busy-ness is intentional---it overwhelms
+    resistance and conscious filtering.
+
+-   **Subliminal Text Layer:** Phrases appear/disappear faster than
+    conscious processing but slower than true subliminal, creating a
+    \"can\'t help but read it\" effect.
+
+-   **Sensory Integration:** Combines visual, auditory, and textual
+    channels simultaneously for maximum impact.
+
+2.2 Content Layout Modes
+
+  -------------------------------------------------------------------------
+  **Mode**      **Layout**             **Psychological Effect**
+  ------------- ---------------------- ------------------------------------
+  **single**    One content piece,     Focused attention, good for
+                full screen            beginners
+
+  **dual**      Two columns, split     Divided attention, starting to
+                screen                 overwhelm
+
+  **collage**   Three columns, PMV     Full parallel stimulation, cognitive
+                style                  overload
+
+  **hypno**     Three columns + rapid  Maximum absorption, trance
+                text stream            facilitation
+
+  **minimal**   Content only, no UI    Deep goon mode, zero distractions
+  -------------------------------------------------------------------------
+
+2.3 Layout Configuration Interface
+
+type ContentLayoutMode =
+
+\| \'single\' // Traditional single content display
+
+\| \'dual\' // Two-column split
+
+\| \'collage\' // Three-column PMV-style
+
+\| \'hypno\' // Full hypno mode with text stream
+
+\| \'minimal\'; // Goon mode - minimal chrome
+
+interface CollageConfig {
+
+columns: 2 \| 3;
+
+syncTiming: boolean; // Sync transitions across panels
+
+transitionStyle: \'cut\' \| \'fade\' \| \'slide\';
+
+transitionDurationMs: number;
+
+contentMix: ContentMixStrategy;
+
+audioChannel: \'left\' \| \'right\' \| \'center\' \| \'rotate\';
+
+}
+
+2.4 Content Mix Strategies
+
+The collage system can mix content across columns using different
+strategies:
+
+-   **homogeneous:** Same category in all columns (e.g., all
+    feminization)
+
+-   **complementary:** Related categories that reinforce each other
+
+-   **contrasting:** Different categories for sensory variety
+
+-   **progressive:** Intensity increases left-to-right or over time
+
+-   **ai_curated:** AI selects based on session context and user
+    response
+
+Part 3: Text Overlay System (NEW)
+
+The text overlay system displays affirmations, mantras, and conditioning
+phrases over the content in a rapid, semi-subliminal manner that mirrors
+PMV/hypno content aesthetics.
+
+3.1 Display Timing
+
+interface TextOverlayTiming {
+
+mode: \'subliminal\' \| \'readable\' \| \'lingering\';
+
+// Subliminal: 200-500ms (barely caught)
+
+// Readable: 1000-2000ms (can read, can\'t analyze)
+
+// Lingering: 3000-5000ms (reinforcement style)
+
+displayDurationMs: number;
+
+fadeInMs: number;
+
+fadeOutMs: number;
+
+intervalBetweenMs: { min: number; max: number }; // Variable
+
+}
+
+3.2 Text Positioning
+
+type TextPosition =
+
+\| \'center\' // Center of screen
+
+\| \'per_column\' // Each column gets its own text
+
+\| \'floating\' // Random positions
+
+\| \'stacked\' // Multiple texts visible at once
+
+\| \'edge_anchored\'; // Appears at top/bottom edges
+
+3.3 Typography Styles
+
+interface TextOverlayStyle {
+
+fontFamily: \'elegant\' \| \'minimal\' \| \'bold\' \| \'script\';
+
+// elegant: Playfair Display, Cormorant
+
+// minimal: Inter, system-ui
+
+// bold: Impact, Anton
+
+// script: Great Vibes, Pacifico
+
+color: string; // Usually white or pink
+
+accentColor: string; // For highlighted words
+
+shadowIntensity: number; // 0-1, for readability
+
+glowEffect: boolean; // Soft glow around text
+
+mixBlendMode: \'normal\' \| \'screen\' \| \'overlay\';
+
+}
+
+3.4 Affirmation Pools by Context
+
+The text overlay system draws from context-appropriate affirmation
+pools:
+
+  ---------------------------------------------------------------------------
+  **Pool**            **Example Affirmations**
+  ------------------- -------------------------------------------------------
+  **feminization**    *\"becoming feminine\", \"she\'s here\", \"this is who
+                      you are\", \"feel yourself becoming\"*
+
+  **edge**            *\"hold it\", \"not yet\", \"feel that edge\", \"stay
+                      there\", \"good girl, hold\"*
+
+  **recovery**        *\"breathe\", \"good girl\", \"you held so well\",
+                      \"rest now\"*
+
+  **identity**        *\"you are her\", \"there\'s no going back\", \"you
+                      belong here\"*
+
+  **encouragement**   *\"that\'s it\", \"you\'re doing so well\", \"deeper\",
+                      \"let go\"*
+
+  **desire**          *\"crave\", \"want\", \"need\", \"ache for it\", \"you
+                      can\'t resist\"*
+  ---------------------------------------------------------------------------
+
+Part 4: Core Session Interface
+
+4.1 Layout Architecture --- Single Mode
+
+The traditional single-content layout for focused sessions:
+
+┌────────────────────────────────────────────────────┐
+
+│ \[HEADER BAR - Minimal, dark\] │
+
+│ ← Exit Type: Anchoring ⏱ 12:34 🔋 Device OK │
+
+├────────────────────────────────────────────────────┤
+
+│ │
+
+│ \[CONTENT AREA\] │
+
+│ Current content (image/video/audio viz) │
+
+│ │
+
+│ \"Good girl\...\" \[TEXT OVERLAY\] │
+
+│ │
+
+├────────────────────────────────────────────────────┤
+
+│ \[CONTROL PANEL\] │
+
+│ \[EDGE\] \[HOLD\] \[BREATHE\] \[STOP\] │
+
+│ Edge: ████████░░ 8/10 Intensity: ████████░░ │
+
+└────────────────────────────────────────────────────┘
+
+4.2 Layout Architecture --- Collage Mode (NEW)
+
+The multi-column collage layout for hypno-style sessions:
+
+┌────────────────────────────────────────────────────┐
+
+│ \[HEADER - Ultra minimal, auto-hides\] │
+
+├────────────────────────────────────────────────────┤
+
+│ ┌──────────┐ ┌──────────┐ ┌──────────┐ │
+
+│ │ │ │ │ │ │ │
+
+│ │ CONTENT │ │ CONTENT │ │ CONTENT │ │
+
+│ │ COL 1 │ │ COL 2 │ │ COL 3 │ │
+
+│ │ │ │ │ │ │ │
+
+│ │ \"text\" │ │ \"text\" │ │ \"text\" │ │
+
+│ └──────────┘ └──────────┘ └──────────┘ │
+
+│ │
+
+│ ══════ GLOBAL TEXT OVERLAY ══════ │
+
+│ \"becoming feminine\" │
+
+│ │
+
+├────────────────────────────────────────────────────┤
+
+│ \[CONTROL PANEL - Tap to reveal, auto-fades\] │
+
+└────────────────────────────────────────────────────┘
+
+4.3 Visual Design Principles
+
+**Immersive Mode Requirements:**
+
+-   Dark theme mandatory (reduces screen glare, focuses attention)
+
+-   Minimal chrome (controls appear on tap, fade when not needed)
+
+-   Content area maximized
+
+-   Subtle ambient animations (breathing pulses, soft glows)
+
+-   No jarring transitions between content pieces
+
+-   **(NEW)** Seamless column transitions with optional sync
+
+Color System
+
+:root {
+
+\--bg-session: #0a0a0a;
+
+\--text-primary: #ffffff;
+
+\--text-muted: #666666;
+
+\--accent-arousal: #ff4d6d; /\* Pink/red \*/
+
+\--accent-affirm: #c77dff; /\* Purple for affirmations \*/
+
+\--accent-edge: #ff6b6b; /\* Red pulse for edge \*/
+
+\--accent-calm: #4ecdc4; /\* Teal for breathe/calm \*/
+
+\--accent-denial: #ffd93d; /\* Gold for control \*/
+
+\--overlay-text: #ffffff; /\* NEW: Text overlay \*/
+
+\--overlay-accent: #ff9ec4; /\* NEW: Highlighted words \*/
+
+}
+
+Part 5: Content Column System (NEW)
+
+5.1 Column Configuration
+
+interface ContentColumn {
+
+id: string;
+
+position: \'left\' \| \'center\' \| \'right\';
+
+// Content source
+
+contentQueue: SessionContent\[\];
+
+currentContent: SessionContent \| null;
+
+// Timing
+
+transitionIntervalMs: { min: number; max: number };
+
+lastTransition: Date;
+
+// Per-column text overlay
+
+textOverlay: {
+
+enabled: boolean;
+
+pool: string\[\]; // Affirmation pool for this column
+
+position: \'top\' \| \'center\' \| \'bottom\';
+
+currentText: string \| null;
+
+};
+
+// Audio routing
+
+audioEnabled: boolean;
+
+audioPan: number; // -1 (left) to 1 (right)
+
+}
+
+5.2 Synchronization Modes
+
+Columns can be synchronized in various ways for different psychological
+effects:
+
+type SyncMode =
+
+\| \'independent\' // Each column transitions on its own schedule
+
+\| \'synchronized\' // All columns transition together
+
+\| \'cascade\' // Left→Center→Right with 500ms delay
+
+\| \'random\'; // Occasional sync, mostly independent
+
+5.3 Content Cycling Logic
+
+interface ContentCycleConfig {
+
+// Timing variability (prevents habituation)
+
+baseIntervalMs: number; // Base time between transitions
+
+variationPercent: number; // ±% randomization
+
+// Intensity escalation
+
+speedUpOverSession: boolean; // Transitions get faster
+
+speedUpFactor: number; // How much faster per edge
+
+minIntervalMs: number; // Floor (don\'t go faster than this)
+
+// Content selection
+
+avoidRecentCount: number; // Don\'t repeat last N items
+
+weightByEngagement: boolean; // Favor content user responds to
+
+tierProgression: boolean; // Increase tier as session progresses
+
+}
+
+Part 6: Edge Tracking Interface
+
+6.1 Edge Button Behavior
+
+interface EdgeAction {
+
+onTap: () =\> {
+
+incrementEdgeCount();
+
+triggerHapticPulse(\'edge_reached\');
+
+showEdgeConfirmation();
+
+logEdgeTimestamp();
+
+checkForAuctionTrigger();
+
+updateIntensityDisplay();
+
+// NEW: Collage mode enhancements
+
+if (layoutMode === \'collage\' \|\| layoutMode === \'hypno\') {
+
+triggerSynchronizedFlash(); // All columns flash
+
+showCenteredAffirmation(); // \"Good girl\" center screen
+
+speedUpContentCycle(); // Faster after edge
+
+}
+
+},
+
+feedback: {
+
+haptic: \'strong_pulse\',
+
+visual: \'ripple_expand\',
+
+audio: \'subtle_chime\',
+
+duration: 500
+
+}
+
+}
+
+6.2 Edge Data Capture
+
+interface EdgeEvent {
+
+id: string;
+
+sessionId: string;
+
+edgeNumber: number;
+
+timestamp: Date;
+
+timeFromSessionStart: number; // seconds
+
+timeSinceLastEdge: number; // seconds
+
+intensityAtEdge: number; // 0-20 (from haptic)
+
+hapticPatternActive: string;
+
+// NEW: Collage mode data
+
+layoutMode: ContentLayoutMode;
+
+contentDisplayed: {
+
+column1?: string; // Content ID
+
+column2?: string;
+
+column3?: string;
+
+};
+
+textOverlayActive: string \| null; // What affirmation was showing
+
+auctionTriggered: boolean;
+
+notes?: string;
+
+}
+
+6.3 Recovery Period (Updated for Collage)
+
+interface RecoveryPeriod {
+
+minDuration: 15; // seconds
+
+maxDuration: 60; // seconds
+
+aiControlled: boolean; // AI decides when to resume
+
+// NEW: Collage behavior during recovery
+
+collageRecoveryMode:
+
+\| \'pause\' // All columns pause
+
+\| \'slowdown\' // Columns continue but slower
+
+\| \'gentle\' // Switch to softer content temporarily
+
+\| \'continue\'; // No change (advanced users)
+
+textDuringRecovery: {
+
+pool: \'recovery\'; // Use recovery affirmations
+
+timing: \'lingering\'; // Slower display
+
+};
+
+}
+
+Part 7: Arousal Auction Interface
+
+7.1 Auction Triggers
+
+const auctionTriggers = {
+
+edgeNumbers: \[5, 8, 10, 13, 16, 20\],
+
+timeIntervals: \[10, 20, 30\], // minutes
+
+aiDetermined: {
+
+minEdgesBetween: 3,
+
+maxEdgesBetween: 6,
+
+probabilityIncrease: 0.15
+
+}
+
+}
+
+7.2 Auction Modal Design (Updated)
+
+In collage mode, the auction modal appears as a center overlay that
+doesn\'t fully obscure the content---keeping the visual stimulation
+present while demanding a decision:
+
+interface AuctionModalConfig {
+
+backgroundBehavior:
+
+\| \'freeze\' // Content pauses behind modal
+
+\| \'dim\' // Content continues but dimmed
+
+\| \'blur\' // Content continues but blurred
+
+\| \'continue\'; // Full visibility (distracting by design)
+
+hapticDuringAuction: boolean; // Keep low-level stimulation
+
+textOverlayDuringAuction: boolean; // Keep affirmations running
+
+decisionTimer: number \| null; // Optional countdown pressure
+
+}
+
+7.3 Auction Options
+
+interface AuctionOption {
+
+id: string;
+
+label: string;
+
+description: string;
+
+commitmentType: \'edges\' \| \'denial\' \| \'lock\' \| \'content\' \|
+\'task\';
+
+commitmentValue: number \| string;
+
+reward?: {
+
+intensityBoost: number;
+
+contentUnlock?: string;
+
+hapticPattern?: string;
+
+layoutUpgrade?: ContentLayoutMode; // NEW: Unlock better layout
+
+};
+
+penalty?: {
+
+intensityDrop: number;
+
+pauseDuration: number;
+
+layoutDowngrade?: ContentLayoutMode; // NEW: Lose collage mode
+
+};
+
+}
+
+Part 8: Goon Mode (Deep Trance)
+
+Goon mode is an extended, deep-absorption state for users who have
+demonstrated commitment (Phase 3+, 20+ sessions). It emphasizes
+trance-like immersion over edge counting, and is the ideal context for
+the full hypno collage experience.
+
+8.1 Goon Mode Configuration
+
+interface GoonModeConfig {
+
+minDuration: 45; // minutes
+
+maxDuration: 90; // minutes
+
+features: {
+
+edgeCounting: false; // No discrete edges
+
+continuousFlow: true; // Fluid intensity
+
+deeperContent: true; // Hypno, trance material
+
+reducedUI: true; // Minimal controls
+
+breathingSync: true; // Haptics sync to breath
+
+extendedAffirmations: true; // Longer, slower text
+
+tranceInduction: true; // Opening induction
+
+// NEW: Collage optimizations for goon mode
+
+defaultLayout: \'hypno\'; // Full collage + text stream
+
+syncMode: \'cascade\'; // Hypnotic cascade effect
+
+textTiming: \'subliminal\'; // Fast text cycling
+
+contentIntensity: \'progressive\'; // Builds over session
+
+};
+
+completion: \'ai_decides\' \| \'timer\' \| \'user_signal\';
+
+completionType: \'denial\' \| \'ruined\' \| \'full\' \| \'ai_decides\';
+
+}
+
+8.2 Goon Mode UI
+
+Minimal interface designed for maximum absorption:
+
+┌────────────────────────────────────────────────────┐
+
+│ │
+
+│ ┌────────┐ ┌────────┐ ┌────────┐ │
+
+│ │ │ │ │ │ │ │
+
+│ │ COL1 │ │ COL2 │ │ COL3 │ │
+
+│ │ │ │ │ │ │ │
+
+│ └────────┘ └────────┘ └────────┘ │
+
+│ │
+
+│ \"Sink deeper\... let go\... she\'s here\...\" │
+
+│ │
+
+├────────────────────────────────────────────────────┤
+
+│ \[Tap to reveal controls\] ⏱ 34:12 🔴 STOP │
+
+└────────────────────────────────────────────────────┘
+
+8.3 Trance Induction Sequence
+
+interface TranceInduction {
+
+phases: \[
+
+{
+
+name: \'settling\',
+
+duration: 120, // 2 minutes
+
+haptic: \'gentle_pulse\',
+
+content: \'abstract_visual\',
+
+layoutMode: \'single\', // Start with single
+
+affirmations: \[
+
+\"Close your eyes\... or keep them open\...\",
+
+\"Either way, you\'re sinking\...\",
+
+\"Let the world fade\...\"
+
+\]
+
+},
+
+{
+
+name: \'deepening\',
+
+duration: 180, // 3 minutes
+
+haptic: \'slow_wave\',
+
+content: \'hypno_spiral\',
+
+layoutMode: \'dual\', // Expand to dual
+
+affirmations: \[
+
+\"Deeper now\...\",
+
+\"Feel your thoughts slow\...\",
+
+\"There\'s only this\... Only her\...\"
+
+\]
+
+},
+
+{
+
+name: \'full_immersion\',
+
+duration: null, // Rest of session
+
+haptic: \'building_wave\',
+
+content: \'feminization_visual\',
+
+layoutMode: \'hypno\', // Full collage
+
+textMode: \'subliminal\' // Fast cycling
+
+}
+
+\]
+
+}
+
+Part 9: Database Schema Updates
+
+9.1 Session Layout Tracking
+
+\-- Add to edge_sessions table
+
+ALTER TABLE edge_sessions ADD COLUMN
+
+layout_mode VARCHAR(20) DEFAULT \'single\',
+
+layout_config JSONB, \-- Full CollageConfig
+
+text_overlay_enabled BOOLEAN DEFAULT true,
+
+text_timing_mode VARCHAR(20) DEFAULT \'readable\',
+
+affirmations_shown TEXT\[\]; \-- Array of shown texts
+
+9.2 Content Display Log
+
+\-- New table for multi-column content tracking
+
+CREATE TABLE session_content_display (
+
+id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+session_id UUID REFERENCES edge_sessions(id),
+
+timestamp TIMESTAMPTZ DEFAULT NOW(),
+
+\-- Per-column content
+
+column_1_content_id UUID,
+
+column_2_content_id UUID,
+
+column_3_content_id UUID,
+
+\-- Text overlay state
+
+global_text_active VARCHAR(200),
+
+column_1_text VARCHAR(100),
+
+column_2_text VARCHAR(100),
+
+column_3_text VARCHAR(100),
+
+\-- Session state at this moment
+
+session_phase VARCHAR(20),
+
+haptic_intensity INT,
+
+edge_count INT
+
+);
+
+9.3 Affirmation Pool Table
+
+CREATE TABLE affirmation_pools (
+
+id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+pool_name VARCHAR(50) NOT NULL, \-- \'feminization\', \'edge\', etc.
+
+affirmation_text TEXT NOT NULL,
+
+intensity_level INT DEFAULT 1, \-- 1-5 intensity
+
+requires_phase INT DEFAULT 1, \-- Minimum phase to show
+
+word_to_highlight VARCHAR(50), \-- Word to accent color
+
+custom BOOLEAN DEFAULT false, \-- User-created
+
+created_at TIMESTAMPTZ DEFAULT NOW()
+
+);
+
+Part 10: Component Architecture
+
+10.1 Updated File Structure
+
+/src
+
+/features
+
+/edge-session
+
+/components
+
+EdgeSessionProvider.tsx
+
+SessionEntryFlow.tsx
+
+SessionTypeSelector.tsx
+
+PreSessionCheckin.tsx
+
+LayoutSelector.tsx \# NEW
+
+/session
+
+SessionContainer.tsx
+
+SessionHeader.tsx
+
+ControlPanel.tsx
+
+EdgeButton.tsx
+
+RecoveryOverlay.tsx
+
+/content \# NEW DIRECTORY
+
+ContentDisplay.tsx \# Unified display component
+
+SingleLayout.tsx \# Traditional single view
+
+DualLayout.tsx \# Two-column view
+
+CollageLayout.tsx \# Three-column PMV style
+
+HypnoLayout.tsx \# Full hypno mode
+
+ContentColumn.tsx \# Individual column component
+
+/text-overlay \# NEW DIRECTORY
+
+TextOverlaySystem.tsx \# Main overlay controller
+
+AffirmationDisplay.tsx \# Single affirmation render
+
+TextStreamManager.tsx \# Timing/queue management
+
+ColumnText.tsx \# Per-column text
+
+GlobalText.tsx \# Center-screen text
+
+/auction
+
+AuctionModal.tsx
+
+AuctionOption.tsx
+
+/goon
+
+GoonModeContainer.tsx
+
+TranceInduction.tsx
+
+MinimalUI.tsx
+
+/hooks
+
+useEdgeSession.ts
+
+useSessionHaptics.ts
+
+useSessionContent.ts
+
+useCollageLayout.ts \# NEW
+
+useTextOverlay.ts \# NEW
+
+useContentColumns.ts \# NEW
+
+useAuction.ts
+
+/lib
+
+session-state-machine.ts
+
+content-selector.ts
+
+collage-sync.ts \# NEW
+
+text-scheduler.ts \# NEW
+
+affirmation-pools.ts \# NEW
+
+Part 11: Implementation Priority
+
+Phase 1: Core Session (Week 1-2)
+
+-   Basic session entry flow
+
+-   Edge counting interface
+
+-   Simple intensity display
+
+-   Session timer
+
+-   Basic completion flow
+
+-   Post-session modal
+
+Phase 2: Haptic Integration (Week 2-3)
+
+-   Connect to Lovense layer
+
+-   Implement basic patterns
+
+-   Intensity control
+
+-   Recovery period haptics
+
+Phase 3: Single-Mode Content (Week 3-4)
+
+-   ContentDisplay component (single mode)
+
+-   Content queue management
+
+-   Basic affirmation overlay
+
+-   Content tier integration
+
+Phase 4: Collage Layout System (Week 4-5) --- NEW
+
+-   ContentColumn component
+
+-   DualLayout implementation
+
+-   CollageLayout (3-column)
+
+-   Column synchronization logic
+
+-   Layout selector in entry flow
+
+-   Content mix strategies
+
+Phase 5: Text Overlay System (Week 5-6) --- NEW
+
+-   TextOverlaySystem component
+
+-   Timing modes (subliminal/readable/lingering)
+
+-   Per-column text display
+
+-   Global center text
+
+-   Affirmation pool management
+
+-   Word highlighting system
+
+Phase 6: Auction System (Week 6-7)
+
+-   Auction trigger logic
+
+-   Auction modal UI (updated for collage)
+
+-   Commitment tracking
+
+-   Consequence enforcement
+
+Phase 7: Goon Mode + Full Hypno (Week 7-8) --- NEW
+
+-   HypnoLayout component
+
+-   Trance induction sequence
+
+-   Progressive layout escalation
+
+-   Subliminal text timing
+
+-   MinimalUI for goon mode
+
+Phase 8: Polish & Integration (Week 8-9)
+
+-   Today view integration
+
+-   Evidence dashboard updates
+
+-   AI prescription support
+
+-   Performance optimization
+
+-   Cross-browser testing
+
+Part 12: UX Principles
+
+1.  **Immersion over interface:** Every UI element should serve the
+    session, not distract from it.
+
+2.  **Progressive disclosure:** Controls appear when needed, fade when
+    not.
+
+3.  **Physical feedback first:** Haptics confirm actions before visual
+    feedback.
+
+4.  **Unpredictability creates engagement:** AI-controlled timing keeps
+    the brain anticipating.
+
+5.  **Feminization woven throughout:** Every affirmation, every content
+    piece reinforces identity.
+
+6.  **Commitments feel binding:** The auction UI should feel weighty,
+    consequential.
+
+7.  **Recovery matters:** Don\'t rush past recovery---it\'s part of the
+    psychological architecture.
+
+8.  **Completion is ritual:** The end flow should feel like closure, not
+    abrupt termination.
+
+9.  **Evidence accumulates:** Every session adds to the undeniable
+    record.
+
+10. **The system rewards, not punishes:** Even denial should feel like
+    achievement.
+
+**NEW Collage-Specific Principles:**
+
+11. **Overwhelm is the feature:** The busy-ness of collage mode is
+    intentional---it bypasses resistance.
+
+12. **Text is subliminal architecture:** Affirmations plant seeds; they
+    don\'t demand attention.
+
+13. **Synchronization creates rhythm:** Cascading transitions create
+    hypnotic flow.
+
+14. **Layout is earned:** More immersive modes can be rewards for
+    commitment.
+
+15. **Audio completes the loop:** Visual columns + text overlay + audio
+    = complete sensory capture.
+
+*--- End of Document ---*
+
+Becoming Protocol v2.0

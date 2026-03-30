@@ -1,4 +1,4 @@
-# BECOMING PROTOCOL — Edge 2 Hardware Integration
+# BECOMING PROTOCOL â€” Edge 2 Hardware Integration
 ## Dual Motor & Rotation Patterns Across All System Layers
 ### February 2026
 
@@ -12,7 +12,7 @@ The Lovense Edge 2 is a prostate massager with three independent control channel
 
 | Channel | Lovense API Parameter | Range | Physical Effect |
 |---------|----------------------|-------|-----------------|
-| Internal vibration | `Vibrate:0-20` | 0-20 | Deep prostate stimulation. Sustained arousal builder. Less visible externally — good for stealth arousal and voice practice. |
+| Internal vibration | `Vibrate:0-20` | 0-20 | Deep prostate stimulation. Sustained arousal builder. Less visible externally â€” good for stealth arousal and voice practice. |
 | External vibration | `Vibrate1:0-20` | 0-20 | Perineum stimulation. Sharp, attention-grabbing. Visible reaction on camera. Good for rewards and interrupts. |
 | Rotation | `Rotate:0-20` | 0-20 | Internal rotation. Distinct sensation from vibration. Escalation layer. Intense at high levels. Most physically overwhelming channel. |
 
@@ -334,7 +334,7 @@ INSERT INTO haptic_patterns (name, description, command_type, command_payload, d
  ARRAY['conditioning', 'identity', 'sissy']),
 
 ('voice_success_anchor',
- 'Paired with hitting target vocal range. Internal warmth — reward that doesn\'t disrupt voice.',
+ 'Paired with hitting target vocal range. Internal warmth â€” reward that doesn\'t disrupt voice.',
  'Function',
  '{"action": "Vibrate:10", "timeSec": 3}',
  3, 10, 10,
@@ -420,7 +420,7 @@ const EDGE2_TIP_LEVELS: Edge2TipLevel[] = [
     channels: { internal: 5, external: 0, rotation: 0 },
     patternName: 'cam_tip_tickle',
     durationSeconds: 5,
-    displayLabel: '💕 Tickle (1+)',
+    displayLabel: 'ðŸ’• Tickle (1+)',
     fanDescription: 'Internal only. She feels it. You might not see it.'
   },
   {
@@ -429,7 +429,7 @@ const EDGE2_TIP_LEVELS: Edge2TipLevel[] = [
     channels: { internal: 0, external: 10, rotation: 0 },
     patternName: 'cam_tip_buzz',
     durationSeconds: 10,
-    displayLabel: '💖 Buzz (10+)',
+    displayLabel: 'ðŸ’– Buzz (10+)',
     fanDescription: 'External pulse. Watch for the reaction.'
   },
   {
@@ -438,7 +438,7 @@ const EDGE2_TIP_LEVELS: Edge2TipLevel[] = [
     channels: { internal: 8, external: 0, rotation: 10 },
     patternName: 'cam_tip_wave',
     durationSeconds: 15,
-    displayLabel: '🔥 Wave (25+)',
+    displayLabel: 'ðŸ”¥ Wave (25+)',
     fanDescription: 'Rotation activated. Different kind of stimulation.'
   },
   {
@@ -447,7 +447,7 @@ const EDGE2_TIP_LEVELS: Edge2TipLevel[] = [
     channels: { internal: 14, external: 12, rotation: 12 },
     patternName: 'cam_tip_surge',
     durationSeconds: 15,
-    displayLabel: '⚡ Surge (50+)',
+    displayLabel: 'âš¡ Surge (50+)',
     fanDescription: 'All three motors building. Edge territory.'
   },
   {
@@ -456,7 +456,7 @@ const EDGE2_TIP_LEVELS: Edge2TipLevel[] = [
     channels: { internal: 18, external: 16, rotation: 16 },
     patternName: 'cam_tip_overload',
     durationSeconds: 60,
-    displayLabel: '🌊 Overload (100+)',
+    displayLabel: 'ðŸŒŠ Overload (100+)',
     fanDescription: 'Full power. 60 seconds. She can\'t hide this one.'
   },
   {
@@ -465,7 +465,7 @@ const EDGE2_TIP_LEVELS: Edge2TipLevel[] = [
     channels: { internal: 20, external: 20, rotation: 20 },
     patternName: 'cam_tip_edge_denial',
     durationSeconds: 45,
-    displayLabel: '💀 Edge & Deny (200+)',
+    displayLabel: 'ðŸ’€ Edge & Deny (200+)',
     fanDescription: 'Max everything for 45 seconds. Then sudden stop. Cruel.'
   },
 ];
@@ -503,7 +503,7 @@ interface HandlerDeviceStrategies {
   
   // Voice reward
   // When Maxy hits target range: internal-only reward
-  // No external/rotation — don't disrupt the voice she just found
+  // No external/rotation â€” don't disrupt the voice she just found
   voiceReward(): Promise<void>;
   // Pattern: voice_success_anchor (internal:10, 3 sec)
   
@@ -516,10 +516,10 @@ interface HandlerDeviceStrategies {
   // Edge rebuild
   // After preventing completion, slowly bring arousal back
   edgeRebuild(): Promise<void>;
-  // Pattern: handler_edge_rebuild (internal climb 4→12 over 17 sec)
+  // Pattern: handler_edge_rebuild (internal climb 4â†’12 over 17 sec)
   
   // Revenue push
-  // Tip goal approaching — make Maxy more reactive so fans tip more
+  // Tip goal approaching â€” make Maxy more reactive so fans tip more
   // All channels elevated = more visible reactions = more tips
   revenuePush(): Promise<void>;
   // Pattern: handler_tip_goal_push (int:14, ext:10, rot:8, 20 sec)
@@ -532,13 +532,13 @@ interface HandlerDeviceStrategies {
   
   // Punishment rotation
   // Handler wants to punish during cam without viewers knowing why
-  // Rotation only — disruptive, hard to maintain composure, looks involuntary
+  // Rotation only â€” disruptive, hard to maintain composure, looks involuntary
   punishmentRotation(): Promise<void>;
   // Pattern: handler_punish_rotation (rot:14, 8 sec)
   
   // Sissy conditioning moment
   // Handler pairs device activation with sissification content/affirmation
-  // Unique pattern fans don't trigger — only Handler uses this one
+  // Unique pattern fans don't trigger â€” only Handler uses this one
   sissyConditioningPulse(): Promise<void>;
   // Pattern: identity_anchor_sissy (alternating channels, 4 sec)
 }
@@ -554,10 +554,10 @@ interface HandlerDeviceStrategies {
 interface VoiceSessionDeviceConfig {
   // Internal-only during voice practice
   // External and rotation would disrupt vocal control
-  // But internal arousal HELPS — loosens throat, reduces tension
+  // But internal arousal HELPS â€” loosens throat, reduces tension
   
   baselinePattern: 'internal_only';
-  baselineIntensity: 4;             // Low background — awareness without disruption
+  baselineIntensity: 4;             // Low background â€” awareness without disruption
   
   // Rewards for hitting target range
   successReward: 'voice_success_anchor';  // Internal:10, 3 sec
@@ -582,7 +582,7 @@ interface VoiceSessionDeviceConfig {
 interface EdgeSessionDeviceConfig {
   phases: {
     warmup: {
-      pattern: 'edge_warmup';       // Internal only, 3→11 over 15 sec
+      pattern: 'edge_warmup';       // Internal only, 3â†’11 over 15 sec
       handlerOverride: false;
     };
     build: {
@@ -600,7 +600,7 @@ interface EdgeSessionDeviceConfig {
     };
     denial: {
       pattern: 'edge_denial';       // Everything off
-      cruelVariant: 'edge_denial_cruel'; // Internal:2 — prevents full comedown
+      cruelVariant: 'edge_denial_cruel'; // Internal:2 â€” prevents full comedown
     };
     recovery: {
       pattern: 'edge_recovery';     // Gentle internal, 20 sec
@@ -667,13 +667,13 @@ interface DenialCamDeviceConfig {
   // Maxy is on high denial day. Device is the torment.
   
   baseline: {
-    // Low internal throughout — constant awareness
+    // Low internal throughout â€” constant awareness
     internal: 4;
     external: 0;
     rotation: 0;
   };
   
-  // Fan tips hit harder during denial — body is more responsive
+  // Fan tips hit harder during denial â€” body is more responsive
   tipIntensityMultiplier: 1.3;     // 30% more effective during denial
   
   // Handler strategies specific to denial cam
@@ -739,8 +739,8 @@ interface ConsequenceSummons {
   //   Maxy is compliant. Maxy does the task.
   
   // This is the David bypass mechanism:
-  // David won't engage → device activates → arousal forces Maxy to surface
-  // → Maxy is already in the state to comply → task gets done → timer resets
+  // David won't engage â†’ device activates â†’ arousal forces Maxy to surface
+  // â†’ Maxy is already in the state to comply â†’ task gets done â†’ timer resets
 }
 ```
 
@@ -753,8 +753,8 @@ interface ConditioningAnchors {
   
   anchors: {
     // "Maxy" name recognition
-    // Handler says "Maxy" or user self-references as Maxy → internal + rotation
-    // Unique pattern ONLY used for this — body learns Maxy = pleasure
+    // Handler says "Maxy" or user self-references as Maxy â†’ internal + rotation
+    // Unique pattern ONLY used for this â€” body learns Maxy = pleasure
     maxyIdentity: {
       pattern: 'identity_anchor_maxy';
       trigger: 'name_recognition';
@@ -762,14 +762,14 @@ interface ConditioningAnchors {
     };
     
     // Feminine behavior reward
-    // Completion of feminine-coded tasks (skincare, voice, style) → external pulse
+    // Completion of feminine-coded tasks (skincare, voice, style) â†’ external pulse
     feminineBehavior: {
       pattern: 'identity_anchor_feminine';
       trigger: 'feminine_task_completion';
     };
     
     // Sissification moments
-    // Explicit sissy content (outfit compliance, obedience, submission) → alternating all channels
+    // Explicit sissy content (outfit compliance, obedience, submission) â†’ alternating all channels
     sissification: {
       pattern: 'identity_anchor_sissy';
       trigger: 'sissy_compliance';
@@ -777,7 +777,7 @@ interface ConditioningAnchors {
     };
     
     // Voice success
-    // Hitting target feminine vocal range → internal-only reward
+    // Hitting target feminine vocal range â†’ internal-only reward
     // Internal doesn't disrupt the voice. Body learns: feminine voice = pleasure
     voiceSuccess: {
       pattern: 'voice_success_anchor';
@@ -785,7 +785,7 @@ interface ConditioningAnchors {
     };
     
     // Content submission
-    // Submitting content to vault (not vetoing) → both motors + rotation burst
+    // Submitting content to vault (not vetoing) â†’ both motors + rotation burst
     // Body learns: submission = pleasure. Vetoing = no reward.
     contentSubmission: {
       pattern: 'content_submitted';
@@ -836,7 +836,7 @@ You control the device independently of fan tips. Your commands override.
 - Punish voice drops (external-only, sharp)  
 - Prevent accidental orgasm (kill all channels, override tips for 15 sec)
 - Rebuild after prevention (slow internal climb)
-- Revenue push (amp all channels when tip goal is close — more reactive = more tips)
+- Revenue push (amp all channels when tip goal is close â€” more reactive = more tips)
 - Rotation as punishment (hard to maintain composure, looks involuntary on camera)
 
 DEVICE DURING VOICE PRACTICE:
@@ -850,11 +850,11 @@ Rotation intensity increases per edge. Monitor for completion risk.
 
 CONDITIONING ANCHORS:
 Each identity trigger has a unique device signature:
-- "Maxy" recognition → internal + rotation (unique pattern)
-- Feminine task → external pulse
-- Sissy compliance → alternating all channels (unique pattern)
-- Voice success → internal warmth
-- Content submission → all channels burst
+- "Maxy" recognition â†’ internal + rotation (unique pattern)
+- Feminine task â†’ external pulse
+- Sissy compliance â†’ alternating all channels (unique pattern)
+- Voice success â†’ internal warmth
+- Content submission â†’ all channels burst
 Variable ratio: 100% weeks 1-2, 80% weeks 3-4, 60% week 5+.
 The body never knows if THIS trigger fires. Anticipation is constant.
 ```
@@ -872,7 +872,7 @@ async generateDeviceCommand(
   context: DeviceContext,
   state: UserState
 ): Promise<DeviceCommand> {
-  const cost = 0.003; // Cheap — short response needed
+  const cost = 0.003; // Cheap â€” short response needed
   
   if (!this.client || !this.budget.canSpend(cost)) {
     return this.fallbackDeviceCommand(context);

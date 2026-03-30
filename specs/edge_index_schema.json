@@ -1,0 +1,115 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Edge Content Index",
+  "description": "Catalog of single videos for Edge session mode",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Schema version",
+      "default": "1.0"
+    },
+    "updated": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last catalog update"
+    },
+    "videos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "path", "duration_seconds"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier",
+            "pattern": "^edge-[a-z0-9-]+$"
+          },
+          "path": {
+            "type": "string",
+            "description": "Relative path from media root",
+            "examples": ["/edge/feminization/video_001.mp4"]
+          },
+          "filename": {
+            "type": "string",
+            "description": "Original filename for reference"
+          },
+          "duration_seconds": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "tier": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4,
+            "default": 1,
+            "description": "Access tier (1=always, 4=denial day 7+)"
+          },
+          "themes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "feminization",
+                "sissification", 
+                "service",
+                "bbc",
+                "solo",
+                "anal",
+                "oral",
+                "humiliation",
+                "chastity",
+                "hypno",
+                "pov",
+                "trans",
+                "lesbian",
+                "gangbang",
+                "other"
+              ]
+            },
+            "default": []
+          },
+          "intensity": {
+            "type": "string",
+            "enum": ["soft", "medium", "hard", "extreme"],
+            "default": "medium"
+          },
+          "resolution": {
+            "type": "string",
+            "enum": ["480p", "720p", "1080p", "4k"],
+            "description": "Video quality"
+          },
+          "has_audio": {
+            "type": "boolean",
+            "default": true
+          },
+          "source": {
+            "type": "string",
+            "description": "Where content was obtained",
+            "examples": ["pornhub", "spankbang", "xhamster", "reddit", "twitter"]
+          },
+          "added_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "play_count": {
+            "type": "integer",
+            "default": 0
+          },
+          "last_played": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "favorite": {
+            "type": "boolean",
+            "default": false
+          },
+          "notes": {
+            "type": "string",
+            "description": "Personal notes about content"
+          }
+        }
+      }
+    }
+  }
+}

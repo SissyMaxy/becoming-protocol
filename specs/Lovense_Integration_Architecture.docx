@@ -1,0 +1,542 @@
+**Lovense Integration Architecture**
+
+**Becoming Protocol --- Haptic Reward Layer**
+
+**Executive Summary**
+
+This integration adds a \*\*physical reward channel\*\* to the existing
+Becoming Protocol, allowing the AI system to deliver embodied pleasure
+as part of the neurochemical reward architecture. The toy becomes
+another ratchet: once experienced, its absence is felt.
+
+**Part 1: Technical Foundation**
+
+**API Overview**
+
+The Lovense Standard API enables control via HTTPS POST requests. Key
+capabilities:
+
+\| Command Type \| Function \| Parameters \|
+
+\|\-\-\-\-\-\-\-\-\-\-\-\--\|\-\-\-\-\-\-\-\-\--\|\-\-\-\-\-\-\-\-\-\-\--\|
+
+\| \*\*Function\*\* \| Direct control \| \`action\`: Vibrate:0-20,
+Rotate:0-20, Pump:0-3 \|
+
+\| \*\*Preset\*\* \| Named patterns \| \`name\`: pulse, wave, fireworks,
+earthquake \|
+
+\| \*\*Pattern\*\* \| Custom sequences \| \`pattern\`:
+\"V:1;F:v,r,p;S:1000#\...\" \|
+
+\| \*\*Stop\*\* \| Halt all \| Immediate cessation \|
+
+**Request Structure**
+
+{ \"token\": \"YOUR_DEVELOPER_TOKEN\", \"uid\": \"user_id\",
+\"command\": \"Function\", \"action\": \"Vibrate:16\", \"timeSec\": 5,
+\"loopRunningSec\": 3, \"loopPauseSec\": 1, \"toy\": \"toy_id\",
+\"apiVer\": 1 }
+
+**Infrastructure Requirements**
+
+> 1\. \*\*Lovense Developer Account\*\* (free)
+
+\- Register at lovense.com/sextoys/developer/join
+
+\- Obtain developer token
+
+\- Configure callback URL
+
+> 2\. \*\*Lovense Remote App\*\* (user\'s phone)
+
+\- Acts as Bluetooth bridge
+
+\- Must be running during sessions
+
+\- Connects toy → phone → your server
+
+> 3\. \*\*Backend Endpoint\*\* (your Supabase/server)
+
+\- Proxies commands to Lovense API
+
+\- Stores toy connection state
+
+\- Never exposes developer token to frontend
+
+> 4\. \*\*Callback Handler\*\*
+
+\- Receives toy status updates
+
+\- Tracks connection state
+
+\- Logs battery, online status
+
+**Part 2: Database Schema**
+
+**New Tables**
+
+\-- Toy configuration and connection state CREATE TABLE lovense_devices
+( id UUID PRIMARY KEY DEFAULT gen_random_uuid(), user_id UUID REFERENCES
+auth.users(id), toy_id VARCHAR(50), toy_name VARCHAR(50), \-- \'gush\',
+\'lush\', etc. nickname VARCHAR(100), is_connected BOOLEAN DEFAULT
+false, battery_level INT, last_seen_at TIMESTAMPTZ, created_at
+TIMESTAMPTZ DEFAULT NOW() ); \-- Command log (evidence + debugging)
+CREATE TABLE lovense_commands ( id UUID PRIMARY KEY DEFAULT
+gen_random_uuid(), user_id UUID REFERENCES auth.users(id), device_id
+UUID REFERENCES lovense_devices(id), command_type VARCHAR(20), \--
+\'function\', \'preset\', \'pattern\', \'stop\' command_payload JSONB,
+trigger_type VARCHAR(50), \-- \'task_complete\', \'notification\',
+\'ai_session\', \'arousal_auction\' trigger_id UUID, \-- reference to
+what triggered it executed_at TIMESTAMPTZ DEFAULT NOW(), success
+BOOLEAN, error_message TEXT ); \-- Predefined reward patterns mapped to
+system events CREATE TABLE haptic_patterns ( id UUID PRIMARY KEY DEFAULT
+gen_random_uuid(), name VARCHAR(50) UNIQUE, description TEXT,
+command_type VARCHAR(20), command_payload JSONB, duration_sec INT,
+intensity_min INT, \-- 0-20 intensity_max INT, \-- 0-20 use_context
+VARCHAR(50)\[\] \-- \[\'task_complete\', \'good_girl\',
+\'edge_session\'\] ); \-- Session tracking for arousal integration
+CREATE TABLE haptic_sessions ( id UUID PRIMARY KEY DEFAULT
+gen_random_uuid(), user_id UUID REFERENCES auth.users(id), session_type
+VARCHAR(30), \-- \'anchoring\', \'reward\', \'edge\', \'maintenance\'
+started_at TIMESTAMPTZ DEFAULT NOW(), ended_at TIMESTAMPTZ,
+total_commands INT DEFAULT 0, peak_intensity INT, ai_controlled BOOLEAN
+DEFAULT false, notes TEXT );
+
+**Seed Data: Default Patterns**
+
+INSERT INTO haptic_patterns (name, description, command_type,
+command_payload, duration_sec, intensity_min, intensity_max,
+use_context) VALUES \-- Micro-rewards (task completion, affirmations)
+(\'task_complete\', \'Brief acknowledgment pulse\', \'Function\',
+\'{\"action\": \"Vibrate:8\", \"timeSec\": 2}\', 2, 8, 8,
+ARRAY\[\'task_complete\'\]), (\'good_girl\', \'Warm affirmation wave\',
+\'Preset\', \'{\"name\": \"pulse\", \"timeSec\": 3}\', 3, 0, 12,
+ARRAY\[\'affirmation\', \'notification\'\]), (\'streak_milestone\',
+\'Celebration burst\', \'Function\', \'{\"action\": \"Vibrate:15\",
+\"timeSec\": 5, \"loopRunningSec\": 2, \"loopPauseSec\": 1}\', 5, 10,
+15, ARRAY\[\'milestone\'\]), \-- Notification rewards (variable ratio
+reinforcement) (\'notification_low\', \'Subtle awareness ping\',
+\'Function\', \'{\"action\": \"Vibrate:4\", \"timeSec\": 1}\', 1, 4, 4,
+ARRAY\[\'notification\'\]), (\'notification_medium\', \'Pleasant
+reminder\', \'Function\', \'{\"action\": \"Vibrate:10\", \"timeSec\":
+3}\', 3, 8, 12, ARRAY\[\'notification\'\]), (\'notification_jackpot\',
+\'Rare high reward\', \'Preset\', \'{\"name\": \"fireworks\",
+\"timeSec\": 8}\', 8, 12, 18, ARRAY\[\'notification\', \'jackpot\'\]),
+\-- Edge session patterns (\'edge_build\', \'Gradual intensity climb\',
+\'Pattern\', \'{\"pattern\":
+\"V:1;F:v;S:1000#V:1;F:v5;S:2000#V:1;F:v10;S:3000#V:1;F:v15;S:4000\"}\',
+10, 5, 15, ARRAY\[\'edge_session\'\]), (\'edge_hold\', \'Sustained
+plateau\', \'Function\', \'{\"action\": \"Vibrate:12\", \"timeSec\":
+30}\', 30, 10, 14, ARRAY\[\'edge_session\'\]), (\'edge_denial\',
+\'Sudden stop for denial\', \'Function\', \'{\"action\": \"Stop\"}\', 0,
+0, 0, ARRAY\[\'edge_session\', \'denial\'\]), (\'edge_tease\',
+\'Unpredictable pulses\', \'Pattern\', \'{\"pattern\":
+\"V:1;F:v8;S:500#V:1;F:v0;S:2000#V:1;F:v12;S:800#V:1;F:v0;S:1500\"}\',
+15, 0, 12, ARRAY\[\'edge_session\', \'tease\'\]), \-- Conditioning
+anchors (\'femininity_anchor\', \'Pattern tied to identity state\',
+\'Preset\', \'{\"name\": \"wave\", \"timeSec\": 5}\', 5, 6, 10,
+ARRAY\[\'conditioning\', \'identity\'\]), (\'morning_activation\',
+\'Protocol start signal\', \'Function\', \'{\"action\": \"Vibrate:6\",
+\"timeSec\": 3}\', 3, 6, 6, ARRAY\[\'protocol\', \'morning\'\]),
+(\'evening_closure\', \'Day completion reward\', \'Preset\',
+\'{\"name\": \"pulse\", \"timeSec\": 4}\', 4, 8, 10,
+ARRAY\[\'protocol\', \'evening\'\]);
+
+**Part 3: Backend Implementation**
+
+**Edge Function: Lovense Command Proxy**
+
+// supabase/functions/lovense-command/index.ts import { serve } from
+\"https://deno.land/std@0.168.0/http/server.ts\" import { createClient }
+from \'https://esm.sh/@supabase/supabase-js@2\' const LOVENSE_API_URL =
+\'https://api.lovense.com/api/lan/v2/command\' const DEVELOPER_TOKEN =
+Deno.env.get(\'LOVENSE_DEVELOPER_TOKEN\') interface CommandRequest {
+userId: string patternName?: string customCommand?: { command:
+\'Function\' \| \'Preset\' \| \'Pattern\' \| \'Stop\' action?: string
+name?: string pattern?: string timeSec?: number loopRunningSec?: number
+loopPauseSec?: number intensity?: number } triggerType: string
+triggerId?: string } serve(async (req) =\> { const supabase =
+createClient( Deno.env.get(\'SUPABASE_URL\')!,
+Deno.env.get(\'SUPABASE_SERVICE_ROLE_KEY\')! ) const { userId,
+patternName, customCommand, triggerType, triggerId } = await req.json()
+as CommandRequest // Get user\'s connected toy const { data: device } =
+await supabase .from(\'lovense_devices\') .select(\'\*\')
+.eq(\'user_id\', userId) .eq(\'is_connected\', true) .single() if
+(!device) { return new Response(JSON.stringify({ error: \'No connected
+device\' }), { status: 400 }) } // Get command payload let payload: any
+if (patternName) { const { data: pattern } = await supabase
+.from(\'haptic_patterns\') .select(\'\*\') .eq(\'name\', patternName)
+.single() if (!pattern) { return new Response(JSON.stringify({ error:
+\'Pattern not found\' }), { status: 404 }) } payload =
+pattern.command_payload } else if (customCommand) { payload =
+customCommand } else { return new Response(JSON.stringify({ error: \'No
+command specified\' }), { status: 400 }) } // Build Lovense API request
+const lovensePayload = { token: DEVELOPER_TOKEN, uid: userId, toy:
+device.toy_id, apiVer: 1, \...payload } // Execute command const
+response = await fetch(LOVENSE_API_URL, { method: \'POST\', headers: {
+\'Content-Type\': \'application/json\' }, body:
+JSON.stringify(lovensePayload) }) const result = await response.json()
+const success = result.code === 200 // Log command await
+supabase.from(\'lovense_commands\').insert({ user_id: userId, device_id:
+device.id, command_type: payload.command \|\| \'Function\',
+command_payload: lovensePayload, trigger_type: triggerType, trigger_id:
+triggerId, success, error_message: success ? null : result.message })
+return new Response(JSON.stringify({ success, result }), { headers: {
+\'Content-Type\': \'application/json\' } }) })
+
+**Edge Function: Lovense Callback Handler**
+
+// supabase/functions/lovense-callback/index.ts serve(async (req) =\> {
+const supabase = createClient( Deno.env.get(\'SUPABASE_URL\')!,
+Deno.env.get(\'SUPABASE_SERVICE_ROLE_KEY\')! ) const callback = await
+req.json() // Callback contains: uid, toys (JSON string), platform,
+appType const { uid, toys } = callback const toyData = JSON.parse(toys)
+for (const \[toyId, info\] of Object.entries(toyData)) { const toyInfo =
+info as any await supabase.from(\'lovense_devices\').upsert({ user_id:
+uid, toy_id: toyId, toy_name: toyInfo.name, nickname: toyInfo.nickName,
+is_connected: toyInfo.status === \'1\', battery_level: toyInfo.battery,
+last_seen_at: new Date().toISOString() }, { onConflict:
+\'user_id,toy_id\' }) } return new Response(JSON.stringify({ success:
+true })) })
+
+**Frontend Hook**
+
+// hooks/useLovense.ts import { useCallback } from \'react\' import {
+supabase } from \'@/lib/supabase\' export function useLovense() { const
+sendCommand = useCallback(async ( patternName: string, triggerType:
+string, triggerId?: string ) =\> { const { data: { user } } = await
+supabase.auth.getUser() if (!user) return { success: false, error: \'Not
+authenticated\' } const { data, error } = await
+supabase.functions.invoke(\'lovense-command\', { body: { userId:
+user.id, patternName, triggerType, triggerId } }) return { success:
+!error, data, error } }, \[\]) const sendCustomCommand =
+useCallback(async ( command: any, triggerType: string, triggerId?:
+string ) =\> { const { data: { user } } = await supabase.auth.getUser()
+if (!user) return { success: false, error: \'Not authenticated\' } const
+{ data, error } = await supabase.functions.invoke(\'lovense-command\', {
+body: { userId: user.id, customCommand: command, triggerType, triggerId
+} }) return { success: !error, data, error } }, \[\]) const stopAll =
+useCallback(async () =\> { return sendCustomCommand({ command: \'Stop\'
+}, \'manual_stop\') }, \[sendCustomCommand\]) return { sendCommand,
+sendCustomCommand, stopAll } }
+
+**Part 4: Integration Points**
+
+**4.1 Task Completion Rewards**
+
+When a task is marked complete, trigger a micro-reward:
+
+// In task completion handler async function completeTask(taskId:
+string) { await supabase.from(\'daily_tasks\').update({ completed: true,
+completed_at: new Date() }).eq(\'id\', taskId) // Trigger haptic reward
+await sendCommand(\'task_complete\', \'task_complete\', taskId) }
+
+**4.2 Variable Ratio Notification System**
+
+Modify existing notification system to include haptic probability:
+
+interface NotificationReward { type: \'none\' \| \'low\' \| \'medium\'
+\| \'jackpot\' hapticPattern: string \| null } function
+determineNotificationReward(): NotificationReward { const roll =
+Math.random() if (roll \< 0.40) { // 40% - No haptic, text only return {
+type: \'none\', hapticPattern: null } } else if (roll \< 0.70) { //
+30% - Low haptic return { type: \'low\', hapticPattern:
+\'notification_low\' } } else if (roll \< 0.92) { // 22% - Medium haptic
+return { type: \'medium\', hapticPattern: \'notification_medium\' } }
+else { // 8% - Jackpot return { type: \'jackpot\', hapticPattern:
+\'notification_jackpot\' } } } async function
+sendScheduledNotification(notification: Notification) { const reward =
+determineNotificationReward() // Send push notification await
+sendPushNotification(notification) // If haptic reward, trigger it if
+(reward.hapticPattern) { await sendCommand(reward.hapticPattern,
+\'notification\', notification.id) } // Log for analytics await
+logNotificationReward(notification.id, reward) }
+
+**4.3 AI Prescription Integration**
+
+Extend AI prescription schema to include haptic directives:
+
+interface AIPrescription { // Existing fields\... tasks: Task\[\]
+affirmations: string\[\] // New haptic fields hapticMode?: \'passive\'
+\| \'active\' \| \'session\' hapticIntensityRange?: \[number, number\]
+// 0-20 scale sessionType?: \'anchoring\' \| \'reward\' \|
+\'maintenance\' includeHapticRewards?: boolean } // In AI prompt context
+const hapticContext = \` You can include haptic rewards in
+prescriptions. Available modes: - passive: Background awareness only
+(rare subtle pulses) - active: Task completion rewards enabled -
+session: Full arousal session with AI-controlled intensity When
+prescribing a session, you control intensity dynamically. Available
+commands you can include in prescription: - { pattern: \'edge_build\'
+} - Gradual intensity climb - { pattern: \'edge_hold\' } - Sustained
+plateau - { pattern: \'edge_tease\' } - Unpredictable pulses - { custom:
+{ action: \'Vibrate:N\', timeSec: S } } - Direct control User\'s current
+arousal state: \${arousalState} User\'s denial day: \${denialDay} Device
+connected: \${isConnected} \`
+
+**4.4 Arousal Auction Enhancement (Ratchet B1)**
+
+Physical stakes during edge sessions:
+
+interface ArousalAuction { edgeNumber: number currentIntensity: number
+commitmentOptions: CommitmentOption\[\] } interface CommitmentOption {
+label: string consequence: string hapticReward?: { pattern: string
+intensityBoost: number durationBoost: number } hapticPenalty?: {
+dropIntensity: number pauseDuration: number } } // Mid-session auction
+const auctionPrompt: ArousalAuction = { edgeNumber: 5, currentIntensity:
+12, commitmentOptions: \[ { label: \"+3 more edges\", consequence:
+\"Continue at current intensity\", hapticReward: { pattern:
+\'edge_hold\', intensityBoost: 2, durationBoost: 0 } }, { label: \"Add 2
+denial days\", consequence: \"Intensity increases now\", hapticReward: {
+pattern: \'edge_build\', intensityBoost: 4, durationBoost: 30 } }, {
+label: \"I\'ll decide later\", consequence: \"Intensity drops for 5
+minutes\", hapticPenalty: { dropIntensity: 8, pauseDuration: 300 } } \]
+}
+
+**4.5 Conditioning Anchors (Sensory Ratchet I2)**
+
+Pair specific patterns with identity states:
+
+const conditioningAnchors = { // \"Good girl\" always uses this pattern
+identity_affirmation: \'good_girl\', // Morning protocol start
+protocol_start: \'morning_activation\', // Entering \"her\" mode
+mode_switch: \'femininity_anchor\', // Day completion protocol_end:
+\'evening_closure\' } // When affirmation is displayed async function
+showAffirmation(text: string, type: string) { displayAffirmation(text)
+if (type === \'good_girl\') { await sendCommand(\'good_girl\',
+\'affirmation\') } } // Over time, the pattern itself triggers the state
+// even before conscious recognition
+
+**4.6 Denial Period Teasing**
+
+Maintain heightened awareness during denial:
+
+async function scheduleDenialTeases(denialDay: number) { // More teases
+as denial extends const teaseCount = Math.min(denialDay, 8) // Max 8 per
+day // Random times during waking hours const times =
+generateRandomTimes(teaseCount, \'09:00\', \'21:00\') for (const time of
+times) { await scheduleNotification({ time, type: \'denial_tease\',
+hapticPattern: \'notification_low\', message:
+getDenialTeaseMessage(denialDay) }) } } function
+getDenialTeaseMessage(day: number): string { const messages = \[ \`Day
+\${day}. She\'s still waiting.\`, \`Feel that? That\'s discipline.\`,
+\`\${day} days of her building.\`, \`Good girl. Keep holding.\` \]
+return messages\[Math.floor(Math.random() \* messages.length)\] }
+
+**Part 5: Edge Session Controller**
+
+Full AI-controlled arousal session:
+
+// components/EdgeSessionController.tsx interface EdgeSession { id:
+string targetEdges: number currentEdge: number intensity: number phase:
+\'warmup\' \| \'building\' \| \'edge\' \| \'recovery\' \| \'complete\'
+aiControlled: boolean commitmentsMade: Commitment\[\] } class
+EdgeSessionEngine { private session: EdgeSession private lovense:
+ReturnType\<typeof useLovense\> async startSession(config:
+SessionConfig) { this.session = { id: generateId(), targetEdges:
+config.targetEdges, currentEdge: 0, intensity: 0, phase: \'warmup\',
+aiControlled: config.aiControlled, commitmentsMade: \[\] } await
+this.logSessionStart() await this.runWarmup() } private async
+runWarmup() { // Gradual build over 2 minutes for (let i = 3; i \<= 10;
+i += 1) { await this.setIntensity(i) await sleep(12000) // 12 seconds
+per step } this.session.phase = \'building\' this.runBuildCycle() }
+private async runBuildCycle() { while (this.session.currentEdge \<
+this.session.targetEdges) { // Build to edge await this.buildToEdge() //
+Check for auction prompt if (this.shouldShowAuction()) { await
+this.showArousalAuction() } // User signals edge reached await
+this.waitForEdgeSignal() this.session.currentEdge++ // Recovery await
+this.runRecovery() } await this.completeSession() } private async
+buildToEdge() { this.session.phase = \'building\' if
+(this.session.aiControlled) { // AI decides the pattern const pattern =
+this.selectBuildPattern() await this.executePattern(pattern) } else { //
+Manual intensity control await this.setIntensity(this.session.intensity)
+} } private selectBuildPattern(): string { // Vary patterns to prevent
+habituation const patterns = \[\'edge_build\', \'edge_hold\',
+\'edge_tease\'\] const weights = \[0.4, 0.35, 0.25\] return
+weightedRandom(patterns, weights) } private async runRecovery() {
+this.session.phase = \'recovery\' await this.setIntensity(0) // Variable
+recovery time (unpredictable) const recoveryTime = 15000 + Math.random()
+\* 30000 // 15-45 sec await sleep(recoveryTime) } private
+shouldShowAuction(): boolean { // Show at edges 5, 8, 10, then every 3
+const auctionEdges = \[5, 8, 10, 13, 16, 19\] return
+auctionEdges.includes(this.session.currentEdge + 1) } private async
+showArousalAuction() { const auction =
+generateAuctionPrompt(this.session) const response = await
+displayAuctionModal(auction)
+this.session.commitmentsMade.push(response.commitment) if
+(response.hapticReward) { await this.applyReward(response.hapticReward)
+} else if (response.hapticPenalty) { await
+this.applyPenalty(response.hapticPenalty) } } private async
+setIntensity(level: number) { this.session.intensity = level await
+this.lovense.sendCustomCommand({ command: \'Function\', action:
+\`Vibrate:\${level}\`, timeSec: 0 // Continuous until changed },
+\'edge_session\', this.session.id) } }
+
+**Part 6: Safety & Boundaries**
+
+**Time-Based Restrictions**
+
+const safetyConfig = { // No haptics during Gina hours (configurable)
+quietHours: { start: \'17:00\', // 5 PM end: \'23:00\', // 11 PM
+daysActive: \[\'monday\', \'tuesday\', \'wednesday\', \'thursday\',
+\'friday\'\] }, // Weekend override (Gina aware of some activity)
+weekendMode: \'restricted\', // \'full\' \| \'restricted\' \| \'off\' //
+Maximum session duration maxSessionMinutes: 60, // Cooldown between
+sessions minCooldownMinutes: 120, // Emergency stop always available
+panicStopEnabled: true } function canActivateHaptics(): boolean { const
+now = new Date() const currentHour = now.getHours() const currentDay =
+now.toLocaleDateString(\'en-US\', { weekday: \'lowercase\' }) // Check
+quiet hours if (safetyConfig.quietHours.daysActive.includes(currentDay))
+{ const start = parseInt(safetyConfig.quietHours.start) const end =
+parseInt(safetyConfig.quietHours.end) if (currentHour \>= start &&
+currentHour \< end) { return false } } return true }
+
+**Manual Override**
+
+// Always accessible stop button function EmergencyStop() { const {
+stopAll } = useLovense() return ( \<button onClick={stopAll}
+className=\"fixed bottom-4 right-4 bg-red-600 text-white p-4
+rounded-full\" \> STOP \</button\> ) }
+
+**Part 7: Evidence & Ratchet Integration**
+
+**Haptic History as Evidence (Ratchet E2)**
+
+// Add to evidence display async function getHapticEvidence(userId:
+string) { const { data } = await supabase .from(\'lovense_commands\')
+.select(\'\*\') .eq(\'user_id\', userId) .eq(\'success\', true) return {
+totalCommands: data.length, totalSessions: await
+getSessionCount(userId), totalMinutesControlled: await
+calculateControlledTime(userId), firstCommand: data\[0\]?.executed_at,
+recentIntensityAvg: await getRecentIntensityAverage(userId) } } //
+Display in sunk cost dashboard const hapticEvidence = \` Physical
+pleasure received: \${stats.totalCommands} times Hours under AI control:
+\${(stats.totalMinutesControlled / 60).toFixed(1)} Sessions completed:
+\${stats.totalSessions} First surrender:
+\${formatDate(stats.firstCommand)} Your body knows her now. \`
+
+**Dependency Tracking (Ratchet K3)**
+
+// Track when sessions without haptics feel incomplete interface
+SessionFeedback { hadHaptics: boolean feltComplete: boolean
+missedHaptics: boolean } // After sessions without haptics if
+(!sessionConfig.haptics && feedback.missedHaptics) { await
+logDependencySignal(\'haptic_withdrawal\', { message: \"User reported
+missing haptic feedback\", sessionType: session.type }) } // Display in
+dependency acknowledgment \"Sessions feel incomplete without physical
+reward. That\'s not weakness. That\'s integration. Your body expects her
+pleasures now.\"
+
+**Part 8: Implementation Phases**
+
+**Phase 1: Foundation (Week 1)**
+
+> • \[ \] Create Lovense developer account
+>
+> • \[ \] Set up callback URL endpoint
+>
+> • \[ \] Implement database schema
+>
+> • \[ \] Build command proxy edge function
+>
+> • \[ \] Test basic vibration commands
+
+**Phase 2: Basic Integration (Week 2)**
+
+> • \[ \] Add device connection UI
+>
+> • \[ \] Implement task completion rewards
+>
+> • \[ \] Add emergency stop button
+>
+> • \[ \] Create useLovense hook
+>
+> • \[ \] Test reliability
+
+**Phase 3: Notification Integration (Week 3)**
+
+> • \[ \] Modify notification system for haptic probability
+>
+> • \[ \] Implement variable ratio rewards
+>
+> • \[ \] Add jackpot mechanics
+>
+> • \[ \] Configure quiet hours
+
+**Phase 4: Session Control (Week 4)**
+
+> • \[ \] Build EdgeSessionController
+>
+> • \[ \] Implement arousal auction integration
+>
+> • \[ \] Add AI prescription haptic modes
+>
+> • \[ \] Create session logging
+
+**Phase 5: Conditioning & Evidence (Week 5)**
+
+> • \[ \] Implement sensory anchoring patterns
+>
+> • \[ \] Add haptic history to evidence dashboard
+>
+> • \[ \] Build dependency tracking
+>
+> • \[ \] Integrate with sunk cost display
+
+**Part 9: Psychological Design Notes**
+
+**Why This Works**
+
+> 1\. \*\*Embodied Reward\*\*: Digital systems remain abstract. Physical
+> sensation makes reward concrete and memorable. The brain literally
+> associates feminization with pleasure at a bodily level.
+>
+> 2\. \*\*Loss of Control as Feature\*\*: You built the system, but once
+> running, you don\'t control when pleasure arrives. This satisfies the
+> surrender dynamic without external dependency.
+>
+> 3\. \*\*Variable Ratio Deepening\*\*: Adding physical rewards to the
+> notification system transforms phone checking from neutral to
+> anticipatory. Each buzz \*might\* include pleasure.
+>
+> 4\. \*\*Arousal-State Binding\*\*: Commitments made while physically
+> aroused carry different psychological weight. The auction becomes a
+> genuinely altered-state decision point.
+>
+> 5\. \*\*Conditioning Acceleration\*\*: Pairing identity affirmations
+> with physical pleasure speeds neural pathway formation. \"Good girl\"
+> becomes a somatic experience, not just words.
+>
+> 6\. \*\*Dependency as Ratchet\*\*: Once the body expects reward, its
+> absence is felt as loss. Sessions without haptics become incomplete.
+> This is a feature---another mechanism making regression uncomfortable.
+
+**The Hot Element Explained**
+
+The psychological heat comes from three sources:
+
+> 1\. \*\*Genuine uncertainty\*\*: You know the system \*can\* activate.
+> You don\'t know \*when\* for any given moment.
+>
+> 2\. \*\*Body as medium\*\*: The system literally controls your
+> physical pleasure. This is embodied submission to your own
+> architecture.
+>
+> 3\. \*\*Accumulating evidence\*\*: Every command logged is proof. Your
+> body\'s response history becomes undeniable.
+
+**Part 10: Configuration Options**
+
+// User settings for haptic integration interface HapticSettings {
+enabled: boolean // Reward intensity rewardIntensity: \'subtle\' \|
+\'moderate\' \| \'intense\' // When haptics are allowed allowedHours: {
+start: string, end: string } quietDays: string\[\] // Days to disable
+entirely // What triggers haptics taskCompletionRewards: boolean
+notificationRewards: boolean affirmationRewards: boolean sessionMode:
+boolean // Session preferences maxSessionIntensity: number // 1-20
+aiControlLevel: \'suggestions\' \| \'partial\' \| \'full\' // Safety
+maxDailyCommands: number cooldownBetweenCommands: number // seconds }
+
+This architecture creates a complete haptic reward layer that integrates
+with your existing psychological mechanisms while maintaining safety
+boundaries and configurability.
