@@ -6,16 +6,28 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { ArrowLeft, Headphones, Loader2 } from 'lucide-react';
+import { ArrowLeft, Headphones, Loader2, Sparkles } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
 import { useHypnoSession } from '../../hooks/useHypnoSession';
 import { getAvailableLibraryItems } from '../../lib/hypno-library';
 import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
+import { activateSessionDevice, deactivateSessionDevice } from '../../lib/conditioning/session-device';
 import { HypnoLiveView } from './HypnoLiveView';
 import { HypnoSummaryView } from './HypnoSummaryView';
 import { HypnoSessionCard } from './HypnoSessionCard';
 import { HYPNO_TASK_CODES } from '../../lib/content/hypno-tasks';
 import type { HypnoLibraryItem, HypnoPostSessionState } from '../../types/hypno-bridge';
+
+interface PrescribedContent {
+  id: string;
+  title: string;
+  category: string;
+  intensity: number;
+  duration_minutes: number;
+  creator: string;
+  media_type: string;
+}
 
 type HypnoPhase = 'idle' | 'starting' | 'live' | 'summary';
 
@@ -47,6 +59,7 @@ export function HypnoDashboard({
     initialLibraryItem
   );
   const [availableItems, setAvailableItems] = useState<HypnoLibraryItem[]>([]);
+  const [prescribedContent, setPrescribedContent] = useState<PrescribedContent[]>([]);
   const sessionStartRef = useRef<number>(0);
 
   // Resume active session on mount
@@ -57,12 +70,25 @@ export function HypnoDashboard({
     }
   }, [activeSession, phase]);
 
-  // Load available library items
+  // Load available library items + prescribed conditioning content
   useEffect(() => {
     if (!user?.id) return;
     getAvailableLibraryItems(user.id)
       .then(setAvailableItems)
       .catch(() => {});
+
+    // Load prescribed content from conditioning engine curriculum
+    supabase
+      .from('content_curriculum')
+      .select('id, title, category, intensity, duration_minutes, creator, media_type')
+      .eq('user_id', user.id)
+      .in('media_type', ['audio', 'custom_handler'])
+      .in('session_contexts', ['trance', 'combined', 'sleep'])
+      .order('times_prescribed', { ascending: true })
+      .limit(5)
+      .then(({ data }) => {
+        if (data) setPrescribedContent(data);
+      });
   }, [user?.id]);
 
   const handleStart = useCallback(
@@ -80,6 +106,8 @@ export function HypnoDashboard({
       if (session) {
         sessionStartRef.current = Date.now();
         setPhase('live');
+        // Activate device for trance induction
+        activateSessionDevice('trance', 'induction').catch(() => {});
       } else {
         setPhase('idle');
       }
@@ -93,6 +121,8 @@ export function HypnoDashboard({
 
   const handleComplete = useCallback(
     async (tranceDepth: number, postState: HypnoPostSessionState) => {
+      // Stop device
+      deactivateSessionDevice().catch(() => {});
       await endSession({
         tranceDepth,
         postSessionState: postState,
@@ -186,6 +216,59 @@ export function HypnoDashboard({
             libraryItem={libraryItem || availableItems[0]}
             onStart={() => handleStart()}
           />
+
+          {/* Prescribed conditioning content from curriculum */}
+          {prescribedContent.length > 0 && (
+            <div>
+              <p
+                className={`text-xs uppercase tracking-wider font-semibold mb-2 px-1 flex items-center gap-1 ${
+                  isBambiMode ? 'text-pink-500' : 'text-pink-400'
+                }`}
+              >
+                <Sparkles className="w-3 h-3" />
+                Prescribed ({prescribedContent.length})
+              </p>
+              <div className="space-y-2">
+                {prescribedContent.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => handleStart({
+                      id: item.id,
+                      title: item.title,
+                      contentCategory: item.category,
+                      intensity: item.intensity,
+                      captureValue: 0,
+                      mediaType: item.media_type as 'audio' | 'video',
+                    } as HypnoLibraryItem)}
+                    className={`w-full text-left p-3 rounded-xl transition-colors ${
+                      isBambiMode
+                        ? 'bg-pink-50 border border-pink-200 hover:bg-pink-100'
+                        : 'bg-pink-900/10 border border-pink-700/30 hover:bg-pink-900/20'
+                    }`}
+                  >
+                    <p className={`text-sm font-medium ${isBambiMode ? 'text-pink-700' : 'text-pink-300'}`}>
+                      {item.title}
+                    </p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                        isBambiMode ? 'bg-pink-100 text-pink-600' : 'bg-pink-900/30 text-pink-400'
+                      }`}>
+                        {item.creator === 'handler' ? 'Custom Handler' : item.creator}
+                      </span>
+                      <span className={`text-[10px] ${isBambiMode ? 'text-pink-400' : 'text-pink-500'}`}>
+                        {'●'.repeat(item.intensity)}{'○'.repeat(5 - item.intensity)}
+                      </span>
+                      {item.duration_minutes > 0 && (
+                        <span className={`text-[10px] ${isBambiMode ? 'text-pink-400' : 'text-pink-500'}`}>
+                          {item.duration_minutes}min
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Available library items */}
           {availableItems.length > 1 && (
