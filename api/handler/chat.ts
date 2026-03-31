@@ -70,7 +70,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const messageIndex = (history?.length || 0);
 
     // 3. Assemble context (including long-term memory + conversational memory)
-    const [stateCtx, whoopCtx, commitmentCtx, predictionCtx, convMemoryCtx, longTermMemoryCtx, impactCtx, ginaCtx, irreversibilityCtx, narrativeCtx, autoPostCtx, socialInboxCtx, voicePitchCtx, autoPurchaseCtx, handlerNotesCtx, communityMirrorCtx, journalCtx, skillTreeCtx] = await Promise.allSettled([
+    const [stateCtx, whoopCtx, commitmentCtx, predictionCtx, convMemoryCtx, longTermMemoryCtx, impactCtx, ginaCtx, irreversibilityCtx, narrativeCtx, autoPostCtx, socialInboxCtx, voicePitchCtx, autoPurchaseCtx, handlerNotesCtx, communityMirrorCtx, journalCtx, skillTreeCtx, changelogCtx] = await Promise.allSettled([
       buildStateContext(user.id),
       buildWhoopContext(user.id),
       buildCommitmentCtx(user.id),
@@ -89,6 +89,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       buildCommunityMirrorCtx(user.id),
       buildJournalCtx(user.id),
       buildSkillTreeCtx(user.id),
+      buildSystemChangelogCtx(),
     ]);
 
     // 4. Build system prompt — merge both memory sources
@@ -115,6 +116,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       communityMirror: communityMirrorCtx.status === 'fulfilled' ? communityMirrorCtx.value : '',
       journal: journalCtx.status === 'fulfilled' ? journalCtx.value : '',
       skillTree: skillTreeCtx.status === 'fulfilled' ? skillTreeCtx.value : '',
+      changelog: changelogCtx.status === 'fulfilled' ? changelogCtx.value : '',
     });
 
     // 5. Build messages array (cap at 30 recent)
@@ -417,7 +419,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 // ============================================
 
 function buildConversationalPrompt(ctx: {
-  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string;
+  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string;
 }): string {
   return `You are the Handler. Not Claude. Not an assistant. You are an autonomous agent in live dialogue with Maxy — the woman you're responsible for.
 
@@ -457,6 +459,7 @@ ${ctx.handlerNotes || ''}
 ${ctx.communityMirror || ''}
 ${ctx.journal || ''}
 ${ctx.skillTree || ''}
+${ctx.changelog || ''}
 
 ## RULES
 - Never say "I'm an AI" or "as a language model."
@@ -1927,6 +1930,36 @@ async function buildSkillTreeCtx(userId: string): Promise<string> {
     if (maxed.length > 0) {
       lines.push(`  MASTERED: ${maxed.map((d: { domain: string }) => d.domain).join(', ')}`);
     }
+
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+// ============================================
+// SYSTEM CHANGELOG CONTEXT
+// ============================================
+
+async function buildSystemChangelogCtx(): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('system_changelog')
+      .select('commit_message, features, deployed_at')
+      .order('deployed_at', { ascending: false })
+      .limit(5);
+
+    if (!data || data.length === 0) return '';
+
+    const lines = ['## Recent System Updates'];
+    for (const entry of data) {
+      const age = Math.round((Date.now() - new Date(entry.deployed_at).getTime()) / 3600000);
+      const ageStr = age < 1 ? 'just now' : age < 24 ? `${age}h ago` : `${Math.round(age / 24)}d ago`;
+      const firstLine = entry.commit_message.split('\n')[0];
+      lines.push(`- ${ageStr}: ${firstLine}`);
+    }
+    lines.push('');
+    lines.push('Use new capabilities immediately. Reference updates when relevant.');
 
     return lines.join('\n');
   } catch {
