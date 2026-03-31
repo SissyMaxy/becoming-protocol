@@ -79,14 +79,14 @@ enabled = false
 # Edge Functions
 # ---------------------------------------------------------------------------
 
-# AI-powered prescription generator — called by authenticated users.
+# AI-powered prescription generator — auth handled internally.
 [functions.generate-prescription]
-verify_jwt = true
+verify_jwt = false
 
 # Handler AI — generates daily plans, interventions, commitments, pattern analysis.
-# Called by authenticated users.
+# Auth handled internally — gateway JWT verification disabled.
 [functions.handler-ai]
-verify_jwt = true
+verify_jwt = false
 
 # Background task processor — processes queued handler tasks using service role key.
 # Invoked by cron / pg_cron, not by end users directly.
@@ -99,17 +99,18 @@ verify_jwt = false
 verify_jwt = false
 
 # Lovense command — sends commands to connected devices on behalf of the user.
+# Auth handled internally — gateway JWT verification disabled.
 [functions.lovense-command]
-verify_jwt = true
+verify_jwt = false
 
 # Lovense QR code — generates pairing QR codes. Handles auth internally.
 [functions.lovense-qrcode]
 verify_jwt = false
 
 # Handler Coach — AI coaching via Claude API with prefill technique.
-# Called by authenticated users for task framing, briefings, check-ins.
+# Auth handled internally — gateway JWT verification disabled.
 [functions.handler-coach]
-verify_jwt = true
+verify_jwt = false
 
 # Schedule notifications — cron job that queues daily notification batches.
 # Invoked by pg_cron with service role key.
@@ -139,6 +140,30 @@ verify_jwt = false
 # Handler Platform — platform posting, analytics sync, engagement.
 # Invoked by cron for posting and analytics. Service role only.
 [functions.handler-platform]
+verify_jwt = false
+
+# Handler Outreach — proactive check-in scheduling.
+[functions.handler-outreach]
+verify_jwt = false
+
+# Handler Commitment — commitment tracking and enforcement.
+[functions.handler-commitment]
+verify_jwt = false
+
+# Handler Calendar — schedule-aware operations.
+[functions.handler-calendar]
+verify_jwt = false
+
+# Handler Revenue — autonomous revenue generation.
+[functions.handler-revenue]
+verify_jwt = false
+
+# Device Control — autonomous Lovense scheduling (5-min cron).
+[functions.device-control]
+verify_jwt = false
+
+# Conditioning Engine — weekly scripts, sleep prescription, hidden params.
+[functions.conditioning-engine]
 verify_jwt = false
 
 [analytics]
