@@ -295,3 +295,82 @@ export type {
   ContentSearchCriteria,
   ContentLibraryContext,
 } from './content-sourcer';
+export {
+  generateDailyMandates,
+  checkMandateCompliance,
+  processMandateDeadlines,
+  getMandateStatus,
+  buildMandateContext,
+} from './feminization-mandate';
+export type {
+  MandateCategory,
+  MandateVerification,
+  DailyMandate,
+  MandateComplianceResult,
+} from './feminization-mandate';
+export {
+  prescribeOutfit,
+  verifyOutfitCompliance,
+  escalateOutfit,
+  buildOutfitControlContext,
+} from './outfit-control';
+export type {
+  OutfitContext,
+  OutfitPrescription,
+  OutfitComplianceResult,
+} from './outfit-control';
+export {
+  prescribeGoonSession,
+  generateSissyCaptions,
+  trackGoonEffectiveness,
+  postGoonProtocol,
+  storeGoonConfession,
+  buildGoonEngineContext,
+} from './goon-engine';
+export type {
+  GoonContentType,
+  GoonPrescription,
+  GoonContentItem,
+  GoonDevicePhase,
+  GoonCaptionPhase,
+  GoonEffectivenessMetrics,
+} from './goon-engine';
+export {
+  calculateArousalTarget,
+  generateArousalPulses,
+  checkArousalState,
+  fireArousalPulse,
+  buildArousalMaintenanceContext,
+} from './arousal-maintenance';
+export type {
+  PulseType,
+  ArousalTarget,
+  ArousalPulse,
+  ArousalState,
+} from './arousal-maintenance';
+export {
+  getExposureLevel,
+  prescribeExposure,
+  completeExposure,
+  processOverdueExposures,
+  getExposureProgress,
+  buildExposureContext,
+} from './progressive-exposure';
+export type {
+  ExposureFrequency,
+  ExposureVerification,
+  ExposureMandate,
+  ExposurePrescription as ProgressiveExposurePrescription,
+  ExposureProgress,
+} from './progressive-exposure';
+export {
+  prescribeConsumption,
+  verifyConsumption,
+  processOverdueConsumption,
+  buildConsumptionContext,
+} from './consumption-mandates';
+export type {
+  ConsumptionType,
+  ConsumptionMandate,
+  ConsumptionStatus,
+} from './consumption-mandates';

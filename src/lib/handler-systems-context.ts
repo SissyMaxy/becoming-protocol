@@ -106,6 +106,16 @@ import { buildEmotionalModelContext } from './conditioning/emotional-model';
 import { buildPersonalityContext } from './conditioning/personality-evolution';
 import { buildLibraryGrowthContext } from './conditioning/library-growth';
 import { buildChainContext } from './conditioning/session-chainer';
+import { buildAutonomousCycleContext } from './conditioning/autonomous-cycle';
+import { buildConsequenceContext } from './conditioning/consequence-engine';
+import { buildObligationContext } from './conditioning/engagement-obligations';
+import { buildVariableRatioContext } from './conditioning/variable-ratio-device';
+import { buildMandateContext } from './conditioning/feminization-mandate';
+import { buildOutfitControlContext } from './conditioning/outfit-control';
+import { buildGoonEngineContext } from './conditioning/goon-engine';
+import { buildArousalMaintenanceContext } from './conditioning/arousal-maintenance';
+import { buildExposureContext } from './conditioning/progressive-exposure';
+import { buildConsumptionContext } from './conditioning/consumption-mandates';
 import { supabase } from './supabase';
 
 // ============================================
@@ -170,6 +180,16 @@ export interface SystemsContext {
   personalityEvolution: string;
   libraryGrowth: string;
   sessionChaining: string;
+  autonomousCycle: string;
+  consequenceEngine: string;
+  obligations: string;
+  variableRatioDevice: string;
+  feminizationMandates: string;
+  outfitControl: string;
+  goonEngine: string;
+  arousalMaintenance: string;
+  progressiveExposure: string;
+  consumptionMandates: string;
 }
 
 // ============================================
@@ -892,7 +912,7 @@ async function buildAutoPurchaseCtx(userId: string): Promise<string> {
  * All systems, maximum data density.
  */
 export async function buildFullSystemsContext(userId: string): Promise<string> {
-  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social, memory, conditioningEngine, impactTracking, irreversibility, narrativeArc, autoPoster, socialInbox, voicePitch, autoPurchase, femPrescription, exerciseRx, postReleaseBridge, serviceAdvancement, ambushScheduler, voiceEvolution, corruptionActivation, camHandlerControl, failureRecovery, communityMirror, handlerDirectives, journal, skillTree, contentOptimization, denialMapping, languageDrift, sleepPhaseTargeting, photoTimeline, correlationEngine, commitmentLadder, ginaMicroExposure, socialIntelligence, accountability, proactiveOutreach, conversationAgenda, predictiveEngine, protocolManager, handlerReflection, emotionalModel, personalityEvolution, libraryGrowth, sessionChaining] = await Promise.allSettled([
+  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social, memory, conditioningEngine, impactTracking, irreversibility, narrativeArc, autoPoster, socialInbox, voicePitch, autoPurchase, femPrescription, exerciseRx, postReleaseBridge, serviceAdvancement, ambushScheduler, voiceEvolution, corruptionActivation, camHandlerControl, failureRecovery, communityMirror, handlerDirectives, journal, skillTree, contentOptimization, denialMapping, languageDrift, sleepPhaseTargeting, photoTimeline, correlationEngine, commitmentLadder, ginaMicroExposure, socialIntelligence, accountability, proactiveOutreach, conversationAgenda, predictiveEngine, protocolManager, handlerReflection, emotionalModel, personalityEvolution, libraryGrowth, sessionChaining, autonomousCycle, consequenceEng, obligationsCtx, variableRatio, femMandates, outfitCtrl, goonEng, arousalMaint, progressiveExp, consumptionMand] = await Promise.allSettled([
     buildGinaContext(userId),
     buildContentContext(userId),
     buildVoiceContext(userId),
@@ -964,6 +984,16 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     buildPersonalityContext(userId),
     buildLibraryGrowthContext(userId),
     buildChainContext(userId),
+    buildAutonomousCycleContext(userId),
+    buildConsequenceContext(userId),
+    buildObligationContext(userId),
+    buildVariableRatioContext(userId),
+    buildMandateContext(userId),
+    buildOutfitControlContext(userId),
+    buildGoonEngineContext(userId),
+    buildArousalMaintenanceContext(userId),
+    buildExposureContext(userId),
+    buildConsumptionContext(userId),
   ]);
 
   const blocks = [
@@ -1038,6 +1068,16 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     personalityEvolution.status === 'fulfilled' ? personalityEvolution.value : '',
     libraryGrowth.status === 'fulfilled' ? libraryGrowth.value : '',
     sessionChaining.status === 'fulfilled' ? sessionChaining.value : '',
+    autonomousCycle.status === 'fulfilled' ? autonomousCycle.value : '',
+    consequenceEng.status === 'fulfilled' ? consequenceEng.value : '',
+    obligationsCtx.status === 'fulfilled' ? obligationsCtx.value : '',
+    variableRatio.status === 'fulfilled' ? variableRatio.value : '',
+    femMandates.status === 'fulfilled' ? femMandates.value : '',
+    outfitCtrl.status === 'fulfilled' ? outfitCtrl.value : '',
+    goonEng.status === 'fulfilled' ? goonEng.value : '',
+    arousalMaint.status === 'fulfilled' ? arousalMaint.value : '',
+    progressiveExp.status === 'fulfilled' ? progressiveExp.value : '',
+    consumptionMand.status === 'fulfilled' ? consumptionMand.value : '',
   ].filter(Boolean);
 
   if (blocks.length === 0) return '';
