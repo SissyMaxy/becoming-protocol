@@ -97,13 +97,13 @@ export function useSessionBiometrics(): UseSessionBiometricsReturn {
         return;
       }
 
-      const res = await fetch('/api/whoop/session-poll', {
+      const res = await fetch('/api/whoop/sync', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ session_id: sessionIdRef.current }),
+        body: JSON.stringify({ action: 'session-poll', session_id: sessionIdRef.current }),
       });
 
       if (!res.ok) {

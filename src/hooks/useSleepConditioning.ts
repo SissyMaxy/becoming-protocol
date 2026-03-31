@@ -86,12 +86,13 @@ export function useSleepConditioning(): UseSleepConditioningReturn {
         return null;
       }
 
-      const res = await fetch('/api/conditioning/sleep-prescription', {
+      const res = await fetch('/api/conditioning', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify({ action: 'sleep-prescription' }),
       });
 
       if (!res.ok) {

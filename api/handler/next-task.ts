@@ -41,7 +41,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const userId = user.id;
     const now = new Date();
     const hour = now.getHours();
-    const today = now.toISOString().split('T')[0];
 
     // Get recent completions (last 24h) to avoid repeats
     const { data: recentCompletions } = await supabase

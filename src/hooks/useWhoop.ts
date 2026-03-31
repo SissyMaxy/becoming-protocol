@@ -118,9 +118,13 @@ export function useWhoop(): UseWhoopReturn {
     const token = session.data.session?.access_token;
     if (!token) return;
 
-    await fetch('/api/whoop/disconnect', {
+    await fetch('/api/whoop/sync', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ action: 'disconnect' }),
     });
 
     setIsConnected(false);
