@@ -81,6 +81,7 @@ import { buildPostReleaseContext } from './conditioning/post-release-bridge';
 import { buildServiceAdvancementContext } from './conditioning/service-advancement';
 import { buildAmbushContext } from './conditioning/ambush-scheduler';
 import { buildCommunityMirrorContext } from './conditioning/community-mirror';
+import { buildDirectiveContext } from './conditioning/directive-executor';
 import { buildCorruptionActivationContext } from './conditioning/corruption-engine';
 import { buildCamHandlerControlContext } from './conditioning/cam-handler-control';
 import { buildFailureRecoveryContext } from './conditioning/failure-recovery';
@@ -129,6 +130,7 @@ export interface SystemsContext {
   camHandlerControl: string;
   failureRecovery: string;
   communityMirror: string;
+  handlerDirectives: string;
   skillTree: string;
 }
 
@@ -852,7 +854,7 @@ async function buildAutoPurchaseCtx(userId: string): Promise<string> {
  * All systems, maximum data density.
  */
 export async function buildFullSystemsContext(userId: string): Promise<string> {
-  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social, memory, conditioningEngine, impactTracking, irreversibility, narrativeArc, autoPoster, socialInbox, voicePitch, autoPurchase, femPrescription, exerciseRx, postReleaseBridge, serviceAdvancement, ambushScheduler, voiceEvolution, corruptionActivation, camHandlerControl, failureRecovery, communityMirror, journal, skillTree] = await Promise.allSettled([
+  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social, memory, conditioningEngine, impactTracking, irreversibility, narrativeArc, autoPoster, socialInbox, voicePitch, autoPurchase, femPrescription, exerciseRx, postReleaseBridge, serviceAdvancement, ambushScheduler, voiceEvolution, corruptionActivation, camHandlerControl, failureRecovery, communityMirror, handlerDirectives, journal, skillTree] = await Promise.allSettled([
     buildGinaContext(userId),
     buildContentContext(userId),
     buildVoiceContext(userId),
@@ -902,6 +904,7 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     buildCamHandlerControlContext(userId),
     buildFailureRecoveryContext(userId),
     buildCommunityMirrorContext(userId),
+    buildDirectiveContext(userId),
     buildJournalContext(userId),
     buildSkillTreeContext(userId),
   ]);
@@ -956,6 +959,7 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     camHandlerControl.status === 'fulfilled' ? camHandlerControl.value : '',
     failureRecovery.status === 'fulfilled' ? failureRecovery.value : '',
     communityMirror.status === 'fulfilled' ? communityMirror.value : '',
+    handlerDirectives.status === 'fulfilled' ? handlerDirectives.value : '',
     journal.status === 'fulfilled' ? journal.value : '',
     skillTree.status === 'fulfilled' ? skillTree.value : '',
   ].filter(Boolean);

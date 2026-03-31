@@ -123,6 +123,9 @@ serve(async (req) => {
       case 'check_posthypnotic_activations':
         return await handleCheckPosthypnoticActivations(supabase)
 
+      case 'execute_directives':
+        return await handleExecuteDirectives(supabase)
+
       default:
         return new Response(
           JSON.stringify({ error: `Unknown action: ${action}` }),
@@ -685,6 +688,345 @@ async function handleCheckPosthypnoticActivations(supabase: ReturnType<typeof cr
   }
 
   return jsonResponse({ action: 'check_posthypnotic_activations', results })
+}
+
+// =============================================
+// ACTION 5: execute_directives
+// Process pending handler directives for all users
+// =============================================
+async function handleExecuteDirectives(supabase: ReturnType<typeof createClient>) {
+  // Get all users with pending directives
+  const { data: pendingRows, error: pendingErr } = await supabase
+    .from('handler_directives')
+    .select('user_id')
+    .eq('status', 'pending')
+
+  if (pendingErr) {
+    console.error('[directives] Failed to query pending:', pendingErr)
+    return jsonResponse({ error: 'Failed to query pending directives', detail: pendingErr.message }, 500)
+  }
+
+  const userIds = [...new Set((pendingRows || []).map((r: { user_id: string }) => r.user_id))]
+  if (userIds.length === 0) {
+    return jsonResponse({ action: 'execute_directives', results: 'No pending directives' })
+  }
+
+  console.log(`[directives] Processing directives for ${userIds.length} users`)
+
+  const PRIORITY_ORDER: Record<string, number> = {
+    immediate: 0, normal: 1, low: 2, deferred: 3,
+  }
+
+  const results: Record<string, { executed: number; failed: number; errors: string[] }> = {}
+
+  for (const userId of userIds) {
+    const userResult = { executed: 0, failed: 0, errors: [] as string[] }
+    results[userId] = userResult
+
+    try {
+      const { data: directives, error: dirErr } = await supabase
+        .from('handler_directives')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: true })
+
+      if (dirErr || !directives) {
+        console.error(`[directives] Failed to query directives for ${userId}:`, dirErr)
+        userResult.errors.push(`Query failed: ${dirErr?.message}`)
+        continue
+      }
+
+      // Sort by priority
+      const sorted = [...directives].sort((a, b) => {
+        const pa = PRIORITY_ORDER[a.priority] ?? 1
+        const pb = PRIORITY_ORDER[b.priority] ?? 1
+        if (pa !== pb) return pa - pb
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      })
+
+      for (const directive of sorted) {
+        try {
+          // Mark executing
+          await supabase
+            .from('handler_directives')
+            .update({ status: 'executing' })
+            .eq('id', directive.id)
+
+          const execResult = await executeDirectiveInline(supabase, directive)
+
+          if (execResult.success) {
+            await supabase
+              .from('handler_directives')
+              .update({
+                status: 'completed',
+                result: execResult.data || {},
+                executed_at: new Date().toISOString(),
+              })
+              .eq('id', directive.id)
+            userResult.executed++
+            console.log(`[directives] Completed: ${directive.action} (${directive.id})`)
+          } else {
+            await supabase
+              .from('handler_directives')
+              .update({
+                status: 'failed',
+                error_message: execResult.error || 'Unknown error',
+                executed_at: new Date().toISOString(),
+              })
+              .eq('id', directive.id)
+            userResult.failed++
+            userResult.errors.push(`${directive.action}(${directive.id}): ${execResult.error}`)
+            console.error(`[directives] Failed: ${directive.action} (${directive.id}):`, execResult.error)
+          }
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err)
+          await supabase
+            .from('handler_directives')
+            .update({
+              status: 'failed',
+              error_message: errMsg,
+              executed_at: new Date().toISOString(),
+            })
+            .eq('id', directive.id)
+          userResult.failed++
+          userResult.errors.push(`${directive.action}(${directive.id}): ${errMsg}`)
+          console.error(`[directives] Exception: ${directive.action} (${directive.id}):`, err)
+        }
+      }
+    } catch (userErr) {
+      console.error(`[directives] Error processing user ${userId}:`, userErr)
+      userResult.errors.push(`User-level error: ${String(userErr)}`)
+    }
+  }
+
+  return jsonResponse({ action: 'execute_directives', results })
+}
+
+/**
+ * Inline directive executor for Deno edge function.
+ * Direct Supabase queries — cannot import from src/lib/.
+ */
+async function executeDirectiveInline(
+  supabase: ReturnType<typeof createClient>,
+  directive: { id: string; user_id: string; action: string; target: string | null; value: Record<string, unknown> | null; conversation_id: string | null },
+): Promise<{ success: boolean; data?: Record<string, unknown>; error?: string }> {
+  const { action, user_id: userId, target, value: v } = directive
+  const val = (v || {}) as Record<string, unknown>
+
+  switch (action) {
+    case 'modify_parameter': {
+      const parameter = val.parameter as string
+      const newValue = val.new_value as number
+      if (!parameter || newValue == null) return { success: false, error: 'Missing parameter or new_value' }
+
+      const { data: existing } = await supabase
+        .from('hidden_operations')
+        .select('id, current_value')
+        .eq('user_id', userId)
+        .eq('parameter', parameter)
+        .maybeSingle()
+
+      if (existing) {
+        const { error } = await supabase
+          .from('hidden_operations')
+          .update({ current_value: newValue })
+          .eq('id', existing.id)
+        if (error) return { success: false, error: `Update failed: ${error.message}` }
+        return { success: true, data: { parameter, previous: existing.current_value, new_value: newValue } }
+      } else {
+        const { error } = await supabase
+          .from('hidden_operations')
+          .insert({ user_id: userId, parameter, current_value: newValue, increment_rate: 0, increment_interval: 'weekly' })
+        if (error) return { success: false, error: `Insert failed: ${error.message}` }
+        return { success: true, data: { parameter, previous: null, new_value: newValue, created: true } }
+      }
+    }
+
+    case 'generate_script': {
+      const phase = (val.phase as number) ?? 0
+      const scriptTarget = (val.target as string) || 'identity'
+      const { error } = await supabase
+        .from('generated_scripts')
+        .insert({
+          user_id: userId,
+          conditioning_phase: phase,
+          conditioning_target: scriptTarget,
+          script_text: '',
+          generation_prompt: `Handler directive: generate ${scriptTarget} script at phase ${phase}`,
+        })
+      if (error) return { success: false, error: `Insert failed: ${error.message}` }
+      return { success: true, data: { target: scriptTarget, phase, queued: true } }
+    }
+
+    case 'schedule_session': {
+      const sessionType = (val.session_type as string) || 'conditioning'
+      const scheduledAt = (val.scheduled_at as string) || new Date().toISOString()
+      const { data, error } = await supabase
+        .from('conditioning_sessions_v2')
+        .insert({ user_id: userId, session_type: sessionType, started_at: scheduledAt, completed: false })
+        .select('id')
+        .single()
+      if (error) return { success: false, error: `Insert failed: ${error.message}` }
+      return { success: true, data: { session_id: data?.id, session_type: sessionType, scheduled_at: scheduledAt } }
+    }
+
+    case 'schedule_ambush': {
+      const ambushType = (val.type as string) || 'surprise_task'
+      const scheduledAt = (val.scheduled_at as string) || new Date().toISOString()
+      const { data, error } = await supabase
+        .from('ambush_events')
+        .insert({ user_id: userId, ambush_type: ambushType, scheduled_at: scheduledAt, status: 'pending' })
+        .select('id')
+        .single()
+      if (error) return { success: false, error: `Insert failed: ${error.message}` }
+      return { success: true, data: { ambush_id: data?.id, type: ambushType, scheduled_at: scheduledAt } }
+    }
+
+    case 'advance_skill': {
+      const domain = val.domain as string
+      if (!domain) return { success: false, error: 'Missing domain' }
+      const { data: existing } = await supabase
+        .from('skill_domains')
+        .select('id, current_level')
+        .eq('user_id', userId)
+        .eq('domain', domain)
+        .maybeSingle()
+      if (existing) {
+        const newLevel = (existing.current_level || 0) + 1
+        const { error } = await supabase.from('skill_domains').update({ current_level: newLevel }).eq('id', existing.id)
+        if (error) return { success: false, error: `Update failed: ${error.message}` }
+        return { success: true, data: { domain, previous_level: existing.current_level, new_level: newLevel } }
+      } else {
+        const { error } = await supabase.from('skill_domains').insert({ user_id: userId, domain, current_level: 1 })
+        if (error) return { success: false, error: `Insert failed: ${error.message}` }
+        return { success: true, data: { domain, previous_level: 0, new_level: 1, created: true } }
+      }
+    }
+
+    case 'advance_service': {
+      const newStage = val.new_stage as string
+      if (!newStage) return { success: false, error: 'Missing new_stage' }
+      const { data: existing } = await supabase
+        .from('service_progression')
+        .select('id, current_stage')
+        .eq('user_id', userId)
+        .maybeSingle()
+      if (!existing) return { success: false, error: 'No service_progression row found' }
+      const { error } = await supabase
+        .from('service_progression')
+        .update({ current_stage: newStage, last_advanced_at: new Date().toISOString() })
+        .eq('id', existing.id)
+      if (error) return { success: false, error: `Update failed: ${error.message}` }
+      return { success: true, data: { previous_stage: existing.current_stage, new_stage: newStage } }
+    }
+
+    case 'advance_corruption': {
+      const domain = (val.domain as string) || 'general'
+      const amount = (val.amount as number) ?? 1
+      const { data: existing } = await supabase
+        .from('corruption_state')
+        .select('id, corruption_level, domain_levels')
+        .eq('user_id', userId)
+        .maybeSingle()
+      if (!existing) return { success: false, error: 'No corruption_state row found' }
+      const domainLevels = (existing.domain_levels || {}) as Record<string, number>
+      domainLevels[domain] = (domainLevels[domain] || 0) + amount
+      const newLevel = (existing.corruption_level || 0) + amount
+      const { error } = await supabase
+        .from('corruption_state')
+        .update({ corruption_level: newLevel, domain_levels: domainLevels })
+        .eq('id', existing.id)
+      if (error) return { success: false, error: `Update failed: ${error.message}` }
+      return { success: true, data: { domain, amount, new_level: newLevel } }
+    }
+
+    case 'write_memory': {
+      const memoryType = (val.memory_type as string) || 'observation'
+      const content = val.content as string
+      const importance = (val.importance as number) ?? 3
+      if (!content) return { success: false, error: 'Missing content' }
+      const { data, error } = await supabase
+        .from('handler_memory')
+        .insert({ user_id: userId, memory_type: memoryType, content, importance, created_at: new Date().toISOString() })
+        .select('id')
+        .single()
+      if (error) return { success: false, error: `Insert failed: ${error.message}` }
+      return { success: true, data: { memory_id: data?.id, memory_type: memoryType } }
+    }
+
+    case 'prescribe_task': {
+      const taskId = val.task_id as string
+      const domain = (val.domain as string) || 'general'
+      if (!taskId) return { success: false, error: 'Missing task_id' }
+      const { data, error } = await supabase
+        .from('daily_tasks')
+        .insert({ user_id: userId, task_id: taskId, domain, prescribed_at: new Date().toISOString(), status: 'pending' })
+        .select('id')
+        .single()
+      if (error) return { success: false, error: `Insert failed: ${error.message}` }
+      return { success: true, data: { daily_task_id: data?.id, task_id: taskId, domain } }
+    }
+
+    case 'modify_schedule': {
+      const parameter = val.parameter as string
+      const newValue = val.new_value
+      if (!parameter) return { success: false, error: 'Missing parameter' }
+      const { error } = await supabase
+        .from('handler_notes')
+        .insert({ user_id: userId, note_type: 'schedule_modification', content: `Modify schedule: ${parameter} = ${JSON.stringify(newValue)}`, priority: 3 })
+      if (error) return { success: false, error: `Insert failed: ${error.message}` }
+      return { success: true, data: { parameter, new_value: newValue, method: 'handler_note' } }
+    }
+
+    case 'send_device_command': {
+      const intensity = (val.intensity as number) ?? 5
+      const duration = (val.duration as number) ?? 5
+      const pattern = (val.pattern as string) || 'pulse'
+      const { data, error } = await supabase.functions.invoke('lovense-command', {
+        body: { user_id: userId, intensity, duration, pattern, source: 'handler_directive' },
+      })
+      if (error) return { success: false, error: `Edge function failed: ${error.message}` }
+      return { success: true, data: { intensity, duration, pattern, response: data } }
+    }
+
+    case 'create_narrative_beat': {
+      const arcId = val.arc_id as string
+      const beat = val.beat as Record<string, unknown>
+      if (!arcId || !beat) return { success: false, error: 'Missing arc_id or beat' }
+      const { data: arc } = await supabase
+        .from('narrative_arcs')
+        .select('id, beats')
+        .eq('id', arcId)
+        .eq('user_id', userId)
+        .maybeSingle()
+      if (!arc) return { success: false, error: `Arc not found: ${arcId}` }
+      const beats = Array.isArray(arc.beats) ? [...arc.beats, beat] : [beat]
+      const { error } = await supabase.from('narrative_arcs').update({ beats }).eq('id', arc.id)
+      if (error) return { success: false, error: `Update failed: ${error.message}` }
+      return { success: true, data: { arc_id: arcId, beat_index: beats.length - 1 } }
+    }
+
+    case 'flag_for_review': {
+      const content = val.content as string
+      if (!content) return { success: false, error: 'Missing content' }
+      const { data, error } = await supabase
+        .from('handler_notes')
+        .insert({ user_id: userId, note_type: 'context', content, priority: (val.priority as number) ?? 3, conversation_id: directive.conversation_id })
+        .select('id')
+        .single()
+      if (error) return { success: false, error: `Insert failed: ${error.message}` }
+      return { success: true, data: { note_id: data?.id, content } }
+    }
+
+    case 'custom': {
+      console.log(`[directives] Custom directive logged: ${target}`, val)
+      return { success: true, data: { action: 'custom', logged: true, target } }
+    }
+
+    default:
+      return { success: false, error: `Unknown action: ${action}` }
+  }
 }
 
 // =============================================

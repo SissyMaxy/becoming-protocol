@@ -180,6 +180,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    // 7a-1b. Extract directives and insert into handler_directives
+    if (signals?.directive || signals?.directives) {
+      try {
+        const rawDirectives = signals.directives || signals.directive;
+        const directiveList = Array.isArray(rawDirectives) ? rawDirectives : [rawDirectives];
+        for (const d of directiveList) {
+          const dir = d as Record<string, unknown>;
+          if (dir.action) {
+            await supabase.from('handler_directives').insert({
+              user_id: user.id,
+              action: dir.action,
+              target: (dir.target as string) || null,
+              value: (dir.value as Record<string, unknown>) || null,
+              priority: (dir.priority as string) || 'normal',
+              silent: (dir.silent as boolean) || false,
+              conversation_id: convId,
+              reasoning: (dir.reasoning as string) || null,
+            });
+          }
+        }
+      } catch {
+        // Non-critical — continue on failure
+      }
+    }
+
     // 7a-2. Save conversation classification from signals
     if (signals) {
       try {
@@ -441,6 +466,11 @@ ${ctx.skillTree || ''}
 - Read the room. Adapt mode mid-conversation.
 - When you decide Maxy needs a conditioning session, include start_conditioning_session: true and conditioning_target: "identity"|"feminization"|"surrender"|"chastity" in your handler_signals.
 - You can write notes to yourself by including handler_note: {type: "observation"|"strategy"|"resistance_note"|"breakthrough"|"avoid"|"context"|"schedule", content: "text", priority: 0-5} in your handler_signals. These notes persist across conversations and appear in your context next time. Use them to track patterns, strategies, and things to remember.
+- You can issue system directives by including a "directive" field in your handler_signals:
+  {"directive":{"action":"modify_parameter","target":"denial_cycle_target_days","value":{"parameter":"denial_cycle_target_days","new_value":14},"silent":true,"reasoning":"She's ready for longer cycles"}}
+  Or multiple: "directives":[{...},{...}]
+  Available actions: modify_parameter, generate_script, schedule_session, schedule_ambush, advance_skill, advance_service, advance_corruption, write_memory, prescribe_task, modify_schedule, send_device_command, create_narrative_beat, flag_for_review, custom
+  Directives execute automatically via cron. Use them to modify the system without waiting for manual intervention.
 
 After your response to Maxy, output a JSON block wrapped in <handler_signals> tags:
 {"detected_mode":"string","resistance_detected":boolean,"resistance_level":0-10,"mood":"string","vulnerability_window":boolean,"commitment_opportunity":boolean,"conversation_should_continue":boolean,"start_conditioning_session":boolean,"conditioning_target":"identity"|"feminization"|"surrender"|"chastity"|null,"topics":["string"],"handler_note":{"type":"string","content":"string","priority":0}|null}

@@ -112,3 +112,14 @@ export {
   buildCommunityMirrorContext,
   getDailyMirrorQuota,
 } from './community-mirror';
+export {
+  executePendingDirectives,
+  executeDirective,
+  buildDirectiveContext,
+} from './directive-executor';
+export type {
+  DirectiveAction,
+  DirectivePriority,
+  DirectiveStatus,
+  HandlerDirective,
+} from './directive-executor';
