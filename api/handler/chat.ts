@@ -395,6 +395,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       extractMemoryFromMessage(user.id, convId!, message, signals).catch(() => {});
     }
 
+    // 9c. Fire-and-forget language drift analysis (P10.4)
+    analyzeAndTrackLanguage(user.id, message).catch(() => {});
+
     // 10. Return
     const responseJson: Record<string, unknown> = {
       conversationId: convId,
@@ -1985,5 +1988,101 @@ async function buildSystemChangelogCtx(): Promise<string> {
     return lines.join('\n');
   } catch {
     return '';
+  }
+}
+
+// ============================================
+// LANGUAGE DRIFT TRACKING (P10.4)
+// ============================================
+
+/** Feminine self-reference pronouns */
+const FEMININE_PRONOUNS = ['she', 'her', 'herself', 'hers'];
+/** Masculine self-reference pronouns */
+const MASCULINE_PRONOUNS = ['he', 'him', 'his', 'himself'];
+const NAME_PATTERNS_RE = [/\bmaxy\b/i, /\bi'?m\s+maxy\b/i, /\bas\s+maxy\b/i];
+const EMBODIED_WORDS = ['feel', 'feeling', 'felt', 'body', 'skin', 'wore', 'wearing', 'dressed', 'mirror', 'lips', 'hair', 'nails', 'makeup', 'heels', 'panties', 'bra', 'lingerie', 'smooth', 'soft', 'pretty', 'beautiful', 'feminine', 'girly', 'cute'];
+const REGRESSION_RE = [/\bdavid\b/i, /\bthe\s+old\s+me\b/i, /\bguy\b/i, /\bman\b/i, /\bdude\b/i, /\bmale\b/i, /\bmasculine\b/i];
+
+/**
+ * Fire-and-forget: analyze a user message for identity language markers
+ * and upsert daily metrics. Inlined here because api/ cannot import from src/lib/.
+ */
+async function analyzeAndTrackLanguage(userId: string, messageText: string): Promise<void> {
+  try {
+    const text = messageText.toLowerCase();
+    const words = text.split(/\s+/).filter(Boolean);
+    const totalWords = words.length;
+
+    let femininePronounCount = 0;
+    let masculinePronounCount = 0;
+    for (const word of words) {
+      if (FEMININE_PRONOUNS.includes(word)) femininePronounCount++;
+      if (MASCULINE_PRONOUNS.includes(word)) masculinePronounCount++;
+    }
+
+    let nameReferences = 0;
+    for (const pattern of NAME_PATTERNS_RE) {
+      const matches = text.match(new RegExp(pattern.source, 'gi'));
+      if (matches) nameReferences += matches.length;
+    }
+
+    let embodiedLanguage = 0;
+    for (const word of EMBODIED_WORDS) {
+      const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const matches = text.match(new RegExp(`\\b${escaped}\\b`, 'gi'));
+      if (matches) embodiedLanguage += matches.length;
+    }
+
+    let regressionMarkers = 0;
+    for (const pattern of REGRESSION_RE) {
+      const matches = text.match(new RegExp(pattern.source, 'gi'));
+      if (matches) regressionMarkers += matches.length;
+    }
+
+    // Skip if nothing detected
+    if (femininePronounCount === 0 && masculinePronounCount === 0 && nameReferences === 0 && embodiedLanguage === 0 && regressionMarkers === 0) {
+      return;
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+
+    const { data: existing } = await supabase
+      .from('identity_language_metrics')
+      .select('id, feminine_pronoun_count, masculine_pronoun_count, name_references, embodied_language_count, regression_marker_count, total_words, message_count')
+      .eq('user_id', userId)
+      .eq('date', today)
+      .maybeSingle();
+
+    if (existing) {
+      await supabase
+        .from('identity_language_metrics')
+        .update({
+          feminine_pronoun_count: (existing.feminine_pronoun_count || 0) + femininePronounCount,
+          masculine_pronoun_count: (existing.masculine_pronoun_count || 0) + masculinePronounCount,
+          name_references: (existing.name_references || 0) + nameReferences,
+          embodied_language_count: (existing.embodied_language_count || 0) + embodiedLanguage,
+          regression_marker_count: (existing.regression_marker_count || 0) + regressionMarkers,
+          total_words: (existing.total_words || 0) + totalWords,
+          message_count: (existing.message_count || 0) + 1,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id);
+    } else {
+      await supabase
+        .from('identity_language_metrics')
+        .insert({
+          user_id: userId,
+          date: today,
+          feminine_pronoun_count: femininePronounCount,
+          masculine_pronoun_count: masculinePronounCount,
+          name_references: nameReferences,
+          embodied_language_count: embodiedLanguage,
+          regression_marker_count: regressionMarkers,
+          total_words: totalWords,
+          message_count: 1,
+        });
+    }
+  } catch (err) {
+    console.error('[chat] analyzeAndTrackLanguage error:', err);
   }
 }

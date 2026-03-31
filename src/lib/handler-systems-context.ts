@@ -78,6 +78,11 @@ import { getFundBalance } from './handler-v2/auto-purchase';
 import { buildFeminizationPrescriptionContext } from './conditioning/feminization-prescriptions';
 import { buildExercisePrescriptionContext } from './conditioning/exercise-prescriptions';
 import { buildPostReleaseContext } from './conditioning/post-release-bridge';
+import { buildCorrelationContext } from './conditioning/correlation-engine';
+import { buildCommitmentLadderContext } from './conditioning/commitment-ladder';
+import { buildGinaMicroExposureContext } from './conditioning/gina-micro-exposure';
+import { buildContentOptimizationContext } from './conditioning/content-optimizer';
+import { buildDenialMappingContext } from './conditioning/denial-mapping';
 import { buildServiceAdvancementContext } from './conditioning/service-advancement';
 import { buildAmbushContext } from './conditioning/ambush-scheduler';
 import { buildCommunityMirrorContext } from './conditioning/community-mirror';
@@ -87,6 +92,9 @@ import { buildCamHandlerControlContext } from './conditioning/cam-handler-contro
 import { buildFailureRecoveryContext } from './conditioning/failure-recovery';
 import { buildJournalContext } from './journal/handler-context';
 import { buildSkillTreeContext } from './skills/skill-tree-engine';
+import { buildLanguageDriftContext } from './conditioning/language-drift';
+import { buildSleepPhaseContext } from './conditioning/sleep-phase-targeting';
+import { buildPhotoTimelineContext } from './conditioning/photo-timeline';
 import { supabase } from './supabase';
 
 // ============================================
@@ -132,6 +140,14 @@ export interface SystemsContext {
   communityMirror: string;
   handlerDirectives: string;
   skillTree: string;
+  contentOptimization: string;
+  denialMapping: string;
+  languageDrift: string;
+  sleepPhaseTargeting: string;
+  photoTimeline: string;
+  correlationEngine: string;
+  commitmentLadder: string;
+  ginaMicroExposure: string;
 }
 
 // ============================================
@@ -854,7 +870,7 @@ async function buildAutoPurchaseCtx(userId: string): Promise<string> {
  * All systems, maximum data density.
  */
 export async function buildFullSystemsContext(userId: string): Promise<string> {
-  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social, memory, conditioningEngine, impactTracking, irreversibility, narrativeArc, autoPoster, socialInbox, voicePitch, autoPurchase, femPrescription, exerciseRx, postReleaseBridge, serviceAdvancement, ambushScheduler, voiceEvolution, corruptionActivation, camHandlerControl, failureRecovery, communityMirror, handlerDirectives, journal, skillTree] = await Promise.allSettled([
+  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social, memory, conditioningEngine, impactTracking, irreversibility, narrativeArc, autoPoster, socialInbox, voicePitch, autoPurchase, femPrescription, exerciseRx, postReleaseBridge, serviceAdvancement, ambushScheduler, voiceEvolution, corruptionActivation, camHandlerControl, failureRecovery, communityMirror, handlerDirectives, journal, skillTree, contentOptimization, denialMapping, languageDrift, sleepPhaseTargeting, photoTimeline, correlationEngine, commitmentLadder, ginaMicroExposure] = await Promise.allSettled([
     buildGinaContext(userId),
     buildContentContext(userId),
     buildVoiceContext(userId),
@@ -907,6 +923,14 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     buildDirectiveContext(userId),
     buildJournalContext(userId),
     buildSkillTreeContext(userId),
+    buildContentOptimizationContext(userId),
+    buildDenialMappingContext(userId),
+    buildLanguageDriftContext(userId),
+    buildSleepPhaseContext(userId),
+    buildPhotoTimelineContext(userId),
+    buildCorrelationContext(userId),
+    buildCommitmentLadderContext(userId),
+    buildGinaMicroExposureContext(userId),
   ]);
 
   const blocks = [
@@ -962,6 +986,14 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     handlerDirectives.status === 'fulfilled' ? handlerDirectives.value : '',
     journal.status === 'fulfilled' ? journal.value : '',
     skillTree.status === 'fulfilled' ? skillTree.value : '',
+    contentOptimization.status === 'fulfilled' ? contentOptimization.value : '',
+    denialMapping.status === 'fulfilled' ? denialMapping.value : '',
+    languageDrift.status === 'fulfilled' ? languageDrift.value : '',
+    sleepPhaseTargeting.status === 'fulfilled' ? sleepPhaseTargeting.value : '',
+    photoTimeline.status === 'fulfilled' ? photoTimeline.value : '',
+    correlationEngine.status === 'fulfilled' ? correlationEngine.value : '',
+    commitmentLadder.status === 'fulfilled' ? commitmentLadder.value : '',
+    ginaMicroExposure.status === 'fulfilled' ? ginaMicroExposure.value : '',
   ].filter(Boolean);
 
   if (blocks.length === 0) return '';

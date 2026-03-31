@@ -13,6 +13,7 @@
  */
 
 import { supabase } from '../supabase';
+import { deliverMicroPulse } from './micro-pulse';
 
 // ============================================
 // TYPES
@@ -553,44 +554,25 @@ async function fireSilentDeviceFollowup(userId: string): Promise<void> {
 }
 
 /**
- * P8.3: Micro conditioning — 3-minute micro_drop session with a single audio piece.
+ * P8.3 + P10.7: Micro conditioning — delivers a micro-pulse affirmation
+ * with optional cached audio, Lovense gentle_wave, and conditioning session log.
+ * Replaced original 3-minute audio logic with micro-pulse system.
  */
 async function fireMicroConditioning(userId: string): Promise<void> {
-  // Create a micro_drop conditioning session
-  await supabase.from('conditioning_sessions_v2').insert({
+  const delivery = await deliverMicroPulse(userId);
+
+  // Create a daily task with the affirmation text so it appears as a notification
+  await supabase.from('daily_tasks').insert({
     user_id: userId,
-    session_type: 'micro_drop',
-    started_at: new Date().toISOString(),
+    title: 'Micro Conditioning Pulse',
+    description: delivery.pulse.text,
+    category: 'ambush',
+    priority: 'high',
+    source: 'micro_pulse',
+    duration_estimate_minutes: 1,
     completed: false,
-    source: 'ambush_scheduler',
-    trance_depth_estimated: null,
-    arousal_level_estimated: null,
-    notes: 'P8.3 micro conditioning — 3-minute micro_drop, single audio piece',
+    created_at: new Date().toISOString(),
   });
-
-  // Prescribe a single short audio from curriculum
-  const { data: audio } = await supabase
-    .from('hypno_content')
-    .select('id, title')
-    .lte('duration_minutes', 5)
-    .eq('active', true)
-    .order('created_at', { ascending: false })
-    .limit(10);
-
-  if (audio && audio.length > 0) {
-    const pick = audio[Math.floor(Math.random() * audio.length)];
-    await supabase.from('daily_tasks').insert({
-      user_id: userId,
-      title: 'Micro Conditioning Drop',
-      description: `Listen now: "${pick.title}". 3 minutes. Headphones in. Eyes closed.`,
-      category: 'ambush',
-      priority: 'high',
-      source: 'ambush_scheduler',
-      duration_estimate_minutes: 3,
-      completed: false,
-      created_at: new Date().toISOString(),
-    });
-  }
 }
 
 /**

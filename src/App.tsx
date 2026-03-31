@@ -38,6 +38,7 @@ import { HerWorldPage } from './components/collections';
 import { MorningBookend } from './components/bookends';
 import { EveningDebrief } from './components/EveningDebrief';
 import { useBookends } from './hooks/useBookends';
+import { useAmbientVoiceMonitor } from './hooks/useAmbientVoiceMonitor';
 import { OrgasmLogModal } from './components/arousal/OrgasmLogModal';
 import { PostReleaseOverlay } from './components/post-release/PostReleaseOverlay';
 import { DeletionInterceptModal } from './components/post-release/DeletionInterceptModal';
@@ -187,6 +188,9 @@ function AuthenticatedAppInner() {
 
   // Morning/Evening bookend system
   const bookends = useBookends();
+
+  // Ambient voice pitch monitoring (P10.3) — passive, opt-out via user_state
+  useAmbientVoiceMonitor();
 
   // Micro-tasks disabled — user found pop-ups disruptive
   // const microTasks = useMicroTasks();

@@ -123,3 +123,53 @@ export type {
   DirectiveStatus,
   HandlerDirective,
 } from './directive-executor';
+export {
+  recordContentEffectiveness,
+  getOptimalContent,
+  buildContentOptimizationContext,
+} from './content-optimizer';
+export type {
+  EffectivenessMetrics,
+  OptimalContentItem,
+  ContentOptimizationContext,
+} from './content-optimizer';
+export {
+  updateDenialDayAnalytics,
+  findSweetSpotDays,
+  buildDenialMappingContext,
+} from './denial-mapping';
+export type {
+  SweetSpotDays,
+  DenialDayAnalytics,
+} from './denial-mapping';
+export {
+  computeCorrelations,
+  getSignificantCorrelations,
+  buildCorrelationContext,
+} from './correlation-engine';
+export type {
+  CorrelationResult,
+} from './correlation-engine';
+export {
+  getCurrentCommitmentLevel,
+  proposeNextCommitment,
+  recordCommitmentCompletion,
+  buildCommitmentLadderContext,
+  LADDER_DOMAINS,
+} from './commitment-ladder';
+export type {
+  CommitmentLevel,
+  LadderProgress,
+  NextCommitment,
+} from './commitment-ladder';
+export {
+  prescribeMicroExposure,
+  recordExposureResult,
+  buildGinaMicroExposureContext,
+} from './gina-micro-exposure';
+export type {
+  MicroExposure,
+  GinaResponse,
+  ExposureRecord,
+  ExposurePrescription,
+} from './gina-micro-exposure';
