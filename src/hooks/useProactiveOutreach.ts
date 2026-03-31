@@ -10,6 +10,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { getPendingOutreach, markDelivered } from '../lib/conditioning/proactive-outreach';
 import type { OutreachMessage } from '../lib/conditioning/proactive-outreach';
 import { useAuth } from '../context/AuthContext';
+import { usePushNotifications } from './usePushNotifications';
 
 const POLL_INTERVAL_MS = 60_000;
 
@@ -24,6 +25,7 @@ interface UseProactiveOutreachReturn {
 
 export function useProactiveOutreach(): UseProactiveOutreachReturn {
   const { user } = useAuth();
+  const { notify, isSubscribed } = usePushNotifications();
   const [pendingMessage, setPendingMessage] = useState<OutreachMessage | null>(null);
   const [isChecking, setIsChecking] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -36,6 +38,13 @@ export function useProactiveOutreach(): UseProactiveOutreachReturn {
     try {
       const msg = await getPendingOutreach(user.id);
       if (msg && mountedRef.current) {
+        // P12.9: If tab is hidden and notifications enabled, send push notification
+        if (isSubscribed && document.hidden) {
+          notify('Handler', msg.message?.substring(0, 100) || 'You have a message waiting.', {
+            tag: `outreach-${msg.id}`,
+            url: '/',
+          });
+        }
         setPendingMessage(msg);
       }
     } catch (err) {
@@ -45,7 +54,7 @@ export function useProactiveOutreach(): UseProactiveOutreachReturn {
         setIsChecking(false);
       }
     }
-  }, [user?.id]);
+  }, [user?.id, isSubscribed, notify]);
 
   const acknowledge = useCallback(async () => {
     if (!pendingMessage) return;

@@ -3,9 +3,10 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
-import { Send, Loader2, Settings, Volume2, VolumeX, Play, Pause, Image } from 'lucide-react';
+import { Send, Loader2, Settings, Volume2, VolumeX, Play, Pause, Image, Mic, MicOff } from 'lucide-react';
 import { useHandlerChat, type ChatMessage, type MediaAttachment } from '../../hooks/useHandlerChat';
 import { useHandlerVoice } from '../../hooks/useHandlerVoice';
+import { useVoiceConversation } from '../../hooks/useVoiceConversation';
 
 interface HandlerChatProps {
   onClose: () => void;
@@ -24,11 +25,13 @@ const MODE_COLORS: Record<string, { bg: string; text: string; label: string }> =
 export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
   const { messages, isLoading, isSending, currentMode, sendMessage, startNewConversation } = useHandlerChat();
   const voice = useHandlerVoice();
+  const voiceInput = useVoiceConversation();
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const initRef = useRef(false);
   const lastSpokenIndexRef = useRef(-1);
+  const prevTranscriptRef = useRef('');
 
   // If opening from outreach with an opening line AND no existing conversation loaded
   useEffect(() => {
@@ -61,8 +64,37 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
     inputRef.current?.focus();
   }, [messages]);
 
+  // P12.3: Sync voice transcript to input field
+  useEffect(() => {
+    if (voiceInput.isListening && voiceInput.transcript !== prevTranscriptRef.current) {
+      prevTranscriptRef.current = voiceInput.transcript;
+      setInput(voiceInput.transcript);
+    }
+  }, [voiceInput.isListening, voiceInput.transcript]);
+
+  const handleMicToggle = () => {
+    if (voiceInput.isListening) {
+      voiceInput.stopListening();
+      // Send the transcribed message if we have content
+      if (input.trim() && !isSending) {
+        sendMessage(input.trim());
+        setInput('');
+        prevTranscriptRef.current = '';
+      }
+    } else {
+      setInput('');
+      prevTranscriptRef.current = '';
+      voiceInput.startListening();
+    }
+  };
+
   const handleSend = () => {
     if (!input.trim() || isSending) return;
+    // Stop listening if voice was active
+    if (voiceInput.isListening) {
+      voiceInput.stopListening();
+      prevTranscriptRef.current = '';
+    }
     sendMessage(input.trim());
     setInput('');
   };
@@ -165,14 +197,42 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
 
       {/* Input */}
       <div className="px-4 py-3 border-t border-gray-800/50 bg-[#0a0a0a]">
+        {/* P12.3: Listening indicator */}
+        {voiceInput.isListening && (
+          <div className="flex items-center gap-2 mb-2 px-1">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+            </span>
+            <span className="text-xs text-red-400">Listening</span>
+            {voiceInput.currentPitch && (
+              <span className="text-xs text-gray-500 ml-auto">{voiceInput.currentPitch}Hz</span>
+            )}
+          </div>
+        )}
         <div className="flex items-center gap-2">
+          {/* P12.3: Mic button */}
+          {voiceInput.isSupported && (
+            <button
+              onClick={handleMicToggle}
+              disabled={isSending}
+              className={`p-3 rounded-xl transition-all ${
+                voiceInput.isListening
+                  ? 'bg-red-600/20 text-red-400 hover:bg-red-600/30'
+                  : 'bg-[#141414] text-gray-500 hover:text-gray-300'
+              }`}
+              aria-label={voiceInput.isListening ? 'Stop listening' : 'Start voice input'}
+            >
+              {voiceInput.isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            </button>
+          )}
           <input
             ref={inputRef}
             type="text"
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder=""
+            placeholder={voiceInput.isListening ? 'Speak now...' : ''}
             disabled={isSending}
             className="flex-1 px-4 py-3 rounded-xl border-0 outline-none text-gray-200 placeholder-gray-600 bg-[#141414]"
           />

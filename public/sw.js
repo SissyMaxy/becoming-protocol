@@ -98,6 +98,23 @@ self.addEventListener('push', (event) => {
   );
 });
 
+// Handle messages from the app (for showing notifications when tab is hidden)
+self.addEventListener('message', (event) => {
+  if (!event.data) return;
+
+  if (event.data.type === 'SHOW_NOTIFICATION') {
+    const { title, body, icon, tag, url, requireInteraction } = event.data;
+    self.registration.showNotification(title || 'Handler', {
+      body: body || 'You have a message waiting.',
+      icon: icon || '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      tag: tag || 'handler-message',
+      requireInteraction: requireInteraction || false,
+      data: { url: url || '/' }
+    });
+  }
+});
+
 // Handle notification clicks
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();

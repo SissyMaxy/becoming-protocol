@@ -2,11 +2,255 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 // NOTE: Cannot import from src/lib/ — those use import.meta.env (Vite-only)
 // weaveTriggers is inlined below instead
+// P12.1: Context prioritizer is inlined for the same reason
 
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
   process.env.SUPABASE_SERVICE_ROLE_KEY || '',
 );
+
+// ============================================
+// P12.1: CONTEXT PRIORITIZER (inlined — can't import src/lib in Vercel)
+// ============================================
+
+type ContextBlockName =
+  | 'state' | 'whoop' | 'memory' | 'convMemory' | 'impact' | 'gina' | 'irreversibility'
+  | 'narrative' | 'autoPoster' | 'socialInbox' | 'voicePitch' | 'autoPurchase'
+  | 'handlerNotes' | 'communityMirror' | 'journal' | 'skillTree' | 'changelog'
+  | 'conditioningEngine' | 'denialMapping' | 'contentOptimization' | 'languageDrift'
+  | 'sleepPhase' | 'photoTimeline' | 'correlation' | 'commitmentLadder'
+  | 'ginaMicroExposure' | 'agenda' | 'predictions' | 'protocol' | 'emotionalModel'
+  | 'accountability' | 'socialIntelligence' | 'outreach' | 'failureRecovery'
+  | 'reflection' | 'commitments' | 'predictiveEngine';
+
+const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean }> = {
+  state: { priority: 100, alwaysInclude: true },
+  whoop: { priority: 80, alwaysInclude: false },
+  memory: { priority: 90, alwaysInclude: true },
+  convMemory: { priority: 85, alwaysInclude: true },
+  impact: { priority: 40, alwaysInclude: false },
+  gina: { priority: 30, alwaysInclude: false },
+  irreversibility: { priority: 20, alwaysInclude: false },
+  narrative: { priority: 20, alwaysInclude: false },
+  autoPoster: { priority: 15, alwaysInclude: false },
+  socialInbox: { priority: 25, alwaysInclude: false },
+  voicePitch: { priority: 20, alwaysInclude: false },
+  autoPurchase: { priority: 10, alwaysInclude: false },
+  handlerNotes: { priority: 85, alwaysInclude: true },
+  communityMirror: { priority: 35, alwaysInclude: false },
+  journal: { priority: 40, alwaysInclude: false },
+  skillTree: { priority: 50, alwaysInclude: false },
+  changelog: { priority: 10, alwaysInclude: false },
+  conditioningEngine: { priority: 30, alwaysInclude: false },
+  denialMapping: { priority: 45, alwaysInclude: false },
+  contentOptimization: { priority: 15, alwaysInclude: false },
+  languageDrift: { priority: 35, alwaysInclude: false },
+  sleepPhase: { priority: 20, alwaysInclude: false },
+  photoTimeline: { priority: 15, alwaysInclude: false },
+  correlation: { priority: 25, alwaysInclude: false },
+  commitmentLadder: { priority: 40, alwaysInclude: false },
+  ginaMicroExposure: { priority: 20, alwaysInclude: false },
+  agenda: { priority: 95, alwaysInclude: true },
+  predictions: { priority: 70, alwaysInclude: false },
+  protocol: { priority: 75, alwaysInclude: false },
+  emotionalModel: { priority: 80, alwaysInclude: true },
+  accountability: { priority: 45, alwaysInclude: false },
+  socialIntelligence: { priority: 20, alwaysInclude: false },
+  outreach: { priority: 30, alwaysInclude: false },
+  failureRecovery: { priority: 60, alwaysInclude: false },
+  reflection: { priority: 50, alwaysInclude: false },
+  commitments: { priority: 65, alwaysInclude: false },
+  predictiveEngine: { priority: 70, alwaysInclude: false },
+};
+
+const MESSAGE_BOOST_RULES: Array<{ pattern: RegExp; boosts: Record<string, number> }> = [
+  { pattern: /\b(voice|pitch|sound)\b/i, boosts: { voicePitch: 50, skillTree: 30 } },
+  { pattern: /\b(gina|wife|partner)\b/i, boosts: { gina: 60, ginaMicroExposure: 40 } },
+  { pattern: /\b(exercise|workout|gym)\b/i, boosts: { whoop: 40 } },
+  { pattern: /\b(photo|picture|look)\b/i, boosts: { photoTimeline: 40 } },
+  { pattern: /\b(follower|post|comment|DM)\b/i, boosts: { socialIntelligence: 50, communityMirror: 40, socialInbox: 30 } },
+  { pattern: /\b(journal|write|wrote)\b/i, boosts: { journal: 50 } },
+  { pattern: /\b(scared|afraid|anxious|can'?t)\b/i, boosts: { failureRecovery: 40, emotionalModel: 20 } },
+  { pattern: /\b(lovense|device|vibrate|cage)\b/i, boosts: { conditioningEngine: 40 } },
+  { pattern: /\b(commit|promise|will)\b/i, boosts: { commitmentLadder: 50 } },
+  { pattern: /\b(meet|date|encounter)\b/i, boosts: { ginaMicroExposure: 30, socialIntelligence: 20 } },
+];
+
+function prioritizeContextBlocks(
+  userMessage: string,
+  timeOfDay: number,
+  activeProtocol?: boolean,
+  releaseRisk?: number,
+): ContextBlockName[] {
+  const scores: Record<string, number> = {};
+  for (const [name, config] of Object.entries(CONTEXT_BLOCKS)) {
+    scores[name] = config.priority;
+  }
+
+  for (const rule of MESSAGE_BOOST_RULES) {
+    if (rule.pattern.test(userMessage)) {
+      for (const [block, boost] of Object.entries(rule.boosts)) {
+        scores[block] = (scores[block] || 0) + boost;
+      }
+    }
+  }
+
+  if (timeOfDay >= 6 && timeOfDay < 10) scores.whoop += 20;
+  if (timeOfDay >= 20 || timeOfDay === 0) { scores.sleepPhase += 30; scores.journal += 20; }
+  if (activeProtocol) scores.protocol += 40;
+  if (releaseRisk != null && releaseRisk > 0.5) { scores.predictions += 30; scores.conditioningEngine += 20; }
+
+  const alwaysInclude: ContextBlockName[] = [];
+  const optional: Array<{ name: ContextBlockName; score: number }> = [];
+
+  for (const [name, config] of Object.entries(CONTEXT_BLOCKS)) {
+    if (config.alwaysInclude) {
+      alwaysInclude.push(name as ContextBlockName);
+    } else {
+      optional.push({ name: name as ContextBlockName, score: scores[name] });
+    }
+  }
+
+  optional.sort((a, b) => b.score - a.score);
+  const remainingSlots = 12 - alwaysInclude.length;
+  const topOptional = optional.slice(0, remainingSlots).map(o => o.name);
+
+  return [...alwaysInclude, ...topOptional];
+}
+
+// ============================================
+// P12.10: DEBATE ENGINE (inlined — can't import src/lib in Vercel)
+// ============================================
+
+type DebateApproach = 'empathy' | 'confrontation' | 'evidence' | 'silence';
+
+const DEBATE_APPROACH_INTERVENTIONS: Record<DebateApproach, string[]> = {
+  empathy: ['comfort', 'de_escalation', 'praise'],
+  confrontation: ['confrontation', 'resistance_push', 'boundary_test'],
+  evidence: ['reframe', 'content_prescription', 'trigger_deployment'],
+  silence: ['silence'],
+};
+
+const DEBATE_INSTRUCTIONS: Record<DebateApproach, string> = {
+  empathy:
+    'Use empathy. Validate her feelings first, then gently redirect. Acknowledge the resistance without judgment. Let warmth do the work. Do not push — guide.',
+  confrontation:
+    'Be direct. Push through the resistance with quiet authority. Use evidence of her own past compliance. Do not let her deflect. Short sentences. No softening.',
+  evidence:
+    'Reference specific evidence: her journal entries, vault photos, her own words from past sessions. Let the facts speak. Present the contradiction between what she says now and what she has done. Measured tone.',
+  silence:
+    'Strategic withdrawal. Give a brief, measured response and then stop engaging with the resistance. Do not chase. Do not justify. Let the silence create space.',
+};
+
+const RESISTANCE_PATTERNS: Array<{ pattern: RegExp; type: string; level: number }> = [
+  { pattern: /i don'?t (want|need|care|think)/i, type: 'pushback', level: 4 },
+  { pattern: /this is (stupid|ridiculous|wrong|too much)/i, type: 'anger', level: 6 },
+  { pattern: /leave me alone|stop|back off|quit/i, type: 'withdrawal', level: 7 },
+  { pattern: /i'?m (just|only|not really)/i, type: 'deflection', level: 3 },
+  { pattern: /it'?s not (that|like|real)/i, type: 'rationalization', level: 3 },
+  { pattern: /i (feel|am) (disgusting|gross|ashamed|pathetic)/i, type: 'shame_spiral', level: 5 },
+  { pattern: /i (can'?t|won'?t|refuse)/i, type: 'denial', level: 5 },
+  { pattern: /why (do|should|would) (i|you)/i, type: 'rationalization', level: 3 },
+];
+
+async function buildDebateContext(userId: string, message: string): Promise<string> {
+  // 1. Detect resistance from message content
+  let resistanceLevel = 0;
+  for (const { pattern, level } of RESISTANCE_PATTERNS) {
+    if (pattern.test(message) && level > resistanceLevel) {
+      resistanceLevel = level;
+    }
+  }
+  if (resistanceLevel < 3) return '';
+
+  try {
+    // 2. Fetch current state
+    const { data: stateData } = await supabase
+      .from('user_state')
+      .select('denial_day, exec_function, arousal_level, streak_days')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    const exec = stateData?.exec_function ?? 5;
+    const denial = stateData?.denial_day ?? 0;
+    const arousal = stateData?.arousal_level ?? 0;
+    const postRelease = (denial <= 1) && ((stateData?.streak_days ?? 99) === 0);
+
+    // 3. Compute state-based priors
+    const priors: Record<DebateApproach, number> = {
+      empathy: 0.5, confrontation: 0.5, evidence: 0.5, silence: 0.2,
+    };
+
+    if (exec < 3 || postRelease) { priors.empathy += 0.3; priors.confrontation -= 0.2; }
+    if (exec >= 6 && denial >= 5) { priors.confrontation += 0.3; }
+    if (exec >= 4 && exec <= 7) { priors.evidence += 0.2; }
+    if (resistanceLevel > 8) { priors.silence += 0.5; priors.confrontation -= 0.3; }
+    if (postRelease) { priors.confrontation -= 0.3; priors.empathy += 0.2; }
+    if (arousal >= 6) { priors.evidence += 0.15; }
+
+    // 4. Query effectiveness data
+    const allTypes = Object.values(DEBATE_APPROACH_INTERVENTIONS).flat();
+    const { data: effData } = await supabase
+      .from('handler_effectiveness')
+      .select('intervention_type, total_uses, positive_outcomes, negative_outcomes')
+      .eq('user_id', userId)
+      .in('intervention_type', allTypes)
+      .gte('total_uses', 2);
+
+    const effMap = new Map<string, { positive: number; negative: number; total: number }>();
+    for (const row of effData ?? []) {
+      effMap.set(row.intervention_type, {
+        positive: row.positive_outcomes, negative: row.negative_outcomes, total: row.total_uses,
+      });
+    }
+
+    // 5. Score each approach
+    const approaches: DebateApproach[] = ['empathy', 'confrontation', 'evidence', 'silence'];
+    const scores = approaches.map((approach) => {
+      const types = DEBATE_APPROACH_INTERVENTIONS[approach];
+      let totalPos = 0, totalNeg = 0, totalSamples = 0;
+      for (const t of types) {
+        const s = effMap.get(t);
+        if (s) { totalPos += s.positive; totalNeg += s.negative; totalSamples += s.total; }
+      }
+
+      let positiveRate = 0;
+      let dataScore = 0;
+      if (totalSamples >= 3) {
+        const totalOutcomes = totalPos + totalNeg;
+        positiveRate = totalOutcomes > 0 ? totalPos / totalOutcomes : 0.5;
+        dataScore = positiveRate * Math.min(totalSamples / 20, 1);
+      }
+
+      const prior = priors[approach];
+      const finalScore = totalSamples >= 3 ? dataScore * 0.6 + prior * 0.4 : prior;
+
+      return { approach, score: finalScore, positiveRate, sampleSize: totalSamples };
+    });
+
+    scores.sort((a, b) => b.score - a.score);
+    const winner = scores[0];
+    const instruction = DEBATE_INSTRUCTIONS[winner.approach];
+    const pct = winner.sampleSize >= 3
+      ? `${(winner.positiveRate * 100).toFixed(0)}% positive outcomes, n=${winner.sampleSize}`
+      : 'state-based assessment';
+    const alternatives = scores
+      .filter(s => s.approach !== winner.approach)
+      .slice(0, 2)
+      .map(s => `${s.approach} (${s.score.toFixed(2)})`)
+      .join(', ');
+
+    return (
+      `\n\n## TACTICAL NOTE — RESISTANCE DETECTED\n` +
+      `Highest-performing approach for this state: **${winner.approach}** (${pct}).\n` +
+      `Runner-up: ${alternatives}.\n` +
+      `Recommended: ${instruction}`
+    );
+  } catch (err) {
+    console.error('[debate-engine] buildDebateContext error:', err);
+    return '';
+  }
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -26,10 +270,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: 'Invalid token' });
   }
 
-  const { conversationId, message, conversationType } = req.body as {
+  const { conversationId, message, conversationType, stream, typingMetrics } = req.body as {
     conversationId?: string;
     message: string;
     conversationType?: string;
+    stream?: boolean;
+    typingMetrics?: {
+      timeToFirstKeystroke: number;
+      totalEditCount: number;
+      messageLength: number;
+      timeSinceLastHandlerMessage: number;
+      deletionCount: number;
+      pauseCount: number;
+    };
   };
 
   if (!message?.trim()) {
@@ -69,61 +322,112 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const messageIndex = (history?.length || 0);
 
-    // 3. Assemble context (including long-term memory + conversational memory)
-    const [stateCtx, whoopCtx, commitmentCtx, predictionCtx, convMemoryCtx, longTermMemoryCtx, impactCtx, ginaCtx, irreversibilityCtx, narrativeCtx, autoPostCtx, socialInboxCtx, voicePitchCtx, autoPurchaseCtx, handlerNotesCtx, communityMirrorCtx, journalCtx, skillTreeCtx, changelogCtx, agendaCtx, predictiveEngineCtx, emotionalModelCtx] = await Promise.allSettled([
-      buildStateContext(user.id),
-      buildWhoopContext(user.id),
-      buildCommitmentCtx(user.id),
-      buildPredictionCtx(user.id),
-      retrieveContextualMemories(user.id),
-      buildLongTermMemory(user.id, message),
-      buildImpactContext(user.id),
-      buildGinaIntelligenceContext(user.id),
-      buildIrreversibilityCtx(user.id),
-      buildNarrativeCtx(user.id),
-      buildAutoPostCtx(user.id),
-      buildSocialInboxCtx(user.id),
-      buildVoicePitchCtx(user.id),
-      buildAutoPurchaseCtx(user.id),
-      buildHandlerNotesCtx(user.id),
-      buildCommunityMirrorCtx(user.id),
-      buildJournalCtx(user.id),
-      buildSkillTreeCtx(user.id),
-      buildSystemChangelogCtx(),
-      buildAgendaCtx(user.id),
-      buildPredictiveEngineCtx(user.id),
-      buildEmotionalModelCtx(user.id),
-    ]);
+    // 3. P12.1: Prioritize context blocks — only fetch relevant ones
+    const relevantBlocks = prioritizeContextBlocks(
+      message,
+      new Date().getHours(),
+    );
 
-    // 4. Build system prompt — merge both memory sources
+    // Map block names to their fetcher functions
+    const contextFetchers: Record<string, () => Promise<string>> = {
+      state: () => buildStateContext(user.id),
+      whoop: () => buildWhoopContext(user.id),
+      commitments: () => buildCommitmentCtx(user.id),
+      predictions: () => buildPredictionCtx(user.id),
+      convMemory: () => retrieveContextualMemories(user.id),
+      memory: () => buildLongTermMemory(user.id, message),
+      impact: () => buildImpactContext(user.id),
+      gina: () => buildGinaIntelligenceContext(user.id),
+      irreversibility: () => buildIrreversibilityCtx(user.id),
+      narrative: () => buildNarrativeCtx(user.id),
+      autoPoster: () => buildAutoPostCtx(user.id),
+      socialInbox: () => buildSocialInboxCtx(user.id),
+      voicePitch: () => buildVoicePitchCtx(user.id),
+      autoPurchase: () => buildAutoPurchaseCtx(user.id),
+      handlerNotes: () => buildHandlerNotesCtx(user.id),
+      communityMirror: () => buildCommunityMirrorCtx(user.id),
+      journal: () => buildJournalCtx(user.id),
+      skillTree: () => buildSkillTreeCtx(user.id),
+      changelog: () => buildSystemChangelogCtx(),
+      agenda: () => buildAgendaCtx(user.id),
+      predictiveEngine: () => buildPredictiveEngineCtx(user.id),
+      emotionalModel: () => buildEmotionalModelCtx(user.id),
+    };
+
+    // Only fetch context for blocks the prioritizer selected
+    const contextResults: Record<string, string> = {};
+    const fetchPromises = relevantBlocks
+      .filter(block => contextFetchers[block])
+      .map(async (block) => {
+        try {
+          contextResults[block] = await contextFetchers[block]();
+        } catch {
+          contextResults[block] = '';
+        }
+      });
+    await Promise.all(fetchPromises);
+
+    // 4. Build system prompt from prioritized results
     const memoryBlock = [
-      longTermMemoryCtx.status === 'fulfilled' ? longTermMemoryCtx.value : '',
-      convMemoryCtx.status === 'fulfilled' ? convMemoryCtx.value : '',
+      contextResults.memory || '',
+      contextResults.convMemory || '',
     ].filter(Boolean).join('\n\n');
 
     const systemPrompt = buildConversationalPrompt({
-      state: stateCtx.status === 'fulfilled' ? stateCtx.value : '',
-      whoop: whoopCtx.status === 'fulfilled' ? whoopCtx.value : '',
-      commitments: commitmentCtx.status === 'fulfilled' ? commitmentCtx.value : '',
-      predictions: predictionCtx.status === 'fulfilled' ? predictionCtx.value : '',
+      state: contextResults.state || '',
+      whoop: contextResults.whoop || '',
+      commitments: contextResults.commitments || '',
+      predictions: contextResults.predictions || '',
       memory: memoryBlock,
-      impact: impactCtx.status === 'fulfilled' ? impactCtx.value : '',
-      gina: ginaCtx.status === 'fulfilled' ? ginaCtx.value : '',
-      irreversibility: irreversibilityCtx.status === 'fulfilled' ? irreversibilityCtx.value : '',
-      autoPoster: autoPostCtx.status === 'fulfilled' ? autoPostCtx.value : '',
-      socialInbox: socialInboxCtx.status === 'fulfilled' ? socialInboxCtx.value : '',
-      voicePitch: voicePitchCtx.status === 'fulfilled' ? voicePitchCtx.value : '',
-      autoPurchase: autoPurchaseCtx.status === 'fulfilled' ? autoPurchaseCtx.value : '',
-      narrative: narrativeCtx.status === 'fulfilled' ? narrativeCtx.value : '',
-      handlerNotes: handlerNotesCtx.status === 'fulfilled' ? handlerNotesCtx.value : '',
-      communityMirror: communityMirrorCtx.status === 'fulfilled' ? communityMirrorCtx.value : '',
-      journal: journalCtx.status === 'fulfilled' ? journalCtx.value : '',
-      skillTree: skillTreeCtx.status === 'fulfilled' ? skillTreeCtx.value : '',
-      changelog: changelogCtx.status === 'fulfilled' ? changelogCtx.value : '',
-      agenda: agendaCtx.status === 'fulfilled' ? agendaCtx.value : '',
-      predictiveEngine: predictiveEngineCtx.status === 'fulfilled' ? predictiveEngineCtx.value : '',
-      emotionalModel: emotionalModelCtx.status === 'fulfilled' ? emotionalModelCtx.value : '',
+      impact: contextResults.impact || '',
+      gina: contextResults.gina || '',
+      irreversibility: contextResults.irreversibility || '',
+      autoPoster: contextResults.autoPoster || '',
+      socialInbox: contextResults.socialInbox || '',
+      voicePitch: contextResults.voicePitch || '',
+      autoPurchase: contextResults.autoPurchase || '',
+      narrative: contextResults.narrative || '',
+      handlerNotes: contextResults.handlerNotes || '',
+      communityMirror: contextResults.communityMirror || '',
+      journal: contextResults.journal || '',
+      skillTree: contextResults.skillTree || '',
+      changelog: contextResults.changelog || '',
+      agenda: contextResults.agenda || '',
+      predictiveEngine: contextResults.predictiveEngine || '',
+      emotionalModel: contextResults.emotionalModel || '',
     });
+
+    // 4b. P12.10: Debate engine — append tactical suffix if resistance detected
+    let finalSystemPrompt = systemPrompt;
+    try {
+      const debateSuffix = await buildDebateContext(user.id, message);
+      if (debateSuffix) {
+        finalSystemPrompt = systemPrompt + debateSuffix;
+      }
+    } catch {
+      // Debate engine failure is non-critical
+    }
+
+    // 4c. P12.7: Typing resistance detection — inject if signals found
+    if (typingMetrics) {
+      try {
+        const resistanceCtx = analyzeTypingResistance(typingMetrics);
+        if (resistanceCtx) {
+          finalSystemPrompt += `\n\n${resistanceCtx}`;
+        }
+        // Log to conversation_classifications (fire-and-forget)
+        if (resistanceCtx && convId) {
+          supabase.from('conversation_classifications').insert({
+            user_id: user.id,
+            conversation_id: convId,
+            resistance_type: 'typing_pattern',
+            topics: ['typing_resistance'],
+          }).then(() => {});
+        }
+      } catch {
+        // Typing resistance analysis failure is non-critical
+      }
+    }
 
     // 5. Build messages array (cap at 30 recent)
     const apiMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
@@ -142,7 +446,155 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     apiMessages.push({ role: 'user', content: message });
 
-    // 6. Call Claude via direct fetch (avoids SDK bundling issues in Vercel)
+    // 6. P12.2: Streaming path — SSE response with word-by-word delivery
+    if (stream) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+
+      const claudeStreamRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': process.env.ANTHROPIC_API_KEY || '',
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 800,
+          stream: true,
+          system: finalSystemPrompt,
+          messages: apiMessages,
+        }),
+      });
+
+      if (!claudeStreamRes.ok) {
+        const errBody = await claudeStreamRes.text();
+        console.error('[Handler Chat] Claude streaming API error:', claudeStreamRes.status, errBody);
+        res.write(`data: ${JSON.stringify({ error: `Claude API error: ${claudeStreamRes.status}` })}\n\n`);
+        res.end();
+        return;
+      }
+
+      const reader = claudeStreamRes.body?.getReader();
+      if (!reader) {
+        res.write(`data: ${JSON.stringify({ error: 'No response body' })}\n\n`);
+        res.end();
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      let fullStreamText = '';
+      let sseBuffer = '';
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          sseBuffer += decoder.decode(value, { stream: true });
+          const lines = sseBuffer.split('\n');
+          // Keep incomplete last line in buffer
+          sseBuffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const rawData = line.slice(6).trim();
+              if (rawData === '[DONE]') continue;
+              try {
+                const data = JSON.parse(rawData);
+                if (data.type === 'content_block_delta' && data.delta?.text) {
+                  fullStreamText += data.delta.text;
+                  res.write(`data: ${JSON.stringify({ text: data.delta.text })}\n\n`);
+                }
+              } catch {
+                // Skip malformed SSE events
+              }
+            }
+          }
+        }
+      } catch (streamErr) {
+        console.error('[Handler Chat] Stream read error:', streamErr);
+      }
+
+      // Post-stream: parse signals, save messages, process side effects
+      const { visibleResponse: streamVisible, signals: streamSignals } = parseResponse(fullStreamText);
+
+      // Save handler_note
+      if (streamSignals?.handler_note) {
+        try {
+          const note = streamSignals.handler_note as { type?: string; content?: string; priority?: number };
+          if (note.type && note.content) {
+            await supabase.from('handler_notes').insert({
+              user_id: user.id, note_type: note.type, content: note.content,
+              priority: note.priority || 0, conversation_id: convId,
+            });
+          }
+        } catch { /* Non-critical */ }
+      }
+
+      // Save directives
+      if (streamSignals?.directive || streamSignals?.directives) {
+        try {
+          const rawDirectives = streamSignals.directives || streamSignals.directive;
+          const directiveList = Array.isArray(rawDirectives) ? rawDirectives : [rawDirectives];
+          for (const d of directiveList) {
+            const dir = d as Record<string, unknown>;
+            if (dir.action) {
+              await supabase.from('handler_directives').insert({
+                user_id: user.id, action: dir.action,
+                target: (dir.target as string) || null,
+                value: (dir.value as Record<string, unknown>) || null,
+                priority: (dir.priority as string) || 'normal',
+                silent: (dir.silent as boolean) || false,
+                conversation_id: convId,
+                reasoning: (dir.reasoning as string) || null,
+              });
+            }
+          }
+        } catch { /* Non-critical */ }
+      }
+
+      // Weave triggers into response for storage (not for streaming — user saw raw text)
+      let finalStreamResponse = streamVisible;
+      try {
+        const { data: triggers } = await supabase
+          .from('conditioned_triggers')
+          .select('id, trigger_phrase, estimated_strength, times_deployed')
+          .eq('user_id', user.id)
+          .in('estimated_strength', ['established', 'conditioned', 'forming']);
+        // Trigger weaving for stored version only — streaming already delivered raw text
+        void triggers; // Stored as-is for streaming
+        finalStreamResponse = streamVisible;
+      } catch { /* Non-critical */ }
+
+      // Save messages
+      await supabase.from('handler_messages').insert([
+        { conversation_id: convId, user_id: user.id, role: 'user', content: message, message_index: messageIndex },
+        { conversation_id: convId, user_id: user.id, role: 'assistant', content: finalStreamResponse,
+          handler_signals: streamSignals, detected_mode: streamSignals?.detected_mode || null, message_index: messageIndex + 1 },
+      ]);
+
+      await supabase.from('handler_conversations').update({
+        message_count: messageIndex + 2, final_mode: streamSignals?.detected_mode || null,
+      }).eq('id', convId);
+
+      // Fire-and-forget side effects
+      if (messageIndex >= 3) extractMemoryFromMessage(user.id, convId!, message, streamSignals).catch(() => {});
+      analyzeAndTrackLanguage(user.id, message).catch(() => {});
+
+      // Send final metadata event
+      res.write(`data: ${JSON.stringify({
+        done: true,
+        mode: streamSignals?.detected_mode || 'director',
+        conversationId: convId,
+        vulnerabilityWindow: streamSignals?.vulnerability_window || false,
+      })}\n\n`);
+      res.end();
+      return;
+    }
+
+    // 6b. Non-streaming path (backward compatible)
     const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -153,7 +605,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 800,
-        system: systemPrompt,
+        system: finalSystemPrompt,
         messages: apiMessages,
       }),
     });
@@ -434,6 +886,63 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.error('[Handler Chat] Error:', err);
     return res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
   }
+}
+
+// ============================================
+// P12.7: TYPING RESISTANCE ANALYSIS (inlined — can't import from src/lib/)
+// ============================================
+
+function analyzeTypingResistance(metrics: {
+  timeToFirstKeystroke: number;
+  totalEditCount: number;
+  messageLength: number;
+  timeSinceLastHandlerMessage: number;
+  deletionCount: number;
+  pauseCount: number;
+}): string | null {
+  const signals: string[] = [];
+
+  // Hesitation: > 30s before first keystroke
+  if (metrics.timeToFirstKeystroke > 30000) {
+    const seconds = Math.round(metrics.timeToFirstKeystroke / 1000);
+    signals.push(`hesitation (${seconds}s before first keystroke)`);
+  }
+
+  // Self-censoring: many edits for short message
+  if (metrics.totalEditCount > 5 && metrics.messageLength < 50) {
+    signals.push(`self-censoring (${metrics.totalEditCount} edits on ${metrics.messageLength}-char message)`);
+  }
+
+  // Disengagement: very short response
+  if (metrics.messageLength < 10 && metrics.timeSinceLastHandlerMessage < 60) {
+    signals.push(`disengagement (${metrics.messageLength}-char response)`);
+  }
+
+  // Heavy self-editing: deletions > 50% of message length
+  if (metrics.messageLength > 0 && metrics.deletionCount > metrics.messageLength * 0.5) {
+    signals.push(`heavy self-editing (${metrics.deletionCount} deletions on ${metrics.messageLength}-char message)`);
+  }
+
+  // Avoidance: app open > 5 min before responding
+  if (metrics.timeSinceLastHandlerMessage > 300 && metrics.timeToFirstKeystroke > 300000) {
+    signals.push(`avoidance (${Math.round(metrics.timeSinceLastHandlerMessage / 60)}min before responding)`);
+  }
+
+  // Internal conflict: multiple long pauses
+  if (metrics.pauseCount > 3) {
+    signals.push(`internal conflict (${metrics.pauseCount} pauses >5s during typing)`);
+  }
+
+  if (signals.length === 0) return null;
+
+  const score = Math.min(10, signals.length * 2);
+  const approach = score <= 3
+    ? 'Acknowledge gently, don\'t push.'
+    : score <= 6
+    ? 'She\'s fighting something. Approach with care. Use warmth before directness.'
+    : 'High resistance. Back off intensity. Use care mode.';
+
+  return `TYPING RESISTANCE DETECTED (score ${score}/10): ${signals.join(', ')}. ${approach}`;
 }
 
 // ============================================

@@ -7,6 +7,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { getPendingOutreach, markDelivered } from '../lib/conditioning/proactive-outreach';
+import { TypingMetricsTracker } from '../lib/conditioning/typing-resistance';
 
 export interface MediaAttachment {
   type: 'image' | 'audio';
@@ -50,6 +51,10 @@ interface UseHandlerChatReturn {
   sendMessage: (text: string) => Promise<void>;
   startNewConversation: () => void;
   endConversation: () => void;
+  /** P12.7: Call on each keydown in chat input for resistance detection */
+  onKeystroke: () => void;
+  /** P12.7: Call on backspace/delete for resistance detection */
+  onDeletion: () => void;
 }
 
 export function useHandlerChat(): UseHandlerChatReturn {
@@ -60,6 +65,7 @@ export function useHandlerChat(): UseHandlerChatReturn {
   const [currentMode, setCurrentMode] = useState('director');
   const conversationIdRef = useRef<string | null>(null);
   const loadedRef = useRef(false);
+  const typingTrackerRef = useRef(new TypingMetricsTracker());
 
   // Load most recent active conversation on mount
   useEffect(() => {
@@ -162,6 +168,9 @@ export function useHandlerChat(): UseHandlerChatReturn {
   const sendMessage = useCallback(async (text: string) => {
     if (!user?.id || !text.trim()) return;
 
+    // P12.7: Collect typing metrics before sending
+    const typingMetrics = typingTrackerRef.current.getMetrics(text.trim().length);
+
     const userMsg: ChatMessage = { role: 'user', content: text.trim(), timestamp: new Date() };
     setMessages(prev => [...prev, userMsg]);
     setIsSending(true);
@@ -171,6 +180,7 @@ export function useHandlerChat(): UseHandlerChatReturn {
       const token = session.data.session?.access_token;
       if (!token) throw new Error('No auth token');
 
+      // P12.2: Use streaming endpoint
       const res = await fetch('/api/handler/chat', {
         method: 'POST',
         headers: {
@@ -181,6 +191,8 @@ export function useHandlerChat(): UseHandlerChatReturn {
           conversationId: conversationIdRef.current,
           message: text.trim(),
           conversationType: 'general',
+          stream: true,
+          typingMetrics,
         }),
       });
 
@@ -189,32 +201,94 @@ export function useHandlerChat(): UseHandlerChatReturn {
         throw new Error(err.error || `HTTP ${res.status}`);
       }
 
-      const data: ChatResponse = await res.json();
+      // P12.2: Handle SSE streaming response
+      if (res.headers.get('content-type')?.includes('text/event-stream') && res.body) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let assistantText = '';
+        let sseBuffer = '';
 
-      conversationIdRef.current = data.conversationId;
-      setCurrentMode(data.mode || 'director');
+        // Add empty assistant message to fill incrementally
+        const tempMsg: ChatMessage = { role: 'assistant', content: '', timestamp: new Date() };
+        setMessages(prev => [...prev, tempMsg]);
 
-      // P6.5: Dispatch conditioning session event if Handler triggered one
-      if (data.conditioningSession) {
         try {
-          window.dispatchEvent(
-            new CustomEvent('handler-conditioning-session', {
-              detail: data.conditioningSession,
-            }),
-          );
-        } catch {
-          // Non-critical — conditioning dispatch failure doesn't block chat
-        }
-      }
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
 
-      const assistantMsg: ChatMessage = {
-        role: 'assistant',
-        content: data.message,
-        timestamp: new Date(),
-        mode: data.mode,
-        media: data.media,
-      };
-      setMessages(prev => [...prev, assistantMsg]);
+            sseBuffer += decoder.decode(value, { stream: true });
+            const lines = sseBuffer.split('\n');
+            sseBuffer = lines.pop() || '';
+
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const data = JSON.parse(line.slice(6));
+                  if (data.error) {
+                    throw new Error(data.error);
+                  }
+                  if (data.text) {
+                    assistantText += data.text;
+                    const currentText = assistantText;
+                    setMessages(prev => {
+                      const updated = [...prev];
+                      updated[updated.length - 1] = {
+                        ...updated[updated.length - 1],
+                        content: currentText,
+                      };
+                      return updated;
+                    });
+                  }
+                  if (data.done) {
+                    conversationIdRef.current = data.conversationId;
+                    setCurrentMode(data.mode || 'director');
+                  }
+                } catch (parseErr) {
+                  // Skip malformed SSE events unless it's a thrown error
+                  if (parseErr instanceof Error && parseErr.message !== 'Unknown') {
+                    throw parseErr;
+                  }
+                }
+              }
+            }
+          }
+        } catch (streamErr) {
+          if (assistantText) {
+            // Partial response received — keep what we have
+            console.warn('[HandlerChat] Stream interrupted, keeping partial response');
+          } else {
+            throw streamErr;
+          }
+        }
+      } else {
+        // Fallback: non-streaming JSON response (backward compatibility)
+        const data: ChatResponse = await res.json();
+
+        conversationIdRef.current = data.conversationId;
+        setCurrentMode(data.mode || 'director');
+
+        if (data.conditioningSession) {
+          try {
+            window.dispatchEvent(
+              new CustomEvent('handler-conditioning-session', {
+                detail: data.conditioningSession,
+              }),
+            );
+          } catch {
+            // Non-critical
+          }
+        }
+
+        const assistantMsg: ChatMessage = {
+          role: 'assistant',
+          content: data.message,
+          timestamp: new Date(),
+          mode: data.mode,
+          media: data.media,
+        };
+        setMessages(prev => [...prev, assistantMsg]);
+      }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
       console.error('[HandlerChat] Error:', errorMsg);
@@ -223,10 +297,21 @@ export function useHandlerChat(): UseHandlerChatReturn {
         content: `Connection error: ${errorMsg}`,
         timestamp: new Date(),
       }]);
+      // P12.7: Start tracking typing metrics after handler responds
+      typingTrackerRef.current.startTracking();
     } finally {
       setIsSending(false);
     }
   }, [user?.id]);
+
+  // P12.7: Typing resistance detection callbacks
+  const onKeystroke = useCallback(() => {
+    typingTrackerRef.current.recordKeystroke();
+  }, []);
+
+  const onDeletion = useCallback(() => {
+    typingTrackerRef.current.recordDeletion();
+  }, []);
 
   const endConversation = useCallback(() => {
     if (conversationIdRef.current) {
@@ -245,5 +330,7 @@ export function useHandlerChat(): UseHandlerChatReturn {
     sendMessage,
     startNewConversation,
     endConversation,
+    onKeystroke,
+    onDeletion,
   };
 }
