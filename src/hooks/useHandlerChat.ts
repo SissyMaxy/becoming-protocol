@@ -6,12 +6,20 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import { getPendingOutreach, markDelivered } from '../lib/conditioning/proactive-outreach';
+
+export interface MediaAttachment {
+  type: 'image' | 'audio';
+  url: string;
+  caption: string;
+}
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
   mode?: string;
+  media?: MediaAttachment[];
 }
 
 interface ConditioningSessionSignal {
@@ -30,6 +38,7 @@ interface ChatResponse {
   commitmentOpportunity: boolean;
   shouldContinue: boolean;
   conditioningSession?: ConditioningSessionSignal;
+  media?: MediaAttachment[];
 }
 
 interface UseHandlerChatReturn {
@@ -100,6 +109,44 @@ export function useHandlerChat(): UseHandlerChatReturn {
     loadRecent();
   }, [user?.id]);
 
+  // P11.1: Poll for Handler-initiated messages every 60s
+  useEffect(() => {
+    if (!user?.id) return;
+
+    let mounted = true;
+
+    async function checkOutreach() {
+      if (!mounted || !user?.id) return;
+      try {
+        const msg = await getPendingOutreach(user.id);
+        if (msg && mounted) {
+          // Display as Handler message
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: msg.message,
+            timestamp: new Date(),
+            mode: 'director',
+          }]);
+          // Mark delivered (fire-and-forget)
+          markDelivered(msg.id).catch(() => {});
+        }
+      } catch {
+        // Non-critical — proactive outreach polling failure doesn't break chat
+      }
+    }
+
+    // Initial check
+    checkOutreach();
+
+    // Poll every 60s
+    const interval = setInterval(checkOutreach, 60_000);
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, [user?.id]);
+
   const startNewConversation = useCallback(() => {
     // End current conversation if exists
     if (conversationIdRef.current) {
@@ -165,6 +212,7 @@ export function useHandlerChat(): UseHandlerChatReturn {
         content: data.message,
         timestamp: new Date(),
         mode: data.mode,
+        media: data.media,
       };
       setMessages(prev => [...prev, assistantMsg]);
     } catch (err) {

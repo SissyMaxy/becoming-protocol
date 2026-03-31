@@ -173,3 +173,38 @@ export type {
   ExposureRecord,
   ExposurePrescription,
 } from './gina-micro-exposure';
+export {
+  queueOutreachMessage,
+  getPendingOutreach,
+  markDelivered,
+  scheduleCheckIn,
+  buildOutreachQueueContext,
+} from './proactive-outreach';
+export type {
+  OutreachUrgency,
+  OutreachStatus,
+  OutreachSource,
+  CheckInReason,
+  OutreachMessage,
+} from './proactive-outreach';
+export {
+  generateConversationAgenda,
+  getActiveAgenda,
+  completeAgenda,
+  buildAgendaContext,
+} from './conversation-agenda';
+export type {
+  ConversationAgenda,
+} from './conversation-agenda';
+export {
+  predictReleaseRisk,
+  predictEngagementDrop,
+  predictBreakthroughWindow,
+  runPredictions,
+  buildPredictiveEngineContext,
+} from './predictive-engine';
+export type {
+  PredictionType,
+  Prediction,
+  PredictionResult,
+} from './predictive-engine';

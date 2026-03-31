@@ -126,6 +126,9 @@ serve(async (req) => {
       case 'execute_directives':
         return await handleExecuteDirectives(supabase)
 
+      case 'generate_weekly_reflection':
+        return await handleGenerateWeeklyReflection(supabase)
+
       default:
         return new Response(
           JSON.stringify({ error: `Unknown action: ${action}` }),
@@ -1056,6 +1059,122 @@ async function incrementPrescribedCounts(
       console.warn(`[sleep] Failed to increment times_prescribed for ${id}`)
     }
   }
+}
+
+// =============================================
+// ACTION 6: generate_weekly_reflection
+// Weekly Handler self-reflection loop (P11.5)
+// =============================================
+async function handleGenerateWeeklyReflection(supabase: ReturnType<typeof createClient>) {
+  // Get all users with handler_interventions (active users)
+  const { data: userRows, error: userErr } = await supabase
+    .from('handler_interventions')
+    .select('user_id')
+    .order('user_id')
+
+  if (userErr) {
+    return jsonResponse({ error: 'Failed to query users', detail: userErr.message }, 500)
+  }
+
+  const userIds = [...new Set((userRows || []).map((r: { user_id: string }) => r.user_id))]
+  console.log(`[weekly-reflection] Processing ${userIds.length} users`)
+
+  const results: Record<string, { success: boolean; error?: string }> = {}
+
+  for (const userId of userIds) {
+    try {
+      const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString()
+
+      // Fetch intervention stats
+      const { data: interventions } = await supabase
+        .from('handler_interventions')
+        .select('id, intervention_type, handler_mode')
+        .eq('user_id', userId)
+        .gte('created_at', weekAgo)
+
+      const { data: outcomes } = await supabase
+        .from('intervention_outcomes')
+        .select('intervention_id, direction')
+        .eq('user_id', userId)
+        .gte('created_at', weekAgo)
+
+      if (!interventions || interventions.length === 0) {
+        results[userId] = { success: true, error: 'no interventions this week' }
+        continue
+      }
+
+      // Build outcome map
+      const outcomeMap = new Map<string, string[]>()
+      for (const o of (outcomes || [])) {
+        const list = outcomeMap.get(o.intervention_id) || []
+        list.push(o.direction)
+        outcomeMap.set(o.intervention_id, list)
+      }
+
+      // Group by type
+      const groups = new Map<string, { total: number; positive: number; negative: number; mode: string | null }>()
+      for (const i of interventions) {
+        const key = i.intervention_type
+        if (!groups.has(key)) groups.set(key, { total: 0, positive: 0, negative: 0, mode: i.handler_mode })
+        const g = groups.get(key)!
+        g.total++
+        const dirs = outcomeMap.get(i.id) || []
+        for (const d of dirs) {
+          if (d === 'positive') g.positive++
+          if (d === 'negative') g.negative++
+        }
+      }
+
+      // Get compliance
+      const { data: state } = await supabase
+        .from('user_state')
+        .select('compliance_rate, denial_day')
+        .eq('user_id', userId)
+        .maybeSingle()
+
+      const compliance = state?.compliance_rate ?? 0
+      const denial = state?.denial_day ?? 0
+
+      // Build memo
+      const allGroups = [...groups.entries()]
+        .map(([type, g]) => ({ type, ...g, rate: g.total > 0 ? g.positive / Math.max(1, g.positive + g.negative) : 0 }))
+        .filter(g => g.total >= 2)
+
+      const top = [...allGroups].sort((a, b) => b.rate - a.rate).slice(0, 3)
+      const bottom = [...allGroups].sort((a, b) => {
+        const aRate = a.total > 0 ? a.negative / Math.max(1, a.positive + a.negative) : 0
+        const bRate = b.total > 0 ? b.negative / Math.max(1, b.positive + b.negative) : 0
+        return bRate - aRate
+      }).slice(0, 3)
+
+      const topStr = top.map(t => `${t.type} (${(t.rate * 100).toFixed(0)}% positive, n=${t.total})`).join('. ')
+      const bottomStr = bottom
+        .filter(b => b.negative > b.positive)
+        .map(b => `${b.type} (${Math.round((b.negative / Math.max(1, b.positive + b.negative)) * 100)}% negative, n=${b.total})`)
+        .join('. ')
+
+      const memo = [
+        'WEEKLY REFLECTION:',
+        `What worked: ${topStr || 'Insufficient data.'}`,
+        bottomStr ? `What didn't: ${bottomStr}` : '',
+        `Trends: Compliance ${compliance}%. Denial day ${denial}. ${interventions.length} interventions this week.`,
+      ].filter(Boolean).join('\n')
+
+      // Store as handler_notes
+      await supabase.from('handler_notes').insert({
+        user_id: userId,
+        note_type: 'strategy',
+        content: memo,
+        priority: 4,
+      })
+
+      results[userId] = { success: true }
+    } catch (err) {
+      results[userId] = { success: false, error: String(err) }
+    }
+  }
+
+  return jsonResponse({ action: 'generate_weekly_reflection', results })
 }
 
 function jsonResponse(body: unknown, status = 200) {

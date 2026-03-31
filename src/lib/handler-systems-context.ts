@@ -95,6 +95,14 @@ import { buildSkillTreeContext } from './skills/skill-tree-engine';
 import { buildLanguageDriftContext } from './conditioning/language-drift';
 import { buildSleepPhaseContext } from './conditioning/sleep-phase-targeting';
 import { buildPhotoTimelineContext } from './conditioning/photo-timeline';
+import { buildSocialIntelligenceContext } from './conditioning/social-intelligence';
+import { buildAccountabilityContext } from './conditioning/accountability';
+import { buildOutreachQueueContext } from './conditioning/proactive-outreach';
+import { buildAgendaContext } from './conditioning/conversation-agenda';
+import { buildPredictiveEngineContext } from './conditioning/predictive-engine';
+import { buildProtocolContext } from './conditioning/protocol-manager';
+import { buildReflectionContext } from './conditioning/handler-reflection';
+import { buildEmotionalModelContext } from './conditioning/emotional-model';
 import { supabase } from './supabase';
 
 // ============================================
@@ -148,6 +156,14 @@ export interface SystemsContext {
   correlationEngine: string;
   commitmentLadder: string;
   ginaMicroExposure: string;
+  socialIntelligence: string;
+  accountability: string;
+  proactiveOutreach: string;
+  conversationAgenda: string;
+  predictiveEngine: string;
+  protocolManager: string;
+  handlerReflection: string;
+  emotionalModel: string;
 }
 
 // ============================================
@@ -870,7 +886,7 @@ async function buildAutoPurchaseCtx(userId: string): Promise<string> {
  * All systems, maximum data density.
  */
 export async function buildFullSystemsContext(userId: string): Promise<string> {
-  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social, memory, conditioningEngine, impactTracking, irreversibility, narrativeArc, autoPoster, socialInbox, voicePitch, autoPurchase, femPrescription, exerciseRx, postReleaseBridge, serviceAdvancement, ambushScheduler, voiceEvolution, corruptionActivation, camHandlerControl, failureRecovery, communityMirror, handlerDirectives, journal, skillTree, contentOptimization, denialMapping, languageDrift, sleepPhaseTargeting, photoTimeline, correlationEngine, commitmentLadder, ginaMicroExposure] = await Promise.allSettled([
+  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social, memory, conditioningEngine, impactTracking, irreversibility, narrativeArc, autoPoster, socialInbox, voicePitch, autoPurchase, femPrescription, exerciseRx, postReleaseBridge, serviceAdvancement, ambushScheduler, voiceEvolution, corruptionActivation, camHandlerControl, failureRecovery, communityMirror, handlerDirectives, journal, skillTree, contentOptimization, denialMapping, languageDrift, sleepPhaseTargeting, photoTimeline, correlationEngine, commitmentLadder, ginaMicroExposure, socialIntelligence, accountability, proactiveOutreach, conversationAgenda, predictiveEngine, protocolManager, handlerReflection, emotionalModel] = await Promise.allSettled([
     buildGinaContext(userId),
     buildContentContext(userId),
     buildVoiceContext(userId),
@@ -931,6 +947,14 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     buildCorrelationContext(userId),
     buildCommitmentLadderContext(userId),
     buildGinaMicroExposureContext(userId),
+    buildSocialIntelligenceContext(userId),
+    buildAccountabilityContext(userId),
+    buildOutreachQueueContext(userId),
+    buildAgendaContext(userId),
+    buildPredictiveEngineContext(userId),
+    buildProtocolContext(userId),
+    buildReflectionContext(userId),
+    buildEmotionalModelContext(userId),
   ]);
 
   const blocks = [
@@ -994,6 +1018,14 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     correlationEngine.status === 'fulfilled' ? correlationEngine.value : '',
     commitmentLadder.status === 'fulfilled' ? commitmentLadder.value : '',
     ginaMicroExposure.status === 'fulfilled' ? ginaMicroExposure.value : '',
+    socialIntelligence.status === 'fulfilled' ? socialIntelligence.value : '',
+    accountability.status === 'fulfilled' ? accountability.value : '',
+    proactiveOutreach.status === 'fulfilled' ? proactiveOutreach.value : '',
+    conversationAgenda.status === 'fulfilled' ? conversationAgenda.value : '',
+    predictiveEngine.status === 'fulfilled' ? predictiveEngine.value : '',
+    protocolManager.status === 'fulfilled' ? protocolManager.value : '',
+    handlerReflection.status === 'fulfilled' ? handlerReflection.value : '',
+    emotionalModel.status === 'fulfilled' ? emotionalModel.value : '',
   ].filter(Boolean);
 
   if (blocks.length === 0) return '';

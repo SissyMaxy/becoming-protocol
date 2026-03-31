@@ -3,8 +3,9 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
-import { Send, Loader2, Settings } from 'lucide-react';
-import { useHandlerChat, type ChatMessage } from '../../hooks/useHandlerChat';
+import { Send, Loader2, Settings, Volume2, VolumeX, Play, Pause, Image } from 'lucide-react';
+import { useHandlerChat, type ChatMessage, type MediaAttachment } from '../../hooks/useHandlerChat';
+import { useHandlerVoice } from '../../hooks/useHandlerVoice';
 
 interface HandlerChatProps {
   onClose: () => void;
@@ -22,10 +23,12 @@ const MODE_COLORS: Record<string, { bg: string; text: string; label: string }> =
 
 export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
   const { messages, isLoading, isSending, currentMode, sendMessage, startNewConversation } = useHandlerChat();
+  const voice = useHandlerVoice();
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const initRef = useRef(false);
+  const lastSpokenIndexRef = useRef(-1);
 
   // If opening from outreach with an opening line AND no existing conversation loaded
   useEffect(() => {
@@ -41,6 +44,17 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Speak new assistant messages via TTS when voice mode is enabled
+  useEffect(() => {
+    if (!voice.enabled || messages.length === 0) return;
+    const lastIndex = messages.length - 1;
+    const lastMsg = messages[lastIndex];
+    if (lastMsg.role === 'assistant' && lastIndex > lastSpokenIndexRef.current) {
+      lastSpokenIndexRef.current = lastIndex;
+      voice.speak(lastMsg.content, lastIndex);
+    }
+  }, [messages, voice.enabled]);
 
   // Focus input
   useEffect(() => {
@@ -88,6 +102,20 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
               New
             </button>
           )}
+          <button
+            onClick={() => {
+              voice.setEnabled(!voice.enabled);
+              if (voice.isPlaying) voice.stop();
+            }}
+            className={`p-1.5 rounded-lg transition-colors ${
+              voice.enabled
+                ? 'bg-purple-500/20 text-purple-400 hover:bg-purple-500/30'
+                : 'hover:bg-gray-800 text-gray-500'
+            }`}
+            aria-label={voice.enabled ? 'Disable voice' : 'Enable voice'}
+          >
+            {voice.enabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+          </button>
           {onOpenSettings && (
             <button
               onClick={onOpenSettings}
@@ -117,7 +145,7 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
         )}
 
         {messages.map((msg, i) => (
-          <MessageBubble key={i} message={msg} />
+          <MessageBubble key={i} message={msg} isSpeaking={voice.isPlaying && voice.speakingMessageIndex === i} />
         ))}
 
         {isSending && (
@@ -165,7 +193,7 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
   );
 }
 
-function MessageBubble({ message }: { message: ChatMessage }) {
+function MessageBubble({ message, isSpeaking }: { message: ChatMessage; isSpeaking?: boolean }) {
   const isUser = message.role === 'user';
 
   return (
@@ -178,7 +206,92 @@ function MessageBubble({ message }: { message: ChatMessage }) {
         <p className="text-[15px] leading-relaxed whitespace-pre-wrap" style={{ letterSpacing: '-0.01em' }}>
           {message.content}
         </p>
+        {message.media && message.media.length > 0 && (
+          <div className="mt-2 space-y-2">
+            {message.media.map((attachment, idx) => (
+              <MediaRenderer key={idx} attachment={attachment} />
+            ))}
+          </div>
+        )}
+        {isSpeaking && (
+          <div className="flex items-center gap-1 mt-1.5">
+            <Volume2 className="w-3 h-3 text-purple-400 animate-pulse" />
+            <span className="text-[11px] text-purple-400">speaking</span>
+          </div>
+        )}
       </div>
     </div>
   );
+}
+
+function MediaRenderer({ attachment }: { attachment: MediaAttachment }) {
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const [imgError, setImgError] = useState(false);
+  const [audioPlaying, setAudioPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  if (attachment.type === 'image') {
+    return (
+      <div className="rounded-lg overflow-hidden">
+        {!imgError ? (
+          <>
+            {!imgLoaded && (
+              <div className="w-full h-32 bg-gray-800/50 animate-pulse rounded-lg flex items-center justify-center">
+                <Image className="w-5 h-5 text-gray-600" />
+              </div>
+            )}
+            <img
+              src={attachment.url}
+              alt={attachment.caption}
+              onLoad={() => setImgLoaded(true)}
+              onError={() => setImgError(true)}
+              className={`max-w-full max-h-48 rounded-lg object-cover ${imgLoaded ? '' : 'hidden'}`}
+            />
+          </>
+        ) : (
+          <div className="w-full h-16 bg-gray-800/30 rounded-lg flex items-center justify-center">
+            <span className="text-xs text-gray-500">Image unavailable</span>
+          </div>
+        )}
+        {attachment.caption && (
+          <p className="text-[11px] text-gray-500 mt-1">{attachment.caption}</p>
+        )}
+      </div>
+    );
+  }
+
+  if (attachment.type === 'audio') {
+    const toggleAudio = () => {
+      if (!audioRef.current) {
+        audioRef.current = new Audio(attachment.url);
+        audioRef.current.onended = () => setAudioPlaying(false);
+        audioRef.current.onerror = () => setAudioPlaying(false);
+      }
+      if (audioPlaying) {
+        audioRef.current.pause();
+        setAudioPlaying(false);
+      } else {
+        audioRef.current.play().catch(() => setAudioPlaying(false));
+        setAudioPlaying(true);
+      }
+    };
+
+    return (
+      <div className="flex items-center gap-2 bg-gray-800/30 rounded-lg px-3 py-2">
+        <button
+          onClick={toggleAudio}
+          className="p-1.5 rounded-full bg-purple-600/30 hover:bg-purple-600/50 transition-colors"
+        >
+          {audioPlaying ? (
+            <Pause className="w-3.5 h-3.5 text-purple-300" />
+          ) : (
+            <Play className="w-3.5 h-3.5 text-purple-300" />
+          )}
+        </button>
+        <span className="text-xs text-gray-400">{attachment.caption || 'Audio'}</span>
+      </div>
+    );
+  }
+
+  return null;
 }

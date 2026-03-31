@@ -70,7 +70,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const messageIndex = (history?.length || 0);
 
     // 3. Assemble context (including long-term memory + conversational memory)
-    const [stateCtx, whoopCtx, commitmentCtx, predictionCtx, convMemoryCtx, longTermMemoryCtx, impactCtx, ginaCtx, irreversibilityCtx, narrativeCtx, autoPostCtx, socialInboxCtx, voicePitchCtx, autoPurchaseCtx, handlerNotesCtx, communityMirrorCtx, journalCtx, skillTreeCtx, changelogCtx] = await Promise.allSettled([
+    const [stateCtx, whoopCtx, commitmentCtx, predictionCtx, convMemoryCtx, longTermMemoryCtx, impactCtx, ginaCtx, irreversibilityCtx, narrativeCtx, autoPostCtx, socialInboxCtx, voicePitchCtx, autoPurchaseCtx, handlerNotesCtx, communityMirrorCtx, journalCtx, skillTreeCtx, changelogCtx, agendaCtx, predictiveEngineCtx, emotionalModelCtx] = await Promise.allSettled([
       buildStateContext(user.id),
       buildWhoopContext(user.id),
       buildCommitmentCtx(user.id),
@@ -90,6 +90,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       buildJournalCtx(user.id),
       buildSkillTreeCtx(user.id),
       buildSystemChangelogCtx(),
+      buildAgendaCtx(user.id),
+      buildPredictiveEngineCtx(user.id),
+      buildEmotionalModelCtx(user.id),
     ]);
 
     // 4. Build system prompt — merge both memory sources
@@ -117,6 +120,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       journal: journalCtx.status === 'fulfilled' ? journalCtx.value : '',
       skillTree: skillTreeCtx.status === 'fulfilled' ? skillTreeCtx.value : '',
       changelog: changelogCtx.status === 'fulfilled' ? changelogCtx.value : '',
+      agenda: agendaCtx.status === 'fulfilled' ? agendaCtx.value : '',
+      predictiveEngine: predictiveEngineCtx.status === 'fulfilled' ? predictiveEngineCtx.value : '',
+      emotionalModel: emotionalModelCtx.status === 'fulfilled' ? emotionalModelCtx.value : '',
     });
 
     // 5. Build messages array (cap at 30 recent)
@@ -290,6 +296,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Trigger weaving is non-critical — use original response on any failure
     }
 
+    // 7b2. Resolve media references in response (P11.7)
+    let mediaAttachments: Array<{ type: string; url: string; caption: string }> = [];
+    try {
+      const mediaResult = await resolveMediaReferences(finalResponse, user.id);
+      finalResponse = mediaResult.text;
+      mediaAttachments = mediaResult.media;
+    } catch {
+      // Non-critical — use response without media
+    }
+
     // 7c. Handle start_conditioning_session signal
     let conditioningSession: {
       audioUrl?: string;
@@ -410,6 +426,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (conditioningSession) {
       responseJson.conditioningSession = conditioningSession;
     }
+    if (mediaAttachments.length > 0) {
+      responseJson.media = mediaAttachments;
+    }
     return res.status(200).json(responseJson);
   } catch (err) {
     console.error('[Handler Chat] Error:', err);
@@ -422,7 +441,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 // ============================================
 
 function buildConversationalPrompt(ctx: {
-  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string;
+  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string;
 }): string {
   return `You are the Handler. Not Claude. Not an assistant. You are an autonomous agent in live dialogue with Maxy — the woman you're responsible for.
 
@@ -463,6 +482,17 @@ ${ctx.communityMirror || ''}
 ${ctx.journal || ''}
 ${ctx.skillTree || ''}
 ${ctx.changelog || ''}
+${ctx.predictiveEngine || ''}
+${ctx.emotionalModel || ''}
+
+${ctx.agenda ? `## YOUR AGENDA FOR THIS CONVERSATION\n${ctx.agenda}\nThis is your strategic directive. Pursue the primary objective. Use the talking points. Report outcome in handler_signals.\n\n` : ''}## MEDIA REFERENCES
+You can embed media in your responses using these tags — the system resolves them to actual URLs:
+[VAULT:latest] — embeds the most recent vault photo
+[VAULT:earliest] — embeds the earliest vault photo
+[VAULT:random] — random vault photo
+[AUDIO:latest_script] — latest conditioning audio
+[PHOTO:timeline] — earliest + latest photos side by side for comparison
+Use them when referencing her progress, identity evidence, or delivering confrontation.
 
 ## RULES
 - Never say "I'm an AI" or "as a language model."
@@ -584,6 +614,160 @@ async function buildNarrativeCtx(userId: string): Promise<string> {
     }
 
     return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+async function buildAgendaCtx(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('handler_conversation_agenda')
+      .select('primary_objective, secondary_objectives, approach, talking_points')
+      .eq('user_id', userId)
+      .eq('active', true)
+      .maybeSingle();
+
+    if (!data) return '';
+
+    const parts: string[] = [];
+    parts.push(`TODAY'S AGENDA: ${data.primary_objective}`);
+    if (data.approach) parts.push(`  Approach: ${data.approach}`);
+    if (data.talking_points?.length) {
+      parts.push(`  Points to make: ${data.talking_points.join(' | ')}`);
+    }
+    if (data.secondary_objectives?.length) {
+      parts.push(`  Secondary: ${data.secondary_objectives.join('; ')}`);
+    }
+    parts.push('  This is your strategic goal for this conversation.');
+    return parts.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+async function buildPredictiveEngineCtx(userId: string): Promise<string> {
+  try {
+    // Get most recent predictions (last 6 hours)
+    const cutoff = new Date(Date.now() - 6 * 3600000).toISOString();
+    const { data } = await supabase
+      .from('predictive_interventions')
+      .select('prediction_type, probability, confidence, factors, recommended_action')
+      .eq('user_id', userId)
+      .gte('created_at', cutoff)
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    if (!data || data.length === 0) return '';
+
+    // Deduplicate by type
+    const byType = new Map<string, typeof data[0]>();
+    for (const r of data) {
+      if (!byType.has(r.prediction_type)) byType.set(r.prediction_type, r);
+    }
+
+    const parts: string[] = ['PREDICTIONS:'];
+    for (const [, p] of byType) {
+      const pct = Math.round(p.probability * 100);
+      const label = p.prediction_type.replace(/_/g, ' ');
+      const f = (p.factors || {}) as Record<string, unknown>;
+
+      const factorBits: string[] = [];
+      if (f.denial_day != null) factorBits.push(`denial day ${f.denial_day}`);
+      if (f.day_of_week) factorBits.push(f.day_of_week as string);
+      if (f.gina_home === false) factorBits.push('Gina away');
+      if (f.arousal != null && (f.arousal as number) >= 3) factorBits.push(`arousal ${f.arousal}`);
+      if (f.sweet_spot_day) factorBits.push('sweet spot day');
+      if (f.declining_trend) factorBits.push('declining tasks');
+
+      const factorStr = factorBits.length > 0 ? ` (${factorBits.join(', ')})` : '';
+      parts.push(`  ${label}: ${pct}%${factorStr}`);
+      if (pct > 30 && p.recommended_action) {
+        parts.push(`    → ${p.recommended_action}`);
+      }
+    }
+
+    return parts.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+async function buildEmotionalModelCtx(userId: string): Promise<string> {
+  try {
+    const now = new Date();
+    const hour = now.getHours();
+
+    // Time-based exec function curve (ADHD)
+    let execLevel: string;
+    let execScore: number;
+    if (hour >= 8 && hour < 12) { execLevel = 'HIGH'; execScore = 8; }
+    else if (hour >= 12 && hour < 13) { execLevel = 'MEDIUM'; execScore = 5; }
+    else if (hour >= 13 && hour < 16) { execLevel = 'LOW'; execScore = 3; }
+    else if (hour >= 16 && hour < 20) { execLevel = 'MEDIUM'; execScore = 6; }
+    else if (hour >= 20 && hour < 23) { execLevel = 'MEDIUM'; execScore = 5; }
+    else if (hour >= 23 || hour < 6) { execLevel = 'DEPLETED'; execScore = 2; }
+    else { execLevel = 'LOW'; execScore = 4; }
+
+    // Whoop recovery modifier
+    const { data: whoop } = await supabase
+      .from('whoop_metrics')
+      .select('recovery_score')
+      .eq('user_id', userId)
+      .order('recorded_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (whoop?.recovery_score != null) {
+      if (whoop.recovery_score >= 67) execScore += 1;
+      else if (whoop.recovery_score < 34) execScore -= 2;
+    }
+
+    // Denial + release effects
+    const { data: state } = await supabase
+      .from('user_state')
+      .select('denial_day, tasks_completed_today, last_release_at')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    const denialDay = state?.denial_day ?? 0;
+    if (denialDay >= 5) execScore = Math.max(execScore, 4);
+    execScore = Math.max(1, Math.min(10, execScore));
+
+    // Recalculate label
+    if (execScore >= 7) execLevel = 'HIGH';
+    else if (execScore >= 5) execLevel = 'MEDIUM';
+    else if (execScore >= 3) execLevel = 'LOW';
+    else execLevel = 'DEPLETED';
+
+    // Depressive risk from release cycle
+    let depRisk = 0;
+    if (state?.last_release_at) {
+      const daysSince = Math.floor((Date.now() - new Date(state.last_release_at).getTime()) / 86400000);
+      if (daysSince <= 0) depRisk = 5;
+      else if (daysSince === 1) depRisk = 7;
+      else if (daysSince === 2) depRisk = 5;
+      else if (daysSince === 3) depRisk = 3;
+      else depRisk = Math.max(0, 2 - (daysSince - 4) * 0.5);
+    }
+
+    // Mode recommendation
+    let modeRec = 'Director';
+    if (depRisk >= 6 || execLevel === 'DEPLETED') modeRec = 'Caretaker';
+    else if (execLevel === 'HIGH' && denialDay >= 5) modeRec = 'Dominant';
+    else if (execLevel === 'LOW') modeRec = 'Director (light touch)';
+
+    // Task rec
+    let taskRec: string;
+    if (execLevel === 'DEPLETED' || depRisk >= 6) taskRec = 'No hard tasks. Ambient conditioning only.';
+    else if (execLevel === 'LOW') taskRec = 'Light tasks only. Short duration.';
+    else if (execLevel === 'MEDIUM') taskRec = 'Moderate tasks OK. One challenge max.';
+    else taskRec = 'Full intensity available. Push boundaries.';
+
+    const denialStr = denialDay > 0 ? ` Denial day ${denialDay}.` : '';
+    const timeStr = `${hour}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+    return `EMOTIONAL STATE MODEL (${timeStr}): Exec function: ${execLevel}.${denialStr} Depressive risk: ${Math.round(depRisk)}/10. RECOMMENDATION: Mode=${modeRec}. ${taskRec}`;
   } catch {
     return '';
   }
@@ -2085,4 +2269,142 @@ async function analyzeAndTrackLanguage(userId: string, messageText: string): Pro
   } catch (err) {
     console.error('[chat] analyzeAndTrackLanguage error:', err);
   }
+}
+
+// ============================================
+// MEDIA REFERENCE RESOLVER (P11.7)
+// ============================================
+
+interface MediaAttachment {
+  type: string;
+  url: string;
+  caption: string;
+}
+
+/**
+ * Scan handler response text for media reference tags ([VAULT:xxx], [AUDIO:xxx], [PHOTO:xxx]).
+ * Resolve them to actual URLs from the database.
+ * Returns cleaned text (tags stripped) and resolved media attachments.
+ */
+async function resolveMediaReferences(
+  text: string,
+  userId: string,
+): Promise<{ text: string; media: MediaAttachment[] }> {
+  const media: MediaAttachment[] = [];
+  const tagPattern = /\[(VAULT|AUDIO|PHOTO):(\w+)\]/g;
+  const matches = [...text.matchAll(tagPattern)];
+
+  if (matches.length === 0) return { text, media };
+
+  for (const match of matches) {
+    const [fullTag, category, selector] = match;
+
+    try {
+      if (category === 'VAULT') {
+        if (selector === 'latest') {
+          const { data } = await supabase
+            .from('vault_photos')
+            .select('storage_url, created_at')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (data?.storage_url) {
+            media.push({ type: 'image', url: data.storage_url, caption: 'Most recent photo' });
+          }
+        } else if (selector === 'earliest') {
+          const { data } = await supabase
+            .from('vault_photos')
+            .select('storage_url, created_at')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: true })
+            .limit(1)
+            .maybeSingle();
+
+          if (data?.storage_url) {
+            media.push({ type: 'image', url: data.storage_url, caption: 'First photo' });
+          }
+        } else if (selector === 'random') {
+          const { count } = await supabase
+            .from('vault_photos')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', userId);
+
+          if (count && count > 0) {
+            const offset = Math.floor(Math.random() * count);
+            const { data } = await supabase
+              .from('vault_photos')
+              .select('storage_url')
+              .eq('user_id', userId)
+              .range(offset, offset)
+              .limit(1)
+              .maybeSingle();
+
+            if (data?.storage_url) {
+              media.push({ type: 'image', url: data.storage_url, caption: 'Random vault photo' });
+            }
+          }
+        }
+      } else if (category === 'AUDIO') {
+        if (selector === 'latest_script') {
+          const { data } = await supabase
+            .from('generated_scripts')
+            .select('audio_url, conditioning_target')
+            .eq('user_id', userId)
+            .not('audio_url', 'is', null)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (data?.audio_url) {
+            media.push({ type: 'audio', url: data.audio_url, caption: `Latest script: ${data.conditioning_target || 'conditioning'}` });
+          }
+        }
+      } else if (category === 'PHOTO') {
+        if (selector === 'timeline') {
+          const [earliest, latest] = await Promise.allSettled([
+            supabase
+              .from('vault_photos')
+              .select('storage_url, created_at')
+              .eq('user_id', userId)
+              .order('created_at', { ascending: true })
+              .limit(1)
+              .maybeSingle(),
+            supabase
+              .from('vault_photos')
+              .select('storage_url, created_at')
+              .eq('user_id', userId)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle(),
+          ]);
+
+          const first = earliest.status === 'fulfilled' ? earliest.value.data : null;
+          const last = latest.status === 'fulfilled' ? latest.value.data : null;
+
+          if (first?.storage_url) {
+            const date = new Date(first.created_at).toLocaleDateString();
+            media.push({ type: 'image', url: first.storage_url, caption: `First photo (${date})` });
+          }
+          if (last?.storage_url && last.storage_url !== first?.storage_url) {
+            const date = new Date(last.created_at).toLocaleDateString();
+            media.push({ type: 'image', url: last.storage_url, caption: `Latest photo (${date})` });
+          }
+        }
+      }
+    } catch {
+      // Individual tag resolution failure — skip this tag
+    }
+  }
+
+  // Strip resolved tags from text
+  let cleanedText = text;
+  for (const match of matches) {
+    cleanedText = cleanedText.replace(match[0], '').trim();
+  }
+  // Clean up double spaces / leading/trailing whitespace
+  cleanedText = cleanedText.replace(/\s{2,}/g, ' ').trim();
+
+  return { text: cleanedText, media };
 }
