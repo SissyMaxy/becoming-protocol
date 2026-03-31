@@ -208,3 +208,90 @@ export type {
   Prediction,
   PredictionResult,
 } from './predictive-engine';
+export {
+  generateDailyCycle,
+  executeCycleBlock,
+  checkBlockCompliance,
+  updateDailyComplianceScore,
+  getTodayCycle,
+  buildAutonomousCycleContext,
+} from './autonomous-cycle';
+export type {
+  BlockType,
+  BlockStatus,
+  DailyCycle,
+  BlockComplianceResult,
+} from './autonomous-cycle';
+export {
+  assessConsequence,
+  executeConsequence,
+  resetConsequenceLevel,
+  getCurrentConsequenceLevel,
+  getRecentConsequences,
+  buildConsequenceContext,
+  CONSEQUENCE_LADDER,
+} from './consequence-engine';
+export type {
+  ConsequenceType,
+  ConsequenceLevel,
+  ConsequenceRecord,
+  ConsequenceAssessment,
+} from './consequence-engine';
+export {
+  generateDailyObligations,
+  checkObligationCompliance,
+  autoCompleteObligation,
+  markObligationComplete,
+  getTodayObligations,
+  buildObligationContext,
+} from './engagement-obligations';
+export type {
+  ObligationType,
+  Obligation,
+} from './engagement-obligations';
+export {
+  generateDailyDeviceSchedule,
+  getNextActivation,
+  getDueActivations,
+  fireActivation,
+  processDeviceSchedule,
+  getDeviceScheduleStats,
+  buildVariableRatioContext,
+} from './variable-ratio-device';
+export type {
+  DevicePattern,
+  DeviceActivation,
+} from './variable-ratio-device';
+export {
+  getAllTemplates,
+  getTemplatesForCategory,
+  renderTemplate,
+  generateFromTemplate,
+} from './script-templates';
+export type {
+  ScriptTemplate,
+} from './script-templates';
+export {
+  batchGenerateAudio,
+  fillContentGaps,
+  buildBatchTtsContext,
+} from './batch-tts';
+export type {
+  BatchGenerateResult,
+  GeneratedItem,
+} from './batch-tts';
+export {
+  addExternalContent,
+  searchExternalContent,
+  prescribeExternalContent,
+  recordExternalConsumption,
+  buildContentLibraryContext,
+  seedExternalContent,
+} from './content-sourcer';
+export type {
+  ExternalContentType,
+  ExternalContentInput,
+  ExternalContentItem,
+  ContentSearchCriteria,
+  ContentLibraryContext,
+} from './content-sourcer';

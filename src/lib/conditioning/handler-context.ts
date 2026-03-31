@@ -7,20 +7,25 @@
  */
 
 import { supabase } from '../supabase';
+import { buildBatchTtsContext } from './batch-tts';
+import { buildContentLibraryContext } from './content-sourcer';
 
 /**
  * Build the conditioning engine context block for the Handler system prompt.
  * Queries recent sessions, trance progression, established triggers,
- * pending post-hypnotics, and scent conditioning state.
+ * pending post-hypnotics, scent conditioning state, template pipeline,
+ * and external content library.
  */
 export async function buildConditioningEngineContext(userId: string): Promise<string> {
   try {
-    const [sessions, trance, triggers, postHypnotics, scent] = await Promise.all([
+    const [sessions, trance, triggers, postHypnotics, scent, batchTtsCtx, contentLibCtx] = await Promise.all([
       fetchRecentSessions(userId),
       fetchTranceProgression(userId),
       fetchEstablishedTriggers(userId),
       fetchPendingPostHypnotics(userId),
       fetchScentConditioning(userId),
+      buildBatchTtsContext(userId).catch(() => ''),
+      buildContentLibraryContext(userId).catch(() => ''),
     ]);
 
     const lines: string[] = ['## Conditioning Engine State'];
@@ -73,6 +78,18 @@ export async function buildConditioningEngineContext(userId: string): Promise<st
       for (const sc of scent) {
         lines.push(`- ${sc.scent_name}: ${sc.sessions_paired ?? 0} pairings, strength: ${sc.association_strength ?? 'none'}`);
       }
+    }
+
+    // Template audio pipeline status
+    if (batchTtsCtx) {
+      lines.push('');
+      lines.push(batchTtsCtx);
+    }
+
+    // External content library
+    if (contentLibCtx) {
+      lines.push('');
+      lines.push(contentLibCtx);
     }
 
     if (lines.length <= 1) return '';
