@@ -23,6 +23,8 @@ import {
 import { useSleepContent } from '../../hooks/useSleepContent';
 import { useCorruption } from '../../hooks/useCorruption';
 import { recommendMode } from '../../lib/sleep-content';
+import { recordSleepPlayback } from '../../lib/conditioning/sleep-tracking';
+import { supabase } from '../../lib/supabase';
 import type { SleepAudioMode } from '../../types/sleep-content';
 import type { SleepPrescription } from '../../hooks/useSleepConditioning';
 
@@ -94,23 +96,43 @@ export function SleepContentPlayer({
   // Auto-dismiss on complete
   const completeDismissRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Sleep tracking: duration interval + start time
+  const durationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const playbackStartTimeRef = useRef<number>(0);
+
   const recommended = recommendMode(ginaHome, corruptionLevel);
+
+  // Helper to get current user ID for fire-and-forget tracking
+  const getUserId = useCallback(async () => {
+    const { data } = await supabase.auth.getUser();
+    return data?.user?.id ?? null;
+  }, []);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (controlsTimerRef.current) clearTimeout(controlsTimerRef.current);
       if (completeDismissRef.current) clearTimeout(completeDismissRef.current);
+      if (durationIntervalRef.current) clearInterval(durationIntervalRef.current);
     };
   }, []);
 
-  // Auto-dismiss after complete phase (5 seconds) + end conditioning
+  // Auto-dismiss after complete phase (5 seconds) + end conditioning + report completion
   useEffect(() => {
     if (sleep.state.phase === 'complete') {
       // End conditioning session when playback completes naturally
       if (prescription && onConditioningEnd) {
         onConditioningEnd();
       }
+
+      // Fire-and-forget: report completed
+      if (durationIntervalRef.current) clearInterval(durationIntervalRef.current);
+      const elapsed = Math.round((Date.now() - playbackStartTimeRef.current) / 1000);
+      getUserId().then((uid) => {
+        if (!uid) return;
+        recordSleepPlayback(uid, { event: 'completed', durationSeconds: elapsed }).catch(() => {});
+      });
+
       completeDismissRef.current = setTimeout(() => {
         onDismiss();
       }, 5000);
@@ -118,7 +140,7 @@ export function SleepContentPlayer({
         if (completeDismissRef.current) clearTimeout(completeDismissRef.current);
       };
     }
-  }, [sleep.state.phase, onDismiss, prescription, onConditioningEnd]);
+  }, [sleep.state.phase, onDismiss, prescription, onConditioningEnd, getUserId]);
 
   // ============================================
   // CONTROLS AUTO-HIDE
@@ -158,6 +180,21 @@ export function SleepContentPlayer({
     if (prescription && onConditioningStart) {
       onConditioningStart();
     }
+
+    // Fire-and-forget: report playback started
+    playbackStartTimeRef.current = Date.now();
+    getUserId().then((uid) => {
+      if (!uid) return;
+      const contentIds = prescription?.playlist?.map((p) => p.id) ?? [];
+      recordSleepPlayback(uid, { event: 'started', contentIds }).catch(() => {});
+
+      // Start duration reporting interval (every 30 seconds)
+      if (durationIntervalRef.current) clearInterval(durationIntervalRef.current);
+      durationIntervalRef.current = setInterval(() => {
+        const elapsed = Math.round((Date.now() - playbackStartTimeRef.current) / 1000);
+        recordSleepPlayback(uid, { event: 'progress', durationSeconds: elapsed }).catch(() => {});
+      }, 30_000);
+    });
   };
 
   const handleStop = async () => {
@@ -166,6 +203,14 @@ export function SleepContentPlayer({
     if (prescription && onConditioningEnd) {
       onConditioningEnd();
     }
+
+    // Fire-and-forget: report interrupted
+    if (durationIntervalRef.current) clearInterval(durationIntervalRef.current);
+    const elapsed = Math.round((Date.now() - playbackStartTimeRef.current) / 1000);
+    getUserId().then((uid) => {
+      if (!uid) return;
+      recordSleepPlayback(uid, { event: 'interrupted', durationSeconds: elapsed }).catch(() => {});
+    });
   };
 
   const handleSkipDelay = () => {

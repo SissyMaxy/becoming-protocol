@@ -12,6 +12,8 @@
 
 import { supabase } from '../supabase';
 import { getHiddenParam } from './hidden-operations';
+import { prescribeSpecificOutfit, recordOutfitWorn } from './wardrobe-system';
+import type { PrescribedOutfit } from './wardrobe-system';
 
 // ============================================
 // TYPES
@@ -154,8 +156,8 @@ const STEALTH_ADJUSTMENTS: Partial<Record<OutfitContext, Partial<OutfitTemplate>
 // ============================================
 
 /**
- * Prescribe today's outfit. Based on skill level, context, denial day,
- * and hidden explicitness tier.
+ * Prescribe today's outfit. Tries wardrobe-based specific prescription first.
+ * Falls back to generic template if wardrobe is empty.
  */
 export async function prescribeOutfit(userId: string): Promise<OutfitPrescription> {
   const today = new Date().toISOString().slice(0, 10);
@@ -169,6 +171,15 @@ export async function prescribeOutfit(userId: string): Promise<OutfitPrescriptio
     .maybeSingle();
 
   if (existing) return mapDbToOutfit(existing);
+
+  // Try wardrobe-based prescription first
+  const wardrobeOutfit = await prescribeSpecificOutfit(userId).catch(() => null);
+  if (wardrobeOutfit) {
+    return saveWardrobePrescription(userId, today, wardrobeOutfit);
+  }
+
+  // Wardrobe empty — fall back to generic template prescription
+  // Handler note: log wardrobe directive will come via buildWardrobeContext
 
   // Fetch state
   const [stateRes, skillRes, explicitness, ginaHome] = await Promise.all([
@@ -400,6 +411,97 @@ export async function buildOutfitControlContext(userId: string): Promise<string>
   } catch {
     return '';
   }
+}
+
+// ============================================
+// WARDROBE-BASED PRESCRIPTION
+// ============================================
+
+/**
+ * Save a wardrobe-based prescription. Maps actual wardrobe items
+ * into the outfit_prescriptions table format.
+ */
+async function saveWardrobePrescription(
+  userId: string,
+  today: string,
+  wardrobeOutfit: PrescribedOutfit,
+): Promise<OutfitPrescription> {
+  // Map wardrobe items to prescription fields
+  const findByCategory = (cats: string[]) =>
+    wardrobeOutfit.items.find((i) => cats.includes(i.category))?.itemName ?? '';
+
+  const underwear = findByCategory(['underwear']);
+  const top = findByCategory(['top', 'bra']);
+  const bottom = findByCategory(['bottom', 'skirt', 'leggings', 'dress']);
+  const shoes = findByCategory(['shoes_flats', 'shoes_heels']);
+  const accessories = wardrobeOutfit.items
+    .filter((i) => ['accessories', 'jewelry', 'wig', 'scent'].includes(i.category))
+    .map((i) => i.itemName);
+
+  // Determine context from stealth state
+  const { data: stateRow } = await supabase
+    .from('user_state')
+    .select('gina_home')
+    .eq('user_id', userId)
+    .maybeSingle();
+  const isGinaHome = stateRow?.gina_home ?? false;
+
+  let context: OutfitContext = 'home';
+  if (isGinaHome) {
+    context = wardrobeOutfit.femininityLevel >= 4 ? 'public_stealth' : 'work_stealth';
+  } else if (wardrobeOutfit.femininityLevel >= 5) {
+    context = 'public_visible';
+  }
+
+  const deadline = new Date();
+  deadline.setHours(9, 0, 0, 0);
+  if (deadline.getTime() < Date.now()) {
+    deadline.setHours(deadline.getHours() + 2);
+  }
+
+  const { data: inserted } = await supabase
+    .from('outfit_prescriptions')
+    .insert({
+      user_id: userId,
+      date: today,
+      underwear: underwear || 'Feminine panties (from wardrobe)',
+      top: top || wardrobeOutfit.description,
+      bottom: bottom || 'See outfit description',
+      accessories,
+      shoes: shoes || 'Any available',
+      scent: findByCategory(['scent']) || 'Light feminine scent',
+      context,
+      photo_required: wardrobeOutfit.photoRequired,
+      deadline: deadline.toISOString(),
+      verified: false,
+      escalation_level: wardrobeOutfit.femininityLevel,
+      wardrobe_item_ids: wardrobeOutfit.items.map((i) => i.itemId),
+    })
+    .select('id')
+    .single();
+
+  // Record items as worn (fire-and-forget)
+  recordOutfitWorn(
+    userId,
+    wardrobeOutfit.items.map((i) => i.itemId),
+  ).catch(() => {});
+
+  return {
+    id: inserted?.id ?? `outfit_${today}`,
+    userId,
+    date: today,
+    underwear: underwear || 'Feminine panties (from wardrobe)',
+    top: top || wardrobeOutfit.description,
+    bottom: bottom || 'See outfit description',
+    accessories,
+    shoes: shoes || 'Any available',
+    scent: findByCategory(['scent']) || 'Light feminine scent',
+    context,
+    photo_required: wardrobeOutfit.photoRequired,
+    deadline: deadline.toISOString(),
+    verified: false,
+    escalation_level: wardrobeOutfit.femininityLevel,
+  };
 }
 
 // ============================================

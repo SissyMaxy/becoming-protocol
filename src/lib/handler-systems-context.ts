@@ -112,6 +112,9 @@ import { buildObligationContext } from './conditioning/engagement-obligations';
 import { buildVariableRatioContext } from './conditioning/variable-ratio-device';
 import { buildMandateContext } from './conditioning/feminization-mandate';
 import { buildOutfitControlContext } from './conditioning/outfit-control';
+import { buildWardrobeContext } from './conditioning/wardrobe-system';
+import { buildVerificationContext } from './conditioning/compliance-verification';
+import { buildSleepTrackingContext } from './conditioning/sleep-tracking';
 import { buildGoonEngineContext } from './conditioning/goon-engine';
 import { buildArousalMaintenanceContext } from './conditioning/arousal-maintenance';
 import { buildExposureContext } from './conditioning/progressive-exposure';
@@ -186,6 +189,9 @@ export interface SystemsContext {
   variableRatioDevice: string;
   feminizationMandates: string;
   outfitControl: string;
+  wardrobeInventory: string;
+  complianceVerification: string;
+  sleepConditioningTracking: string;
   goonEngine: string;
   arousalMaintenance: string;
   progressiveExposure: string;
@@ -912,7 +918,7 @@ async function buildAutoPurchaseCtx(userId: string): Promise<string> {
  * All systems, maximum data density.
  */
 export async function buildFullSystemsContext(userId: string): Promise<string> {
-  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social, memory, conditioningEngine, impactTracking, irreversibility, narrativeArc, autoPoster, socialInbox, voicePitch, autoPurchase, femPrescription, exerciseRx, postReleaseBridge, serviceAdvancement, ambushScheduler, voiceEvolution, corruptionActivation, camHandlerControl, failureRecovery, communityMirror, handlerDirectives, journal, skillTree, contentOptimization, denialMapping, languageDrift, sleepPhaseTargeting, photoTimeline, correlationEngine, commitmentLadder, ginaMicroExposure, socialIntelligence, accountability, proactiveOutreach, conversationAgenda, predictiveEngine, protocolManager, handlerReflection, emotionalModel, personalityEvolution, libraryGrowth, sessionChaining, autonomousCycle, consequenceEng, obligationsCtx, variableRatio, femMandates, outfitCtrl, goonEng, arousalMaint, progressiveExp, consumptionMand] = await Promise.allSettled([
+  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social, memory, conditioningEngine, impactTracking, irreversibility, narrativeArc, autoPoster, socialInbox, voicePitch, autoPurchase, femPrescription, exerciseRx, postReleaseBridge, serviceAdvancement, ambushScheduler, voiceEvolution, corruptionActivation, camHandlerControl, failureRecovery, communityMirror, handlerDirectives, journal, skillTree, contentOptimization, denialMapping, languageDrift, sleepPhaseTargeting, photoTimeline, correlationEngine, commitmentLadder, ginaMicroExposure, socialIntelligence, accountability, proactiveOutreach, conversationAgenda, predictiveEngine, protocolManager, handlerReflection, emotionalModel, personalityEvolution, libraryGrowth, sessionChaining, autonomousCycle, consequenceEng, obligationsCtx, variableRatio, femMandates, outfitCtrl, wardrobeInv, complianceVerif, sleepTracking, goonEng, arousalMaint, progressiveExp, consumptionMand] = await Promise.allSettled([
     buildGinaContext(userId),
     buildContentContext(userId),
     buildVoiceContext(userId),
@@ -990,6 +996,9 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     buildVariableRatioContext(userId),
     buildMandateContext(userId),
     buildOutfitControlContext(userId),
+    buildWardrobeContext(userId),
+    buildVerificationContext(userId),
+    buildSleepTrackingContext(userId),
     buildGoonEngineContext(userId),
     buildArousalMaintenanceContext(userId),
     buildExposureContext(userId),
@@ -1074,6 +1083,9 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     variableRatio.status === 'fulfilled' ? variableRatio.value : '',
     femMandates.status === 'fulfilled' ? femMandates.value : '',
     outfitCtrl.status === 'fulfilled' ? outfitCtrl.value : '',
+    wardrobeInv.status === 'fulfilled' ? wardrobeInv.value : '',
+    complianceVerif.status === 'fulfilled' ? complianceVerif.value : '',
+    sleepTracking.status === 'fulfilled' ? sleepTracking.value : '',
     goonEng.status === 'fulfilled' ? goonEng.value : '',
     arousalMaint.status === 'fulfilled' ? arousalMaint.value : '',
     progressiveExp.status === 'fulfilled' ? progressiveExp.value : '',
