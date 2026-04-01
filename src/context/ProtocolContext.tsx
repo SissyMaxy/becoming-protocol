@@ -393,7 +393,7 @@ export function ProtocolProvider({ children }: { children: React.ReactNode }) {
 
     let aiPrescription: Prescription;
 
-    // Try Claude API first, fall back to rule-based if unavailable
+    // Try Claude API first, fall back to rule-based, then minimal fallback
     try {
       const claudeResult = await generateClaudePrescription(
         progress,
@@ -416,15 +416,26 @@ export function ProtocolProvider({ children }: { children: React.ReactNode }) {
           mode: userAnalytics.recommendedMode,
           reasoning: `AI-generated prescription in ${userAnalytics.recommendedMode.toUpperCase()} mode`
         };
-        console.log('Using Claude-generated prescription');
       } else {
-        // Claude not available, use fallback
         aiPrescription = generatePrescription(progress, history, intensity, levelLocks);
-        console.log('Using rule-based prescription (Claude unavailable)');
       }
     } catch (error) {
-      console.error('Claude API error, using fallback:', error);
-      aiPrescription = generatePrescription(progress, history, intensity, levelLocks);
+      console.error('Claude API error, trying fallback:', error);
+      try {
+        aiPrescription = generatePrescription(progress, history, intensity, levelLocks);
+      } catch (fallbackError) {
+        console.error('Fallback also failed, using minimal prescription:', fallbackError);
+        // Ultimate fallback — create a day with no AI-generated tasks
+        // The Handler will prescribe through conversation instead
+        aiPrescription = {
+          tasks: [],
+          note: 'Talk to the Handler for today\'s tasks.',
+          warnings: [],
+          celebrations: [],
+          mode: 'build' as const,
+          reasoning: 'Prescription generation unavailable — Handler will prescribe directly'
+        };
+      }
     }
 
     setPrescription(aiPrescription);
