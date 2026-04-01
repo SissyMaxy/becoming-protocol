@@ -120,6 +120,13 @@ import { buildArousalMaintenanceContext } from './conditioning/arousal-maintenan
 import { buildExposureContext } from './conditioning/progressive-exposure';
 import { buildConsumptionContext } from './conditioning/consumption-mandates';
 import { buildAntiCircumventionContext } from './conditioning/anti-circumvention';
+import { buildProofOfLifeContext } from './conditioning/proof-of-life';
+import { buildVideoVerificationContext } from './conditioning/video-verification';
+import { buildVerificationSequenceContext } from './conditioning/verification-sequences';
+import { buildStreakContext } from './conditioning/streak-stakes';
+import { buildDifficultyContext } from './conditioning/difficulty-escalation';
+import { buildRewardGatingContext } from './conditioning/reward-gating';
+import { buildResistanceClassifierContext } from './conditioning/resistance-classifier';
 import { supabase } from './supabase';
 
 // ============================================
@@ -198,6 +205,13 @@ export interface SystemsContext {
   progressiveExposure: string;
   consumptionMandates: string;
   antiCircumvention: string;
+  proofOfLife: string;
+  videoVerification: string;
+  verificationSequences: string;
+  streakStakes: string;
+  difficultyEscalation: string;
+  rewardGating: string;
+  resistanceClassifier: string;
 }
 
 // ============================================
@@ -920,7 +934,7 @@ async function buildAutoPurchaseCtx(userId: string): Promise<string> {
  * All systems, maximum data density.
  */
 export async function buildFullSystemsContext(userId: string): Promise<string> {
-  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social, memory, conditioningEngine, impactTracking, irreversibility, narrativeArc, autoPoster, socialInbox, voicePitch, autoPurchase, femPrescription, exerciseRx, postReleaseBridge, serviceAdvancement, ambushScheduler, voiceEvolution, corruptionActivation, camHandlerControl, failureRecovery, communityMirror, handlerDirectives, journal, skillTree, contentOptimization, denialMapping, languageDrift, sleepPhaseTargeting, photoTimeline, correlationEngine, commitmentLadder, ginaMicroExposure, socialIntelligence, accountability, proactiveOutreach, conversationAgenda, predictiveEngine, protocolManager, handlerReflection, emotionalModel, personalityEvolution, libraryGrowth, sessionChaining, autonomousCycle, consequenceEng, obligationsCtx, variableRatio, femMandates, outfitCtrl, wardrobeInv, complianceVerif, sleepTracking, goonEng, arousalMaint, progressiveExp, consumptionMand, antiCircumvent] = await Promise.allSettled([
+  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social, memory, conditioningEngine, impactTracking, irreversibility, narrativeArc, autoPoster, socialInbox, voicePitch, autoPurchase, femPrescription, exerciseRx, postReleaseBridge, serviceAdvancement, ambushScheduler, voiceEvolution, corruptionActivation, camHandlerControl, failureRecovery, communityMirror, handlerDirectives, journal, skillTree, contentOptimization, denialMapping, languageDrift, sleepPhaseTargeting, photoTimeline, correlationEngine, commitmentLadder, ginaMicroExposure, socialIntelligence, accountability, proactiveOutreach, conversationAgenda, predictiveEngine, protocolManager, handlerReflection, emotionalModel, personalityEvolution, libraryGrowth, sessionChaining, autonomousCycle, consequenceEng, obligationsCtx, variableRatio, femMandates, outfitCtrl, wardrobeInv, complianceVerif, sleepTracking, goonEng, arousalMaint, progressiveExp, consumptionMand, antiCircumvent, proofOfLife, videoVerif, verifSequences, streakStakes, difficultyEsc, rewardGating, resistanceClass] = await Promise.allSettled([
     buildGinaContext(userId),
     buildContentContext(userId),
     buildVoiceContext(userId),
@@ -1006,6 +1020,13 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     buildExposureContext(userId),
     buildConsumptionContext(userId),
     buildAntiCircumventionContext(userId),
+    buildProofOfLifeContext(userId),
+    buildVideoVerificationContext(userId),
+    buildVerificationSequenceContext(userId),
+    buildStreakContext(userId),
+    buildDifficultyContext(userId),
+    buildRewardGatingContext(userId),
+    buildResistanceClassifierContext(userId),
   ]);
 
   const blocks = [
@@ -1094,6 +1115,13 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     progressiveExp.status === 'fulfilled' ? progressiveExp.value : '',
     consumptionMand.status === 'fulfilled' ? consumptionMand.value : '',
     antiCircumvent.status === 'fulfilled' ? antiCircumvent.value : '',
+    proofOfLife.status === 'fulfilled' ? proofOfLife.value : '',
+    videoVerif.status === 'fulfilled' ? videoVerif.value : '',
+    verifSequences.status === 'fulfilled' ? verifSequences.value : '',
+    streakStakes.status === 'fulfilled' ? streakStakes.value : '',
+    difficultyEsc.status === 'fulfilled' ? difficultyEsc.value : '',
+    rewardGating.status === 'fulfilled' ? rewardGating.value : '',
+    resistanceClass.status === 'fulfilled' ? resistanceClass.value : '',
   ].filter(Boolean);
 
   if (blocks.length === 0) return '';

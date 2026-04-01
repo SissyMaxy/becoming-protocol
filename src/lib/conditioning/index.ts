@@ -374,3 +374,87 @@ export type {
   ConsumptionMandate,
   ConsumptionStatus,
 } from './consumption-mandates';
+export {
+  generateProofCode,
+  validateProofCode,
+  getActiveProofCode,
+  buildProofOfLifeContext,
+} from './proof-of-life';
+export type {
+  ProofOfLife,
+  ProofValidation,
+} from './proof-of-life';
+export {
+  requireVideoVerification,
+  validateVideoSubmission,
+  getActiveVideoRequirement,
+  buildVideoVerificationContext,
+} from './video-verification';
+export type {
+  VideoMandateType,
+  VideoRequirement,
+  VideoValidation,
+} from './video-verification';
+export {
+  createVerificationSequence,
+  submitSequenceStep,
+  checkSequenceComplete,
+  getActiveSequence,
+  buildVerificationSequenceContext,
+} from './verification-sequences';
+export type {
+  SequenceMandateType,
+  SequenceStep,
+  VerificationSequence,
+  SequenceStepResult,
+} from './verification-sequences';
+export {
+  calculateStreakValue,
+  incrementStreak,
+  breakStreak,
+  getActiveStreaks,
+  buildStreakContext,
+} from './streak-stakes';
+export type {
+  StreakType,
+  StreakValueTier,
+  Streak,
+  StreakBreak,
+  AllStreaks,
+} from './streak-stakes';
+export {
+  detectEasyMode,
+  detectHardMode,
+  assessDifficulty,
+  escalateDifficulty,
+  reduceDifficulty,
+  autoBalanceDifficulty,
+  buildDifficultyContext,
+} from './difficulty-escalation';
+export type {
+  DifficultyMode,
+  DifficultyAssessment,
+  DifficultyAdjustment,
+} from './difficulty-escalation';
+export {
+  checkPrivilege,
+  checkAllPrivileges,
+  grantReward,
+  revokePrivilege,
+  buildRewardGatingContext,
+} from './reward-gating';
+export type {
+  Privilege,
+  RewardType,
+  PrivilegeCheck,
+  RewardEvent,
+} from './reward-gating';
+export {
+  classifyResistance,
+  buildResistanceClassifierContext,
+} from './resistance-classifier';
+export type {
+  ResistanceClassification,
+  RecommendedApproach,
+  ClassificationResult,
+} from './resistance-classifier';
