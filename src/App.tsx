@@ -98,6 +98,21 @@ function parseWishlistToken(): string | null {
   return match ? match[1] : null;
 }
 
+// Parse URL path for deep-linking into menu sub-views (e.g. /social-dashboard)
+const DEEP_LINK_VIEWS: Record<string, string> = {
+  '/social-dashboard': 'social-dashboard',
+  '/socials': 'social-dashboard',
+  '/content-dashboard': 'content-dashboard',
+  '/dashboard': 'dashboard',
+  '/journal': 'journal',
+  '/settings': 'settings',
+};
+
+function parseDeepLinkView(): string | null {
+  const path = window.location.pathname;
+  return DEEP_LINK_VIEWS[path] || null;
+}
+
 type Tab = 'protocol' | 'progress' | 'sealed' | 'menu';
 
 // Navigation and Header removed — conversation IS the app.
@@ -229,8 +244,9 @@ function AuthenticatedAppInner() {
     }
   }, [whoopToast]);
 
-  const [activeTab, setActiveTab] = useState<Tab>('protocol');
-  const [menuSubView, setMenuSubView] = useState<MenuSubView>(null);
+  const deepLinkView = parseDeepLinkView();
+  const [activeTab, setActiveTab] = useState<Tab>(deepLinkView ? 'menu' : 'protocol');
+  const [menuSubView, setMenuSubView] = useState<MenuSubView>((deepLinkView as MenuSubView) || null);
   const [showMorningFlow, setShowMorningFlow] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
   const [editIntakeMode, setEditIntakeMode] = useState(false);

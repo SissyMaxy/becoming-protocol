@@ -4,7 +4,7 @@
  * settings, legacy Today view access, and help.
  */
 
-import { Settings, ChevronRight, HelpCircle, Calendar } from 'lucide-react';
+import { Settings, ChevronRight, HelpCircle, Calendar, Radio } from 'lucide-react';
 
 type MenuItemId =
   | 'settings' | 'help'
@@ -15,7 +15,7 @@ type MenuItemId =
   | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills'
   | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous'
   | 'exercise' | 'her-world' | 'vault-swipe' | 'content-dashboard' | 'cam-session' | 'hypno-session'
-  | 'progress-page' | 'sealed-page' | 'log-release';
+  | 'progress-page' | 'sealed-page' | 'log-release' | 'social-dashboard';
 
 interface MenuViewProps {
   onNavigate: (view: MenuItemId) => void;
@@ -29,6 +29,13 @@ export function MenuView({ onNavigate }: MenuViewProps) {
       label: 'Settings',
       description: 'Account, preferences, integrations',
       color: '#8b8b8b',
+    },
+    {
+      id: 'social-dashboard' as MenuItemId,
+      icon: Radio,
+      label: 'Socials',
+      description: 'Posts, replies, queue, quality metrics',
+      color: '#1DA1F2',
     },
     {
       id: 'journal' as MenuItemId,
