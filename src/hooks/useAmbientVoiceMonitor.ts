@@ -67,7 +67,7 @@ function detectPitch(audioBuffer: Float32Array, sampleRate: number): number | nu
   return frequency >= MIN_VOICE_HZ && frequency <= MAX_VOICE_HZ ? frequency : null;
 }
 
-export function useAmbientVoiceMonitor(): UseAmbientVoiceMonitorReturn {
+export function useAmbientVoiceMonitor(paused: boolean = false): UseAmbientVoiceMonitorReturn {
   const { user } = useAuth();
   const [isActive, setIsActive] = useState(false);
   const [lastPitchHz, setLastPitchHz] = useState<number | null>(null);
@@ -118,7 +118,7 @@ export function useAmbientVoiceMonitor(): UseAmbientVoiceMonitorReturn {
 
   // Capture and analyze a single sample
   const captureSample = useCallback(async () => {
-    if (!user || !enabledRef.current || activeCapture.current) return;
+    if (!user || !enabledRef.current || activeCapture.current || paused) return;
     if (document.hidden) return; // Only when app is visible
 
     activeCapture.current = true;
