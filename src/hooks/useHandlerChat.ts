@@ -191,7 +191,7 @@ export function useHandlerChat(): UseHandlerChatReturn {
           conversationId: conversationIdRef.current,
           message: text.trim(),
           conversationType: 'general',
-          stream: true,
+          stream: false,
           typingMetrics,
         }),
       });
