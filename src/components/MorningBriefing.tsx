@@ -40,7 +40,7 @@ export function MorningBriefing({ onComplete }: MorningBriefingProps) {
   const { startDay, progress } = useProtocol();
   const { userState, quickUpdate } = useUserState();
   const { isBambiMode } = useBambiMode();
-  const [selectedIntensity, setSelectedIntensity] = useState<Intensity | null>(null);
+  const [selectedIntensity, setSelectedIntensity] = useState<Intensity | null>('normal');
   const [isStarting, setIsStarting] = useState(false);
   const [userName, setUserName] = useState<string | null>(null);
   const [personalization, setPersonalization] = useState<MorningPersonalization | null>(null);
@@ -154,11 +154,12 @@ export function MorningBriefing({ onComplete }: MorningBriefingProps) {
     setIsStarting(true);
     try {
       await startDay(selectedIntensity);
-      onComplete();
     } catch (error) {
       console.error('Failed to start day:', error);
+      // Still proceed even if startDay fails — don't trap the user on this screen
     } finally {
       setIsStarting(false);
+      onComplete();
     }
   };
 
