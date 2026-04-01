@@ -68,6 +68,8 @@ export function MorningBriefing({ onComplete }: MorningBriefingProps) {
           }
         } catch (err) {
           console.error('Failed to load personalization:', err);
+          // Default to 'normal' so the Start Today button isn't permanently disabled
+          setSelectedIntensity('normal');
         }
       }
     }
