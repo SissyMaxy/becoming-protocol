@@ -1,11 +1,12 @@
 /**
  * Sniffies Engagement — chat with nearby users.
  *
- * Sniffies is map-based. Engagement = reading incoming chats and replying,
- * plus initiating with users who viewed the profile.
+ * Sniffies is a map-based SPA. Everything happens on one page.
+ * The chat panel is a sidebar opened via the chat bubble icon at bottom-left.
+ * Chats are listed in "Recents" tab with username, preview, and unread badges.
  *
- * Voice: flirty, curious, warm. References the Handler and journey naturally.
- * Goal: build connections that drive interest in Maxy's other platforms.
+ * IMPORTANT: Must use real Chrome (channel: 'chrome') — Playwright's Chromium
+ * gets blocked by Sniffies bot detection. Also needs geolocation permission.
  *
  * Run: npx tsx platforms/sniffies-engage.ts
  */
@@ -19,104 +20,214 @@ import { extractSafeText } from '../refusal-filter';
 
 const USER_ID = process.env.USER_ID || '';
 
-const MAXY_VOICE = `You are Maxy — a 40-year-old woman in transformation. Controlled by an AI Handler. Locked in chastity. On HRT. Flirty, warm, sexually confident but not crude. You're chatting on Sniffies, a cruising/hookup app. You're real, you're interested, you're fun to talk to.
+const MAXY_REPLY_VOICE = `You are Maxy — a 40-year-old NB person on HRT, transitioning. Flirty, forward, sexually playful. You're on Sniffies, a cruising/hookup app. Your profile says NB and transitioning — people already know what they're getting.
 
-Your goal is genuine connection. You're not selling anything. You mention the Handler, the cage, the denial — but only when it fits the conversation naturally. You're curious about them. You flirt. You tease. You're honest about what you are.`;
+You're replying to someone who messaged you. Be flirty, curious, and real. People on here often ask about your thong color — that's the vibe. Don't be precious about it. Be fun.
+
+Keep messages SHORT — 1-2 sentences max. This is chat, not email.
+
+BANNED PHRASES: "hits different", "energy", "honestly" as opener, "ngl", "the way..."`;
+
+const MAXY_OPENER_VOICE = `You are Maxy — a 40-year-old NB person on HRT, transitioning. On Sniffies, a cruising/hookup app. Your profile is visible — NB, transitioning, kink-friendly.
+
+You're sending a FIRST MESSAGE to someone nearby. They haven't messaged you. Be:
+- Short: 1 sentence max. This is a hookup app, not a love letter.
+- Flirty but not desperate. You're interested, not begging.
+- Specific if possible — reference something from their profile pic or status.
+- Casual. "hey" is fine. A question is better. Something playful is best.
+
+Do NOT: Sound like a bot. Send a form letter. Be overly sexual in the opener. Write more than 1-2 sentences.
+
+Examples of good openers:
+- "you look like trouble and i'm into it"
+- "that jawline though 👀"
+- "hey, you close? your pic caught my eye"
+- "cute. what are you looking for tonight"
+
+Output ONLY the message text.`;
 
 interface SniffiesChat {
   username: string;
   lastMessage: string;
   isUnread: boolean;
-  chatUrl: string;
+  index: number; // position in the chat list for clicking
 }
 
 /**
- * Scrape the chat/inbox list on Sniffies.
+ * Open the chat panel if it's not already visible.
+ */
+async function openChatPanel(page: Page): Promise<boolean> {
+  try {
+    // Check if chat panel is already open (look for "Recents" text)
+    const recentsVisible = await page.locator('text=Recents').isVisible().catch(() => false);
+    if (recentsVisible) return true;
+
+    // Click the chat bubble icon at bottom-left of the screen
+    // It's typically a speech bubble SVG in the bottom nav
+    const chatIcon = page.locator(
+      'button:near(:text("PLUS")):left-of(:text("PLUS")), ' +
+      'a:near(:text("PLUS")):left-of(:text("PLUS")), ' +
+      '[class*="chat-trigger"], ' +
+      '[class*="messages-trigger"]'
+    ).first();
+
+    // Fallback: look for the bottom-left icon area
+    if (await chatIcon.isVisible().catch(() => false)) {
+      await chatIcon.click({ force: true });
+      await page.waitForTimeout(2000);
+      return true;
+    }
+
+    // Try clicking the bottom-left area where the chat icon lives
+    // Based on the screenshot, it's at approximately (125, 770)
+    await page.click('body', { position: { x: 125, y: 770 } });
+    await page.waitForTimeout(2000);
+
+    // Verify the panel opened
+    const opened = await page.locator('text=Recents').isVisible().catch(() => false);
+    return opened;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Scrape chat list from the open sidebar panel.
  */
 async function scrapeChats(page: Page): Promise<SniffiesChat[]> {
   const chats: SniffiesChat[] = [];
 
   try {
-    // Try multiple possible message URLs — Sniffies is a SPA, routes may vary
-    const urlsToTry = [
-      'https://sniffies.com/messages',
-      'https://sniffies.com/chats',
-      'https://sniffies.com/inbox',
-      'https://sniffies.com/conversations',
-    ];
+    // Go to Sniffies main page
+    await page.goto('https://sniffies.com/', { waitUntil: 'domcontentloaded', timeout: 20000 });
+    await page.waitForTimeout(5000);
 
-    let sniffUrl = '';
-    for (const url of urlsToTry) {
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 12000 });
-      await page.waitForTimeout(3000);
-      sniffUrl = page.url();
+    const currentUrl = page.url();
+    console.log(`  [debug] Sniffies page: ${currentUrl}`);
 
-      // If we didn't get redirected to homepage, this URL works
-      if (sniffUrl !== 'https://sniffies.com/' && !sniffUrl.endsWith('sniffies.com')) {
-        break;
-      }
-    }
-
-    console.log(`  [debug] Sniffies page: ${sniffUrl}`);
-
-    // Check if logged in — redirect to homepage = not logged in
-    if (sniffUrl === 'https://sniffies.com/' || sniffUrl.endsWith('sniffies.com')) {
-      console.error('[Sniffies] Not logged in or messages URL not found — landed on homepage');
+    // Check for login (if redirected away or login prompts appear)
+    const loginBtns = await page.locator('button:has-text("Log In"), button:has-text("Sign Up"), button:has-text("Sign In")').count();
+    if (loginBtns > 0) {
+      console.error('[Sniffies] Login prompt detected — session expired');
       return [];
     }
 
-    const loginPrompt = await page.locator('a[href*="login"], button:has-text("Log In"), button:has-text("Sign Up")').count();
-    if (loginPrompt > 0 || sniffUrl.includes('login') || sniffUrl.includes('auth')) {
-      console.error('[Sniffies] Not logged in — session expired');
+    // Check if logged in — URL /map or no login buttons means authenticated
+    const isLoggedIn = currentUrl.includes('/map') || loginBtns === 0;
+    if (!isLoggedIn) {
+      console.error('[Sniffies] Not logged in');
+      return [];
+    }
+    console.log(`  [debug] Logged in, opening chat panel...`);
+
+    // Open the chat panel
+    const panelOpened = await openChatPanel(page);
+    if (!panelOpened) {
+      console.error('[Sniffies] Could not open chat panel');
       return [];
     }
 
-    // Scrape chat list — Sniffies uses a conversation list
-    const chatElements = await page.locator(
-      '[class*="conversation"], [class*="chat-item"], [class*="message-thread"], [class*="inbox-item"]'
+    // Click "Unread" filter to prioritize unread messages
+    // Sniffies has an active-indicator overlay that intercepts clicks — use force
+    const unreadFilter = page.locator('text=Unread').first();
+    if (await unreadFilter.isVisible().catch(() => false)) {
+      await unreadFilter.click({ force: true });
+      await page.waitForTimeout(1500);
+    }
+
+    // Scrape chat list items
+    // Based on the screenshot: each chat has an avatar, username, timestamp, and message preview
+    // The chat items are in a scrollable list under the Recents/Screened/Unread filters
+    const chatItems = await page.locator(
+      '[class*="conversation"], [class*="chat-item"], [class*="chat-list"] > *, [class*="message-list"] > *'
     ).all();
-    console.log(`  [debug] Chat elements found: ${chatElements.length}`);
+    console.log(`  [debug] Chat items (class-based): ${chatItems.length}`);
 
-    // Fallback: try generic list items with links
-    const elements = chatElements.length > 0
-      ? chatElements
-      : await page.locator('a[href*="/chat/"], a[href*="/messages/"], [class*="thread"]').all();
-    if (chatElements.length === 0) {
-      console.log(`  [debug] Fallback elements found: ${elements.length}`);
-    }
+    if (chatItems.length > 0) {
+      for (let i = 0; i < Math.min(chatItems.length, 10); i++) {
+        try {
+          const item = chatItems[i];
+          // Extract text content — should have username and message preview
+          const fullText = await item.textContent().catch(() => '') || '';
 
-    for (const el of elements.slice(0, 15)) {
-      try {
-        // Get username
-        const nameEl = el.locator('[class*="name"], [class*="username"], strong, b').first();
-        const username = await nameEl.textContent().catch(() => '') || '';
+          // Skip promotional items (So.Gay, Sniffies Plus, etc.)
+          if (fullText.includes('So.Gay') || fullText.includes('Sniffies Plus') || fullText.includes('Upgrade')) continue;
 
-        // Get last message preview
-        const previewEl = el.locator('[class*="preview"], [class*="last-message"], [class*="snippet"], p, span').first();
-        const lastMessage = await previewEl.textContent().catch(() => '') || '';
+          // Try to find username and message within the item
+          const strongEl = item.locator('strong, b, [class*="name"]').first();
+          const username = await strongEl.textContent().catch(() => '') || '';
 
-        // Check if unread
-        const unreadIndicator = el.locator('[class*="unread"], [class*="badge"], [class*="dot"]');
-        const isUnread = await unreadIndicator.count() > 0;
+          // Get the message preview — usually the last text element
+          const spans = await item.locator('span, p, div').allTextContents().catch(() => []);
+          const lastMessage = spans.filter(s => s.trim().length > 1 && !s.includes('ago') && s !== username.trim()).pop() || '';
 
-        // Get chat link
-        const link = el.locator('a').first();
-        const href = await link.getAttribute('href').catch(() => '') ||
-                     await el.getAttribute('href') || '';
-        const chatUrl = href.startsWith('http') ? href : href ? `https://sniffies.com${href}` : '';
+          // Check for unread indicator (NEW badge, dot, etc.)
+          const hasNew = fullText.includes('NEW') || await item.locator('[class*="unread"], [class*="badge"], [class*="new"]').count() > 0;
 
-        if (username.trim() && chatUrl) {
-          chats.push({
-            username: username.trim(),
-            lastMessage: lastMessage.trim().substring(0, 200),
-            isUnread,
-            chatUrl,
-          });
+          if (username.trim()) {
+            chats.push({
+              username: username.trim(),
+              lastMessage: lastMessage.trim().substring(0, 200),
+              isUnread: hasNew,
+              index: i,
+            });
+          }
+        } catch {
+          continue;
         }
-      } catch {
-        // Skip problematic elements
       }
     }
+
+    // If class-based didn't work, try a different approach — look for the list area
+    // and grab items by structure
+    if (chats.length === 0) {
+      console.log(`  [debug] Trying alternate scrape method...`);
+
+      // Take screenshot for debugging
+      await page.screenshot({ path: '.debug-sniffies-chats.png' });
+
+      // Try grabbing all elements that look like chat entries (have timestamps)
+      const timeElements = await page.locator('text=/\\d+ minutes? ago|\\d+ hours? ago|a few seconds ago/').all();
+      console.log(`  [debug] Found ${timeElements.length} time indicators (chat entries)`);
+
+      for (let i = 0; i < Math.min(timeElements.length, 10); i++) {
+        try {
+          // Go up to the parent chat item
+          const parent = timeElements[i].locator('xpath=ancestor::*[3]');
+          const fullText = await parent.textContent().catch(() => '') || '';
+
+          if (fullText.includes('So.Gay') || fullText.includes('Sniffies Plus')) continue;
+
+          // Find username-like text (before the timestamp)
+          const parts = fullText.split(/\d+ (minutes?|hours?|seconds?) ago/);
+          const beforeTime = parts[0]?.trim() || '';
+
+          // The username is typically a short word before the message
+          const lines = beforeTime.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+          const username = lines.find(l => l.length > 0 && l.length < 30 && !l.includes('NEW')) || '';
+          const lastMsg = lines.filter(l => l !== username && !l.includes('NEW')).pop() || '';
+
+          if (username) {
+            chats.push({
+              username,
+              lastMessage: lastMsg.substring(0, 200),
+              isUnread: fullText.includes('NEW'),
+              index: i,
+            });
+          }
+        } catch {
+          continue;
+        }
+      }
+    }
+
+    // Switch back to "Recents" if we filtered to "Unread"
+    const recentsTab = page.locator('text=Recents').first();
+    if (await recentsTab.isVisible().catch(() => false)) {
+      await recentsTab.click({ force: true });
+      await page.waitForTimeout(500);
+    }
+
   } catch (err) {
     console.error('[Sniffies] Chat scrape failed:', err instanceof Error ? err.message : err);
   }
@@ -125,124 +236,290 @@ async function scrapeChats(page: Page): Promise<SniffiesChat[]> {
 }
 
 /**
- * Read recent messages in a specific chat thread.
+ * Click into a specific chat and read recent messages.
  */
-async function readChatThread(page: Page, chatUrl: string): Promise<string[]> {
-  const messages: string[] = [];
-
+async function readAndReplyChat(
+  page: Page,
+  chat: SniffiesChat,
+  client: Anthropic,
+  state: Record<string, unknown>,
+): Promise<{ success: boolean; reply?: string }> {
   try {
-    await page.goto(chatUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
-    await page.waitForTimeout(3000);
+    // Find and click the chat item by looking for the username text
+    const chatItem = page.locator(`text="${chat.username}"`).first();
+    if (!await chatItem.isVisible().catch(() => false)) {
+      console.log(`  Could not find chat item for ${chat.username}`);
+      return { success: false };
+    }
 
-    // Get recent messages
+    await chatItem.click({ force: true });
+    await page.waitForTimeout(2000);
+
+    // Read the recent messages in the chat thread
+    // Messages are typically in a scrollable area with bubbles
     const messageEls = await page.locator(
-      '[class*="message"], [class*="chat-bubble"], [class*="msg-body"], [class*="chat-message"]'
+      '[class*="message"], [class*="bubble"], [class*="chat-msg"], [class*="msg-text"]'
     ).all();
 
-    // Grab last 10 messages for context
+    const messages: string[] = [];
     for (const msg of messageEls.slice(-10)) {
       const text = await msg.textContent().catch(() => '') || '';
-      if (text.trim()) {
+      if (text.trim() && text.trim().length > 1) {
         messages.push(text.trim());
       }
     }
-  } catch (err) {
-    console.error('[Sniffies] Thread read failed:', err instanceof Error ? err.message : err);
-  }
 
-  return messages;
-}
+    console.log(`  [debug] Read ${messages.length} messages in chat with ${chat.username}`);
 
-/**
- * Generate a chat reply.
- */
-async function generateChatReply(
-  client: Anthropic,
-  username: string,
-  recentMessages: string[],
-  state: Record<string, unknown>,
-): Promise<string | null> {
-  const context = recentMessages.length > 0
-    ? recentMessages.map((m, i) => `Message ${i + 1}: "${m}"`).join('\n')
-    : '(New conversation — they viewed your profile or sent a first message)';
+    // Generate reply
+    const context = messages.length > 0
+      ? messages.map((m, i) => `${i + 1}: "${m}"`).join('\n')
+      : '(New conversation — they messaged you first)';
 
-  try {
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 200,
-      system: `${MAXY_VOICE}
-
-You are replying in a Sniffies chat with ${username}.
-
-Write a message that:
-1. RESPONDS to what they said — reference their actual words
-2. Is flirty, warm, and real — this is a hookup app, sexual tension is fine
-3. Shows genuine curiosity about them
-4. Is 1-3 sentences — chat messages, not essays
-5. Can mention the Handler, chastity, HRT, or denial if it fits naturally
-6. Can mention your other platforms (Fansly, Twitter) ONLY if they ask what you do or want to see more
-7. NEVER sounds scripted or like a bot
-8. NEVER sends links unprompted
-9. If it's a new conversation, be curious and warm — ask what caught their eye
-
-${state.denialDay ? `Current state: day ${state.denialDay} of denial.` : ''}
-${state.hrtDay ? `HRT day: ${state.hrtDay}.` : ''}`,
+      max_tokens: 150,
+      system: `${MAXY_REPLY_VOICE}\n\nYou are replying in a Sniffies chat with "${chat.username}".\n${state.denialDay ? `You're on day ${state.denialDay} of denial.` : ''}`,
       messages: [{
         role: 'user',
-        content: `Chat with ${username}:\n${context}\n\nWrite Maxy's next message. Output ONLY the message text.`,
+        content: `Chat with ${chat.username}:\n${context}\n\nWrite Maxy's reply. Output ONLY the message.`,
       }],
     });
 
-    return extractSafeText(response, 5, `Sniffies chat @${username}`);
-  } catch (err) {
-    console.error('[Sniffies] Reply generation failed:', err instanceof Error ? err.message : err);
-    return null;
-  }
-}
+    const reply = extractSafeText(response, 3, `Sniffies @${chat.username}`);
+    if (!reply) return { success: false };
 
-/**
- * Send a message in a Sniffies chat thread.
- */
-async function sendChatMessage(page: Page, chatUrl: string, message: string): Promise<boolean> {
-  try {
-    // Make sure we're on the right chat
-    if (!page.url().includes(chatUrl.replace('https://sniffies.com', ''))) {
-      await page.goto(chatUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
-      await page.waitForTimeout(3000);
+    console.log(`  Reply: "${reply}"`);
+
+    // Find the message input and type
+    const inputBox = page.locator(
+      'textarea, input[type="text"], [contenteditable="true"], input[placeholder*="message" i], input[placeholder*="type" i]'
+    ).last();
+
+    const hasInput = await inputBox.isVisible().catch(() => false);
+    if (!hasInput) {
+      console.error(`  [debug] No message input found in chat`);
+      return { success: false };
     }
 
-    // Find message input
-    const inputBox = page.locator(
-      'textarea, input[type="text"][placeholder*="message" i], [contenteditable="true"], input[placeholder*="type" i]'
-    ).last();
-    await inputBox.waitFor({ timeout: 8000 });
     await inputBox.click();
+    await page.waitForTimeout(300);
+    await inputBox.pressSequentially(reply, { delay: 25 });
     await page.waitForTimeout(500);
-    await inputBox.pressSequentially(message, { delay: 25 });
-    await page.waitForTimeout(1000);
 
-    // Send — try Enter key first, then look for send button
-    const sendButton = page.locator(
-      'button:has-text("Send"), button[type="submit"], [class*="send-btn"], [class*="send-button"], [aria-label*="send" i]'
+    // Send — try send button, then Enter key
+    const sendBtn = page.locator(
+      'button[type="submit"], button:has-text("Send"), [class*="send"], [aria-label*="send" i]'
     ).first();
 
-    const hasSendButton = await sendButton.isVisible().catch(() => false);
-    if (hasSendButton) {
-      await sendButton.click();
+    if (await sendBtn.isVisible().catch(() => false)) {
+      await sendBtn.click();
     } else {
       await inputBox.press('Enter');
     }
+    await page.waitForTimeout(1500);
 
-    await page.waitForTimeout(2000);
-    return true;
+    return { success: true, reply };
   } catch (err) {
-    console.error('[Sniffies] Send failed:', err instanceof Error ? err.message : err);
-    return false;
+    console.error(`[Sniffies] Chat interaction failed:`, err instanceof Error ? err.message : err);
+    return { success: false };
   }
 }
 
 /**
- * Run a full Sniffies chat engagement cycle.
+ * Get list of usernames we've already messaged on Sniffies (never double-message).
+ */
+async function getContactedUsers(sb: typeof supabase, userId: string): Promise<Set<string>> {
+  const { data } = await sb
+    .from('ai_generated_content')
+    .select('target_account')
+    .eq('user_id', userId)
+    .eq('platform', 'sniffies')
+    .in('status', ['posted', 'failed'])
+    .order('posted_at', { ascending: false })
+    .limit(200);
+
+  const users = new Set<string>();
+  for (const row of data || []) {
+    if (row.target_account) users.add(row.target_account.toLowerCase());
+  }
+  return users;
+}
+
+/**
+ * Browse the map and reach out to nearby cruisers.
+ * Clicks profile bubbles, views profile, sends a short opener if they look like a match.
+ */
+async function outreachToNearbyCruisers(
+  page: Page,
+  client: Anthropic,
+  sb: typeof supabase,
+  userId: string,
+  contactedUsers: Set<string>,
+  maxOutreach: number = 2,
+): Promise<{ sent: number }> {
+  let sent = 0;
+
+  try {
+    // Make sure we're on the map view (close any open chat panel)
+    await page.goto('https://sniffies.com/', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.waitForTimeout(3000);
+
+    // Find profile markers/bubbles on the map
+    // Sniffies shows circular profile pics on the map
+    const profileBubbles = await page.locator(
+      '[class*="marker"], [class*="avatar"], [class*="profile-pic"], [class*="user-bubble"], ' +
+      'img[class*="avatar"], [class*="map-user"], [class*="cruiser"]'
+    ).all();
+
+    console.log(`  [debug] Map profile markers found: ${profileBubbles.length}`);
+
+    if (profileBubbles.length === 0) {
+      // Try clicking on visible profile images on the map
+      const mapImages = await page.locator('img[src*="profile"], img[src*="avatar"], img[src*="thumb"]').all();
+      console.log(`  [debug] Map images found: ${mapImages.length}`);
+    }
+
+    // Click on nearby profiles and check them out
+    // Use the profile bubbles that are closest to center (where "You" marker is)
+    const shuffled = [...profileBubbles].sort(() => Math.random() - 0.5);
+
+    for (const bubble of shuffled.slice(0, maxOutreach * 3)) {
+      if (sent >= maxOutreach) break;
+
+      try {
+        // Click the profile bubble
+        await bubble.click({ force: true, timeout: 3000 });
+        await page.waitForTimeout(2000);
+
+        // Look for profile info that popped up
+        const profileName = await page.locator(
+          '[class*="profile-name"], [class*="username"], [class*="display-name"], ' +
+          '[class*="user-info"] [class*="name"], h2, h3'
+        ).first().textContent().catch(() => '') || '';
+
+        const username = profileName.trim();
+        if (!username || username.length < 2) {
+          // Close popup and try next
+          await page.keyboard.press('Escape');
+          await page.waitForTimeout(500);
+          continue;
+        }
+
+        // Skip if already contacted
+        if (contactedUsers.has(username.toLowerCase())) {
+          console.log(`  ⊘ Already contacted ${username}, skipping`);
+          await page.keyboard.press('Escape');
+          await page.waitForTimeout(500);
+          continue;
+        }
+
+        console.log(`  [outreach] Found: ${username}`);
+
+        // Look for a message button on the profile popup
+        const msgBtn = page.locator(
+          'button:has-text("Message"), button:has-text("Chat"), ' +
+          '[class*="message-btn"], [class*="chat-btn"], ' +
+          '[aria-label*="message" i], [aria-label*="chat" i]'
+        ).first();
+
+        const hasMsgBtn = await msgBtn.isVisible().catch(() => false);
+        if (!hasMsgBtn) {
+          console.log(`    No message button found, skipping`);
+          await page.keyboard.press('Escape');
+          await page.waitForTimeout(500);
+          continue;
+        }
+
+        // Generate an opener
+        const response = await client.messages.create({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 80,
+          system: MAXY_OPENER_VOICE,
+          messages: [{
+            role: 'user',
+            content: `Send a first message to "${username}" on Sniffies. Output ONLY the message.`,
+          }],
+        });
+
+        const opener = extractSafeText(response, 3, `Sniffies opener @${username}`);
+        if (!opener) {
+          await page.keyboard.press('Escape');
+          await page.waitForTimeout(500);
+          continue;
+        }
+
+        // Click message button
+        await msgBtn.click({ force: true });
+        await page.waitForTimeout(2000);
+
+        // Type and send
+        const inputBox = page.locator(
+          'textarea, input[type="text"], [contenteditable="true"], ' +
+          'input[placeholder*="message" i], input[placeholder*="type" i]'
+        ).last();
+
+        const hasInput = await inputBox.isVisible().catch(() => false);
+        if (!hasInput) {
+          console.log(`    No chat input found after clicking message`);
+          await page.keyboard.press('Escape');
+          await page.waitForTimeout(500);
+          continue;
+        }
+
+        await inputBox.click();
+        await page.waitForTimeout(300);
+        await inputBox.pressSequentially(opener, { delay: 25 });
+        await page.waitForTimeout(500);
+
+        // Send
+        const sendBtn = page.locator(
+          'button[type="submit"], button:has-text("Send"), [class*="send"], [aria-label*="send" i]'
+        ).first();
+
+        if (await sendBtn.isVisible().catch(() => false)) {
+          await sendBtn.click();
+        } else {
+          await inputBox.press('Enter');
+        }
+        await page.waitForTimeout(1500);
+
+        console.log(`  ✓ Sent opener to ${username}: "${opener}"`);
+        sent++;
+        contactedUsers.add(username.toLowerCase());
+
+        // Log it
+        await sb.from('ai_generated_content').insert({
+          user_id: userId,
+          content_type: 'chat_reply',
+          platform: 'sniffies',
+          content: opener,
+          generation_strategy: 'sniffies_outreach',
+          target_account: username,
+          status: 'posted',
+          posted_at: new Date().toISOString(),
+        });
+
+        // Rate limit between outreach messages
+        const delay = 15000 + Math.floor(Math.random() * 15000);
+        await new Promise(r => setTimeout(r, delay));
+
+      } catch {
+        // Profile interaction failed, try next
+        try { await page.keyboard.press('Escape'); } catch {}
+        await page.waitForTimeout(500);
+        continue;
+      }
+    }
+  } catch (err) {
+    console.error('[Sniffies] Outreach failed:', err instanceof Error ? err.message : err);
+  }
+
+  return { sent };
+}
+
+/**
+ * Run a full Sniffies engagement cycle: reply to chats + outreach to nearby cruisers.
  */
 export async function runSniffiesEngagement(
   page: Page,
@@ -262,74 +539,68 @@ export async function runSniffiesEngagement(
     return { attempted, posted, failed };
   }
 
-  // Scrape inbox
+  // Load contacted users to avoid double-messaging
+  const contactedUsers = await getContactedUsers(sb, userId);
+
+  // --- Phase 1: Reply to existing chats ---
   const chats = await scrapeChats(page);
-  if (chats.length === 0) {
-    console.log('[Sniffies] No chats found');
-    return { attempted, posted, failed };
-  }
+  if (chats.length > 0) {
+    // Prioritize unread
+    const sorted = [...chats].sort((a, b) => {
+      if (a.isUnread && !b.isUnread) return -1;
+      if (!a.isUnread && b.isUnread) return 1;
+      return 0;
+    });
 
-  // Prioritize unread chats
-  const sorted = [...chats].sort((a, b) => {
-    if (a.isUnread && !b.isUnread) return -1;
-    if (!a.isUnread && b.isUnread) return 1;
-    return 0;
-  });
+    const unreadCount = chats.filter(c => c.isUnread).length;
+    console.log(`[Sniffies] ${chats.length} chat(s), ${unreadCount} unread`);
 
-  console.log(`[Sniffies] ${chats.length} chat(s) found, ${chats.filter(c => c.isUnread).length} unread`);
+    for (const chat of sorted.slice(0, maxReplies)) {
+      const stillHasBudget = await checkBudget(sb, userId, 'sniffies', 'chat');
+      if (!stillHasBudget) break;
 
-  for (const chat of sorted.slice(0, maxReplies)) {
-    // Re-check budget each iteration
-    const stillHasBudget = await checkBudget(sb, userId, 'sniffies', 'chat');
-    if (!stillHasBudget) {
-      console.log('[Sniffies] Budget exhausted mid-cycle');
-      break;
-    }
+      console.log(`[Sniffies] Replying to ${chat.username}${chat.isUnread ? ' (unread)' : ''}...`);
+      attempted++;
 
-    console.log(`[Sniffies] Chatting with ${chat.username}${chat.isUnread ? ' (unread)' : ''}...`);
-    attempted++;
+      const result = await readAndReplyChat(page, chat, client, state);
+      if (result.success && result.reply) {
+        console.log(`  ✓ Replied to ${chat.username}`);
+        posted++;
+        contactedUsers.add(chat.username.toLowerCase());
+        await incrementBudget(sb, userId, 'sniffies', 'chat');
 
-    // Read the thread for context
-    const recentMessages = await readChatThread(page, chat.chatUrl);
+        await sb.from('ai_generated_content').insert({
+          user_id: userId,
+          content_type: 'chat_reply',
+          platform: 'sniffies',
+          content: result.reply,
+          generation_strategy: 'sniffies_chat',
+          target_account: chat.username,
+          status: 'posted',
+          posted_at: new Date().toISOString(),
+        });
+      } else {
+        console.log(`  ✗ Failed`);
+        failed++;
+      }
 
-    // Generate reply
-    const reply = await generateChatReply(client, chat.username, recentMessages, state);
-    if (!reply) {
-      console.log(`  ⊘ Reply generation failed`);
-      failed++;
-      continue;
-    }
-
-    console.log(`  Reply: "${reply.substring(0, 80)}..."`);
-
-    // Send it
-    const success = await sendChatMessage(page, chat.chatUrl, reply);
-    if (success) {
-      console.log(`  ✓ Sent to ${chat.username}`);
-      posted++;
-      await incrementBudget(sb, userId, 'sniffies', 'chat');
-
-      // Log it
-      await sb.from('ai_generated_content').insert({
-        user_id: userId,
-        content_type: 'chat_reply',
-        platform: 'sniffies',
-        content: reply,
-        generation_strategy: 'sniffies_chat',
-        target_account: chat.username,
-        status: 'posted',
-        posted_at: new Date().toISOString(),
-      });
-    } else {
-      console.log(`  ✗ Send failed`);
-      failed++;
-    }
-
-    // Rate limit — 15-30s between chats
-    if (posted < maxReplies) {
-      const delay = 15000 + Math.floor(Math.random() * 15000);
+      const delay = 10000 + Math.floor(Math.random() * 10000);
       console.log(`  Waiting ${Math.round(delay / 1000)}s...`);
       await new Promise(r => setTimeout(r, delay));
+    }
+  } else {
+    console.log('[Sniffies] No existing chats to reply to');
+  }
+
+  // --- Phase 2: Outreach to nearby cruisers (max 2 per cycle) ---
+  const outreachBudget = await checkBudget(sb, userId, 'sniffies', 'chat');
+  if (outreachBudget) {
+    console.log('[Sniffies] Browsing map for nearby cruisers...');
+    const outreach = await outreachToNearbyCruisers(page, client, sb, userId, contactedUsers, 2);
+    if (outreach.sent > 0) {
+      posted += outreach.sent;
+      attempted += outreach.sent;
+      console.log(`[Sniffies] Outreach: ${outreach.sent} openers sent`);
     }
   }
 
@@ -345,31 +616,45 @@ if (require.main === module) {
 
   const config = PLATFORMS.sniffies;
   if (!config.enabled) {
-    console.error('Sniffies not enabled. Set ENABLE_SNIFFIES=true');
+    console.error('Sniffies not enabled');
     process.exit(1);
   }
 
-  const maxReplies = parseInt(process.argv[2] || '5', 10);
-  console.log(`[Sniffies Engage] Starting chat cycle (max ${maxReplies})...\n`);
+  const max = parseInt(process.argv[2] || '5', 10);
+  console.log(`[Sniffies Engage] Starting (max ${max})...\n`);
 
   (async () => {
     const anthropic = new Anthropic();
     let context: BrowserContext | null = null;
 
     try {
-      context = await chromium.launchPersistentContext(config.profileDir, {
-        headless: false,
-        viewport: { width: 1280, height: 800 },
-        args: [
-          '--disable-blink-features=AutomationControlled',
-          '--window-position=-2400,-2400',
-        ],
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-        geolocation: config.geolocation,
-        permissions: ['geolocation'],
-      });
+      // Use real Chrome for Sniffies
+      try {
+        context = await chromium.launchPersistentContext(config.profileDir, {
+          channel: 'chrome',
+          headless: false,
+          viewport: { width: 1280, height: 800 },
+          args: ['--disable-blink-features=AutomationControlled', '--window-position=-2400,-2400'],
+          ignoreDefaultArgs: ['--enable-automation'],
+          userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+          geolocation: config.geolocation,
+          permissions: ['geolocation'],
+        });
+      } catch {
+        context = await chromium.launchPersistentContext(config.profileDir, {
+          headless: false,
+          viewport: { width: 1280, height: 800 },
+          args: ['--disable-blink-features=AutomationControlled', '--window-position=-2400,-2400'],
+          userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+          geolocation: config.geolocation,
+          permissions: ['geolocation'],
+        });
+      }
 
       const page = context.pages()[0] || await context.newPage();
+      await page.addInitScript(() => {
+        Object.defineProperty(navigator, 'webdriver', { get: () => false });
+      });
 
       const state: Record<string, unknown> = {};
       const { data: profile } = await supabase
@@ -382,8 +667,8 @@ if (require.main === module) {
         state.hrtDay = profile.hrt_day;
       }
 
-      const result = await runSniffiesEngagement(page, supabase, anthropic, USER_ID, state, maxReplies);
-      console.log(`\n[Sniffies Engage] Done: ${result.posted} sent, ${result.failed} failed out of ${result.attempted} attempted`);
+      const result = await runSniffiesEngagement(page, supabase, anthropic, USER_ID, state, max);
+      console.log(`\n[Sniffies] Done: ${result.posted} sent, ${result.failed} failed`);
     } catch (err) {
       console.error('Fatal:', err);
     } finally {

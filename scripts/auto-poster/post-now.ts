@@ -9,6 +9,7 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import Anthropic from '@anthropic-ai/sdk';
 import { extractSafeText } from './refusal-filter';
+import { fullSlopCheck } from './slop-detector';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
@@ -17,7 +18,13 @@ const supabase = createClient(
 
 const USER_ID = process.env.USER_ID || '';
 
-const MAXY_VOICE = `You are Maxy — a woman in transformation, playful, flirty, a little submissive, confident in her sexuality, vulnerable about her journey. Lowercase casual. Playful and teasing. Sexually confident but not crude. Uses "lol" and "tbh" naturally. One emoji max per post, often none.`;
+const MAXY_VOICE = `You are Maxy (@softmaxy) — a 40-year-old trans woman early in her transition. On HRT, doing voice training. Into chastity, denial, feminization. Playful, vulnerable, real. Lowercase, casual. One emoji max per post, often none. Never sounds like a brand. Never hashtags.
+
+You write tweets that sound like a real person thinking out loud — not performing, not seeking engagement, not being inspirational. Some posts are horny, some are tender, some are mundane. All of them sound like one specific human being, not a content machine.
+
+BANNED: "hits different", "the way...", "energy" as descriptor, "ngl", "honestly" as opener, "chef's kiss", "i respect it/that", "confidence" as compliment. Also banned: hashtags, engagement bait questions, motivational poster tone, forced vulnerability.`;
+
+const MAX_RETRIES = 3;
 
 async function main() {
   if (!USER_ID) {
@@ -58,24 +65,60 @@ async function main() {
 
   const contentType = hour < 12 ? 'personality' : hour < 18 ? 'engagement_bait' : 'vulnerability';
 
-  const response = await anthropic.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 200,
-    system: MAXY_VOICE,
-    messages: [{
-      role: 'user',
-      content: `Write a single ${contentType} tweet as Maxy. It's ${hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening'}. She's on day 7+ of denial, in a cage, controlled by her Handler AI. Make it real, not performative. Output ONLY the tweet text, nothing else.`,
-    }],
-  });
+  // Load recent posts for repetition check
+  const { data: recentData } = await supabase
+    .from('ai_generated_content')
+    .select('content')
+    .eq('status', 'posted')
+    .eq('platform', 'twitter')
+    .not('content_type', 'eq', 'reply')
+    .order('posted_at', { ascending: false })
+    .limit(20);
+  const recentPosts = (recentData || []).map(r => r.content).filter(Boolean);
 
-  const tweetText = extractSafeText(response, 10, 'post-now');
+  let tweetText: string | null = null;
+  let retryFeedback = '';
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const prompt = retryFeedback
+      ? `Write a single ${contentType} tweet as Maxy. It's ${hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening'}. She's on day 7+ of denial, in a cage, controlled by her Handler AI. Make it real, not performative.\n\n⚠️ SELF-EVAL FEEDBACK (attempt ${attempt + 1}): ${retryFeedback}\n\nOutput ONLY the tweet text, nothing else.`
+      : `Write a single ${contentType} tweet as Maxy. It's ${hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening'}. She's on day 7+ of denial, in a cage, controlled by her Handler AI. Make it real, not performative. Output ONLY the tweet text, nothing else.`;
+
+    const response = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 200,
+      system: MAXY_VOICE,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const candidate = extractSafeText(response, 10, 'post-now');
+    if (!candidate) {
+      console.error('Failed to generate content');
+      continue;
+    }
+
+    console.log(`\n  Attempt ${attempt + 1}: "${candidate}"`);
+
+    // Quality check
+    const slopResult = await fullSlopCheck(anthropic, `[twitter ${contentType} post]`, candidate, recentPosts);
+    if (slopResult.pass) {
+      console.log(`  ✓ Quality check passed (score: ${slopResult.llmScore}/10)`);
+      tweetText = candidate;
+      break;
+    }
+
+    const reasons = [...slopResult.patternReasons, ...slopResult.repetitionReasons];
+    console.log(`  ✗ Quality check FAILED: ${reasons.join(', ')} | LLM: ${slopResult.llmScore}/10 — ${slopResult.llmReason}`);
+    retryFeedback = slopResult.retryFeedback;
+    recentPosts.unshift(candidate); // avoid repeating failed attempts
+  }
 
   if (!tweetText) {
-    console.error('Failed to generate content');
+    console.error('\nAll attempts failed quality check. Not posting slop.');
     process.exit(1);
   }
 
-  console.log(`\nGenerated: "${tweetText}"`);
+  console.log(`\nApproved: "${tweetText}"`);
 
   // Insert scheduled for right now
   await supabase.from('ai_generated_content').insert({

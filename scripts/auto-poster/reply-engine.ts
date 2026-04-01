@@ -22,7 +22,7 @@ import { fullSlopCheck, patternSlopCheck } from './slop-detector';
 
 const USER_ID = process.env.USER_ID || '';
 const OWN_HANDLE = process.env.TWITTER_HANDLE || 'softmaxy';
-const MAX_SLOP_RETRIES = 2; // max regeneration attempts per reply
+const MAX_SLOP_RETRIES = 3; // max regeneration attempts per reply (higher bar = more retries needed)
 
 // ── Search queries for finding replyable tweets ──────────────────────
 
@@ -165,13 +165,14 @@ function isSpamOrAd(text: string): boolean {
 async function getReplyHistory(): Promise<{ urls: Set<string>; recentUsers: Set<string> }> {
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
+  // Load both posted AND skipped/failed tweets to avoid resurfacing
   const { data } = await supabase
     .from('ai_generated_content')
-    .select('generation_prompt, target_account, posted_at')
+    .select('generation_prompt, target_account, posted_at, status')
     .eq('user_id', USER_ID)
     .eq('content_type', 'reply')
     .eq('platform', 'twitter')
-    .eq('status', 'posted')
+    .in('status', ['posted', 'failed'])
     .order('posted_at', { ascending: false })
     .limit(500);
 
@@ -467,6 +468,23 @@ export async function runReplyCycle(maxReplies: number = 4): Promise<{
         const reply = await generateReply(anthropic, tweet, sq.nsfw, recentReplyTexts);
         if (!reply) {
           failed++;
+          // Mark this tweet as "seen" so it doesn't resurface — both in-memory and DB
+          if (tweet.url) {
+            repliedUrls.add(tweet.url);
+            try {
+              await supabase.from('ai_generated_content').insert({
+                user_id: USER_ID,
+                content_type: 'reply',
+                platform: 'twitter',
+                content: '[skipped]',
+                generation_strategy: `skipped:${sq.label}`,
+                generation_prompt: tweet.url,
+                target_account: tweet.username,
+                status: 'failed',
+                posted_at: new Date().toISOString(),
+              });
+            } catch {} // Don't fail if insert fails
+          }
           continue;
         }
 
@@ -501,7 +519,7 @@ export async function runReplyCycle(maxReplies: number = 4): Promise<{
         }
 
         // Rate limit — 30-60 seconds between replies
-        const delay = 30000 + Math.floor(Math.random() * 30000);
+        const delay = 20000 + Math.floor(Math.random() * 20000);
         console.log(`  Waiting ${Math.round(delay / 1000)}s...`);
         await new Promise(r => setTimeout(r, delay));
       }

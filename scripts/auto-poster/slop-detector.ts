@@ -144,11 +144,12 @@ export function repetitionCheck(reply: string, recentReplies: string[]): SlopChe
 
 const JUDGE_PROMPT = `You are a social media authenticity judge. Your job is to rate whether a reply sounds like it was written by a real person or by an AI bot.
 
-Score 1-10:
-- 1-3: Obvious AI slop. Generic, hollow, could be a reply to any tweet.
-- 4-5: Suspicious. Has some personality but falls into AI patterns (over-enthusiastic, too supportive, therapy-speak, forced slang).
-- 6-7: Decent. Sounds like a real person but could be tighter or more specific.
-- 8-10: Authentic. Specific, has real personality, references concrete personal experience, natural cadence.
+Score 1-10 (BE HARSH — only a 9 or 10 should pass):
+- 1-4: Obvious AI. Generic, hollow, could be a reply to any tweet. Hollow encouragement. Therapy-speak.
+- 5-6: Suspicious. Has some personality but still feels composed/polished. Real people are messier.
+- 7-8: Close but not quite. Something's slightly off — too clean, too balanced, too supportive, or uses a phrase pattern that feels manufactured.
+- 9: Authentic. Genuinely sounds like one specific real person typed this on their phone. Has rough edges, specificity, and personality that can't be faked.
+- 10: Indistinguishable from a real person. Could never be flagged as AI by anyone.
 
 Common AI tells to watch for:
 - Replying with generic encouragement instead of engaging with the actual content
@@ -158,6 +159,8 @@ Common AI tells to watch for:
 - Sounding like a motivational poster
 - Using slang that doesn't match the rest of the voice
 - Starting multiple sentences the same way
+
+A score of 9 or 10 = PASS. Anything below 9 = FAIL. Be strict.
 
 Output EXACTLY this format:
 SCORE: [number]
@@ -189,7 +192,7 @@ export async function llmSlopJudge(
     const reasonMatch = text.match(/REASON:\s*(.+)/);
 
     const score = scoreMatch ? parseInt(scoreMatch[1], 10) : 5;
-    const pass = verdictMatch ? verdictMatch[1].toUpperCase() === 'PASS' : score >= 7;
+    const pass = verdictMatch ? verdictMatch[1].toUpperCase() === 'PASS' : score >= 9;
     const reason = reasonMatch ? reasonMatch[1].trim() : 'no reason given';
 
     return { pass, score, reason };
@@ -275,7 +278,7 @@ function buildRetryFeedback(
   if (repetitionReasons.length > 0) {
     parts.push(`REPETITION: ${repetitionReasons.join('; ')}`);
   }
-  if (llmScore > 0 && llmScore < 7) {
+  if (llmScore > 0 && llmScore < 9) {
     parts.push(`AUTHENTICITY SCORE: ${llmScore}/10 — ${llmReason}`);
   }
 

@@ -3,7 +3,7 @@
  * Run: npx tsx check-all-sessions.ts
  */
 
-import { chromium } from 'playwright';
+import { chromium, firefox } from 'playwright';
 import { PLATFORMS } from './config';
 
 interface SessionCheck {
@@ -24,28 +24,40 @@ async function checkPlatform(name: string, config: { profileDir: string; url: st
     pageTitle: '',
   };
 
-  const STEALTH = new Set(['onlyfans', 'sniffies']);
-  const useStealth = STEALTH.has(name);
+  const useFirefox = name === 'sniffies';
+  const useStealthChrome = name === 'onlyfans';
 
   let context;
   try {
-    context = await chromium.launchPersistentContext(config.profileDir, {
-      ...(useStealth ? { channel: 'chrome' } : {}),
-      headless: false,
-      viewport: { width: 1280, height: 800 },
-      args: [
-        '--disable-blink-features=AutomationControlled',
-        '--window-position=-2400,-2400',
-      ],
-      ...(useStealth ? { ignoreDefaultArgs: ['--enable-automation'] } : {}),
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-    });
-
-    if (useStealth) {
-      const p = context.pages()[0] || await context.newPage();
-      await p.addInitScript(() => {
-        Object.defineProperty(navigator, 'webdriver', { get: () => false });
+    if (useFirefox) {
+      // Sniffies uses Firefox with a separate profile dir
+      context = await firefox.launchPersistentContext(config.profileDir + '-firefox', {
+        headless: false,
+        viewport: { width: 1280, height: 800 },
+        ...('geolocation' in config ? {
+          geolocation: (config as any).geolocation,
+          permissions: ['geolocation'],
+        } : {}),
       });
+    } else {
+      context = await chromium.launchPersistentContext(config.profileDir, {
+        ...(useStealthChrome ? { channel: 'chrome' } : {}),
+        headless: false,
+        viewport: { width: 1280, height: 800 },
+        args: [
+          '--disable-blink-features=AutomationControlled',
+          '--window-position=-2400,-2400',
+        ],
+        ...(useStealthChrome ? { ignoreDefaultArgs: ['--enable-automation'] } : {}),
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      });
+
+      if (useStealthChrome) {
+        const p = context.pages()[0] || await context.newPage();
+        await p.addInitScript(() => {
+          Object.defineProperty(navigator, 'webdriver', { get: () => false });
+        });
+      }
     }
 
     const page = context.pages()[0] || await context.newPage();
@@ -83,9 +95,9 @@ async function checkPlatform(name: string, config: { profileDir: string; url: st
         loggedInIndicators: ['/home'],
       },
       sniffies: {
-        checkUrl: 'https://sniffies.com/messages',
+        checkUrl: 'https://sniffies.com/',
         loginIndicators: [],
-        loggedInIndicators: ['messages', 'chats', 'inbox'],
+        loggedInIndicators: ['/map', 'messages', 'chats', 'inbox'],
       },
     };
 
@@ -111,8 +123,9 @@ async function checkPlatform(name: string, config: { profileDir: string; url: st
     ).count();
 
     // Sniffies special case: landing on homepage = not logged in
-    if (name === 'sniffies' && (result.finalUrl === 'https://sniffies.com/' || result.finalUrl.endsWith('sniffies.com'))) {
-      result.loggedIn = false;
+    if (name === 'sniffies') {
+      // Sniffies redirects to /map when logged in
+      result.loggedIn = result.finalUrl.includes('/map');
     } else {
       result.loggedIn = isLoggedIn && !isLoginPage;
     }

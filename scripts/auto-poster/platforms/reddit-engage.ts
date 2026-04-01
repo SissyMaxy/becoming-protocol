@@ -117,7 +117,9 @@ const SUBREDDIT_VOICES: Record<string, SubredditVoice> = {
   },
 };
 
-const KARMA_BUILDING_SUBS = ['MTFSelfieTrain', 'TransTimelines', 'transadorable', 'MTF', 'TransLater', 'TransDIY', 'ChatGPT', 'selfimprovement', 'AskReddit'];
+// NSFW selfie subs (TransTimelines, TransLater, transadorable, MTFSelfieTrain) removed —
+// comment box consistently fails due to NSFW age gate. Will re-add when fixed.
+const KARMA_BUILDING_SUBS = ['MTF', 'TransDIY', 'ChatGPT', 'selfimprovement', 'AskReddit'];
 const SELFIE_SUBS = new Set(['MTFSelfieTrain', 'TransTimelines', 'transadorable']);
 const NICHE_SUBS = ['sissification', 'feminization', 'chastity', 'TransLater', 'sissyhypno'];
 
@@ -537,6 +539,12 @@ export async function runRedditComments(
   for (const subreddit of shuffled) {
     if (posted >= maxComments) break;
 
+    // Check if browser is still alive (timeout may have killed it)
+    try { await page.evaluate(() => true); } catch {
+      console.log('[Reddit] Browser closed — stopping');
+      break;
+    }
+
     // Re-check budget each iteration
     const stillHasBudget = await checkBudget(sb, userId, 'reddit', 'comment');
     if (!stillHasBudget) {
@@ -642,7 +650,7 @@ export async function runRedditComments(
 
     // Rate limit — 30-60 seconds between comments
     if (posted < maxComments) {
-      const delay = 30000 + Math.floor(Math.random() * 30000);
+      const delay = 15000 + Math.floor(Math.random() * 15000);
       console.log(`  Waiting ${Math.round(delay / 1000)}s...`);
       await new Promise(r => setTimeout(r, delay));
     }

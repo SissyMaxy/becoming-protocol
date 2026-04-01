@@ -487,6 +487,12 @@ export async function runFetLifeEngagement(
   }
 
   for (const group of groups) {
+    // Check if browser is still alive
+    try { await page.evaluate(() => true); } catch {
+      console.log('[FetLife] Browser closed — stopping');
+      break;
+    }
+
     // Re-check budget
     const stillHasBudget = await checkBudget(sb, userId, 'fetlife', 'group_discussion');
     if (!stillHasBudget) {

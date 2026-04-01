@@ -129,6 +129,33 @@ serve(async (req) => {
       case 'generate_weekly_reflection':
         return await handleGenerateWeeklyReflection(supabase)
 
+      case 'generate_daily_cycle':
+        return await handleGenerateDailyCycle(supabase)
+
+      case 'execute_daily_cycle_morning':
+        return await handleExecuteCycleBlock(supabase, 'morning')
+
+      case 'execute_daily_cycle_midday':
+        return await handleExecuteCycleBlock(supabase, 'midday')
+
+      case 'execute_daily_cycle_afternoon':
+        return await handleExecuteCycleBlock(supabase, 'afternoon')
+
+      case 'execute_daily_cycle_evening':
+        return await handleExecuteCycleBlock(supabase, 'evening')
+
+      case 'execute_daily_cycle_night':
+        return await handleExecuteCycleBlock(supabase, 'night')
+
+      case 'check_obligation_compliance':
+        return await handleCheckObligationCompliance(supabase)
+
+      case 'execute_consequences':
+        return await handleExecuteConsequences(supabase)
+
+      case 'process_device_schedule':
+        return await handleProcessDeviceSchedule(supabase)
+
       default:
         return new Response(
           JSON.stringify({ error: `Unknown action: ${action}` }),

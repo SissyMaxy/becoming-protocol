@@ -26,9 +26,12 @@ import { runReplyCycle } from './reply-engine';
 import { runRedditComments } from './platforms/reddit-engage';
 import { runFetLifeEngagement } from './platforms/fetlife-engage';
 import { runSubscriberReplies } from './platforms/subscriber-engage';
+import { getSniffiesPage, closeSniffiesSession } from './sniffies-session';
+import { getOnlyFansPage, closeOnlyFansSession } from './onlyfans-session';
 import { runSniffiesEngagement } from './platforms/sniffies-engage';
 import { checkBudget } from './engagement-budget';
 import { runDMOutreach } from './dm-outreach';
+import { generateCalendar } from './generate-calendar';
 import { supabase, PLATFORMS, POLL_INTERVAL_MS } from './config';
 
 const USER_ID = process.env.USER_ID || '';
@@ -72,8 +75,12 @@ async function launchPlatform(platform: keyof typeof PLATFORMS, retries = 2): Pr
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
+      // Sniffies needs geolocation
+      const needsGeo = platform === 'sniffies' && 'geolocation' in config;
+      const geoConfig = needsGeo ? (config as any).geolocation : undefined;
+
       const context = await chromium.launchPersistentContext(config.profileDir, {
-        ...(useStealth ? { channel: 'chrome' } : {}), // Real Chrome for stealth platforms
+        ...(useStealth ? { channel: 'chrome' } : {}),
         headless: false,
         viewport: { width: 1280, height: 800 },
         args: [
@@ -82,6 +89,10 @@ async function launchPlatform(platform: keyof typeof PLATFORMS, retries = 2): Pr
         ],
         ...(useStealth ? {
           ignoreDefaultArgs: ['--enable-automation'],
+        } : {}),
+        ...(geoConfig ? {
+          geolocation: geoConfig,
+          permissions: ['geolocation'],
         } : {}),
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
       });
@@ -108,6 +119,27 @@ async function launchPlatform(platform: keyof typeof PLATFORMS, retries = 2): Pr
   return null;
 }
 
+/** Run a function with a timeout — prevents one module from blocking the whole tick */
+async function withTimeout<T>(label: string, fn: () => Promise<T>, timeoutMs: number = 120000): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout>;
+  try {
+    return await Promise.race([
+      fn().finally(() => clearTimeout(timer)),
+      new Promise<null>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`TIMEOUT`)), timeoutMs);
+      }),
+    ]);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg === 'TIMEOUT') {
+      console.error(`[Scheduler] ⏱ ${label} timed out after ${timeoutMs / 1000}s — moving on`);
+    } else {
+      console.error(`[Scheduler] ${label} error: ${msg}`);
+    }
+    return null;
+  }
+}
+
 async function tick() {
   const timestamp = new Date().toLocaleTimeString();
   tickCount++;
@@ -116,10 +148,17 @@ async function tick() {
   const state = await loadState();
   const anthropic = new Anthropic();
 
-  // Track browser contexts to close at end
-  const contexts: BrowserContext[] = [];
+  // Each platform now manages its own browser context lifecycle
 
   try {
+    // --- Every tick: ensure content calendar is populated ---
+    await withTimeout('Calendar check', async () => {
+      const generated = await generateCalendar();
+      if (generated > 0) {
+        console.log(`[${timestamp}] Calendar: generated ${generated} post(s) for next 24h`);
+      }
+    }, 180000); // 3 min — generation + quality gates take time
+
     // --- Every tick: post due content ---
     const { vault, ai } = await processAllDuePosts();
     const total = vault + ai;
@@ -127,138 +166,160 @@ async function tick() {
       console.log(`[${timestamp}] Posted ${vault} vault + ${ai} AI = ${total} item(s)`);
     }
 
-    // --- Every tick: Twitter replies (4-5) ---
+    // --- Every tick: Twitter replies (4-5) --- (5 min timeout)
     if (PLATFORMS.twitter.enabled) {
-      const hasBudget = await checkBudget(supabase, USER_ID, 'twitter', 'reply');
-      if (hasBudget) {
-        const replyResult = await runReplyCycle(4);
-        if (replyResult.posted > 0) {
-          console.log(`[${timestamp}] Twitter replies: ${replyResult.posted} posted`);
+      await withTimeout('Twitter replies', async () => {
+        const hasBudget = await checkBudget(supabase, USER_ID, 'twitter', 'reply');
+        if (hasBudget) {
+          const replyResult = await runReplyCycle(4);
+          if (replyResult.posted > 0) {
+            console.log(`[${timestamp}] Twitter replies: ${replyResult.posted} posted`);
+          }
+        } else {
+          console.log(`[${timestamp}] Twitter reply budget exhausted`);
         }
-      } else {
-        console.log(`[${timestamp}] Twitter reply budget exhausted`);
-      }
+      }, 300000);
     }
 
-    // --- Every tick: Reddit comments (2-3) ---
+    // --- Every tick: Reddit comments (2-3) --- (3 min timeout, self-contained)
     if (PLATFORMS.reddit.enabled) {
-      const hasBudget = await checkBudget(supabase, USER_ID, 'reddit', 'comment');
-      if (hasBudget) {
-        const redditCtx = await launchPlatform('reddit');
-        if (redditCtx) {
-          contexts.push(redditCtx);
-          const redditPage = redditCtx.pages()[0] || await redditCtx.newPage();
-          const redditResult = await runRedditComments(redditPage, supabase, anthropic, USER_ID, state, 3);
-          if (redditResult.posted > 0) {
-            console.log(`[${timestamp}] Reddit comments: ${redditResult.posted} posted`);
+      let redditCtx: BrowserContext | null = null;
+      await withTimeout('Reddit comments', async () => {
+        const hasBudget = await checkBudget(supabase, USER_ID, 'reddit', 'comment');
+        if (hasBudget) {
+          // Clear Chromium lock file that causes launch failures
+          const fs = require('fs');
+          const lockFile = require('path').join(PLATFORMS.reddit.profileDir, 'SingletonLock');
+          try { fs.unlinkSync(lockFile); } catch {}
+
+          redditCtx = await launchPlatform('reddit');
+          if (redditCtx) {
+            const redditPage = redditCtx.pages()[0] || await redditCtx.newPage();
+            const redditResult = await runRedditComments(redditPage, supabase, anthropic, USER_ID, state, 2);
+            if (redditResult.posted > 0) {
+              console.log(`[${timestamp}] Reddit comments: ${redditResult.posted} posted`);
+            }
+            await redditCtx.close().catch(() => {});
+            redditCtx = null;
           }
+        } else {
+          console.log(`[${timestamp}] Reddit comment budget exhausted`);
         }
-      } else {
-        console.log(`[${timestamp}] Reddit comment budget exhausted`);
+      }, 480000); // 8 min — reddit needs time for body fetch + vision + slop retries
+      // Force-close if timeout killed the function mid-run
+      if (redditCtx) {
+        try { await (redditCtx as BrowserContext).close(); } catch {}
       }
     }
 
-    // --- Every 2nd tick: FetLife engagement (1) ---
+    // --- Every 2nd tick: FetLife engagement (1) --- (2 min timeout)
     if (tickCount % 2 === 0 && PLATFORMS.fetlife.enabled) {
-      const hasBudget = await checkBudget(supabase, USER_ID, 'fetlife', 'group_discussion');
-      if (hasBudget) {
-        const fetlifeCtx = await launchPlatform('fetlife');
-        if (fetlifeCtx) {
-          contexts.push(fetlifeCtx);
-          const fetlifePage = fetlifeCtx.pages()[0] || await fetlifeCtx.newPage();
-          const fetResult = await runFetLifeEngagement(fetlifePage, supabase, anthropic, USER_ID, state);
-          if (fetResult.posted > 0) {
-            console.log(`[${timestamp}] FetLife discussions: ${fetResult.posted} posted`);
+      let fetCtx: BrowserContext | null = null;
+      await withTimeout('FetLife', async () => {
+        const hasBudget = await checkBudget(supabase, USER_ID, 'fetlife', 'group_discussion');
+        if (hasBudget) {
+          // Clear lock file
+          const fs2 = require('fs');
+          try { fs2.unlinkSync(require('path').join(PLATFORMS.fetlife.profileDir, 'SingletonLock')); } catch {}
+          fetCtx = await launchPlatform('fetlife');
+          if (fetCtx) {
+            const fetlifePage = fetCtx.pages()[0] || await fetCtx.newPage();
+            const fetResult = await runFetLifeEngagement(fetlifePage, supabase, anthropic, USER_ID, state);
+            if (fetResult.posted > 0) {
+              console.log(`[${timestamp}] FetLife discussions: ${fetResult.posted} posted`);
+            }
+            await fetCtx.close().catch(() => {});
+            fetCtx = null;
+          }
+        } else {
+          console.log(`[${timestamp}] FetLife budget exhausted`);
+        }
+      }, 300000); // 5 min
+      if (fetCtx) { try { await (fetCtx as BrowserContext).close(); } catch {} }
+    }
+
+    // --- Every 2nd tick: Subscriber replies --- (90s timeout)
+    // OnlyFans uses persistent Firefox session; Fansly uses normal Chromium
+    if (tickCount % 2 === 0) {
+      let fanslyCtx: BrowserContext | null = null;
+      await withTimeout('Subscribers', async () => {
+        let fanslyPage: Page | null = null;
+        let ofPage: Page | null = null;
+
+        if (PLATFORMS.fansly.enabled) {
+          fanslyCtx = await launchPlatform('fansly');
+          if (fanslyCtx) {
+            fanslyPage = fanslyCtx.pages()[0] || await fanslyCtx.newPage();
           }
         }
-      } else {
-        console.log(`[${timestamp}] FetLife budget exhausted`);
-      }
+
+        if (PLATFORMS.onlyfans.enabled) {
+          ofPage = await getOnlyFansPage();
+        }
+
+        if (fanslyPage || ofPage) {
+          const subResult = await runSubscriberReplies(fanslyPage, ofPage, supabase, anthropic, USER_ID, state);
+          if (subResult.posted > 0) {
+            console.log(`[${timestamp}] Subscriber replies: ${subResult.posted} posted`);
+          }
+        }
+
+        if (fanslyCtx) { await fanslyCtx.close().catch(() => {}); fanslyCtx = null; }
+        // OnlyFans is persistent — don't close it here
+      }, 90000);
+      if (fanslyCtx) { try { await (fanslyCtx as BrowserContext).close(); } catch {} }
     }
 
-    // --- Every 2nd tick: Subscriber replies ---
-    if (tickCount % 2 === 0) {
-      let fanslyPage: Page | null = null;
-      let ofPage: Page | null = null;
-
-      if (PLATFORMS.fansly.enabled) {
-        const fanslyCtx = await launchPlatform('fansly');
-        if (fanslyCtx) {
-          contexts.push(fanslyCtx);
-          fanslyPage = fanslyCtx.pages()[0] || await fanslyCtx.newPage();
-        }
-      }
-
-      if (PLATFORMS.onlyfans.enabled) {
-        const ofCtx = await launchPlatform('onlyfans');
-        if (ofCtx) {
-          contexts.push(ofCtx);
-          ofPage = ofCtx.pages()[0] || await ofCtx.newPage();
-        }
-      }
-
-      if (fanslyPage || ofPage) {
-        const subResult = await runSubscriberReplies(fanslyPage, ofPage, supabase, anthropic, USER_ID, state);
-        if (subResult.posted > 0) {
-          console.log(`[${timestamp}] Subscriber replies: ${subResult.posted} posted`);
-        }
-      }
-    }
-
-    // --- Every 2nd tick: Sniffies chats (5) ---
+    // --- Every 2nd tick: Sniffies chats (5) --- (2 min timeout)
+    // Uses persistent Firefox session — browser stays open between ticks
     if (tickCount % 2 === 0 && PLATFORMS.sniffies.enabled) {
-      const hasBudget = await checkBudget(supabase, USER_ID, 'sniffies', 'chat');
-      if (hasBudget) {
-        const sniffiesCtx = await launchPlatform('sniffies');
-        if (sniffiesCtx) {
-          contexts.push(sniffiesCtx);
-          const sniffiesPage = sniffiesCtx.pages()[0] || await sniffiesCtx.newPage();
-          const sniffResult = await runSniffiesEngagement(sniffiesPage, supabase, anthropic, USER_ID, state, 5);
-          if (sniffResult.posted > 0) {
-            console.log(`[${timestamp}] Sniffies chats: ${sniffResult.posted} sent`);
+      await withTimeout('Sniffies', async () => {
+        const hasBudget = await checkBudget(supabase, USER_ID, 'sniffies', 'chat');
+        if (hasBudget) {
+          const sPage = await getSniffiesPage();
+          if (sPage) {
+            const sniffResult = await runSniffiesEngagement(sPage, supabase, anthropic, USER_ID, state, 5);
+            if (sniffResult.posted > 0) {
+              console.log(`[${timestamp}] Sniffies chats: ${sniffResult.posted} sent`);
+            }
           }
+        } else {
+          console.log(`[${timestamp}] Sniffies chat budget exhausted`);
         }
-      } else {
-        console.log(`[${timestamp}] Sniffies chat budget exhausted`);
-      }
+      }, 300000); // 5 min
     }
 
-    // --- Every 2nd tick: DM Outreach (cold DMs to hot targets) ---
+    // --- Every 2nd tick: DM Outreach --- (2 min timeout)
     if (tickCount % 2 === 0 && PLATFORMS.twitter.enabled) {
-      const hasBudget = await checkBudget(supabase, USER_ID, 'twitter', 'dm');
-      if (hasBudget) {
-        const outreachResult = await runDMOutreach(3);
-        if (outreachResult.sent > 0) {
-          console.log(`[${timestamp}] DM outreach: ${outreachResult.sent} sent`);
+      await withTimeout('DM Outreach', async () => {
+        const hasBudget = await checkBudget(supabase, USER_ID, 'twitter', 'dm');
+        if (hasBudget) {
+          const outreachResult = await runDMOutreach(3);
+          if (outreachResult.sent > 0) {
+            console.log(`[${timestamp}] DM outreach: ${outreachResult.sent} sent`);
+          }
+        } else {
+          console.log(`[${timestamp}] DM outreach budget exhausted`);
         }
-      } else {
-        console.log(`[${timestamp}] DM outreach budget exhausted`);
-      }
+      });
     }
 
-    // --- Every 2nd tick: DMs (read + reply) ---
+    // --- Every 2nd tick: DMs (read + reply) --- (90s timeout)
     if (tickCount % 2 === 0) {
-      const dmResult = await readAllDMs();
-      if (dmResult.stored > 0) {
-        console.log(`[${timestamp}] DMs: ${dmResult.stored} new message(s) stored`);
-      }
+      await withTimeout('DM read/send', async () => {
+        const dmResult = await readAllDMs();
+        if (dmResult.stored > 0) {
+          console.log(`[${timestamp}] DMs: ${dmResult.stored} new message(s) stored`);
+        }
 
-      const sent = await sendPendingDMReplies();
-      if (sent > 0) {
-        console.log(`[${timestamp}] DM replies: ${sent} sent`);
-      }
+        const sent = await sendPendingDMReplies();
+        if (sent > 0) {
+          console.log(`[${timestamp}] DM replies: ${sent} sent`);
+        }
+      }, 90000);
     }
   } catch (err) {
     console.error(`[${timestamp}] Tick error:`, err instanceof Error ? err.message : err);
-  } finally {
-    // Close all browser contexts
-    for (const ctx of contexts) {
-      try {
-        await ctx.close();
-      } catch {
-        // Already closed
-      }
-    }
   }
 }
 
@@ -283,6 +344,14 @@ async function main() {
   }
   console.log('');
   console.log('Press Ctrl+C to stop\n');
+
+  // Clean up persistent sessions on shutdown
+  process.on('SIGINT', async () => {
+    console.log('\nShutting down...');
+    await closeSniffiesSession();
+    await closeOnlyFansSession();
+    process.exit(0);
+  });
 
   // Run immediately, then on interval
   await tick();
