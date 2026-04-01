@@ -504,8 +504,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               try {
                 const data = JSON.parse(rawData);
                 if (data.type === 'content_block_delta' && data.delta?.text) {
-                  fullStreamText += data.delta.text;
-                  res.write(`data: ${JSON.stringify({ text: data.delta.text })}\n\n`);
+                  const chunk = data.delta.text;
+                  fullStreamText += chunk;
+                  // Stop streaming to client once <handler_signals> starts
+                  // The signals block is always at the end of the response
+                  if (!fullStreamText.includes('<handler_signal')) {
+                    res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+                  }
                 }
               } catch {
                 // Skip malformed SSE events
