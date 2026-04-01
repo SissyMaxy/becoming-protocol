@@ -545,7 +545,8 @@ function AuthenticatedAppInner() {
   }
 
   // Show morning bookend before morning flow (first open each day)
-  if (bookends.showMorningBookend && bookends.config) {
+  // Skip all gates when deep-linking to a specific view
+  if (!deepLinkView && bookends.showMorningBookend && bookends.config) {
     return (
       <ErrorBoundary componentName="MorningBookend">
         <MorningBookend
@@ -561,7 +562,7 @@ function AuthenticatedAppInner() {
   }
 
   // Show morning briefing if no entry for today
-  if (showMorningFlow) {
+  if (!deepLinkView && showMorningFlow) {
     return (
       <ErrorBoundary componentName="MorningBriefing">
         <MorningBriefing onComplete={() => setShowMorningFlow(false)} />
@@ -570,7 +571,7 @@ function AuthenticatedAppInner() {
   }
 
   // Show compulsory gate if app is locked (Feature 38)
-  if (compulsoryLocked) {
+  if (!deepLinkView && compulsoryLocked) {
     return (
       <ErrorBoundary componentName="CompulsoryGate">
         <CompulsoryGateScreen
