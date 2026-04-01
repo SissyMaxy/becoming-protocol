@@ -12,6 +12,14 @@
  */
 
 import { supabase } from '../supabase';
+import {
+  detectPhotoRecycling,
+  validateVoicePractice,
+  validateSessionEngagement,
+  validateJournalEntry,
+  validateDMResponse,
+  generateDailyVerificationChallenge,
+} from './anti-circumvention';
 
 // ============================================
 // TYPES
@@ -298,6 +306,41 @@ async function verifyOutfit(
       minute: '2-digit',
     });
 
+    // ANTI-CIRCUMVENTION: Check for photo recycling
+    const recycleCheck = await detectPhotoRecycling(userId, photo.id);
+    if (recycleCheck.recycled) {
+      // Log the attempt
+      await supabase.from('handler_interventions').insert({
+        user_id: userId,
+        intervention_type: 'photo_recycling_detected',
+        details: {
+          photo_id: photo.id,
+          matched_photo_id: recycleCheck.matchedPhotoId,
+          reason: recycleCheck.reason,
+          mandate_type: 'outfit',
+          date,
+        },
+      });
+
+      return {
+        verified: false,
+        confidence: 'high',
+        evidence: `RECYCLED PHOTO DETECTED: ${recycleCheck.reason}`,
+        method: 'photo_submitted',
+      };
+    }
+
+    // ANTI-CIRCUMVENTION: Verify photo created_at is actually today
+    const photoDate = photo.created_at?.slice(0, 10);
+    if (photoDate !== date) {
+      return {
+        verified: false,
+        confidence: 'high',
+        evidence: `Photo created on ${photoDate}, not today (${date}). Old photo submitted.`,
+        method: 'photo_submitted',
+      };
+    }
+
     // Update vault_photo_id on the verification record
     await supabase
       .from('compliance_verifications')
@@ -306,10 +349,13 @@ async function verifyOutfit(
       .eq('mandate_type', 'outfit')
       .eq('mandate_date', date);
 
+    // Include daily challenge in evidence for Handler awareness
+    const challenge = generateDailyVerificationChallenge(date);
+
     return {
       verified: true,
       confidence: 'high',
-      evidence: `Vault photo submitted at ${time}`,
+      evidence: `Vault photo submitted at ${time}. Challenge: "${challenge.challenge}" — Handler must visually confirm.`,
       method: 'photo_submitted',
     };
   }
@@ -406,42 +452,44 @@ async function verifyVoice(
   userId: string,
   date: string,
 ): Promise<VerificationResult> {
-  // Check voice_pitch_samples for 3+ samples today
-  const { data: samples } = await supabase
-    .from('voice_pitch_samples')
-    .select('id, context, duration_seconds, pitch_hz')
-    .eq('user_id', userId)
-    .gte('created_at', `${date}T00:00:00`)
-    .lte('created_at', `${date}T23:59:59`);
+  // ANTI-CIRCUMVENTION: Full voice practice validation
+  // Checks continuity, pitch variance, duration — not just sample count
+  const validation = await validateVoicePractice(userId, date, 10);
 
-  if (!samples || samples.length < 3) {
+  if (validation.suspicious) {
+    // Log suspicious voice practice
+    await supabase.from('handler_interventions').insert({
+      user_id: userId,
+      intervention_type: 'suspicious_voice_practice',
+      details: {
+        date,
+        variance: validation.variance,
+        duration: validation.duration,
+        reason: validation.reason,
+      },
+    });
+
     return {
       verified: false,
       confidence: 'high',
-      evidence: `Only ${samples?.length ?? 0} voice samples today (need 3+)`,
+      evidence: `SUSPICIOUS: ${validation.reason}`,
       method: 'audio_detected',
     };
   }
 
-  // Check total duration
-  const totalSeconds = samples.reduce(
-    (sum, s) => sum + (s.duration_seconds ?? 0),
-    0,
-  );
-  const totalMinutes = Math.round(totalSeconds / 60);
-
-  // Check how many match practice/conversation context
-  const practiceCount = samples.filter(
-    (s) =>
-      s.context === 'practice' ||
-      s.context === 'conversation' ||
-      s.context === 'drill',
-  ).length;
+  if (!validation.valid) {
+    return {
+      verified: false,
+      confidence: 'high',
+      evidence: validation.reason,
+      method: 'audio_detected',
+    };
+  }
 
   return {
     verified: true,
-    confidence: practiceCount >= 3 ? 'high' : 'medium',
-    evidence: `${samples.length} pitch samples, ${totalMinutes}min total, ${practiceCount} practice/conversation`,
+    confidence: 'high',
+    evidence: validation.reason,
     method: 'audio_detected',
   };
 }
@@ -450,6 +498,15 @@ async function verifyExercise(
   userId: string,
   date: string,
 ): Promise<VerificationResult> {
+  // Check if Whoop is connected
+  const { data: whoopConfig } = await supabase
+    .from('whoop_config')
+    .select('access_token')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  const whoopConnected = !!whoopConfig?.access_token;
+
   // Check whoop_metrics for strain increase
   const { data: whoop } = await supabase
     .from('whoop_metrics')
@@ -458,37 +515,69 @@ async function verifyExercise(
     .eq('date', date)
     .maybeSingle();
 
-  if (whoop && (whoop.strain >= 2 || whoop.day_strain >= 2)) {
+  // ANTI-CIRCUMVENTION: Require strain delta >= 2.0 when Whoop connected
+  if (whoopConnected) {
+    const strain = whoop?.strain ?? whoop?.day_strain ?? 0;
+    if (strain >= 2) {
+      return {
+        verified: true,
+        confidence: 'high',
+        evidence: `Whoop strain: ${strain}. Biometrically confirmed.`,
+        method: 'biometric_detected',
+      };
+    }
+
+    // Check whoop_workouts as fallback
+    const { data: workouts } = await supabase
+      .from('whoop_workouts')
+      .select('id, sport, strain')
+      .eq('user_id', userId)
+      .gte('created_at', `${date}T00:00:00`)
+      .lte('created_at', `${date}T23:59:59`)
+      .limit(1);
+
+    if (workouts && workouts.length > 0 && (workouts[0].strain ?? 0) >= 2) {
+      return {
+        verified: true,
+        confidence: 'high',
+        evidence: `Whoop workout: ${workouts[0].sport ?? 'exercise'}, strain ${workouts[0].strain}`,
+        method: 'biometric_detected',
+      };
+    }
+
+    // Whoop connected but no strain = she didn't exercise or she removed the device
     return {
-      verified: true,
+      verified: false,
       confidence: 'high',
-      evidence: `Whoop strain: ${whoop.strain ?? whoop.day_strain}`,
+      evidence: `Whoop IS connected but strain is ${strain.toFixed(1)} (need 2.0+). Self-report alone not accepted when Whoop is available. Either she didnt exercise or she removed the band.`,
       method: 'biometric_detected',
     };
   }
 
-  // Check whoop_workouts
-  const { data: workouts } = await supabase
-    .from('whoop_workouts')
-    .select('id, sport, strain')
+  // Whoop NOT connected — fall back to self-report with low confidence
+  const { data: tasks } = await supabase
+    .from('daily_tasks')
+    .select('id, completed')
     .eq('user_id', userId)
+    .ilike('title', '%exercise%')
+    .eq('completed', true)
     .gte('created_at', `${date}T00:00:00`)
     .lte('created_at', `${date}T23:59:59`)
     .limit(1);
 
-  if (workouts && workouts.length > 0) {
+  if (tasks && tasks.length > 0) {
     return {
       verified: true,
-      confidence: 'high',
-      evidence: `Whoop workout logged: ${workouts[0].sport ?? 'exercise'}`,
-      method: 'biometric_detected',
+      confidence: 'low',
+      evidence: 'Exercise self-reported (no Whoop verification). Low confidence — self-report alone is unverifiable.',
+      method: 'self_report',
     };
   }
 
   return {
     verified: false,
     confidence: 'high',
-    evidence: 'No exercise detected via Whoop',
+    evidence: 'No exercise detected. No Whoop data, no self-report.',
     method: 'biometric_detected',
   };
 }
@@ -507,10 +596,27 @@ async function verifyConditioning(
     .limit(1);
 
   if (sessions && sessions.length > 0) {
+    // ANTI-CIRCUMVENTION: Check biometric engagement via Whoop
+    const engagement = await validateSessionEngagement(userId, sessions[0].id);
+
+    if (!engagement.engaged && engagement.avgHrDelta === 0 && engagement.evidence.includes('Whoop IS connected')) {
+      // Whoop connected but no HR change — she didn't engage
+      return {
+        verified: false,
+        confidence: 'high',
+        evidence: `Session "${sessions[0].session_type}" marked complete but ${engagement.evidence}`,
+        method: 'session_completed',
+      };
+    }
+
+    const engagementNote = engagement.avgHrDelta > 0
+      ? ` HR delta: +${engagement.avgHrDelta.toFixed(0)}bpm.`
+      : '';
+
     return {
       verified: true,
-      confidence: 'high',
-      evidence: `Conditioning session completed: ${sessions[0].session_type}`,
+      confidence: engagement.engaged ? 'high' : 'medium',
+      evidence: `Conditioning session completed: ${sessions[0].session_type}.${engagementNote}`,
       method: 'session_completed',
     };
   }
@@ -606,28 +712,66 @@ async function verifySocialInteraction(
   userId: string,
   date: string,
 ): Promise<VerificationResult> {
+  // Get outbound messages for today
   const { data: messages } = await supabase
     .from('social_inbox')
-    .select('id, direction')
+    .select('id, direction, body')
     .eq('user_id', userId)
     .eq('direction', 'outbound')
     .gte('created_at', `${date}T00:00:00`)
-    .lte('created_at', `${date}T23:59:59`)
-    .limit(1);
+    .lte('created_at', `${date}T23:59:59`);
 
-  if (messages && messages.length > 0) {
+  if (!messages || messages.length === 0) {
+    return {
+      verified: false,
+      confidence: 'medium',
+      evidence: 'No outbound social interactions today',
+      method: 'session_completed',
+    };
+  }
+
+  // ANTI-CIRCUMVENTION: Check message quality (length + template detection)
+  let validCount = 0;
+  let tooShortCount = 0;
+
+  for (const msg of messages) {
+    const dmCheck = await validateDMResponse(userId, msg.id);
+    if (dmCheck.valid) {
+      validCount++;
+    } else {
+      tooShortCount++;
+      // Log short DMs
+      if ((msg.body ?? '').trim().length < 20) {
+        await supabase.from('handler_interventions').insert({
+          user_id: userId,
+          intervention_type: 'dm_too_short',
+          details: {
+            message_id: msg.id,
+            length: (msg.body ?? '').trim().length,
+            date,
+          },
+        });
+      }
+    }
+  }
+
+  if (validCount > 0) {
+    const evidence = tooShortCount > 0
+      ? `${validCount} valid DMs sent. ${tooShortCount} too short (< 20 chars) and rejected.`
+      : `${validCount} valid DMs sent.`;
+
     return {
       verified: true,
       confidence: 'high',
-      evidence: 'Outbound social messages sent',
+      evidence,
       method: 'session_completed',
     };
   }
 
   return {
     verified: false,
-    confidence: 'medium',
-    evidence: 'No outbound social interactions today',
+    confidence: 'high',
+    evidence: `${messages.length} DMs sent but ALL were under 20 characters. One-word responses dont count as social engagement.`,
     method: 'session_completed',
   };
 }
@@ -636,27 +780,36 @@ async function verifyJournal(
   userId: string,
   date: string,
 ): Promise<VerificationResult> {
-  const { data: entries } = await supabase
-    .from('identity_journal')
-    .select('id')
-    .eq('user_id', userId)
-    .gte('created_at', `${date}T00:00:00`)
-    .lte('created_at', `${date}T23:59:59`)
-    .limit(1);
+  // ANTI-CIRCUMVENTION: Full journal validation (word count, copy-paste, identity signals)
+  const validation = await validateJournalEntry(userId, date);
 
-  if (entries && entries.length > 0) {
+  if (!validation.valid) {
+    // Log rejection if entry exists but was rejected
+    if (validation.wordCount > 0) {
+      await supabase.from('handler_interventions').insert({
+        user_id: userId,
+        intervention_type: 'journal_rejected',
+        details: {
+          date,
+          wordCount: validation.wordCount,
+          signals: validation.signals,
+          reason: validation.reason,
+        },
+      });
+    }
+
     return {
-      verified: true,
+      verified: false,
       confidence: 'high',
-      evidence: 'Journal entry written',
+      evidence: validation.reason,
       method: 'session_completed',
     };
   }
 
   return {
-    verified: false,
+    verified: true,
     confidence: 'high',
-    evidence: 'No journal entry today',
+    evidence: `Journal: ${validation.wordCount} words, ${validation.signals} identity signals. Accepted.`,
     method: 'session_completed',
   };
 }

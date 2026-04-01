@@ -119,6 +119,7 @@ import { buildGoonEngineContext } from './conditioning/goon-engine';
 import { buildArousalMaintenanceContext } from './conditioning/arousal-maintenance';
 import { buildExposureContext } from './conditioning/progressive-exposure';
 import { buildConsumptionContext } from './conditioning/consumption-mandates';
+import { buildAntiCircumventionContext } from './conditioning/anti-circumvention';
 import { supabase } from './supabase';
 
 // ============================================
@@ -196,6 +197,7 @@ export interface SystemsContext {
   arousalMaintenance: string;
   progressiveExposure: string;
   consumptionMandates: string;
+  antiCircumvention: string;
 }
 
 // ============================================
@@ -918,7 +920,7 @@ async function buildAutoPurchaseCtx(userId: string): Promise<string> {
  * All systems, maximum data density.
  */
 export async function buildFullSystemsContext(userId: string): Promise<string> {
-  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social, memory, conditioningEngine, impactTracking, irreversibility, narrativeArc, autoPoster, socialInbox, voicePitch, autoPurchase, femPrescription, exerciseRx, postReleaseBridge, serviceAdvancement, ambushScheduler, voiceEvolution, corruptionActivation, camHandlerControl, failureRecovery, communityMirror, handlerDirectives, journal, skillTree, contentOptimization, denialMapping, languageDrift, sleepPhaseTargeting, photoTimeline, correlationEngine, commitmentLadder, ginaMicroExposure, socialIntelligence, accountability, proactiveOutreach, conversationAgenda, predictiveEngine, protocolManager, handlerReflection, emotionalModel, personalityEvolution, libraryGrowth, sessionChaining, autonomousCycle, consequenceEng, obligationsCtx, variableRatio, femMandates, outfitCtrl, wardrobeInv, complianceVerif, sleepTracking, goonEng, arousalMaint, progressiveExp, consumptionMand] = await Promise.allSettled([
+  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social, memory, conditioningEngine, impactTracking, irreversibility, narrativeArc, autoPoster, socialInbox, voicePitch, autoPurchase, femPrescription, exerciseRx, postReleaseBridge, serviceAdvancement, ambushScheduler, voiceEvolution, corruptionActivation, camHandlerControl, failureRecovery, communityMirror, handlerDirectives, journal, skillTree, contentOptimization, denialMapping, languageDrift, sleepPhaseTargeting, photoTimeline, correlationEngine, commitmentLadder, ginaMicroExposure, socialIntelligence, accountability, proactiveOutreach, conversationAgenda, predictiveEngine, protocolManager, handlerReflection, emotionalModel, personalityEvolution, libraryGrowth, sessionChaining, autonomousCycle, consequenceEng, obligationsCtx, variableRatio, femMandates, outfitCtrl, wardrobeInv, complianceVerif, sleepTracking, goonEng, arousalMaint, progressiveExp, consumptionMand, antiCircumvent] = await Promise.allSettled([
     buildGinaContext(userId),
     buildContentContext(userId),
     buildVoiceContext(userId),
@@ -1003,6 +1005,7 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     buildArousalMaintenanceContext(userId),
     buildExposureContext(userId),
     buildConsumptionContext(userId),
+    buildAntiCircumventionContext(userId),
   ]);
 
   const blocks = [
@@ -1090,6 +1093,7 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     arousalMaint.status === 'fulfilled' ? arousalMaint.value : '',
     progressiveExp.status === 'fulfilled' ? progressiveExp.value : '',
     consumptionMand.status === 'fulfilled' ? consumptionMand.value : '',
+    antiCircumvent.status === 'fulfilled' ? antiCircumvent.value : '',
   ].filter(Boolean);
 
   if (blocks.length === 0) return '';

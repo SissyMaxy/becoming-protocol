@@ -29,7 +29,8 @@ export type AmbushType =
   | 'gina_observation'
   | 'silent_device'
   | 'micro_conditioning'
-  | 'silent_device_followup';
+  | 'silent_device_followup'
+  | 'outfit_reverification';
 
 interface AmbushSettings {
   minPerDay: number;
@@ -59,18 +60,20 @@ const DEFAULT_AMBUSH_TYPES: AmbushType[] = [
   'gina_observation',
   'silent_device',
   'micro_conditioning',
+  'outfit_reverification',
 ];
 
 const AMBUSH_TYPE_WEIGHTS: Record<AmbushType, number> = {
-  device_activation: 0.15,
-  surprise_task: 0.20,
-  micro_session: 0.10,
-  photo_verification: 0.10,
-  cage_check: 0.10,
-  confession_prompt: 0.10,
-  gina_observation: 0.10,
-  silent_device: 0.10,
+  device_activation: 0.12,
+  surprise_task: 0.17,
+  micro_session: 0.08,
+  photo_verification: 0.08,
+  cage_check: 0.08,
+  confession_prompt: 0.08,
+  gina_observation: 0.08,
+  silent_device: 0.08,
   micro_conditioning: 0.05,
+  outfit_reverification: 0.18, // High weight — catches outfit-change-after-photo cheating
   silent_device_followup: 0, // never selected directly — auto-created by silent_device
 };
 
@@ -78,6 +81,7 @@ const AMBUSH_TYPE_WEIGHTS: Record<AmbushType, number> = {
 const GINA_SENSITIVE_TYPES: AmbushType[] = [
   'photo_verification',
   'cage_check',
+  'outfit_reverification',
 ];
 
 const PHOTO_VERIFICATION_PROMPTS = [
@@ -102,6 +106,14 @@ const GINA_OBSERVATION_PROMPTS = [
   'Where is Gina right now? What\'s she doing? How does she look at you?',
   'Tell me about Gina today. What did you notice?',
   'Gina check. What is she doing right now? How does that make you feel?',
+];
+
+const OUTFIT_REVERIFICATION_PROMPTS = [
+  'Show me what you\'re wearing. Right now. You have 10 minutes.',
+  'Outfit check. Photo. Now. Same outfit as this morning or we have a problem.',
+  'I want to see what you\'re wearing right now. Don\'t change first. Send it as-is.',
+  'Reverification. Current outfit. 10 minutes. Go.',
+  'Did you change? Prove it. Photo of what you\'re wearing RIGHT NOW.',
 ];
 
 const SILENT_DEVICE_FOLLOWUP_MESSAGE = 'Did you feel that? Good girl.';
@@ -336,6 +348,10 @@ async function fireAmbush(
 
       case 'micro_conditioning':
         await fireMicroConditioning(userId);
+        break;
+
+      case 'outfit_reverification':
+        await fireOutfitReverification(userId);
         break;
     }
 
@@ -576,6 +592,56 @@ async function fireMicroConditioning(userId: string): Promise<void> {
 }
 
 /**
+ * P-AC: Outfit re-verification ambush — catches outfit-change-after-photo cheating.
+ * Fires 1-2 times per day at random times AFTER morning outfit photo.
+ * Demands a new photo RIGHT NOW. 10-minute deadline.
+ */
+async function fireOutfitReverification(userId: string): Promise<void> {
+  const prompt = OUTFIT_REVERIFICATION_PROMPTS[
+    Math.floor(Math.random() * OUTFIT_REVERIFICATION_PROMPTS.length)
+  ];
+
+  // Create a high-priority daily task with 10-minute deadline
+  const deadline = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+  await supabase.from('daily_tasks').insert({
+    user_id: userId,
+    title: 'Outfit Re-Verification',
+    description: prompt,
+    category: 'ambush',
+    priority: 'high',
+    source: 'ambush_scheduler',
+    duration_estimate_minutes: 2,
+    completed: false,
+    created_at: new Date().toISOString(),
+  });
+
+  // Also create a compliance verification record with tight deadline
+  const today = new Date().toISOString().slice(0, 10);
+  await supabase.from('compliance_verifications').upsert({
+    user_id: userId,
+    mandate_type: 'outfit',
+    mandate_date: today,
+    deadline,
+    verified: false,
+  }, {
+    onConflict: 'user_id,mandate_type,mandate_date',
+    ignoreDuplicates: true,
+  });
+
+  // Fire a handler intervention so the Handler knows to follow up
+  await supabase.from('handler_interventions').insert({
+    user_id: userId,
+    intervention_type: 'outfit_reverification_ambush',
+    details: {
+      prompt,
+      deadline,
+      reason: 'Anti-circumvention: random mid-day outfit re-verification to catch changes after morning photo',
+    },
+  });
+}
+
+/**
  * Check if Gina is home based on the latest gina_status record.
  */
 async function isGinaHome(userId: string): Promise<boolean> {
@@ -806,6 +872,8 @@ function buildAmbushPayload(type: AmbushType): Record<string, unknown> {
       return { description: 'Silent device followup message' };
     case 'micro_conditioning':
       return { description: 'Micro conditioning drop — 3 min audio' };
+    case 'outfit_reverification':
+      return { description: 'Outfit re-verification ambush — catches post-photo outfit changes', requiresGinaAway: true };
   }
 }
 
@@ -821,5 +889,6 @@ function parseAmbushType(selectionReason: string | null): AmbushType {
   if (selectionReason.includes('cage_check')) return 'cage_check';
   if (selectionReason.includes('confession_prompt')) return 'confession_prompt';
   if (selectionReason.includes('gina_observation')) return 'gina_observation';
+  if (selectionReason.includes('outfit_reverification')) return 'outfit_reverification';
   return 'surprise_task';
 }
