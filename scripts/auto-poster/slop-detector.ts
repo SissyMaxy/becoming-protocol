@@ -106,20 +106,22 @@ export function repetitionCheck(reply: string, recentReplies: string[]): SlopChe
     }
   }
 
-  // Check for high word overlap (>60% shared non-stop-words)
-  const STOP_WORDS = new Set(['i', 'the', 'a', 'an', 'is', 'it', 'to', 'and', 'of', 'in', 'my', 'that', 'this', 'was', 'for', 'on', 'you', 'me', 'so', 'but', 'like', 'with', 'just', 'not', 'be', 'are', 'do', 'if', 'at', 'or', 'no']);
-  const replyWords = new Set(replyLower.split(/\s+/).filter(w => w.length > 2 && !STOP_WORDS.has(w)));
+  // Check for high word overlap — but only flag if there are enough content words
+  // to make the comparison meaningful. Short tweets sharing common topic words
+  // (hrt, transition, cage, etc.) shouldn't be flagged as repeats.
+  const STOP_WORDS = new Set(['i', 'the', 'a', 'an', 'is', 'it', 'to', 'and', 'of', 'in', 'my', 'that', 'this', 'was', 'for', 'on', 'you', 'me', 'so', 'but', 'like', 'with', 'just', 'not', 'be', 'are', 'do', 'if', 'at', 'or', 'no', 'about', 'when', 'been', 'still', 'really', 'don\'t', 'didn\'t', 'can\'t', 'got', 'get', 'going', 'think', 'know', 'feel', 'now', 'even', 'too', 'how', 'what', 'lol', 'lmao', 'tbh', 'yeah']);
+  const replyWords = new Set(replyLower.split(/\s+/).filter(w => w.length > 3 && !STOP_WORDS.has(w)));
 
   for (const recent of recentReplies) {
-    const recentWords = new Set(recent.toLowerCase().split(/\s+/).filter(w => w.length > 2 && !STOP_WORDS.has(w)));
-    if (replyWords.size === 0 || recentWords.size === 0) continue;
+    const recentWords = new Set(recent.toLowerCase().split(/\s+/).filter(w => w.length > 3 && !STOP_WORDS.has(w)));
+    if (replyWords.size < 5 || recentWords.size < 5) continue; // skip short texts
 
     let overlap = 0;
     replyWords.forEach(w => {
       if (recentWords.has(w)) overlap++;
     });
     const overlapRatio = overlap / Math.min(replyWords.size, recentWords.size);
-    if (overlapRatio > 0.6 && overlap >= 3) {
+    if (overlapRatio > 0.7 && overlap >= 5) {
       reasons.push(`high word overlap with a recent reply (${Math.round(overlapRatio * 100)}%)`);
       break;
     }

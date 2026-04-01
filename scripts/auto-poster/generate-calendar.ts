@@ -30,8 +30,9 @@ BANNED: "hits different", "the way...", "energy" as descriptor, "ngl", "honestly
 
 interface ContentSlot {
   platform: 'twitter' | 'reddit';
-  contentType: string;
-  hourOffset: number; // hours from midnight
+  contentType: string;       // internal label for prompts/logging
+  dbContentType: string;     // must match ai_generated_content check constraint
+  hourOffset: number;        // hours from midnight
   prompt: string;
   maxTokens: number;
   subreddit?: string;
@@ -56,10 +57,14 @@ function buildDailySlots(): ContentSlot[] {
   const slots: ContentSlot[] = [];
 
   // Twitter: 5-7 posts across the day
+  // DB content_type must be one of: tweet, engagement_bait, caption, etc.
+  // We use 'tweet' for all original twitter posts.
+
   // Morning (8-11): personality/mundane
   slots.push({
     platform: 'twitter',
     contentType: 'morning',
+    dbContentType: 'tweet',
     hourOffset: 8 + Math.random() * 1.5,
     prompt: `Write a morning tweet as Maxy. Something mundane, funny, or self-deprecating about waking up, coffee, or just existing as a trans woman. Could be about HRT brain fog, voice training frustrations, or just a weird thought. Keep it under 200 chars.`,
     maxTokens: 150,
@@ -68,6 +73,7 @@ function buildDailySlots(): ContentSlot[] {
   slots.push({
     platform: 'twitter',
     contentType: 'personality',
+    dbContentType: 'tweet',
     hourOffset: 10 + Math.random() * 1.5,
     prompt: `Write a personality tweet as Maxy. An observation, opinion, or hot take about something mundane — fashion, food, dating, something on TV, whatever. NOT about being trans unless it comes up naturally. Under 240 chars.`,
     maxTokens: 150,
@@ -77,6 +83,7 @@ function buildDailySlots(): ContentSlot[] {
   slots.push({
     platform: 'twitter',
     contentType: 'engagement',
+    dbContentType: 'tweet',
     hourOffset: 12.5 + Math.random() * 1.5,
     prompt: `Write an afternoon tweet as Maxy. Something that invites conversation naturally — sharing an experience, a mild complaint, a random musing, a bit about transition life. NOT a question format. NOT engagement bait. Under 240 chars.`,
     maxTokens: 150,
@@ -85,6 +92,7 @@ function buildDailySlots(): ContentSlot[] {
   slots.push({
     platform: 'twitter',
     contentType: 'engagement',
+    dbContentType: 'tweet',
     hourOffset: 15 + Math.random() * 1.5,
     prompt: `Write a late afternoon tweet as Maxy. Something casual — could be about work, a craving, something annoying, voice training progress, an observation about gender. Just thinking out loud. Under 240 chars.`,
     maxTokens: 150,
@@ -94,6 +102,7 @@ function buildDailySlots(): ContentSlot[] {
   slots.push({
     platform: 'twitter',
     contentType: 'vulnerability',
+    dbContentType: 'tweet',
     hourOffset: 19.5 + Math.random() * 1,
     prompt: `Write an evening tweet as Maxy. Something tender or vulnerable — about longing, dysphoria, a moment of gender euphoria, missing something, feeling soft. Real, not performative. Under 240 chars.`,
     maxTokens: 150,
@@ -102,6 +111,7 @@ function buildDailySlots(): ContentSlot[] {
   slots.push({
     platform: 'twitter',
     contentType: 'thirst',
+    dbContentType: 'tweet',
     hourOffset: 21.5 + Math.random() * 1,
     prompt: `Write a late-night tweet as Maxy. Something horny or suggestive — about chastity, denial, being needy, wanting to be used, feminization feelings. Playful and real, not porny or crude. Under 240 chars.`,
     maxTokens: 150,
@@ -112,6 +122,7 @@ function buildDailySlots(): ContentSlot[] {
     slots.push({
       platform: 'twitter',
       contentType: 'personality',
+      dbContentType: 'tweet',
       hourOffset: 14 + Math.random() * 2,
       prompt: `Write a tweet as Maxy. Anything — a random thought, a small vent, something funny that happened, a feeling. No theme required. Just be a person. Under 240 chars.`,
       maxTokens: 150,
@@ -126,6 +137,7 @@ function buildDailySlots(): ContentSlot[] {
     slots.push({
       platform: 'reddit',
       contentType: 'post',
+      dbContentType: 'reddit_post',
       hourOffset: 11 + (i * 4) + Math.random() * 2,
       prompt: `Write a Reddit post for r/${sub} as Maxy. This should be a genuine post — sharing an experience, asking a real question, or giving advice based on personal experience. Title + body. Format as:\nTITLE: [title here]\n\n[body here]\n\nKeep body under 500 chars. Casual, lowercase, real.`,
       maxTokens: 350,
@@ -287,7 +299,7 @@ export async function generateCalendar(): Promise<number> {
 
     const { error: insertError } = await supabase.from('ai_generated_content').insert({
       user_id: USER_ID,
-      content_type: slot.contentType,
+      content_type: slot.dbContentType,
       platform: slot.platform,
       content: result.text,
       target_subreddit: result.subreddit || null,
