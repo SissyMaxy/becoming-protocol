@@ -190,8 +190,8 @@ function AuthenticatedAppInner() {
   // Morning/Evening bookend system
   const bookends = useBookends();
 
-  // Ambient voice pitch monitoring (P10.3) — paused during loading to prevent mic popup on morning screen
-  useAmbientVoiceMonitor(isLoading || compulsoryLoading);
+  // Ambient voice monitoring DISABLED — causes persistent mic access that disrupts UX
+  // useAmbientVoiceMonitor(isLoading || compulsoryLoading);
 
   // Subliminal UI reinforcement (P12.8) — progressive CSS shifts over months
   useSubliminalUI();
