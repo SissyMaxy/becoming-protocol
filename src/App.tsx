@@ -254,7 +254,7 @@ function AuthenticatedAppInner() {
   const [showSleepContent, setShowSleepContent] = useState(false);
   // showHandlerChat removed — chat is now always visible as primary UI
   const [pendingOutreach, setPendingOutreach] = useState<{ id: string; openingLine: string } | null>(null);
-  const [showSettings, setShowSettings] = useState(false);
+  const [showSettings, setShowSettings] = useState(!!deepLinkView);
 
   // P6.5: Conditioning session triggered by Handler conversation
   const [conditioningSession, setConditioningSession] = useState<{
@@ -461,6 +461,13 @@ function AuthenticatedAppInner() {
 
   // Handle back from menu sub-view
   const handleBackFromSubView = () => {
+    // If we deep-linked in, close settings overlay and reset URL instead of history.back()
+    if (window.location.pathname !== '/') {
+      window.history.replaceState({}, '', '/');
+      setShowSettings(false);
+      setMenuSubView(null);
+      return;
+    }
     window.history.back();
   };
 
