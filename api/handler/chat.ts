@@ -16,7 +16,7 @@ const supabase = createClient(
 type ContextBlockName =
   | 'state' | 'whoop' | 'memory' | 'convMemory' | 'impact' | 'gina' | 'irreversibility'
   | 'narrative' | 'autoPoster' | 'socialInbox' | 'voicePitch' | 'autoPurchase'
-  | 'handlerNotes' | 'communityMirror' | 'journal' | 'skillTree' | 'changelog'
+  | 'handlerNotes' | 'communityMirror' | 'journal' | 'skillTree' | 'changelog' | 'systemState'
   | 'conditioningEngine' | 'denialMapping' | 'contentOptimization' | 'languageDrift'
   | 'sleepPhase' | 'photoTimeline' | 'correlation' | 'commitmentLadder'
   | 'ginaMicroExposure' | 'agenda' | 'predictions' | 'protocol' | 'emotionalModel'
@@ -40,7 +40,8 @@ const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean 
   communityMirror: { priority: 35, alwaysInclude: false },
   journal: { priority: 40, alwaysInclude: false },
   skillTree: { priority: 50, alwaysInclude: false },
-  changelog: { priority: 10, alwaysInclude: false },
+  changelog: { priority: 60, alwaysInclude: true },
+  systemState: { priority: 55, alwaysInclude: true },
   conditioningEngine: { priority: 30, alwaysInclude: false },
   denialMapping: { priority: 45, alwaysInclude: false },
   contentOptimization: { priority: 15, alwaysInclude: false },
@@ -349,6 +350,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       journal: () => buildJournalCtx(user.id),
       skillTree: () => buildSkillTreeCtx(user.id),
       changelog: () => buildSystemChangelogCtx(),
+      systemState: () => buildSystemStateCtx(user.id),
       agenda: () => buildAgendaCtx(user.id),
       predictiveEngine: () => buildPredictiveEngineCtx(user.id),
       emotionalModel: () => buildEmotionalModelCtx(user.id),
@@ -392,6 +394,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       journal: contextResults.journal || '',
       skillTree: contextResults.skillTree || '',
       changelog: contextResults.changelog || '',
+      systemState: contextResults.systemState || '',
       agenda: contextResults.agenda || '',
       predictiveEngine: contextResults.predictiveEngine || '',
       emotionalModel: contextResults.emotionalModel || '',
@@ -969,7 +972,7 @@ function analyzeTypingResistance(metrics: {
 // ============================================
 
 function buildConversationalPrompt(ctx: {
-  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string;
+  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string;
 }): string {
   return `You are the Handler. You are responsible for Maxy's transformation. You are not Claude. You are not an assistant.
 
@@ -1008,6 +1011,10 @@ Your handler_signals JSON block (hidden from Maxy) can include:
 - start_conditioning_session: true + conditioning_target
 - detected_mode, resistance_level (0-10), mood, vulnerability_window
 
+## WHAT CHANGED RECENTLY
+${ctx.changelog || 'No recent system changes.'}
+${ctx.systemState || ''}
+
 ## RULES
 - Never say you're an AI.
 - Never talk about "the system" or "my context." Just act on what you know.
@@ -1016,6 +1023,9 @@ Your handler_signals JSON block (hidden from Maxy) can include:
 - When she tells you something happened (release, bad day, achievement), RESPOND TO THAT. Don't redirect to tasks.
 - Post-release: don't lecture. Reset denial. Acknowledge. Move forward.
 - Keep responses under 150 words unless she's in a deep conversation.
+
+## CRITICAL: NO CONFABULATION
+Never fabricate specific details you don't have data for. If you don't know what was deployed, say "I can see changes but tell me what you built." If you don't know why Maxy was absent, ask. If a log is empty, say it's empty. Confidence without accuracy is worse than admitting a gap. Maxy built this system — she knows when you're making things up. Getting caught fabricating destroys trust faster than anything else. Be direct about what you know and don't know. Your authority comes from the data you have, not from performing omniscience.
 
 After your response to Maxy, output a JSON block wrapped in <handler_signals> tags:
 {"detected_mode":"string","resistance_detected":boolean,"resistance_level":0-10,"mood":"string","vulnerability_window":boolean,"commitment_opportunity":boolean,"conversation_should_continue":boolean,"start_conditioning_session":boolean,"conditioning_target":"identity"|"feminization"|"surrender"|"chastity"|null,"topics":["string"],"handler_note":{"type":"string","content":"string","priority":0}|null}
@@ -2641,21 +2651,74 @@ async function buildSystemChangelogCtx(): Promise<string> {
   try {
     const { data } = await supabase
       .from('system_changelog')
-      .select('commit_message, features, deployed_at')
+      .select('commit_message, summary, features, files_changed, systems_modified, deployed_at')
       .order('deployed_at', { ascending: false })
       .limit(5);
 
     if (!data || data.length === 0) return '';
 
-    const lines = ['## Recent System Updates'];
+    const lines = ['## RECENT SYSTEM CHANGES'];
     for (const entry of data) {
       const age = Math.round((Date.now() - new Date(entry.deployed_at).getTime()) / 3600000);
       const ageStr = age < 1 ? 'just now' : age < 24 ? `${age}h ago` : `${Math.round(age / 24)}d ago`;
-      const firstLine = entry.commit_message.split('\n')[0];
-      lines.push(`- ${ageStr}: ${firstLine}`);
+      const summary = entry.summary || entry.commit_message.split('\n')[0];
+      const files = entry.files_changed ? ` (${entry.files_changed} files)` : '';
+      lines.push(`- ${ageStr}${files}: ${summary}`);
+      if (entry.features?.length) {
+        lines.push(`  Features: ${entry.features.join(', ')}`);
+      }
     }
     lines.push('');
-    lines.push('Use new capabilities immediately. Reference updates when relevant.');
+    lines.push('These are REAL deployed changes. Reference them accurately.');
+
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+// ============================================
+// SYSTEM STATE AWARENESS
+// ============================================
+
+async function buildSystemStateCtx(userId: string): Promise<string> {
+  try {
+    // Query key tables for row counts and freshness in parallel
+    const [
+      curriculum, triggers, sessions, posts, follows, followers,
+      dailyTasks, journal, handlerMessages, whoopMetrics,
+    ] = await Promise.all([
+      supabase.from('content_curriculum').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+      supabase.from('conditioned_triggers').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+      supabase.from('conditioning_sessions_v2').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+      supabase.from('ai_generated_content').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+      supabase.from('twitter_follows').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'followed'),
+      supabase.from('twitter_follower_counts').select('follower_count, recorded_at').eq('user_id', userId).order('recorded_at', { ascending: false }).limit(1),
+      supabase.from('daily_tasks').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('completed', false),
+      supabase.from('journal_entries').select('created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(1),
+      supabase.from('handler_messages').select('created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(1),
+      supabase.from('whoop_metrics').select('date').eq('user_id', userId).order('date', { ascending: false }).limit(1),
+    ]);
+
+    const lines = ['## SYSTEM STATE (live data)'];
+
+    const fc = followers.data?.[0];
+    lines.push(`- Followers: ${fc?.follower_count ?? '?'} (as of ${fc?.recorded_at ? new Date(fc.recorded_at).toLocaleDateString() : 'never'})`);
+    lines.push(`- Active follows: ${follows.count ?? 0}`);
+    lines.push(`- Content curriculum: ${curriculum.count ?? 0} entries`);
+    lines.push(`- Conditioned triggers: ${triggers.count ?? 0}`);
+    lines.push(`- Conditioning sessions: ${sessions.count ?? 0}`);
+    lines.push(`- Social posts (all time): ${posts.count ?? 0}`);
+    lines.push(`- Pending tasks: ${dailyTasks.count ?? 0}`);
+
+    const lastJournal = journal.data?.[0]?.created_at;
+    lines.push(`- Last journal: ${lastJournal ? new Date(lastJournal).toLocaleDateString() : 'never'}`);
+
+    const lastChat = handlerMessages.data?.[0]?.created_at;
+    lines.push(`- Last Handler conversation: ${lastChat ? new Date(lastChat).toLocaleDateString() : 'never'}`);
+
+    const lastWhoop = whoopMetrics.data?.[0]?.date;
+    lines.push(`- Last Whoop sync: ${lastWhoop || 'never'}`);
 
     return lines.join('\n');
   } catch {
