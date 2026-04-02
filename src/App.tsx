@@ -109,6 +109,13 @@ const DEEP_LINK_VIEWS: Record<string, string> = {
 };
 
 function parseDeepLinkView(): string | null {
+  // Check hash first (app uses hash routing: /#/social-dashboard)
+  const hash = window.location.hash;
+  if (hash) {
+    const hashPath = hash.replace('#', '');
+    if (DEEP_LINK_VIEWS[hashPath]) return DEEP_LINK_VIEWS[hashPath];
+  }
+  // Fallback to pathname for non-hash deploys
   const path = window.location.pathname;
   return DEEP_LINK_VIEWS[path] || null;
 }

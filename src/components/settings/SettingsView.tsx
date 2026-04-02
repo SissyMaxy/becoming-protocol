@@ -25,6 +25,7 @@ import {
   LogOut,
   Trash2,
   Loader2,
+  Radio,
 } from 'lucide-react';
 import { profileStorageV2 } from '../../lib/profile-storage-v2';
 import { supabase } from '../../lib/supabase';
@@ -49,6 +50,7 @@ import { PrivacySettings } from './PrivacySettings';
 import { MicroTaskSettings } from '../micro-tasks';
 import { CorruptionDashboard } from '../admin/CorruptionDashboard';
 import { SleepContentSettings } from '../sleep-content/SleepContentSettings';
+import { SocialMediaDashboard } from '../social/SocialMediaDashboard';
 
 const DIFFICULTY_LEVELS = [
   { id: 'gentle', label: 'Gentle', desc: 'Lighter load, longer timers' },
@@ -300,7 +302,7 @@ interface SettingsViewProps {
   onEditIntake?: () => void;
 }
 
-type SettingsSection = 'main' | 'profile' | 'lovense' | 'whoop' | 'equipment' | 'timeratchets' | 'reminders' | 'privacy' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content' | 'opacity';
+type SettingsSection = 'main' | 'profile' | 'lovense' | 'whoop' | 'equipment' | 'timeratchets' | 'reminders' | 'privacy' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content' | 'opacity' | 'social-dashboard';
 
 export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
   const { isBambiMode } = useBambiMode();
@@ -431,6 +433,7 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
     if (activeSection === 'appearance') return 'Appearance';
     if (activeSection === 'data') return 'Data Export';
     if (activeSection === 'opacity') return 'Visibility';
+    if (activeSection === 'social-dashboard') return 'Socials';
     const section = sections.find(s => s.id === activeSection);
     return section?.label || 'Settings';
   };
@@ -630,6 +633,58 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
                   );
                 })}
               </div>
+            </div>
+
+            {/* Socials */}
+            <div>
+              <h2
+                className={`text-sm font-medium mb-3 ${
+                  isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'
+                }`}
+              >
+                Social Media
+              </h2>
+              <button
+                onClick={() => setActiveSection('social-dashboard')}
+                className={`w-full p-4 rounded-xl border flex items-center gap-4 text-left transition-all ${
+                  isBambiMode
+                    ? 'bg-pink-50 border-pink-200 hover:border-pink-300'
+                    : 'bg-protocol-surface border-protocol-border hover:border-protocol-accent/30'
+                }`}
+              >
+                <div
+                  className={`p-3 rounded-xl ${
+                    isBambiMode ? 'bg-pink-100' : 'bg-protocol-surface-light'
+                  }`}
+                >
+                  <Radio
+                    className={`w-5 h-5 ${
+                      isBambiMode ? 'text-pink-500' : 'text-blue-400'
+                    }`}
+                  />
+                </div>
+                <div className="flex-1">
+                  <p
+                    className={`font-medium ${
+                      isBambiMode ? 'text-pink-700' : 'text-protocol-text'
+                    }`}
+                  >
+                    Socials
+                  </p>
+                  <p
+                    className={`text-sm ${
+                      isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'
+                    }`}
+                  >
+                    Posts, replies, queue, quality metrics
+                  </p>
+                </div>
+                <ChevronRight
+                  className={`w-5 h-5 ${
+                    isBambiMode ? 'text-pink-300' : 'text-protocol-text-muted'
+                  }`}
+                />
+              </button>
             </div>
 
             {/* Help Section */}
@@ -986,6 +1041,11 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
 
         {/* Sleep Content */}
         {activeSection === 'sleep-content' && <SleepContentSettings />}
+
+        {/* Social Media Dashboard */}
+        {activeSection === 'social-dashboard' && (
+          <SocialMediaDashboard onBack={() => setActiveSection('main')} />
+        )}
 
         {/* Privacy & Security */}
         {activeSection === 'privacy' && <PrivacySettings />}
