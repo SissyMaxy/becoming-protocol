@@ -62,6 +62,20 @@ const SLOP_PATTERNS: { pattern: RegExp; reason: string }[] = [
   { pattern: /^honestly/i, reason: 'banned phrase: honestly opener' },
   { pattern: /chef'?s kiss/i, reason: 'banned phrase: chef\'s kiss' },
   { pattern: /\bi respect (it|that)\b/i, reason: 'banned phrase: i respect it/that' },
+
+  // New bans — corny patterns that slipped through
+  { pattern: /\bnobody (tells|warns|told) you (about)?\b/i, reason: 'banned phrase: nobody tells you about' },
+  { pattern: /\bbiology doing its thing\b/i, reason: 'banned phrase: biology doing its thing' },
+  { pattern: /\bmysterious ways\b/i, reason: 'banned phrase: mysterious ways' },
+  { pattern: /\bso real (though|tho)\b/i, reason: 'banned phrase: so real though' },
+  { pattern: /\bthe dysphoria tax\b/i, reason: 'banned phrase: the dysphoria tax' },
+  { pattern: /\bcrying in (a |the )?(parking lot|walgreens|target)\b/i, reason: 'banned phrase: crying in public place' },
+  { pattern: /^(god |ok(ay)? but )/i, reason: 'banned opener: god/okay but' },
+  { pattern: /\b(just|stop) processing\b/i, reason: 'banned phrase: processing' },
+  { pattern: /\bwhole thing worth it\b/i, reason: 'banned phrase: whole thing worth it' },
+  { pattern: /\brent free\b/i, reason: 'banned phrase: rent free' },
+  { pattern: /\bspeedrun(ning)?\b/i, reason: 'banned phrase: speedrunning' },
+  { pattern: /\b(is|that'?s) (actually )?so real\b/i, reason: 'banned phrase: is/that\'s so real' },
 ];
 
 export interface SlopCheckResult {
@@ -253,12 +267,23 @@ export async function fullSlopCheck(
   // Pass 3: LLM judge
   const llm = await llmSlopJudge(anthropic, originalTweet, reply);
 
-  const allFailed = !patterns.pass || !repetition.pass || !llm.pass;
-  const feedback = buildRetryFeedback(patterns.reasons, repetition.reasons, llm.score, llm.reason);
+  // LLM score 9+ overrides pattern failures — the LLM is the more nuanced judge.
+  // Pattern regexes catch common AI tells but produce false positives on authentic text.
+  // Repetition failures are NOT overridable — even good text shouldn't repeat.
+  const patternOverridden = !patterns.pass && llm.score >= 9;
+  const effectivePatternPass = patterns.pass || patternOverridden;
+
+  const allFailed = !effectivePatternPass || !repetition.pass || !llm.pass;
+  const feedback = buildRetryFeedback(
+    patternOverridden ? [] : patterns.reasons,
+    repetition.reasons,
+    llm.score,
+    llm.reason,
+  );
 
   return {
     pass: !allFailed,
-    patternReasons: patterns.reasons,
+    patternReasons: patternOverridden ? [] : patterns.reasons,
     repetitionReasons: repetition.reasons,
     llmScore: llm.score,
     llmReason: llm.reason,
