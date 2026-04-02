@@ -12,6 +12,9 @@ import {
   BarChart3,
   RefreshCw,
   ArrowLeft,
+  TrendingUp,
+  TrendingDown,
+  Users,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -20,6 +23,8 @@ import {
   type PlatformStats,
   type RecentPost,
   type DailyActivity,
+  type FollowerGrowth,
+  type FollowActivity,
 } from '../../lib/social-media-analytics';
 
 interface Props {
@@ -157,9 +162,100 @@ function ActivityChart({ data }: { data: DailyActivity[] }) {
   );
 }
 
+function FollowerCard({ followers, followActivity }: { followers: FollowerGrowth; followActivity: FollowActivity }) {
+  const change24h = followers.change24h;
+  const change7d = followers.change7d;
+
+  return (
+    <div className="p-4 rounded-xl border border-protocol-border bg-protocol-surface space-y-3">
+      <div className="flex items-center gap-2 mb-1">
+        <Users className="w-4 h-4 text-protocol-text-muted" />
+        <span className="text-sm font-medium text-protocol-text">Followers</span>
+      </div>
+
+      {/* Main counts */}
+      <div className="grid grid-cols-3 gap-3 text-center">
+        <div>
+          <div className="text-2xl font-bold text-protocol-text">{followers.current}</div>
+          <div className="text-[10px] text-protocol-text-muted">followers</div>
+        </div>
+        <div>
+          <div className="text-2xl font-bold text-protocol-text">{followers.following}</div>
+          <div className="text-[10px] text-protocol-text-muted">following</div>
+        </div>
+        <div>
+          <div className="text-2xl font-bold text-green-400">{followActivity.mutualFollows}</div>
+          <div className="text-[10px] text-protocol-text-muted">mutual</div>
+        </div>
+      </div>
+
+      {/* Growth indicators */}
+      <div className="flex gap-4 justify-center text-xs">
+        {change24h !== null && (
+          <span className={`flex items-center gap-1 ${change24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {change24h >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+            {change24h >= 0 ? '+' : ''}{change24h} 24h
+          </span>
+        )}
+        {change7d !== null && (
+          <span className={`flex items-center gap-1 ${change7d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {change7d >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+            {change7d >= 0 ? '+' : ''}{change7d} 7d
+          </span>
+        )}
+      </div>
+
+      {/* Follower history mini chart */}
+      {followers.history.length > 1 && (() => {
+        const counts = followers.history.map(h => h.count);
+        const maxVal = Math.max(...counts, 1);
+        const minVal = Math.min(...counts, 0);
+        const range = maxVal - minVal || 1;
+
+        return (
+          <div className="flex items-end gap-[2px] h-12">
+            {followers.history.map((h) => {
+              const height = ((h.count - minVal) / range) * 100;
+              return (
+                <div
+                  key={h.date}
+                  className="flex-1 rounded-sm bg-purple-500/50"
+                  style={{ height: `${Math.max(height, 4)}%` }}
+                  title={`${h.date}: ${h.count}`}
+                />
+              );
+            })}
+          </div>
+        );
+      })()}
+
+      {/* Recent follows */}
+      {followActivity.recent.length > 0 && (
+        <div className="pt-2 border-t border-protocol-border">
+          <div className="text-[10px] text-protocol-text-muted uppercase tracking-wider mb-1">Recent follows (24h)</div>
+          <div className="flex flex-wrap gap-1">
+            {followActivity.recent.slice(0, 10).map(f => (
+              <span
+                key={f.handle}
+                className={`text-[10px] px-1.5 py-0.5 rounded-full border ${
+                  f.source === 'followback'
+                    ? 'border-green-500/30 text-green-400'
+                    : 'border-blue-500/30 text-blue-400'
+                }`}
+              >
+                @{f.handle}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main dashboard ───────────────────────────────────────────────────
 
-type Tab = 'overview' | 'posts' | 'replies' | 'queue';
+type Tab = 'overview' | 'posts' | 'replies' | 'queue' | 'growth';
 
 export function SocialMediaDashboard({ onBack }: Props) {
   const { user } = useAuth();
@@ -211,6 +307,7 @@ export function SocialMediaDashboard({ onBack }: Props) {
 
   const tabs: { key: Tab; label: string; count?: number }[] = [
     { key: 'overview', label: 'Overview' },
+    { key: 'growth', label: 'Growth', count: data.followers.current || undefined },
     { key: 'posts', label: 'Posts', count: data.recentPosts.length },
     { key: 'replies', label: 'Replies', count: data.recentReplies.length },
     { key: 'queue', label: 'Queue', count: totalQueued },
@@ -239,14 +336,20 @@ export function SocialMediaDashboard({ onBack }: Props) {
       </div>
 
       {/* Top stats */}
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-5 gap-2">
+        <StatCard
+          label="Followers"
+          value={data.followers.current}
+          sub={data.followers.change24h !== null ? `${data.followers.change24h >= 0 ? '+' : ''}${data.followers.change24h} today` : undefined}
+          color="#a855f7"
+        />
         <StatCard label="Posts today" value={todayPosts} color="#22c55e" />
-        <StatCard label="Replies today" value={todayReplies} color="#3b82f6" />
-        <StatCard label="Queued" value={totalQueued} color="#a855f7" />
+        <StatCard label="Replies" value={todayReplies} color="#3b82f6" />
+        <StatCard label="Queued" value={totalQueued} color="#6366f1" />
         <StatCard
           label="Quality"
           value={`${data.quality.passRate}%`}
-          sub={`${data.quality.totalPosted}/${data.quality.totalGenerated} passed`}
+          sub={`${data.quality.totalPosted}/${data.quality.totalGenerated}`}
           color={data.quality.passRate >= 70 ? '#22c55e' : data.quality.passRate >= 50 ? '#eab308' : '#ef4444'}
         />
       </div>
@@ -326,6 +429,12 @@ export function SocialMediaDashboard({ onBack }: Props) {
           ) : (
             data.recentReplies.map(post => <PostItem key={post.id} post={post} />)
           )}
+        </div>
+      )}
+
+      {activeTab === 'growth' && (
+        <div className="space-y-3">
+          <FollowerCard followers={data.followers} followActivity={data.followActivity} />
         </div>
       )}
 

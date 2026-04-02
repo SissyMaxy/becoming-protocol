@@ -45,6 +45,21 @@ export interface QualityMetrics {
   avgAttemptsBeforePost: number;
 }
 
+export interface FollowerGrowth {
+  current: number;
+  following: number;
+  change24h: number | null;
+  change7d: number | null;
+  history: { date: string; count: number }[];
+}
+
+export interface FollowActivity {
+  activeFollows: number;
+  mutualFollows: number;
+  unfollowed: number;
+  recent: { handle: string; source: string; status: string; followedAt: string }[];
+}
+
 export interface SocialDashboardData {
   platformStats: PlatformStats[];
   recentPosts: RecentPost[];
@@ -52,6 +67,8 @@ export interface SocialDashboardData {
   scheduledQueue: RecentPost[];
   dailyActivity: DailyActivity[];
   quality: QualityMetrics;
+  followers: FollowerGrowth;
+  followActivity: FollowActivity;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -84,11 +101,16 @@ export async function loadSocialDashboard(userId: string): Promise<SocialDashboa
   const todayStart = startOfDay(0);
   const weekStart = startOfDay(7);
 
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
   // Run all queries in parallel
   const [
     allRecent,
     scheduled,
     weekActivity,
+    followerCounts,
+    followTotals,
+    recentFollows,
   ] = await Promise.all([
     // All content from last 7 days
     supabase
@@ -115,6 +137,29 @@ export async function loadSocialDashboard(userId: string): Promise<SocialDashboa
       .eq('user_id', userId)
       .gte('created_at', startOfDay(14))
       .limit(1000),
+
+    // Follower count history (last 14 days)
+    supabase
+      .from('twitter_follower_counts')
+      .select('follower_count, following_count, recorded_at')
+      .eq('user_id', userId)
+      .order('recorded_at', { ascending: false })
+      .limit(200),
+
+    // Follow totals
+    supabase
+      .from('twitter_follows')
+      .select('status, followed_back')
+      .eq('user_id', userId),
+
+    // Recent follows (last 24h)
+    supabase
+      .from('twitter_follows')
+      .select('target_handle, source, status, followed_at')
+      .eq('user_id', userId)
+      .gte('followed_at', oneDayAgo)
+      .order('followed_at', { ascending: false })
+      .limit(20),
   ]);
 
   const rows = (allRecent.data || []) as Record<string, unknown>[];
@@ -197,6 +242,61 @@ export async function loadSocialDashboard(userId: string): Promise<SocialDashboa
     avgAttemptsBeforePost: totalPosted > 0 ? Math.round(((totalGenerated / totalPosted) + Number.EPSILON) * 10) / 10 : 0,
   };
 
+  // ── Follower growth ──
+  const fcRows = (followerCounts.data || []) as Record<string, unknown>[];
+  const latestFc = fcRows[0];
+  const currentFollowers = (latestFc?.follower_count as number) || 0;
+  const currentFollowing = (latestFc?.following_count as number) || 0;
+
+  // Find counts at 24h and 7d ago
+  const now = Date.now();
+  const fc24h = fcRows.find(r => {
+    const t = new Date(r.recorded_at as string).getTime();
+    return now - t >= 23 * 60 * 60 * 1000;
+  });
+  const fc7d = fcRows.find(r => {
+    const t = new Date(r.recorded_at as string).getTime();
+    return now - t >= 6.5 * 24 * 60 * 60 * 1000;
+  });
+
+  // Daily history for chart (one entry per day, latest per day)
+  const fcByDay: Record<string, number> = {};
+  for (const r of fcRows) {
+    const day = (r.recorded_at as string).split('T')[0];
+    if (!fcByDay[day]) fcByDay[day] = r.follower_count as number;
+  }
+  const followerHistory = Object.entries(fcByDay)
+    .map(([date, count]) => ({ date, count }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-14);
+
+  const followers: FollowerGrowth = {
+    current: currentFollowers,
+    following: currentFollowing,
+    change24h: fc24h ? currentFollowers - (fc24h.follower_count as number) : null,
+    change7d: fc7d ? currentFollowers - (fc7d.follower_count as number) : null,
+    history: followerHistory,
+  };
+
+  // ── Follow activity ──
+  const ftRows = (followTotals.data || []) as Record<string, unknown>[];
+  const activeFollows = ftRows.filter(r => r.status === 'followed').length;
+  const mutualFollows = ftRows.filter(r => r.followed_back === true).length;
+  const unfollowed = ftRows.filter(r => r.status === 'unfollowed_stale').length;
+  const rfRows = (recentFollows.data || []) as Record<string, unknown>[];
+
+  const followActivity: FollowActivity = {
+    activeFollows,
+    mutualFollows,
+    unfollowed,
+    recent: rfRows.map(r => ({
+      handle: r.target_handle as string,
+      source: r.source as string,
+      status: r.status as string,
+      followedAt: r.followed_at as string,
+    })),
+  };
+
   return {
     platformStats,
     recentPosts,
@@ -204,5 +304,7 @@ export async function loadSocialDashboard(userId: string): Promise<SocialDashboa
     scheduledQueue,
     dailyActivity,
     quality,
+    followers,
+    followActivity,
   };
 }
