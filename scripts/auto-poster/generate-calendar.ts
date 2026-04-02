@@ -44,15 +44,18 @@ interface ContentSlot {
   subreddit?: string;
 }
 
-/** Subreddits Maxy actually posts in */
+/** Subreddits Maxy posts in — Tier 1 (daily core audience) */
 const SUBREDDITS = [
   'sissychastity',
   'feminization',
-  'TransDIY',
-  'TransTimelines',
-  'MtF',
+  'Sissy',
   'chastity',
   'sissyology',
+  'femboy',
+  'MtF',
+  'TransDIY',
+  'TransTimelines',
+  'TransLater',
 ];
 
 function pickRandom<T>(arr: T[]): T {

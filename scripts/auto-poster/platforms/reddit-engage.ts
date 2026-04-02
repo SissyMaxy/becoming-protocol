@@ -25,7 +25,11 @@ const MAXY_VOICE_KINK = `You are Maxy (@softmaxy) — a 40-year-old woman in tra
 // Clean voice for trans support, selfie, and general subs
 const MAXY_VOICE_SFW = `You are Maxy (@softmaxy) — a 40-year-old trans woman early in her transition. On HRT, doing voice training daily. Starting later in life and figuring it out. Warm, genuine, a little self-deprecating. You love hyping up other trans people because you know how much it matters.`;
 
-const KINK_SUBS = new Set(['sissification', 'feminization', 'chastity', 'sissyhypno']);
+const KINK_SUBS = new Set([
+  'sissification', 'feminization', 'chastity', 'sissyhypno', 'sissychastity',
+  'Sissy', 'sissyology', 'bambisleep', 'EroticHypnosis', 'GOONED',
+  'traps', 'GoneWildTrans', 'TransGoneWild', 'edging', 'BDSMcommunity',
+]);
 
 function getMaxyVoice(subreddit: string): string {
   return KINK_SUBS.has(subreddit) ? MAXY_VOICE_KINK : MAXY_VOICE_SFW;
@@ -105,6 +109,66 @@ const SUBREDDIT_VOICES: Record<string, SubredditVoice> = {
     topics: ['HRT regimens', 'self-medding experiences', 'bloodwork', 'dosages'],
     rules: 'Be respectful. Ask genuine questions or share your own research. Never give medical advice. This community values harm reduction. No kink content.',
   },
+  Sissy: {
+    tone: 'playful, sharing experiences, community member',
+    topics: ['feminization', 'dressing', 'training', 'identity exploration'],
+    rules: 'Be genuine about the sissy journey. Community-appropriate. Share real experiences.',
+  },
+  femboy: {
+    tone: 'casual, supportive, complimentary on outfits',
+    topics: ['outfits', 'fashion', 'confidence', 'self-expression'],
+    rules: 'Compliment something specific. Keep it positive. Can mention your own style journey.',
+  },
+  bambisleep: {
+    tone: 'open about hypno experiences, community member',
+    topics: ['trance experiences', 'session effects', 'conditioning progress'],
+    rules: 'Share genuine experiences. Be part of the community, not an outsider looking in.',
+  },
+  EroticHypnosis: {
+    tone: 'thoughtful, experienced, sharing insights',
+    topics: ['hypnosis techniques', 'trance experiences', 'ethical practices'],
+    rules: 'Share real experiences. Be thoughtful about consent and practice. Community voice.',
+  },
+  GOONED: {
+    tone: 'unhinged, horny, real about the experience',
+    topics: ['gooning sessions', 'edging', 'hypno', 'brain melt'],
+    rules: 'Match the sub energy. Be real about the experience. No judgment.',
+  },
+  AskTransgender: {
+    tone: 'thoughtful, genuine, sharing lived experience',
+    topics: ['transition at 40', 'late transition', 'HRT', 'social challenges'],
+    rules: 'Answer from personal experience. Be supportive. No kink content. This is a general trans support space.',
+  },
+  BDSMcommunity: {
+    tone: 'experienced, articulate about dynamics, SSC/RACK aware',
+    topics: ['D/s dynamics', 'chastity in relationships', 'protocol structures'],
+    rules: 'Be thoughtful about consent and safety. Share genuine experiences. Community-appropriate language.',
+  },
+  edging: {
+    tone: 'real, sharing the struggle, community member',
+    topics: ['edging experiences', 'denial', 'mental effects'],
+    rules: 'Be genuine. Match the community energy.',
+  },
+  traps: {
+    tone: 'confident, casual, community member',
+    topics: ['presentation', 'passing', 'selfies', 'fashion'],
+    rules: 'Keep comments specific to what they posted. Compliment specifics. Be part of the community.',
+  },
+  GoneWildTrans: {
+    tone: 'flirty, supportive, community member',
+    topics: ['body positivity', 'transition progress', 'confidence'],
+    rules: 'NSFW-appropriate comments. Compliment something specific. Be genuine, not creepy.',
+  },
+  TransGoneWild: {
+    tone: 'flirty, supportive, community member',
+    topics: ['body positivity', 'transition progress', 'confidence'],
+    rules: 'NSFW-appropriate comments. Compliment something specific. Be genuine, not creepy.',
+  },
+  crossdressing: {
+    tone: 'supportive, sharing experiences, encouraging',
+    topics: ['outfits', 'first times', 'confidence building'],
+    rules: 'Be supportive. Share your own experience. Compliment specifics.',
+  },
   MTF: {
     tone: 'supportive, relatable, sharing the journey',
     topics: ['transition experiences', 'coming out', 'HRT', 'passing', 'voice training', 'fashion'],
@@ -117,11 +181,49 @@ const SUBREDDIT_VOICES: Record<string, SubredditVoice> = {
   },
 };
 
-// NSFW selfie subs (TransTimelines, TransLater, transadorable, MTFSelfieTrain) removed —
-// comment box consistently fails due to NSFW age gate. Will re-add when fixed.
-const KARMA_BUILDING_SUBS = ['MTF', 'TransDIY', 'ChatGPT', 'selfimprovement', 'AskReddit'];
-const SELFIE_SUBS = new Set(['MTFSelfieTrain', 'TransTimelines', 'transadorable']);
-const NICHE_SUBS = ['sissification', 'feminization', 'chastity', 'TransLater', 'sissyhypno'];
+// ── Tiered subreddit strategy ──────────────────────────────────────
+// Tier 1: daily (core audience) — post + comment
+// Tier 2: 3x/week (community building) — discussion + journey comments
+// Tier 3: weekly (NSFW audience growth) — requires karma
+// Tier 4: monthly (narrative seeding) — long-form, credibility
+
+const TIER_1_SUBS = ['sissychastity', 'feminization', 'Sissy', 'chastity', 'sissyology', 'femboy'];
+const TIER_2_SUBS = ['MtF', 'TransDIY', 'TransTimelines', 'TransLater', 'bambisleep', 'EroticHypnosis', 'GOONED'];
+const TIER_3_SUBS = ['traps', 'GoneWildTrans', 'TransGoneWild', 'crossdressing', 'sissyhypno'];
+const TIER_4_SUBS = ['AskTransgender', 'BDSMcommunity', 'TransBodyTimelines', 'edging'];
+
+const SELFIE_SUBS = new Set(['TransTimelines', 'TransBodyTimelines', 'traps', 'GoneWildTrans', 'TransGoneWild', 'femboy', 'crossdressing']);
+
+/** Pick subreddits for this tick based on tier schedule */
+function getTieredSubs(): string[] {
+  const now = new Date();
+  const dayOfWeek = now.getDay(); // 0=Sun
+  const dayOfMonth = now.getDate();
+
+  // Tier 1: always available
+  const subs = [...TIER_1_SUBS];
+
+  // Tier 2: Mon/Wed/Fri/Sat (4 days/week)
+  if ([1, 3, 5, 6].includes(dayOfWeek)) {
+    subs.push(...TIER_2_SUBS);
+  }
+
+  // Tier 3: Wed/Sat only (requires karma)
+  if ([3, 6].includes(dayOfWeek)) {
+    subs.push(...TIER_3_SUBS);
+  }
+
+  // Tier 4: 1st and 15th of month
+  if (dayOfMonth === 1 || dayOfMonth === 15) {
+    subs.push(...TIER_4_SUBS);
+  }
+
+  return subs;
+}
+
+// Legacy aliases for karma gating
+const KARMA_BUILDING_SUBS = [...TIER_1_SUBS, ...TIER_2_SUBS];
+const NICHE_SUBS = [...TIER_3_SUBS, ...TIER_4_SUBS];
 
 function getSubredditVoice(subreddit: string): SubredditVoice {
   return SUBREDDIT_VOICES[subreddit] || {
@@ -359,96 +461,72 @@ export async function postRedditComment(
   comment: string,
 ): Promise<boolean> {
   try {
-    // Try old.reddit first, fall back to new reddit
-    const oldUrl = postUrl.replace('www.reddit.com', 'old.reddit.com');
-    await page.goto(oldUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
-    await page.waitForTimeout(3000);
+    // Go directly to www.reddit.com — login session lives there, not old.reddit.com
+    const newUrl = postUrl.replace('old.reddit.com', 'www.reddit.com');
+    await page.goto(newUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.waitForTimeout(4000);
 
-    // Handle NSFW age gate / content warning (old reddit)
-    const overAge = page.locator('button:has-text("Yes"), a:has-text("proceed"), button:has-text("Continue"), a:has-text("are you sure"), button:has-text("I agree")').first();
-    if (await overAge.isVisible().catch(() => false)) {
-      await overAge.click();
+    // Handle NSFW age gate (new reddit)
+    const nsfwGate = page.locator(
+      'button:has-text("Yes"), ' +
+      'button:has-text("Continue"), ' +
+      'button:has-text("I agree"), ' +
+      'button:has-text("Click to see nsfw"), ' +
+      '[id*="over18"] button'
+    ).first();
+    if (await nsfwGate.isVisible().catch(() => false)) {
+      await nsfwGate.click();
       await page.waitForTimeout(2000);
     }
 
-    // Scroll down to ensure comment section is in view
+    // Scroll to load lazy comment section
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await page.waitForTimeout(1500);
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(2000);
 
-    // Try old reddit comment box first
-    let commentBox = page.locator('.commentarea textarea[name="text"]').first();
-    let isOldReddit = await commentBox.isVisible().catch(() => false);
+    // Try shreddit (new new reddit) selectors
+    let commentBox = page.locator(
+      'shreddit-composer textarea, ' +
+      'div[contenteditable="true"][role="textbox"], ' +
+      '[contenteditable="true"][data-lexical-editor], ' +
+      '[placeholder*="comment" i], ' +
+      'textarea[placeholder*="Add a comment" i]'
+    ).first();
 
-    if (!isOldReddit) {
-      // Fall back to new reddit URL
-      const newUrl = postUrl.replace('old.reddit.com', 'www.reddit.com');
-      await page.goto(newUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
-      await page.waitForTimeout(4000);
-
-      // Handle NSFW age gate (new reddit)
-      const nsfwGate = page.locator(
-        'button:has-text("Yes"), ' +
-        'button:has-text("Continue"), ' +
-        'button:has-text("I agree"), ' +
-        'button:has-text("Click to see nsfw"), ' +
-        '[id*="over18"] button'
+    // If still not visible, try clicking into the comment area to activate it
+    const hasNewBox = await commentBox.isVisible().catch(() => false);
+    if (!hasNewBox) {
+      // New reddit sometimes shows a collapsed "Add a comment" bar that needs clicking
+      const commentTrigger = page.locator(
+        '[placeholder*="Add a comment"], ' +
+        'div:has-text("Add a comment"), ' +
+        'shreddit-composer'
       ).first();
-      if (await nsfwGate.isVisible().catch(() => false)) {
-        await nsfwGate.click();
-        await page.waitForTimeout(2000);
+      if (await commentTrigger.isVisible().catch(() => false)) {
+        await commentTrigger.click();
+        await page.waitForTimeout(1500);
       }
 
-      // Scroll to load lazy comment section
-      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-      await page.waitForTimeout(2000);
-
-      // Try shreddit (new new reddit) selectors
+      // Re-check for the input
       commentBox = page.locator(
         'shreddit-composer textarea, ' +
         'div[contenteditable="true"][role="textbox"], ' +
         '[contenteditable="true"][data-lexical-editor], ' +
-        '[placeholder*="comment" i], ' +
-        'textarea[placeholder*="Add a comment" i]'
+        'textarea'
       ).first();
 
-      // If still not visible, try clicking into the comment area to activate it
-      const hasNewBox = await commentBox.isVisible().catch(() => false);
-      if (!hasNewBox) {
-        // New reddit sometimes shows a collapsed "Add a comment" bar that needs clicking
-        const commentTrigger = page.locator(
-          '[placeholder*="Add a comment"], ' +
-          'div:has-text("Add a comment"), ' +
-          'shreddit-composer'
-        ).first();
-        if (await commentTrigger.isVisible().catch(() => false)) {
-          await commentTrigger.click();
-          await page.waitForTimeout(1500);
-        }
-
-        // Re-check for the input
-        commentBox = page.locator(
-          'shreddit-composer textarea, ' +
-          'div[contenteditable="true"][role="textbox"], ' +
-          '[contenteditable="true"][data-lexical-editor], ' +
-          'textarea'
-        ).first();
-
-        const lastTry = await commentBox.isVisible().catch(() => false);
-        if (!lastTry) {
-          const screenshotPath = path.join(__dirname, '..', '.debug-reddit-fail.png');
-          await page.screenshot({ path: screenshotPath, fullPage: true });
-          console.error(`[Reddit] No comment box found. Screenshot: .debug-reddit-fail.png`);
-          return false;
-        }
+      const lastTry = await commentBox.isVisible().catch(() => false);
+      if (!lastTry) {
+        const screenshotPath = path.join(__dirname, '..', '.debug-reddit-fail.png');
+        await page.screenshot({ path: screenshotPath, fullPage: true });
+        console.error(`[Reddit] No comment box found. Screenshot: .debug-reddit-fail.png`);
+        return false;
       }
     }
 
     await commentBox.click();
     await page.waitForTimeout(500);
 
-    // Use pressSequentially for old reddit textarea, but new reddit contenteditable may need different approach
+    // Type the comment
     const tagName = await commentBox.evaluate(el => el.tagName.toLowerCase()).catch(() => 'unknown');
     if (tagName === 'textarea') {
       await commentBox.pressSequentially(comment, { delay: 25 });
@@ -458,13 +536,12 @@ export async function postRedditComment(
     }
     await page.waitForTimeout(1500);
 
-    // Click submit — handle both old and new reddit
+    // Click submit
     const saveButton = page.locator(
-      '.commentarea button[type="submit"], ' +
-      '.commentarea .save-button button, ' +
       'button:has-text("Comment"), ' +
       'button[type="submit"][slot="submit-button"], ' +
-      'shreddit-composer button[type="submit"]'
+      'shreddit-composer button[type="submit"], ' +
+      'button[type="submit"]:has-text("Comment")'
     ).first();
     await saveButton.click();
     await page.waitForTimeout(3000);
@@ -527,11 +604,12 @@ export async function runRedditComments(
 
   // Check karma to determine which subs are available
   const karma = await checkKarma(page);
+  const tieredSubs = getTieredSubs();
   const availableSubs = karma >= 500
-    ? [...KARMA_BUILDING_SUBS, ...NICHE_SUBS]
-    : KARMA_BUILDING_SUBS;
+    ? tieredSubs
+    : tieredSubs.filter(s => [...TIER_1_SUBS, ...TIER_2_SUBS].includes(s));
 
-  console.log(`[Reddit] Karma: ${karma} → ${availableSubs.length} subs available (${karma < 500 ? 'karma-building phase' : 'niche subs unlocked'})`);
+  console.log(`[Reddit] Karma: ${karma} → ${availableSubs.length} subs available (${karma < 500 ? 'karma-building phase' : 'all tiers unlocked'})`);
 
   // Shuffle available subs
   const shuffled = [...availableSubs].sort(() => Math.random() - 0.5);
