@@ -11,6 +11,7 @@
 
 import { supabase } from '../supabase';
 import { getHiddenParam } from './hidden-operations';
+import { logTriggerDeployment, detectTriggerPhrases } from './trigger-deployment-logger';
 
 // ============================================
 // TYPES
@@ -273,6 +274,26 @@ export async function fireActivation(userId: string, activationId: string): Prom
         undefined,
         'system',
       );
+
+      // Log trigger deployment if paired message contains a trigger phrase
+      const { data: knownTriggers } = await supabase
+        .from('conditioned_triggers')
+        .select('id, trigger_phrase')
+        .eq('user_id', userId);
+
+      if (knownTriggers?.length) {
+        const phrases = knownTriggers.map(t => t.trigger_phrase);
+        const matched = detectTriggerPhrases(activation.paired_message, phrases);
+        for (const phrase of matched) {
+          const trigger = knownTriggers.find(t => t.trigger_phrase === phrase);
+          logTriggerDeployment({
+            userId,
+            triggerId: trigger?.id,
+            triggerPhrase: phrase,
+            context: 'session',
+          });
+        }
+      }
     }
 
     return true;

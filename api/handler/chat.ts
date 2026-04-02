@@ -740,11 +740,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 finalResponse = `${visibleResponse} ${insert}`;
               }
             }
-            // Track deployment — fire-and-forget increment
+            // Track deployment — fire-and-forget increment + deployment log
+            const deployedNow = new Date().toISOString();
             supabase
               .from('conditioned_triggers')
-              .update({ times_deployed: (trigger.times_deployed || 0) + 1 })
+              .update({
+                times_deployed: (trigger.times_deployed || 0) + 1,
+                last_deployed_at: deployedNow,
+              })
               .eq('id', trigger.id)
+              .then(() => {});
+            supabase
+              .from('trigger_deployments')
+              .insert({
+                user_id: user.id,
+                trigger_id: trigger.id,
+                trigger_phrase: phrase,
+                deployment_context: 'conversation',
+                deployed_at: deployedNow,
+              })
               .then(() => {});
           }
         }

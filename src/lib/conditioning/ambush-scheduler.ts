@@ -13,6 +13,7 @@
  */
 
 import { supabase } from '../supabase';
+import { logTriggerDeployment, detectTriggerPhrases } from './trigger-deployment-logger';
 import { deliverMicroPulse } from './micro-pulse';
 
 // ============================================
@@ -589,6 +590,21 @@ async function fireMicroConditioning(userId: string): Promise<void> {
     completed: false,
     created_at: new Date().toISOString(),
   });
+
+  // Log trigger deployment if pulse contains a trigger phrase
+  try {
+    const { data: triggers } = await supabase
+      .from('conditioned_triggers')
+      .select('id, trigger_phrase')
+      .eq('user_id', userId);
+    if (triggers?.length) {
+      const matched = detectTriggerPhrases(delivery.pulse.text, triggers.map(t => t.trigger_phrase));
+      for (const phrase of matched) {
+        const trigger = triggers.find(t => t.trigger_phrase === phrase);
+        logTriggerDeployment({ userId, triggerId: trigger?.id, triggerPhrase: phrase, context: 'ambush' });
+      }
+    }
+  } catch { /* non-critical */ }
 }
 
 /**

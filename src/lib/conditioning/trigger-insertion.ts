@@ -6,6 +6,7 @@
  */
 
 import { supabase } from '../supabase';
+import { logTriggerDeployment } from './trigger-deployment-logger';
 
 const TRIGGER_CHANCE = 0.3;
 
@@ -105,6 +106,14 @@ export async function weaveTriggers(message: string, userId: string): Promise<st
 
     // If message already contains the trigger phrase, don't double-insert
     if (trimmed.toLowerCase().includes(phrase)) return message;
+
+    // Log deployment — fire-and-forget
+    logTriggerDeployment({
+      userId,
+      triggerId: selected.id,
+      triggerPhrase: selected.trigger_phrase,
+      context: 'conversation',
+    });
 
     return `${trimmed}\n\n${template}`;
   } catch (err) {

@@ -8,6 +8,7 @@ export type { SessionContext, SessionPrescription } from './prescription';
 export { recordDelivery, checkActivations, recordActivation, getPendingPostHypnotics } from './post-hypnotic';
 export { weaveTriggers } from './trigger-insertion';
 export { buildConditioningEngineContext } from './handler-context';
+export { logTriggerDeployment, getTriggerDeploymentStats, detectTriggerPhrases } from './trigger-deployment-logger';
 export * from './elevenlabs';
 export * from './script-generator';
 export * from './adaptive-session';

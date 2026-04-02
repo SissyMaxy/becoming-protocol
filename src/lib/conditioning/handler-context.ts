@@ -9,6 +9,7 @@
 import { supabase } from '../supabase';
 import { buildBatchTtsContext } from './batch-tts';
 import { buildContentLibraryContext } from './content-sourcer';
+import { getTriggerDeploymentStats } from './trigger-deployment-logger';
 
 /**
  * Build the conditioning engine context block for the Handler system prompt.
@@ -18,7 +19,7 @@ import { buildContentLibraryContext } from './content-sourcer';
  */
 export async function buildConditioningEngineContext(userId: string): Promise<string> {
   try {
-    const [sessions, trance, triggers, postHypnotics, scent, batchTtsCtx, contentLibCtx] = await Promise.all([
+    const [sessions, trance, triggers, postHypnotics, scent, batchTtsCtx, contentLibCtx, deploymentStats] = await Promise.all([
       fetchRecentSessions(userId),
       fetchTranceProgression(userId),
       fetchEstablishedTriggers(userId),
@@ -26,6 +27,7 @@ export async function buildConditioningEngineContext(userId: string): Promise<st
       fetchScentConditioning(userId),
       buildBatchTtsContext(userId).catch(() => ''),
       buildContentLibraryContext(userId).catch(() => ''),
+      getTriggerDeploymentStats(userId).catch(() => []),
     ]);
 
     const lines: string[] = ['## Conditioning Engine State'];
@@ -56,6 +58,35 @@ export async function buildConditioningEngineContext(userId: string): Promise<st
       lines.push('### Available Triggers (for conversation weaving)');
       for (const tr of triggers) {
         lines.push(`- "${tr.trigger_phrase}" — strength: ${tr.estimated_strength}, pairings: ${tr.pairing_count}, response: ${tr.intended_response ?? 'general'}`);
+      }
+    }
+
+    // Trigger deployment intelligence
+    if (deploymentStats.length) {
+      lines.push('');
+      lines.push('### Trigger Deployment Intelligence');
+      for (const stat of deploymentStats) {
+        const lastStr = stat.lastDeployedAt
+          ? `${Math.round((Date.now() - new Date(stat.lastDeployedAt).getTime()) / 3600000)}h ago`
+          : 'never';
+        const effStr = stat.avgEffectiveness !== null ? `${stat.avgEffectiveness}/10` : 'no data';
+        const riskLabel = stat.habituationRisk >= 0.6 ? 'HIGH' : stat.habituationRisk >= 0.3 ? 'MODERATE' : 'LOW';
+        lines.push(`- "${stat.triggerPhrase}" — ${stat.last7Days} deployments (7d), last: ${lastStr}, effectiveness: ${effStr}, habituation: ${stat.habituationRisk} ${riskLabel}`);
+
+        // Context breakdown
+        const contexts = Object.entries(stat.byContext);
+        if (contexts.length > 1) {
+          const sorted = contexts.sort((a, b) => (b[1].avgEffectiveness ?? 0) - (a[1].avgEffectiveness ?? 0));
+          const best = sorted[0];
+          if (best[1].avgEffectiveness !== null) {
+            lines.push(`  best context: ${best[0]} (${best[1].avgEffectiveness}/10)`);
+          }
+        }
+
+        // Warnings
+        if (stat.habituationRisk >= 0.6) {
+          lines.push(`  HABITUATION WARNING: reduce frequency, space deployments further apart`);
+        }
       }
     }
 
