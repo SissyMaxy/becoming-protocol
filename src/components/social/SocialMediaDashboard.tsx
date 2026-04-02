@@ -6,15 +6,11 @@
 import { useState, useEffect } from 'react';
 import {
   Loader2,
-  Send,
-  MessageSquare,
   Clock,
-  AlertTriangle,
   CheckCircle2,
   XCircle,
   BarChart3,
   RefreshCw,
-  Twitter,
   ArrowLeft,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -211,7 +207,6 @@ export function SocialMediaDashboard({ onBack }: Props) {
 
   const todayPosts = data.platformStats.reduce((sum, s) => sum + s.postsToday, 0);
   const todayReplies = data.platformStats.reduce((sum, s) => sum + s.repliesToday, 0);
-  const todayFailed = data.platformStats.reduce((sum, s) => sum + s.failedToday, 0);
   const totalQueued = data.scheduledQueue.length;
 
   const tabs: { key: Tab; label: string; count?: number }[] = [
