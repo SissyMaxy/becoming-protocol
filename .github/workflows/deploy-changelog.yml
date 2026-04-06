@@ -1,0 +1,35 @@
+# Log every deploy to system_changelog so the Handler knows what changed
+name: Deploy Changelog
+
+on:
+  push:
+    branches: [main]
+
+env:
+  SUPABASE_URL: https://atevwvexapiykchvqvhm.supabase.co
+
+jobs:
+  log-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write commit to system_changelog
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+          # Take first line only, escape for JSON
+          FIRST_LINE=$(echo "$COMMIT_MSG" | head -1 | python3 -c "import sys,json; print(json.dumps(sys.stdin.read().strip()))")
+          TIMESTAMP="${{ github.event.head_commit.timestamp }}"
+
+          curl -sf -X POST "${SUPABASE_URL}/rest/v1/system_changelog" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=minimal" \
+            -d "{
+              \"commit_sha\": \"${SHORT_SHA}\",
+              \"commit_message\": ${FIRST_LINE},
+              \"environment\": \"production\",
+              \"deployed_at\": \"${TIMESTAMP}\"
+            }"
