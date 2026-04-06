@@ -54,6 +54,7 @@ export function MorningBriefing({ onComplete }: MorningBriefingProps) {
   const [releaseChecked, setReleaseChecked] = useState(false);
   const [didCum, setDidCum] = useState<boolean | null>(null);
   const [selectedReleaseType, setSelectedReleaseType] = useState<ReleaseType | null>(null);
+  const [releaseWhen, setReleaseWhen] = useState<string | null>(null);
   const [recordingRelease, setRecordingRelease] = useState(false);
 
   // Streak break detection
@@ -104,15 +105,17 @@ export function MorningBriefing({ onComplete }: MorningBriefingProps) {
 
   // Handle release recording
   const handleRecordRelease = async () => {
-    if (!selectedReleaseType) return;
+    if (!selectedReleaseType || !releaseWhen) return;
     setRecordingRelease(true);
     try {
+      // Calculate the actual release timestamp
+      const releaseTimestamp = resolveReleaseTime(releaseWhen);
       await denial.recordRelease(selectedReleaseType);
-      // Update last_release in user_state
+      // Update last_release in user_state with the actual time
       if (user?.id) {
         await supabase
           .from('user_state')
-          .update({ last_release: new Date().toISOString() })
+          .update({ last_release: releaseTimestamp.toISOString() })
           .eq('user_id', user.id);
       }
     } catch (err) {
@@ -301,11 +304,13 @@ export function MorningBriefing({ onComplete }: MorningBriefingProps) {
           releaseChecked={releaseChecked}
           didCum={didCum}
           selectedReleaseType={selectedReleaseType}
+          releaseWhen={releaseWhen}
           recordingRelease={recordingRelease}
           isBambiMode={isBambiMode}
           onAnswerNo={() => { setDidCum(false); setReleaseChecked(true); }}
           onAnswerYes={() => setDidCum(true)}
           onSelectType={setSelectedReleaseType}
+          onSelectWhen={setReleaseWhen}
           onConfirmRelease={handleRecordRelease}
         />
 
@@ -485,27 +490,76 @@ const RELEASE_TYPE_OPTIONS: { type: ReleaseType; label: string; emoji: string; r
   { type: 'edge_only', label: 'Edge only', emoji: '🔥', resetsStreak: false },
 ];
 
+const RELEASE_WHEN_OPTIONS = [
+  { value: 'last_night', label: 'Last night' },
+  { value: 'this_morning', label: 'This morning' },
+  { value: 'yesterday', label: 'Yesterday' },
+  { value: '2_days_ago', label: '2 days ago' },
+  { value: '3_plus_days', label: '3+ days ago' },
+];
+
+function resolveReleaseTime(when: string): Date {
+  const now = new Date();
+  switch (when) {
+    case 'last_night': {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 1);
+      d.setHours(23, 0, 0, 0);
+      return d;
+    }
+    case 'this_morning': {
+      const d = new Date(now);
+      d.setHours(7, 0, 0, 0);
+      return d;
+    }
+    case 'yesterday': {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 1);
+      d.setHours(12, 0, 0, 0);
+      return d;
+    }
+    case '2_days_ago': {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 2);
+      d.setHours(12, 0, 0, 0);
+      return d;
+    }
+    case '3_plus_days': {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 3);
+      d.setHours(12, 0, 0, 0);
+      return d;
+    }
+    default:
+      return now;
+  }
+}
+
 function ReleaseCheckIn({
   lastReleaseDate,
   releaseChecked,
   didCum,
   selectedReleaseType,
+  releaseWhen,
   recordingRelease,
   isBambiMode,
   onAnswerNo,
   onAnswerYes,
   onSelectType,
+  onSelectWhen,
   onConfirmRelease,
 }: {
   lastReleaseDate: Date | null;
   releaseChecked: boolean;
   didCum: boolean | null;
   selectedReleaseType: ReleaseType | null;
+  releaseWhen: string | null;
   recordingRelease: boolean;
   isBambiMode: boolean;
   onAnswerNo: () => void;
   onAnswerYes: () => void;
   onSelectType: (t: ReleaseType) => void;
+  onSelectWhen: (w: string) => void;
   onConfirmRelease: () => void;
 }) {
   // Already answered — don't show
@@ -571,33 +625,59 @@ function ReleaseCheckIn({
         </div>
       )}
 
-      {/* Release type picker */}
+      {/* Release flow: when → how → confirm */}
       {didCum === true && !releaseChecked && (
-        <div className="space-y-2">
-          <p className={`text-sm font-medium ${isBambiMode ? 'text-purple-700' : 'text-protocol-text'}`}>
-            How did you cum?
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            {RELEASE_TYPE_OPTIONS.map((opt) => (
-              <button
-                key={opt.type}
-                onClick={() => onSelectType(opt.type)}
-                className={`py-2 px-3 rounded-lg border text-left text-sm transition-all ${
-                  selectedReleaseType === opt.type ? selectedBorder : surface
-                }`}
-              >
-                <span className="mr-1.5">{opt.emoji}</span>
-                <span className={selectedReleaseType === opt.type ? accent : muted}>
+        <div className="space-y-3">
+          {/* Step 1: When */}
+          <div className="space-y-2">
+            <p className={`text-sm font-medium ${isBambiMode ? 'text-purple-700' : 'text-protocol-text'}`}>
+              When?
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {RELEASE_WHEN_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => onSelectWhen(opt.value)}
+                  className={`py-1.5 px-3 rounded-lg border text-sm transition-all ${
+                    releaseWhen === opt.value ? selectedBorder : surface
+                  } ${releaseWhen === opt.value ? accent : muted}`}
+                >
                   {opt.label}
-                </span>
-                {opt.resetsStreak && (
-                  <span className="text-xs text-red-400 ml-1">resets</span>
-                )}
-              </button>
-            ))}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {selectedReleaseType && (
+          {/* Step 2: How (shows after when is selected) */}
+          {releaseWhen && (
+            <div className="space-y-2">
+              <p className={`text-sm font-medium ${isBambiMode ? 'text-purple-700' : 'text-protocol-text'}`}>
+                How did you cum?
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {RELEASE_TYPE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.type}
+                    onClick={() => onSelectType(opt.type)}
+                    className={`py-2 px-3 rounded-lg border text-left text-sm transition-all ${
+                      selectedReleaseType === opt.type ? selectedBorder : surface
+                    }`}
+                  >
+                    <span className="mr-1.5">{opt.emoji}</span>
+                    <span className={selectedReleaseType === opt.type ? accent : muted}>
+                      {opt.label}
+                    </span>
+                    {opt.resetsStreak && (
+                      <span className="text-xs text-red-400 ml-1">resets</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Confirm */}
+          {selectedReleaseType && releaseWhen && (
             <button
               onClick={onConfirmRelease}
               disabled={recordingRelease}
