@@ -278,26 +278,31 @@ async function getAudienceData(userId: string) {
 }
 
 async function getDenialData(userId: string) {
-  // user_state has most fields but denial_day may be stale
+  // user_state for context fields
   const { data: state } = await supabase
     .from('user_state')
-    .select('denial_day, streak_days, current_arousal, handler_mode, gina_home, gina_asleep, estimated_exec_function')
+    .select('denial_day, streak_days, current_arousal, handler_mode, gina_home, gina_asleep, estimated_exec_function, last_release')
     .eq('user_id', userId)
     .maybeSingle();
 
-  // denial_state has the real, actively-incremented denial day
-  const { data: denialState } = await supabase
-    .from('denial_state')
-    .select('current_denial_day')
+  // denial_streaks is the source of truth — calculate denial day from started_at
+  // (same method as morning-personalization's getStreakData)
+  const { data: activeStreak } = await supabase
+    .from('denial_streaks')
+    .select('started_at, days_completed')
     .eq('user_id', userId)
+    .is('ended_at', null)
     .maybeSingle();
 
   if (!state) return null;
 
-  // Prefer denial_state.current_denial_day over user_state.denial_day
+  const denialDay = activeStreak
+    ? Math.floor((Date.now() - new Date(activeStreak.started_at).getTime()) / (1000 * 60 * 60 * 24))
+    : state.denial_day ?? 0;
+
   return {
     ...state,
-    denial_day: denialState?.current_denial_day ?? state.denial_day ?? 0,
+    denial_day: denialDay,
   };
 }
 
@@ -359,7 +364,7 @@ function buildOvernightSection(
     });
   }
 
-  // Release check
+  // Release check — always surface last release context
   if (data.lastRelease) {
     const releaseTime = new Date(data.lastRelease);
     if (releaseTime > data.lastNight10pm) {
@@ -368,6 +373,15 @@ function buildOvernightSection(
         text: `Release logged at ${releaseTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}. Counter reset.`,
         type: 'info',
       });
+    } else {
+      const daysAgo = Math.floor((Date.now() - releaseTime.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysAgo > 0) {
+        items.push({
+          icon: 'lock',
+          text: `Last release: ${daysAgo} day${daysAgo !== 1 ? 's' : ''} ago.`,
+          type: 'info',
+        });
+      }
     }
   }
 

@@ -6,14 +6,16 @@
 
 import { useState, useEffect } from 'react';
 import { Intensity } from '../types';
+import type { ReleaseType } from '../types/arousal';
 import { INTENSITY_CONFIG } from '../data/constants';
 import { useProtocol } from '../context/ProtocolContext';
 import { useBambiMode } from '../context/BambiModeContext';
 import { profileStorage, storage } from '../lib/storage';
 import { useAuth } from '../context/AuthContext';
 import { useUserState } from '../hooks/useUserState';
+import { useCurrentDenialDay } from '../hooks/useCurrentDenialDay';
 import { supabase } from '../lib/supabase';
-import { Flame, Sparkles, Leaf, ArrowRight, Loader2, AlertTriangle, Heart, Star, TrendingUp } from 'lucide-react';
+import { Flame, Sparkles, Leaf, ArrowRight, Loader2, AlertTriangle, Heart, Star, TrendingUp, Lock } from 'lucide-react';
 import { StreakBreakModal } from './SkipConfirmModal';
 import { getMorningPersonalization, type MorningPersonalization } from '../lib/morning-personalization';
 import { HandlerStatusBriefing } from './handler/HandlerStatusBriefing';
@@ -40,11 +42,19 @@ export function MorningBriefing({ onComplete }: MorningBriefingProps) {
   const { startDay, progress } = useProtocol();
   const { userState, quickUpdate } = useUserState();
   const { isBambiMode } = useBambiMode();
+  const denial = useCurrentDenialDay();
   const [selectedIntensity, setSelectedIntensity] = useState<Intensity | null>('normal');
   const [isStarting, setIsStarting] = useState(false);
   const [userName, setUserName] = useState<string | null>(null);
   const [personalization, setPersonalization] = useState<MorningPersonalization | null>(null);
   const [showTherapistSuggestion, setShowTherapistSuggestion] = useState(false);
+
+  // Release check-in state
+  const [lastReleaseDate, setLastReleaseDate] = useState<Date | null>(null);
+  const [releaseChecked, setReleaseChecked] = useState(false);
+  const [didCum, setDidCum] = useState<boolean | null>(null);
+  const [selectedReleaseType, setSelectedReleaseType] = useState<ReleaseType | null>(null);
+  const [recordingRelease, setRecordingRelease] = useState(false);
 
   // Streak break detection
   const [showStreakBreakModal, setShowStreakBreakModal] = useState(false);
@@ -75,6 +85,43 @@ export function MorningBriefing({ onComplete }: MorningBriefingProps) {
     }
     loadData();
   }, [user?.id]);
+
+  // Load last release date
+  useEffect(() => {
+    async function loadLastRelease() {
+      if (!user?.id) return;
+      const { data } = await supabase
+        .from('user_state')
+        .select('last_release')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (data?.last_release) {
+        setLastReleaseDate(new Date(data.last_release));
+      }
+    }
+    loadLastRelease();
+  }, [user?.id]);
+
+  // Handle release recording
+  const handleRecordRelease = async () => {
+    if (!selectedReleaseType) return;
+    setRecordingRelease(true);
+    try {
+      await denial.recordRelease(selectedReleaseType);
+      // Update last_release in user_state
+      if (user?.id) {
+        await supabase
+          .from('user_state')
+          .update({ last_release: new Date().toISOString() })
+          .eq('user_id', user.id);
+      }
+    } catch (err) {
+      console.error('Failed to record release:', err);
+    } finally {
+      setRecordingRelease(false);
+      setReleaseChecked(true);
+    }
+  };
 
   // Mood history check — suggest therapist if avg < 4 over 3 days
   useEffect(() => {
@@ -248,6 +295,20 @@ export function MorningBriefing({ onComplete }: MorningBriefingProps) {
           </div>
         )}
 
+        {/* Release check-in */}
+        <ReleaseCheckIn
+          lastReleaseDate={lastReleaseDate}
+          releaseChecked={releaseChecked}
+          didCum={didCum}
+          selectedReleaseType={selectedReleaseType}
+          recordingRelease={recordingRelease}
+          isBambiMode={isBambiMode}
+          onAnswerNo={() => { setDidCum(false); setReleaseChecked(true); }}
+          onAnswerYes={() => setDidCum(true)}
+          onSelectType={setSelectedReleaseType}
+          onConfirmRelease={handleRecordRelease}
+        />
+
         {/* Handler Status Briefing — 5 sections */}
         <HandlerStatusBriefing />
 
@@ -406,6 +467,155 @@ export function MorningBriefing({ onComplete }: MorningBriefingProps) {
           </p>
         )}
       </div>
+    </div>
+  );
+}
+
+// ============================================
+// RELEASE CHECK-IN COMPONENT
+// ============================================
+
+const RELEASE_TYPE_OPTIONS: { type: ReleaseType; label: string; emoji: string; resetsStreak: boolean }[] = [
+  { type: 'full', label: 'Full release', emoji: '💦', resetsStreak: true },
+  { type: 'ruined', label: 'Ruined', emoji: '😩', resetsStreak: true },
+  { type: 'accident', label: 'Accident', emoji: '🫣', resetsStreak: true },
+  { type: 'wet_dream', label: 'Wet dream', emoji: '🌙', resetsStreak: true },
+  { type: 'prostate', label: 'Prostate', emoji: '🫧', resetsStreak: false },
+  { type: 'sissygasm', label: 'Sissygasm', emoji: '✨', resetsStreak: false },
+  { type: 'edge_only', label: 'Edge only', emoji: '🔥', resetsStreak: false },
+];
+
+function ReleaseCheckIn({
+  lastReleaseDate,
+  releaseChecked,
+  didCum,
+  selectedReleaseType,
+  recordingRelease,
+  isBambiMode,
+  onAnswerNo,
+  onAnswerYes,
+  onSelectType,
+  onConfirmRelease,
+}: {
+  lastReleaseDate: Date | null;
+  releaseChecked: boolean;
+  didCum: boolean | null;
+  selectedReleaseType: ReleaseType | null;
+  recordingRelease: boolean;
+  isBambiMode: boolean;
+  onAnswerNo: () => void;
+  onAnswerYes: () => void;
+  onSelectType: (t: ReleaseType) => void;
+  onConfirmRelease: () => void;
+}) {
+  // Already answered — don't show
+  if (releaseChecked) return null;
+
+  const daysAgo = lastReleaseDate
+    ? Math.floor((Date.now() - lastReleaseDate.getTime()) / (1000 * 60 * 60 * 24))
+    : null;
+
+  const accent = isBambiMode ? 'text-pink-500' : 'text-protocol-accent';
+  const muted = isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted';
+  const surface = isBambiMode ? 'bg-pink-50 border-pink-200' : 'bg-protocol-surface border-protocol-border';
+  const selectedBorder = isBambiMode ? 'border-pink-400 bg-pink-100' : 'border-protocol-accent bg-protocol-accent/10';
+
+  return (
+    <div className={`rounded-xl p-4 space-y-3 ${
+      isBambiMode ? 'bg-purple-50 border-2 border-purple-200' : 'bg-purple-900/20 border border-purple-500/30'
+    }`}>
+      <div className="flex items-center gap-2">
+        <Lock className={`w-4 h-4 ${isBambiMode ? 'text-purple-500' : 'text-purple-400'}`} />
+        <span className={`text-xs font-medium uppercase tracking-wider ${
+          isBambiMode ? 'text-purple-600' : 'text-purple-400'
+        }`}>
+          RELEASE CHECK
+        </span>
+      </div>
+
+      {/* Last release info */}
+      <p className={`text-sm handler-voice ${isBambiMode ? 'text-purple-700' : 'text-protocol-text'}`}>
+        {daysAgo !== null
+          ? daysAgo === 0
+            ? 'Last reported release: today.'
+            : daysAgo === 1
+            ? 'Last reported release: yesterday.'
+            : `Last reported release: ${daysAgo} days ago.`
+          : 'No release on record.'}
+      </p>
+
+      {/* Question */}
+      {didCum === null && (
+        <div className="space-y-2">
+          <p className={`text-sm font-medium ${isBambiMode ? 'text-purple-700' : 'text-protocol-text'}`}>
+            Have you cum since?
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={onAnswerNo}
+              className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-all ${surface} ${
+                isBambiMode ? 'text-purple-600 hover:bg-purple-100' : 'text-protocol-text hover:bg-protocol-accent/5'
+              }`}
+            >
+              No
+            </button>
+            <button
+              onClick={onAnswerYes}
+              className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-all ${surface} ${
+                isBambiMode ? 'text-purple-600 hover:bg-purple-100' : 'text-protocol-text hover:bg-protocol-accent/5'
+              }`}
+            >
+              Yes
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Release type picker */}
+      {didCum === true && !releaseChecked && (
+        <div className="space-y-2">
+          <p className={`text-sm font-medium ${isBambiMode ? 'text-purple-700' : 'text-protocol-text'}`}>
+            How did you cum?
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {RELEASE_TYPE_OPTIONS.map((opt) => (
+              <button
+                key={opt.type}
+                onClick={() => onSelectType(opt.type)}
+                className={`py-2 px-3 rounded-lg border text-left text-sm transition-all ${
+                  selectedReleaseType === opt.type ? selectedBorder : surface
+                }`}
+              >
+                <span className="mr-1.5">{opt.emoji}</span>
+                <span className={selectedReleaseType === opt.type ? accent : muted}>
+                  {opt.label}
+                </span>
+                {opt.resetsStreak && (
+                  <span className="text-xs text-red-400 ml-1">resets</span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {selectedReleaseType && (
+            <button
+              onClick={onConfirmRelease}
+              disabled={recordingRelease}
+              className={`w-full py-2.5 rounded-lg text-sm font-medium transition-all ${
+                isBambiMode
+                  ? 'bg-purple-500 text-white hover:bg-purple-600'
+                  : 'bg-purple-600 text-white hover:bg-purple-700'
+              }`}
+            >
+              {recordingRelease ? (
+                <Loader2 className="w-4 h-4 animate-spin mx-auto" />
+              ) : (
+                'Log it'
+              )}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
