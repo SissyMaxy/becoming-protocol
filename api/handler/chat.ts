@@ -342,6 +342,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       irreversibility: () => buildIrreversibilityCtx(user.id),
       narrative: () => buildNarrativeCtx(user.id),
       autoPoster: () => buildAutoPostCtx(user.id),
+      socialIntelligence: () => buildSocialIntelligenceCtx(user.id),
       socialInbox: () => buildSocialInboxCtx(user.id),
       voicePitch: () => buildVoicePitchCtx(user.id),
       autoPurchase: () => buildAutoPurchaseCtx(user.id),
@@ -2010,25 +2011,175 @@ async function buildIrreversibilityCtx(userId: string): Promise<string> {
 
 async function buildAutoPostCtx(userId: string): Promise<string> {
   try {
-    const { data } = await supabase
-      .from('auto_poster_status')
-      .select('status, last_post_at, last_error, platform, posts_today, updated_at')
-      .eq('user_id', userId)
-      .maybeSingle();
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600000).toISOString();
 
-    if (!data) return '';
+    const [statusResult, recentPosts, recentContent] = await Promise.all([
+      supabase
+        .from('auto_poster_status')
+        .select('status, last_post_at, last_error, platform, posts_today, updated_at')
+        .eq('user_id', userId)
+        .maybeSingle(),
+      // Vault-based scheduled posts
+      supabase
+        .from('content_posts')
+        .select('platform, post_status, posted_at, likes, comments, shares, caption')
+        .eq('user_id', userId)
+        .gte('posted_at', sevenDaysAgo)
+        .eq('post_status', 'posted')
+        .order('posted_at', { ascending: false })
+        .limit(10),
+      // AI-generated content (tweets, replies, reddit posts)
+      supabase
+        .from('ai_generated_content')
+        .select('platform, content_type, status, posted_at, content, engagement_likes, engagement_comments, engagement_shares, target_subreddit')
+        .eq('user_id', userId)
+        .gte('posted_at', sevenDaysAgo)
+        .eq('status', 'posted')
+        .order('posted_at', { ascending: false })
+        .limit(15),
+    ]);
 
-    const updatedAgo = data.updated_at
-      ? `${Math.round((Date.now() - new Date(data.updated_at).getTime()) / 3600000)}h ago`
-      : 'unknown';
-    const lastPostAgo = data.last_post_at
-      ? `${Math.round((Date.now() - new Date(data.last_post_at).getTime()) / 3600000)}h ago`
-      : 'never';
+    const lines: string[] = [];
 
-    const lines = [`Auto-poster: ${data.status}, ${data.posts_today || 0} posts today, last post ${lastPostAgo}${data.platform ? ` on ${data.platform}` : ''}, heartbeat ${updatedAgo}`];
-    if (data.status === 'error' && data.last_error) {
-      lines.push(`  ERROR: ${data.last_error.slice(0, 120)}`);
+    // Bot status
+    const data = statusResult.data;
+    if (data) {
+      const updatedAgo = data.updated_at
+        ? `${Math.round((Date.now() - new Date(data.updated_at).getTime()) / 3600000)}h ago`
+        : 'unknown';
+      const lastPostAgo = data.last_post_at
+        ? `${Math.round((Date.now() - new Date(data.last_post_at).getTime()) / 3600000)}h ago`
+        : 'never';
+      lines.push(`Auto-poster: ${data.status}, ${data.posts_today || 0} posts today, last post ${lastPostAgo}${data.platform ? ` on ${data.platform}` : ''}, heartbeat ${updatedAgo}`);
+      if (data.status === 'error' && data.last_error) {
+        lines.push(`  ERROR: ${data.last_error.slice(0, 120)}`);
+      }
     }
+
+    // Recent post activity summary
+    const allPosts = [
+      ...(recentPosts.data || []).map(p => ({
+        platform: p.platform,
+        type: 'content' as const,
+        posted_at: p.posted_at,
+        preview: p.caption?.slice(0, 60) || '',
+        likes: p.likes || 0,
+        comments: p.comments || 0,
+        subreddit: null as string | null,
+      })),
+      ...(recentContent.data || []).map(p => ({
+        platform: p.platform,
+        type: p.content_type as string,
+        posted_at: p.posted_at,
+        preview: p.content?.slice(0, 60) || '',
+        likes: p.engagement_likes || 0,
+        comments: p.engagement_comments || 0,
+        subreddit: p.target_subreddit,
+      })),
+    ].sort((a, b) => new Date(b.posted_at!).getTime() - new Date(a.posted_at!).getTime());
+
+    if (allPosts.length > 0) {
+      // Platform breakdown
+      const byPlatform: Record<string, number> = {};
+      for (const p of allPosts) {
+        byPlatform[p.platform] = (byPlatform[p.platform] || 0) + 1;
+      }
+      const platformSummary = Object.entries(byPlatform).map(([k, v]) => `${k}: ${v}`).join(', ');
+      lines.push(`Posts last 7 days: ${allPosts.length} total (${platformSummary})`);
+
+      // Last 5 posts with detail
+      lines.push('Recent posts:');
+      for (const p of allPosts.slice(0, 5)) {
+        const ago = Math.round((Date.now() - new Date(p.posted_at!).getTime()) / 3600000);
+        const agoStr = ago < 1 ? '<1h ago' : ago < 24 ? `${ago}h ago` : `${Math.round(ago / 24)}d ago`;
+        const where = p.subreddit ? `r/${p.subreddit}` : p.platform;
+        const engagement = (p.likes + p.comments) > 0 ? ` [${p.likes}♥ ${p.comments}💬]` : '';
+        lines.push(`  ${agoStr} [${where}/${p.type}] "${p.preview}"${engagement}`);
+      }
+    } else {
+      lines.push('No posts in the last 7 days.');
+    }
+
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+// ============================================
+// SOCIAL INTELLIGENCE — follow/unfollow activity, engagement, growth
+// ============================================
+
+async function buildSocialIntelligenceCtx(userId: string): Promise<string> {
+  try {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600000).toISOString();
+
+    const [recentFollows, recentUnfollows, followbacks, engagementBudget] = await Promise.all([
+      // New follows in last 7 days
+      supabase
+        .from('twitter_follows')
+        .select('target_handle, source, followed_at, follower_count, bio_snippet')
+        .eq('user_id', userId)
+        .eq('status', 'followed')
+        .gte('followed_at', sevenDaysAgo)
+        .order('followed_at', { ascending: false })
+        .limit(10),
+      // Recent unfollows
+      supabase
+        .from('twitter_follows')
+        .select('target_handle, unfollowed_at')
+        .eq('user_id', userId)
+        .eq('status', 'unfollowed_stale')
+        .gte('unfollowed_at', sevenDaysAgo)
+        .order('unfollowed_at', { ascending: false })
+        .limit(5),
+      // Recent followbacks
+      supabase
+        .from('twitter_follows')
+        .select('target_handle, followed_back_at')
+        .eq('user_id', userId)
+        .eq('status', 'followed_back')
+        .gte('followed_back_at', sevenDaysAgo)
+        .order('followed_back_at', { ascending: false })
+        .limit(5),
+      // Today's engagement budget usage
+      supabase
+        .from('platform_engagement_budget')
+        .select('platform, engagement_type, count, max_allowed')
+        .eq('user_id', userId)
+        .eq('date', new Date().toISOString().split('T')[0]),
+    ]);
+
+    const lines: string[] = ['## SOCIAL ACTIVITY (last 7 days)'];
+
+    // Follow activity
+    const followCount = recentFollows.data?.length || 0;
+    const unfollowCount = recentUnfollows.data?.length || 0;
+    const followbackCount = followbacks.data?.length || 0;
+
+    if (followCount > 0 || unfollowCount > 0 || followbackCount > 0) {
+      lines.push(`Follows: +${followCount} new, ${followbackCount} followed back, ${unfollowCount} unfollowed stale`);
+
+      // Show follow sources breakdown
+      if (recentFollows.data && recentFollows.data.length > 0) {
+        const bySrc: Record<string, number> = {};
+        for (const f of recentFollows.data) {
+          bySrc[f.source || 'unknown'] = (bySrc[f.source || 'unknown'] || 0) + 1;
+        }
+        lines.push(`Follow sources: ${Object.entries(bySrc).map(([k, v]) => `${k}: ${v}`).join(', ')}`);
+      }
+    } else {
+      lines.push('No follow/unfollow activity this week.');
+    }
+
+    // Engagement budget today
+    if (engagementBudget.data && engagementBudget.data.length > 0) {
+      const budgetParts = engagementBudget.data.map(b =>
+        `${b.platform}/${b.engagement_type}: ${b.count}/${b.max_allowed}`
+      );
+      lines.push(`Today's engagement: ${budgetParts.join(', ')}`);
+    }
+
     return lines.join('\n');
   } catch {
     return '';
@@ -2684,8 +2835,12 @@ async function buildSystemChangelogCtx(): Promise<string> {
 async function buildSystemStateCtx(userId: string): Promise<string> {
   try {
     // Query key tables for row counts and freshness in parallel
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600000).toISOString();
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 3600000).toISOString();
+
     const [
       curriculum, triggers, sessions, posts, follows, followers,
+      followers7d, followers30d,
       dailyTasks, journal, handlerMessages, whoopMetrics,
     ] = await Promise.all([
       supabase.from('content_curriculum').select('id', { count: 'exact', head: true }).eq('user_id', userId),
@@ -2693,7 +2848,11 @@ async function buildSystemStateCtx(userId: string): Promise<string> {
       supabase.from('conditioning_sessions_v2').select('id', { count: 'exact', head: true }).eq('user_id', userId),
       supabase.from('ai_generated_content').select('id', { count: 'exact', head: true }).eq('user_id', userId),
       supabase.from('twitter_follows').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'followed'),
-      supabase.from('twitter_follower_counts').select('follower_count, recorded_at').eq('user_id', userId).order('recorded_at', { ascending: false }).limit(1),
+      supabase.from('twitter_follower_counts').select('follower_count, following_count, recorded_at').eq('user_id', userId).order('recorded_at', { ascending: false }).limit(1),
+      // 7-day-ago snapshot for growth delta
+      supabase.from('twitter_follower_counts').select('follower_count, recorded_at').eq('user_id', userId).lte('recorded_at', sevenDaysAgo).order('recorded_at', { ascending: false }).limit(1),
+      // 30-day-ago snapshot for growth delta
+      supabase.from('twitter_follower_counts').select('follower_count, recorded_at').eq('user_id', userId).lte('recorded_at', thirtyDaysAgo).order('recorded_at', { ascending: false }).limit(1),
       supabase.from('daily_tasks').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('completed', false),
       supabase.from('journal_entries').select('created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(1),
       supabase.from('handler_messages').select('created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(1),
@@ -2703,7 +2862,22 @@ async function buildSystemStateCtx(userId: string): Promise<string> {
     const lines = ['## SYSTEM STATE (live data)'];
 
     const fc = followers.data?.[0];
-    lines.push(`- Followers: ${fc?.follower_count ?? '?'} (as of ${fc?.recorded_at ? new Date(fc.recorded_at).toLocaleDateString() : 'never'})`);
+    const currentFollowers = fc?.follower_count ?? null;
+    const fc7d = followers7d.data?.[0]?.follower_count ?? null;
+    const fc30d = followers30d.data?.[0]?.follower_count ?? null;
+
+    let followerLine = `- Followers: ${currentFollowers ?? '?'}`;
+    if (fc?.following_count) followerLine += ` (following: ${fc.following_count})`;
+    if (fc?.recorded_at) followerLine += ` as of ${new Date(fc.recorded_at).toLocaleDateString()}`;
+    if (currentFollowers !== null && fc7d !== null) {
+      const delta7 = currentFollowers - fc7d;
+      followerLine += ` | 7d: ${delta7 >= 0 ? '+' : ''}${delta7}`;
+    }
+    if (currentFollowers !== null && fc30d !== null) {
+      const delta30 = currentFollowers - fc30d;
+      followerLine += ` | 30d: ${delta30 >= 0 ? '+' : ''}${delta30}`;
+    }
+    lines.push(followerLine);
     lines.push(`- Active follows: ${follows.count ?? 0}`);
     lines.push(`- Content curriculum: ${curriculum.count ?? 0} entries`);
     lines.push(`- Conditioned triggers: ${triggers.count ?? 0}`);
