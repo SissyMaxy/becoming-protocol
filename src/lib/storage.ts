@@ -409,7 +409,10 @@ export const profileStorage = {
       .eq('user_id', userId)
       .maybeSingle();
 
-    if (error || !data) return false;
+    if (error || !data) {
+      console.error('Onboarding check failed:', { error, data, userId });
+      return false;
+    }
     return data.onboarding_completed === true;
   }
 };

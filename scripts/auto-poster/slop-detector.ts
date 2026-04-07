@@ -76,11 +76,23 @@ const SLOP_PATTERNS: { pattern: RegExp; reason: string }[] = [
   { pattern: /\brent free\b/i, reason: 'banned phrase: rent free' },
   { pattern: /\bspeedrun(ning)?\b/i, reason: 'banned phrase: speedrunning' },
   { pattern: /\b(is|that'?s) (actually )?so real\b/i, reason: 'banned phrase: is/that\'s so real' },
+
+  // Repetitive crutch phrases from audit
+  { pattern: /doing (all )?the heavy lifting\b/i, reason: 'banned phrase: doing the heavy lifting' },
+  { pattern: /\bthe math is mathing\b/i, reason: 'banned phrase: the math is mathing' },
+  { pattern: /\bgo off i guess\b/i, reason: 'banned phrase: go off i guess' },
+  { pattern: /\bgo touch grass\b/i, reason: 'banned phrase: go touch grass' },
+  { pattern: /\bsending me\b/i, reason: 'banned phrase: sending me' },
+  { pattern: /\bin a chokehold\b/i, reason: 'banned phrase: in a chokehold' },
+  { pattern: /\bwho am i\b$/i, reason: 'banned phrase: trailing "who am i"' },
+  { pattern: /\bi (get|respect) the (energy|vibe|commitment)\b/i, reason: 'banned phrase: i respect the X' },
 ];
 
 export interface SlopCheckResult {
   pass: boolean;
   reasons: string[];
+  /** True if any reason is a hard-ban (LLM score cannot override) */
+  hasHardBan?: boolean;
 }
 
 /**
@@ -88,16 +100,32 @@ export interface SlopCheckResult {
  */
 export function patternSlopCheck(reply: string): SlopCheckResult {
   const reasons: string[] = [];
+  let hasHardBan = false;
 
   for (const { pattern, reason } of SLOP_PATTERNS) {
     // Reset lastIndex for global patterns
     pattern.lastIndex = 0;
     if (pattern.test(reply)) {
       reasons.push(reason);
+      // "banned phrase:" entries are hard bans — LLM cannot override
+      if (reason.startsWith('banned phrase:')) hasHardBan = true;
     }
   }
 
-  return { pass: reasons.length === 0, reasons };
+  // Truncation check — unmatched quotes or ends mid-sentence
+  const quoteCount = (reply.match(/"/g) || []).length;
+  if (quoteCount % 2 !== 0) {
+    reasons.push('truncated: unmatched quote');
+    hasHardBan = true;
+  }
+
+  // Minimum substance check — reject filler replies under 10 words
+  const wordCount = reply.split(/\s+/).length;
+  if (wordCount < 10) {
+    reasons.push(`too short: ${wordCount} words — lacks substance`);
+  }
+
+  return { pass: reasons.length === 0, reasons, hasHardBan };
 }
 
 /**
@@ -141,6 +169,15 @@ export function repetitionCheck(reply: string, recentReplies: string[]): SlopChe
     }
   }
 
+  // Check for "lmao/lmaooo" opener frequency — max 1 in 5 recent replies
+  if (/^lmao+/i.test(replyLower)) {
+    const lmaoCount = recentReplies.filter(r => /^lmao+/i.test(r.toLowerCase().trim())).length;
+    // If 20%+ of recent replies start with lmao, block this one
+    if (recentReplies.length >= 3 && lmaoCount / recentReplies.length >= 0.2) {
+      reasons.push(`"lmao" opener overused: ${lmaoCount}/${recentReplies.length} recent replies start with it — vary your openings`);
+    }
+  }
+
   // Check for emoji repetition (same emoji used in >40% of recent replies)
   // Match common emoji ranges — tsx handles unicode but avoid the /u flag for tsc compat
   const replyEmojis = reply.match(/[\uD83C-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27BF]/g) || [];
@@ -175,6 +212,9 @@ Common AI tells to watch for:
 - Sounding like a motivational poster
 - Using slang that doesn't match the rest of the voice
 - Starting multiple sentences the same way
+- Generic reaction replies that could respond to literally anything ("the way you said that", "oh yeah?", vague 👀 responses)
+- Replies under 10 words that are just filler reactions with no substance
+- Crutch phrases: "doing the heavy lifting", "sending me", "in a chokehold", "go off"
 
 A score of 9 or 10 = PASS. Anything below 9 = FAIL. Be strict.
 
@@ -270,7 +310,8 @@ export async function fullSlopCheck(
   // LLM score 9+ overrides pattern failures — the LLM is the more nuanced judge.
   // Pattern regexes catch common AI tells but produce false positives on authentic text.
   // Repetition failures are NOT overridable — even good text shouldn't repeat.
-  const patternOverridden = !patterns.pass && llm.score >= 9;
+  // Hard bans (banned phrases) are NEVER overridable — these are explicit voice rules.
+  const patternOverridden = !patterns.pass && llm.score >= 9 && !patterns.hasHardBan;
   const effectivePatternPass = patterns.pass || patternOverridden;
 
   const allFailed = !effectivePatternPass || !repetition.pass || !llm.pass;

@@ -149,7 +149,7 @@ export async function loadSocialDashboard(userId: string): Promise<SocialDashboa
     // Follow totals
     supabase
       .from('twitter_follows')
-      .select('status, followed_back')
+      .select('status, followed_back_at')
       .eq('user_id', userId),
 
     // Recent follows (last 24h)
@@ -281,7 +281,7 @@ export async function loadSocialDashboard(userId: string): Promise<SocialDashboa
   // ── Follow activity ──
   const ftRows = (followTotals.data || []) as Record<string, unknown>[];
   const activeFollows = ftRows.filter(r => r.status === 'followed').length;
-  const mutualFollows = ftRows.filter(r => r.followed_back === true).length;
+  const mutualFollows = ftRows.filter(r => r.followed_back_at != null).length;
   const unfollowed = ftRows.filter(r => r.status === 'unfollowed_stale').length;
   const rfRows = (recentFollows.data || []) as Record<string, unknown>[];
 

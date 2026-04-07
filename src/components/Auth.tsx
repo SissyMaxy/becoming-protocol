@@ -38,12 +38,13 @@ export function Auth({ initialMode = 'signin' }: AuthProps) {
       try {
         const { error } = await resetPasswordForEmail(email);
         if (error) {
-          setError(error.message);
+          setError(error.message || 'Unable to connect — check your internet connection');
         } else {
           setMessage('Check your email for a password reset link');
         }
-      } catch {
-        setError('An unexpected error occurred');
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : JSON.stringify(err);
+        setError(msg || 'An unexpected error occurred');
       } finally {
         setIsLoading(false);
       }
@@ -67,15 +68,16 @@ export function Auth({ initialMode = 'signin' }: AuthProps) {
       try {
         const { error } = await updatePassword(password);
         if (error) {
-          setError(error.message);
+          setError(error.message || 'Unable to connect — check your internet connection');
         } else {
           setMessage('Password updated successfully. You can now sign in.');
           // Clear the hash so recovery token doesn't persist
           window.location.hash = '';
           setTimeout(() => switchMode('signin'), 2000);
         }
-      } catch {
-        setError('An unexpected error occurred');
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : JSON.stringify(err);
+        setError(msg || 'An unexpected error occurred');
       } finally {
         setIsLoading(false);
       }
@@ -104,18 +106,19 @@ export function Auth({ initialMode = 'signin' }: AuthProps) {
       if (mode === 'signup') {
         const { error } = await signUp(email, password);
         if (error) {
-          setError(error.message);
+          setError(error.message || 'Unable to connect — check your internet connection');
         } else {
           setMessage('Check your email to confirm your account');
         }
       } else {
         const { error } = await signIn(email, password);
         if (error) {
-          setError(error.message);
+          setError(error.message || 'Unable to connect — check your internet connection');
         }
       }
-    } catch {
-      setError('An unexpected error occurred');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : JSON.stringify(err);
+      setError(msg || 'An unexpected error occurred');
     } finally {
       setIsLoading(false);
     }

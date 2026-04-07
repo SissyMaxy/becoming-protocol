@@ -32,6 +32,11 @@ import { runSniffiesEngagement } from './platforms/sniffies-engage';
 import { checkBudget } from './engagement-budget';
 import { runDMOutreach } from './dm-outreach';
 import { generateCalendar } from './generate-calendar';
+import { runFollowbackCycle } from './followback-engine';
+import { runEngageFollowCycle } from './engage-follow-engine';
+import { runStrategicFollowCycle } from './strategic-follow-engine';
+import { runUnfollowStalesCycle } from './unfollow-stales';
+import { runQuoteTweetCycle } from './quote-tweet-engine';
 import { supabase, PLATFORMS, POLL_INTERVAL_MS } from './config';
 
 const USER_ID = process.env.USER_ID || '';
@@ -181,6 +186,100 @@ async function tick() {
       }, 300000);
     }
 
+    // ═══ GROWTH ENGINE (runs early to avoid starvation) ═══════════════
+
+    // --- Every 4th tick (~1h): Twitter follow operations ---
+    // Fires on ticks 1, 5, 9, ... (immediate on first tick for verification)
+    if (tickCount % 4 === 1 && PLATFORMS.twitter.enabled) {
+      let twitterFollowCtx: BrowserContext | null = null;
+      await withTimeout('Twitter follows', async () => {
+        const hasFollowBudget = await checkBudget(supabase, USER_ID, 'twitter', 'follow');
+        if (!hasFollowBudget) {
+          console.log(`[${timestamp}] Twitter follow budget exhausted`);
+          return;
+        }
+
+        // Clear lock file
+        const fs3 = require('fs');
+        try { fs3.unlinkSync(require('path').join(PLATFORMS.twitter.profileDir, 'SingletonLock')); } catch {}
+
+        twitterFollowCtx = await launchPlatform('twitter');
+        if (!twitterFollowCtx) return;
+
+        const followPage = twitterFollowCtx.pages()[0] || await twitterFollowCtx.newPage();
+
+        // Followback: scan followers, follow back real accounts (max 8)
+        const fbResult = await runFollowbackCycle(followPage, 8);
+        if (fbResult.followed > 0) {
+          console.log(`[${timestamp}] Followback: ${fbResult.followed} followed (${fbResult.skippedBot} bots skipped)`);
+        }
+
+        // Engage-follow: follow people who interact with our tweets (max 5)
+        const efResult = await runEngageFollowCycle(followPage, 5);
+        if (efResult.followed > 0) {
+          console.log(`[${timestamp}] Engage-follow: ${efResult.followed} followed from ${efResult.interactorsFound} interactors`);
+        }
+
+        await twitterFollowCtx.close().catch(() => {});
+        twitterFollowCtx = null;
+      }, 600000); // 10 min — follow ops involve many profile visits with delays
+      if (twitterFollowCtx) { try { await (twitterFollowCtx as BrowserContext).close(); } catch {} }
+    }
+
+    // --- Every 8th tick (~2h): Strategic follows + unfollow stales ---
+    if (tickCount % 8 === 0 && PLATFORMS.twitter.enabled) {
+      let twitterGrowthCtx: BrowserContext | null = null;
+      await withTimeout('Twitter growth', async () => {
+        // Clear lock file
+        const fs4 = require('fs');
+        try { fs4.unlinkSync(require('path').join(PLATFORMS.twitter.profileDir, 'SingletonLock')); } catch {}
+
+        twitterGrowthCtx = await launchPlatform('twitter');
+        if (!twitterGrowthCtx) return;
+
+        const growthPage = twitterGrowthCtx.pages()[0] || await twitterGrowthCtx.newPage();
+
+        // Strategic follows (max 10)
+        const hasFollowBudget = await checkBudget(supabase, USER_ID, 'twitter', 'follow');
+        if (hasFollowBudget) {
+          const sfResult = await runStrategicFollowCycle(growthPage, 10);
+          if (sfResult.followed > 0) {
+            console.log(`[${timestamp}] Strategic follow: ${sfResult.followed} followed (${sfResult.skippedBot} bots)`);
+          }
+        }
+
+        // Unfollow stales (max 10)
+        const hasUnfollowBudget = await checkBudget(supabase, USER_ID, 'twitter', 'unfollow');
+        if (hasUnfollowBudget) {
+          const usResult = await runUnfollowStalesCycle(growthPage, 10);
+          if (usResult.unfollowed > 0) {
+            console.log(`[${timestamp}] Unfollow stales: ${usResult.unfollowed} unfollowed, ${usResult.reciprocated} kept`);
+          }
+        }
+
+        await twitterGrowthCtx.close().catch(() => {});
+        twitterGrowthCtx = null;
+      }, 600000); // 10 min
+      if (twitterGrowthCtx) { try { await (twitterGrowthCtx as BrowserContext).close(); } catch {} }
+    }
+
+    // --- Every 4th tick (~1h): Quote tweets (2-3) ---
+    if (tickCount % 4 === 2 && PLATFORMS.twitter.enabled) {
+      await withTimeout('Quote tweets', async () => {
+        const hasQTBudget = await checkBudget(supabase, USER_ID, 'twitter', 'quote_tweet');
+        if (hasQTBudget) {
+          const qtResult = await runQuoteTweetCycle(2);
+          if (qtResult.posted > 0) {
+            console.log(`[${timestamp}] Quote tweets: ${qtResult.posted} posted`);
+          }
+        } else {
+          console.log(`[${timestamp}] Quote tweet budget exhausted`);
+        }
+      }, 300000); // 5 min
+    }
+
+    // ═══ PLATFORM ENGAGEMENT (slow, browser-heavy) ════════════════════
+
     // --- Every tick: Reddit comments (2-3) --- (3 min timeout, self-contained)
     if (PLATFORMS.reddit.enabled) {
       let redditCtx: BrowserContext | null = null;
@@ -195,7 +294,7 @@ async function tick() {
           redditCtx = await launchPlatform('reddit');
           if (redditCtx) {
             const redditPage = redditCtx.pages()[0] || await redditCtx.newPage();
-            const redditResult = await runRedditComments(redditPage, supabase, anthropic, USER_ID, state, 2);
+            const redditResult = await runRedditComments(redditPage, supabase, anthropic, USER_ID, state, 1);
             if (redditResult.posted > 0) {
               console.log(`[${timestamp}] Reddit comments: ${redditResult.posted} posted`);
             }
@@ -205,7 +304,7 @@ async function tick() {
         } else {
           console.log(`[${timestamp}] Reddit comment budget exhausted`);
         }
-      }, 480000); // 8 min — reddit needs time for body fetch + vision + slop retries
+      }, 600000); // 10 min — reddit: scrape + vision + slop retries + slow character-by-character typing
       // Force-close if timeout killed the function mid-run
       if (redditCtx) {
         try { await (redditCtx as BrowserContext).close(); } catch {}
@@ -318,6 +417,7 @@ async function tick() {
         }
       }, 90000);
     }
+
   } catch (err) {
     console.error(`[${timestamp}] Tick error:`, err instanceof Error ? err.message : err);
   }
@@ -335,8 +435,12 @@ async function main() {
   console.log(`User: ${USER_ID.substring(0, 8)}...`);
   console.log('');
   console.log('Schedule:');
-  console.log(`  Every ${intervalMinutes} min: Post content + Twitter replies (4) + Reddit comments (3)`);
-  console.log(`  Every ${intervalMinutes * 2} min: FetLife (1) + Subscriber replies + DMs`);
+  console.log(`  Every ${intervalMinutes} min: Post content + Twitter replies (4)`);
+  console.log(`  Every ${intervalMinutes * 4} min: Growth — Followback + Engage-follow`);
+  console.log(`  Every ${intervalMinutes * 4} min: Growth — Quote tweets (offset tick)`);
+  console.log(`  Every ${intervalMinutes * 8} min: Growth — Strategic follows + Unfollow stales`);
+  console.log(`  Every ${intervalMinutes} min: Reddit comments (1) [slow]`);
+  console.log(`  Every ${intervalMinutes * 2} min: FetLife (1) + Subscribers + Sniffies + DMs [slow]`);
   console.log('');
   console.log('Platforms:');
   for (const [name, cfg] of Object.entries(PLATFORMS)) {

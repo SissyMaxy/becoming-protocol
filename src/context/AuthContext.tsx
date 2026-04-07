@@ -54,7 +54,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email,
       password,
     });
-    return { error: error as Error | null };
+    if (error) {
+      return { error: new Error(error.message || JSON.stringify(error)) };
+    }
+    return { error: null };
   };
 
   const signIn = async (email: string, password: string) => {
@@ -62,7 +65,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email,
       password,
     });
-    return { error: error as Error | null };
+    if (error) {
+      // Preserve original message — Supabase AuthError may not survive cast
+      return { error: new Error(error.message || JSON.stringify(error)) };
+    }
+    return { error: null };
   };
 
   const signOut = async () => {
@@ -79,12 +86,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: window.location.origin,
     });
-    return { error: error as Error | null };
+    if (error) {
+      return { error: new Error(error.message || JSON.stringify(error)) };
+    }
+    return { error: null };
   };
 
   const updatePassword = async (password: string) => {
     const { error } = await supabase.auth.updateUser({ password });
-    return { error: error as Error | null };
+    if (error) {
+      return { error: new Error(error.message || JSON.stringify(error)) };
+    }
+    return { error: null };
   };
 
   return (

@@ -8,7 +8,7 @@ import { supabase } from './config';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 const DEFAULT_LIMITS: Record<string, Record<string, number>> = {
-  twitter: { reply: 20 },
+  twitter: { reply: 20, follow: 25, unfollow: 20, quote_tweet: 4, dm: 10 },
   reddit: { comment: 8 },
   fetlife: { group_discussion: 3 },
   fansly: { subscriber_reply: 999 },
