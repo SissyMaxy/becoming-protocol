@@ -96,13 +96,24 @@ jobs:
 
               try:
                   with urllib.request.urlopen(req, timeout=30) as resp:
-                      data = json.loads(resp.read())
+                      raw = resp.read().decode()
+                  data = json.loads(raw)
                   text = data["content"][0]["text"]
+                  # Strip markdown fences if Claude wraps in ```json
+                  text = text.strip()
+                  if text.startswith("```"):
+                      text = "\n".join(text.split("\n")[1:])
+                  if text.endswith("```"):
+                      text = "\n".join(text.split("\n")[:-1])
+                  text = text.strip()
                   parsed = json.loads(text)
                   summary = parsed.get("summary", "")
                   features = parsed.get("features", [])
                   systems_modified = parsed.get("systems_modified", [])
                   print(f"Claude summary: {summary}")
+              except urllib.error.HTTPError as e:
+                  body = e.read().decode() if hasattr(e, 'read') else ''
+                  print(f"Claude API error {e.code}: {body[:300]}")
               except Exception as e:
                   print(f"Claude call failed, falling back to bare entry: {e}")
           else:
