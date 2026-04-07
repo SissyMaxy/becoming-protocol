@@ -1,4 +1,6 @@
-# Log every deploy to system_changelog so the Handler knows what changed
+# Log every deploy to system_changelog with Claude-generated summary
+# so the Handler knows what changed, what systems were affected,
+# and what it should now reference in conversation.
 name: Deploy Changelog
 
 on:
@@ -12,24 +14,126 @@ jobs:
   log-deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Write commit to system_changelog
-        env:
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          COMMIT_MSG: ${{ github.event.head_commit.message }}
-        run: |
-          SHORT_SHA="${GITHUB_SHA:0:7}"
-          # Take first line only, escape for JSON
-          FIRST_LINE=$(echo "$COMMIT_MSG" | head -1 | python3 -c "import sys,json; print(json.dumps(sys.stdin.read().strip()))")
-          TIMESTAMP="${{ github.event.head_commit.timestamp }}"
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
-          curl -sf -X POST "${SUPABASE_URL}/rest/v1/system_changelog" \
-            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
-            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
-            -H "Content-Type: application/json" \
-            -H "Prefer: return=minimal" \
-            -d "{
-              \"commit_sha\": \"${SHORT_SHA}\",
-              \"commit_message\": ${FIRST_LINE},
-              \"environment\": \"production\",
-              \"deployed_at\": \"${TIMESTAMP}\"
-            }"
+      - name: Get diff and summarize deploy
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          COMMIT_SHA: ${{ github.sha }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          COMMIT_TIMESTAMP: ${{ github.event.head_commit.timestamp }}
+        run: |
+          python3 << 'PYEOF'
+          import json, os, subprocess, urllib.request, urllib.error
+
+          commit_sha = os.environ["COMMIT_SHA"][:7]
+          commit_msg = os.environ["COMMIT_MSG"]
+          timestamp = os.environ["COMMIT_TIMESTAMP"]
+          anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
+          supabase_url = os.environ["SUPABASE_URL"]
+          supabase_key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+          first_line = commit_msg.strip().split("\n")[0][:200]
+
+          # Get the code diff (truncated)
+          try:
+              diff = subprocess.check_output(
+                  ["git", "diff", "HEAD~1", "HEAD", "--", "*.ts", "*.tsx", "*.sql"],
+                  text=True, timeout=10
+              )[:8000]
+          except Exception:
+              diff = "(diff unavailable)"
+
+          # Count files changed
+          try:
+              files_output = subprocess.check_output(
+                  ["git", "diff", "--name-only", "HEAD~1", "HEAD"],
+                  text=True, timeout=10
+              )
+              files_changed = len([f for f in files_output.strip().split("\n") if f])
+          except Exception:
+              files_changed = 0
+
+          summary = ""
+          features = []
+          systems_modified = []
+
+          # Call Claude to summarize (skip if no API key)
+          if anthropic_key:
+              prompt = f"""You are a systems analyst for a web app called Becoming Protocol. A deploy just landed.
+
+          Commit message:
+          {commit_msg}
+
+          Code diff (truncated):
+          {diff}
+
+          Write a JSON object with these fields:
+          - "summary": 1-2 sentence plain English summary of what changed and why it matters. Written for an AI Handler that manages a user's daily protocol — focus on what the Handler should now know or reference in conversation.
+          - "features": array of short feature tags (e.g. "follower tracking", "voice training", "slop detector")
+          - "systems_modified": array of system names affected (e.g. "handler", "auto-poster", "conditioning", "morning-briefing", "denial", "socials", "whoop")
+
+          Respond with ONLY the JSON object. No markdown, no explanation."""
+
+              req_body = json.dumps({
+                  "model": "claude-haiku-4-5-20251001",
+                  "max_tokens": 400,
+                  "messages": [{"role": "user", "content": prompt}]
+              }).encode()
+
+              req = urllib.request.Request(
+                  "https://api.anthropic.com/v1/messages",
+                  data=req_body,
+                  headers={
+                      "x-api-key": anthropic_key,
+                      "anthropic-version": "2023-06-01",
+                      "content-type": "application/json",
+                  },
+              )
+
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as resp:
+                      data = json.loads(resp.read())
+                  text = data["content"][0]["text"]
+                  parsed = json.loads(text)
+                  summary = parsed.get("summary", "")
+                  features = parsed.get("features", [])
+                  systems_modified = parsed.get("systems_modified", [])
+                  print(f"Claude summary: {summary}")
+              except Exception as e:
+                  print(f"Claude call failed, falling back to bare entry: {e}")
+          else:
+              print("No ANTHROPIC_API_KEY — writing bare changelog entry")
+
+          # Write to system_changelog
+          payload = json.dumps({
+              "commit_sha": commit_sha,
+              "commit_message": first_line,
+              "summary": summary or None,
+              "features": features or [],
+              "systems_modified": systems_modified or [],
+              "files_changed": files_changed,
+              "environment": "production",
+              "deployed_at": timestamp,
+          }).encode()
+
+          req = urllib.request.Request(
+              f"{supabase_url}/rest/v1/system_changelog",
+              data=payload,
+              headers={
+                  "apikey": supabase_key,
+                  "Authorization": f"Bearer {supabase_key}",
+                  "Content-Type": "application/json",
+                  "Prefer": "return=minimal",
+              },
+          )
+
+          try:
+              urllib.request.urlopen(req, timeout=10)
+              print(f"Logged deploy {commit_sha}: {first_line}")
+          except urllib.error.HTTPError as e:
+              print(f"Failed to write changelog: {e.code} {e.read().decode()}")
+          PYEOF
