@@ -44,6 +44,27 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{}'
 
+  handler-outreach:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if 30-minute window
+        id: should_run
+        run: |
+          MINUTE=$(date -u +%M)
+          if [ "$MINUTE" -lt "5" ] || [ "$MINUTE" -ge "30" -a "$MINUTE" -lt "35" ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Trigger handler-outreach
+        if: steps.should_run.outputs.run == 'true'
+        run: |
+          curl -X POST "${{ env.SUPABASE_URL }}/functions/v1/handler-outreach" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}'
+
   generate-prescription:
     runs-on: ubuntu-latest
     # Only at ~4 AM UTC (GitHub schedules can drift, this approximates)

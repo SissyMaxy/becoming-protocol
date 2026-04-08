@@ -183,15 +183,29 @@ async function evaluateOutreach(
   const pool = OPENING_LINES[trigger.type] || ['Come talk to me.']
   const openingLine = pool[Math.floor(Math.random() * pool.length)]
 
-  // Queue outreach
+  const now = new Date().toISOString()
+  const expiresAt = new Date(Date.now() + 4 * 3600000).toISOString()
+
+  // Queue outreach (tracking table)
   await supabase.from('handler_outreach').insert({
     user_id: userId,
     trigger_type: trigger.type,
     opening_line: openingLine,
     conversation_context: trigger.context,
-    scheduled_at: new Date().toISOString(),
+    scheduled_at: now,
     status: 'scheduled',
-    expires_at: new Date(Date.now() + 4 * 3600000).toISOString(),
+    expires_at: expiresAt,
+  })
+
+  // Queue for client-side delivery (handler_outreach_queue — polled by useProactiveOutreach)
+  await supabase.from('handler_outreach_queue').insert({
+    user_id: userId,
+    message: openingLine,
+    urgency: trigger.priority <= 2 ? 'high' : 'normal',
+    trigger_reason: trigger.type,
+    scheduled_for: now,
+    expires_at: expiresAt,
+    source: 'outreach_engine',
   })
 
   return { queued: true, type: trigger.type, line: openingLine }
