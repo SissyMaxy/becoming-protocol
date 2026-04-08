@@ -6,7 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { Intensity } from '../types';
-import type { ReleaseType } from '../types/arousal';
+import type { ReleaseType, ReleaseContext } from '../types/arousal';
 import { INTENSITY_CONFIG } from '../data/constants';
 import { useProtocol } from '../context/ProtocolContext';
 import { useBambiMode } from '../context/BambiModeContext';
@@ -54,6 +54,7 @@ export function MorningBriefing({ onComplete }: MorningBriefingProps) {
   const [releaseChecked, setReleaseChecked] = useState(false);
   const [didCum, setDidCum] = useState<boolean | null>(null);
   const [selectedReleaseType, setSelectedReleaseType] = useState<ReleaseType | null>(null);
+  const [releaseContext, setReleaseContext] = useState<ReleaseContext | null>(null);
   const [releaseWhen, setReleaseWhen] = useState<string | null>(null);
   const [recordingRelease, setRecordingRelease] = useState(false);
 
@@ -105,12 +106,18 @@ export function MorningBriefing({ onComplete }: MorningBriefingProps) {
 
   // Handle release recording
   const handleRecordRelease = async () => {
-    if (!selectedReleaseType || !releaseWhen) return;
+    if (!selectedReleaseType || !releaseWhen || !releaseContext) return;
     setRecordingRelease(true);
     try {
       // Calculate the actual release timestamp
       const releaseTimestamp = resolveReleaseTime(releaseWhen);
-      await denial.recordRelease(selectedReleaseType);
+
+      // Sex with Gina doesn't reset denial streak — it's partner sex, not a slip
+      const isPartnerSex = releaseContext === 'with_partner';
+      if (!isPartnerSex) {
+        await denial.recordRelease(selectedReleaseType);
+      }
+
       // Update last_release in user_state with the actual time
       if (user?.id) {
         await supabase
@@ -304,12 +311,14 @@ export function MorningBriefing({ onComplete }: MorningBriefingProps) {
           releaseChecked={releaseChecked}
           didCum={didCum}
           selectedReleaseType={selectedReleaseType}
+          releaseContext={releaseContext}
           releaseWhen={releaseWhen}
           recordingRelease={recordingRelease}
           isBambiMode={isBambiMode}
           onAnswerNo={() => { setDidCum(false); setReleaseChecked(true); }}
           onAnswerYes={() => setDidCum(true)}
           onSelectType={setSelectedReleaseType}
+          onSelectContext={setReleaseContext}
           onSelectWhen={setReleaseWhen}
           onConfirmRelease={handleRecordRelease}
         />
@@ -490,6 +499,14 @@ const RELEASE_TYPE_OPTIONS: { type: ReleaseType; label: string; emoji: string; r
   { type: 'edge_only', label: 'Edge only', emoji: '🔥', resetsStreak: false },
 ];
 
+const RELEASE_CONTEXT_OPTIONS: { context: ReleaseContext; label: string; emoji: string }[] = [
+  { context: 'with_partner', label: 'With Gina', emoji: '👫' },
+  { context: 'solo', label: 'Solo', emoji: '🔒' },
+  { context: 'during_content', label: 'During content', emoji: '📱' },
+  { context: 'during_practice', label: 'During practice', emoji: '🎀' },
+  { context: 'sleep', label: 'In sleep', emoji: '😴' },
+];
+
 const RELEASE_WHEN_OPTIONS = [
   { value: 'last_night', label: 'Last night' },
   { value: 'this_morning', label: 'This morning' },
@@ -540,12 +557,14 @@ function ReleaseCheckIn({
   releaseChecked,
   didCum,
   selectedReleaseType,
+  releaseContext,
   releaseWhen,
   recordingRelease,
   isBambiMode,
   onAnswerNo,
   onAnswerYes,
   onSelectType,
+  onSelectContext,
   onSelectWhen,
   onConfirmRelease,
 }: {
@@ -553,21 +572,34 @@ function ReleaseCheckIn({
   releaseChecked: boolean;
   didCum: boolean | null;
   selectedReleaseType: ReleaseType | null;
+  releaseContext: ReleaseContext | null;
   releaseWhen: string | null;
   recordingRelease: boolean;
   isBambiMode: boolean;
   onAnswerNo: () => void;
   onAnswerYes: () => void;
   onSelectType: (t: ReleaseType) => void;
+  onSelectContext: (c: ReleaseContext) => void;
   onSelectWhen: (w: string) => void;
   onConfirmRelease: () => void;
 }) {
   // Already answered — don't show
   if (releaseChecked) return null;
 
-  const daysAgo = lastReleaseDate
-    ? Math.floor((Date.now() - lastReleaseDate.getTime()) / (1000 * 60 * 60 * 24))
-    : null;
+  // Format last release as actual date, not vague "yesterday"
+  const formatReleaseDate = (date: Date): string => {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    // Show the actual date with day of week
+    const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
+    const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+    if (diffDays === 0) return `today (${dateStr})`;
+    if (diffDays === 1) return `${dayName} (${dateStr})`;
+    return `${dayName} ${dateStr} — ${diffDays} days ago`;
+  };
 
   const accent = isBambiMode ? 'text-pink-500' : 'text-protocol-accent';
   const muted = isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted';
@@ -587,14 +619,10 @@ function ReleaseCheckIn({
         </span>
       </div>
 
-      {/* Last release info */}
+      {/* Last release info — shows actual date */}
       <p className={`text-sm handler-voice ${isBambiMode ? 'text-purple-700' : 'text-protocol-text'}`}>
-        {daysAgo !== null
-          ? daysAgo === 0
-            ? 'Last reported release: today.'
-            : daysAgo === 1
-            ? 'Last reported release: yesterday.'
-            : `Last reported release: ${daysAgo} days ago.`
+        {lastReleaseDate
+          ? `Last release: ${formatReleaseDate(lastReleaseDate)}.`
           : 'No release on record.'}
       </p>
 
@@ -602,7 +630,7 @@ function ReleaseCheckIn({
       {didCum === null && (
         <div className="space-y-2">
           <p className={`text-sm font-medium ${isBambiMode ? 'text-purple-700' : 'text-protocol-text'}`}>
-            Have you cum since?
+            Have you cum since then?
           </p>
           <div className="flex gap-2">
             <button
@@ -625,7 +653,7 @@ function ReleaseCheckIn({
         </div>
       )}
 
-      {/* Release flow: when → how → confirm */}
+      {/* Release flow: when → with who → how → confirm */}
       {didCum === true && !releaseChecked && (
         <div className="space-y-3">
           {/* Step 1: When */}
@@ -648,11 +676,34 @@ function ReleaseCheckIn({
             </div>
           </div>
 
-          {/* Step 2: How (shows after when is selected) */}
+          {/* Step 2: With who / context (shows after when) */}
           {releaseWhen && (
             <div className="space-y-2">
               <p className={`text-sm font-medium ${isBambiMode ? 'text-purple-700' : 'text-protocol-text'}`}>
-                How did you cum?
+                How did it happen?
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {RELEASE_CONTEXT_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.context}
+                    onClick={() => onSelectContext(opt.context)}
+                    className={`py-1.5 px-3 rounded-lg border text-sm transition-all ${
+                      releaseContext === opt.context ? selectedBorder : surface
+                    } ${releaseContext === opt.context ? accent : muted}`}
+                  >
+                    <span className="mr-1">{opt.emoji}</span>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Release type (shows after context) */}
+          {releaseContext && (
+            <div className="space-y-2">
+              <p className={`text-sm font-medium ${isBambiMode ? 'text-purple-700' : 'text-protocol-text'}`}>
+                What kind?
               </p>
               <div className="grid grid-cols-2 gap-2">
                 {RELEASE_TYPE_OPTIONS.map((opt) => (
@@ -667,7 +718,7 @@ function ReleaseCheckIn({
                     <span className={selectedReleaseType === opt.type ? accent : muted}>
                       {opt.label}
                     </span>
-                    {opt.resetsStreak && (
+                    {opt.resetsStreak && releaseContext !== 'with_partner' && (
                       <span className="text-xs text-red-400 ml-1">resets</span>
                     )}
                   </button>
@@ -677,7 +728,7 @@ function ReleaseCheckIn({
           )}
 
           {/* Confirm */}
-          {selectedReleaseType && releaseWhen && (
+          {selectedReleaseType && releaseWhen && releaseContext && (
             <button
               onClick={onConfirmRelease}
               disabled={recordingRelease}
