@@ -224,14 +224,15 @@ async function runEnforcementForUser(
       created_at: new Date().toISOString(),
     }, { onConflict: 'user_id,task_type' })
 
-    // Morning Lovense summon (if enabled and device connected)
+    // Morning Lovense summon (if enabled)
     if (config.lovense_proactive_enabled && config.lovense_summon_enabled) {
-      await queueLovenseCommand(supabase, userId, {
-        command_type: 'summon',
-        trigger_reason: 'morning_enforcement',
-        pattern: 'pulse',
-        intensity: 5,
-        duration_seconds: 3,
+      await supabase.from('handler_directives').insert({
+        user_id: userId,
+        action: 'send_device_command',
+        target: 'lovense',
+        value: { pattern: 'heartbeat' },
+        priority: 'normal',
+        reasoning: 'Morning wake-up summon — Handler calling',
       })
     }
   }
@@ -475,7 +476,7 @@ async function applyEscalation(
       break
     }
 
-    case 3: { // Punishment
+    case 3: { // Punishment — mandatory task + device punishment
       const { data: punishment } = await supabase.from('punishments').insert({
         user_id: userId,
         trigger: `enforcement_${compliance.domain}_noncompliance`,
@@ -485,7 +486,20 @@ async function applyEscalation(
         applied_at: new Date().toISOString(),
         served_at: null,
       }).select().single()
-      actionTaken = `Punishment applied: mandatory ${compliance.domain} task`
+
+      // Fire device punishment via handler_directives (client poller picks these up)
+      if (config.lovense_proactive_enabled) {
+        await supabase.from('handler_directives').insert({
+          user_id: userId,
+          action: 'send_device_command',
+          target: 'lovense',
+          value: { pattern: 'denial_pulse' },
+          priority: 'immediate',
+          reasoning: `Punishment for ${consecutiveDays} days ${compliance.domain} noncompliance`,
+        })
+      }
+
+      actionTaken = `Punishment applied: mandatory ${compliance.domain} task + device punishment`
       details.punishment_id = punishment?.id
       break
     }
@@ -507,7 +521,19 @@ async function applyEscalation(
           })
           .eq('user_id', userId)
       }
-      actionTaken = `Denial extended by ${extensionDays} days for ${compliance.domain} avoidance`
+      // Fire device to reinforce the denial extension
+      if (config.lovense_proactive_enabled) {
+        await supabase.from('handler_directives').insert({
+          user_id: userId,
+          action: 'send_device_command',
+          target: 'lovense',
+          value: { intensity: 5, duration: 30 },
+          priority: 'normal',
+          reasoning: `Denial extended ${extensionDays} days — sustained low vibration as reminder`,
+        })
+      }
+
+      actionTaken = `Denial extended by ${extensionDays} days for ${compliance.domain} avoidance + device reminder`
       details.extension_days = extensionDays
       break
     }
