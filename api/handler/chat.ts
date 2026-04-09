@@ -2946,50 +2946,68 @@ async function buildSystemStateCtx(userId: string): Promise<string> {
 
 // ============================================
 // DEVICE COMMAND EXECUTION (immediate, from Handler directives)
+// Calls the lovense-command edge function which handles the real API.
 // ============================================
 
 async function executeDeviceCommand(
   userId: string,
-  value: Record<string, unknown>,
+  rawValue: unknown,
 ): Promise<void> {
-  const intensity = (value.intensity as number) || 5;
-  const duration = (value.duration as number) || 10;
-  const pattern = (value.pattern as string) || 'vibrate';
+  // Normalize the value — Handler emits various formats
+  let intensity = 5;
+  let duration = 10;
 
-  // Get Lovense connection
-  const { data: connection } = await supabase
-    .from('lovense_connections')
-    .select('cloud_token, uid')
-    .eq('user_id', userId)
-    .eq('status', 'connected')
-    .maybeSingle();
-
-  if (!connection?.cloud_token) {
-    console.log('[Device] No Lovense connection for user', userId);
-    return;
+  if (typeof rawValue === 'object' && rawValue !== null) {
+    const v = rawValue as Record<string, unknown>;
+    intensity = (v.intensity as number) || 5;
+    duration = (v.duration as number) || (v.timeSec as number) || 10;
+    // Duration might be in ms
+    if (duration > 100) duration = Math.round(duration / 1000);
+  } else if (typeof rawValue === 'string') {
+    // Parse strings like "pulse:medium:3" or "pulse_pattern_3_medium"
+    const parts = String(rawValue).split(/[_:]/);
+    for (const p of parts) {
+      const n = parseInt(p);
+      if (!isNaN(n) && n <= 20) intensity = n;
+      if (!isNaN(n) && n > 20) duration = n > 100 ? Math.round(n / 1000) : n;
+    }
+    if (String(rawValue).includes('medium')) intensity = 10;
+    if (String(rawValue).includes('high') || String(rawValue).includes('strong')) intensity = 15;
+    if (String(rawValue).includes('low') || String(rawValue).includes('soft')) intensity = 3;
   }
 
-  const action = pattern === 'pulse'
-    ? `Vibrate:${intensity};Vibrate:0;Vibrate:${intensity}`
-    : `Vibrate:${intensity}`;
+  // Clamp values
+  intensity = Math.max(1, Math.min(20, intensity));
+  duration = Math.max(1, Math.min(60, duration));
 
   try {
-    const res = await fetch('https://api.lovense-api.com/api/lan/v2/command', {
+    // Call the lovense-command edge function which handles the real Lovense API
+    const supabaseUrl = process.env.SUPABASE_URL || '';
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+    // Get user's auth token for the edge function (it expects user auth)
+    // Use service role to call directly instead
+    const res = await fetch(`${supabaseUrl}/functions/v1/lovense-command`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${serviceKey}`,
+      },
       body: JSON.stringify({
-        token: connection.cloud_token,
-        uid: connection.uid,
-        command: 'Function',
-        action,
-        timeSec: duration,
-        apiVer: 1,
+        customCommand: {
+          command: 'Function',
+          action: `Vibrate:${intensity}`,
+          timeSec: duration,
+        },
+        triggerType: 'handler_directive',
+        intensity,
       }),
     });
+
     const result = await res.json();
-    console.log('[Device] Command result:', result.code === 200 ? 'success' : result);
+    console.log(`[Device] Command fired: intensity=${intensity}, duration=${duration}s, result:`, result.success ? 'ok' : result.error);
   } catch (err) {
-    console.error('[Device] Lovense API error:', err);
+    console.error('[Device] Edge function call failed:', err);
   }
 }
 
