@@ -420,7 +420,9 @@ function AuthenticatedAppInner() {
     if (!isLoading && showOnboarding === false) {
       const today = getTodayDate();
       const hasEntryToday = currentEntry?.date === today;
-      setShowMorningFlow(!hasEntryToday);
+      // Also check localStorage fallback — startDay may have failed but morning was completed
+      const morningDoneToday = localStorage.getItem('morning_done_date') === today;
+      setShowMorningFlow(!hasEntryToday && !morningDoneToday);
     }
   }, [isLoading, currentEntry, showOnboarding]);
 
@@ -572,7 +574,10 @@ function AuthenticatedAppInner() {
   if (!deepLinkView && showMorningFlow) {
     return (
       <ErrorBoundary componentName="MorningBriefing">
-        <MorningBriefing onComplete={() => setShowMorningFlow(false)} />
+        <MorningBriefing onComplete={() => {
+          localStorage.setItem('morning_done_date', getTodayDate());
+          setShowMorningFlow(false);
+        }} />
       </ErrorBoundary>
     );
   }
