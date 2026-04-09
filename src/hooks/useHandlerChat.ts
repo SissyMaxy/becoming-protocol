@@ -300,8 +300,7 @@ export function useHandlerChat(): UseHandlerChatReturn {
             supabase.from('handler_directives')
               .update({ status: 'completed', executed_at: new Date().toISOString() })
               .eq('id', data.id)
-              .then(() => {})
-              .catch(() => {});
+              .then(() => {});
           } catch (execErr) {
             console.error('[HandlerChat] Device command execution error:', execErr);
             // Still mark this directive to avoid infinite retry
