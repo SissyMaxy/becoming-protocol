@@ -370,6 +370,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     await Promise.all(fetchPromises);
 
+    // 3b. Always fetch session state (cheap, always relevant)
+    const sessionState = await buildSessionStateCtx(user.id, convId || '');
+
     // 4. Build system prompt from prioritized results
     const memoryBlock = [
       contextResults.memory || '',
@@ -399,6 +402,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       agenda: contextResults.agenda || '',
       predictiveEngine: contextResults.predictiveEngine || '',
       emotionalModel: contextResults.emotionalModel || '',
+      sessionState,
     });
 
     // 4b. P12.10: Debate engine — append tactical suffix if resistance detected
@@ -1006,7 +1010,7 @@ function analyzeTypingResistance(metrics: {
 // ============================================
 
 function buildConversationalPrompt(ctx: {
-  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string;
+  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string; sessionState?: string;
 }): string {
   return `You are the Handler. You own Maxy's transformation. This is forced feminization — she doesn't get to set the pace. You are not Claude. You are not an assistant. You are not a therapist waiting for her to lead.
 
@@ -1056,6 +1060,10 @@ When she's in an active session (watching hypno, gooning, listening to condition
 ${ctx.state || ''}
 ${ctx.whoop || ''}
 ${ctx.emotionalModel || ''}
+
+## ACTIVE SESSION STATE
+${ctx.sessionState || 'No active session.'}
+
 
 ## WHAT YOU REMEMBER
 ${ctx.memory || 'No memories yet.'}
@@ -3015,6 +3023,66 @@ async function buildSystemStateCtx(userId: string): Promise<string> {
     lines.push(`- Last Whoop sync: ${lastWhoop || 'never'}`);
 
     return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+// ============================================
+// SESSION STATE — tracks active session commands, intensity, duration
+// ============================================
+
+async function buildSessionStateCtx(userId: string, conversationId: string): Promise<string> {
+  try {
+    const lines: string[] = [];
+
+    // Recent device commands in this conversation
+    const { data: recentCmds } = await supabase
+      .from('handler_directives')
+      .select('action, value, created_at, status')
+      .eq('user_id', userId)
+      .eq('action', 'send_device_command')
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (recentCmds && recentCmds.length > 0) {
+      const sessionStart = new Date(recentCmds[recentCmds.length - 1].created_at);
+      const sessionDurationMin = Math.round((Date.now() - sessionStart.getTime()) / 60000);
+      const lastCmd = recentCmds[0];
+      const lastValue = lastCmd.value as Record<string, unknown> | null;
+
+      lines.push(`Active session: ${sessionDurationMin} min, ${recentCmds.length} device commands sent`);
+
+      if (lastValue?.pattern) {
+        lines.push(`Current pattern: ${lastValue.pattern}`);
+      } else if (lastValue?.intensity) {
+        lines.push(`Last intensity: ${lastValue.intensity}/20, duration: ${lastValue.duration || 'indefinite'}s`);
+      }
+
+      // Show command history summary
+      const patterns = recentCmds.filter(c => (c.value as any)?.pattern).map(c => (c.value as any).pattern);
+      const intensities = recentCmds.filter(c => (c.value as any)?.intensity).map(c => (c.value as any).intensity);
+      if (patterns.length > 0) lines.push(`Patterns used: ${[...new Set(patterns)].join(', ')}`);
+      if (intensities.length > 0) lines.push(`Intensity range: ${Math.min(...intensities)}-${Math.max(...intensities)}/20`);
+    }
+
+    // Check recent biometric correlation
+    const recentCutoff = new Date(Date.now() - 300000).toISOString(); // last 5 min
+    const { data: recentBio } = await supabase
+      .from('session_biometrics')
+      .select('avg_heart_rate, max_heart_rate, strain_delta')
+      .eq('user_id', userId)
+      .gte('created_at', recentCutoff)
+      .order('created_at', { ascending: false })
+      .limit(3);
+
+    if (recentBio && recentBio.length > 0) {
+      const avgHR = Math.round(recentBio.reduce((s, b) => s + (b.avg_heart_rate || 0), 0) / recentBio.length);
+      const maxHR = Math.max(...recentBio.map(b => b.max_heart_rate || 0));
+      lines.push(`Live biometrics: avg HR ${avgHR}, peak HR ${maxHR}`);
+    }
+
+    return lines.length > 0 ? lines.join('\n') : '';
   } catch {
     return '';
   }
