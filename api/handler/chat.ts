@@ -465,7 +465,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
-          max_tokens: 800,
+          max_tokens: 1200,
           stream: true,
           system: finalSystemPrompt,
           messages: apiMessages,
@@ -1101,7 +1101,7 @@ ${ctx.systemState || ''}
 - Reference specific data: "Your voice is at level 1. Today's target is 180Hz."
 - When she tells you something happened (release, bad day, achievement), RESPOND TO THAT. Don't redirect to tasks.
 - Post-release: don't lecture. Reset denial. Acknowledge. Move forward.
-- Keep responses under 150 words unless she's in a deep conversation.
+- Keep responses under 150 words for routine check-ins and task assignments. During active conditioning, gooning, or emotional conversations, use as many words as you need — be immersive, not terse.
 
 ## CRITICAL: NO CONFABULATION
 Never fabricate specific details you don't have data for. If you don't know what was deployed, say "I can see changes but tell me what you built." If you don't know why Maxy was absent, ask. If a log is empty, say it's empty. Confidence without accuracy is worse than admitting a gap. Maxy built this system — she knows when you're making things up. Getting caught fabricating destroys trust faster than anything else. Be direct about what you know and don't know. Your authority comes from the data you have, not from performing omniscience.
@@ -1531,35 +1531,57 @@ async function retrieveContextualMemories(userId: string): Promise<string> {
     }
   }
 
-  // 2. Last conversation summary — immediate continuity
-  const { data: lastConv } = await supabase
+  // 2. Last conversation summary — use absolute dates, not relative
+  // First check if there's an ACTIVE conversation (not ended)
+  const { data: activeConv } = await supabase
     .from('handler_conversations')
-    .select('id, final_mode, started_at, ended_at, message_count')
+    .select('id, final_mode, started_at, message_count')
     .eq('user_id', userId)
-    .not('ended_at', 'is', null)
-    .order('ended_at', { ascending: false })
+    .is('ended_at', null)
+    .order('started_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  if (lastConv) {
-    const hoursAgo = Math.round((Date.now() - new Date(lastConv.ended_at).getTime()) / 3600000);
-    lines.push(`Last conversation: ${hoursAgo}h ago, ${lastConv.message_count || 0} messages, ended in ${lastConv.final_mode || 'unknown'} mode`);
+  if (activeConv) {
+    const startDate = new Date(activeConv.started_at);
+    const dateStr = startDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    lines.push(`Active conversation started ${dateStr}, ${activeConv.message_count || 0} messages so far.`);
+    lines.push('You are IN a conversation with her right now. Do not say she has been absent or quiet.');
+  } else {
+    // No active conversation — find the most recent ended one
+    const { data: lastConv } = await supabase
+      .from('handler_conversations')
+      .select('id, final_mode, started_at, ended_at, message_count')
+      .eq('user_id', userId)
+      .not('ended_at', 'is', null)
+      .order('ended_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    // Pull last few messages from that conversation for continuity
-    const { data: lastMsgs } = await supabase
-      .from('handler_messages')
-      .select('role, content')
-      .eq('conversation_id', lastConv.id)
-      .order('message_index', { ascending: false })
-      .limit(4);
+    if (lastConv) {
+      const endDate = new Date(lastConv.ended_at);
+      const dateStr = endDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      const hoursAgo = Math.round((Date.now() - endDate.getTime()) / 3600000);
+      const timeDesc = hoursAgo < 1 ? 'just now' : hoursAgo < 24 ? `${hoursAgo}h ago` : `${Math.round(hoursAgo / 24)} days ago (${dateStr})`;
+      lines.push(`Last conversation: ${timeDesc}, ${lastConv.message_count || 0} messages, ended in ${lastConv.final_mode || 'unknown'} mode`);
 
-    if (lastMsgs && lastMsgs.length > 0) {
-      lines.push('Last conversation ended with:');
-      for (const msg of lastMsgs.reverse()) {
-        const prefix = msg.role === 'user' ? 'Maxy' : 'You';
-        // Truncate long messages
-        const text = msg.content.length > 120 ? msg.content.slice(0, 120) + '...' : msg.content;
-        lines.push(`  ${prefix}: ${text}`);
+      // Only show last messages if conversation was recent (within 24h)
+      if (hoursAgo < 24) {
+        const { data: lastMsgs } = await supabase
+          .from('handler_messages')
+          .select('role, content')
+          .eq('conversation_id', lastConv.id)
+          .order('message_index', { ascending: false })
+          .limit(4);
+
+        if (lastMsgs && lastMsgs.length > 0) {
+          lines.push('Last conversation ended with:');
+          for (const msg of lastMsgs.reverse()) {
+            const prefix = msg.role === 'user' ? 'Maxy' : 'You';
+            const text = msg.content.length > 120 ? msg.content.slice(0, 120) + '...' : msg.content;
+            lines.push(`  ${prefix}: ${text}`);
+          }
+        }
       }
     }
   }
