@@ -592,12 +592,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (messageIndex >= 3) extractMemoryFromMessage(user.id, convId!, message, streamSignals).catch(() => {});
       analyzeAndTrackLanguage(user.id, message).catch(() => {});
 
+      // Extract device commands for client-side execution
+      let streamDeviceCmds: Array<{intensity: number; duration: number}> | undefined;
+      if (streamSignals?.directive || streamSignals?.directives) {
+        const rawDirs = streamSignals.directives || streamSignals.directive;
+        const dirList = Array.isArray(rawDirs) ? rawDirs : [rawDirs];
+        const cmds = dirList
+          .filter((d: any) => d?.action === 'send_device_command')
+          .map((d: any) => {
+            const v = d.value;
+            let intensity = 5, duration = 3;
+            if (typeof v === 'object' && v !== null) {
+              intensity = v.intensity || 5;
+              duration = v.duration || v.timeSec || 3;
+              if (duration > 100) duration = Math.round(duration / 1000);
+            } else if (typeof v === 'string') {
+              if (v.includes('medium')) intensity = 10;
+              else if (v.includes('high') || v.includes('strong')) intensity = 15;
+              else if (v.includes('low') || v.includes('soft')) intensity = 3;
+            }
+            return { intensity: Math.max(1, Math.min(20, intensity)), duration: Math.max(1, Math.min(60, duration)) };
+          });
+        if (cmds.length > 0) streamDeviceCmds = cmds;
+      }
+
       // Send final metadata event
       res.write(`data: ${JSON.stringify({
         done: true,
         mode: streamSignals?.detected_mode || 'director',
         conversationId: convId,
         vulnerabilityWindow: streamSignals?.vulnerability_window || false,
+        ...(streamDeviceCmds ? { deviceCommands: streamDeviceCmds } : {}),
       })}\n\n`);
       res.end();
       return;

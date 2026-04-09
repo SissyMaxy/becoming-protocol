@@ -302,6 +302,16 @@ export function useHandlerChat(): UseHandlerChatReturn {
                   if (data.done) {
                     conversationIdRef.current = data.conversationId;
                     setCurrentMode(data.mode || 'director');
+
+                    // Execute device commands from streaming response
+                    if (data.deviceCommands && Array.isArray(data.deviceCommands)) {
+                      console.log('[HandlerChat] SSE device commands:', data.deviceCommands);
+                      for (const cmd of data.deviceCommands) {
+                        sendVibrateCommand(cmd.intensity, cmd.duration, 'conditioning').catch(err =>
+                          console.error('[HandlerChat] Device command failed:', err)
+                        );
+                      }
+                    }
                   }
                 } catch (parseErr) {
                   // Skip malformed SSE events unless it's a thrown error
