@@ -671,9 +671,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             // EXECUTE device commands immediately — don't let them rot in a table
             if (dir.action === 'send_device_command') {
-              executeDeviceCommand(user.id, dir.value ?? dir.target ?? 'pulse:medium:3', req.headers.authorization || '').catch(err =>
-                console.error('[Handler] Device command failed:', err)
-              );
+              console.log(`[Handler] Executing device command for user ${user.id}, value:`, dir.value);
+              executeDeviceCommand(user.id, dir.value ?? dir.target ?? 'pulse:medium:3', req.headers.authorization || '')
+                .then(() => console.log('[Handler] Device command execution completed'))
+                .catch(err => console.error('[Handler] Device command FAILED:', err));
             }
           }
         }
@@ -3002,6 +3003,10 @@ async function executeDeviceCommand(
 
     // Call Lovense Standard API directly
     const developerToken = process.env.LOVENSE_DEVELOPER_TOKEN || '';
+    if (!developerToken) {
+      console.error('[Device] LOVENSE_DEVELOPER_TOKEN not set in environment');
+      return;
+    }
     const apiUrl = 'https://api.lovense.com/api/lan/v2/command';
 
     const payload: Record<string, unknown> = {
