@@ -97,12 +97,14 @@ export function useHandlerChat(): UseHandlerChatReturn {
             .order('message_index', { ascending: true });
 
           if (msgs && msgs.length > 0) {
-            setMessages(msgs.map(m => ({
-              role: m.role as 'user' | 'assistant',
-              content: m.content,
-              timestamp: new Date(m.created_at),
-              mode: m.detected_mode || undefined,
-            })));
+            setMessages(msgs
+              .filter(m => !(m.role === 'user' && m.content.startsWith('[system:')))
+              .map(m => ({
+                role: m.role as 'user' | 'assistant',
+                content: m.content,
+                timestamp: new Date(m.created_at),
+                mode: m.detected_mode || undefined,
+              })));
           }
         }
       } catch (err) {
@@ -114,6 +116,57 @@ export function useHandlerChat(): UseHandlerChatReturn {
 
     loadRecent();
   }, [user?.id]);
+
+  // Auto-open: if chat loads empty (no conversation, no messages), the Handler speaks first.
+  // Sends a system-initiated message so the Handler leads with directives.
+  const autoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (!user?.id || isLoading || autoOpenedRef.current) return;
+    if (messages.length > 0 || conversationIdRef.current) return;
+    autoOpenedRef.current = true;
+
+    // Handler speaks first — send an empty "start of day" trigger
+    (async () => {
+      try {
+        const session = await supabase.auth.getSession();
+        const token = session.data.session?.access_token;
+        if (!token) return;
+
+        setIsSending(true);
+        const res = await fetch('/api/handler/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            conversationId: null,
+            message: '[system: start of day — Handler opens. Assign tasks. Set the tone. Lead.]',
+            conversationType: 'morning',
+            stream: false,
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.conversationId) conversationIdRef.current = data.conversationId;
+          if (data.mode) setCurrentMode(data.mode);
+          if (data.message) {
+            setMessages([{
+              role: 'assistant',
+              content: data.message,
+              timestamp: new Date(),
+              mode: data.mode || 'director',
+            }]);
+          }
+        }
+      } catch (err) {
+        console.error('[HandlerChat] Auto-open failed:', err);
+      } finally {
+        setIsSending(false);
+      }
+    })();
+  }, [user?.id, isLoading, messages.length]);
 
   // P11.1: Poll for Handler-initiated messages every 60s
   useEffect(() => {
