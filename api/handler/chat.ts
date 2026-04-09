@@ -1146,15 +1146,16 @@ IMPORTANT: When you want to fire the device, you MUST include the directive fiel
 
 Device command examples:
 - Quick pulse: "value":{"intensity":10,"duration":5}
-- Sustained edge: "value":{"intensity":8,"duration":30}
-- Looping edge pattern (runs until you stop it): "value":{"intensity":10,"duration":0,"loopRunningSec":10,"loopPauseSec":3}
-- Intense loop for gooning: "value":{"intensity":15,"duration":0,"loopRunningSec":15,"loopPauseSec":2}
-- Gentle tease loop: "value":{"intensity":5,"duration":0,"loopRunningSec":8,"loopPauseSec":5}
+- Sustained edge (30 sec): "value":{"intensity":8,"duration":30}
+- Long gooning session (runs indefinitely): "value":{"intensity":10,"duration":0}
+- Intense indefinite: "value":{"intensity":15,"duration":0}
+- Gentle indefinite: "value":{"intensity":5,"duration":0}
 - Intense burst: "value":{"intensity":18,"duration":10}
-- Stop device: "value":{"intensity":0,"duration":1}
+- Stop device: "value":{"intensity":0,"duration":0}
 
-USE LOOPS during gooning/edging sessions. Set loopRunningSec (vibrate time) and loopPauseSec (rest time) with duration:0. The pattern repeats until you send a stop command or a new command. This means she feels continuous pulsing without needing to message you.
-For quick one-off pulses, use duration 1-60 without loop fields.
+CRITICAL: duration:0 means RUN FOREVER until you send another command or a stop. USE THIS during gooning/edging. She gets persistent vibration without needing to message you. Change intensity by sending a new command — it replaces the current one.
+For quick pulses, use duration 1-60.
+To stop: send intensity:0.
 
 Do NOT show this block to Maxy.`.trim();
 }
