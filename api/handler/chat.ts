@@ -671,7 +671,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             // EXECUTE device commands immediately — don't let them rot in a table
             if (dir.action === 'send_device_command') {
-              executeDeviceCommand(user.id, dir.value as Record<string, unknown>).catch(err =>
+              executeDeviceCommand(user.id, dir.value as Record<string, unknown>, req.headers.authorization || '').catch(err =>
                 console.error('[Handler] Device command failed:', err)
               );
             }
@@ -2952,6 +2952,7 @@ async function buildSystemStateCtx(userId: string): Promise<string> {
 async function executeDeviceCommand(
   userId: string,
   rawValue: unknown,
+  userAuthHeader: string,
 ): Promise<void> {
   // Normalize the value — Handler emits various formats
   let intensity = 5;
@@ -2991,7 +2992,7 @@ async function executeDeviceCommand(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${serviceKey}`,
+        'Authorization': userAuthHeader.startsWith('Bearer ') ? userAuthHeader : `Bearer ${userAuthHeader}`,
       },
       body: JSON.stringify({
         customCommand: {
