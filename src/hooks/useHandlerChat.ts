@@ -8,26 +8,23 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { getPendingOutreach, markDelivered } from '../lib/conditioning/proactive-outreach';
 import { TypingMetricsTracker } from '../lib/conditioning/typing-resistance';
-import { sendVibrateCommand, sendCloudCommand } from '../lib/lovense';
+import { sendVibrateCommand, playPattern } from '../lib/lovense';
+import { BUILTIN_PATTERNS } from '../types/lovense';
 import type { CloudCommandResponse } from '../types/lovense';
 
-// Execute a device command — uses loop pattern if loopRunningSec is set, otherwise simple vibrate
-async function executeDeviceCmd(cmd: { intensity: number; duration: number; loopRunningSec?: number; loopPauseSec?: number }): Promise<CloudCommandResponse> {
-  if (cmd.loopRunningSec && cmd.loopRunningSec > 0) {
-    // Looping pattern — use cloud command with Pattern
-    return sendCloudCommand({
-      customCommand: {
-        command: 'Function',
-        action: `Vibrate:${cmd.intensity}`,
-        timeSec: cmd.duration || 0,
-        loopRunningSec: cmd.loopRunningSec,
-        loopPauseSec: cmd.loopPauseSec || 2,
-      },
-      triggerType: 'conditioning',
-      intensity: cmd.intensity,
-    });
+// Execute a device command — pattern or simple vibrate
+function executeDeviceCmd(cmd: { intensity?: number; duration?: number; pattern?: string }): Promise<CloudCommandResponse> {
+  // Pattern command — play a named pattern with looping
+  if (cmd.pattern) {
+    const pat = BUILTIN_PATTERNS.find(p => p.id === cmd.pattern);
+    if (pat) {
+      playPattern(pat, { loop: true });
+      return Promise.resolve({ success: true });
+    }
+    // Fall back to simple vibrate if pattern not found
+    console.warn(`[HandlerChat] Pattern "${cmd.pattern}" not found, falling back to vibrate`);
   }
-  return sendVibrateCommand(cmd.intensity, cmd.duration, 'conditioning');
+  return sendVibrateCommand(cmd.intensity || 5, cmd.duration || 0, 'conditioning');
 }
 
 export interface MediaAttachment {
@@ -61,7 +58,7 @@ interface ChatResponse {
   shouldContinue: boolean;
   conditioningSession?: ConditioningSessionSignal;
   media?: MediaAttachment[];
-  deviceCommands?: Array<{ intensity: number; duration: number; loopRunningSec?: number; loopPauseSec?: number }>;
+  deviceCommands?: Array<{ intensity?: number; duration?: number; pattern?: string }>;
 }
 
 interface UseHandlerChatReturn {

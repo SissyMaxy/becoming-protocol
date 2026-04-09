@@ -593,31 +593,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       analyzeAndTrackLanguage(user.id, message).catch(() => {});
 
       // Extract device commands for client-side execution
-      let streamDeviceCmds: Array<{intensity: number; duration: number; loopRunningSec?: number; loopPauseSec?: number}> | undefined;
+      let streamDeviceCmds: Array<{intensity?: number; duration?: number; pattern?: string}> | undefined;
       if (streamSignals?.directive || streamSignals?.directives) {
         const rawDirs = streamSignals.directives || streamSignals.directive;
         const dirList = Array.isArray(rawDirs) ? rawDirs : [rawDirs];
         const cmds = dirList
           .filter((d: any) => d?.action === 'send_device_command')
-          .map((d: any) => {
-            const v = d.value;
-            let intensity = 5, duration = 3, loopRunningSec: number | undefined, loopPauseSec: number | undefined;
-            if (typeof v === 'object' && v !== null) {
-              intensity = v.intensity || 5;
-              duration = v.duration ?? v.timeSec ?? 3;
-              if (duration > 100) duration = Math.round(duration / 1000);
-              loopRunningSec = v.loopRunningSec || undefined;
-              loopPauseSec = v.loopPauseSec || undefined;
-            } else if (typeof v === 'string') {
-              if (v.includes('medium')) intensity = 10;
-              else if (v.includes('high') || v.includes('strong')) intensity = 15;
-              else if (v.includes('low') || v.includes('soft')) intensity = 3;
-            }
-            const cmd: any = { intensity: Math.max(1, Math.min(20, intensity)), duration: Math.max(0, Math.min(60, duration)) };
-            if (loopRunningSec) cmd.loopRunningSec = loopRunningSec;
-            if (loopPauseSec) cmd.loopPauseSec = loopPauseSec;
-            return cmd;
-          });
+          .map((d: any) => parseDeviceValue(d.value));
         if (cmds.length > 0) streamDeviceCmds = cmds;
       }
 
@@ -947,25 +929,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const dirList = Array.isArray(rawDirs) ? rawDirs : [rawDirs];
       const deviceCmds = dirList
         .filter((d: any) => d?.action === 'send_device_command')
-        .map((d: any) => {
-          const v = d.value;
-          let intensity = 5, duration = 3, loopRunningSec: number | undefined, loopPauseSec: number | undefined;
-          if (typeof v === 'object' && v !== null) {
-            intensity = v.intensity || 5;
-            duration = v.duration ?? v.timeSec ?? 3;
-            if (duration > 100) duration = Math.round(duration / 1000);
-            loopRunningSec = v.loopRunningSec || undefined;
-            loopPauseSec = v.loopPauseSec || undefined;
-          } else if (typeof v === 'string') {
-            if (v.includes('medium')) intensity = 10;
-            else if (v.includes('high') || v.includes('strong')) intensity = 15;
-            else if (v.includes('low') || v.includes('soft')) intensity = 3;
-          }
-          const cmd: any = { intensity: Math.max(1, Math.min(20, intensity)), duration: Math.max(0, Math.min(60, duration)) };
-          if (loopRunningSec) cmd.loopRunningSec = loopRunningSec;
-          if (loopPauseSec) cmd.loopPauseSec = loopPauseSec;
-          return cmd;
-        });
+        .map((d: any) => parseDeviceValue(d.value));
       if (deviceCmds.length > 0) {
         responseJson.deviceCommands = deviceCmds;
       }
@@ -1144,18 +1108,25 @@ After your response to Maxy, output a JSON block wrapped in <handler_signals> ta
 
 IMPORTANT: When you want to fire the device, you MUST include the directive field with action "send_device_command". Writing "*sends pulse*" in text does NOTHING. Only the directive field in this JSON block actually fires the device.
 
-Device command examples:
-- Quick pulse: "value":{"intensity":10,"duration":5}
-- Sustained edge (30 sec): "value":{"intensity":8,"duration":30}
-- Long gooning session (runs indefinitely): "value":{"intensity":10,"duration":0}
-- Intense indefinite: "value":{"intensity":15,"duration":0}
-- Gentle indefinite: "value":{"intensity":5,"duration":0}
-- Intense burst: "value":{"intensity":18,"duration":10}
-- Stop device: "value":{"intensity":0,"duration":0}
+Device commands — two types:
 
-CRITICAL: duration:0 means RUN FOREVER until you send another command or a stop. USE THIS during gooning/edging. She gets persistent vibration without needing to message you. Change intensity by sending a new command — it replaces the current one.
-For quick pulses, use duration 1-60.
-To stop: send intensity:0.
+1. SIMPLE VIBRATION: "value":{"intensity":10,"duration":5}
+   duration:0 = run forever. To stop: intensity:0. Good for sustained gooning.
+
+2. PATTERNS (preferred during sessions): "value":{"pattern":"pattern_name"}
+   Available patterns:
+   - "edge_tease": unpredictable spikes with stops, keeps her guessing
+   - "denial_pulse": long waits then sudden intense bursts, torturous
+   - "building": clear progression low to high, feels like climbing
+   - "gentle_wave": smooth medium waves, good for warm-up
+   - "heartbeat": rhythmic double-pulse
+   - "staircase": distinct steps up then drop
+   - "random_tease": chaotic, unpredictable
+   - "flutter_gentle": light quick tickling pulses
+
+   Patterns loop automatically. Send a new pattern or intensity:0 to change/stop.
+
+USE PATTERNS during edging/gooning. They vary intensity automatically — not flat boring vibration. Switch patterns to control the session: edge_tease when building, denial_pulse when she's close, gentle_wave to cool down.
 
 Do NOT show this block to Maxy.`.trim();
 }
@@ -3047,6 +3018,42 @@ async function buildSystemStateCtx(userId: string): Promise<string> {
   } catch {
     return '';
   }
+}
+
+// ============================================
+// DEVICE VALUE PARSER — normalizes Handler's various directive formats
+// ============================================
+
+function parseDeviceValue(v: unknown): { intensity?: number; duration?: number; pattern?: string } {
+  if (typeof v === 'object' && v !== null) {
+    const obj = v as Record<string, unknown>;
+    // Pattern command
+    if (obj.pattern && typeof obj.pattern === 'string') {
+      return { pattern: obj.pattern };
+    }
+    // Simple vibrate
+    let intensity = (obj.intensity as number) || 5;
+    let duration = (obj.duration as number) ?? (obj.timeSec as number) ?? 3;
+    if (duration > 100) duration = Math.round(duration / 1000);
+    return {
+      intensity: Math.max(0, Math.min(20, intensity)),
+      duration: Math.max(0, Math.min(60, duration)),
+    };
+  }
+  if (typeof v === 'string') {
+    // Check if it's a pattern name
+    const patterns = ['edge_tease', 'denial_pulse', 'building', 'gentle_wave', 'heartbeat', 'staircase', 'random_tease', 'flutter_gentle', 'constant_low', 'constant_medium', 'constant_high'];
+    for (const p of patterns) {
+      if (v.includes(p)) return { pattern: p };
+    }
+    // Parse intensity from string
+    let intensity = 5;
+    if (v.includes('medium')) intensity = 10;
+    else if (v.includes('high') || v.includes('strong')) intensity = 15;
+    else if (v.includes('low') || v.includes('soft')) intensity = 3;
+    return { intensity, duration: 0 };
+  }
+  return { intensity: 5, duration: 0 };
 }
 
 // ============================================
