@@ -7,6 +7,7 @@ import { Send, Loader2, Settings, Volume2, VolumeX, Play, Pause, Image, Mic, Mic
 import { useHandlerChat, type ChatMessage, type MediaAttachment } from '../../hooks/useHandlerChat';
 import { useHandlerVoice } from '../../hooks/useHandlerVoice';
 import { useVoiceConversation } from '../../hooks/useVoiceConversation';
+import { useSessionBiometrics } from '../../hooks/useSessionBiometrics';
 
 interface HandlerChatProps {
   onClose: () => void;
@@ -23,9 +24,28 @@ const MODE_COLORS: Record<string, { bg: string; text: string; label: string }> =
 };
 
 export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
-  const { messages, isLoading, isSending, currentMode, sendMessage, startNewConversation } = useHandlerChat();
+  const { messages, isLoading, isSending, currentMode, conversationId, sendMessage, startNewConversation } = useHandlerChat();
   const voice = useHandlerVoice();
   const voiceInput = useVoiceConversation();
+  const biometrics = useSessionBiometrics();
+
+  // Auto-start biometric polling when Handler enters dominant/conditioning mode
+  const bioPollStartedRef = useRef(false);
+  useEffect(() => {
+    if ((currentMode === 'dominant' || currentMode === 'conditioning') && !biometrics.isPolling && conversationId && !bioPollStartedRef.current) {
+      bioPollStartedRef.current = true;
+      biometrics.startPolling(conversationId);
+    }
+    // Also start if message content suggests active session
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg?.role === 'user' && !biometrics.isPolling && conversationId && !bioPollStartedRef.current) {
+      const text = lastMsg.content.toLowerCase();
+      if (text.includes('goon') || text.includes('edge') || text.includes('hypno') || text.includes('session')) {
+        bioPollStartedRef.current = true;
+        biometrics.startPolling(conversationId);
+      }
+    }
+  }, [currentMode, messages, conversationId, biometrics.isPolling]);
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
