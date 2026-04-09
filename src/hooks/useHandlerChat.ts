@@ -35,14 +35,16 @@ async function executeDeviceCmd(cmd: { intensity?: number; duration?: number; pa
     const patStr = patternToLovenseString(cmd.pattern);
     if (patStr) {
       const stepCount = patStr.split(',').length;
-      console.log(`[HandlerChat] Sending pattern "${cmd.pattern}" (${stepCount} steps) via cloud API`);
-      // Use Lovense native Pattern command — device handles stepping internally
-      // timeSec must be > 0, use 3600 (1 hour) for effectively infinite
+      const patternDurationSec = Math.ceil(stepCount / 10); // 100ms per step
+      console.log(`[HandlerChat] Sending pattern "${cmd.pattern}" (${stepCount} steps, ${patternDurationSec}s per cycle) via cloud API`);
+      // Pattern command with loopRunningSec to repeat the pattern
       const result = await sendCloudCommand({
         customCommand: {
           command: 'Pattern',
           action: `V:1;F:v,${patStr};`,
           timeSec: 3600,
+          loopRunningSec: patternDurationSec,
+          loopPauseSec: 0,
         },
         triggerType: 'conditioning',
       });
