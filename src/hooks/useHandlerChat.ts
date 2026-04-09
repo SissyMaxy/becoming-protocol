@@ -286,18 +286,27 @@ export function useHandlerChat(): UseHandlerChatReturn {
         }
 
         if (data && data.id !== lastDirectiveRef.current) {
-          lastDirectiveRef.current = data.id;
           console.log('[HandlerChat] Directive poll found device command:', JSON.stringify(data.value));
 
-          // Execute it
-          await executeDeviceCmd(data.value as any);
+          try {
+            // Execute it
+            const result = await executeDeviceCmd(data.value as any);
+            console.log('[HandlerChat] Device command result:', JSON.stringify(result));
 
-          // Mark as completed
-          await supabase.from('handler_directives')
-            .update({ status: 'completed', executed_at: new Date().toISOString() })
-            .eq('id', data.id);
+            // Only mark as processed after successful execution
+            lastDirectiveRef.current = data.id;
 
-          console.log('[HandlerChat] Device command executed and marked');
+            // Mark as completed (ignore errors — the command already fired)
+            supabase.from('handler_directives')
+              .update({ status: 'completed', executed_at: new Date().toISOString() })
+              .eq('id', data.id)
+              .then(() => {})
+              .catch(() => {});
+          } catch (execErr) {
+            console.error('[HandlerChat] Device command execution error:', execErr);
+            // Still mark this directive to avoid infinite retry
+            lastDirectiveRef.current = data.id;
+          }
         }
       } catch (err) {
         // Non-critical
