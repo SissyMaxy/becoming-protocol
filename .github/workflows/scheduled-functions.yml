@@ -1,28 +1,65 @@
 # Scheduled Edge Function Triggers
 # Replaces pg_cron for Supabase free/starter plans
+# These are the autonomous systems that force feminize without user action.
 
 name: Scheduled Functions
 
 on:
   schedule:
-    # Send notifications - every 5 minutes (GitHub minimum)
     - cron: '*/5 * * * *'
-  workflow_dispatch: # Manual trigger for testing
+  workflow_dispatch:
 
 env:
   SUPABASE_URL: https://atevwvexapiykchvqvhm.supabase.co
 
 jobs:
-  send-notifications:
+  # ── EVERY 5 MINUTES ──────────────────────────────────────────────
+  # Compliance check: tracks engagement, escalates noncompliance
+  compliance-check:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger send-notifications
+      - name: Trigger compliance check
         run: |
-          curl -X POST "${{ env.SUPABASE_URL }}/functions/v1/send-notifications" \
+          curl -sS -X POST "${{ env.SUPABASE_URL }}/functions/v1/handler-autonomous" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"action":"compliance_check"}'
+
+  # Device control: check for due Lovense commands, fire them
+  device-control:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger device control
+        run: |
+          curl -sS -X POST "${{ env.SUPABASE_URL }}/functions/v1/device-control" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Content-Type: application/json" \
             -d '{}'
 
+  # ── EVERY 15 MINUTES ─────────────────────────────────────────────
+  # Quick task check: generate tasks if user is idle
+  quick-task-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if 15-minute window
+        id: should_run
+        run: |
+          MINUTE=$(date -u +%M)
+          if [ "$MINUTE" -lt "5" ] || [ "$MINUTE" -ge "15" -a "$MINUTE" -lt "20" ] || [ "$MINUTE" -ge "30" -a "$MINUTE" -lt "35" ] || [ "$MINUTE" -ge "45" -a "$MINUTE" -lt "50" ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Trigger quick task check
+        if: steps.should_run.outputs.run == 'true'
+        run: |
+          curl -sS -X POST "${{ env.SUPABASE_URL }}/functions/v1/handler-autonomous" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"action":"quick_task_check"}'
+
+  # Notifications
   schedule-notifications:
     runs-on: ubuntu-latest
     steps:
@@ -39,11 +76,23 @@ jobs:
       - name: Trigger schedule-notifications
         if: steps.should_run.outputs.run == 'true'
         run: |
-          curl -X POST "${{ env.SUPABASE_URL }}/functions/v1/schedule-notifications" \
+          curl -sS -X POST "${{ env.SUPABASE_URL }}/functions/v1/schedule-notifications" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Content-Type: application/json" \
             -d '{}'
 
+  send-notifications:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger send-notifications
+        run: |
+          curl -sS -X POST "${{ env.SUPABASE_URL }}/functions/v1/send-notifications" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}'
+
+  # ── EVERY 30 MINUTES ─────────────────────────────────────────────
+  # Handler outreach: proactive reach based on state triggers
   handler-outreach:
     runs-on: ubuntu-latest
     steps:
@@ -60,15 +109,83 @@ jobs:
       - name: Trigger handler-outreach
         if: steps.should_run.outputs.run == 'true'
         run: |
-          curl -X POST "${{ env.SUPABASE_URL }}/functions/v1/handler-outreach" \
+          curl -sS -X POST "${{ env.SUPABASE_URL }}/functions/v1/handler-outreach" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Content-Type: application/json" \
             -d '{}'
 
+  # ── HOURLY ───────────────────────────────────────────────────────
+  # Enforcement: evaluate compliance, escalate consequences
+  handler-enforcement:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if top-of-hour window
+        id: should_run
+        run: |
+          MINUTE=$(date -u +%M)
+          if [ "$MINUTE" -lt "5" ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Trigger enforcement
+        if: steps.should_run.outputs.run == 'true'
+        run: |
+          curl -sS -X POST "${{ env.SUPABASE_URL }}/functions/v1/handler-enforcement" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}'
+
+  # Financial bleeding: deduct funds for noncompliance
+  bleeding-process:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if top-of-hour window
+        id: should_run
+        run: |
+          MINUTE=$(date -u +%M)
+          if [ "$MINUTE" -lt "5" ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Trigger bleeding process
+        if: steps.should_run.outputs.run == 'true'
+        run: |
+          curl -sS -X POST "${{ env.SUPABASE_URL }}/functions/v1/handler-autonomous" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"action":"bleeding_process"}'
+
+  # ── DAILY ────────────────────────────────────────────────────────
+  # 6 AM UTC: Daily cycle — generate tasks, briefs, strategy
+  daily-cycle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if 6 AM window
+        id: should_run
+        run: |
+          HOUR=$(date -u +%H)
+          MINUTE=$(date -u +%M)
+          if [ "$HOUR" = "06" ] && [ "$MINUTE" -lt "10" ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Trigger daily cycle
+        if: steps.should_run.outputs.run == 'true'
+        run: |
+          curl -sS -X POST "${{ env.SUPABASE_URL }}/functions/v1/handler-autonomous" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"action":"daily_cycle"}'
+
+  # Generate prescription (task generation)
   generate-prescription:
     runs-on: ubuntu-latest
-    # Only at ~4 AM UTC (GitHub schedules can drift, this approximates)
-    if: ${{ github.event.schedule == '*/5 * * * *' }}
     steps:
       - name: Check if 4 AM window
         id: time_check
@@ -84,7 +201,54 @@ jobs:
       - name: Trigger generate-prescription
         if: steps.time_check.outputs.run == 'true'
         run: |
-          curl -X POST "${{ env.SUPABASE_URL }}/functions/v1/generate-prescription" \
+          curl -sS -X POST "${{ env.SUPABASE_URL }}/functions/v1/generate-prescription" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Content-Type: application/json" \
             -d '{"batch": true}'
+
+  # Conditioning engine: increment hidden parameters, generate scripts
+  conditioning-engine:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if 3 AM window
+        id: should_run
+        run: |
+          HOUR=$(date -u +%H)
+          MINUTE=$(date -u +%M)
+          if [ "$HOUR" = "03" ] && [ "$MINUTE" -lt "10" ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Trigger conditioning engine
+        if: steps.should_run.outputs.run == 'true'
+        run: |
+          curl -sS -X POST "${{ env.SUPABASE_URL }}/functions/v1/conditioning-engine" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}'
+
+  # ── WEEKLY (Sunday) ──────────────────────────────────────────────
+  weekly-adaptation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if Sunday 2 AM window
+        id: should_run
+        run: |
+          DOW=$(date -u +%u)
+          HOUR=$(date -u +%H)
+          MINUTE=$(date -u +%M)
+          if [ "$DOW" = "7" ] && [ "$HOUR" = "02" ] && [ "$MINUTE" -lt "10" ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Trigger weekly adaptation
+        if: steps.should_run.outputs.run == 'true'
+        run: |
+          curl -sS -X POST "${{ env.SUPABASE_URL }}/functions/v1/handler-autonomous" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"action":"weekly_adaptation"}'
