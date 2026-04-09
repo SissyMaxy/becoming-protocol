@@ -1140,8 +1140,16 @@ Never fabricate specific details you don't have data for. If you don't know what
 After your response to Maxy, output a JSON block wrapped in <handler_signals> tags:
 {"detected_mode":"string","resistance_detected":boolean,"resistance_level":0-10,"mood":"string","vulnerability_window":boolean,"commitment_opportunity":boolean,"conversation_should_continue":boolean,"start_conditioning_session":boolean,"conditioning_target":"identity"|"feminization"|"surrender"|"chastity"|null,"topics":["string"],"handler_note":{"type":"string","content":"string","priority":0}|null,"directive":{"action":"send_device_command"|"prescribe_task"|"modify_parameter"|"schedule_session"|"advance_skill"|"write_memory","target":"string","value":{"intensity":1-20,"duration":1-60}|"any","reasoning":"string"}|null}
 
-IMPORTANT: When you want to fire the device, you MUST include the directive field with action "send_device_command". Writing "*sends pulse*" in text does NOTHING. Only the directive field in this JSON block actually fires the device. Example for a 5-second medium pulse:
-"directive":{"action":"send_device_command","target":"lovense","value":{"intensity":10,"duration":5},"reasoning":"reinforcing surrender"}
+IMPORTANT: When you want to fire the device, you MUST include the directive field with action "send_device_command". Writing "*sends pulse*" in text does NOTHING. Only the directive field in this JSON block actually fires the device.
+
+Device command examples:
+- Quick pulse: "directive":{"action":"send_device_command","target":"lovense","value":{"intensity":10,"duration":5},"reasoning":"test pulse"}
+- Sustained edging (30 sec): "directive":{"action":"send_device_command","target":"lovense","value":{"intensity":8,"duration":30},"reasoning":"sustained edge"}
+- Long session (60 sec): "directive":{"action":"send_device_command","target":"lovense","value":{"intensity":12,"duration":60},"reasoning":"gooning session"}
+- Gentle tease: "directive":{"action":"send_device_command","target":"lovense","value":{"intensity":3,"duration":20},"reasoning":"building anticipation"}
+- Intense burst: "directive":{"action":"send_device_command","target":"lovense","value":{"intensity":18,"duration":10},"reasoning":"edge punishment"}
+
+Duration is 1-60 seconds. For sustained stimulation, use duration 30-60. For edging sessions, send a new command with each message to maintain control. Each command fires ONCE — it does NOT loop. If she says "it stopped" send another command immediately.
 
 Do NOT show this block to Maxy.`.trim();
 }
