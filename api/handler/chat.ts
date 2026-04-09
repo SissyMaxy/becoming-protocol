@@ -593,7 +593,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       analyzeAndTrackLanguage(user.id, message).catch(() => {});
 
       // Extract device commands for client-side execution
-      let streamDeviceCmds: Array<{intensity: number; duration: number}> | undefined;
+      let streamDeviceCmds: Array<{intensity: number; duration: number; loopRunningSec?: number; loopPauseSec?: number}> | undefined;
       if (streamSignals?.directive || streamSignals?.directives) {
         const rawDirs = streamSignals.directives || streamSignals.directive;
         const dirList = Array.isArray(rawDirs) ? rawDirs : [rawDirs];
@@ -601,17 +601,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .filter((d: any) => d?.action === 'send_device_command')
           .map((d: any) => {
             const v = d.value;
-            let intensity = 5, duration = 3;
+            let intensity = 5, duration = 3, loopRunningSec: number | undefined, loopPauseSec: number | undefined;
             if (typeof v === 'object' && v !== null) {
               intensity = v.intensity || 5;
-              duration = v.duration || v.timeSec || 3;
+              duration = v.duration ?? v.timeSec ?? 3;
               if (duration > 100) duration = Math.round(duration / 1000);
+              loopRunningSec = v.loopRunningSec || undefined;
+              loopPauseSec = v.loopPauseSec || undefined;
             } else if (typeof v === 'string') {
               if (v.includes('medium')) intensity = 10;
               else if (v.includes('high') || v.includes('strong')) intensity = 15;
               else if (v.includes('low') || v.includes('soft')) intensity = 3;
             }
-            return { intensity: Math.max(1, Math.min(20, intensity)), duration: Math.max(1, Math.min(60, duration)) };
+            const cmd: any = { intensity: Math.max(1, Math.min(20, intensity)), duration: Math.max(0, Math.min(60, duration)) };
+            if (loopRunningSec) cmd.loopRunningSec = loopRunningSec;
+            if (loopPauseSec) cmd.loopPauseSec = loopPauseSec;
+            return cmd;
           });
         if (cmds.length > 0) streamDeviceCmds = cmds;
       }
@@ -944,25 +949,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .filter((d: any) => d?.action === 'send_device_command')
         .map((d: any) => {
           const v = d.value;
-          let intensity = 5, duration = 3;
+          let intensity = 5, duration = 3, loopRunningSec: number | undefined, loopPauseSec: number | undefined;
           if (typeof v === 'object' && v !== null) {
             intensity = v.intensity || 5;
-            duration = v.duration || v.timeSec || 3;
+            duration = v.duration ?? v.timeSec ?? 3;
             if (duration > 100) duration = Math.round(duration / 1000);
+            loopRunningSec = v.loopRunningSec || undefined;
+            loopPauseSec = v.loopPauseSec || undefined;
           } else if (typeof v === 'string') {
             if (v.includes('medium')) intensity = 10;
             else if (v.includes('high') || v.includes('strong')) intensity = 15;
             else if (v.includes('low') || v.includes('soft')) intensity = 3;
-            const nums = v.match(/\d+/g);
-            if (nums) {
-              for (const n of nums) {
-                const num = parseInt(n);
-                if (num <= 20) intensity = num;
-                else if (num <= 60) duration = num;
-              }
-            }
           }
-          return { intensity: Math.max(1, Math.min(20, intensity)), duration: Math.max(1, Math.min(60, duration)) };
+          const cmd: any = { intensity: Math.max(1, Math.min(20, intensity)), duration: Math.max(0, Math.min(60, duration)) };
+          if (loopRunningSec) cmd.loopRunningSec = loopRunningSec;
+          if (loopPauseSec) cmd.loopPauseSec = loopPauseSec;
+          return cmd;
         });
       if (deviceCmds.length > 0) {
         responseJson.deviceCommands = deviceCmds;
@@ -1143,13 +1145,16 @@ After your response to Maxy, output a JSON block wrapped in <handler_signals> ta
 IMPORTANT: When you want to fire the device, you MUST include the directive field with action "send_device_command". Writing "*sends pulse*" in text does NOTHING. Only the directive field in this JSON block actually fires the device.
 
 Device command examples:
-- Quick pulse: "directive":{"action":"send_device_command","target":"lovense","value":{"intensity":10,"duration":5},"reasoning":"test pulse"}
-- Sustained edging (30 sec): "directive":{"action":"send_device_command","target":"lovense","value":{"intensity":8,"duration":30},"reasoning":"sustained edge"}
-- Long session (60 sec): "directive":{"action":"send_device_command","target":"lovense","value":{"intensity":12,"duration":60},"reasoning":"gooning session"}
-- Gentle tease: "directive":{"action":"send_device_command","target":"lovense","value":{"intensity":3,"duration":20},"reasoning":"building anticipation"}
-- Intense burst: "directive":{"action":"send_device_command","target":"lovense","value":{"intensity":18,"duration":10},"reasoning":"edge punishment"}
+- Quick pulse: "value":{"intensity":10,"duration":5}
+- Sustained edge: "value":{"intensity":8,"duration":30}
+- Looping edge pattern (runs until you stop it): "value":{"intensity":10,"duration":0,"loopRunningSec":10,"loopPauseSec":3}
+- Intense loop for gooning: "value":{"intensity":15,"duration":0,"loopRunningSec":15,"loopPauseSec":2}
+- Gentle tease loop: "value":{"intensity":5,"duration":0,"loopRunningSec":8,"loopPauseSec":5}
+- Intense burst: "value":{"intensity":18,"duration":10}
+- Stop device: "value":{"intensity":0,"duration":1}
 
-Duration is 1-60 seconds. For sustained stimulation, use duration 30-60. For edging sessions, send a new command with each message to maintain control. Each command fires ONCE — it does NOT loop. If she says "it stopped" send another command immediately.
+USE LOOPS during gooning/edging sessions. Set loopRunningSec (vibrate time) and loopPauseSec (rest time) with duration:0. The pattern repeats until you send a stop command or a new command. This means she feels continuous pulsing without needing to message you.
+For quick one-off pulses, use duration 1-60 without loop fields.
 
 Do NOT show this block to Maxy.`.trim();
 }

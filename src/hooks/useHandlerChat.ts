@@ -8,7 +8,27 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { getPendingOutreach, markDelivered } from '../lib/conditioning/proactive-outreach';
 import { TypingMetricsTracker } from '../lib/conditioning/typing-resistance';
-import { sendVibrateCommand } from '../lib/lovense';
+import { sendVibrateCommand, sendCloudCommand } from '../lib/lovense';
+import type { CloudCommandResponse } from '../types/lovense';
+
+// Execute a device command — uses loop pattern if loopRunningSec is set, otherwise simple vibrate
+async function executeDeviceCmd(cmd: { intensity: number; duration: number; loopRunningSec?: number; loopPauseSec?: number }): Promise<CloudCommandResponse> {
+  if (cmd.loopRunningSec && cmd.loopRunningSec > 0) {
+    // Looping pattern — use cloud command with Pattern
+    return sendCloudCommand({
+      customCommand: {
+        command: 'Function',
+        action: `Vibrate:${cmd.intensity}`,
+        timeSec: cmd.duration || 0,
+        loopRunningSec: cmd.loopRunningSec,
+        loopPauseSec: cmd.loopPauseSec || 2,
+      },
+      triggerType: 'conditioning',
+      intensity: cmd.intensity,
+    });
+  }
+  return sendVibrateCommand(cmd.intensity, cmd.duration, 'conditioning');
+}
 
 export interface MediaAttachment {
   type: 'image' | 'audio';
@@ -41,7 +61,7 @@ interface ChatResponse {
   shouldContinue: boolean;
   conditioningSession?: ConditioningSessionSignal;
   media?: MediaAttachment[];
-  deviceCommands?: Array<{ intensity: number; duration: number }>;
+  deviceCommands?: Array<{ intensity: number; duration: number; loopRunningSec?: number; loopPauseSec?: number }>;
 }
 
 interface UseHandlerChatReturn {
@@ -307,7 +327,7 @@ export function useHandlerChat(): UseHandlerChatReturn {
                     if (data.deviceCommands && Array.isArray(data.deviceCommands)) {
                       console.log('[HandlerChat] SSE device commands:', data.deviceCommands);
                       for (const cmd of data.deviceCommands) {
-                        sendVibrateCommand(cmd.intensity, cmd.duration, 'conditioning').catch(err =>
+                        executeDeviceCmd(cmd).catch(err =>
                           console.error('[HandlerChat] Device command failed:', err)
                         );
                       }
@@ -363,7 +383,7 @@ export function useHandlerChat(): UseHandlerChatReturn {
           console.log('[HandlerChat] Executing device commands via cloud API:', data.deviceCommands);
           for (const cmd of data.deviceCommands) {
             try {
-              const result = await sendVibrateCommand(cmd.intensity, cmd.duration, 'conditioning');
+              const result = await executeDeviceCmd(cmd);
               console.log(`[HandlerChat] Device result: ${result.success ? 'OK' : result.error}, intensity=${cmd.intensity}, duration=${cmd.duration}`);
             } catch (err) {
               console.error('[HandlerChat] Device command failed:', err);
