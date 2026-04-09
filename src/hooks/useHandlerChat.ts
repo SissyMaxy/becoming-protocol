@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { getPendingOutreach, markDelivered } from '../lib/conditioning/proactive-outreach';
 import { TypingMetricsTracker } from '../lib/conditioning/typing-resistance';
-import { smartVibrate } from '../lib/lovense';
+import { sendVibrateCommand } from '../lib/lovense';
 
 export interface MediaAttachment {
   type: 'image' | 'audio';
@@ -348,13 +348,13 @@ export function useHandlerChat(): UseHandlerChatReturn {
         };
         setMessages(prev => [...prev, assistantMsg]);
 
-        // Execute device commands locally via Lovense LAN API
+        // Execute device commands via cloud API (same path as working test button)
         if (data.deviceCommands && Array.isArray(data.deviceCommands)) {
-          console.log('[HandlerChat] Executing device commands:', data.deviceCommands);
+          console.log('[HandlerChat] Executing device commands via cloud API:', data.deviceCommands);
           for (const cmd of data.deviceCommands) {
             try {
-              const result = await smartVibrate(cmd.intensity, cmd.duration, 'conditioning');
-              console.log(`[HandlerChat] Device vibrate result: ${result}, intensity=${cmd.intensity}, duration=${cmd.duration}`);
+              const result = await sendVibrateCommand(cmd.intensity, cmd.duration, 'conditioning');
+              console.log(`[HandlerChat] Device result: ${result.success ? 'OK' : result.error}, intensity=${cmd.intensity}, duration=${cmd.duration}`);
             } catch (err) {
               console.error('[HandlerChat] Device command failed:', err);
             }
