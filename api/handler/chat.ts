@@ -649,7 +649,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // 7a-1b. Extract directives and insert into handler_directives
+    // 7a-1b. Extract directives — save AND execute immediately
     if (signals?.directive || signals?.directives) {
       try {
         const rawDirectives = signals.directives || signals.directive;
@@ -657,6 +657,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         for (const d of directiveList) {
           const dir = d as Record<string, unknown>;
           if (dir.action) {
+            // Save to directive log
             await supabase.from('handler_directives').insert({
               user_id: user.id,
               action: dir.action,
@@ -667,6 +668,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               conversation_id: convId,
               reasoning: (dir.reasoning as string) || null,
             });
+
+            // EXECUTE device commands immediately — don't let them rot in a table
+            if (dir.action === 'send_device_command') {
+              executeDeviceCommand(user.id, dir.value as Record<string, unknown>).catch(err =>
+                console.error('[Handler] Device command failed:', err)
+              );
+            }
           }
         }
       } catch {
@@ -2933,6 +2941,55 @@ async function buildSystemStateCtx(userId: string): Promise<string> {
     return lines.join('\n');
   } catch {
     return '';
+  }
+}
+
+// ============================================
+// DEVICE COMMAND EXECUTION (immediate, from Handler directives)
+// ============================================
+
+async function executeDeviceCommand(
+  userId: string,
+  value: Record<string, unknown>,
+): Promise<void> {
+  const intensity = (value.intensity as number) || 5;
+  const duration = (value.duration as number) || 10;
+  const pattern = (value.pattern as string) || 'vibrate';
+
+  // Get Lovense connection
+  const { data: connection } = await supabase
+    .from('lovense_connections')
+    .select('cloud_token, uid')
+    .eq('user_id', userId)
+    .eq('status', 'connected')
+    .maybeSingle();
+
+  if (!connection?.cloud_token) {
+    console.log('[Device] No Lovense connection for user', userId);
+    return;
+  }
+
+  const action = pattern === 'pulse'
+    ? `Vibrate:${intensity};Vibrate:0;Vibrate:${intensity}`
+    : `Vibrate:${intensity}`;
+
+  try {
+    const res = await fetch('https://api.lovense-api.com/api/lan/v2/command', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token: connection.cloud_token,
+        uid: connection.uid,
+        command: 'Function',
+        action,
+        timeSec: duration,
+        apiVer: 1,
+      }),
+    });
+    const result = await res.json();
+    console.log('[Device] Command result:', result.code === 200 ? 'success' : result);
+  } catch (err) {
+    console.error('[Device] Lovense API error:', err);
   }
 }
 
