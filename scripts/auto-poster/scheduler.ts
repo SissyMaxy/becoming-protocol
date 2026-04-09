@@ -62,7 +62,98 @@ async function loadState(): Promise<Record<string, unknown>> {
   } catch {
     // State unavailable, proceed without it
   }
+
+  // ── Feminization escalation tier (from hidden_operations) ──
+  // content_explicitness_tier auto-increments weekly via conditioning engine cron.
+  // Tier determines post femininity level in generate-calendar content strategy.
+  try {
+    const { data: tierRow } = await supabase
+      .from('hidden_operations')
+      .select('current_value')
+      .eq('user_id', USER_ID)
+      .eq('parameter', 'content_explicitness_tier')
+      .maybeSingle();
+    if (tierRow) {
+      state.feminizationTier = Math.floor(tierRow.current_value);
+      // Tier 1: general feminine lifestyle content
+      // Tier 2: explicit feminization references
+      // Tier 3: sissy/crossdressing content
+      // Tier 4: explicit transformation content
+    }
+  } catch {
+    // Non-critical — defaults to whatever generate-calendar uses
+  }
+
   return state;
+}
+
+// ── Denial streak milestone posts ──────────────────────────────────
+// When denial streak hits milestones (7, 14, 21, 30 days), auto-generate
+// and queue a celebratory/accountability post into ai_generated_content.
+
+const DENIAL_MILESTONES = [7, 14, 21, 30];
+
+async function checkDenialMilestonePosts(): Promise<number> {
+  if (!USER_ID) return 0;
+
+  // Get current denial day
+  const { data: streak } = await supabase
+    .from('denial_streaks')
+    .select('started_at')
+    .eq('user_id', USER_ID)
+    .is('ended_at', null)
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!streak?.started_at) return 0;
+
+  const startDate = new Date(streak.started_at);
+  const denialDays = Math.floor((Date.now() - startDate.getTime()) / (24 * 60 * 60 * 1000));
+
+  if (!DENIAL_MILESTONES.includes(denialDays)) return 0;
+
+  // Check if we already generated a milestone post for this exact day count
+  const { data: existing } = await supabase
+    .from('ai_generated_content')
+    .select('id')
+    .eq('user_id', USER_ID)
+    .eq('platform', 'twitter')
+    .like('generation_prompt', `%denial-milestone-${denialDays}%`)
+    .limit(1);
+
+  if (existing && existing.length > 0) return 0;
+
+  // Build generation prompt based on milestone
+  const milestonePrompts: Record<number, string> = {
+    7: `Write a tweet celebrating 7 days of chastity/denial as Maxy. Playful, a little unhinged, acknowledging the ache but owning it. Under 240 chars. Casual, lowercase.`,
+    14: `Write a tweet marking 2 weeks of chastity/denial as Maxy. She's deep in it now — the denial is changing how she thinks, how she moves. Under 240 chars. Casual, lowercase, horny undertone.`,
+    21: `Write a tweet for 3 weeks locked/denied as Maxy. She's a different person now. The denial has rewired something. Under 240 chars. Lowercase, real, a little feral.`,
+    30: `Write a tweet for 30 DAYS of chastity/denial as Maxy. A full month. She barely remembers what it felt like before. This is who she is now. Under 240 chars. Lowercase, raw.`,
+  };
+
+  const prompt = milestonePrompts[denialDays];
+  if (!prompt) return 0;
+
+  // Schedule for 30 minutes from now
+  const scheduledAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+
+  const { error } = await supabase.from('ai_generated_content').insert({
+    user_id: USER_ID,
+    content_type: 'tweet',
+    platform: 'twitter',
+    status: 'generated',
+    generation_prompt: `[denial-milestone-${denialDays}] ${prompt}`,
+    scheduled_at: scheduledAt,
+  });
+
+  if (error) {
+    console.error(`[Scheduler] Failed to queue denial milestone post:`, error.message);
+    return 0;
+  }
+
+  console.log(`[Scheduler] Queued denial milestone post: day ${denialDays}`);
+  return 1;
 }
 
 /**
@@ -158,11 +249,16 @@ async function tick() {
   try {
     // --- Every tick: ensure content calendar is populated ---
     await withTimeout('Calendar check', async () => {
-      const generated = await generateCalendar();
+      const generated = await generateCalendar(state.feminizationTier as number | undefined);
       if (generated > 0) {
         console.log(`[${timestamp}] Calendar: generated ${generated} post(s) for next 24h`);
       }
     }, 180000); // 3 min — generation + quality gates take time
+
+    // --- Every tick: check denial streak milestone posts ---
+    await withTimeout('Denial milestones', async () => {
+      await checkDenialMilestonePosts();
+    }, 15000);
 
     // --- Every tick: post due content ---
     const { vault, ai } = await processAllDuePosts();
@@ -406,7 +502,7 @@ async function tick() {
     // --- Every 2nd tick: DMs (read + reply) --- (90s timeout)
     if (tickCount % 2 === 0) {
       await withTimeout('DM read/send', async () => {
-        const dmResult = await readAllDMs();
+        const dmResult = await readAllDMs(anthropic);
         if (dmResult.stored > 0) {
           console.log(`[${timestamp}] DMs: ${dmResult.stored} new message(s) stored`);
         }

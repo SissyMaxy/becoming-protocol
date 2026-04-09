@@ -32,6 +32,17 @@ Voice rules:
 
 BANNED: "hits different", "the way...", "energy" as descriptor, "ngl", "honestly" opener, "chef's kiss", "i respect it/that", "confidence" compliment, "nobody tells you about...", crying in parking lots, being amazed at your own reflection, wistful observations about time. Also banned: hashtags, engagement bait, motivational tone, forced vulnerability, sounding like a therapy journal.`;
 
+// ── Feminization tier voice overlays ──────────────────────────────
+// content_explicitness_tier from hidden_operations (auto-increments weekly).
+// Each tier adds escalating feminization flavor to prompts.
+
+const FEMINIZATION_TIER_OVERLAYS: Record<number, string> = {
+  1: `\n\nTone overlay: lean into feminine lifestyle content — beauty routines, outfit choices, girl talk, soft vulnerability. Don't force it but let femininity be the default lens.`,
+  2: `\n\nTone overlay: explicitly reference feminization — talk about how HRT is changing you, how denial reshapes you, how you're becoming more feminine every day. Reference chastity as part of the process. Be open about the transformation.`,
+  3: `\n\nTone overlay: sissy/crossdressing content — reference dressing up, feeling like a good girl, sissy feelings, the thrill of feminization. Use words like sissy, girly, pretty. This is who you are now and you're not hiding it.`,
+  4: `\n\nTone overlay: explicit transformation content — you're being turned into something. Reference conditioning, being molded, losing your old self. Feminization isn't optional, it's happening to you whether you resist or not. Raw, explicit, unapologetic.`,
+};
+
 // ── Content slot definitions ───────────────────────────────────────
 
 interface ContentSlot {
@@ -62,8 +73,10 @@ function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function buildDailySlots(): ContentSlot[] {
+function buildDailySlots(feminizationTier?: number): ContentSlot[] {
   const slots: ContentSlot[] = [];
+  // Apply feminization tier overlay to all prompts if tier >= 1
+  const tierOverlay = feminizationTier ? (FEMINIZATION_TIER_OVERLAYS[Math.min(feminizationTier, 4)] || '') : '';
 
   // Twitter: 5-7 posts across the day
   // DB content_type must be one of: tweet, engagement_bait, caption, etc.
@@ -154,6 +167,13 @@ function buildDailySlots(): ContentSlot[] {
     });
   }
 
+  // Apply feminization tier overlay to all prompts
+  if (tierOverlay) {
+    for (const slot of slots) {
+      slot.prompt += tierOverlay;
+    }
+  }
+
   return slots;
 }
 
@@ -235,7 +255,7 @@ async function generatePost(
  * Check if posts already exist for the next 24h. If not, generate a full day.
  * Returns the number of posts inserted.
  */
-export async function generateCalendar(): Promise<number> {
+export async function generateCalendar(feminizationTier?: number): Promise<number> {
   const now = new Date();
   const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
@@ -262,7 +282,10 @@ export async function generateCalendar(): Promise<number> {
   console.log('[Calendar] No scheduled posts found for next 24h — generating content calendar');
 
   const anthropic = new Anthropic();
-  const slots = buildDailySlots();
+  const slots = buildDailySlots(feminizationTier);
+  if (feminizationTier) {
+    console.log(`[Calendar] Feminization tier ${feminizationTier} active — content strategy adjusted`);
+  }
 
   // Load recent posts for repetition checking
   const { data: recentTwitter } = await supabase

@@ -213,6 +213,184 @@ async function complianceCheck(
     } catch (_) { /* non-critical */ }
   }
 
+  // ── FEATURE: Idle detection device nudge ──
+  // If user hasn't messaged in 4+ hours during waking hours (8am-10pm CDT),
+  // fire a gentle idle nudge. Rate-limited: once per 4 hours.
+  for (const state of states) {
+    try {
+      // Check latest user message
+      const { data: lastMsg } = await supabase
+        .from('handler_messages')
+        .select('created_at')
+        .eq('user_id', state.user_id)
+        .eq('role', 'user')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (!lastMsg?.created_at) continue
+
+      const lastMsgTime = new Date(lastMsg.created_at)
+      const hoursSinceMsg = (Date.now() - lastMsgTime.getTime()) / (1000 * 60 * 60)
+
+      if (hoursSinceMsg < 4) continue
+
+      // Check waking hours: CDT = UTC-5, CST = UTC-6. Use UTC-5 (CDT) as default.
+      const nowUTC = new Date()
+      const cdtHour = (nowUTC.getUTCHours() - 5 + 24) % 24
+      if (cdtHour < 8 || cdtHour >= 22) continue
+
+      // Rate limit: check if we already fired an idle nudge in last 4 hours
+      const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString()
+      const { count: recentNudge } = await supabase
+        .from('handler_directives')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', state.user_id)
+        .eq('action', 'send_device_command')
+        .gte('created_at', fourHoursAgo)
+        .like('reasoning', '%Idle nudge%')
+
+      if ((recentNudge || 0) > 0) continue
+
+      await supabase.from('handler_directives').insert({
+        user_id: state.user_id,
+        action: 'send_device_command',
+        target: 'lovense',
+        value: { intensity: 3, duration: 10 },
+        priority: 'normal',
+        reasoning: `Idle nudge — ${Math.round(hoursSinceMsg)}h without engagement`,
+      })
+    } catch (_) { /* non-critical */ }
+  }
+
+  // ── FEATURE 13: Nighttime conditioning triggers ──
+  // If 11pm-2am CDT, user active in last 2h, denial >= 3:
+  // Fire gentle_wave device command + outreach message. Rate limit: once per night.
+  for (const state of states) {
+    try {
+      const nowUTC = new Date()
+      const cdtHour = (nowUTC.getUTCHours() - 5 + 24) % 24
+
+      // Only between 11pm and 2am CDT
+      if (cdtHour < 23 && cdtHour >= 2) continue
+
+      const denialDays = await getActiveDenialDays(supabase, state.user_id)
+      if (denialDays < 3) continue
+
+      // Check if user was active in last 2 hours
+      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+      const { data: recentMsg } = await supabase
+        .from('handler_messages')
+        .select('id')
+        .eq('user_id', state.user_id)
+        .eq('role', 'user')
+        .gte('created_at', twoHoursAgo)
+        .limit(1)
+        .maybeSingle()
+
+      if (!recentMsg) continue
+
+      // Rate limit: once per night (check last 8 hours for nighttime conditioning)
+      const eightHoursAgo = new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString()
+      const { count: recentNightCond } = await supabase
+        .from('handler_directives')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', state.user_id)
+        .eq('action', 'send_device_command')
+        .gte('created_at', eightHoursAgo)
+        .like('reasoning', '%Late night conditioning%')
+
+      if ((recentNightCond || 0) > 0) continue
+
+      // Fire gentle_wave device command
+      await supabase.from('handler_directives').insert({
+        user_id: state.user_id,
+        action: 'send_device_command',
+        target: 'lovense',
+        value: { pattern: 'gentle_wave', intensity: 4 + Math.floor(denialDays / 5), denial_day: denialDays },
+        priority: 'normal',
+        reasoning: `Late night conditioning — defenses down, denial elevated (day ${denialDays}, ${cdtHour}:00 CDT)`,
+      })
+
+      // Queue outreach message
+      await supabase.from('handler_outreach_queue').insert({
+        user_id: state.user_id,
+        message: "You're still awake. Come talk to me.",
+        urgency: 'high',
+        trigger_reason: 'nighttime_conditioning',
+        scheduled_for: nowUTC.toISOString(),
+        expires_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+        source: 'autonomous_nighttime',
+      })
+    } catch (_) { /* non-critical */ }
+  }
+
+  // ── FEATURE 14: Biometric arousal detection → auto-session ──
+  // If resting HR > 80, evening hours, Gina not home: fire edge_tease + outreach.
+  // Rate limit: once per 6 hours.
+  for (const state of states) {
+    try {
+      const nowUTC = new Date()
+      const cdtHour = (nowUTC.getUTCHours() - 5 + 24) % 24
+
+      // Evening only: 6pm-midnight CDT
+      if (cdtHour < 18 && cdtHour !== 0) continue
+
+      // Check Gina status
+      const { data: userState } = await supabase
+        .from('user_state')
+        .select('gina_home')
+        .eq('user_id', state.user_id)
+        .maybeSingle()
+
+      if (userState?.gina_home !== false) continue
+
+      // Get latest Whoop metrics
+      const { data: whoop } = await supabase
+        .from('whoop_metrics')
+        .select('resting_heart_rate')
+        .eq('user_id', state.user_id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (!whoop?.resting_heart_rate || whoop.resting_heart_rate <= 80) continue
+
+      // Rate limit: once per 6 hours
+      const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
+      const { count: recentArousal } = await supabase
+        .from('handler_directives')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', state.user_id)
+        .eq('action', 'send_device_command')
+        .gte('created_at', sixHoursAgo)
+        .like('reasoning', '%Biometric arousal%')
+
+      if ((recentArousal || 0) > 0) continue
+
+      // Fire edge_tease
+      await supabase.from('handler_directives').insert({
+        user_id: state.user_id,
+        action: 'send_device_command',
+        target: 'lovense',
+        value: { pattern: 'edge_tease', intensity: 6, source: 'biometric' },
+        priority: 'high',
+        reasoning: `Biometric arousal detected — resting HR ${whoop.resting_heart_rate} bpm, evening, Gina away`,
+      })
+
+      // Queue outreach
+      await supabase.from('handler_outreach_queue').insert({
+        user_id: state.user_id,
+        message: 'Your heart rate is elevated. I know what that means. Open the app.',
+        urgency: 'high',
+        trigger_reason: 'biometric_arousal',
+        scheduled_for: nowUTC.toISOString(),
+        expires_at: new Date(Date.now() + 1 * 60 * 60 * 1000).toISOString(),
+        source: 'autonomous_biometric',
+      })
+    } catch (_) { /* non-critical */ }
+  }
+
   return { checked, escalated, deescalated, actions }
 }
 

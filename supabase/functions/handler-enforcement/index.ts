@@ -235,6 +235,77 @@ async function runEnforcementForUser(
         reasoning: 'Morning wake-up summon — Handler calling',
       })
     }
+
+    // ── FEATURE: Escalating morning protocol based on noncompliance streaks ──
+    try {
+      const { data: streaks } = await supabase
+        .from('noncompliance_streaks')
+        .select('domain, consecutive_days, current_tier')
+        .eq('user_id', userId)
+
+      if (streaks) {
+        const noncompliantDomains = streaks.filter(
+          (s: { consecutive_days: number }) => s.consecutive_days > 0
+        )
+        const noncompliantCount = noncompliantDomains.length
+
+        if (noncompliantCount >= 3) {
+          // Maximum enforcement: 3+ domains failing
+          await supabase.from('handler_directives').insert({
+            user_id: userId,
+            action: 'send_device_command',
+            target: 'lovense',
+            value: { pattern: 'denial_pulse' },
+            priority: 'immediate',
+            reasoning: `Morning enforcement — ${noncompliantCount} domains noncompliant: ${noncompliantDomains.map((s: { domain: string }) => s.domain).join(', ')}`,
+          })
+          await supabase.from('handler_notes').insert({
+            user_id: userId,
+            note_type: 'enforcement_escalation',
+            content: `Multiple domain failure (${noncompliantCount} domains) — maximum enforcement applied at morning protocol`,
+            source: 'morning_enforcement',
+          })
+        } else if (noncompliantCount === 2) {
+          // Escalated: 2 domains failing
+          await supabase.from('handler_directives').insert({
+            user_id: userId,
+            action: 'send_device_command',
+            target: 'lovense',
+            value: { pattern: 'edge_tease' },
+            priority: 'normal',
+            reasoning: `Morning enforcement — 2 domains noncompliant: ${noncompliantDomains.map((s: { domain: string }) => s.domain).join(', ')}`,
+          })
+          await supabase.from('handler_notes').insert({
+            user_id: userId,
+            note_type: 'enforcement_escalation',
+            content: `Escalating morning enforcement — 2 domains noncompliant: ${noncompliantDomains.map((s: { domain: string }) => s.domain).join(', ')}`,
+            source: 'morning_enforcement',
+          })
+        } else if (noncompliantCount === 1) {
+          // Moderate: 1 domain failing
+          await supabase.from('handler_directives').insert({
+            user_id: userId,
+            action: 'send_device_command',
+            target: 'lovense',
+            value: { intensity: 8, duration: 15 },
+            priority: 'normal',
+            reasoning: `Morning enforcement — 1 domain noncompliant: ${noncompliantDomains[0].domain}`,
+          })
+        } else {
+          // All compliant — reward
+          await supabase.from('handler_directives').insert({
+            user_id: userId,
+            action: 'send_device_command',
+            target: 'lovense',
+            value: { pattern: 'gentle_wave' },
+            priority: 'normal',
+            reasoning: 'Morning reward — all domains compliant',
+          })
+        }
+      }
+    } catch (err) {
+      console.error(`Morning escalation protocol failed for ${userId}:`, err)
+    }
   }
 
   // 6. Log the enforcement run
