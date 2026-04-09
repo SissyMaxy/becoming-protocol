@@ -30,24 +30,30 @@ function patternToLovenseString(patternId: string): string | null {
 }
 
 // Execute a device command — pattern or simple vibrate
-function executeDeviceCmd(cmd: { intensity?: number; duration?: number; pattern?: string }): Promise<CloudCommandResponse> {
+async function executeDeviceCmd(cmd: { intensity?: number; duration?: number; pattern?: string }): Promise<CloudCommandResponse> {
   if (cmd.pattern) {
     const patStr = patternToLovenseString(cmd.pattern);
     if (patStr) {
-      console.log(`[HandlerChat] Sending pattern "${cmd.pattern}" (${patStr.split(',').length} steps)`);
-      // Use Lovense native Pattern command — action field contains the pattern
-      return sendCloudCommand({
+      const stepCount = patStr.split(',').length;
+      console.log(`[HandlerChat] Sending pattern "${cmd.pattern}" (${stepCount} steps) via cloud API`);
+      // Use Lovense native Pattern command — device handles stepping internally
+      // timeSec must be > 0, use 3600 (1 hour) for effectively infinite
+      const result = await sendCloudCommand({
         customCommand: {
           command: 'Pattern',
           action: `V:1;F:v,${patStr};`,
-          timeSec: 0, // 0 = loop forever
+          timeSec: 3600,
         },
         triggerType: 'conditioning',
       });
+      console.log(`[HandlerChat] Pattern result:`, result);
+      return result;
     }
     console.warn(`[HandlerChat] Pattern "${cmd.pattern}" not found`);
   }
-  return sendVibrateCommand(cmd.intensity || 5, cmd.duration || 0, 'conditioning');
+  // Lovense rejects timeSec:0, use 3600 (1 hour) for "indefinite"
+  const duration = (cmd.duration && cmd.duration > 0) ? cmd.duration : 3600;
+  return sendVibrateCommand(cmd.intensity || 5, duration, 'conditioning');
 }
 
 export interface MediaAttachment {

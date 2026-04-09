@@ -1110,8 +1110,8 @@ IMPORTANT: When you want to fire the device, you MUST include the directive fiel
 
 Device commands — two types:
 
-1. SIMPLE VIBRATION: "value":{"intensity":10,"duration":5}
-   duration:0 = run forever. To stop: intensity:0. Good for sustained gooning.
+1. SIMPLE VIBRATION: "value":{"intensity":10,"duration":30}
+   Use duration 1-60. For long sessions use duration:60 and send again when needed. To stop: intensity:0, duration:1.
 
 2. PATTERNS (preferred during sessions): "value":{"pattern":"pattern_name"}
    Available patterns:
