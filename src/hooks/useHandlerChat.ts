@@ -117,12 +117,12 @@ export function useHandlerChat(): UseHandlerChatReturn {
     loadRecent();
   }, [user?.id]);
 
-  // Auto-open: if chat loads empty (no conversation, no messages), the Handler speaks first.
-  // Sends a system-initiated message so the Handler leads with directives.
+  // Auto-open: if chat loads with no messages, the Handler speaks first.
+  // Fires even if there's a stale conversation — the Handler always leads.
   const autoOpenedRef = useRef(false);
   useEffect(() => {
     if (!user?.id || isLoading || autoOpenedRef.current) return;
-    if (messages.length > 0 || conversationIdRef.current) return;
+    if (messages.length > 0) return;
     autoOpenedRef.current = true;
 
     // Handler speaks first — send an empty "start of day" trigger
