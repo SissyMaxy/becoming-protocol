@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { PrivacyPage } from './components/PrivacyPage';
 import { HandlerChat } from './components/handler/HandlerChat';
 import { getPendingOutreach, evaluateAndQueueOutreach } from './lib/handler-v2/outreach-engine';
@@ -415,14 +415,17 @@ function AuthenticatedAppInner() {
     checkOnboarding();
   }, []);
 
-  // Check if we need to show morning flow
+  // Check if we need to show morning flow — only show after confirming no entry exists
+  const morningCheckDone = useRef(false);
   useEffect(() => {
-    if (!isLoading && showOnboarding === false) {
+    if (!isLoading && showOnboarding === false && !morningCheckDone.current) {
+      morningCheckDone.current = true;
       const today = getTodayDate();
       const hasEntryToday = currentEntry?.date === today;
-      // Also check localStorage fallback — startDay may have failed but morning was completed
       const morningDoneToday = localStorage.getItem('morning_done_date') === today;
-      setShowMorningFlow(!hasEntryToday && !morningDoneToday);
+      if (!hasEntryToday && !morningDoneToday) {
+        setShowMorningFlow(true);
+      }
     }
   }, [isLoading, currentEntry, showOnboarding]);
 
