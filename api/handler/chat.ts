@@ -17,11 +17,8 @@ type ContextBlockName =
   | 'state' | 'whoop' | 'memory' | 'convMemory' | 'impact' | 'gina' | 'irreversibility'
   | 'narrative' | 'autoPoster' | 'socialInbox' | 'voicePitch' | 'autoPurchase'
   | 'handlerNotes' | 'communityMirror' | 'journal' | 'skillTree' | 'changelog' | 'systemState'
-  | 'conditioningEngine' | 'denialMapping' | 'contentOptimization' | 'languageDrift'
-  | 'sleepPhase' | 'photoTimeline' | 'correlation' | 'commitmentLadder'
-  | 'ginaMicroExposure' | 'agenda' | 'predictions' | 'protocol' | 'emotionalModel'
-  | 'accountability' | 'socialIntelligence' | 'outreach' | 'failureRecovery'
-  | 'reflection' | 'commitments' | 'predictiveEngine'
+  | 'agenda' | 'predictions' | 'emotionalModel'
+  | 'socialIntelligence' | 'commitments' | 'predictiveEngine'
   | 'feminizationScore' | 'shameJournal'
   | 'conditioningEffectiveness' | 'habitStreaks'
   | 'fantasyJournal' | 'socialLockIn';
@@ -45,24 +42,10 @@ const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean 
   skillTree: { priority: 50, alwaysInclude: false },
   changelog: { priority: 60, alwaysInclude: true },
   systemState: { priority: 55, alwaysInclude: true },
-  conditioningEngine: { priority: 30, alwaysInclude: false },
-  denialMapping: { priority: 45, alwaysInclude: false },
-  contentOptimization: { priority: 15, alwaysInclude: false },
-  languageDrift: { priority: 35, alwaysInclude: false },
-  sleepPhase: { priority: 20, alwaysInclude: false },
-  photoTimeline: { priority: 15, alwaysInclude: false },
-  correlation: { priority: 25, alwaysInclude: false },
-  commitmentLadder: { priority: 40, alwaysInclude: false },
-  ginaMicroExposure: { priority: 20, alwaysInclude: false },
   agenda: { priority: 95, alwaysInclude: true },
   predictions: { priority: 70, alwaysInclude: false },
-  protocol: { priority: 75, alwaysInclude: false },
   emotionalModel: { priority: 80, alwaysInclude: true },
-  accountability: { priority: 45, alwaysInclude: false },
   socialIntelligence: { priority: 20, alwaysInclude: false },
-  outreach: { priority: 30, alwaysInclude: false },
-  failureRecovery: { priority: 60, alwaysInclude: false },
-  reflection: { priority: 50, alwaysInclude: false },
   commitments: { priority: 65, alwaysInclude: false },
   predictiveEngine: { priority: 70, alwaysInclude: false },
   feminizationScore: { priority: 90, alwaysInclude: true },
@@ -76,17 +59,16 @@ const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean 
 
 const MESSAGE_BOOST_RULES: Array<{ pattern: RegExp; boosts: Record<string, number> }> = [
   { pattern: /\b(voice|pitch|sound)\b/i, boosts: { voicePitch: 50, skillTree: 30 } },
-  { pattern: /\b(gina|wife|partner)\b/i, boosts: { gina: 60, ginaMicroExposure: 40 } },
+  { pattern: /\b(gina|wife|partner)\b/i, boosts: { gina: 60 } },
   { pattern: /\b(exercise|workout|gym)\b/i, boosts: { whoop: 40 } },
-  { pattern: /\b(photo|picture|look)\b/i, boosts: { photoTimeline: 40 } },
   { pattern: /\b(follower|post|comment|DM)\b/i, boosts: { socialIntelligence: 50, communityMirror: 40, socialInbox: 30 } },
   { pattern: /\b(journal|write|wrote)\b/i, boosts: { journal: 50 } },
-  { pattern: /\b(scared|afraid|anxious|can'?t)\b/i, boosts: { failureRecovery: 40, emotionalModel: 20 } },
-  { pattern: /\b(lovense|device|vibrate|cage)\b/i, boosts: { conditioningEngine: 40, conditioningEffectiveness: 30 } },
+  { pattern: /\b(scared|afraid|anxious|can'?t)\b/i, boosts: { emotionalModel: 20 } },
+  { pattern: /\b(lovense|device|vibrate|cage)\b/i, boosts: { conditioningEffectiveness: 30 } },
   { pattern: /\b(streak|habit|practice|routine|skincare|mannerism)\b/i, boosts: { habitStreaks: 50 } },
   { pattern: /\b(compliance|obey|obedient|effective)\b/i, boosts: { conditioningEffectiveness: 40 } },
-  { pattern: /\b(commit|promise|will)\b/i, boosts: { commitmentLadder: 50 } },
-  { pattern: /\b(meet|date|encounter)\b/i, boosts: { ginaMicroExposure: 30, socialIntelligence: 20 } },
+  { pattern: /\b(commit|promise|will)\b/i, boosts: { commitments: 50 } },
+  { pattern: /\b(meet|date|encounter)\b/i, boosts: { socialIntelligence: 20 } },
   { pattern: /\b(shame|embarrass|humiliat|blush|cringe)\b/i, boosts: { shameJournal: 60 } },
   { pattern: /\b(score|progress|how am i doing|report)\b/i, boosts: { feminizationScore: 30 } },
   { pattern: /\b(outfit|clothes|wearing|underwear|dressed)\b/i, boosts: { outfitCompliance: 50 } },
@@ -114,9 +96,8 @@ function prioritizeContextBlocks(
   }
 
   if (timeOfDay >= 6 && timeOfDay < 10) scores.whoop += 20;
-  if (timeOfDay >= 20 || timeOfDay === 0) { scores.sleepPhase += 30; scores.journal += 20; }
-  if (activeProtocol) scores.protocol += 40;
-  if (releaseRisk != null && releaseRisk > 0.5) { scores.predictions += 30; scores.conditioningEngine += 20; }
+  if (timeOfDay >= 20 || timeOfDay === 0) { scores.journal += 20; }
+  if (releaseRisk != null && releaseRisk > 0.5) { scores.predictions += 30; }
 
   const alwaysInclude: ContextBlockName[] = [];
   const optional: Array<{ name: ContextBlockName; score: number }> = [];
@@ -654,6 +635,145 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     .catch(err => console.error('[Handler] Stream edge timer punishment FAILED:', err));
                 }, durationSeconds * 1000);
               }
+
+              // ── EXECUTE prescribe_task (streaming path) ──
+              if (dir.action === 'prescribe_task') {
+                try {
+                  const val = dir.value as Record<string, unknown> | null;
+                  const title = (val?.title as string) || (val?.description as string) || 'Handler-assigned task';
+                  const domain = (val?.domain as string) || 'feminization';
+                  const today = new Date().toISOString().slice(0, 10);
+
+                  const { data: bankRow, error: bankErr } = await supabase.from('task_bank').insert({
+                    category: 'handler_prescribed',
+                    domain,
+                    intensity: (val?.intensity as number) || 3,
+                    instruction: title,
+                    subtext: (val?.subtext as string) || null,
+                    completion_type: (val?.completion_type as string) || 'binary',
+                    points: (val?.points as number) || 10,
+                    affirmation: (val?.affirmation as string) || 'Good girl.',
+                    created_by: 'handler_directive',
+                  }).select('id').single();
+
+                  if (bankErr) {
+                    console.error('[Handler][stream] prescribe_task bank insert failed:', bankErr);
+                  } else {
+                    const { error: taskErr } = await supabase.from('daily_tasks').insert({
+                      user_id: user.id,
+                      task_id: bankRow.id,
+                      assigned_date: today,
+                      status: 'pending',
+                      selection_reason: 'handler_directive',
+                    });
+                    if (taskErr) console.error('[Handler][stream] prescribe_task daily insert failed:', taskErr);
+                    else console.log(`[Handler][stream] prescribe_task executed: "${title}" (${domain})`);
+                  }
+                } catch (e) { console.error('[Handler][stream] prescribe_task exception:', e); }
+              }
+
+              // ── EXECUTE modify_parameter (streaming path) ──
+              if (dir.action === 'modify_parameter') {
+                try {
+                  const val = dir.value as Record<string, unknown> | null;
+                  const parameter = val?.parameter as string;
+                  const newValue = val?.new_value as number;
+                  if (parameter && newValue != null) {
+                    const { data: existing } = await supabase.from('hidden_operations')
+                      .select('id, current_value')
+                      .eq('user_id', user.id)
+                      .eq('parameter', parameter)
+                      .maybeSingle();
+
+                    if (existing) {
+                      await supabase.from('hidden_operations')
+                        .update({ current_value: newValue })
+                        .eq('id', existing.id);
+                      console.log(`[Handler][stream] modify_parameter: ${parameter} ${existing.current_value} -> ${newValue}`);
+                    } else {
+                      await supabase.from('hidden_operations').insert({
+                        user_id: user.id,
+                        parameter,
+                        current_value: newValue,
+                        base_value: newValue,
+                        increment_rate: 0,
+                        increment_interval: 'weekly',
+                      });
+                      console.log(`[Handler][stream] modify_parameter: created ${parameter} = ${newValue}`);
+                    }
+                  }
+                } catch (e) { console.error('[Handler][stream] modify_parameter exception:', e); }
+              }
+
+              // ── EXECUTE write_memory (streaming path) ──
+              if (dir.action === 'write_memory') {
+                try {
+                  const val = dir.value as Record<string, unknown> | null;
+                  const content = val?.content as string;
+                  if (content) {
+                    const memoryType = (val?.memory_type as string) || (val?.type as string) || 'observation';
+                    const importance = (val?.importance as number) || 3;
+                    const { error: memErr } = await supabase.from('handler_memory').insert({
+                      user_id: user.id,
+                      memory_type: memoryType,
+                      content,
+                      importance,
+                      source_type: 'conversation',
+                      source_id: convId,
+                      decay_rate: importance >= 5 ? 0 : 0.05,
+                    });
+                    if (memErr) console.error('[Handler][stream] write_memory failed:', memErr);
+                    else console.log(`[Handler][stream] write_memory: ${memoryType} (importance ${importance})`);
+                  }
+                } catch (e) { console.error('[Handler][stream] write_memory exception:', e); }
+              }
+
+              // ── EXECUTE schedule_session (streaming path) ──
+              if (dir.action === 'schedule_session') {
+                try {
+                  const val = dir.value as Record<string, unknown> | null;
+                  const sessionType = (val?.session_type as string) || 'conditioning';
+                  const scheduledAt = (val?.scheduled_at as string) || new Date().toISOString();
+                  const { error: sessErr } = await supabase.from('conditioning_sessions_v2').insert({
+                    user_id: user.id,
+                    session_type: sessionType,
+                    started_at: scheduledAt,
+                    completed: false,
+                  });
+                  if (sessErr) console.error('[Handler][stream] schedule_session failed:', sessErr);
+                  else console.log(`[Handler][stream] schedule_session: ${sessionType} at ${scheduledAt}`);
+                } catch (e) { console.error('[Handler][stream] schedule_session exception:', e); }
+              }
+
+              // ── EXECUTE advance_skill (streaming path) ──
+              if (dir.action === 'advance_skill') {
+                try {
+                  const val = dir.value as Record<string, unknown> | null;
+                  const domain = val?.domain as string;
+                  if (domain) {
+                    const { data: existing } = await supabase.from('skill_domains')
+                      .select('id, current_level')
+                      .eq('user_id', user.id)
+                      .eq('domain', domain)
+                      .maybeSingle();
+
+                    if (existing) {
+                      const newLevel = (existing.current_level || 0) + 1;
+                      await supabase.from('skill_domains')
+                        .update({ current_level: newLevel })
+                        .eq('id', existing.id);
+                      console.log(`[Handler][stream] advance_skill: ${domain} ${existing.current_level} -> ${newLevel}`);
+                    } else {
+                      await supabase.from('skill_domains').insert({
+                        user_id: user.id,
+                        domain,
+                        current_level: 1,
+                      });
+                      console.log(`[Handler][stream] advance_skill: created ${domain} at level 1`);
+                    }
+                  }
+                } catch (e) { console.error('[Handler][stream] advance_skill exception:', e); }
+              }
             }
           }
         } catch { /* Non-critical */ }
@@ -866,6 +986,145 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                   .then(() => console.log('[Handler] Edge timer punishment burst fired'))
                   .catch(err => console.error('[Handler] Edge timer punishment burst FAILED:', err));
               }, durationSeconds * 1000);
+            }
+
+            // ── EXECUTE prescribe_task (non-streaming path) ──
+            if (dir.action === 'prescribe_task') {
+              try {
+                const val = dir.value as Record<string, unknown> | null;
+                const title = (val?.title as string) || (val?.description as string) || 'Handler-assigned task';
+                const domain = (val?.domain as string) || 'feminization';
+                const today = new Date().toISOString().slice(0, 10);
+
+                const { data: bankRow, error: bankErr } = await supabase.from('task_bank').insert({
+                  category: 'handler_prescribed',
+                  domain,
+                  intensity: (val?.intensity as number) || 3,
+                  instruction: title,
+                  subtext: (val?.subtext as string) || null,
+                  completion_type: (val?.completion_type as string) || 'binary',
+                  points: (val?.points as number) || 10,
+                  affirmation: (val?.affirmation as string) || 'Good girl.',
+                  created_by: 'handler_directive',
+                }).select('id').single();
+
+                if (bankErr) {
+                  console.error('[Handler] prescribe_task bank insert failed:', bankErr);
+                } else {
+                  const { error: taskErr } = await supabase.from('daily_tasks').insert({
+                    user_id: user.id,
+                    task_id: bankRow.id,
+                    assigned_date: today,
+                    status: 'pending',
+                    selection_reason: 'handler_directive',
+                  });
+                  if (taskErr) console.error('[Handler] prescribe_task daily insert failed:', taskErr);
+                  else console.log(`[Handler] prescribe_task executed: "${title}" (${domain})`);
+                }
+              } catch (e) { console.error('[Handler] prescribe_task exception:', e); }
+            }
+
+            // ── EXECUTE modify_parameter (non-streaming path) ──
+            if (dir.action === 'modify_parameter') {
+              try {
+                const val = dir.value as Record<string, unknown> | null;
+                const parameter = val?.parameter as string;
+                const newValue = val?.new_value as number;
+                if (parameter && newValue != null) {
+                  const { data: existing } = await supabase.from('hidden_operations')
+                    .select('id, current_value')
+                    .eq('user_id', user.id)
+                    .eq('parameter', parameter)
+                    .maybeSingle();
+
+                  if (existing) {
+                    await supabase.from('hidden_operations')
+                      .update({ current_value: newValue })
+                      .eq('id', existing.id);
+                    console.log(`[Handler] modify_parameter: ${parameter} ${existing.current_value} -> ${newValue}`);
+                  } else {
+                    await supabase.from('hidden_operations').insert({
+                      user_id: user.id,
+                      parameter,
+                      current_value: newValue,
+                      base_value: newValue,
+                      increment_rate: 0,
+                      increment_interval: 'weekly',
+                    });
+                    console.log(`[Handler] modify_parameter: created ${parameter} = ${newValue}`);
+                  }
+                }
+              } catch (e) { console.error('[Handler] modify_parameter exception:', e); }
+            }
+
+            // ── EXECUTE write_memory (non-streaming path) ──
+            if (dir.action === 'write_memory') {
+              try {
+                const val = dir.value as Record<string, unknown> | null;
+                const content = val?.content as string;
+                if (content) {
+                  const memoryType = (val?.memory_type as string) || (val?.type as string) || 'observation';
+                  const importance = (val?.importance as number) || 3;
+                  const { error: memErr } = await supabase.from('handler_memory').insert({
+                    user_id: user.id,
+                    memory_type: memoryType,
+                    content,
+                    importance,
+                    source_type: 'conversation',
+                    source_id: convId,
+                    decay_rate: importance >= 5 ? 0 : 0.05,
+                  });
+                  if (memErr) console.error('[Handler] write_memory failed:', memErr);
+                  else console.log(`[Handler] write_memory: ${memoryType} (importance ${importance})`);
+                }
+              } catch (e) { console.error('[Handler] write_memory exception:', e); }
+            }
+
+            // ── EXECUTE schedule_session (non-streaming path) ──
+            if (dir.action === 'schedule_session') {
+              try {
+                const val = dir.value as Record<string, unknown> | null;
+                const sessionType = (val?.session_type as string) || 'conditioning';
+                const scheduledAt = (val?.scheduled_at as string) || new Date().toISOString();
+                const { error: sessErr } = await supabase.from('conditioning_sessions_v2').insert({
+                  user_id: user.id,
+                  session_type: sessionType,
+                  started_at: scheduledAt,
+                  completed: false,
+                });
+                if (sessErr) console.error('[Handler] schedule_session failed:', sessErr);
+                else console.log(`[Handler] schedule_session: ${sessionType} at ${scheduledAt}`);
+              } catch (e) { console.error('[Handler] schedule_session exception:', e); }
+            }
+
+            // ── EXECUTE advance_skill (non-streaming path) ──
+            if (dir.action === 'advance_skill') {
+              try {
+                const val = dir.value as Record<string, unknown> | null;
+                const domain = val?.domain as string;
+                if (domain) {
+                  const { data: existing } = await supabase.from('skill_domains')
+                    .select('id, current_level')
+                    .eq('user_id', user.id)
+                    .eq('domain', domain)
+                    .maybeSingle();
+
+                  if (existing) {
+                    const newLevel = (existing.current_level || 0) + 1;
+                    await supabase.from('skill_domains')
+                      .update({ current_level: newLevel })
+                      .eq('id', existing.id);
+                    console.log(`[Handler] advance_skill: ${domain} ${existing.current_level} -> ${newLevel}`);
+                  } else {
+                    await supabase.from('skill_domains').insert({
+                      user_id: user.id,
+                      domain,
+                      current_level: 1,
+                    });
+                    console.log(`[Handler] advance_skill: created ${domain} at level 1`);
+                  }
+                }
+              } catch (e) { console.error('[Handler] advance_skill exception:', e); }
             }
           }
         }

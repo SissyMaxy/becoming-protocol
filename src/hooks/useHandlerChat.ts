@@ -307,11 +307,21 @@ export function useHandlerChat(): UseHandlerChatReturn {
         }
 
         if (data && data.id !== lastDirectiveRef.current) {
+          // Check for deferred directives with delay_minutes
+          const val = data.value as any;
+          if (val?.delay_minutes && val.delay_minutes > 0) {
+            const targetTime = new Date(data.created_at).getTime() + (val.delay_minutes * 60 * 1000);
+            if (Date.now() < targetTime) {
+              // Not yet time — skip without marking as processed
+              return;
+            }
+          }
+
           console.log('[HandlerChat] Directive poll found device command:', JSON.stringify(data.value));
 
           try {
             // Execute it
-            const result = await executeDeviceCmd(data.value as any);
+            const result = await executeDeviceCmd(val);
             console.log('[HandlerChat] Device command result:', JSON.stringify(result));
 
             // Only mark as processed after successful execution
