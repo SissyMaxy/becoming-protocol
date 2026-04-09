@@ -270,7 +270,7 @@ export function useHandlerChat(): UseHandlerChatReturn {
     async function pollDirectives() {
       if (!mounted) return;
       try {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('handler_directives')
           .select('id, value, created_at')
           .eq('user_id', user!.id)
@@ -280,16 +280,21 @@ export function useHandlerChat(): UseHandlerChatReturn {
           .limit(1)
           .maybeSingle();
 
+        if (error) {
+          console.error('[HandlerChat] Directive poll error:', error.message, error.code);
+          return;
+        }
+
         if (data && data.id !== lastDirectiveRef.current) {
           lastDirectiveRef.current = data.id;
-          console.log('[HandlerChat] Directive poll found device command:', data.value);
+          console.log('[HandlerChat] Directive poll found device command:', JSON.stringify(data.value));
 
           // Execute it
           await executeDeviceCmd(data.value as any);
 
-          // Mark as executed
+          // Mark as completed
           await supabase.from('handler_directives')
-            .update({ status: 'executed', executed_at: new Date().toISOString() })
+            .update({ status: 'completed', executed_at: new Date().toISOString() })
             .eq('id', data.id);
 
           console.log('[HandlerChat] Device command executed and marked');
