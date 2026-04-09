@@ -74,6 +74,7 @@ export function useHandlerChat(): UseHandlerChatReturn {
 
     async function loadRecent() {
       setIsLoading(true);
+      let needsAutoOpen = false;
       try {
         // Find most recent conversation that isn't ended (any date)
         const { data: conv } = await supabase
@@ -96,37 +97,38 @@ export function useHandlerChat(): UseHandlerChatReturn {
             .eq('conversation_id', conv.id)
             .order('message_index', { ascending: true });
 
-          if (msgs && msgs.length > 0) {
-            setMessages(msgs
-              .filter(m => !(m.role === 'user' && m.content.startsWith('[system:')))
-              .map(m => ({
-                role: m.role as 'user' | 'assistant',
-                content: m.content,
-                timestamp: new Date(m.created_at),
-                mode: m.detected_mode || undefined,
-              })));
+          const filtered = (msgs || [])
+            .filter(m => !(m.role === 'user' && m.content.startsWith('[system:')))
+            .map(m => ({
+              role: m.role as 'user' | 'assistant',
+              content: m.content,
+              timestamp: new Date(m.created_at),
+              mode: m.detected_mode || undefined,
+            }));
+
+          if (filtered.length > 0) {
+            setMessages(filtered);
+          } else {
+            // Conversation exists but no visible messages — Handler should open
+            needsAutoOpen = true;
           }
+        } else {
+          // No conversation at all — Handler should open
+          needsAutoOpen = true;
         }
       } catch (err) {
         console.error('[HandlerChat] Failed to load conversation:', err);
+        needsAutoOpen = true;
       } finally {
         setIsLoading(false);
+        if (needsAutoOpen) {
+          triggerAutoOpen();
+        }
       }
     }
 
-    loadRecent();
-  }, [user?.id]);
-
-  // Auto-open: if chat loads with no messages, the Handler speaks first.
-  // Fires even if there's a stale conversation — the Handler always leads.
-  const autoOpenedRef = useRef(false);
-  useEffect(() => {
-    if (!user?.id || isLoading || autoOpenedRef.current) return;
-    if (messages.length > 0) return;
-    autoOpenedRef.current = true;
-
-    // Handler speaks first — send an empty "start of day" trigger
-    (async () => {
+    // Handler speaks first — called when chat has no visible messages
+    async function triggerAutoOpen() {
       try {
         const session = await supabase.auth.getSession();
         const token = session.data.session?.access_token;
@@ -165,8 +167,10 @@ export function useHandlerChat(): UseHandlerChatReturn {
       } finally {
         setIsSending(false);
       }
-    })();
-  }, [user?.id, isLoading, messages.length]);
+    }
+
+    loadRecent();
+  }, [user?.id]);
 
   // P11.1: Poll for Handler-initiated messages every 60s
   useEffect(() => {
