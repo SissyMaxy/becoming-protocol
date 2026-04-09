@@ -910,6 +910,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (conditioningSession) {
       responseJson.conditioningSession = conditioningSession;
     }
+
+    // Pass device commands to client for local execution (Lovense LAN API)
+    if (signals?.directive || signals?.directives) {
+      const rawDirs = signals.directives || signals.directive;
+      const dirList = Array.isArray(rawDirs) ? rawDirs : [rawDirs];
+      const deviceCmds = dirList
+        .filter((d: any) => d?.action === 'send_device_command')
+        .map((d: any) => {
+          const v = d.value;
+          let intensity = 5, duration = 3;
+          if (typeof v === 'object' && v !== null) {
+            intensity = v.intensity || 5;
+            duration = v.duration || v.timeSec || 3;
+            if (duration > 100) duration = Math.round(duration / 1000);
+          } else if (typeof v === 'string') {
+            if (v.includes('medium')) intensity = 10;
+            else if (v.includes('high') || v.includes('strong')) intensity = 15;
+            else if (v.includes('low') || v.includes('soft')) intensity = 3;
+            const nums = v.match(/\d+/g);
+            if (nums) {
+              for (const n of nums) {
+                const num = parseInt(n);
+                if (num <= 20) intensity = num;
+                else if (num <= 60) duration = num;
+              }
+            }
+          }
+          return { intensity: Math.max(1, Math.min(20, intensity)), duration: Math.max(1, Math.min(60, duration)) };
+        });
+      if (deviceCmds.length > 0) {
+        responseJson.deviceCommands = deviceCmds;
+      }
+    }
     if (mediaAttachments.length > 0) {
       responseJson.media = mediaAttachments;
     }

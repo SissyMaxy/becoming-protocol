@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { getPendingOutreach, markDelivered } from '../lib/conditioning/proactive-outreach';
 import { TypingMetricsTracker } from '../lib/conditioning/typing-resistance';
+import { smartVibrate } from '../lib/lovense';
 
 export interface MediaAttachment {
   type: 'image' | 'audio';
@@ -40,6 +41,7 @@ interface ChatResponse {
   shouldContinue: boolean;
   conditioningSession?: ConditioningSessionSignal;
   media?: MediaAttachment[];
+  deviceCommands?: Array<{ intensity: number; duration: number }>;
 }
 
 interface UseHandlerChatReturn {
@@ -345,6 +347,15 @@ export function useHandlerChat(): UseHandlerChatReturn {
           media: data.media,
         };
         setMessages(prev => [...prev, assistantMsg]);
+
+        // Execute device commands locally via Lovense LAN API
+        if (data.deviceCommands && Array.isArray(data.deviceCommands)) {
+          for (const cmd of data.deviceCommands) {
+            smartVibrate(cmd.intensity, cmd.duration, 'conditioning').catch(err =>
+              console.error('[HandlerChat] Device command failed:', err)
+            );
+          }
+        }
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
