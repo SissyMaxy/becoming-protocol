@@ -364,26 +364,8 @@ function buildOvernightSection(
     });
   }
 
-  // Release check — always surface last release context
-  if (data.lastRelease) {
-    const releaseTime = new Date(data.lastRelease);
-    if (releaseTime > data.lastNight10pm) {
-      items.push({
-        icon: 'lock',
-        text: `Release logged at ${releaseTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}. Counter reset.`,
-        type: 'info',
-      });
-    } else {
-      const daysAgo = Math.floor((Date.now() - releaseTime.getTime()) / (1000 * 60 * 60 * 24));
-      if (daysAgo > 0) {
-        items.push({
-          icon: 'lock',
-          text: `Last release: ${daysAgo} day${daysAgo !== 1 ? 's' : ''} ago.`,
-          type: 'info',
-        });
-      }
-    }
-  }
+  // Release info removed from OVERNIGHT — the Release Check-In component
+  // on MorningBriefing handles this with actual date, context, and follow-up.
 
   // Content posted overnight
   if (data.contentPosted.length > 0) {
