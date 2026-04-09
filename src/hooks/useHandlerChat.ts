@@ -35,11 +35,11 @@ function executeDeviceCmd(cmd: { intensity?: number; duration?: number; pattern?
     const patStr = patternToLovenseString(cmd.pattern);
     if (patStr) {
       console.log(`[HandlerChat] Sending pattern "${cmd.pattern}" (${patStr.split(',').length} steps)`);
-      // Use Lovense native Pattern command — device handles stepping internally
+      // Use Lovense native Pattern command — action field contains the pattern
       return sendCloudCommand({
         customCommand: {
           command: 'Pattern',
-          pattern: `V:1;F:v,${patStr};`,
+          action: `V:1;F:v,${patStr};`,
           timeSec: 0, // 0 = loop forever
         },
         triggerType: 'conditioning',
