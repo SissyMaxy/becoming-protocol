@@ -350,13 +350,16 @@ export function useHandlerChat(): UseHandlerChatReturn {
                     setCurrentMode(data.mode || 'director');
 
                     // Execute device commands from streaming response
+                    console.log('[HandlerChat] SSE done event keys:', Object.keys(data));
                     if (data.deviceCommands && Array.isArray(data.deviceCommands)) {
-                      console.log('[HandlerChat] SSE device commands:', data.deviceCommands);
+                      console.log('[HandlerChat] SSE device commands:', JSON.stringify(data.deviceCommands));
                       for (const cmd of data.deviceCommands) {
                         executeDeviceCmd(cmd).catch(err =>
                           console.error('[HandlerChat] Device command failed:', err)
                         );
                       }
+                    } else {
+                      console.log('[HandlerChat] No deviceCommands in SSE done event');
                     }
                   }
                 } catch (parseErr) {
