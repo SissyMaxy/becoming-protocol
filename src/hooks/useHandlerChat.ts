@@ -350,11 +350,17 @@ export function useHandlerChat(): UseHandlerChatReturn {
 
         // Execute device commands locally via Lovense LAN API
         if (data.deviceCommands && Array.isArray(data.deviceCommands)) {
+          console.log('[HandlerChat] Executing device commands:', data.deviceCommands);
           for (const cmd of data.deviceCommands) {
-            smartVibrate(cmd.intensity, cmd.duration, 'conditioning').catch(err =>
-              console.error('[HandlerChat] Device command failed:', err)
-            );
+            try {
+              const result = await smartVibrate(cmd.intensity, cmd.duration, 'conditioning');
+              console.log(`[HandlerChat] Device vibrate result: ${result}, intensity=${cmd.intensity}, duration=${cmd.duration}`);
+            } catch (err) {
+              console.error('[HandlerChat] Device command failed:', err);
+            }
           }
+        } else {
+          console.log('[HandlerChat] No deviceCommands in response. Keys:', Object.keys(data));
         }
       }
     } catch (err) {
