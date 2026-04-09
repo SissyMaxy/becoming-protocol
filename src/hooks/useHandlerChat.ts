@@ -260,6 +260,55 @@ export function useHandlerChat(): UseHandlerChatReturn {
     };
   }, [user?.id]);
 
+  // Poll handler_directives for device commands and execute them client-side
+  // This bypasses the response pipeline entirely — reliable delivery
+  const lastDirectiveRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!user?.id) return;
+    let mounted = true;
+
+    async function pollDirectives() {
+      if (!mounted) return;
+      try {
+        const { data } = await supabase
+          .from('handler_directives')
+          .select('id, value, created_at')
+          .eq('user_id', user!.id)
+          .eq('action', 'send_device_command')
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (data && data.id !== lastDirectiveRef.current) {
+          lastDirectiveRef.current = data.id;
+          console.log('[HandlerChat] Directive poll found device command:', data.value);
+
+          // Execute it
+          await executeDeviceCmd(data.value as any);
+
+          // Mark as executed
+          await supabase.from('handler_directives')
+            .update({ status: 'executed', executed_at: new Date().toISOString() })
+            .eq('id', data.id);
+
+          console.log('[HandlerChat] Device command executed and marked');
+        }
+      } catch (err) {
+        // Non-critical
+      }
+    }
+
+    // Poll every 3 seconds
+    pollDirectives();
+    const directiveInterval = setInterval(pollDirectives, 3000);
+
+    return () => {
+      mounted = false;
+      clearInterval(directiveInterval);
+    };
+  }, [user?.id]);
+
   const startNewConversation = useCallback(() => {
     // End current conversation if exists
     if (conversationIdRef.current) {
