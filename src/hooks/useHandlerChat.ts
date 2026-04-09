@@ -8,21 +8,44 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { getPendingOutreach, markDelivered } from '../lib/conditioning/proactive-outreach';
 import { TypingMetricsTracker } from '../lib/conditioning/typing-resistance';
-import { sendVibrateCommand, playPattern } from '../lib/lovense';
+import { sendVibrateCommand, sendCloudCommand } from '../lib/lovense';
 import { BUILTIN_PATTERNS } from '../types/lovense';
 import type { CloudCommandResponse } from '../types/lovense';
 
+// Convert a builtin pattern to a Lovense Pattern command string
+// Each value = 100ms of intensity (0-20), comma-separated
+function patternToLovenseString(patternId: string): string | null {
+  const pat = BUILTIN_PATTERNS.find(p => p.id === patternId);
+  if (!pat) return null;
+
+  const values: number[] = [];
+  for (const step of pat.steps) {
+    // Each value = 100ms, so duration 1500ms = 15 values
+    const count = Math.round(step.duration / 100);
+    for (let i = 0; i < count; i++) {
+      values.push(Math.min(20, Math.max(0, step.intensity)));
+    }
+  }
+  return values.join(',');
+}
+
 // Execute a device command — pattern or simple vibrate
 function executeDeviceCmd(cmd: { intensity?: number; duration?: number; pattern?: string }): Promise<CloudCommandResponse> {
-  // Pattern command — play a named pattern with looping
   if (cmd.pattern) {
-    const pat = BUILTIN_PATTERNS.find(p => p.id === cmd.pattern);
-    if (pat) {
-      playPattern(pat, { loop: true });
-      return Promise.resolve({ success: true });
+    const patStr = patternToLovenseString(cmd.pattern);
+    if (patStr) {
+      console.log(`[HandlerChat] Sending pattern "${cmd.pattern}" (${patStr.split(',').length} steps)`);
+      // Use Lovense native Pattern command — device handles stepping internally
+      return sendCloudCommand({
+        customCommand: {
+          command: 'Pattern',
+          pattern: `V:1;F:v,${patStr};`,
+          timeSec: 0, // 0 = loop forever
+        },
+        triggerType: 'conditioning',
+      });
     }
-    // Fall back to simple vibrate if pattern not found
-    console.warn(`[HandlerChat] Pattern "${cmd.pattern}" not found, falling back to vibrate`);
+    console.warn(`[HandlerChat] Pattern "${cmd.pattern}" not found`);
   }
   return sendVibrateCommand(cmd.intensity || 5, cmd.duration || 0, 'conditioning');
 }
