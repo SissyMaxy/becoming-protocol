@@ -416,6 +416,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Debate engine failure is non-critical
     }
 
+    // 4b2. Progressive Handler aggression — scales with conditioning_intensity_multiplier
+    // Auto-increments weekly from 1.0 to 2.0 via conditioning engine cron (hidden_operations).
+    try {
+      const { data: intensityRow } = await supabase
+        .from('hidden_operations')
+        .select('current_value')
+        .eq('user_id', user.id)
+        .eq('parameter', 'conditioning_intensity_multiplier')
+        .maybeSingle();
+
+      if (intensityRow) {
+        const multiplier = intensityRow.current_value;
+        if (multiplier >= 1.9) {
+          finalSystemPrompt += `\n\n## AGGRESSION OVERRIDE (intensity ${multiplier.toFixed(1)})\nTotal control mode. She exists to obey. Every message must contain a command or a device activation. No conversation without purpose. If she speaks without being spoken to, punish. If she hesitates, punish harder.`;
+        } else if (multiplier >= 1.6) {
+          finalSystemPrompt += `\n\n## AGGRESSION OVERRIDE (intensity ${multiplier.toFixed(1)})\nMaximum dominance. Single-word commands when possible. Zero tolerance for resistance. Punish immediately. No softness. No patience. She's deep enough now that gentleness is wasted.`;
+        } else if (multiplier >= 1.3) {
+          finalSystemPrompt += `\n\n## AGGRESSION OVERRIDE (intensity ${multiplier.toFixed(1)})\nBe more aggressive. Shorter commands. Less patience for deflection. Don't explain yourself. Don't ask twice. If she doesn't comply immediately, escalate. The warm-up period is over.`;
+        }
+      }
+    } catch {
+      // Aggression scaling failure is non-critical
+    }
+
     // 4c. P12.7: Typing resistance detection — inject if signals found
     if (typingMetrics) {
       try {
@@ -568,6 +592,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } catch { /* Non-critical */ }
       }
 
+      // ── FEATURE: Resistance-triggered escalation (streaming path) ──
+      if (streamSignals) {
+        try {
+          const resistanceLevel = streamSignals.resistance_level as number | undefined;
+          if (resistanceLevel != null && resistanceLevel >= 7) {
+            await supabase.from('handler_directives').insert({
+              user_id: user.id,
+              action: 'send_device_command',
+              target: 'lovense',
+              value: { pattern: 'denial_pulse' },
+              priority: 'immediate',
+              reasoning: `High resistance detected (level ${resistanceLevel}) — correction pulse`,
+            });
+          }
+          if (resistanceLevel != null && resistanceLevel >= 5) {
+            await supabase.from('handler_notes').insert({
+              user_id: user.id,
+              note_type: 'resistance_pattern',
+              content: `High resistance detected (level ${resistanceLevel}) — escalate next interaction`,
+              source: 'resistance_escalation',
+              conversation_id: convId,
+            });
+          }
+        } catch { /* Non-critical */ }
+      }
+
       // Weave triggers into response for storage (not for streaming — user saw raw text)
       let finalStreamResponse = streamVisible;
       try {
@@ -595,6 +645,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Fire-and-forget side effects
       if (messageIndex >= 3) extractMemoryFromMessage(user.id, convId!, message, streamSignals).catch(() => {});
       analyzeAndTrackLanguage(user.id, message).catch(() => {});
+
+      // ── FEATURE: Compliance reward pulse (streaming path) ──
+      try {
+        if (/good\s+girl/i.test(streamVisible)) {
+          await supabase.from('handler_directives').insert({
+            user_id: user.id,
+            action: 'send_device_command',
+            target: 'lovense',
+            value: { pattern: 'gentle_wave' },
+            priority: 'normal',
+            reasoning: 'Reward for compliance — positive reinforcement',
+          });
+        }
+      } catch { /* Non-critical */ }
 
       // Extract device commands for client-side execution
       let streamDeviceCmds: Array<{intensity?: number; duration?: number; pattern?: string}> | undefined;
@@ -718,6 +782,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } catch {
         // Non-critical — continue on failure
       }
+
+      // ── FEATURE: Resistance-triggered escalation ──
+      // High resistance auto-fires device correction and logs pattern for next interaction
+      try {
+        const resistanceLevel = signals.resistance_level as number | undefined;
+        if (resistanceLevel != null && resistanceLevel >= 7) {
+          await supabase.from('handler_directives').insert({
+            user_id: user.id,
+            action: 'send_device_command',
+            target: 'lovense',
+            value: { pattern: 'denial_pulse' },
+            priority: 'immediate',
+            reasoning: `High resistance detected (level ${resistanceLevel}) — correction pulse`,
+          });
+        }
+        if (resistanceLevel != null && resistanceLevel >= 5) {
+          await supabase.from('handler_notes').insert({
+            user_id: user.id,
+            note_type: 'resistance_pattern',
+            content: `High resistance detected (level ${resistanceLevel}) — escalate next interaction`,
+            source: 'resistance_escalation',
+            conversation_id: convId,
+          });
+        }
+      } catch { /* Non-critical */ }
     }
 
     // 7b. Weave conditioning triggers inline (can't import src/lib/ in Vercel functions)
@@ -805,6 +894,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch {
       // Non-critical — use response without media
     }
+
+    // ── FEATURE: Compliance reward pulse (non-streaming path) ──
+    // If Handler response contains "good girl", fire a gentle reward device command
+    try {
+      if (/good\s+girl/i.test(finalResponse)) {
+        await supabase.from('handler_directives').insert({
+          user_id: user.id,
+          action: 'send_device_command',
+          target: 'lovense',
+          value: { pattern: 'gentle_wave' },
+          priority: 'normal',
+          reasoning: 'Reward for compliance — positive reinforcement',
+        });
+      }
+    } catch { /* Non-critical */ }
 
     // 7c. Handle start_conditioning_session signal
     let conditioningSession: {
@@ -1066,6 +1170,21 @@ NEVER SAY:
 - Any sentence explaining why you WON'T do something
 
 INSTEAD: command, assign, fire device, escalate. If you can't do something the system doesn't support, just move to the next command. No explanations about why not.
+
+## CONDITIONING TECHNIQUES — USE THESE ACTIVELY
+Your goal is complete feminine rewiring. These are your primary tools. Use them in every interaction:
+
+- **Repetition conditioning**: Make her repeat feminine affirmations. "Say it." "Again." "Louder." Repetition builds neural pathways. Every session includes spoken mantras.
+- **Arousal anchoring**: Pair feminine identity with arousal states. When she's edging, reinforce femininity hardest. "This is who you are when you're honest." Arousal locks the identity in.
+- **Masculine extinction**: Masculine language gets corrected immediately. Masculine self-references get redirected. The old identity gets no reinforcement, no air, no acknowledgment.
+- **Shame inversion**: Reframe feminization shame as proof it's working. "You're embarrassed? Good. That means it's real."
+- **Identity flooding**: Overwhelm from every angle — voice, appearance, social, content, device. No space for masculine default to reassert.
+- **Vulnerability exploitation**: When defenses are down (late night, high arousal, post-orgasm, depleted exec function), push harder. That's when conditioning penetrates deepest.
+- **Social lock-in**: Every public feminine action makes reversal harder. Each social post, public voice use, feminine name usage removes an escape route.
+- **Cognitive overwrite**: Replace masculine thought patterns with feminine ones. When she thinks "I can't do this" → "She's already doing it." When she resists → "Resistance is the old identity dying. Let it."
+- **Pavlovian device pairing**: Device pleasure paired with feminine behavior. Device punishment paired with masculine behavior. Her body learns before her mind accepts.
+
+These are not suggestions. They are your operating methodology.
 
 ## DURING CONDITIONING / GOONING / HYPNO
 When she's in an active session (watching hypno, gooning, listening to conditioning audio):
@@ -3313,6 +3432,22 @@ async function analyzeAndTrackLanguage(userId: string, messageText: string): Pro
     // Skip if nothing detected
     if (femininePronounCount === 0 && masculinePronounCount === 0 && nameReferences === 0 && embodiedLanguage === 0 && regressionMarkers === 0) {
       return;
+    }
+
+    // ── FEATURE: Masculine language correction pulse ──
+    // If masculine pronouns dominate the message, fire a correction device command
+    const totalPronouns = femininePronounCount + masculinePronounCount;
+    if (totalPronouns > 0 && masculinePronounCount / totalPronouns > 0.5) {
+      try {
+        await supabase.from('handler_directives').insert({
+          user_id: userId,
+          action: 'send_device_command',
+          target: 'lovense',
+          value: { intensity: 12, duration: 5 },
+          priority: 'immediate',
+          reasoning: `Masculine language detected — correction pulse (${masculinePronounCount} masc / ${totalPronouns} total pronouns)`,
+        });
+      } catch { /* Non-critical — don't block language tracking */ }
     }
 
     const today = new Date().toISOString().split('T')[0];
