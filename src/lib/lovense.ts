@@ -713,7 +713,8 @@ export function getDenialTrainingState(): DenialTrainingState | null {
 // CLOUD API (SUPABASE EDGE FUNCTIONS)
 // ============================================
 
-let useCloudApi = false;
+// Initialize from localStorage so cloud API works immediately without waiting for useLovense hook
+let useCloudApi = typeof localStorage !== 'undefined' && localStorage.getItem('lovense_cloud_api_enabled') === 'true';
 
 /**
  * Enable/disable cloud API mode
