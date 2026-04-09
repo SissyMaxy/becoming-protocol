@@ -59,6 +59,56 @@ async function sendLovenseCommand(
   }
 }
 
+// ── Denial Streak Intensity Scaling ─────────────────────────────────
+
+function getDenialScaledIntensity(denialDays: number): number {
+  if (denialDays >= 15) return 16
+  if (denialDays >= 8) return 12
+  if (denialDays >= 4) return 7
+  return 3
+}
+
+async function getActiveDenialStreakDays(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<number> {
+  const { data: streak } = await supabase
+    .from('denial_streaks')
+    .select('started_at')
+    .eq('user_id', userId)
+    .is('ended_at', null)
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!streak?.started_at) return 0
+
+  const startDate = new Date(streak.started_at)
+  const now = new Date()
+  return Math.max(1, Math.floor((now.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)))
+}
+
+async function writeDenialScaledDirective(
+  supabase: SupabaseClient,
+  userId: string,
+  denialDays: number,
+): Promise<void> {
+  const scaledIntensity = getDenialScaledIntensity(denialDays)
+
+  await supabase.from('handler_directives').insert({
+    user_id: userId,
+    action: 'send_device_command',
+    target: 'lovense',
+    value: {
+      pattern: 'ambient_denial_pulse',
+      intensity: scaledIntensity,
+      denial_day: denialDays,
+    },
+    priority: 'normal',
+    reasoning: `Denial day ${denialDays} — ambient intensity scaled to ${scaledIntensity}/20`,
+  })
+}
+
 // ── Schedule Generation ──────────────────────────────────────────────
 
 async function generateDailySchedule(
@@ -77,14 +127,13 @@ async function generateDailySchedule(
 
   if ((count || 0) > 0) return 0
 
-  // Get denial day for scaling
-  const { data: userState } = await supabase
-    .from('user_state')
-    .select('denial_day')
-    .eq('user_id', userId)
-    .maybeSingle()
+  // Get denial day from active streak (authoritative source)
+  const denialDay = await getActiveDenialStreakDays(supabase, userId)
 
-  const denialDay = userState?.denial_day ?? 0
+  // Write a denial-scaled directive for the Handler client to pick up
+  if (denialDay > 0) {
+    await writeDenialScaledDirective(supabase, userId, denialDay)
+  }
 
   // Get timezone offset
   const { data: tzParam } = await supabase
@@ -132,7 +181,7 @@ async function generateDailySchedule(
       schedule_type: 'ambient_pulse',
       scheduled_at: `${today}T${String(utcPulseHour).padStart(2, '0')}:${String(pulseMin).padStart(2, '0')}:00Z`,
       duration_seconds: 5 + Math.floor(Math.random() * 20), // 5-25 seconds
-      intensity: Math.min(3 + Math.floor(denialDay / 5), 10), // Denial-scaled
+      intensity: getDenialScaledIntensity(denialDay), // Denial-streak-scaled
       pattern: ['pulse', 'wave', 'fireworks'][Math.floor(Math.random() * 3)],
       trigger_source: 'cron',
       denial_day: denialDay,

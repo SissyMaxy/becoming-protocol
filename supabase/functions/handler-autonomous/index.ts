@@ -170,6 +170,49 @@ async function complianceCheck(
     }
   }
 
+  // ── Denial-scaled conditioning during compliance checks ──
+  // Also check during the 5-min cycle: if denial is high and privacy window open,
+  // fire conditioning. Rate-limited: only once per 4 hours via handler_directives check.
+  for (const state of states) {
+    try {
+      const denialDays = await getActiveDenialDays(supabase, state.user_id)
+      if (denialDays < 5) continue
+
+      const { data: stateData } = await supabase
+        .from('user_state')
+        .select('gina_home')
+        .eq('user_id', state.user_id)
+        .maybeSingle()
+
+      if (stateData?.gina_home !== false) continue
+
+      // Rate limit: check if we already fired an edge_tease in last 4 hours
+      const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString()
+      const { count: recentTease } = await supabase
+        .from('handler_directives')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', state.user_id)
+        .eq('action', 'send_device_command')
+        .gte('created_at', fourHoursAgo)
+        .contains('value', { pattern: 'edge_tease' })
+
+      if ((recentTease || 0) > 0) continue
+
+      await supabase.from('handler_directives').insert({
+        user_id: state.user_id,
+        action: 'send_device_command',
+        target: 'lovense',
+        value: {
+          pattern: 'edge_tease',
+          intensity: Math.min(8 + Math.floor(denialDays / 3), 18),
+          denial_day: denialDays,
+        },
+        priority: 'normal',
+        reasoning: `Denial day ${denialDays} + privacy window — auto-conditioning (compliance cycle)`,
+      })
+    } catch (_) { /* non-critical */ }
+  }
+
   return { checked, escalated, deescalated, actions }
 }
 
@@ -385,7 +428,38 @@ async function dailyCycle(
         }
       }
 
-      // 5. Log daily cycle
+      // 5. Denial-scaled auto-conditioning
+      // If denial day >= 5 AND gina_home = false (privacy window), fire edge tease
+      let conditioningFired = false
+      const denialDays = await getActiveDenialDays(supabase, uid)
+
+      if (denialDays >= 5) {
+        const { data: stateData } = await supabase
+          .from('user_state')
+          .select('gina_home')
+          .eq('user_id', uid)
+          .maybeSingle()
+
+        const ginaHome = stateData?.gina_home ?? true // default safe: assume home
+
+        if (!ginaHome) {
+          await supabase.from('handler_directives').insert({
+            user_id: uid,
+            action: 'send_device_command',
+            target: 'lovense',
+            value: {
+              pattern: 'edge_tease',
+              intensity: Math.min(8 + Math.floor(denialDays / 3), 18),
+              denial_day: denialDays,
+            },
+            priority: 'normal',
+            reasoning: `Denial day ${denialDays} + privacy window — auto-conditioning`,
+          })
+          conditioningFired = true
+        }
+      }
+
+      // 6. Log daily cycle
       await supabase.from('handler_decisions').insert({
         user_id: uid,
         decision_type: 'daily_cycle',
@@ -393,8 +467,10 @@ async function dailyCycle(
           briefs_generated: briefsGenerated,
           active_briefs: activeBriefs || 0,
           strategy_updated: strategyUpdated,
+          denial_days: denialDays,
+          conditioning_fired: conditioningFired,
         },
-        reasoning: 'Daily 6 AM cycle: reset counters, expire old briefs, generate new assignments',
+        reasoning: 'Daily 6 AM cycle: reset counters, expire old briefs, generate new assignments, denial conditioning check',
         executed: true,
         executed_at: new Date().toISOString(),
       })
@@ -785,6 +861,30 @@ async function hourlyAnalytics(
     action: 'sync_analytics',
     user_id: userId,
   })
+}
+
+// ============================================
+// DENIAL STREAK HELPER
+// ============================================
+
+async function getActiveDenialDays(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<number> {
+  const { data: streak } = await supabase
+    .from('denial_streaks')
+    .select('started_at')
+    .eq('user_id', userId)
+    .is('ended_at', null)
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!streak?.started_at) return 0
+
+  const startDate = new Date(streak.started_at)
+  const now = new Date()
+  return Math.max(1, Math.floor((now.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)))
 }
 
 // ============================================

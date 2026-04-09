@@ -407,7 +407,38 @@ async function evaluateCompliance(
     current_tier: 0,
   })
 
-  // 7. Declined tasks — track resistance
+  // 7. Voice pitch quality — avg pitch must be >= 160Hz over last 3 days
+  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
+  const { data: pitchSamples } = await supabase
+    .from('voice_pitch_samples')
+    .select('pitch_hz')
+    .eq('user_id', userId)
+    .gte('created_at', threeDaysAgo)
+
+  let voicePitchCompliant = false
+  let pitchDetails = 'No voice pitch samples in last 3 days'
+  if (pitchSamples && pitchSamples.length > 0) {
+    const avgPitch = pitchSamples.reduce((sum: number, s: { pitch_hz: number }) => sum + s.pitch_hz, 0) / pitchSamples.length
+    voicePitchCompliant = avgPitch >= 160
+    pitchDetails = `Avg pitch: ${avgPitch.toFixed(1)}Hz across ${pitchSamples.length} samples (min 160Hz required)`
+  }
+
+  const { data: voicePitchStreak } = await supabase
+    .from('noncompliance_streaks')
+    .select('consecutive_days, current_tier')
+    .eq('user_id', userId)
+    .eq('domain', 'voice_quality')
+    .single()
+
+  results.push({
+    domain: 'voice_quality',
+    is_compliant: voicePitchCompliant,
+    details: pitchDetails,
+    days_noncompliant: voicePitchStreak?.consecutive_days || 0,
+    current_tier: voicePitchStreak?.current_tier || 0,
+  })
+
+  // 8. Declined tasks — track resistance
   const { count: declinedThisWeek } = await supabase
     .from('daily_tasks')
     .select('*', { count: 'exact', head: true })
@@ -597,7 +628,76 @@ async function applyEscalation(
     details: action.details,
   })
 
+  // ── FEATURE: Missed task → 24h random device firing ──
+  // On tier 2+ noncompliance, insert random device tease directives
+  if (currentTier >= 2 && config.lovense_proactive_enabled) {
+    await insertRandomDeviceFirings(supabase, userId, compliance)
+  }
+
   return action
+}
+
+// ============================================
+// RANDOM DEVICE FIRING (tier 2+ consequence)
+// ============================================
+// Inserts 3-6 device directives with random intensity/duration
+// spread across the next 24 hours. Uses the existing handler_directives
+// polling pattern — client picks these up when status = 'pending'.
+
+async function insertRandomDeviceFirings(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  compliance: ComplianceResult
+): Promise<void> {
+  const firingCount = 3 + Math.floor(Math.random() * 4) // 3-6 firings
+  const directives: Array<Record<string, unknown>> = []
+
+  // Insert one immediate directive
+  directives.push({
+    user_id: userId,
+    action: 'send_device_command',
+    target: 'lovense',
+    value: {
+      pattern: 'random_tease',
+      intensity: 5 + Math.floor(Math.random() * 11), // 5-15
+      duration_seconds: 5 + Math.floor(Math.random() * 26), // 5-30
+      firing_index: 1,
+      total_firings: firingCount,
+    },
+    priority: 'immediate',
+    reasoning: `Missed task consequence (1/${firingCount}): ${compliance.domain} — ${compliance.details}`,
+  })
+
+  // Insert remaining as deferred — the client polls periodically
+  // and the Handler note tells it to fire more throughout the day
+  for (let i = 2; i <= firingCount; i++) {
+    directives.push({
+      user_id: userId,
+      action: 'send_device_command',
+      target: 'lovense',
+      value: {
+        pattern: 'random_tease',
+        intensity: 5 + Math.floor(Math.random() * 11), // 5-15
+        duration_seconds: 5 + Math.floor(Math.random() * 26), // 5-30
+        firing_index: i,
+        total_firings: firingCount,
+        // Stagger: client should delay execution by this many minutes
+        delay_minutes: Math.floor((i - 1) * (24 * 60 / firingCount) + Math.random() * 60),
+      },
+      priority: 'deferred',
+      reasoning: `Missed task consequence (${i}/${firingCount}): ${compliance.domain} — ${compliance.details}`,
+    })
+  }
+
+  await supabase.from('handler_directives').insert(directives)
+
+  // Also insert a handler note so the enforcement narration knows about it
+  await supabase.from('handler_notes').insert({
+    user_id: userId,
+    note_type: 'device_punishment',
+    content: `${firingCount} random device firings scheduled over next 24h for ${compliance.domain} noncompliance (tier ${compliance.current_tier}). Intensities vary 5-15, durations 5-30s.`,
+    source: 'enforcement_engine',
+  })
 }
 
 // ============================================
@@ -743,6 +843,7 @@ function mapDomainToGateableFeature(domain: string): string {
     'compulsory': 'release_eligibility',
     'mood_logging': 'content_library',
     'resistance': 'session_tier_above_3',
+    'voice_quality': 'edge_session',
     'overall': 'edge_session',
   }
   return mapping[domain] || 'content_library'
