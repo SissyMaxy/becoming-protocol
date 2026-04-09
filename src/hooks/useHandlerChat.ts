@@ -8,51 +8,72 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { getPendingOutreach, markDelivered } from '../lib/conditioning/proactive-outreach';
 import { TypingMetricsTracker } from '../lib/conditioning/typing-resistance';
-import { sendVibrateCommand, sendCloudCommand } from '../lib/lovense';
+import { sendVibrateCommand } from '../lib/lovense';
 import { BUILTIN_PATTERNS } from '../types/lovense';
 import type { CloudCommandResponse } from '../types/lovense';
 
-// Convert a builtin pattern to a Lovense Pattern command string
-// Each value = 100ms of intensity (0-20), comma-separated
-function patternToLovenseString(patternId: string): string | null {
-  const pat = BUILTIN_PATTERNS.find(p => p.id === patternId);
-  if (!pat) return null;
+// ============================================
+// CLIENT-SIDE PATTERN PLAYBACK
+// Steps through pattern intensities using timed Function commands.
+// Lovense Pattern API doesn't loop reliably — this does.
+// ============================================
 
-  const values: number[] = [];
-  for (const step of pat.steps) {
-    // Each value = 100ms, so duration 1500ms = 15 values
-    const count = Math.round(step.duration / 100);
-    for (let i = 0; i < count; i++) {
-      values.push(Math.min(20, Math.max(0, step.intensity)));
-    }
+let activePatternTimer: ReturnType<typeof setTimeout> | null = null;
+let activePatternRunning = false;
+
+function stopActivePattern() {
+  activePatternRunning = false;
+  if (activePatternTimer) {
+    clearTimeout(activePatternTimer);
+    activePatternTimer = null;
   }
-  return values.join(',');
+}
+
+async function playPatternLoop(patternId: string): Promise<CloudCommandResponse> {
+  const pat = BUILTIN_PATTERNS.find(p => p.id === patternId);
+  if (!pat) return { success: false, error: `Pattern "${patternId}" not found` };
+
+  // Stop any existing pattern
+  stopActivePattern();
+  activePatternRunning = true;
+
+  console.log(`[HandlerChat] Starting pattern "${patternId}" (${pat.steps.length} steps, looping)`);
+
+  async function playStep(stepIdx: number) {
+    if (!activePatternRunning) return;
+
+    const idx = stepIdx % pat!.steps.length;
+    const step = pat!.steps[idx];
+
+    // Send intensity change — use short duration, we control timing
+    sendVibrateCommand(step.intensity, Math.ceil(step.duration / 1000) + 1, 'conditioning')
+      .catch(() => {}); // Non-blocking
+
+    // Schedule next step
+    activePatternTimer = setTimeout(() => {
+      playStep(stepIdx + 1);
+    }, step.duration);
+  }
+
+  // Start first step
+  playStep(0);
+  return { success: true };
 }
 
 // Execute a device command — pattern or simple vibrate
 async function executeDeviceCmd(cmd: { intensity?: number; duration?: number; pattern?: string }): Promise<CloudCommandResponse> {
   if (cmd.pattern) {
-    const patStr = patternToLovenseString(cmd.pattern);
-    if (patStr) {
-      const stepCount = patStr.split(',').length;
-      const patternDurationSec = Math.ceil(stepCount / 10); // 100ms per step
-      console.log(`[HandlerChat] Sending pattern "${cmd.pattern}" (${stepCount} steps, ${patternDurationSec}s per cycle) via cloud API`);
-      // Pattern command with loopRunningSec to repeat the pattern
-      const result = await sendCloudCommand({
-        customCommand: {
-          command: 'Pattern',
-          action: `V:1;F:v,${patStr};`,
-          timeSec: 3600,
-          loopRunningSec: patternDurationSec,
-          loopPauseSec: 0,
-        },
-        triggerType: 'conditioning',
-      });
-      console.log(`[HandlerChat] Pattern result:`, result);
-      return result;
+    // Stop sends intensity 0
+    if (cmd.pattern === 'stop') {
+      stopActivePattern();
+      return sendVibrateCommand(0, 1, 'conditioning');
     }
-    console.warn(`[HandlerChat] Pattern "${cmd.pattern}" not found`);
+    return playPatternLoop(cmd.pattern);
   }
+
+  // Simple vibrate — stop any active pattern first
+  stopActivePattern();
+
   // Lovense rejects timeSec:0, use 3600 (1 hour) for "indefinite"
   const duration = (cmd.duration && cmd.duration > 0) ? cmd.duration : 3600;
   return sendVibrateCommand(cmd.intensity || 5, duration, 'conditioning');
