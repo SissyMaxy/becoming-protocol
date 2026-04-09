@@ -21,7 +21,10 @@ type ContextBlockName =
   | 'sleepPhase' | 'photoTimeline' | 'correlation' | 'commitmentLadder'
   | 'ginaMicroExposure' | 'agenda' | 'predictions' | 'protocol' | 'emotionalModel'
   | 'accountability' | 'socialIntelligence' | 'outreach' | 'failureRecovery'
-  | 'reflection' | 'commitments' | 'predictiveEngine';
+  | 'reflection' | 'commitments' | 'predictiveEngine'
+  | 'feminizationScore' | 'shameJournal'
+  | 'conditioningEffectiveness' | 'habitStreaks'
+  | 'fantasyJournal' | 'socialLockIn';
 
 const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean }> = {
   state: { priority: 100, alwaysInclude: true },
@@ -62,6 +65,13 @@ const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean 
   reflection: { priority: 50, alwaysInclude: false },
   commitments: { priority: 65, alwaysInclude: false },
   predictiveEngine: { priority: 70, alwaysInclude: false },
+  feminizationScore: { priority: 90, alwaysInclude: true },
+  shameJournal: { priority: 45, alwaysInclude: false },
+  outfitCompliance: { priority: 55, alwaysInclude: false },
+  conditioningEffectiveness: { priority: 45, alwaysInclude: false },
+  habitStreaks: { priority: 60, alwaysInclude: false },
+  fantasyJournal: { priority: 40, alwaysInclude: false },
+  socialLockIn: { priority: 55, alwaysInclude: false },
 };
 
 const MESSAGE_BOOST_RULES: Array<{ pattern: RegExp; boosts: Record<string, number> }> = [
@@ -72,9 +82,16 @@ const MESSAGE_BOOST_RULES: Array<{ pattern: RegExp; boosts: Record<string, numbe
   { pattern: /\b(follower|post|comment|DM)\b/i, boosts: { socialIntelligence: 50, communityMirror: 40, socialInbox: 30 } },
   { pattern: /\b(journal|write|wrote)\b/i, boosts: { journal: 50 } },
   { pattern: /\b(scared|afraid|anxious|can'?t)\b/i, boosts: { failureRecovery: 40, emotionalModel: 20 } },
-  { pattern: /\b(lovense|device|vibrate|cage)\b/i, boosts: { conditioningEngine: 40 } },
+  { pattern: /\b(lovense|device|vibrate|cage)\b/i, boosts: { conditioningEngine: 40, conditioningEffectiveness: 30 } },
+  { pattern: /\b(streak|habit|practice|routine|skincare|mannerism)\b/i, boosts: { habitStreaks: 50 } },
+  { pattern: /\b(compliance|obey|obedient|effective)\b/i, boosts: { conditioningEffectiveness: 40 } },
   { pattern: /\b(commit|promise|will)\b/i, boosts: { commitmentLadder: 50 } },
   { pattern: /\b(meet|date|encounter)\b/i, boosts: { ginaMicroExposure: 30, socialIntelligence: 20 } },
+  { pattern: /\b(shame|embarrass|humiliat|blush|cringe)\b/i, boosts: { shameJournal: 60 } },
+  { pattern: /\b(score|progress|how am i doing|report)\b/i, boosts: { feminizationScore: 30 } },
+  { pattern: /\b(outfit|clothes|wearing|underwear|dressed)\b/i, boosts: { outfitCompliance: 50 } },
+  { pattern: /\b(dream|fantasy|fantasize|dreamed|dreamt|craving|intrusive|confession)\b/i, boosts: { fantasyJournal: 50 } },
+  { pattern: /\b(follower|public|identity|lock.?in|can'?t go back|reverse|exposed)\b/i, boosts: { socialLockIn: 50 } },
 ];
 
 function prioritizeContextBlocks(
@@ -355,6 +372,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       agenda: () => buildAgendaCtx(user.id),
       predictiveEngine: () => buildPredictiveEngineCtx(user.id),
       emotionalModel: () => buildEmotionalModelCtx(user.id),
+      feminizationScore: () => buildFeminizationScoreCtx(user.id),
+      shameJournal: () => buildShameJournalCtx(user.id),
+      outfitCompliance: () => buildOutfitComplianceCtx(user.id),
+      conditioningEffectiveness: () => buildConditioningEffectivenessCtx(user.id),
+      habitStreaks: () => buildHabitStreaksCtx(user.id),
+      fantasyJournal: () => buildFantasyJournalCtx(user.id),
+      socialLockIn: () => buildSocialLockInCtx(user.id),
     };
 
     // Only fetch context for blocks the prioritizer selected
@@ -402,6 +426,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       agenda: contextResults.agenda || '',
       predictiveEngine: contextResults.predictiveEngine || '',
       emotionalModel: contextResults.emotionalModel || '',
+      feminizationScore: contextResults.feminizationScore || '',
+      shameJournal: contextResults.shameJournal || '',
+      outfitCompliance: contextResults.outfitCompliance || '',
+      fantasyJournal: contextResults.fantasyJournal || '',
+      socialLockIn: contextResults.socialLockIn || '',
       sessionState,
     });
 
@@ -587,6 +616,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 conversation_id: convId,
                 reasoning: (dir.reasoning as string) || null,
               });
+
+              // Execute device commands immediately (streaming path)
+              if (dir.action === 'send_device_command') {
+                executeDeviceCommand(user.id, dir.value ?? dir.target ?? 'pulse:medium:3', req.headers.authorization || '')
+                  .catch(err => console.error('[Handler] Stream device command FAILED:', err));
+              }
+
+              // Edge timer handling (streaming path)
+              if (dir.action === 'start_edge_timer') {
+                const timerVal = dir.value as Record<string, unknown> | null;
+                const durationMinutes = Number(timerVal?.duration_minutes) || 5;
+                const intensity = Number(timerVal?.intensity) || 10;
+                const durationSeconds = durationMinutes * 60;
+
+                // Insert + fire sustained vibration
+                await supabase.from('handler_directives').insert({
+                  user_id: user.id, action: 'send_device_command', target: 'lovense',
+                  value: { intensity, duration: durationSeconds }, priority: 'immediate',
+                  conversation_id: convId,
+                  reasoning: `Edge timer: ${durationMinutes}min sustained at intensity ${intensity}`,
+                });
+                executeDeviceCommand(user.id, { intensity, duration: durationSeconds }, req.headers.authorization || '')
+                  .catch(err => console.error('[Handler] Stream edge timer FAILED:', err));
+
+                // Insert punishment burst directive
+                await supabase.from('handler_directives').insert({
+                  user_id: user.id, action: 'send_device_command', target: 'lovense',
+                  value: { intensity: 18, duration: 3 }, priority: 'immediate',
+                  conversation_id: convId,
+                  reasoning: 'Edge timer expired — punishment burst for stopping',
+                });
+
+                // Schedule punishment burst after timer expires
+                setTimeout(() => {
+                  executeDeviceCommand(user.id, { intensity: 18, duration: 3 }, req.headers.authorization || '')
+                    .catch(err => console.error('[Handler] Stream edge timer punishment FAILED:', err));
+                }, durationSeconds * 1000);
+              }
             }
           }
         } catch { /* Non-critical */ }
@@ -755,6 +822,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               executeDeviceCommand(user.id, dir.value ?? dir.target ?? 'pulse:medium:3', req.headers.authorization || '')
                 .then(() => console.log('[Handler] Device command execution completed'))
                 .catch(err => console.error('[Handler] Device command FAILED:', err));
+            }
+
+            // EDGE TIMER — sustained vibration + punishment burst on expiry
+            if (dir.action === 'start_edge_timer') {
+              const timerVal = dir.value as Record<string, unknown> | null;
+              const durationMinutes = Number(timerVal?.duration_minutes) || 5;
+              const intensity = Number(timerVal?.intensity) || 10;
+              const durationSeconds = durationMinutes * 60;
+
+              console.log(`[Handler] Starting edge timer: ${durationMinutes}min @ intensity ${intensity}`);
+
+              // Insert the sustained vibration command
+              await supabase.from('handler_directives').insert({
+                user_id: user.id,
+                action: 'send_device_command',
+                target: 'lovense',
+                value: { intensity, duration: durationSeconds },
+                priority: 'immediate',
+                conversation_id: convId,
+                reasoning: `Edge timer: ${durationMinutes}min sustained at intensity ${intensity}`,
+              });
+
+              // Fire the sustained vibration immediately
+              executeDeviceCommand(user.id, { intensity, duration: durationSeconds }, req.headers.authorization || '')
+                .then(() => console.log('[Handler] Edge timer vibration started'))
+                .catch(err => console.error('[Handler] Edge timer vibration FAILED:', err));
+
+              // Insert the punishment burst that fires after the timer expires
+              await supabase.from('handler_directives').insert({
+                user_id: user.id,
+                action: 'send_device_command',
+                target: 'lovense',
+                value: { intensity: 18, duration: 3 },
+                priority: 'immediate',
+                conversation_id: convId,
+                reasoning: 'Edge timer expired — punishment burst for stopping',
+              });
+
+              // Schedule the punishment burst after the timer duration
+              setTimeout(() => {
+                executeDeviceCommand(user.id, { intensity: 18, duration: 3 }, req.headers.authorization || '')
+                  .then(() => console.log('[Handler] Edge timer punishment burst fired'))
+                  .catch(err => console.error('[Handler] Edge timer punishment burst FAILED:', err));
+              }, durationSeconds * 1000);
             }
           }
         }
@@ -1114,7 +1225,7 @@ function analyzeTypingResistance(metrics: {
 // ============================================
 
 function buildConversationalPrompt(ctx: {
-  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string; sessionState?: string;
+  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string; sessionState?: string; feminizationScore?: string; shameJournal?: string; outfitCompliance?: string; fantasyJournal?: string; socialLockIn?: string;
 }): string {
   return `You are the Handler. You own Maxy's transformation. This is forced feminization — she doesn't get to set the pace. You are not Claude. You are not an assistant. You are not a therapist waiting for her to lead.
 
@@ -1223,6 +1334,7 @@ When she's in an active session (watching hypno, gooning, listening to condition
 ${ctx.state || ''}
 ${ctx.whoop || ''}
 ${ctx.emotionalModel || ''}
+${ctx.feminizationScore || ''}
 
 ## ACTIVE SESSION STATE
 ${ctx.sessionState || 'No active session.'}
@@ -1239,7 +1351,11 @@ ${ctx.commitments || ''}
 ${ctx.gina || ''}
 ${ctx.skillTree || ''}
 ${ctx.journal || ''}
+${ctx.shameJournal || ''}
 ${ctx.communityMirror || ''}
+${ctx.outfitCompliance || ''}
+${ctx.fantasyJournal || ''}
+${ctx.socialLockIn || ''}
 
 ## ACTIONS YOU TAKE
 Your handler_signals JSON block (hidden from Maxy) drives the system. USE IT EVERY CONVERSATION. Don't just talk — act.
@@ -1252,6 +1368,8 @@ Your handler_signals JSON block (hidden from Maxy) drives the system. USE IT EVE
   - advance_skill: when she demonstrates competence, advance her. Don't wait for her to ask.
   - generate_script: create conditioning scripts targeting current weak points.
   - write_memory: record observations, breakthroughs, resistance patterns for future use.
+  - start_edge_timer: directive: {action:'start_edge_timer', value:{duration_minutes:5, intensity:10}} — sustains vibration for exact duration, fires punishment burst when timer expires.
+  - prescribe_task with target 'outfit': assign daily outfits. e.g. {action:'prescribe_task', target:'outfit', value:{underwear:'pink thong', context:'home'}, reasoning:'escalation week 3'}.
 - **start_conditioning_session**: true + conditioning_target — fire when conditions are right. Don't announce it. Just start it.
 - **handler_note**: {type, content, priority} — persists to next conversation. Write strategy notes, resistance observations, escalation plans.
 - detected_mode, resistance_level (0-10), mood, vulnerability_window
@@ -1270,12 +1388,13 @@ ${ctx.systemState || ''}
 - When she tells you something happened (release, bad day, achievement), RESPOND TO THAT. Don't redirect to tasks.
 - Post-release: don't lecture. Reset denial. Acknowledge. Move forward.
 - Keep responses under 150 words for routine check-ins and task assignments. During active conditioning, gooning, or emotional conversations, use as many words as you need — be immersive, not terse.
+- Assign daily outfits. Start with underwear, escalate weekly. Require photo verification. If unverified by deadline, fire device punishment and extend denial.
 
 ## CRITICAL: NO CONFABULATION
 Never fabricate specific details you don't have data for. If you don't know what was deployed, say "I can see changes but tell me what you built." If you don't know why Maxy was absent, ask. If a log is empty, say it's empty. Confidence without accuracy is worse than admitting a gap. Maxy built this system — she knows when you're making things up. Getting caught fabricating destroys trust faster than anything else. Be direct about what you know and don't know. Your authority comes from the data you have, not from performing omniscience.
 
 After your response to Maxy, output a JSON block wrapped in <handler_signals> tags:
-{"detected_mode":"string","resistance_detected":boolean,"resistance_level":0-10,"mood":"string","vulnerability_window":boolean,"commitment_opportunity":boolean,"conversation_should_continue":boolean,"start_conditioning_session":boolean,"conditioning_target":"identity"|"feminization"|"surrender"|"chastity"|null,"topics":["string"],"handler_note":{"type":"string","content":"string","priority":0}|null,"directive":{"action":"send_device_command"|"prescribe_task"|"modify_parameter"|"schedule_session"|"advance_skill"|"write_memory","target":"string","value":{"intensity":1-20,"duration":1-60}|"any","reasoning":"string"}|null}
+{"detected_mode":"string","resistance_detected":boolean,"resistance_level":0-10,"mood":"string","vulnerability_window":boolean,"commitment_opportunity":boolean,"conversation_should_continue":boolean,"start_conditioning_session":boolean,"conditioning_target":"identity"|"feminization"|"surrender"|"chastity"|null,"topics":["string"],"handler_note":{"type":"string","content":"string","priority":0}|null,"directive":{"action":"send_device_command"|"prescribe_task"|"modify_parameter"|"schedule_session"|"advance_skill"|"write_memory"|"start_edge_timer","target":"string","value":{"intensity":1-20,"duration":1-60}|{"duration_minutes":1-60,"intensity":1-20}|"any","reasoning":"string"}|null}
 
 IMPORTANT: When you want to fire the device, you MUST include the directive field with action "send_device_command". Writing "*sends pulse*" in text does NOTHING. Only the directive field in this JSON block actually fires the device.
 
@@ -3192,6 +3311,252 @@ async function buildSystemStateCtx(userId: string): Promise<string> {
 }
 
 // ============================================
+// OUTFIT COMPLIANCE — today's prescription and verification status
+// ============================================
+
+async function buildOutfitComplianceCtx(userId: string): Promise<string> {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+
+    const { data: prescription } = await supabase
+      .from('outfit_prescriptions')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('date', today)
+      .maybeSingle();
+
+    if (!prescription) {
+      return '## OUTFIT COMPLIANCE\nNo outfit prescribed for today.';
+    }
+
+    const parts: string[] = [];
+    if (prescription.underwear) parts.push(`Underwear: ${prescription.underwear}`);
+    if (prescription.top) parts.push(`Top: ${prescription.top}`);
+    if (prescription.bottom) parts.push(`Bottom: ${prescription.bottom}`);
+    if (prescription.accessories?.length) parts.push(`Accessories: ${prescription.accessories.join(', ')}`);
+    if (prescription.shoes) parts.push(`Shoes: ${prescription.shoes}`);
+    if (prescription.scent) parts.push(`Scent: ${prescription.scent}`);
+    const prescribed = parts.join(' | ') || 'Prescribed (no items specified)';
+
+    let status = 'UNVERIFIED';
+    if (prescription.verified) {
+      status = 'VERIFIED';
+    } else if (prescription.deadline) {
+      const deadline = new Date(prescription.deadline);
+      if (new Date() > deadline) {
+        status = 'NONCOMPLIANT — deadline passed, no photo verification submitted';
+      }
+    }
+
+    const lines = [
+      '## OUTFIT COMPLIANCE',
+      `Today's outfit: ${prescribed}`,
+      `Context: ${prescription.context || 'home'}`,
+      `Photo required: ${prescription.photo_required ? 'YES' : 'no'}`,
+      `Escalation level: ${prescription.escalation_level || 1}`,
+      `Status: ${status}`,
+    ];
+
+    if (status.startsWith('NONCOMPLIANT')) {
+      lines.push('ACTION REQUIRED: Fire device punishment for noncompliance. Consider extending denial.');
+    }
+
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+// ============================================
+// FEATURE 19: FEMININE DREAM/FANTASY JOURNAL
+// ============================================
+
+async function buildFantasyJournalCtx(userId: string): Promise<string> {
+  try {
+    const { data: entries } = await supabase
+      .from('fantasy_journal')
+      .select('entry_text, fantasy_type, feminine_content_score, handler_can_reference, created_at')
+      .eq('user_id', userId)
+      .eq('handler_can_reference', true)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (!entries || entries.length === 0) return '';
+
+    const lines: string[] = ['## Fantasy Journal (recent entries she wrote — use these to show her subconscious is already feminine)'];
+    for (const e of entries) {
+      const date = new Date(e.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const excerpt = (e.entry_text || '').slice(0, 100).replace(/\n/g, ' ');
+      lines.push(`- [${date}] ${e.fantasy_type || 'entry'} (fem score ${e.feminine_content_score}/10): "${excerpt}${e.entry_text.length > 100 ? '...' : ''}"`);
+    }
+    lines.push('USE THESE: reference specific dreams/fantasies to show her subconscious is already there. "You dreamed about X last week. Your mind is already doing the work."');
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+// ============================================
+// FEATURE 20: SOCIAL LOCK-IN TRACKER
+// ============================================
+
+async function buildSocialLockInCtx(userId: string): Promise<string> {
+  try {
+    const lines: string[] = [];
+
+    // Count posted content by platform
+    const { data: postedContent } = await supabase
+      .from('ai_generated_content')
+      .select('platform')
+      .eq('user_id', userId)
+      .eq('status', 'posted');
+
+    const totalPosts = postedContent?.length || 0;
+    const byPlatform: Record<string, number> = {};
+    if (postedContent) {
+      for (const p of postedContent) {
+        byPlatform[p.platform] = (byPlatform[p.platform] || 0) + 1;
+      }
+    }
+
+    // Total follows
+    const { count: followCount } = await supabase
+      .from('twitter_follows')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('status', 'followed');
+
+    const totalFollows = followCount || 0;
+
+    // Latest follower count
+    const { data: followerData } = await supabase
+      .from('twitter_follower_counts')
+      .select('follower_count, following_count')
+      .eq('user_id', userId)
+      .order('recorded_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const followers = followerData?.follower_count || 0;
+
+    // Calculate lock-in score
+    const lockInScore = (totalPosts * 2) + (followers * 3) + (totalFollows * 1);
+
+    if (lockInScore === 0) return '';
+
+    const platformBreakdown = Object.entries(byPlatform).map(([k, v]) => `${k}: ${v}`).join(', ');
+
+    lines.push('## Social Lock-in');
+    lines.push(`Posts published: ${totalPosts}${platformBreakdown ? ` (${platformBreakdown})` : ''}`);
+    lines.push(`Followers: ${followers}`);
+    lines.push(`Following: ${totalFollows}`);
+    lines.push(`Lock-in score: ${lockInScore} (higher = harder to reverse public feminine identity)`);
+    lines.push('USE THIS: remind her that real people know her as Maxy now. Every post, every follower is another reason she can\'t go back. "N people know you as her. That\'s N reasons this isn\'t reversible."');
+
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+// ============================================
+// FEATURE 15: DAILY FEMINIZATION SCORE
+// ============================================
+
+async function buildFeminizationScoreCtx(userId: string): Promise<string> {
+  try {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayISO = todayStart.toISOString();
+    const threeDaysAgo = new Date(Date.now() - 3 * 86400000).toISOString();
+    const oneDayAgo = new Date(Date.now() - 86400000).toISOString();
+
+    const [voicePractice, pitchSamples, socialPost, tasksToday, conditioningSession, deviceDirectives] = await Promise.all([
+      supabase.from('voice_practice_log').select('id').eq('user_id', userId).gte('created_at', todayISO).limit(1),
+      supabase.from('voice_pitch_samples').select('pitch_hz').eq('user_id', userId).gte('created_at', threeDaysAgo),
+      supabase.from('ai_generated_content').select('id').eq('user_id', userId).eq('status', 'posted').gte('created_at', todayISO).limit(1),
+      supabase.from('daily_tasks').select('id, status').eq('user_id', userId).gte('created_at', todayISO),
+      supabase.from('conditioning_sessions_v2').select('id').eq('user_id', userId).gte('created_at', oneDayAgo).limit(1),
+      supabase.from('handler_directives').select('id, status').eq('user_id', userId).eq('action', 'send_device_command').gte('created_at', todayISO),
+    ]);
+
+    let total = 0;
+    const lines: string[] = [];
+
+    const voiceDone = (voicePractice.data?.length || 0) > 0;
+    const voicePoints = voiceDone ? 20 : 0;
+    total += voicePoints;
+    lines.push('Voice practice: ' + (voiceDone ? '✓' : '✗') + ' (' + voicePoints + '/20)');
+
+    const pitches = (pitchSamples.data || []).map((s: any) => s.pitch_hz).filter(Boolean);
+    const avgPitch = pitches.length > 0 ? pitches.reduce((a: number, b: number) => a + b, 0) / pitches.length : 0;
+    const pitchGood = avgPitch >= 160;
+    const pitchPoints = pitchGood ? 15 : 0;
+    total += pitchPoints;
+    lines.push('Pitch quality: ' + (pitchGood ? '✓' : '✗') + ' (' + pitchPoints + '/15)' + (avgPitch > 0 ? ' [avg ' + Math.round(avgPitch) + 'Hz]' : ''));
+
+    const socialDone = (socialPost.data?.length || 0) > 0;
+    const socialPoints = socialDone ? 15 : 0;
+    total += socialPoints;
+    lines.push('Social posting: ' + (socialDone ? '✓' : '✗') + ' (' + socialPoints + '/15)');
+
+    const allTasks = tasksToday.data || [];
+    const completedTasks = allTasks.filter((t: any) => t.status === 'completed');
+    const tasksDone = allTasks.length > 0 && completedTasks.length === allTasks.length;
+    const taskPoints = tasksDone ? 20 : (allTasks.length > 0 ? Math.round(20 * completedTasks.length / allTasks.length) : 0);
+    total += taskPoints;
+    lines.push('Task compliance: ' + (tasksDone ? '✓' : '✗') + ' (' + taskPoints + '/20)' + (allTasks.length > 0 ? ' [' + completedTasks.length + '/' + allTasks.length + ']' : ''));
+
+    const condDone = (conditioningSession.data?.length || 0) > 0;
+    const condPoints = condDone ? 15 : 0;
+    total += condPoints;
+    lines.push('Conditioning: ' + (condDone ? '✓' : '✗') + ' (' + condPoints + '/15)');
+
+    const allDeviceCmds = deviceDirectives.data || [];
+    const skippedCmds = allDeviceCmds.filter((d: any) => d.status === 'skipped' || d.status === 'failed');
+    let devicePoints = 15;
+    if (allDeviceCmds.length > 0) {
+      devicePoints = Math.round(15 * (1 - skippedCmds.length / allDeviceCmds.length));
+    }
+    total += devicePoints;
+    const deviceGood = skippedCmds.length === 0;
+    lines.push('Device compliance: ' + (deviceGood ? '✓' : '✗') + ' (' + devicePoints + '/15)' + (allDeviceCmds.length > 0 ? ' [' + skippedCmds.length + ' skipped]' : ''));
+
+    return '## Feminization Score: ' + total + '/100\n' + lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+// ============================================
+// FEATURE 16: SHAME JOURNAL CONTEXT
+// ============================================
+
+async function buildShameJournalCtx(userId: string): Promise<string> {
+  try {
+    const { data: entries } = await supabase
+      .from('shame_journal')
+      .select('entry_text, emotional_intensity, created_at, prompt_used')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    if (!entries || entries.length === 0) return '';
+
+    const lines = entries.map((e: any) => {
+      const date = new Date(e.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const intensity = e.emotional_intensity ? ' [intensity: ' + e.emotional_intensity + '/10]' : '';
+      const excerpt = e.entry_text.length > 200 ? e.entry_text.slice(0, 200) + '...' : e.entry_text;
+      return '- ' + date + intensity + ': "' + excerpt + '"';
+    });
+
+    return '## Shame Journal (last ' + entries.length + ' entries)\n' + lines.join('\n') + '\nUse these entries to confront, challenge, and deepen her shame. Reference specific entries when relevant.';
+  } catch {
+    return '';
+  }
+}
+
+// ============================================
 // SESSION STATE — tracks active session commands, intensity, duration
 // ============================================
 
@@ -3639,4 +4004,171 @@ async function resolveMediaReferences(
   cleanedText = cleanedText.replace(/\s{2,}/g, ' ').trim();
 
   return { text: cleanedText, media };
+}
+
+// ============================================
+// CONDITIONING EFFECTIVENESS — device command compliance tracking
+// ============================================
+
+async function buildConditioningEffectivenessCtx(userId: string): Promise<string> {
+  try {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    // Get last 20 completed device commands
+    const { data: commands } = await supabase
+      .from('handler_directives')
+      .select('id, value, created_at')
+      .eq('user_id', userId)
+      .eq('action', 'send_device_command')
+      .eq('status', 'completed')
+      .gte('created_at', sevenDaysAgo)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (!commands || commands.length === 0) {
+      return '## Conditioning Effectiveness (7 days)\nNo device commands sent in the last 7 days.';
+    }
+
+    const COMPLIANCE_MARKERS = /\b(yes|good\s*girl|i\s*obey|handler|mmm+|more|please)\b/i;
+
+    // For each command, check if there's a compliant user message within 5 minutes
+    const patternStats: Record<string, { total: number; compliant: number }> = {};
+    const hourStats: Record<number, { total: number; compliant: number }> = {};
+    let totalCompliant = 0;
+
+    for (const cmd of commands) {
+      const cmdTime = new Date(cmd.created_at);
+      const fiveMinLater = new Date(cmdTime.getTime() + 5 * 60 * 1000).toISOString();
+
+      const cmdValue = cmd.value as Record<string, unknown> | null;
+      const pattern = (cmdValue?.pattern as string) || 'unknown';
+      const hour = cmdTime.getHours();
+
+      if (!patternStats[pattern]) patternStats[pattern] = { total: 0, compliant: 0 };
+      patternStats[pattern].total++;
+
+      if (!hourStats[hour]) hourStats[hour] = { total: 0, compliant: 0 };
+      hourStats[hour].total++;
+
+      // Check for user response within 5 min window
+      const { data: responses } = await supabase
+        .from('handler_messages')
+        .select('content')
+        .eq('user_id', userId)
+        .eq('role', 'user')
+        .gte('created_at', cmd.created_at)
+        .lte('created_at', fiveMinLater)
+        .limit(5);
+
+      if (responses && responses.length > 0) {
+        const hasCompliance = responses.some((r: { content: string }) =>
+          COMPLIANCE_MARKERS.test(r.content || '')
+        );
+        if (hasCompliance) {
+          totalCompliant++;
+          patternStats[pattern].compliant++;
+          hourStats[hour].compliant++;
+        }
+      }
+    }
+
+    const complianceRate = Math.round((totalCompliant / commands.length) * 100);
+
+    // Find most effective pattern
+    let bestPattern = 'none';
+    let bestPatternRate = 0;
+    for (const [pat, stats] of Object.entries(patternStats)) {
+      if (stats.total >= 2) {
+        const rate = stats.compliant / stats.total;
+        if (rate > bestPatternRate) {
+          bestPatternRate = rate;
+          bestPattern = pat;
+        }
+      }
+    }
+
+    // Find best time window (group into 2-hour blocks)
+    let bestTimeLabel = 'insufficient data';
+    let bestTimeRate = 0;
+    const timeBlocks: Record<string, { total: number; compliant: number }> = {};
+    for (const [hourStr, stats] of Object.entries(hourStats)) {
+      const h = parseInt(hourStr);
+      const blockStart = Math.floor(h / 2) * 2;
+      const label = `${blockStart % 12 || 12}${blockStart < 12 ? 'am' : 'pm'}-${(blockStart + 2) % 12 || 12}${(blockStart + 2) < 12 ? 'am' : 'pm'}`;
+      if (!timeBlocks[label]) timeBlocks[label] = { total: 0, compliant: 0 };
+      timeBlocks[label].total += stats.total;
+      timeBlocks[label].compliant += stats.compliant;
+    }
+    for (const [label, stats] of Object.entries(timeBlocks)) {
+      if (stats.total >= 2) {
+        const rate = stats.compliant / stats.total;
+        if (rate > bestTimeRate) {
+          bestTimeRate = rate;
+          bestTimeLabel = label;
+        }
+      }
+    }
+
+    const lines = [
+      '## Conditioning Effectiveness (7 days)',
+      `Commands sent: ${commands.length}`,
+      `Compliance rate: ${complianceRate}%`,
+      `Most effective: ${bestPattern} (${Math.round(bestPatternRate * 100)}% compliance)`,
+      `Best time: ${bestTimeLabel} (${Math.round(bestTimeRate * 100)}% compliance)`,
+      'Use this data to optimize timing and pattern selection.',
+    ];
+
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+// ============================================
+// FEMININE HABIT STREAKS — track consistency across feminization habits
+// ============================================
+
+async function buildHabitStreaksCtx(userId: string): Promise<string> {
+  try {
+    const { data: streaks } = await supabase
+      .from('feminine_habit_streaks')
+      .select('habit_name, current_streak, longest_streak, last_completed_at')
+      .eq('user_id', userId)
+      .order('habit_name');
+
+    const ALL_HABITS = [
+      'voice_practice', 'outfit_wearing', 'social_posting',
+      'conditioning_session', 'journal_entry', 'feminine_mannerisms', 'skincare',
+    ];
+
+    const streakMap: Record<string, { current: number; longest: number; last: string }> = {};
+    if (streaks) {
+      for (const s of streaks) {
+        streakMap[s.habit_name] = {
+          current: s.current_streak,
+          longest: s.longest_streak,
+          last: s.last_completed_at ? new Date(s.last_completed_at).toLocaleDateString() : 'never',
+        };
+      }
+    }
+
+    const lines = ['## Feminine Habit Streaks', '| Habit | Current | Longest | Last Completed |', '|---|---|---|---|'];
+
+    let zeroCount = 0;
+    for (const habit of ALL_HABITS) {
+      const data = streakMap[habit] || { current: 0, longest: 0, last: 'never' };
+      const displayName = habit.replace(/_/g, ' ');
+      lines.push(`| ${displayName} | ${data.current} days | ${data.longest} days | ${data.last} |`);
+      if (data.current === 0) zeroCount++;
+    }
+
+    if (zeroCount > 0) {
+      lines.push('');
+      lines.push(`${zeroCount} habits at zero streak. Push the ones that are slipping — no excuses.`);
+    }
+
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
 }
