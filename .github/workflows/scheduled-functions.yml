@@ -252,3 +252,28 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Content-Type: application/json" \
             -d '{"action":"weekly_adaptation"}'
+
+  # Sunday 8 AM UTC: Autonomous strategist — full-state Claude review,
+  # writes strategic directives + notes for the week ahead
+  handler-strategist:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if Sunday 8 AM window
+        id: should_run
+        run: |
+          DOW=$(date -u +%u)
+          HOUR=$(date -u +%H)
+          MINUTE=$(date -u +%M)
+          if [ "$DOW" = "7" ] && [ "$HOUR" = "08" ] && [ "$MINUTE" -lt "10" ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Trigger handler-strategist
+        if: steps.should_run.outputs.run == 'true'
+        run: |
+          curl -sS -X POST "${{ env.SUPABASE_URL }}/functions/v1/handler-strategist" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}'
