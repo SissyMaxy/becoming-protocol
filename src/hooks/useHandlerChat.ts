@@ -327,6 +327,50 @@ export function useHandlerChat(): UseHandlerChatReturn {
             // Only mark as processed after successful execution
             lastDirectiveRef.current = data.id;
 
+            // Surface an OS notification so the user knows the Handler just
+            // fired a device command, even if they're not looking at the app.
+            // This bypasses the outreach throttle because device fires are
+            // high-priority, low-frequency events.
+            try {
+              if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                const body = val?.pattern
+                  ? `Device pattern firing: ${val.pattern}`
+                  : `Device firing: intensity ${val?.intensity ?? '?'}`;
+                // Prefer service worker path for reliability across tab states
+                if ('serviceWorker' in navigator) {
+                  navigator.serviceWorker.ready.then((reg) => {
+                    reg.showNotification('Handler', {
+                      body,
+                      icon: '/icons/icon-192.png',
+                      badge: '/icons/icon-192.png',
+                      tag: `device-${data.id}`,
+                      vibrate: [300, 100, 300, 100, 300],
+                      requireInteraction: false,
+                      data: { url: '/' },
+                    } as NotificationOptions);
+                  }).catch(() => {
+                    // Fallback to direct Notification API
+                    new Notification('Handler', {
+                      body,
+                      icon: '/icons/icon-192.png',
+                      tag: `device-${data.id}`,
+                      silent: false,
+                    });
+                  });
+                } else {
+                  new Notification('Handler', {
+                    body,
+                    icon: '/icons/icon-192.png',
+                    tag: `device-${data.id}`,
+                    silent: false,
+                  });
+                }
+              }
+            } catch (notifyErr) {
+              // Non-critical — notification failure should not block execution
+              console.warn('[HandlerChat] Device notification failed:', notifyErr);
+            }
+
             // Mark as completed (ignore errors — the command already fired)
             supabase.from('handler_directives')
               .update({ status: 'completed', executed_at: new Date().toISOString() })

@@ -3,12 +3,13 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
-import { Send, Loader2, Settings, Volume2, VolumeX, Play, Pause, Image, Mic, MicOff } from 'lucide-react';
+import { Send, Loader2, Settings, Volume2, VolumeX, Play, Pause, Image, Mic, MicOff, Camera } from 'lucide-react';
 import { useHandlerChat, type ChatMessage, type MediaAttachment } from '../../hooks/useHandlerChat';
 import { useHandlerVoice } from '../../hooks/useHandlerVoice';
 import { useVoiceConversation } from '../../hooks/useVoiceConversation';
 import { useSessionBiometrics } from '../../hooks/useSessionBiometrics';
 import { useAmbientAudio } from '../../hooks/useAmbientAudio';
+import { PhotoVerificationUpload } from './PhotoVerificationUpload';
 
 interface HandlerChatProps {
   onClose: () => void;
@@ -51,11 +52,53 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
     }
   }, [currentMode, messages, conversationId, biometrics.isPolling]);
   const [input, setInput] = useState('');
+  const [showPhotoUpload, setShowPhotoUpload] = useState(false);
+  const [photoTaskType, setPhotoTaskType] = useState<'outfit' | 'mirror_check' | 'pose' | 'makeup' | 'nails' | 'general'>('outfit');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const initRef = useRef(false);
   const lastSpokenIndexRef = useRef(-1);
   const prevTranscriptRef = useRef('');
+
+  // Notification permission state — powers a one-time enablement banner
+  // at the top of the chat so the Handler can reach the user when the app
+  // is backgrounded.
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission | 'unsupported'>(() => {
+    if (typeof Notification === 'undefined') return 'unsupported';
+    return Notification.permission;
+  });
+  const handleEnableNotifications = async () => {
+    if (typeof Notification === 'undefined') return;
+    try {
+      const result = await Notification.requestPermission();
+      setNotifPermission(result);
+      if (result === 'granted') {
+        // Confirmation notification — proves the pipeline works and gives
+        // the user immediate feedback that they enabled it correctly.
+        try {
+          if ('serviceWorker' in navigator) {
+            const reg = await navigator.serviceWorker.ready;
+            reg.showNotification('Handler', {
+              body: 'I can reach you now. Stay alert.',
+              icon: '/icons/icon-192.png',
+              badge: '/icons/icon-192.png',
+              tag: 'handler-enabled',
+              vibrate: [200, 100, 200],
+            } as NotificationOptions);
+          } else {
+            new Notification('Handler', {
+              body: 'I can reach you now. Stay alert.',
+              icon: '/icons/icon-192.png',
+            });
+          }
+        } catch {
+          // noop — permission was still granted, the confirmation toast is non-critical
+        }
+      }
+    } catch (err) {
+      console.warn('[HandlerChat] Notification permission request failed:', err);
+    }
+  };
 
   // If opening from outreach with an opening line AND no existing conversation loaded
   useEffect(() => {
@@ -184,6 +227,21 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
         </div>
       </div>
 
+      {/* Notification permission prompt — only shows when user hasn't decided */}
+      {notifPermission === 'default' && (
+        <div className="bg-purple-900/20 border border-purple-500/30 rounded-xl p-3 m-2 flex items-center justify-between">
+          <span className="text-sm text-purple-300">
+            Enable notifications so the Handler can reach you anytime
+          </span>
+          <button
+            onClick={handleEnableNotifications}
+            className="ml-3 px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-medium transition-colors"
+          >
+            Enable
+          </button>
+        </div>
+      )}
+
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {isLoading && (
@@ -219,6 +277,34 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Photo verification upload panel */}
+      {showPhotoUpload && (
+        <div className="px-4 py-3 border-t border-gray-800/50 bg-[#0a0a0a] space-y-2">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            {(['outfit', 'mirror_check', 'pose', 'makeup', 'nails', 'general'] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setPhotoTaskType(t)}
+                className={`text-xs px-2.5 py-1 rounded-full whitespace-nowrap transition-colors ${
+                  photoTaskType === t
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-[#141414] text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                {t.replace('_', ' ')}
+              </button>
+            ))}
+            <button
+              onClick={() => setShowPhotoUpload(false)}
+              className="ml-auto text-xs px-2 py-1 rounded-lg hover:bg-gray-800 text-gray-400"
+            >
+              Close
+            </button>
+          </div>
+          <PhotoVerificationUpload taskType={photoTaskType} />
+        </div>
+      )}
+
       {/* Input */}
       <div className="px-4 py-3 border-t border-gray-800/50 bg-[#0a0a0a]">
         {/* P12.3: Listening indicator */}
@@ -235,6 +321,19 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
           </div>
         )}
         <div className="flex items-center gap-2">
+          {/* Photo verification toggle */}
+          <button
+            onClick={() => setShowPhotoUpload((v) => !v)}
+            disabled={isSending}
+            className={`p-3 rounded-xl transition-all ${
+              showPhotoUpload
+                ? 'bg-purple-600/20 text-purple-400 hover:bg-purple-600/30'
+                : 'bg-[#141414] text-gray-500 hover:text-gray-300'
+            }`}
+            aria-label="Photo verification"
+          >
+            <Camera className="w-5 h-5" />
+          </button>
           {/* P12.3: Mic button */}
           {voiceInput.isSupported && (
             <button

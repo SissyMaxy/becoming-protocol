@@ -41,6 +41,10 @@ interface NotifyOptions {
   url?: string;
   /** Require user interaction to dismiss */
   requireInteraction?: boolean;
+  /** Bypass the throttle (for high-priority events like device commands) */
+  bypassThrottle?: boolean;
+  /** Vibration pattern */
+  vibrate?: number[];
 }
 
 // ============================================
@@ -75,7 +79,8 @@ async function showViaServiceWorker(
   options: NotifyOptions = {},
 ): Promise<boolean> {
   try {
-    const reg = await navigator.serviceWorker?.ready;
+    if (!('serviceWorker' in navigator)) return false;
+    const reg = await navigator.serviceWorker.ready;
     if (!reg) return false;
 
     await reg.showNotification(title, {
@@ -84,11 +89,29 @@ async function showViaServiceWorker(
       badge: '/icons/icon-192.png',
       tag: options.tag || 'handler-outreach',
       requireInteraction: options.requireInteraction || false,
+      vibrate: options.vibrate || [200, 100, 200],
       data: { url: options.url || '/' },
-    });
+    } as NotificationOptions);
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Ensure the service worker is registered. This is idempotent — calling
+ * multiple times just returns the existing registration.
+ */
+async function ensureServiceWorkerRegistered(): Promise<ServiceWorkerRegistration | null> {
+  if (!('serviceWorker' in navigator)) return null;
+  try {
+    // Check for existing registration first
+    const existing = await navigator.serviceWorker.getRegistration('/');
+    if (existing) return existing;
+    return await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+  } catch (err) {
+    console.warn('[usePushNotifications] SW registration failed:', err);
+    return null;
   }
 }
 
@@ -104,13 +127,17 @@ export function usePushNotifications(): PushNotificationState {
   });
   const lastNotifyRef = useRef(0);
 
-  // Sync permission state on mount
+  // Sync permission state on mount + auto-register service worker
   useEffect(() => {
     if (typeof Notification === 'undefined') {
       setPermission('unsupported');
       return;
     }
     setPermission(Notification.permission);
+
+    // Auto-register the service worker so notifications can be shown
+    // even when the tab later becomes hidden. Idempotent.
+    ensureServiceWorkerRegistered();
   }, []);
 
   // Store subscription state in Supabase when permission changes to granted
@@ -157,18 +184,33 @@ export function usePushNotifications(): PushNotificationState {
     (title: string, body: string, options: NotifyOptions = {}): void => {
       if (permission !== 'granted') return;
 
-      // Throttle: no more than one notification per 30 seconds
+      // Throttle: no more than one notification per 30 seconds (unless bypassed)
       const now = Date.now();
-      if (now - lastNotifyRef.current < 30_000) return;
+      if (!options.bypassThrottle && now - lastNotifyRef.current < 30_000) return;
       lastNotifyRef.current = now;
 
-      // Prefer service worker notification (works in background tab)
-      if (navigator.serviceWorker?.controller) {
-        showViaServiceWorker(title, body, options);
+      // Prefer service worker notification — works regardless of tab visibility
+      // and is the only reliable path on mobile Chrome / installed PWAs.
+      if ('serviceWorker' in navigator) {
+        showViaServiceWorker(title, body, options).then((shown) => {
+          if (shown) return;
+          // Service worker path failed — fall back to direct Notification API
+          try {
+            const n = new Notification(title, {
+              body,
+              icon: options.icon || '/icons/icon-192.png',
+              tag: options.tag || 'handler-outreach',
+              requireInteraction: options.requireInteraction || false,
+            });
+            setTimeout(() => n.close(), 10_000);
+          } catch {
+            // noop
+          }
+        });
         return;
       }
 
-      // Fallback: direct Notification API (only works when tab exists)
+      // No service worker available — direct Notification API
       try {
         const notification = new Notification(title, {
           body,
@@ -176,11 +218,9 @@ export function usePushNotifications(): PushNotificationState {
           tag: options.tag || 'handler-outreach',
           requireInteraction: options.requireInteraction || false,
         });
-
-        // Auto-close after 10 seconds
         setTimeout(() => notification.close(), 10_000);
       } catch {
-        // Notification constructor failed (e.g., mobile Safari)
+        // Notification constructor failed (e.g., mobile Safari without PWA)
       }
     },
     [permission],

@@ -38,12 +38,21 @@ export function useProactiveOutreach(): UseProactiveOutreachReturn {
     try {
       const msg = await getPendingOutreach(user.id);
       if (msg && mountedRef.current) {
-        // P12.9: If tab is hidden and notifications enabled, send push notification
-        if (isSubscribed && document.hidden) {
-          notify('Handler', msg.message?.substring(0, 100) || 'You have a message waiting.', {
-            tag: `outreach-${msg.id}`,
-            url: '/',
-          });
+        // Always fire a notification when new outreach arrives — the service
+        // worker path will route it correctly regardless of tab visibility.
+        // When the tab is focused the OS may suppress or present it as an
+        // in-page banner depending on platform.
+        if (isSubscribed) {
+          notify(
+            'Handler',
+            msg.message?.substring(0, 140) || 'You have a message waiting.',
+            {
+              tag: `outreach-${msg.id}`,
+              url: '/',
+              requireInteraction: false,
+              bypassThrottle: true,
+            },
+          );
         }
         setPendingMessage(msg);
       }

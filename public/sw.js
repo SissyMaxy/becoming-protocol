@@ -115,24 +115,43 @@ self.addEventListener('message', (event) => {
   }
 });
 
-// Handle notification clicks
+// Handle notification clicks — focus an existing window if available,
+// otherwise open a new one. Sends a postMessage so the app can route to
+// the Handler chat if it's already loaded.
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
   const url = event.notification.data?.url || '/';
+  const tag = event.notification.tag || '';
 
   event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       // Focus existing window if available
-      for (const client of clients) {
+      for (const client of clientList) {
         if (client.url.includes(self.location.origin) && 'focus' in client) {
-          client.focus();
-          client.navigate(url);
-          return;
+          // Tell the app to route to the Handler chat
+          try {
+            client.postMessage({
+              type: 'NOTIFICATION_CLICK',
+              tag,
+              url,
+            });
+          } catch (e) {
+            // postMessage not supported — proceed with focus + navigate
+          }
+          return client.focus().then((focused) => {
+            // Navigate the focused client if it's not already on the target URL
+            if (focused && 'navigate' in focused && !focused.url.endsWith(url)) {
+              return focused.navigate(url).catch(() => focused);
+            }
+            return focused;
+          });
         }
       }
       // Open new window if no existing window
-      return self.clients.openWindow(url);
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(url);
+      }
     })
   );
 });
