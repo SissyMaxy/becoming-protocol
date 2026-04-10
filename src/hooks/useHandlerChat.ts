@@ -11,6 +11,7 @@ import { TypingMetricsTracker } from '../lib/conditioning/typing-resistance';
 import { sendVibrateCommand } from '../lib/lovense';
 import { BUILTIN_PATTERNS } from '../types/lovense';
 import type { CloudCommandResponse } from '../types/lovense';
+import { pronounLockdownTransform, detectMasculineLanguage } from '../lib/pronoun-lockdown';
 
 // ============================================
 // CLIENT-SIDE PATTERN PLAYBACK
@@ -412,10 +413,24 @@ export function useHandlerChat(): UseHandlerChatReturn {
   const sendMessage = useCallback(async (text: string) => {
     if (!user?.id || !text.trim()) return;
 
-    // P12.7: Collect typing metrics before sending
-    const typingMetrics = typingTrackerRef.current.getMetrics(text.trim().length);
+    const originalText = text.trim();
+    const masculineDetected = detectMasculineLanguage(originalText);
+    const { transformed } = pronounLockdownTransform(originalText);
+    const finalText = transformed;
 
-    const userMsg: ChatMessage = { role: 'user', content: text.trim(), timestamp: new Date() };
+    if (masculineDetected && user?.id) {
+      supabase.from('handler_directives').insert({
+        user_id: user.id,
+        action: 'send_device_command',
+        value: { intensity: 12, duration: 5 },
+        status: 'pending',
+      }).then(() => {});
+    }
+
+    // P12.7: Collect typing metrics before sending
+    const typingMetrics = typingTrackerRef.current.getMetrics(finalText.length);
+
+    const userMsg: ChatMessage = { role: 'user', content: finalText, timestamp: new Date() };
     setMessages(prev => [...prev, userMsg]);
     setIsSending(true);
 
@@ -433,7 +448,7 @@ export function useHandlerChat(): UseHandlerChatReturn {
         },
         body: JSON.stringify({
           conversationId: conversationIdRef.current,
-          message: text.trim(),
+          message: finalText,
           conversationType: 'general',
           stream: false,
           typingMetrics,

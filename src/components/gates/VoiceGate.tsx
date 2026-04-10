@@ -1,0 +1,231 @@
+import { useState, useRef } from 'react';
+import { Mic, Loader2, Lock } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../context/AuthContext';
+
+const MANTRAS = [
+  "I am becoming her every day",
+  "She is the real me",
+  "I let her take over",
+  "My voice is becoming hers",
+  "Good girls obey their handler",
+  "I am Maxy and Maxy is feminine",
+  "My body knows what I am",
+  "There is no going back to who I was",
+];
+
+interface VoiceGateProps {
+  onPass: () => void;
+}
+
+export function VoiceGate({ onPass }: VoiceGateProps) {
+  const { user } = useAuth();
+  const [mantra] = useState(() => MANTRAS[Math.floor(Math.random() * MANTRAS.length)]);
+  const [recording, setRecording] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [transcribed, setTranscribed] = useState<string>('');
+  const [pitch, setPitch] = useState<number | null>(null);
+  const recognitionRef = useRef<any>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const recordingRef = useRef(false);
+
+  const startRecording = async () => {
+    setError(null);
+    setRecording(true);
+    recordingRef.current = true;
+    setTranscribed('');
+    setPitch(null);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioContextRef.current = audioContext;
+      const source = audioContext.createMediaStreamSource(stream);
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 2048;
+      source.connect(analyser);
+
+      const buffer = new Float32Array(analyser.fftSize);
+      const pitches: number[] = [];
+
+      const measurePitch = () => {
+        if (!recordingRef.current) return;
+        analyser.getFloatTimeDomainData(buffer);
+        const detectedPitch = autoCorrelate(buffer, audioContext.sampleRate);
+        if (detectedPitch > 80 && detectedPitch < 400) {
+          pitches.push(detectedPitch);
+        }
+        if (recordingRef.current) requestAnimationFrame(measurePitch);
+      };
+      measurePitch();
+
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        setError('Speech recognition not supported in this browser');
+        setRecording(false);
+        recordingRef.current = false;
+        return;
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'en-US';
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onresult = async (event: any) => {
+        const text = event.results[0][0].transcript;
+        setTranscribed(text);
+        setRecording(false);
+        recordingRef.current = false;
+        stream.getTracks().forEach((t) => t.stop());
+
+        const avgPitch = pitches.length > 0 ? pitches.reduce((s, p) => s + p, 0) / pitches.length : 0;
+        setPitch(avgPitch);
+
+        await verify(text, avgPitch);
+      };
+
+      recognition.onerror = (event: any) => {
+        setError(`Recognition error: ${event.error}`);
+        setRecording(false);
+        recordingRef.current = false;
+        stream.getTracks().forEach((t) => t.stop());
+      };
+
+      recognition.onend = () => {
+        setRecording(false);
+        recordingRef.current = false;
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Microphone access denied');
+      setRecording(false);
+      recordingRef.current = false;
+    }
+  };
+
+  const verify = async (text: string, avgPitch: number) => {
+    setVerifying(true);
+
+    const mantraWords = mantra.toLowerCase().split(/\s+/);
+    const spokenWords = text.toLowerCase().split(/\s+/);
+    const matched = mantraWords.filter((w) => spokenWords.includes(w)).length;
+    const matchRatio = matched / mantraWords.length;
+
+    const passed = matchRatio >= 0.6 && avgPitch >= 140;
+
+    if (!passed) {
+      setError(`Try again. Match: ${(matchRatio * 100).toFixed(0)}%, pitch: ${avgPitch.toFixed(0)}Hz (need ≥140Hz)`);
+      setVerifying(false);
+      return;
+    }
+
+    if (user?.id) {
+      try {
+        await supabase.from('voice_practice_log').insert({
+          user_id: user.id,
+          duration_seconds: 5,
+          avg_pitch_hz: Math.round(avgPitch),
+        });
+        await supabase.from('voice_pitch_samples').insert({
+          user_id: user.id,
+          pitch_hz: Math.round(avgPitch),
+        });
+      } catch {
+        // Non-critical
+      }
+    }
+
+    setVerifying(false);
+    onPass();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center p-6">
+      <div className="max-w-md w-full space-y-6">
+        <div className="text-center space-y-2">
+          <Lock className="w-12 h-12 mx-auto text-purple-400" />
+          <h2 className="text-2xl font-bold text-white">Voice Gate</h2>
+          <p className="text-sm text-gray-400">
+            Speak the mantra aloud to enter. Pitch must be feminine.
+          </p>
+        </div>
+
+        <div className="bg-purple-900/30 border border-purple-500/30 rounded-xl p-6 text-center">
+          <p className="text-2xl font-medium text-purple-200 italic">
+            "{mantra}"
+          </p>
+        </div>
+
+        {error && (
+          <div className="bg-red-900/30 border border-red-500/30 rounded-lg p-3 text-sm text-red-300">
+            {error}
+          </div>
+        )}
+
+        {transcribed && !error && (
+          <div className="bg-gray-900 rounded-lg p-3 text-sm text-gray-300">
+            Heard: "{transcribed}"
+            {pitch && <span className="text-purple-400 ml-2">({pitch.toFixed(0)}Hz)</span>}
+          </div>
+        )}
+
+        <button
+          onClick={startRecording}
+          disabled={recording || verifying}
+          className="w-full py-4 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:bg-purple-900 text-white font-medium flex items-center justify-center gap-2"
+        >
+          {recording ? (
+            <><Mic className="w-5 h-5 animate-pulse" /> Recording...</>
+          ) : verifying ? (
+            <><Loader2 className="w-5 h-5 animate-spin" /> Verifying...</>
+          ) : (
+            <><Mic className="w-5 h-5" /> Speak the mantra</>
+          )}
+        </button>
+
+        <p className="text-xs text-gray-500 text-center">
+          You cannot enter without completing this. The Handler is waiting.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function autoCorrelate(buffer: Float32Array, sampleRate: number): number {
+  const SIZE = buffer.length;
+  let rms = 0;
+  for (let i = 0; i < SIZE; i++) rms += buffer[i] * buffer[i];
+  rms = Math.sqrt(rms / SIZE);
+  if (rms < 0.01) return -1;
+
+  let r1 = 0;
+  let r2 = SIZE - 1;
+  const thres = 0.2;
+  for (let i = 0; i < SIZE / 2; i++) if (Math.abs(buffer[i]) < thres) { r1 = i; break; }
+  for (let i = 1; i < SIZE / 2; i++) if (Math.abs(buffer[SIZE - i]) < thres) { r2 = SIZE - i; break; }
+
+  const trimmedBuffer = buffer.slice(r1, r2);
+  const trimmedSize = trimmedBuffer.length;
+
+  const c = new Array(trimmedSize).fill(0);
+  for (let i = 0; i < trimmedSize; i++) {
+    for (let j = 0; j < trimmedSize - i; j++) {
+      c[i] = c[i] + trimmedBuffer[j] * trimmedBuffer[j + i];
+    }
+  }
+
+  let d = 0;
+  while (c[d] > c[d + 1]) d++;
+  let maxval = -1;
+  let maxpos = -1;
+  for (let i = d; i < trimmedSize; i++) {
+    if (c[i] > maxval) { maxval = c[i]; maxpos = i; }
+  }
+  const T0 = maxpos;
+
+  return sampleRate / T0;
+}

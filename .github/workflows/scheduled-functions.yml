@@ -253,18 +253,17 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{"action":"weekly_adaptation"}'
 
-  # Sunday 8 AM UTC: Autonomous strategist — full-state Claude review,
-  # writes strategic directives + notes for the week ahead
+  # 7 AM UTC daily: Autonomous strategist — full-state Claude review,
+  # writes strategic directives + notes for the day ahead
   handler-strategist:
     runs-on: ubuntu-latest
     steps:
-      - name: Check if Sunday 8 AM window
+      - name: Check if 7 AM window
         id: should_run
         run: |
-          DOW=$(date -u +%u)
           HOUR=$(date -u +%H)
           MINUTE=$(date -u +%M)
-          if [ "$DOW" = "7" ] && [ "$HOUR" = "08" ] && [ "$MINUTE" -lt "10" ]; then
+          if [ "$HOUR" = "07" ] && [ "$MINUTE" -lt "10" ]; then
             echo "run=true" >> $GITHUB_OUTPUT
           else
             echo "run=false" >> $GITHUB_OUTPUT

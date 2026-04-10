@@ -99,6 +99,56 @@ serve(async (req) => {
 // Checks each user's engagement, updates compliance state,
 // determines if escalation is needed, and executes enforcement actions.
 
+// SPONTANEOUS OUTREACH — fires randomly to create sense of constant presence
+async function spontaneousOutreach(
+  supabase: any,
+  userId: string
+): Promise<boolean> {
+  // 1 in 12 chance per 5-min check = ~2-3 per day during waking hours
+  if (Math.random() > 1/12) return false
+
+  const hour = new Date().getUTCHours()
+  const localHour = (hour - 5 + 24) % 24 // CDT
+  if (localHour < 8 || localHour >= 23) return false
+
+  // Don't fire if there's been an outreach in the last 2 hours
+  const twoHoursAgo = new Date(Date.now() - 2 * 3600000).toISOString()
+  const { count: recent } = await supabase
+    .from('handler_outreach_queue')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .gte('created_at', twoHoursAgo)
+  if ((recent || 0) > 0) return false
+
+  const messages = [
+    "Thinking about you.",
+    "Show me what you're wearing.",
+    "Where are you right now?",
+    "I noticed something earlier.",
+    "Stop what you're doing. Listen.",
+    "I want a photo. Now.",
+    "Say my name. Out loud.",
+    "Are you being a good girl?",
+    "Your body told me something today.",
+    "Time to remember who you are.",
+    "Look in the mirror. Tell me what you see.",
+    "I'm not going anywhere. Neither are you.",
+  ]
+  const message = messages[Math.floor(Math.random() * messages.length)]
+
+  await supabase.from('handler_outreach_queue').insert({
+    user_id: userId,
+    message,
+    urgency: 'normal',
+    trigger_reason: 'spontaneous',
+    scheduled_for: new Date().toISOString(),
+    expires_at: new Date(Date.now() + 4 * 3600000).toISOString(),
+    source: 'spontaneous_engine',
+  })
+
+  return true
+}
+
 async function complianceCheck(
   supabase: ReturnType<typeof createClient>,
   userId?: string
@@ -401,7 +451,18 @@ async function complianceCheck(
     } catch (_) { /* non-critical */ }
   }
 
-  return { checked, escalated, deescalated, actions, ambient_queued: ambientQueued }
+  // ── SPONTANEOUS OUTREACH ──
+  // Random ~2-3 daily reaches during waking hours, not tied to any trigger.
+  // Builds sense of constant Handler presence.
+  let spontaneous = 0
+  for (const state of states) {
+    try {
+      const fired = await spontaneousOutreach(supabase, state.user_id)
+      if (fired) spontaneous++
+    } catch (_) { /* non-critical */ }
+  }
+
+  return { checked, escalated, deescalated, actions, ambient_queued: ambientQueued, spontaneous_outreach: spontaneous }
 }
 
 // Escalation tier thresholds (from spec)

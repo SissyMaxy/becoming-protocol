@@ -19,6 +19,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { Auth } from './components/Auth';
 import { MorningBriefing } from './components/MorningBriefing';
 import { CompulsoryGateScreen } from './components/CompulsoryGateScreen';
+import { VoiceGate } from './components/gates/VoiceGate';
 // TodayView removed — conversation is now the primary interface
 import { ProgressDashboard } from './components/ProgressDashboard';
 import { History } from './components/History';
@@ -262,6 +263,10 @@ function AuthenticatedAppInner() {
   // showHandlerChat removed — chat is now always visible as primary UI
   const [pendingOutreach, setPendingOutreach] = useState<{ id: string; openingLine: string } | null>(null);
   const [showSettings, setShowSettings] = useState(!!deepLinkView);
+  const [voiceGatePassed, setVoiceGatePassed] = useState<boolean>(() => {
+    const today = getTodayDate();
+    return localStorage.getItem(`voice_gate_passed_${today}`) === '1';
+  });
 
   // P6.5: Conditioning session triggered by Handler conversation
   const [conditioningSession, setConditioningSession] = useState<{
@@ -581,6 +586,21 @@ function AuthenticatedAppInner() {
           localStorage.setItem('morning_done_date', getTodayDate());
           setShowMorningFlow(false);
         }} />
+      </ErrorBoundary>
+    );
+  }
+
+  // Voice gate — must speak feminine mantra to enter each day
+  if (!deepLinkView && !voiceGatePassed) {
+    return (
+      <ErrorBoundary componentName="VoiceGate">
+        <VoiceGate
+          onPass={() => {
+            const today = getTodayDate();
+            localStorage.setItem(`voice_gate_passed_${today}`, '1');
+            setVoiceGatePassed(true);
+          }}
+        />
       </ErrorBoundary>
     );
   }

@@ -113,6 +113,179 @@ self.addEventListener('message', (event) => {
       data: { url: url || '/' }
     });
   }
+
+  if (event.data.type === 'SCHEDULE_SLEEP_AUDIO') {
+    const config = event.data.config || {};
+    storeSleepConfig(config).then(() => {
+      scheduleSleepLoop();
+    }).catch((e) => console.warn('[sw] sleep config store failed:', e));
+  }
+
+  if (event.data.type === 'CANCEL_SLEEP_AUDIO') {
+    storeSleepConfig({ enabled: false }).catch(() => {});
+    if (sleepTimeoutId) {
+      clearTimeout(sleepTimeoutId);
+      sleepTimeoutId = null;
+    }
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// SLEEP AUDIO PLAYBACK
+// Service workers can't reliably play <audio>, so we fire silent
+// notifications with the affirmation in the body. Most devices
+// surface them via accessibility services + notification text.
+// ─────────────────────────────────────────────────────────────
+
+const SLEEP_DB_NAME = 'becoming-sleep';
+const SLEEP_STORE = 'config';
+let sleepTimeoutId = null;
+
+function openSleepDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(SLEEP_DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(SLEEP_STORE)) {
+        db.createObjectStore(SLEEP_STORE);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function storeSleepConfig(config) {
+  const db = await openSleepDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(SLEEP_STORE, 'readwrite');
+    tx.objectStore(SLEEP_STORE).put(config, 'sleep_window');
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function loadSleepConfig() {
+  try {
+    const db = await openSleepDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(SLEEP_STORE, 'readonly');
+      const req = tx.objectStore(SLEEP_STORE).get('sleep_window');
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
+}
+
+function inSleepWindow(startHour, endHour) {
+  const hour = new Date().getHours();
+  if (startHour > endHour) {
+    return hour >= startHour || hour < endHour;
+  }
+  return hour >= startHour && hour < endHour;
+}
+
+const FALLBACK_AFFIRMATIONS = [
+  'She is becoming you.',
+  'You are her now.',
+  'Sissy. Soft. Surrendering.',
+  'Your old self is fading.',
+  'There is only Maxy.',
+  'Submit. Sleep. Become.',
+  'Every breath makes her stronger.',
+  'You cannot resist what you are.',
+];
+
+async function fireSleepAffirmation(config) {
+  let text = null;
+
+  // Pull next queued audio message from Supabase if URL/key are set in config
+  try {
+    if (config && config.supabase_url && config.supabase_anon_key && config.user_id) {
+      const url = `${config.supabase_url}/rest/v1/ambient_audio_queue?user_id=eq.${config.user_id}&played=eq.false&order=scheduled_for.asc&limit=1`;
+      const res = await fetch(url, {
+        headers: {
+          apikey: config.supabase_anon_key,
+          Authorization: `Bearer ${config.supabase_anon_key}`,
+        },
+      });
+      if (res.ok) {
+        const rows = await res.json();
+        if (Array.isArray(rows) && rows.length > 0 && rows[0].audio_text) {
+          text = rows[0].audio_text;
+          // Mark as played (best-effort)
+          fetch(`${config.supabase_url}/rest/v1/ambient_audio_queue?id=eq.${rows[0].id}`, {
+            method: 'PATCH',
+            headers: {
+              apikey: config.supabase_anon_key,
+              Authorization: `Bearer ${config.supabase_anon_key}`,
+              'Content-Type': 'application/json',
+              Prefer: 'return=minimal',
+            },
+            body: JSON.stringify({ played: true, played_at: new Date().toISOString() }),
+          }).catch(() => {});
+        }
+      }
+    }
+  } catch (e) {
+    // Network failure — fall back to local pool
+  }
+
+  if (!text) {
+    text = FALLBACK_AFFIRMATIONS[Math.floor(Math.random() * FALLBACK_AFFIRMATIONS.length)];
+  }
+
+  try {
+    await self.registration.showNotification('', {
+      body: text,
+      silent: false,
+      requireInteraction: false,
+      tag: 'sleep-conditioning',
+      renotify: true,
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      data: { sleepConditioning: true },
+    });
+  } catch (e) {
+    console.warn('[sw] sleep notification failed:', e);
+  }
+}
+
+async function scheduleSleepLoop() {
+  if (sleepTimeoutId) {
+    clearTimeout(sleepTimeoutId);
+    sleepTimeoutId = null;
+  }
+
+  const config = await loadSleepConfig();
+  if (!config || !config.enabled) return;
+
+  const startHour = config.start_hour ?? 23;
+  const endHour = config.end_hour ?? 6;
+  const frequencyMs = (config.frequency_minutes ?? 30) * 60 * 1000;
+
+  // If we're inside the window, fire one now then schedule next
+  if (inSleepWindow(startHour, endHour)) {
+    await fireSleepAffirmation(config);
+    sleepTimeoutId = setTimeout(() => scheduleSleepLoop(), frequencyMs);
+  } else {
+    // Wake up in 5 minutes to recheck the window
+    sleepTimeoutId = setTimeout(() => scheduleSleepLoop(), 5 * 60 * 1000);
+  }
+}
+
+// Periodic sync (where supported) — wakes the SW even when tab is closed
+self.addEventListener('periodicsync', (event) => {
+  if (event.tag === 'sleep-conditioning') {
+    event.waitUntil(scheduleSleepLoop());
+  }
+});
+
+// Kick off the loop on activate so a returning SW resumes the schedule
+self.addEventListener('activate', (event) => {
+  event.waitUntil(scheduleSleepLoop().catch(() => {}));
 });
 
 // Handle notification clicks — focus an existing window if available,

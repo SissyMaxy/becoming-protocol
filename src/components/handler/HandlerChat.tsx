@@ -9,6 +9,7 @@ import { useHandlerVoice } from '../../hooks/useHandlerVoice';
 import { useVoiceConversation } from '../../hooks/useVoiceConversation';
 import { useSessionBiometrics } from '../../hooks/useSessionBiometrics';
 import { useAmbientAudio } from '../../hooks/useAmbientAudio';
+import { useSleepAudioConditioning } from '../../hooks/useSleepAudioConditioning';
 import { PhotoVerificationUpload } from './PhotoVerificationUpload';
 
 interface HandlerChatProps {
@@ -33,6 +34,9 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
   // Ambient conditioning audio — polls ambient_audio_queue and speaks queued
   // affirmations via SpeechSynthesis while the chat is open. Toggle persists in localStorage.
   useAmbientAudio();
+  // Sleep-window affirmation drip — schedules notifications during configured
+  // sleep window and hands the loop to the service worker for background play.
+  useSleepAudioConditioning();
 
   // Auto-start biometric polling when Handler enters dominant/conditioning mode
   const bioPollStartedRef = useRef(false);
