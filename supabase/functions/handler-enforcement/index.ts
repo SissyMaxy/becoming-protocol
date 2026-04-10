@@ -525,6 +525,28 @@ async function evaluateCompliance(
     current_tier: 0,
   })
 
+  // 9. Daily confession — shame_journal must have a row from today
+  const { count: todayConfession } = await supabase
+    .from('shame_journal')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .gte('created_at', `${today}T00:00:00`)
+
+  const { data: confessionStreak } = await supabase
+    .from('noncompliance_streaks')
+    .select('consecutive_days, current_tier')
+    .eq('user_id', userId)
+    .eq('domain', 'confession')
+    .single()
+
+  results.push({
+    domain: 'confession',
+    is_compliant: (todayConfession || 0) >= 1,
+    details: `${todayConfession || 0} confessions today`,
+    days_noncompliant: confessionStreak?.consecutive_days || 0,
+    current_tier: confessionStreak?.current_tier || 0,
+  })
+
   return results
 }
 
@@ -679,6 +701,21 @@ async function applyEscalation(
 
     default:
       return null
+  }
+
+  // Stack-up: each consecutive day of noncompliance increases the next required action
+  if (consecutiveDays >= 2 && config.lovense_proactive_enabled) {
+    const stackedIntensity = Math.min(20, 8 + consecutiveDays * 2)
+    const stackedDuration = Math.min(60, 10 + consecutiveDays * 5)
+
+    await supabase.from('handler_directives').insert({
+      user_id: userId,
+      action: 'send_device_command',
+      target: 'lovense',
+      value: { intensity: stackedIntensity, duration: stackedDuration },
+      priority: 'immediate',
+      reasoning: `Stack-up: ${consecutiveDays} days noncompliant in ${compliance.domain} — intensity ${stackedIntensity} for ${stackedDuration}s`,
+    })
   }
 
   // Log the enforcement action
@@ -916,6 +953,7 @@ function mapDomainToGateableFeature(domain: string): string {
     'resistance': 'session_tier_above_3',
     'voice_quality': 'edge_session',
     'overall': 'edge_session',
+    'confession': 'edge_session',
   }
   return mapping[domain] || 'content_library'
 }

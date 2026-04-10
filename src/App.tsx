@@ -20,6 +20,7 @@ import { Auth } from './components/Auth';
 import { MorningBriefing } from './components/MorningBriefing';
 import { CompulsoryGateScreen } from './components/CompulsoryGateScreen';
 import { VoiceGate } from './components/gates/VoiceGate';
+import { DailyConfessionGate } from './components/handler/DailyConfessionGate';
 // TodayView removed — conversation is now the primary interface
 import { ProgressDashboard } from './components/ProgressDashboard';
 import { History } from './components/History';
@@ -266,6 +267,10 @@ function AuthenticatedAppInner() {
   const [voiceGatePassed, setVoiceGatePassed] = useState<boolean>(() => {
     const today = getTodayDate();
     return localStorage.getItem(`voice_gate_passed_${today}`) === '1';
+  });
+  const [confessionDoneToday, setConfessionDoneToday] = useState<boolean>(() => {
+    const today = getTodayDate();
+    return localStorage.getItem(`confession_done_${today}`) === '1';
   });
 
   // P6.5: Conditioning session triggered by Handler conversation
@@ -599,6 +604,21 @@ function AuthenticatedAppInner() {
             const today = getTodayDate();
             localStorage.setItem(`voice_gate_passed_${today}`, '1');
             setVoiceGatePassed(true);
+          }}
+        />
+      </ErrorBoundary>
+    );
+  }
+
+  // Daily confession gate — must confess one shame_journal entry per day
+  if (!deepLinkView && !confessionDoneToday) {
+    return (
+      <ErrorBoundary componentName="DailyConfessionGate">
+        <DailyConfessionGate
+          onComplete={() => {
+            const today = getTodayDate();
+            localStorage.setItem(`confession_done_${today}`, '1');
+            setConfessionDoneToday(true);
           }}
         />
       </ErrorBoundary>

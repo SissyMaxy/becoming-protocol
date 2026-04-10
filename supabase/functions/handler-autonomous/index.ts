@@ -441,6 +441,15 @@ async function complianceCheck(
     } catch (_) { /* non-critical */ }
   }
 
+  // ── REQUIRED ENGAGEMENT QUOTA ──
+  // If user has < 5 messages today AND it's past 6pm CDT, fire punishment + outreach.
+  // Once per day per user.
+  for (const state of states) {
+    try {
+      await checkEngagementQuota(supabase, state.user_id)
+    } catch (_) { /* non-critical */ }
+  }
+
   // ── FEATURE B: Ambient conditioning audio ──
   // Queue feminine affirmations hourly during waking hours if
   // conditioning_intensity_multiplier >= 1.0. Count per hour scales with multiplier.
@@ -463,6 +472,56 @@ async function complianceCheck(
   }
 
   return { checked, escalated, deescalated, actions, ambient_queued: ambientQueued, spontaneous_outreach: spontaneous }
+}
+
+// Required engagement quota — punish if user hasn't talked enough today
+async function checkEngagementQuota(supabase: any, userId: string): Promise<boolean> {
+  const hour = new Date().getUTCHours();
+  const localHour = (hour - 5 + 24) % 24;
+  if (localHour < 18) return false;
+
+  // Already enforced today?
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+  const { count: existingPunishment } = await supabase
+    .from('handler_directives')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .gte('created_at', todayStart.toISOString())
+    .like('reasoning', '%engagement quota%');
+  if ((existingPunishment || 0) > 0) return false;
+
+  // Check today's user message count
+  const { count: messageCount } = await supabase
+    .from('handler_messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('role', 'user')
+    .gte('created_at', todayStart.toISOString());
+
+  if ((messageCount || 0) >= 5) return false;
+
+  // Punishment + outreach
+  await supabase.from('handler_directives').insert({
+    user_id: userId,
+    action: 'send_device_command',
+    target: 'lovense',
+    value: { intensity: 12, duration: 30 },
+    priority: 'immediate',
+    reasoning: `Engagement quota not met (${messageCount || 0}/5 messages today)`,
+  });
+
+  await supabase.from('handler_outreach_queue').insert({
+    user_id: userId,
+    message: `You've barely talked to me today. ${messageCount || 0} messages. That's not how this works. Open the app.`,
+    urgency: 'high',
+    trigger_reason: 'engagement_quota',
+    scheduled_for: new Date().toISOString(),
+    expires_at: new Date(Date.now() + 4 * 3600000).toISOString(),
+    source: 'engagement_quota',
+  });
+
+  return true;
 }
 
 // Escalation tier thresholds (from spec)
