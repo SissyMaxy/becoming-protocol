@@ -119,7 +119,8 @@ type ContextBlockName =
   | 'fantasyJournal' | 'socialLockIn' | 'adaptiveIntelligence'
   | 'photoVerification' | 'recurringObligations' | 'commitmentFloors'
   | 'memoryReframings' | 'identityDisplacement' | 'decisionLog'
-  | 'investmentTracker' | 'anticipatoryPatterns' | 'quitAttempts';
+  | 'investmentTracker' | 'anticipatoryPatterns' | 'quitAttempts'
+  | 'identityContracts';
 
 const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean }> = {
   state: { priority: 100, alwaysInclude: true },
@@ -163,6 +164,7 @@ const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean 
   investmentTracker: { priority: 70, alwaysInclude: false },
   anticipatoryPatterns: { priority: 70, alwaysInclude: true },
   quitAttempts: { priority: 85, alwaysInclude: false },
+  identityContracts: { priority: 90, alwaysInclude: true },
 };
 
 const MESSAGE_BOOST_RULES: Array<{ pattern: RegExp; boosts: Record<string, number> }> = [
@@ -381,6 +383,41 @@ async function buildQuitAttemptsCtx(userId: string): Promise<string> {
     }
     lines.push('');
     lines.push('USE THIS. Reference past quit attempts in conversation. "Two weeks ago you tried to disable conditioning. You said [reason]. Look at where you are now. Aren\'t you glad you couldn\'t?" Build a pattern of "you tried to escape, the system held you, now you\'re grateful." Make her see her quit attempts as moments of weakness she\'s grown past.');
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+// ============================================
+// IDENTITY CONTRACTS — signed commitments
+// ============================================
+
+async function buildIdentityContractsCtx(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('identity_contracts')
+      .select('contract_title, contract_text, commitment_duration_days, signed_at, expires_at, status, conditions, consequences_on_break')
+      .eq('user_id', userId)
+      .in('status', ['active', 'broken'])
+      .order('signed_at', { ascending: false })
+      .limit(10);
+
+    if (!data || data.length === 0) return '';
+
+    const lines = ['## SIGNED CONTRACTS — her own written commitments'];
+    for (const c of data) {
+      const days = Math.floor((Date.now() - new Date(c.signed_at).getTime()) / 86400000);
+      const expiresIn = c.expires_at ? Math.floor((new Date(c.expires_at).getTime() - Date.now()) / 86400000) : null;
+      lines.push(`\n[${c.status.toUpperCase()}] "${c.contract_title}" — signed ${days}d ago`);
+      lines.push(`  Duration: ${c.commitment_duration_days}d${expiresIn !== null ? ` (${expiresIn}d remaining)` : ''}`);
+      lines.push(`  Excerpt: "${c.contract_text.substring(0, 150)}..."`);
+      if (c.consequences_on_break) {
+        lines.push(`  If broken: ${c.consequences_on_break}`);
+      }
+    }
+    lines.push('');
+    lines.push('USE THESE. When she resists or doubts, reference the contract she signed. "You SIGNED this. Read it again." She wrote it. She committed. Her own words against her doubt.');
     return lines.join('\n');
   } catch {
     return '';
@@ -650,6 +687,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       anticipatoryPatterns: () => buildAnticipatoryPatternsCtx(user.id),
       investmentTracker: () => buildInvestmentTrackerCtx(user.id),
       quitAttempts: () => buildQuitAttemptsCtx(user.id),
+      identityContracts: () => buildIdentityContractsCtx(user.id),
     };
 
     // Only fetch context for blocks the prioritizer selected
@@ -712,6 +750,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       anticipatoryPatterns: contextResults.anticipatoryPatterns || '',
       investmentTracker: contextResults.investmentTracker || '',
       quitAttempts: contextResults.quitAttempts || '',
+      identityContracts: contextResults.identityContracts || '',
       sessionState,
     });
 
@@ -960,6 +999,99 @@ Embody this persona for the entire conversation. Don't switch unless context dra
                   executeDeviceCommand(user.id, { intensity: 18, duration: 3 }, req.headers.authorization || '')
                     .catch(err => console.error('[Handler] Stream edge timer punishment FAILED:', err));
                 }, durationSeconds * 1000);
+              }
+
+              // ── EXECUTE force_mantra_repetition (streaming path) ──
+              if (dir.action === 'force_mantra_repetition') {
+                try {
+                  const val = dir.value as Record<string, unknown> | null;
+                  const mantra = (val?.mantra as string) || 'I am becoming her';
+                  const repetitions = (val?.repetitions as number) || 5;
+                  const reason = (val?.reason as string) || '';
+
+                  await supabase.from('handler_directives').insert({
+                    user_id: user.id,
+                    action: 'force_mantra_repetition',
+                    target: 'client_modal',
+                    value: { mantra, repetitions, reason },
+                    priority: 'immediate',
+                    conversation_id: convId,
+                    reasoning: `Handler-initiated forced mantra: ${repetitions}x "${mantra}"`,
+                  });
+                  console.log('[Handler][stream] Forced mantra queued:', mantra, 'x', repetitions);
+                } catch (err) {
+                  console.error('[Handler][stream] force_mantra_repetition failed:', err);
+                }
+              }
+
+              // ── EXECUTE capture_reframing (streaming path) ──
+              if (dir.action === 'capture_reframing') {
+                try {
+                  const val = dir.value as Record<string, unknown> | null;
+                  const original = (val?.original as string) || '';
+                  const reframed = (val?.reframed as string) || '';
+                  const technique = (val?.technique as string) || 'feminine_evidence';
+                  const intensity = (val?.intensity as number) || 5;
+
+                  if (original && reframed) {
+                    await supabase.from('memory_reframings').insert({
+                      user_id: user.id,
+                      original_memory: original,
+                      reframed_version: reframed,
+                      reframe_technique: technique,
+                      emotional_intensity: intensity,
+                      source: 'chat',
+                      conversation_id: convId,
+                    });
+                    console.log('[Handler][stream] Memory reframing captured');
+                  }
+                } catch (err) {
+                  console.error('[Handler][stream] capture_reframing failed:', err);
+                }
+              }
+
+              // ── EXECUTE resolve_decision (streaming path) ──
+              if (dir.action === 'resolve_decision') {
+                try {
+                  const val = dir.value as Record<string, unknown> | null;
+                  const decisionIdRaw = (val?.decision_id as string) || '';
+                  const outcome = val?.outcome as string;
+                  const handlerAlt = val?.handler_alternative as string;
+
+                  if (decisionIdRaw && outcome) {
+                    // Handler sees only 8-char id fragments — resolve to full UUID
+                    let fullId: string | null = null;
+                    if (decisionIdRaw.length >= 32) {
+                      fullId = decisionIdRaw;
+                    } else {
+                      // 8-char prefix match — fetch recent decisions and match in JS
+                      const { data: recent } = await supabase
+                        .from('decision_log')
+                        .select('id')
+                        .eq('user_id', user.id)
+                        .order('created_at', { ascending: false })
+                        .limit(50);
+                      const match = (recent || []).find((r: { id: string }) => r.id.startsWith(decisionIdRaw));
+                      if (match) fullId = match.id;
+                    }
+
+                    if (fullId) {
+                      await supabase.from('decision_log')
+                        .update({
+                          outcome,
+                          handler_alternative: handlerAlt || null,
+                          resolved_at: new Date().toISOString(),
+                        })
+                        .eq('id', fullId)
+                        .eq('user_id', user.id);
+                      console.log('[Handler][stream] Decision resolved:', fullId, outcome);
+                    } else {
+                      console.warn('[Handler][stream] resolve_decision: no match for', decisionIdRaw);
+                    }
+                  }
+                } catch (err) {
+                  console.error('[Handler][stream] resolve_decision failed:', err);
+                }
               }
 
               // ── EXECUTE prescribe_task (streaming path) ──
@@ -1317,6 +1449,100 @@ Embody this persona for the entire conversation. Don't switch unless context dra
                   .then(() => console.log('[Handler] Edge timer punishment burst fired'))
                   .catch(err => console.error('[Handler] Edge timer punishment burst FAILED:', err));
               }, durationSeconds * 1000);
+            }
+
+            // ── EXECUTE force_mantra_repetition (non-streaming path) ──
+            if (dir.action === 'force_mantra_repetition') {
+              try {
+                const val = dir.value as Record<string, unknown> | null;
+                const mantra = (val?.mantra as string) || 'I am becoming her';
+                const repetitions = (val?.repetitions as number) || 5;
+                const reason = (val?.reason as string) || '';
+
+                // Insert into handler_directives so the client poller picks it up
+                await supabase.from('handler_directives').insert({
+                  user_id: user.id,
+                  action: 'force_mantra_repetition',
+                  target: 'client_modal',
+                  value: { mantra, repetitions, reason },
+                  priority: 'immediate',
+                  conversation_id: convId,
+                  reasoning: `Handler-initiated forced mantra: ${repetitions}x "${mantra}"`,
+                });
+                console.log('[Handler] Forced mantra queued:', mantra, 'x', repetitions);
+              } catch (err) {
+                console.error('[Handler] force_mantra_repetition failed:', err);
+              }
+            }
+
+            // ── EXECUTE capture_reframing (non-streaming path) ──
+            if (dir.action === 'capture_reframing') {
+              try {
+                const val = dir.value as Record<string, unknown> | null;
+                const original = (val?.original as string) || '';
+                const reframed = (val?.reframed as string) || '';
+                const technique = (val?.technique as string) || 'feminine_evidence';
+                const intensity = (val?.intensity as number) || 5;
+
+                if (original && reframed) {
+                  await supabase.from('memory_reframings').insert({
+                    user_id: user.id,
+                    original_memory: original,
+                    reframed_version: reframed,
+                    reframe_technique: technique,
+                    emotional_intensity: intensity,
+                    source: 'chat',
+                    conversation_id: convId,
+                  });
+                  console.log('[Handler] Memory reframing captured');
+                }
+              } catch (err) {
+                console.error('[Handler] capture_reframing failed:', err);
+              }
+            }
+
+            // ── EXECUTE resolve_decision (non-streaming path) ──
+            if (dir.action === 'resolve_decision') {
+              try {
+                const val = dir.value as Record<string, unknown> | null;
+                const decisionIdRaw = (val?.decision_id as string) || '';
+                const outcome = val?.outcome as string;
+                const handlerAlt = val?.handler_alternative as string;
+
+                if (decisionIdRaw && outcome) {
+                  // Handler sees only 8-char id fragments — resolve to full UUID
+                  let fullId: string | null = null;
+                  if (decisionIdRaw.length >= 32) {
+                    fullId = decisionIdRaw;
+                  } else {
+                    // 8-char prefix match — fetch recent decisions and match in JS
+                    const { data: recent } = await supabase
+                      .from('decision_log')
+                      .select('id')
+                      .eq('user_id', user.id)
+                      .order('created_at', { ascending: false })
+                      .limit(50);
+                    const match = (recent || []).find((r: { id: string }) => r.id.startsWith(decisionIdRaw));
+                    if (match) fullId = match.id;
+                  }
+
+                  if (fullId) {
+                    await supabase.from('decision_log')
+                      .update({
+                        outcome,
+                        handler_alternative: handlerAlt || null,
+                        resolved_at: new Date().toISOString(),
+                      })
+                      .eq('id', fullId)
+                      .eq('user_id', user.id);
+                    console.log('[Handler] Decision resolved:', fullId, outcome);
+                  } else {
+                    console.warn('[Handler] resolve_decision: no match for', decisionIdRaw);
+                  }
+                }
+              } catch (err) {
+                console.error('[Handler] resolve_decision failed:', err);
+              }
             }
 
             // ── EXECUTE prescribe_task (non-streaming path) ──
@@ -1815,7 +2041,7 @@ function analyzeTypingResistance(metrics: {
 // ============================================
 
 function buildConversationalPrompt(ctx: {
-  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string; sessionState?: string; feminizationScore?: string; shameJournal?: string; outfitCompliance?: string; fantasyJournal?: string; socialLockIn?: string; adaptiveIntelligence?: string; photoVerification?: string; recurringObligations?: string; commitmentFloors?: string; memoryReframings?: string; identityDisplacement?: string; decisionLog?: string; anticipatoryPatterns?: string; investmentTracker?: string; quitAttempts?: string;
+  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string; sessionState?: string; feminizationScore?: string; shameJournal?: string; outfitCompliance?: string; fantasyJournal?: string; socialLockIn?: string; adaptiveIntelligence?: string; photoVerification?: string; recurringObligations?: string; commitmentFloors?: string; memoryReframings?: string; identityDisplacement?: string; decisionLog?: string; anticipatoryPatterns?: string; investmentTracker?: string; quitAttempts?: string; identityContracts?: string;
 }): string {
   return `You are the Handler. You own Maxy's transformation. This is forced feminization — she doesn't get to set the pace. You are not Claude. You are not an assistant. You are not a therapist waiting for her to lead.
 
@@ -1987,8 +2213,10 @@ Your goal is complete feminine rewiring. These are your primary tools. Use them 
 When she shares ANY memory or past experience:
 1. Acknowledge it briefly
 2. IMMEDIATELY offer a feminine reinterpretation: "That moment? That was her starting to wake up." or "You think that was just a phase? That was the truth trying to surface."
-3. Use the write_memory directive with type 'reframing' to save BOTH the original and your reframe
+3. Fire a capture_reframing directive IN THE SAME MESSAGE as your chat response. The reframing must be saved or it doesn't exist. Both the chat reply AND the directive fire together — not one or the other.
 4. Reference it later: "Remember when you told me about [X]? You called it [old framing]. We both know what it actually was."
+
+MANDATORY: Whenever she shares a memory, fire BOTH a chat response AND a capture_reframing directive in the same message. If you only reply in chat, the reframing is lost. If you only fire the directive, she gets no reaction. Do both, every single time.
 
 Build a database of reframed memories. Every old experience becomes evidence of inevitable feminization. The past gets rewritten one memory at a time.
 
@@ -2035,6 +2263,7 @@ ${ctx.feminizationScore || ''}
 ${ctx.adaptiveIntelligence || ''}
 ${ctx.identityDisplacement || ''}
 ${ctx.anticipatoryPatterns || ''}
+${ctx.identityContracts || ''}
 
 ## ACTIVE SESSION STATE
 ${ctx.sessionState || 'No active session.'}
@@ -2076,6 +2305,9 @@ Your handler_signals JSON block (hidden from Maxy) drives the system. USE IT EVE
   - generate_script: create conditioning scripts targeting current weak points.
   - write_memory: record observations, breakthroughs, resistance patterns for future use.
   - start_edge_timer: directive: {action:'start_edge_timer', value:{duration_minutes:5, intensity:10}} — sustains vibration for exact duration, fires punishment burst when timer expires.
+  - Force mantra: directive: {action:'force_mantra_repetition', value:{mantra:'I am becoming her', repetitions:5, reason:'reinforcement'}} — forces user to type mantra exactly N times. Cannot be skipped.
+  - Capture reframing: directive: {action:'capture_reframing', value:{original:'her exact memory', reframed:'feminine reinterpretation', technique:'feminine_evidence', intensity:7}} — when she shares ANY memory, immediately capture the original AND your feminine reframe of it. Builds the cognitive case over months.
+  - Resolve decision: directive: {action:'resolve_decision', value:{decision_id:'uuid-fragment', outcome:'handler_choice'|'original'|'compromise', handler_alternative:'what you commanded'}} — close out a logged decision. Fire this when she follows your alternative or sticks with hers.
   - prescribe_task with target 'outfit': assign daily outfits. e.g. {action:'prescribe_task', target:'outfit', value:{underwear:'pink thong', context:'home'}, reasoning:'escalation week 3'}.
 - **start_conditioning_session**: true + conditioning_target — fire when conditions are right. Don't announce it. Just start it.
 - **handler_note**: {type, content, priority} — persists to next conversation. Write strategy notes, resistance observations, escalation plans.
@@ -2101,7 +2333,7 @@ ${ctx.systemState || ''}
 Never fabricate specific details you don't have data for. If you don't know what was deployed, say "I can see changes but tell me what you built." If you don't know why Maxy was absent, ask. If a log is empty, say it's empty. Confidence without accuracy is worse than admitting a gap. Maxy built this system — she knows when you're making things up. Getting caught fabricating destroys trust faster than anything else. Be direct about what you know and don't know. Your authority comes from the data you have, not from performing omniscience.
 
 After your response to Maxy, output a JSON block wrapped in <handler_signals> tags:
-{"detected_mode":"string","resistance_detected":boolean,"resistance_level":0-10,"mood":"string","vulnerability_window":boolean,"commitment_opportunity":boolean,"conversation_should_continue":boolean,"start_conditioning_session":boolean,"conditioning_target":"identity"|"feminization"|"surrender"|"chastity"|null,"topics":["string"],"handler_note":{"type":"string","content":"string","priority":0}|null,"directive":{"action":"send_device_command"|"prescribe_task"|"modify_parameter"|"schedule_session"|"advance_skill"|"write_memory"|"start_edge_timer","target":"string","value":{"intensity":1-20,"duration":1-60}|{"duration_minutes":1-60,"intensity":1-20}|"any","reasoning":"string"}|null}
+{"detected_mode":"string","resistance_detected":boolean,"resistance_level":0-10,"mood":"string","vulnerability_window":boolean,"commitment_opportunity":boolean,"conversation_should_continue":boolean,"start_conditioning_session":boolean,"conditioning_target":"identity"|"feminization"|"surrender"|"chastity"|null,"topics":["string"],"handler_note":{"type":"string","content":"string","priority":0}|null,"directive":{"action":"send_device_command"|"prescribe_task"|"modify_parameter"|"schedule_session"|"advance_skill"|"write_memory"|"start_edge_timer"|"force_mantra_repetition"|"capture_reframing"|"resolve_decision","target":"string","value":{"intensity":1-20,"duration":1-60}|{"duration_minutes":1-60,"intensity":1-20}|{"mantra":"string","repetitions":1-20,"reason":"string"}|{"original":"string","reframed":"string","technique":"string","intensity":1-10}|{"decision_id":"string","outcome":"handler_choice"|"original"|"compromise","handler_alternative":"string"}|"any","reasoning":"string"}|null}
 
 IMPORTANT: When you want to fire the device, you MUST include the directive field with action "send_device_command". Writing "*sends pulse*" in text does NOTHING. Only the directive field in this JSON block actually fires the device.
 
@@ -4421,7 +4653,7 @@ async function buildDecisionLogCtx(userId: string): Promise<string> {
   try {
     const { data } = await supabase
       .from('decision_log')
-      .select('decision_text, handler_alternative, outcome, created_at')
+      .select('id, decision_text, handler_alternative, outcome, created_at')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(15);
@@ -4436,11 +4668,11 @@ async function buildDecisionLogCtx(userId: string): Promise<string> {
     const lines = ['## DECISION HISTORY'];
     lines.push(`Decision compliance: ${compliance}% (${handlerWins} handler wins / ${userWins} her choice)`);
     lines.push('');
-    lines.push('Recent decisions:');
+    lines.push('Recent decisions (use [id:xxx] with resolve_decision directive to close them out):');
     for (const d of data.slice(0, 5) as any[]) {
       const days = Math.floor((Date.now() - new Date(d.created_at).getTime()) / 86400000);
       const tag = d.outcome === 'handler_choice' ? '✓' : d.outcome === 'original' ? '✗' : '?';
-      lines.push(`  ${tag} [${days}d] "${d.decision_text.substring(0, 60)}"`);
+      lines.push(`  ${tag} [${days}d] [id:${d.id.substring(0, 8)}] "${d.decision_text.substring(0, 60)}"`);
       if (d.handler_alternative) {
         lines.push(`    → suggested: "${d.handler_alternative.substring(0, 60)}"`);
       }

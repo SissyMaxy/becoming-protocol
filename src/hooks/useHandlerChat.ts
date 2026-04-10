@@ -294,9 +294,9 @@ export function useHandlerChat(): UseHandlerChatReturn {
       try {
         const { data, error } = await supabase
           .from('handler_directives')
-          .select('id, value, created_at')
+          .select('id, value, action, created_at')
           .eq('user_id', user!.id)
-          .eq('action', 'send_device_command')
+          .in('action', ['send_device_command', 'force_mantra_repetition'])
           .eq('status', 'pending')
           .order('created_at', { ascending: false })
           .limit(1)
@@ -308,6 +308,18 @@ export function useHandlerChat(): UseHandlerChatReturn {
         }
 
         if (data && data.id !== lastDirectiveRef.current) {
+          // ── Forced mantra: fire a window event so the chat component can mount the modal ──
+          if (data.action === 'force_mantra_repetition') {
+            console.log('[HandlerChat] Forced mantra:', JSON.stringify(data.value));
+            window.dispatchEvent(new CustomEvent('handler-force-mantra', { detail: data.value }));
+            lastDirectiveRef.current = data.id;
+            supabase.from('handler_directives')
+              .update({ status: 'completed', executed_at: new Date().toISOString() })
+              .eq('id', data.id)
+              .then(() => {});
+            return;
+          }
+
           // Check for deferred directives with delay_minutes
           const val = data.value as any;
           if (val?.delay_minutes && val.delay_minutes > 0) {

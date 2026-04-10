@@ -11,6 +11,7 @@ import { useSessionBiometrics } from '../../hooks/useSessionBiometrics';
 import { useAmbientAudio } from '../../hooks/useAmbientAudio';
 import { useSleepAudioConditioning } from '../../hooks/useSleepAudioConditioning';
 import { PhotoVerificationUpload } from './PhotoVerificationUpload';
+import { MantraRepetition } from './MantraRepetition';
 
 interface HandlerChatProps {
   onClose: () => void;
@@ -57,6 +58,23 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
   }, [currentMode, messages, conversationId, biometrics.isPolling]);
   const [input, setInput] = useState('');
   const [showPhotoUpload, setShowPhotoUpload] = useState(false);
+  const [forcedMantra, setForcedMantra] = useState<{ mantra: string; repetitions: number; reason?: string } | null>(null);
+
+  // Listen for handler-initiated forced mantra directive — mounted modal blocks everything
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.mantra) {
+        setForcedMantra({
+          mantra: detail.mantra,
+          repetitions: detail.repetitions || 5,
+          reason: detail.reason,
+        });
+      }
+    };
+    window.addEventListener('handler-force-mantra', handler);
+    return () => window.removeEventListener('handler-force-mantra', handler);
+  }, []);
   const [photoTaskType, setPhotoTaskType] = useState<'outfit' | 'mirror_check' | 'pose' | 'makeup' | 'nails' | 'general'>('outfit');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -180,6 +198,15 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
   const modeConfig = MODE_COLORS[currentMode] || MODE_COLORS.director;
 
   return (
+    <>
+    {forcedMantra && (
+      <MantraRepetition
+        mantra={forcedMantra.mantra}
+        repetitions={forcedMantra.repetitions}
+        reasonShown={forcedMantra.reason}
+        onComplete={() => setForcedMantra(null)}
+      />
+    )}
     <div className="fixed inset-0 z-[80] flex flex-col bg-[#0a0a0a]">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-[#0a0a0a]">
@@ -377,6 +404,7 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
         </div>
       </div>
     </div>
+    </>
   );
 }
 
