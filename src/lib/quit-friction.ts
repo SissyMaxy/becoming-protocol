@@ -68,6 +68,29 @@ export async function logQuitAttempt(
     reasoning: `Quit attempt: ${options.attemptType} (${options.targetFeature || 'general'})`,
   });
 
+  // Notify all active witnesses
+  try {
+    const { data: witnesses } = await supabase
+      .from('designated_witnesses')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('status', 'active');
+
+    if (witnesses && witnesses.length > 0) {
+      const notifs = witnesses.map(w => ({
+        witness_id: w.id,
+        user_id: userId,
+        notification_type: 'quit_attempt',
+        subject: `Quit attempt logged: ${options.attemptType}`,
+        body: `Maxy attempted to ${options.attemptType}${options.targetFeature ? ' (' + options.targetFeature + ')' : ''}.\n\nReason given: "${options.reasonGiven || 'no reason'}"\n\nCooldown: ${cooldownHours}h. The system has held her.`,
+        payload: { attempt_type: options.attemptType, target_feature: options.targetFeature, cooldown_hours: cooldownHours },
+      }));
+      await supabase.from('witness_notifications').insert(notifs);
+    }
+  } catch {
+    // Non-critical
+  }
+
   return { id: data.id, cooldownUntil, cooldownHours };
 }
 

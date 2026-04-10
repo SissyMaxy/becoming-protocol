@@ -5,3 +5,4 @@ export { QuitFrictionGate } from './QuitFrictionGate';
 export { IdentityContractModal } from './IdentityContractModal';
 export { CaseFileView } from './CaseFileView';
 export { SealedEnvelopeForm } from './SealedEnvelopeForm';
+export { WitnessManager } from './WitnessManager';

@@ -471,7 +471,60 @@ async function complianceCheck(
     } catch (_) { /* non-critical */ }
   }
 
+  // ── FORCED CHECK-IN ON IDLE ──
+  // 4-hour idle threshold during waking hours → force_mantra_repetition directive.
+  // Rate limited to once per 6 hours.
+  for (const state of states) {
+    try {
+      await forceCheckInIfIdle(supabase, state.user_id)
+    } catch (_) { /* non-critical */ }
+  }
+
   return { checked, escalated, deescalated, actions, ambient_queued: ambientQueued, spontaneous_outreach: spontaneous }
+}
+
+async function forceCheckInIfIdle(supabase: any, userId: string): Promise<boolean> {
+  // 4-hour idle threshold during waking hours
+  const hour = new Date().getUTCHours();
+  const localHour = (hour - 5 + 24) % 24;
+  if (localHour < 9 || localHour >= 22) return false;
+
+  const fourHoursAgo = new Date(Date.now() - 4 * 3600000).toISOString();
+  const { count: recent } = await supabase
+    .from('handler_messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('role', 'user')
+    .gte('created_at', fourHoursAgo);
+
+  if ((recent || 0) > 0) return false;
+
+  // Already fired in last 6 hours?
+  const sixHoursAgo = new Date(Date.now() - 6 * 3600000).toISOString();
+  const { count: recentForce } = await supabase
+    .from('handler_directives')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('action', 'force_mantra_repetition')
+    .gte('created_at', sixHoursAgo);
+
+  if ((recentForce || 0) > 0) return false;
+
+  // Fire forced mantra
+  await supabase.from('handler_directives').insert({
+    user_id: userId,
+    action: 'force_mantra_repetition',
+    target: 'client_modal',
+    value: {
+      mantra: 'I am still here. I am still becoming her.',
+      repetitions: 5,
+      reason: '4+ hours of silence — checking you are still committed',
+    },
+    priority: 'immediate',
+    reasoning: 'Idle check-in: no user activity in 4 hours during waking hours',
+  });
+
+  return true;
 }
 
 // Required engagement quota — punish if user hasn't talked enough today
