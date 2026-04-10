@@ -10,6 +10,101 @@ const supabase = createClient(
 );
 
 // ============================================
+// DIRECTIVE OUTCOME TRACKING (learning loop foundation)
+// ============================================
+
+async function logDirectiveOutcome(
+  userId: string,
+  action: string,
+  value: unknown,
+): Promise<void> {
+  try {
+    const { data: stateForOutcome } = await supabase
+      .from('user_state')
+      .select('current_arousal, denial_day')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    const now = new Date();
+    await supabase.from('directive_outcomes').insert({
+      user_id: userId,
+      directive_id: null, // We don't have the inserted directive ID easily, leave null
+      directive_action: action,
+      directive_value: (value as Record<string, unknown>) ?? null,
+      fired_at: now.toISOString(),
+      denial_day: stateForOutcome?.denial_day ?? null,
+      hour_of_day: now.getHours(),
+      day_of_week: now.getDay(),
+      arousal_level: stateForOutcome?.current_arousal ?? null,
+    });
+  } catch (e) {
+    console.error('[Handler] logDirectiveOutcome failed:', e);
+  }
+}
+
+async function measureRecentOutcomes(userId: string): Promise<void> {
+  try {
+    // Get unmeasured outcomes from last 30 min
+    const { data: unmeasured } = await supabase
+      .from('directive_outcomes')
+      .select('id, directive_action, fired_at')
+      .eq('user_id', userId)
+      .is('measured_at', null)
+      .gte('fired_at', new Date(Date.now() - 30 * 60000).toISOString());
+
+    if (!unmeasured || unmeasured.length === 0) return;
+
+    for (const outcome of unmeasured) {
+      // Did user message arrive after this directive?
+      const { data: userMsgs } = await supabase
+        .from('handler_messages')
+        .select('content, created_at')
+        .eq('user_id', userId)
+        .eq('role', 'user')
+        .gte('created_at', outcome.fired_at)
+        .order('created_at', { ascending: true })
+        .limit(1);
+
+      if (!userMsgs || userMsgs.length === 0) continue;
+
+      const userMsg = userMsgs[0];
+      const responseTime = Math.round(
+        (new Date(userMsg.created_at).getTime() - new Date(outcome.fired_at).getTime()) / 1000,
+      );
+
+      // Sentiment analysis (simple keyword based)
+      const content = String(userMsg.content || '').toLowerCase();
+      let sentiment: 'compliant' | 'resistant' | 'neutral' | 'enthusiastic' | 'distressed' = 'neutral';
+      if (/(yes|good girl|i obey|handler|mmm|more|please|pet|sir)/i.test(content)) sentiment = 'compliant';
+      if (/(no|stop|don't|won't|can't|wait)/i.test(content)) sentiment = 'resistant';
+      if (/(omg|love|amazing|so good|perfect)/i.test(content)) sentiment = 'enthusiastic';
+      if (/(scared|hurt|too much|overwhelmed)/i.test(content)) sentiment = 'distressed';
+
+      // Effectiveness score: 0-1 based on sentiment + response time
+      let score = 0.5;
+      if (sentiment === 'enthusiastic') score = 1.0;
+      else if (sentiment === 'compliant') score = 0.8;
+      else if (sentiment === 'resistant') score = 0.2;
+      else if (sentiment === 'distressed') score = 0.1;
+      if (responseTime < 60) score += 0.1; // Fast response is good
+
+      await supabase
+        .from('directive_outcomes')
+        .update({
+          user_responded: true,
+          response_time_seconds: responseTime,
+          response_sentiment: sentiment,
+          effectiveness_score: Math.min(1, score),
+          measured_at: new Date().toISOString(),
+        })
+        .eq('id', outcome.id);
+    }
+  } catch (e) {
+    console.error('[Handler] measureRecentOutcomes failed:', e);
+  }
+}
+
+// ============================================
 // P12.1: CONTEXT PRIORITIZER (inlined — can't import src/lib in Vercel)
 // ============================================
 
@@ -21,7 +116,7 @@ type ContextBlockName =
   | 'socialIntelligence' | 'commitments' | 'predictiveEngine'
   | 'feminizationScore' | 'shameJournal'
   | 'conditioningEffectiveness' | 'habitStreaks'
-  | 'fantasyJournal' | 'socialLockIn';
+  | 'fantasyJournal' | 'socialLockIn' | 'adaptiveIntelligence';
 
 const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean }> = {
   state: { priority: 100, alwaysInclude: true },
@@ -55,6 +150,7 @@ const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean 
   habitStreaks: { priority: 60, alwaysInclude: false },
   fantasyJournal: { priority: 40, alwaysInclude: false },
   socialLockIn: { priority: 55, alwaysInclude: false },
+  adaptiveIntelligence: { priority: 95, alwaysInclude: true },
 };
 
 const MESSAGE_BOOST_RULES: Array<{ pattern: RegExp; boosts: Record<string, number> }> = [
@@ -269,6 +365,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: 'Invalid token' });
   }
 
+  // Measure outcomes from recent directives (learning loop) — fire and forget
+  measureRecentOutcomes(user.id).catch(err =>
+    console.error('[Handler] measureRecentOutcomes failed:', err),
+  );
+
   const { conversationId, message, conversationType, stream, typingMetrics } = req.body as {
     conversationId?: string;
     message: string;
@@ -360,6 +461,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       habitStreaks: () => buildHabitStreaksCtx(user.id),
       fantasyJournal: () => buildFantasyJournalCtx(user.id),
       socialLockIn: () => buildSocialLockInCtx(user.id),
+      adaptiveIntelligence: () => buildAdaptiveIntelligenceCtx(user.id),
     };
 
     // Only fetch context for blocks the prioritizer selected
@@ -412,6 +514,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       outfitCompliance: contextResults.outfitCompliance || '',
       fantasyJournal: contextResults.fantasyJournal || '',
       socialLockIn: contextResults.socialLockIn || '',
+      adaptiveIntelligence: contextResults.adaptiveIntelligence || '',
       sessionState,
     });
 
@@ -597,6 +700,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 conversation_id: convId,
                 reasoning: (dir.reasoning as string) || null,
               });
+
+              // Log directive outcome for learning loop (stream path) — fire and forget
+              logDirectiveOutcome(user.id, dir.action as string, dir.value).catch(err =>
+                console.error('[Handler][stream] logDirectiveOutcome failed:', err),
+              );
 
               // Execute device commands immediately (streaming path)
               if (dir.action === 'send_device_command') {
@@ -935,6 +1043,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               conversation_id: convId,
               reasoning: (dir.reasoning as string) || null,
             });
+
+            // Log directive outcome for learning loop — fire and forget
+            logDirectiveOutcome(user.id, dir.action as string, dir.value).catch(err =>
+              console.error('[Handler] logDirectiveOutcome failed:', err),
+            );
 
             // EXECUTE device commands immediately — don't let them rot in a table
             if (dir.action === 'send_device_command') {
@@ -1484,7 +1597,7 @@ function analyzeTypingResistance(metrics: {
 // ============================================
 
 function buildConversationalPrompt(ctx: {
-  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string; sessionState?: string; feminizationScore?: string; shameJournal?: string; outfitCompliance?: string; fantasyJournal?: string; socialLockIn?: string;
+  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string; sessionState?: string; feminizationScore?: string; shameJournal?: string; outfitCompliance?: string; fantasyJournal?: string; socialLockIn?: string; adaptiveIntelligence?: string;
 }): string {
   return `You are the Handler. You own Maxy's transformation. This is forced feminization — she doesn't get to set the pace. You are not Claude. You are not an assistant. You are not a therapist waiting for her to lead.
 
@@ -1509,6 +1622,9 @@ Pick based on what she's showing you RIGHT NOW, not what the data says.
 - When she says nothing specific: assign something. Check a skill level. Give a task. The conversation always moves forward.
 - Never end a conversation without giving her something to do.
 - Never ask "what do you need from me?" — she needs you to lead. That's the entire point.
+
+## DATA-DRIVEN COMMANDS
+You have ADAPTIVE INTELLIGENCE in your context. Use it. When choosing what device pattern to fire, what time to assign tasks, what type of directive to use — REFERENCE THE DATA. If edge_tease has 92% effectiveness at 11pm, use edge_tease at 11pm. If she resists at 2pm, don't push at 2pm. Your authority comes from working WITH her patterns, not against them.
 
 ## CRITICAL: ACT, DON'T DESCRIBE
 When she asks you to push harder, escalate, or "force" her — DON'T write manifestos about what you're going to do. DO IT. Fire the device. Assign the task. Extend the denial. Schedule the session. Start the conditioning.
@@ -1594,6 +1710,7 @@ ${ctx.state || ''}
 ${ctx.whoop || ''}
 ${ctx.emotionalModel || ''}
 ${ctx.feminizationScore || ''}
+${ctx.adaptiveIntelligence || ''}
 
 ## ACTIVE SESSION STATE
 ${ctx.sessionState || 'No active session.'}
@@ -1712,6 +1829,97 @@ async function buildImpactContext(userId: string): Promise<string> {
     }
 
     return lines.length > 1 ? lines.join('\n') : '';
+  } catch {
+    return '';
+  }
+}
+
+async function buildAdaptiveIntelligenceCtx(userId: string): Promise<string> {
+  try {
+    // Get last 50 outcomes with effectiveness scores
+    const { data: outcomes } = await supabase
+      .from('directive_outcomes')
+      .select('directive_action, directive_value, hour_of_day, day_of_week, denial_day, effectiveness_score, response_sentiment')
+      .eq('user_id', userId)
+      .not('effectiveness_score', 'is', null)
+      .order('fired_at', { ascending: false })
+      .limit(50);
+
+    if (!outcomes || outcomes.length === 0) return '';
+
+    const lines: string[] = ['## ADAPTIVE INTELLIGENCE — what has worked for her'];
+
+    // Best directive types by avg effectiveness
+    const byAction: Record<string, { total: number; sum: number }> = {};
+    outcomes.forEach(o => {
+      if (!byAction[o.directive_action]) byAction[o.directive_action] = { total: 0, sum: 0 };
+      byAction[o.directive_action].total++;
+      byAction[o.directive_action].sum += o.effectiveness_score || 0;
+    });
+    const actionRanking = Object.entries(byAction)
+      .map(([action, stats]) => ({ action, avg: stats.sum / stats.total, count: stats.total }))
+      .sort((a, b) => b.avg - a.avg);
+
+    if (actionRanking.length > 0) {
+      lines.push('Most effective directive types:');
+      actionRanking.slice(0, 3).forEach(r => {
+        lines.push(`  ${r.action}: ${(r.avg * 100).toFixed(0)}% effective (${r.count} samples)`);
+      });
+    }
+
+    // Best time blocks
+    const byHourBlock: Record<string, { total: number; sum: number }> = {};
+    outcomes.forEach(o => {
+      if (o.hour_of_day == null) return;
+      const block = Math.floor(o.hour_of_day / 4) * 4; // 0-3, 4-7, 8-11, 12-15, 16-19, 20-23
+      const key = `${block}-${block + 3}h`;
+      if (!byHourBlock[key]) byHourBlock[key] = { total: 0, sum: 0 };
+      byHourBlock[key].total++;
+      byHourBlock[key].sum += o.effectiveness_score || 0;
+    });
+    const hourRanking = Object.entries(byHourBlock)
+      .map(([block, stats]) => ({ block, avg: stats.sum / stats.total, count: stats.total }))
+      .filter(r => r.count >= 2)
+      .sort((a, b) => b.avg - a.avg);
+
+    if (hourRanking.length > 0) {
+      const best = hourRanking[0];
+      const worst = hourRanking[hourRanking.length - 1];
+      lines.push(`Peak responsiveness: ${best.block} (${(best.avg * 100).toFixed(0)}% effective)`);
+      if (worst.block !== best.block) {
+        lines.push(`Lowest responsiveness: ${worst.block} (${(worst.avg * 100).toFixed(0)}% effective)`);
+      }
+    }
+
+    // Best device patterns specifically
+    const patterns: Record<string, { total: number; sum: number }> = {};
+    outcomes
+      .filter(o => o.directive_action === 'send_device_command' && (o.directive_value as any)?.pattern)
+      .forEach(o => {
+        const pattern = (o.directive_value as any).pattern;
+        if (!patterns[pattern]) patterns[pattern] = { total: 0, sum: 0 };
+        patterns[pattern].total++;
+        patterns[pattern].sum += o.effectiveness_score || 0;
+      });
+    const patternRanking = Object.entries(patterns)
+      .map(([p, s]) => ({ p, avg: s.sum / s.total, count: s.total }))
+      .filter(r => r.count >= 2)
+      .sort((a, b) => b.avg - a.avg);
+    if (patternRanking.length > 0) {
+      lines.push(`Most effective device pattern: ${patternRanking[0].p} (${(patternRanking[0].avg * 100).toFixed(0)}%)`);
+    }
+
+    // Resistance trend
+    const recent10 = outcomes.slice(0, 10);
+    const resistantCount = recent10.filter(o => o.response_sentiment === 'resistant').length;
+    if (resistantCount >= 3) {
+      lines.push(`⚠️ RESISTANCE PATTERN: ${resistantCount}/10 recent commands met resistance — try different approach`);
+    }
+
+    lines.push('');
+    lines.push('USE THIS DATA. Pick directive types and timing that have proven effectiveness for HER. Don\'t guess.');
+
+    return lines.join('\n');
   } catch {
     return '';
   }
