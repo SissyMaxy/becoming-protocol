@@ -3,3 +3,5 @@ export { InterventionNotification, InterventionBadge } from './InterventionNotif
 export { GinaMissionCard, BehavioralDirectiveCard } from './GinaMissionCard';
 export { QuitFrictionGate } from './QuitFrictionGate';
 export { IdentityContractModal } from './IdentityContractModal';
+export { CaseFileView } from './CaseFileView';
+export { SealedEnvelopeForm } from './SealedEnvelopeForm';
