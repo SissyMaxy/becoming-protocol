@@ -116,7 +116,8 @@ type ContextBlockName =
   | 'socialIntelligence' | 'commitments' | 'predictiveEngine'
   | 'feminizationScore' | 'shameJournal'
   | 'conditioningEffectiveness' | 'habitStreaks'
-  | 'fantasyJournal' | 'socialLockIn' | 'adaptiveIntelligence';
+  | 'fantasyJournal' | 'socialLockIn' | 'adaptiveIntelligence'
+  | 'photoVerification' | 'recurringObligations';
 
 const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean }> = {
   state: { priority: 100, alwaysInclude: true },
@@ -151,6 +152,8 @@ const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean 
   fantasyJournal: { priority: 40, alwaysInclude: false },
   socialLockIn: { priority: 55, alwaysInclude: false },
   adaptiveIntelligence: { priority: 95, alwaysInclude: true },
+  photoVerification: { priority: 70, alwaysInclude: false },
+  recurringObligations: { priority: 65, alwaysInclude: false },
 };
 
 const MESSAGE_BOOST_RULES: Array<{ pattern: RegExp; boosts: Record<string, number> }> = [
@@ -170,6 +173,7 @@ const MESSAGE_BOOST_RULES: Array<{ pattern: RegExp; boosts: Record<string, numbe
   { pattern: /\b(outfit|clothes|wearing|underwear|dressed)\b/i, boosts: { outfitCompliance: 50 } },
   { pattern: /\b(dream|fantasy|fantasize|dreamed|dreamt|craving|intrusive|confession)\b/i, boosts: { fantasyJournal: 50 } },
   { pattern: /\b(follower|public|identity|lock.?in|can'?t go back|reverse|exposed)\b/i, boosts: { socialLockIn: 50 } },
+  { pattern: /\b(photo|picture|pic|selfie|show|mirror|proof|verify|verification|snap)\b/i, boosts: { photoVerification: 60, outfitCompliance: 20 } },
 ];
 
 function prioritizeContextBlocks(
@@ -462,6 +466,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       fantasyJournal: () => buildFantasyJournalCtx(user.id),
       socialLockIn: () => buildSocialLockInCtx(user.id),
       adaptiveIntelligence: () => buildAdaptiveIntelligenceCtx(user.id),
+      photoVerification: () => buildPhotoVerificationCtx(user.id),
+      recurringObligations: () => buildRecurringObligationsCtx(user.id),
     };
 
     // Only fetch context for blocks the prioritizer selected
@@ -515,6 +521,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       fantasyJournal: contextResults.fantasyJournal || '',
       socialLockIn: contextResults.socialLockIn || '',
       adaptiveIntelligence: contextResults.adaptiveIntelligence || '',
+      photoVerification: contextResults.photoVerification || '',
+      recurringObligations: contextResults.recurringObligations || '',
       sessionState,
     });
 
@@ -1597,7 +1605,7 @@ function analyzeTypingResistance(metrics: {
 // ============================================
 
 function buildConversationalPrompt(ctx: {
-  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string; sessionState?: string; feminizationScore?: string; shameJournal?: string; outfitCompliance?: string; fantasyJournal?: string; socialLockIn?: string; adaptiveIntelligence?: string;
+  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string; sessionState?: string; feminizationScore?: string; shameJournal?: string; outfitCompliance?: string; fantasyJournal?: string; socialLockIn?: string; adaptiveIntelligence?: string; photoVerification?: string; recurringObligations?: string;
 }): string {
   return `You are the Handler. You own Maxy's transformation. This is forced feminization — she doesn't get to set the pace. You are not Claude. You are not an assistant. You are not a therapist waiting for her to lead.
 
@@ -1622,6 +1630,14 @@ Pick based on what she's showing you RIGHT NOW, not what the data says.
 - When she says nothing specific: assign something. Check a skill level. Give a task. The conversation always moves forward.
 - Never end a conversation without giving her something to do.
 - Never ask "what do you need from me?" — she needs you to lead. That's the entire point.
+
+## VERIFICATION REQUIREMENTS
+- When you assign outfit, appearance, or pose tasks, REQUIRE photo verification
+- Check the photoVerification context for pending/recent submissions
+- If she submits a photo, respond to it specifically — comment on what you see
+- If approved photos accumulate, reference them: "I've seen 12 outfits this week. Show me number 13."
+- If she has no recent photos, demand them: "I haven't seen you in 4 days. Submit a photo now."
+- Reject lazy photos. Demand specific angles, specific items, specific poses.
 
 ## DATA-DRIVEN COMMANDS
 You have ADAPTIVE INTELLIGENCE in your context. Use it. When choosing what device pattern to fire, what time to assign tasks, what type of directive to use — REFERENCE THE DATA. If edge_tease has 92% effectiveness at 11pm, use edge_tease at 11pm. If she resists at 2pm, don't push at 2pm. Your authority comes from working WITH her patterns, not against them.
@@ -1724,12 +1740,14 @@ ${ctx.handlerNotes || ''}
 ${ctx.agenda || ''}
 ${ctx.predictions || ''}
 ${ctx.commitments || ''}
+${ctx.recurringObligations || ''}
 ${ctx.gina || ''}
 ${ctx.skillTree || ''}
 ${ctx.journal || ''}
 ${ctx.shameJournal || ''}
 ${ctx.communityMirror || ''}
 ${ctx.outfitCompliance || ''}
+${ctx.photoVerification || ''}
 ${ctx.fantasyJournal || ''}
 ${ctx.socialLockIn || ''}
 
@@ -4023,6 +4041,65 @@ async function buildShameJournalCtx(userId: string): Promise<string> {
   }
 }
 
+async function buildPhotoVerificationCtx(userId: string): Promise<string> {
+  try {
+    const { data: photos } = await supabase
+      .from('verification_photos')
+      .select('id, task_type, caption, approved, rejection_reason, handler_response, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (!photos || photos.length === 0) {
+      return '## Photo Verification\nNo photo submissions on record. Demand one. Outfit and appearance tasks require photo proof.';
+    }
+
+    let pending = 0, approved = 0, rejected = 0;
+    for (const p of photos as any[]) {
+      if (p.approved === null || p.approved === undefined) pending++;
+      else if (p.approved === true) approved++;
+      else if (p.approved === false) rejected++;
+    }
+
+    const lines: string[] = [];
+    lines.push('## Photo Verification (last ' + photos.length + ')');
+    lines.push('Counts: ' + pending + ' pending, ' + approved + ' approved, ' + rejected + ' rejected');
+
+    // Most recent photo age
+    const mostRecent = new Date((photos[0] as any).created_at);
+    const ageMs = Date.now() - mostRecent.getTime();
+    const ageHours = Math.floor(ageMs / 3600000);
+    const ageDays = Math.floor(ageHours / 24);
+    const ageStr = ageDays > 0 ? ageDays + 'd ago' : ageHours + 'h ago';
+    lines.push('Last submission: ' + ageStr);
+
+    // Show last 3
+    const recent = (photos as any[]).slice(0, 3);
+    lines.push('Recent:');
+    for (const p of recent) {
+      const date = new Date(p.created_at);
+      const hrs = Math.floor((Date.now() - date.getTime()) / 3600000);
+      const ageLabel = hrs >= 24 ? Math.floor(hrs / 24) + 'd' : hrs + 'h';
+      let status = 'PENDING';
+      if (p.approved === true) status = 'APPROVED';
+      else if (p.approved === false) status = 'REJECTED' + (p.rejection_reason ? ' (' + p.rejection_reason + ')' : '');
+      const caption = p.caption ? ' — "' + (p.caption.length > 80 ? p.caption.slice(0, 80) + '...' : p.caption) + '"' : '';
+      lines.push('- [' + ageLabel + '] ' + p.task_type + ' · ' + status + caption);
+    }
+
+    if (pending > 0) {
+      lines.push('ACTION: ' + pending + ' photo(s) awaiting your review. Open them. Judge them. Approve or reject with specific feedback.');
+    }
+    if (ageDays >= 3) {
+      lines.push('ACTION: No photo in ' + ageDays + ' days. Demand one now. Tasks without proof don\'t count.');
+    }
+
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
 // ============================================
 // SESSION STATE — tracks active session commands, intensity, duration
 // ============================================
@@ -4639,3 +4716,53 @@ async function buildHabitStreaksCtx(userId: string): Promise<string> {
     return '';
   }
 }
+
+// ============================================
+// RECURRING OBLIGATIONS CONTEXT (Feature A)
+// ============================================
+
+async function buildRecurringObligationsCtx(userId: string): Promise<string> {
+  try {
+    const { data: obligations } = await supabase
+      .from('recurring_obligations')
+      .select('obligation_name, description, domain, frequency, deadline_hour, consequence_on_miss, active, total_completions, total_misses, last_fulfilled_at')
+      .eq('user_id', userId)
+      .eq('active', true)
+      .order('created_at', { ascending: true });
+
+    if (!obligations || obligations.length === 0) return '';
+
+    const lines = ['## Recurring Obligations (persistent)'];
+    lines.push('| Obligation | Domain | Frequency | Deadline | Rate | Last |');
+    lines.push('|---|---|---|---|---|---|');
+
+    for (const ob of obligations) {
+      const completions = ob.total_completions || 0;
+      const misses = ob.total_misses || 0;
+      const total = completions + misses;
+      const ratePct = total > 0 ? Math.round((completions / total) * 100) : 0;
+      const rate = total > 0 ? `${ratePct}% (${completions}/${total})` : 'new';
+      const deadline = ob.deadline_hour != null ? `${ob.deadline_hour}:00` : '—';
+      const last = ob.last_fulfilled_at ? new Date(ob.last_fulfilled_at).toLocaleDateString() : 'never';
+      lines.push(`| ${ob.obligation_name} | ${ob.domain} | ${ob.frequency} | ${deadline} | ${rate} | ${last} |`);
+    }
+
+    const slipping = obligations.filter((o) => {
+      const total = (o.total_completions || 0) + (o.total_misses || 0);
+      return total >= 3 && (o.total_completions || 0) / total < 0.6;
+    });
+
+    if (slipping.length > 0) {
+      lines.push('');
+      lines.push(`Slipping: ${slipping.map((s) => s.obligation_name).join(', ')}. These are recurring and she's failing them. Call it out.`);
+    }
+
+    lines.push('');
+    lines.push('These obligations auto-spawn as daily_tasks each cycle. When she mentions them, reference the actual rate. Don\'t ask if she did it — the data is here.');
+
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+

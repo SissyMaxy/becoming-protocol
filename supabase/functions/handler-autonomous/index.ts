@@ -391,7 +391,17 @@ async function complianceCheck(
     } catch (_) { /* non-critical */ }
   }
 
-  return { checked, escalated, deescalated, actions }
+  // ── FEATURE B: Ambient conditioning audio ──
+  // Queue feminine affirmations hourly during waking hours if
+  // conditioning_intensity_multiplier >= 1.0. Count per hour scales with multiplier.
+  let ambientQueued = 0
+  for (const state of states) {
+    try {
+      ambientQueued += await queueAmbientAudio(supabase, state.user_id)
+    } catch (_) { /* non-critical */ }
+  }
+
+  return { checked, escalated, deescalated, actions, ambient_queued: ambientQueued }
 }
 
 // Escalation tier thresholds (from spec)
@@ -563,6 +573,17 @@ async function dailyCycle(
         })
         .eq('user_id', uid)
 
+      // 1b. Process recurring obligations — spawn daily_tasks from active obligations
+      let obligationsSpawned = 0
+      let obligationsMissed = 0
+      try {
+        const result = await processRecurringObligations(supabase, uid)
+        obligationsSpawned = result.spawned
+        obligationsMissed = result.missed
+      } catch (err) {
+        console.error(`Recurring obligations failed for ${uid}:`, err)
+      }
+
       // 2. Expire old briefs
       const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
       await supabase
@@ -647,6 +668,8 @@ async function dailyCycle(
           strategy_updated: strategyUpdated,
           denial_days: denialDays,
           conditioning_fired: conditioningFired,
+          obligations_spawned: obligationsSpawned,
+          obligations_missed: obligationsMissed,
         },
         reasoning: 'Daily 6 AM cycle: reset counters, expire old briefs, generate new assignments, denial conditioning check',
         executed: true,
@@ -658,6 +681,8 @@ async function dailyCycle(
         user_id: uid,
         briefs_generated: briefsGenerated,
         strategy_updated: strategyUpdated,
+        obligations_spawned: obligationsSpawned,
+        obligations_missed: obligationsMissed,
       })
     } catch (err) {
       console.error(`Daily cycle failed for ${user.user_id}:`, err)
@@ -1095,4 +1120,225 @@ async function callEdgeFunction(
     console.error(`Failed to call ${functionName}:`, err)
     return { error: err.message }
   }
+}
+
+// ============================================
+// RECURRING OBLIGATIONS (Feature A)
+// ============================================
+// For each active obligation, check if it's due today based on frequency.
+// If the previous spawn wasn't completed, increment total_misses before spawning
+// the new one. Then insert a matching task_bank row (if needed) and a daily_tasks row.
+
+function isObligationDueToday(
+  frequency: string,
+  lastFulfilledAt: string | null,
+  now: Date,
+): boolean {
+  const dayOfWeek = now.getUTCDay() // 0 = Sunday, 6 = Saturday
+  const lastMs = lastFulfilledAt ? new Date(lastFulfilledAt).getTime() : 0
+  const hoursSince = lastMs ? (now.getTime() - lastMs) / (1000 * 60 * 60) : Infinity
+
+  switch (frequency) {
+    case 'daily':
+      return hoursSince >= 20 // allow a small window before 24h
+    case 'twice_daily':
+      return hoursSince >= 10 // ~every 12h
+    case 'every_2_days':
+      return hoursSince >= 44
+    case 'weekly':
+      return hoursSince >= 160 // ~every 7 days
+    case 'weekdays':
+      return dayOfWeek >= 1 && dayOfWeek <= 5 && hoursSince >= 20
+    case 'weekends':
+      return (dayOfWeek === 0 || dayOfWeek === 6) && hoursSince >= 20
+    default:
+      return false
+  }
+}
+
+async function processRecurringObligations(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<{ spawned: number; missed: number }> {
+  const { data: obligations } = await supabase
+    .from('recurring_obligations')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('active', true)
+
+  if (!obligations || obligations.length === 0) return { spawned: 0, missed: 0 }
+
+  const now = new Date()
+  const today = now.toISOString().slice(0, 10)
+  let spawned = 0
+  let missed = 0
+
+  for (const ob of obligations) {
+    try {
+      if (!isObligationDueToday(ob.frequency, ob.last_fulfilled_at, now)) continue
+
+      // If there's a prior obligation-linked task that wasn't completed, count it as a miss.
+      if (ob.last_fulfilled_at) {
+        const { data: priorTask } = await supabase
+          .from('daily_tasks')
+          .select('id, status')
+          .eq('user_id', userId)
+          .eq('selection_reason', `recurring_obligation:${ob.id}`)
+          .order('assigned_date', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (priorTask && priorTask.status !== 'completed') {
+          await supabase
+            .from('recurring_obligations')
+            .update({ total_misses: (ob.total_misses || 0) + 1 })
+            .eq('id', ob.id)
+          missed++
+        }
+      }
+
+      // Ensure a task_bank row exists for this obligation. Use a deterministic lookup
+      // via instruction + domain to avoid creating duplicates on every cycle.
+      const { data: existingTask } = await supabase
+        .from('task_bank')
+        .select('id')
+        .eq('instruction', ob.obligation_name)
+        .eq('domain', ob.domain)
+        .eq('created_by', `recurring:${ob.id}`)
+        .maybeSingle()
+
+      let taskBankId: string | null = existingTask?.id ?? null
+
+      if (!taskBankId) {
+        const { data: newTask, error: insertErr } = await supabase
+          .from('task_bank')
+          .insert({
+            category: 'recurring_obligation',
+            domain: ob.domain,
+            intensity: 2,
+            instruction: ob.obligation_name,
+            subtext: ob.description ?? null,
+            completion_type: 'binary',
+            points: 10,
+            affirmation: 'Good girl.',
+            is_core: true,
+            created_by: `recurring:${ob.id}`,
+            active: true,
+          })
+          .select('id')
+          .single()
+
+        if (insertErr || !newTask) {
+          console.error(`Failed to create task_bank row for obligation ${ob.id}:`, insertErr?.message)
+          continue
+        }
+        taskBankId = newTask.id
+      }
+
+      // Spawn the daily_tasks row for today.
+      const { error: dtErr } = await supabase
+        .from('daily_tasks')
+        .insert({
+          user_id: userId,
+          task_id: taskBankId,
+          assigned_date: today,
+          status: 'pending',
+          selection_reason: `recurring_obligation:${ob.id}`,
+        })
+
+      if (dtErr) {
+        // Uniqueness collision (already spawned today) is non-critical
+        if (!String(dtErr.message || '').includes('duplicate')) {
+          console.error(`Failed to spawn daily_task for obligation ${ob.id}:`, dtErr.message)
+        }
+        continue
+      }
+
+      // Mark the obligation fulfilled (spawned) now.
+      await supabase
+        .from('recurring_obligations')
+        .update({
+          last_fulfilled_at: now.toISOString(),
+          total_completions: (ob.total_completions || 0) + 1,
+        })
+        .eq('id', ob.id)
+
+      spawned++
+    } catch (err) {
+      console.error(`Obligation ${ob.id} processing failed:`, err)
+    }
+  }
+
+  return { spawned, missed }
+}
+
+// ============================================
+// AMBIENT CONDITIONING AUDIO (Feature B)
+// ============================================
+// Queue feminine affirmations scaled by conditioning_intensity_multiplier.
+// Called from complianceCheck() — rate-limited to once-per-hour-per-multiplier.
+
+const AMBIENT_AFFIRMATIONS = [
+  "You're becoming her.",
+  'Good girl.',
+  'Feel how feminine you are.',
+  "She's the real you.",
+  'Let her take over.',
+  "You're so pretty.",
+  'Everyone sees her now.',
+  "There's no going back.",
+]
+
+async function queueAmbientAudio(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<number> {
+  // Check hour gating in CDT (UTC-5): waking hours 8am-11pm
+  const nowUTC = new Date()
+  const cdtHour = (nowUTC.getUTCHours() - 5 + 24) % 24
+  if (cdtHour < 8 || cdtHour >= 23) return 0
+
+  // Read conditioning_intensity_multiplier from hidden_operations
+  const { data: hidden } = await supabase
+    .from('hidden_operations')
+    .select('current_value')
+    .eq('user_id', userId)
+    .eq('parameter', 'conditioning_intensity_multiplier')
+    .maybeSingle()
+
+  const multiplier = Number(hidden?.current_value ?? 0)
+  if (!multiplier || multiplier < 1.0) return 0
+
+  // Target insertions per hour = floor(multiplier), minimum 1 when multiplier >= 1.
+  const targetPerHour = Math.max(1, Math.floor(multiplier))
+
+  // Rate limit: count entries created in the last hour
+  const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+  const { count: recentCount } = await supabase
+    .from('ambient_audio_queue')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .gte('created_at', hourAgo)
+
+  const alreadyThisHour = recentCount || 0
+  if (alreadyThisHour >= targetPerHour) return 0
+
+  const toInsert = targetPerHour - alreadyThisHour
+  let inserted = 0
+
+  for (let i = 0; i < toInsert; i++) {
+    const text = AMBIENT_AFFIRMATIONS[Math.floor(Math.random() * AMBIENT_AFFIRMATIONS.length)]
+    const { error } = await supabase
+      .from('ambient_audio_queue')
+      .insert({
+        user_id: userId,
+        audio_text: text,
+        audio_type: 'affirmation',
+        intensity: Math.min(10, Math.max(1, Math.round(5 * multiplier))),
+        scheduled_for: new Date(Date.now() + i * 5 * 60 * 1000).toISOString(),
+      })
+    if (!error) inserted++
+  }
+
+  return inserted
 }

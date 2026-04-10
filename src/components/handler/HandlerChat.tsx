@@ -8,6 +8,7 @@ import { useHandlerChat, type ChatMessage, type MediaAttachment } from '../../ho
 import { useHandlerVoice } from '../../hooks/useHandlerVoice';
 import { useVoiceConversation } from '../../hooks/useVoiceConversation';
 import { useSessionBiometrics } from '../../hooks/useSessionBiometrics';
+import { useAmbientAudio } from '../../hooks/useAmbientAudio';
 
 interface HandlerChatProps {
   onClose: () => void;
@@ -28,6 +29,9 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
   const voice = useHandlerVoice();
   const voiceInput = useVoiceConversation();
   const biometrics = useSessionBiometrics();
+  // Ambient conditioning audio — polls ambient_audio_queue and speaks queued
+  // affirmations via SpeechSynthesis while the chat is open. Toggle persists in localStorage.
+  useAmbientAudio();
 
   // Auto-start biometric polling when Handler enters dominant/conditioning mode
   const bioPollStartedRef = useRef(false);
