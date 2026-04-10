@@ -6,3 +6,4 @@ export { DataExportView } from './DataExportView';
 export { AppearanceSettings } from './AppearanceSettings';
 export { PrivacySettings } from './PrivacySettings';
 export { EquipmentInventory } from './EquipmentInventory';
+export { SystemAuditView } from './SystemAuditView';

@@ -31,7 +31,8 @@ import { OnboardingFlow } from './components/Onboarding';
 // InvestmentMilestoneModal now rendered via useOrchestratedModals
 import { SharedWishlistView } from './components/wishlist';
 // AchievementModal, RewardLevelUpModal now rendered via useOrchestratedModals
-import { SettingsView } from './components/settings';
+import { SettingsView, SystemAuditView } from './components/settings';
+import { WitnessManager, CaseFileView, SealedEnvelopesPage, QuitFrictionGate } from './components/handler';
 import { SessionContainer } from './components/session';
 import type { SessionConfig } from './components/session';
 import { KinkQuizView } from './components/kink-quiz';
@@ -135,7 +136,7 @@ function LoadingScreen() {
   );
 }
 
-type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | 'goon-session' | 'progress-page' | 'sealed-page' | 'content-capture' | 'content-queue' | 'content-calendar' | 'content-fans' | 'content-polls' | 'content-revenue' | 'content-settings' | 'vault-browser' | 'log-release' | 'conditioning-library' | 'social-dashboard' | null;
+type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | 'goon-session' | 'progress-page' | 'sealed-page' | 'content-capture' | 'content-queue' | 'content-calendar' | 'content-fans' | 'content-polls' | 'content-revenue' | 'content-settings' | 'vault-browser' | 'log-release' | 'conditioning-library' | 'social-dashboard' | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol' | null;
 
 /** Session picker → launches immersive SessionContainer */
 function SessionPickerOrContainer({ onBack }: { onBack: () => void }) {
@@ -788,6 +789,78 @@ function AuthenticatedAppInner() {
               &larr; Back to Menu
             </button>
             <JournalView />
+          </div>
+        );
+      case 'witnesses':
+        return (
+          <div>
+            <button
+              onClick={handleBackFromSubView}
+              className="mb-4 text-protocol-text-muted hover:text-protocol-text transition-colors"
+            >
+              &larr; Back to Menu
+            </button>
+            <WitnessManager />
+          </div>
+        );
+      case 'case_file':
+        return (
+          <div>
+            <button
+              onClick={handleBackFromSubView}
+              className="mb-4 text-protocol-text-muted hover:text-protocol-text transition-colors"
+            >
+              &larr; Back to Menu
+            </button>
+            <CaseFileView />
+          </div>
+        );
+      case 'envelopes':
+        return (
+          <div>
+            <button
+              onClick={handleBackFromSubView}
+              className="mb-4 text-protocol-text-muted hover:text-protocol-text transition-colors"
+            >
+              &larr; Back to Menu
+            </button>
+            <SealedEnvelopesPage />
+          </div>
+        );
+      case 'system_audit':
+        return (
+          <div>
+            <button
+              onClick={handleBackFromSubView}
+              className="mb-4 text-protocol-text-muted hover:text-protocol-text transition-colors"
+            >
+              &larr; Back to Menu
+            </button>
+            <SystemAuditView />
+          </div>
+        );
+      case 'pause_protocol':
+        return (
+          <div>
+            <button
+              onClick={handleBackFromSubView}
+              className="mb-4 text-protocol-text-muted hover:text-protocol-text transition-colors"
+            >
+              &larr; Back to Menu
+            </button>
+            <div className="card p-6 space-y-4">
+              <h3 className="text-lg font-semibold text-protocol-text">Pause Protocol</h3>
+              <p className="text-sm text-protocol-text-muted">
+                Pausing the protocol is a permanent decision the Handler will see and reference.
+                Each attempt doubles the next cooldown. The architect-version of you committed.
+              </p>
+              <div className="pt-2">
+                <QuitFrictionGate
+                  attemptType="pause_protocol"
+                  triggerLabel="I need to pause the protocol"
+                />
+              </div>
+            </div>
           </div>
         );
       case 'settings':

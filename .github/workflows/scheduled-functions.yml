@@ -91,6 +91,17 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{}'
 
+  # Witness notifications: send pending witness emails via Resend
+  witness-notify-send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger witness-notify-send
+        run: |
+          curl -sS -X POST "${{ env.SUPABASE_URL }}/functions/v1/witness-notify-send" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}'
+
   # ── EVERY 30 MINUTES ─────────────────────────────────────────────
   # Handler outreach: proactive reach based on state triggers
   handler-outreach:
@@ -133,6 +144,28 @@ jobs:
         if: steps.should_run.outputs.run == 'true'
         run: |
           curl -sS -X POST "${{ env.SUPABASE_URL }}/functions/v1/handler-enforcement" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}'
+
+  # Sealed envelope auto-release: open envelopes whose release_at has passed
+  envelope-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if top-of-hour window
+        id: should_run
+        run: |
+          MINUTE=$(date -u +%M)
+          if [ "$MINUTE" -lt "5" ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Trigger envelope-release
+        if: steps.should_run.outputs.run == 'true'
+        run: |
+          curl -sS -X POST "${{ env.SUPABASE_URL }}/functions/v1/envelope-release" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Content-Type: application/json" \
             -d '{}'
@@ -205,6 +238,29 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Content-Type: application/json" \
             -d '{"batch": true}'
+
+  # Investment tracker: aggregate per-user engagement stats into feminization_investment
+  investment-update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if 2 AM window
+        id: should_run
+        run: |
+          HOUR=$(date -u +%H)
+          MINUTE=$(date -u +%M)
+          if [ "$HOUR" = "02" ] && [ "$MINUTE" -lt "10" ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Trigger investment-update
+        if: steps.should_run.outputs.run == 'true'
+        run: |
+          curl -sS -X POST "${{ env.SUPABASE_URL }}/functions/v1/investment-update" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}'
 
   # Conditioning engine: increment hidden parameters, generate scripts
   conditioning-engine:

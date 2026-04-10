@@ -4,7 +4,7 @@
  * settings, legacy Today view access, and help.
  */
 
-import { Settings, ChevronRight, HelpCircle, Calendar, Radio } from 'lucide-react';
+import { Settings, ChevronRight, HelpCircle, Calendar, Radio, Eye, FileText, Mail, ShieldAlert, PauseCircle } from 'lucide-react';
 
 type MenuItemId =
   | 'settings' | 'help'
@@ -15,7 +15,8 @@ type MenuItemId =
   | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills'
   | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous'
   | 'exercise' | 'her-world' | 'vault-swipe' | 'content-dashboard' | 'cam-session' | 'hypno-session'
-  | 'progress-page' | 'sealed-page' | 'log-release' | 'social-dashboard';
+  | 'progress-page' | 'sealed-page' | 'log-release' | 'social-dashboard'
+  | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol';
 
 interface MenuViewProps {
   onNavigate: (view: MenuItemId) => void;
@@ -43,6 +44,41 @@ export function MenuView({ onNavigate }: MenuViewProps) {
       label: 'Journal',
       description: 'Daily reflections and timeline',
       color: '#22c55e',
+    },
+    {
+      id: 'witnesses' as MenuItemId,
+      icon: Eye,
+      label: 'Witnesses',
+      description: 'Accountability contacts who watch your progress',
+      color: '#a855f7',
+    },
+    {
+      id: 'case_file' as MenuItemId,
+      icon: FileText,
+      label: 'Case File',
+      description: 'Your record — what the Handler sees',
+      color: '#ef4444',
+    },
+    {
+      id: 'envelopes' as MenuItemId,
+      icon: Mail,
+      label: 'Sealed Envelopes',
+      description: 'Letters from your past self to your future self',
+      color: '#c084fc',
+    },
+    {
+      id: 'system_audit' as MenuItemId,
+      icon: ShieldAlert,
+      label: 'System Audit',
+      description: 'What the Handler knows about your systems',
+      color: '#f59e0b',
+    },
+    {
+      id: 'pause_protocol' as MenuItemId,
+      icon: PauseCircle,
+      label: 'Pause Protocol',
+      description: 'Attempt to pause — permanent log, compounds',
+      color: '#dc2626',
     },
     {
       id: 'help' as MenuItemId,
