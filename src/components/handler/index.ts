@@ -7,3 +7,4 @@ export { CaseFileView } from './CaseFileView';
 export { SealedEnvelopeForm } from './SealedEnvelopeForm';
 export { WitnessManager } from './WitnessManager';
 export { SealedEnvelopesPage } from './SealedEnvelopesPage';
+export { AudioConfession } from './AudioConfession';

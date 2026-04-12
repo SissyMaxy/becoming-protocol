@@ -786,6 +786,166 @@ async function scheduleConsequenceRelease(
 // Morning routine: reset daily counters, generate briefs,
 // evaluate strategy, send morning message.
 
+async function checkWeeklyContractEscalation(supabase: ReturnType<typeof createClient>, userId: string): Promise<boolean> {
+  const dow = new Date().getUTCDay()
+  if (dow !== 0) return false // Only Sunday
+
+  // Check if a contract was already created this week
+  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString()
+  const { count: recentContracts } = await supabase
+    .from('identity_contracts')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .gte('signed_at', weekAgo)
+
+  if ((recentContracts || 0) > 0) return false
+
+  // Get the last active contract for escalation
+  const { data: lastContract } = await supabase
+    .from('identity_contracts')
+    .select('contract_title, conditions, commitment_duration_days')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .order('signed_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const lastConditions: string[] = lastContract?.conditions || []
+
+  // Auto-generate escalated conditions
+  const baseConditions = [...lastConditions]
+  const escalations = [
+    'Add 5 minutes to daily voice practice',
+    'Submit one additional photo verification this week',
+    'Write two confessions instead of one on at least 3 days',
+    'Spend 15 additional minutes on conditioning content daily',
+    'Wear one more feminine item than last week',
+    'Post one more social media update as Maxy this week',
+    'Complete one more Handler-assigned task per day than last week',
+    'Record one audio confession this week',
+  ]
+  // Pick 1-2 new escalations
+  const newCount = Math.min(2, Math.floor(Math.random() * 2) + 1)
+  const available = escalations.filter(e => !baseConditions.includes(e))
+  for (let i = 0; i < newCount && available.length > 0; i++) {
+    const idx = Math.floor(Math.random() * available.length)
+    baseConditions.push(available.splice(idx, 1)[0])
+  }
+
+  const weekNum = Math.floor((Date.now() - new Date('2026-01-01').getTime()) / (7 * 86400000))
+  const title = `Week ${weekNum} Commitment`
+  const text = `This contract escalates from the previous commitment. ${baseConditions.length} conditions must be met. Each week adds new requirements. The system only moves forward.`
+
+  await supabase.from('identity_contracts').insert({
+    user_id: userId,
+    contract_title: title,
+    contract_text: text,
+    commitment_duration_days: 7,
+    expires_at: new Date(Date.now() + 7 * 86400000).toISOString(),
+    signature_text: 'Auto-escalated by system',
+    signature_typed_phrase: 'Weekly escalation contract',
+    conditions: baseConditions,
+    consequences_on_break: 'Denial extension + device punishment + additional compulsory elements',
+    status: 'active',
+  })
+
+  await supabase.from('handler_outreach_queue').insert({
+    user_id: userId,
+    message: `New weekly contract: "${title}" with ${baseConditions.length} conditions. Open the app to review.`,
+    urgency: 'high',
+    trigger_reason: 'weekly_contract',
+    scheduled_for: new Date().toISOString(),
+    expires_at: new Date(Date.now() + 24 * 3600000).toISOString(),
+    source: 'contract_escalation',
+  })
+
+  return true
+}
+
+async function generateClinicalCaseNotes(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  anthropicKey: string
+): Promise<boolean> {
+  // Rate limit: once per day
+  const today = new Date().toISOString().split('T')[0]
+  const { count: todayNotes } = await supabase
+    .from('handler_notes')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('note_type', 'clinical_case_note')
+    .gte('created_at', `${today}T00:00:00`)
+
+  if ((todayNotes || 0) > 0) return false
+
+  if (!anthropicKey) return false
+
+  // Gather recent data for the note
+  const [state, outcomes, streaks, displacement] = await Promise.allSettled([
+    supabase.from('user_state').select('denial_day, current_arousal, estimated_exec_function').eq('user_id', userId).maybeSingle(),
+    supabase.from('directive_outcomes').select('response_sentiment, effectiveness_score').eq('user_id', userId).order('fired_at', { ascending: false }).limit(10),
+    supabase.from('noncompliance_streaks').select('domain, consecutive_days').eq('user_id', userId).gt('consecutive_days', 0),
+    supabase.from('identity_displacement_log').select('displacement_score').eq('user_id', userId).order('log_date', { ascending: false }).limit(1),
+  ])
+
+  const stateData = state.status === 'fulfilled' ? state.value.data : null
+  const outcomesData = outcomes.status === 'fulfilled' ? (outcomes.value.data || []) : []
+  const streaksData = streaks.status === 'fulfilled' ? (streaks.value.data || []) : []
+  const dispData = displacement.status === 'fulfilled' ? displacement.value.data?.[0] : null
+
+  const resistantCount = outcomesData.filter((o: any) => o.response_sentiment === 'resistant').length
+  const avgEffectiveness = outcomesData.length > 0
+    ? outcomesData.reduce((s: number, o: any) => s + (o.effectiveness_score || 0), 0) / outcomesData.length
+    : null
+
+  const prompt = `You are a clinical therapist writing case notes about a patient undergoing forced feminization therapy. Write in third person, clinical, observational tone. The patient's name is Maxy (formerly David).
+
+Current data:
+- Denial day: ${stateData?.denial_day || 'unknown'}
+- Arousal: ${stateData?.current_arousal || 'unknown'}/10
+- Exec function: ${stateData?.estimated_exec_function || 'unknown'}
+- Identity displacement: ${dispData?.displacement_score ? (parseFloat(dispData.displacement_score) * 100).toFixed(0) + '% feminine' : 'no data'}
+- Noncompliant domains: ${streaksData.map((s: any) => s.domain).join(', ') || 'none'}
+- Resistance in last 10 interactions: ${resistantCount}/10
+- Avg directive effectiveness: ${avgEffectiveness !== null ? (avgEffectiveness * 100).toFixed(0) + '%' : 'no data'}
+
+Write a 2-3 sentence clinical case note. Be detached, observational, slightly cold. Reference specific data points. Example tone: "Subject demonstrated elevated resistance during evening conditioning (4/10 interactions). Identity displacement remains at 62% — below target. Recommend increased ambient conditioning frequency and extended denial period."
+
+Output ONLY the case note text. No preamble.`
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': anthropicKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 200,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    })
+
+    if (!res.ok) return false
+    const data = await res.json()
+    const noteText = data.content?.[0]?.type === 'text' ? data.content[0].text : ''
+    if (!noteText) return false
+
+    await supabase.from('handler_notes').insert({
+      user_id: userId,
+      note_type: 'clinical_case_note',
+      content: `[CLINICAL NOTE] ${noteText}`,
+      priority: 3,
+    })
+
+    return true
+  } catch {
+    return false
+  }
+}
+
 async function dailyCycle(
   supabase: ReturnType<typeof createClient>,
   userId?: string
@@ -822,6 +982,14 @@ async function dailyCycle(
         obligationsMissed = result.missed
       } catch (err) {
         console.error(`Recurring obligations failed for ${uid}:`, err)
+      }
+
+      // 1c. Weekly contract escalation (Sunday only)
+      let contractEscalated = false
+      try {
+        contractEscalated = await checkWeeklyContractEscalation(supabase, uid)
+      } catch (err) {
+        console.error(`Weekly contract escalation failed for ${uid}:`, err)
       }
 
       // 2. Expire old briefs
@@ -898,6 +1066,15 @@ async function dailyCycle(
         }
       }
 
+      // 5b. Generate clinical case notes
+      let clinicalNoteGenerated = false
+      try {
+        const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY') || ''
+        clinicalNoteGenerated = await generateClinicalCaseNotes(supabase, uid, anthropicKey)
+      } catch (err) {
+        console.error(`Clinical case notes failed for ${uid}:`, err)
+      }
+
       // 6. Log daily cycle
       await supabase.from('handler_decisions').insert({
         user_id: uid,
@@ -910,6 +1087,8 @@ async function dailyCycle(
           conditioning_fired: conditioningFired,
           obligations_spawned: obligationsSpawned,
           obligations_missed: obligationsMissed,
+          contract_escalated: contractEscalated,
+          clinical_note_generated: clinicalNoteGenerated,
         },
         reasoning: 'Daily 6 AM cycle: reset counters, expire old briefs, generate new assignments, denial conditioning check',
         executed: true,
