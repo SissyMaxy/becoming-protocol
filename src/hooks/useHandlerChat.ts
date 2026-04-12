@@ -320,7 +320,22 @@ export function useHandlerChat(): UseHandlerChatReturn {
             supabase.from('handler_directives')
               .update({ status: 'completed', executed_at: new Date().toISOString() })
               .eq('id', data.id)
-              .then(() => {});
+              .then(() => {}, () => {});
+
+            // Directive chaining: fire next step if specified
+            if (data.value && (data.value as any).chain_next) {
+              const next = (data.value as any).chain_next;
+              console.log('[HandlerChat] Directive chain: firing next step:', next);
+              supabase.from('handler_directives').insert({
+                user_id: user!.id,
+                action: next.action || 'send_device_command',
+                target: next.target || 'lovense',
+                value: next.value || {},
+                priority: 'immediate',
+                status: 'pending',
+                reasoning: `Chained from previous directive: ${data.reasoning || 'auto-chain'}`,
+              }).then(() => {}, () => {});
+            }
             return;
           }
 
@@ -397,7 +412,22 @@ export function useHandlerChat(): UseHandlerChatReturn {
             supabase.from('handler_directives')
               .update({ status: 'completed', executed_at: new Date().toISOString() })
               .eq('id', data.id)
-              .then(() => {});
+              .then(() => {}, () => {});
+
+            // Directive chaining: fire next step if specified
+            if (val && val.chain_next) {
+              const next = val.chain_next;
+              console.log('[HandlerChat] Directive chain: firing next step:', next);
+              supabase.from('handler_directives').insert({
+                user_id: user!.id,
+                action: next.action || 'send_device_command',
+                target: next.target || 'lovense',
+                value: next.value || {},
+                priority: 'immediate',
+                status: 'pending',
+                reasoning: `Chained from previous directive: ${data.reasoning || 'auto-chain'}`,
+              }).then(() => {}, () => {});
+            }
           } catch (execErr) {
             console.error('[HandlerChat] Device command execution error:', execErr);
             // Still mark this directive to avoid infinite retry

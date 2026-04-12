@@ -20,6 +20,7 @@ import { StreakBreakModal } from './SkipConfirmModal';
 import { getMorningPersonalization, type MorningPersonalization } from '../lib/morning-personalization';
 import { HandlerStatusBriefing } from './handler/HandlerStatusBriefing';
 import { QuickStateStrip } from './today/QuickStateStrip';
+import { useFeminizationScore } from '../hooks/useFeminizationScore';
 
 interface MorningBriefingProps {
   onComplete: () => void;
@@ -43,6 +44,7 @@ export function MorningBriefing({ onComplete }: MorningBriefingProps) {
   const { userState, quickUpdate } = useUserState();
   const { isBambiMode } = useBambiMode();
   const denial = useCurrentDenialDay();
+  const feminizationScore = useFeminizationScore();
   const [selectedIntensity, setSelectedIntensity] = useState<Intensity | null>('normal');
   const [isStarting, setIsStarting] = useState(false);
   const [userName, setUserName] = useState<string | null>(null);
@@ -285,6 +287,11 @@ export function MorningBriefing({ onComplete }: MorningBriefingProps) {
             <p className={`text-sm ${isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'}`}>
               Day {stats.currentStreak} · {stats.currentStreak}-day streak
               {stats.denialDay > 0 && ` · Denial day ${stats.denialDay}`}
+            </p>
+          )}
+          {feminizationScore !== null && (
+            <p className={`text-xs ${isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'}`}>
+              Feminization: {feminizationScore}/100
             </p>
           )}
         </div>
