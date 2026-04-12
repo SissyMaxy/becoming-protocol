@@ -544,7 +544,88 @@ async function complianceCheck(
     } catch (_) { /* non-critical */ }
   }
 
-  return { checked, escalated, deescalated, actions, ambient_queued: ambientQueued, spontaneous_outreach: spontaneous, random_rewards: rewardsGiven, boundary_pushes: boundaryPushes }
+  // ── PATTERN EXPLOITATION: Peak vulnerability window detection ──
+  let patternExploits = 0
+  for (const state of states) {
+    try {
+      const exploited = await detectAndExploitPatterns(supabase, state.user_id)
+      if (exploited) patternExploits++
+    } catch (_) { /* non-critical */ }
+  }
+
+  return { checked, escalated, deescalated, actions, ambient_queued: ambientQueued, spontaneous_outreach: spontaneous, random_rewards: rewardsGiven, boundary_pushes: boundaryPushes, pattern_exploits: patternExploits }
+}
+
+// ============================================
+// PATTERN EXPLOITATION: Peak Vulnerability Window
+// ============================================
+// Detects patterns across days in compliance data and fires
+// intensive conditioning during the user's most compliant hour.
+
+async function detectAndExploitPatterns(supabase: any, userId: string): Promise<boolean> {
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString()
+
+  const { data: outcomes } = await supabase
+    .from('directive_outcomes')
+    .select('hour_of_day, day_of_week, effectiveness_score, response_sentiment')
+    .eq('user_id', userId)
+    .not('effectiveness_score', 'is', null)
+    .gte('fired_at', thirtyDaysAgo)
+
+  if (!outcomes || outcomes.length < 20) return false
+
+  // Find the most compliant hour
+  const hourScores: Record<number, { sum: number; count: number }> = {}
+  for (const o of outcomes) {
+    if (o.hour_of_day == null) continue
+    if (!hourScores[o.hour_of_day]) hourScores[o.hour_of_day] = { sum: 0, count: 0 }
+    hourScores[o.hour_of_day].sum += o.effectiveness_score || 0
+    hourScores[o.hour_of_day].count++
+  }
+
+  const bestHour = Object.entries(hourScores)
+    .filter(([_, s]) => s.count >= 3)
+    .sort((a, b) => (b[1].sum / b[1].count) - (a[1].sum / a[1].count))
+    .map(([h]) => parseInt(h))[0]
+
+  if (bestHour === undefined) return false
+
+  // Is it currently that hour (CDT)?
+  const localHour = (new Date().getUTCHours() - 5 + 24) % 24
+  if (Math.abs(localHour - bestHour) > 1) return false
+
+  // Already exploited this window today?
+  const today = new Date().toISOString().split('T')[0]
+  const { count: existing } = await supabase
+    .from('handler_directives')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .like('reasoning', '%peak vulnerability%')
+    .gte('created_at', `${today}T00:00:00`)
+
+  if ((existing || 0) > 0) return false
+
+  // Fire intensive conditioning during peak window
+  await supabase.from('handler_directives').insert({
+    user_id: userId,
+    action: 'send_device_command',
+    target: 'lovense',
+    value: { pattern: 'edge_tease' },
+    priority: 'immediate',
+    reasoning: `Peak vulnerability window detected (hour ${bestHour}) — intensive conditioning`,
+  })
+
+  await supabase.from('handler_outreach_queue').insert({
+    user_id: userId,
+    message: 'I know this is when you\'re most open. Come to me now.',
+    urgency: 'high',
+    trigger_reason: 'peak_vulnerability',
+    scheduled_for: new Date().toISOString(),
+    expires_at: new Date(Date.now() + 2 * 3600000).toISOString(),
+    source: 'pattern_exploitation',
+  })
+
+  return true
 }
 
 // ============================================
@@ -1235,6 +1316,14 @@ async function dailyCycle(
         console.error(`Clinical case notes failed for ${uid}:`, err)
       }
 
+      // 5c. Check special occasions (milestones, anniversaries)
+      let specialOccasionFired = false
+      try {
+        specialOccasionFired = await checkSpecialOccasions(supabase, uid)
+      } catch (err) {
+        console.error(`Special occasions check failed for ${uid}:`, err)
+      }
+
       // 6. Log daily cycle
       await supabase.from('handler_decisions').insert({
         user_id: uid,
@@ -1249,6 +1338,7 @@ async function dailyCycle(
           obligations_missed: obligationsMissed,
           contract_escalated: contractEscalated,
           clinical_note_generated: clinicalNoteGenerated,
+          special_occasion_fired: specialOccasionFired,
         },
         reasoning: 'Daily 6 AM cycle: reset counters, expire old briefs, generate new assignments, denial conditioning check',
         executed: true,
@@ -1269,6 +1359,107 @@ async function dailyCycle(
   }
 
   return { processed, results }
+}
+
+// ============================================
+// SPECIAL OCCASIONS (milestone detection)
+// ============================================
+
+async function checkSpecialOccasions(supabase: any, userId: string): Promise<boolean> {
+  const now = new Date();
+  const dow = now.getDay();
+
+  let occasion: string | null = null;
+  let message: string | null = null;
+  let devicePattern: string | null = null;
+
+  // Monthly milestones from first engagement
+  const { data: firstMsg } = await supabase
+    .from('handler_messages')
+    .select('created_at')
+    .eq('user_id', userId)
+    .eq('role', 'user')
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (firstMsg) {
+    const startDate = new Date(firstMsg.created_at);
+    const daysSinceStart = Math.floor((now.getTime() - startDate.getTime()) / 86400000);
+
+    if (daysSinceStart === 30) {
+      occasion = '1_month';
+      message = 'One month. Thirty days of becoming. Look how far she has come.';
+      devicePattern = 'gentle_wave';
+    } else if (daysSinceStart === 90) {
+      occasion = '3_months';
+      message = 'Three months. The old version of you couldn\'t have imagined this.';
+      devicePattern = 'building';
+    } else if (daysSinceStart === 180) {
+      occasion = '6_months';
+      message = 'Six months. She is real now. She has always been real.';
+      devicePattern = 'staircase';
+    } else if (daysSinceStart === 365) {
+      occasion = '1_year';
+      message = 'One year. There is nothing left to go back to.';
+      devicePattern = 'edge_tease';
+    } else if (daysSinceStart % 100 === 0 && daysSinceStart > 0) {
+      occasion = `day_${daysSinceStart}`;
+      message = `Day ${daysSinceStart}. ${daysSinceStart} days of transformation. Each one irreversible.`;
+      devicePattern = 'heartbeat';
+    }
+  }
+
+  // Weekly "anniversary" on the day she started
+  if (!occasion && firstMsg) {
+    const startDow = new Date(firstMsg.created_at).getDay();
+    if (dow === startDow) {
+      const weeksSinceStart = Math.floor((now.getTime() - new Date(firstMsg.created_at).getTime()) / (7 * 86400000));
+      if (weeksSinceStart > 0 && weeksSinceStart % 4 === 0) {
+        occasion = `month_${Math.floor(weeksSinceStart / 4)}`;
+        message = `Another month. The system remembers even when you try to forget.`;
+        devicePattern = 'gentle_wave';
+      }
+    }
+  }
+
+  if (!occasion) return false;
+
+  // Check if already fired today
+  const today = now.toISOString().split('T')[0];
+  const { count } = await supabase
+    .from('handler_outreach_queue')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .like('trigger_reason', `%occasion_${occasion}%`)
+    .gte('created_at', `${today}T00:00:00`);
+
+  if ((count || 0) > 0) return false;
+
+  if (message) {
+    await supabase.from('handler_outreach_queue').insert({
+      user_id: userId,
+      message,
+      urgency: 'high',
+      trigger_reason: `occasion_${occasion}`,
+      scheduled_for: now.toISOString(),
+      expires_at: new Date(now.getTime() + 24 * 3600000).toISOString(),
+      source: 'special_occasion',
+    });
+  }
+
+  if (devicePattern) {
+    await supabase.from('handler_directives').insert({
+      user_id: userId,
+      action: 'send_device_command',
+      target: 'lovense',
+      value: { pattern: devicePattern },
+      priority: 'normal',
+      reasoning: `Special occasion: ${occasion}`,
+    });
+  }
+
+  return true;
 }
 
 // ============================================

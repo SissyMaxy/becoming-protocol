@@ -126,7 +126,13 @@ Output format: a JSON object with:
       "content": "note for the Handler to reference",
       "priority": 1-5
     }
-  ]
+  ],
+  "daily_agenda": {
+    "primary_goal": "what you most want to achieve today",
+    "secondary_goals": ["other goals"],
+    "tactics": ["specific approaches"],
+    "opening_move": "first thing to say/do when she opens the app"
+  }
 }
 
 Generate 3-8 directives and 2-4 notes. Mix immediate and deferred actions. Use the data — don't make stuff up.`
@@ -224,6 +230,19 @@ Make strategic decisions. Output the JSON object only, no preamble.`
       priority: note.priority || 3,
     })
     notesCreated++
+  }
+
+  // Upsert daily agenda if strategist generated one
+  if (strategy.daily_agenda) {
+    const today = new Date().toISOString().split('T')[0];
+    await supabase.from('handler_daily_agenda').upsert({
+      user_id: userId,
+      agenda_date: today,
+      primary_goal: strategy.daily_agenda.primary_goal || 'Push further',
+      secondary_goals: strategy.daily_agenda.secondary_goals || [],
+      tactics: strategy.daily_agenda.tactics || [],
+      opening_move: strategy.daily_agenda.opening_move || null,
+    }, { onConflict: 'user_id,agenda_date' });
   }
 
   return {
