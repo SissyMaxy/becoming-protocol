@@ -12,6 +12,8 @@ import { useAmbientAudio } from '../../hooks/useAmbientAudio';
 import { useSleepAudioConditioning } from '../../hooks/useSleepAudioConditioning';
 import { PhotoVerificationUpload } from './PhotoVerificationUpload';
 import { MantraRepetition } from './MantraRepetition';
+import { IdentityFadingBar } from './IdentityFadingBar';
+import { useAuth } from '../../context/AuthContext';
 
 interface HandlerChatProps {
   onClose: () => void;
@@ -28,6 +30,7 @@ const MODE_COLORS: Record<string, { bg: string; text: string; label: string }> =
 };
 
 export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
+  const { user: authUser } = useAuth();
   const { messages, isLoading, isSending, currentMode, conversationId, sendMessage, startNewConversation } = useHandlerChat();
   const voice = useHandlerVoice();
   const voiceInput = useVoiceConversation();
@@ -272,6 +275,9 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
           </button>
         </div>
       )}
+
+      {/* Identity Fading Indicator */}
+      <IdentityFadingBar userId={authUser?.id} />
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">

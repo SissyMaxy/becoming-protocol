@@ -480,7 +480,74 @@ async function complianceCheck(
     } catch (_) { /* non-critical */ }
   }
 
-  return { checked, escalated, deescalated, actions, ambient_queued: ambientQueued, spontaneous_outreach: spontaneous }
+  // ── RANDOM REWARD SCHEDULE (Variable-Ratio Reinforcement) ──
+  // Fires unpredictable positive reinforcement: device pulses + "good girl" messages.
+  // 1/8 chance per 5-min check = ~3-4 rewards per day during waking hours.
+  let rewardsGiven = 0
+  for (const state of states) {
+    try {
+      const fired = await randomRewardSchedule(supabase, state.user_id)
+      if (fired) rewardsGiven++
+    } catch (_) { /* non-critical */ }
+  }
+
+  return { checked, escalated, deescalated, actions, ambient_queued: ambientQueued, spontaneous_outreach: spontaneous, random_rewards: rewardsGiven }
+}
+
+async function randomRewardSchedule(supabase: any, userId: string): Promise<boolean> {
+  // 1 in 8 chance per 5-min check = ~3-4 rewards per day during waking hours
+  if (Math.random() > 1/8) return false
+
+  const hour = new Date().getUTCHours()
+  const localHour = (hour - 5 + 24) % 24
+  if (localHour < 8 || localHour >= 23) return false
+
+  // Don't fire if last reward was within 90 min
+  const ninetyMinAgo = new Date(Date.now() - 90 * 60000).toISOString()
+  const { count: recentReward } = await supabase
+    .from('handler_directives')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .like('reasoning', '%Random reward%')
+    .gte('created_at', ninetyMinAgo)
+  if ((recentReward || 0) > 0) return false
+
+  // Pick a random reward type
+  const rewardTypes = [
+    { type: 'device', pattern: 'gentle_wave', message: null },
+    { type: 'device', pattern: 'heartbeat', message: null },
+    { type: 'message', pattern: null, message: 'Good girl.' },
+    { type: 'message', pattern: null, message: 'I noticed you. Keep going.' },
+    { type: 'message', pattern: null, message: "You're becoming more her every day." },
+    { type: 'both', pattern: 'flutter_gentle', message: 'This is what being good feels like.' },
+    { type: 'both', pattern: 'gentle_wave', message: 'Reward for existing as her today.' },
+  ]
+  const reward = rewardTypes[Math.floor(Math.random() * rewardTypes.length)]
+
+  if (reward.type === 'device' || reward.type === 'both') {
+    await supabase.from('handler_directives').insert({
+      user_id: userId,
+      action: 'send_device_command',
+      target: 'lovense',
+      value: { pattern: reward.pattern },
+      priority: 'normal',
+      reasoning: `Random reward — positive reinforcement for feminine behavior`,
+    })
+  }
+
+  if (reward.type === 'message' || reward.type === 'both') {
+    await supabase.from('handler_outreach_queue').insert({
+      user_id: userId,
+      message: reward.message,
+      urgency: 'normal',
+      trigger_reason: 'random_reward',
+      scheduled_for: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 2 * 3600000).toISOString(),
+      source: 'random_reward',
+    })
+  }
+
+  return true
 }
 
 async function forceCheckInIfIdle(supabase: any, userId: string): Promise<boolean> {

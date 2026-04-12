@@ -33,6 +33,7 @@ import { SharedWishlistView } from './components/wishlist';
 // AchievementModal, RewardLevelUpModal now rendered via useOrchestratedModals
 import { SettingsView, SystemAuditView } from './components/settings';
 import { WitnessManager, CaseFileView, SealedEnvelopesPage, QuitFrictionGate } from './components/handler';
+import { DailyReportCard } from './components/handler/DailyReportCard';
 import { SessionContainer } from './components/session';
 import type { SessionConfig } from './components/session';
 import { KinkQuizView } from './components/kink-quiz';
@@ -272,6 +273,10 @@ function AuthenticatedAppInner() {
   const [confessionDoneToday, setConfessionDoneToday] = useState<boolean>(() => {
     const today = getTodayDate();
     return localStorage.getItem(`confession_done_${today}`) === '1';
+  });
+  const [reportCardDone, setReportCardDone] = useState<boolean>(() => {
+    const today = getTodayDate();
+    return localStorage.getItem(`report_card_done_${today}`) === '1';
   });
 
   // P6.5: Conditioning session triggered by Handler conversation
@@ -947,6 +952,17 @@ function AuthenticatedAppInner() {
       )}
 
       {/* Micro-task card overlay — disabled, user found pop-ups disruptive */}
+
+      {/* Daily Report Card — after 7pm, blocks until submitted */}
+      {!reportCardDone && (
+        <DailyReportCard
+          onComplete={() => {
+            const today = getTodayDate();
+            localStorage.setItem(`report_card_done_${today}`, '1');
+            setReportCardDone(true);
+          }}
+        />
+      )}
 
       {/* Evening Debrief overlay */}
       {bookends.showEveningBookend && bookends.daySummary && bookends.config && (
