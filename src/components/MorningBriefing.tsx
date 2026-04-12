@@ -56,6 +56,8 @@ export function MorningBriefing({ onComplete }: MorningBriefingProps) {
   const [selectedReleaseType, setSelectedReleaseType] = useState<ReleaseType | null>(null);
   const [releaseContext, setReleaseContext] = useState<ReleaseContext | null>(null);
   const [releaseWhen, setReleaseWhen] = useState<string | null>(null);
+  const [partnerRole, setPartnerRole] = useState<string | null>(null);
+  const [partnerFemininity, setPartnerFemininity] = useState<string | null>(null);
   const [recordingRelease, setRecordingRelease] = useState(false);
 
   // Streak break detection
@@ -124,6 +126,20 @@ export function MorningBriefing({ onComplete }: MorningBriefingProps) {
           .from('user_state')
           .update({ last_release: releaseTimestamp.toISOString() })
           .eq('user_id', user.id);
+
+        // Log detailed release info to handler_notes for the Handler to reference
+        const details: string[] = [];
+        details.push(`Release: ${selectedReleaseType}, context: ${releaseContext}`);
+        if (releaseContext === 'with_partner') {
+          if (partnerRole) details.push(`Role: ${partnerRole}`);
+          if (partnerFemininity) details.push(`Femininity during: ${partnerFemininity}`);
+        }
+        await supabase.from('handler_notes').insert({
+          user_id: user.id,
+          note_type: 'release_detail',
+          content: details.join('. '),
+          priority: 3,
+        }).then(() => {}, () => {});
       }
     } catch (err) {
       console.error('Failed to record release:', err);
@@ -313,6 +329,8 @@ export function MorningBriefing({ onComplete }: MorningBriefingProps) {
           selectedReleaseType={selectedReleaseType}
           releaseContext={releaseContext}
           releaseWhen={releaseWhen}
+          partnerRole={partnerRole}
+          partnerFemininity={partnerFemininity}
           recordingRelease={recordingRelease}
           isBambiMode={isBambiMode}
           onAnswerNo={() => { setDidCum(false); setReleaseChecked(true); }}
@@ -320,6 +338,8 @@ export function MorningBriefing({ onComplete }: MorningBriefingProps) {
           onSelectType={setSelectedReleaseType}
           onSelectContext={setReleaseContext}
           onSelectWhen={setReleaseWhen}
+          onSelectPartnerRole={setPartnerRole}
+          onSelectPartnerFemininity={setPartnerFemininity}
           onConfirmRelease={handleRecordRelease}
         />
 
@@ -507,6 +527,24 @@ const RELEASE_CONTEXT_OPTIONS: { context: ReleaseContext; label: string; emoji: 
   { context: 'sleep', label: 'In sleep', emoji: '😴' },
 ];
 
+// Additional detail options when "With Gina" is selected
+const PARTNER_ROLE_OPTIONS = [
+  { value: 'penetrating', label: 'I penetrated her' },
+  { value: 'receiving_oral', label: 'She gave me oral' },
+  { value: 'giving_oral', label: 'I gave her oral' },
+  { value: 'mutual', label: 'Mutual / both' },
+  { value: 'handjob', label: 'She used her hands' },
+  { value: 'other', label: 'Other' },
+];
+
+const PARTNER_FEMININITY_OPTIONS = [
+  { value: 'none', label: 'Not feminine at all' },
+  { value: 'thinking', label: 'Feminine thoughts during' },
+  { value: 'clothing', label: 'Wearing something feminine' },
+  { value: 'submissive', label: 'Submissive / receptive role' },
+  { value: 'full', label: 'Fully feminine during' },
+];
+
 const RELEASE_WHEN_OPTIONS = [
   { value: 'last_night', label: 'Last night' },
   { value: 'this_morning', label: 'This morning' },
@@ -559,6 +597,8 @@ function ReleaseCheckIn({
   selectedReleaseType,
   releaseContext,
   releaseWhen,
+  partnerRole,
+  partnerFemininity,
   recordingRelease,
   isBambiMode,
   onAnswerNo,
@@ -566,6 +606,8 @@ function ReleaseCheckIn({
   onSelectType,
   onSelectContext,
   onSelectWhen,
+  onSelectPartnerRole,
+  onSelectPartnerFemininity,
   onConfirmRelease,
 }: {
   lastReleaseDate: Date | null;
@@ -574,6 +616,8 @@ function ReleaseCheckIn({
   selectedReleaseType: ReleaseType | null;
   releaseContext: ReleaseContext | null;
   releaseWhen: string | null;
+  partnerRole: string | null;
+  partnerFemininity: string | null;
   recordingRelease: boolean;
   isBambiMode: boolean;
   onAnswerNo: () => void;
@@ -581,6 +625,8 @@ function ReleaseCheckIn({
   onSelectType: (t: ReleaseType) => void;
   onSelectContext: (c: ReleaseContext) => void;
   onSelectWhen: (w: string) => void;
+  onSelectPartnerRole: (r: string) => void;
+  onSelectPartnerFemininity: (f: string) => void;
   onConfirmRelease: () => void;
 }) {
   // Already answered — don't show
@@ -699,8 +745,53 @@ function ReleaseCheckIn({
             </div>
           )}
 
-          {/* Step 3: Release type (shows after context) */}
-          {releaseContext && (
+          {/* Step 2b: Partner details (shows when "With Gina" selected) */}
+          {releaseContext === 'with_partner' && (
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <p className={`text-sm font-medium ${isBambiMode ? 'text-purple-700' : 'text-protocol-text'}`}>
+                  What happened?
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {PARTNER_ROLE_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => onSelectPartnerRole(opt.value)}
+                      className={`py-1.5 px-3 rounded-lg border text-sm transition-all ${
+                        partnerRole === opt.value ? selectedBorder : surface
+                      } ${partnerRole === opt.value ? accent : muted}`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {partnerRole && (
+                <div className="space-y-2">
+                  <p className={`text-sm font-medium ${isBambiMode ? 'text-purple-700' : 'text-protocol-text'}`}>
+                    How feminine were you during?
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {PARTNER_FEMININITY_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={() => onSelectPartnerFemininity(opt.value)}
+                        className={`py-1.5 px-3 rounded-lg border text-sm transition-all ${
+                          partnerFemininity === opt.value ? selectedBorder : surface
+                        } ${partnerFemininity === opt.value ? accent : muted}`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Step 3: Release type (shows after context + partner details if applicable) */}
+          {releaseContext && (releaseContext !== 'with_partner' || (partnerRole && partnerFemininity)) && (
             <div className="space-y-2">
               <p className={`text-sm font-medium ${isBambiMode ? 'text-purple-700' : 'text-protocol-text'}`}>
                 What kind?
@@ -728,7 +819,7 @@ function ReleaseCheckIn({
           )}
 
           {/* Confirm */}
-          {selectedReleaseType && releaseWhen && releaseContext && (
+          {selectedReleaseType && releaseWhen && releaseContext && (releaseContext !== 'with_partner' || (partnerRole && partnerFemininity)) && (
             <button
               onClick={onConfirmRelease}
               disabled={recordingRelease}
