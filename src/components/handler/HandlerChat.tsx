@@ -13,6 +13,7 @@ import { useSleepAudioConditioning } from '../../hooks/useSleepAudioConditioning
 import { PhotoVerificationUpload } from './PhotoVerificationUpload';
 import { MantraRepetition } from './MantraRepetition';
 import { IdentityFadingBar } from './IdentityFadingBar';
+import { RewardFlash } from './RewardFlash';
 import { useAuth } from '../../context/AuthContext';
 
 interface HandlerChatProps {
@@ -202,6 +203,7 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
 
   return (
     <>
+    <RewardFlash />
     {forcedMantra && (
       <MantraRepetition
         mantra={forcedMantra.mantra}

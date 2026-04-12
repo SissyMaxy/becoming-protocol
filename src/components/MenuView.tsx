@@ -4,7 +4,7 @@
  * settings, legacy Today view access, and help.
  */
 
-import { Settings, ChevronRight, HelpCircle, Calendar, Radio, Eye, FileText, Mail, ShieldAlert, PauseCircle } from 'lucide-react';
+import { Settings, ChevronRight, HelpCircle, Calendar, Radio, Eye, FileText, Mail, ShieldAlert, PauseCircle, ArrowUpRight } from 'lucide-react';
 
 type MenuItemId =
   | 'settings' | 'help'
@@ -16,7 +16,8 @@ type MenuItemId =
   | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous'
   | 'exercise' | 'her-world' | 'vault-swipe' | 'content-dashboard' | 'cam-session' | 'hypno-session'
   | 'progress-page' | 'sealed-page' | 'log-release' | 'social-dashboard'
-  | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol';
+  | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol'
+  | 'escalation_ladder';
 
 interface MenuViewProps {
   onNavigate: (view: MenuItemId) => void;
@@ -65,6 +66,13 @@ export function MenuView({ onNavigate }: MenuViewProps) {
       label: 'Sealed Envelopes',
       description: 'Letters from your past self to your future self',
       color: '#c084fc',
+    },
+    {
+      id: 'escalation_ladder' as MenuItemId,
+      icon: ArrowUpRight,
+      label: 'Transformation Ladder',
+      description: 'Where you are on the journey. Only goes up.',
+      color: '#a855f7',
     },
     {
       id: 'system_audit' as MenuItemId,

@@ -8,3 +8,4 @@ export { SealedEnvelopeForm } from './SealedEnvelopeForm';
 export { WitnessManager } from './WitnessManager';
 export { SealedEnvelopesPage } from './SealedEnvelopesPage';
 export { AudioConfession } from './AudioConfession';
+export { EscalationLadder } from './EscalationLadder';

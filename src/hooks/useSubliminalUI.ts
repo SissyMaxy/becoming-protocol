@@ -41,24 +41,28 @@ interface UIShift {
 // CORE CALCULATION
 // ============================================
 
-function calculateUIShift(totalDays: number, corruptionScore: number): UIShift {
+function calculateUIShift(totalDays: number, corruptionScore: number, displacementScore: number): UIShift {
   const progress = Math.min(totalDays / 365, 1); // 0-1 over a year
   const corruption = corruptionScore / 100; // 0-1
+  const displacement = Math.min(1, displacementScore); // 0-1
+
+  // Displacement accelerates the visual shift — identity dissolution = faster feminization
+  const effectiveProgress = Math.min(1, progress + displacement * 0.3);
 
   return {
-    // Background subtly shifts toward pink/purple
-    bgHue: Math.round(progress * 20), // 0 -> 20 degrees toward pink
-    bgSaturation: Math.round(progress * 5), // 0% -> 5% saturation
+    // Background subtly shifts toward pink/purple — displacement accelerates
+    bgHue: Math.round(effectiveProgress * 25), // 0 -> 25 degrees toward pink
+    bgSaturation: Math.round(effectiveProgress * 8), // 0% -> 8% saturation
 
-    // Accent color intensifies with corruption
-    accentIntensity: 1 + corruption * 0.3, // 1.0 -> 1.3x
+    // Accent color intensifies with corruption AND displacement
+    accentIntensity: 1 + corruption * 0.3 + displacement * 0.2, // 1.0 -> 1.5x
 
-    // Font softens slightly
-    fontWeight: Math.max(300, 400 - Math.round(progress * 100)), // 400 -> 300
-    letterSpacing: progress * 0.02, // 0 -> 0.02em
+    // Font softens — displacement makes it happen faster
+    fontWeight: Math.max(300, 400 - Math.round(effectiveProgress * 100)), // 400 -> 300
+    letterSpacing: effectiveProgress * 0.025, // 0 -> 0.025em
 
     // Border radius increases (softer, more feminine)
-    borderRadiusBoost: Math.round(progress * 4), // 0 -> 4px extra
+    borderRadiusBoost: Math.round(effectiveProgress * 6), // 0 -> 6px extra
 
     // Handler name evolution
     handlerName:
@@ -99,6 +103,22 @@ async function fetchCorruptionScore(userId: string): Promise<number> {
   }
 }
 
+async function fetchDisplacementScore(userId: string): Promise<number> {
+  try {
+    const { data } = await supabase
+      .from('identity_displacement_log')
+      .select('displacement_score')
+      .eq('user_id', userId)
+      .order('log_date', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    return data?.displacement_score ? parseFloat(data.displacement_score) : 0;
+  } catch {
+    return 0;
+  }
+}
+
 // ============================================
 // CSS PROPERTY NAMES
 // ============================================
@@ -131,11 +151,12 @@ export function useSubliminalUI(): SubliminalUIState {
   const { user } = useAuth();
   const { progress } = useProtocol();
   const corruptionRef = useRef(0);
+  const displacementRef = useRef(0);
   const fetchedRef = useRef(false);
 
   const totalDays = Math.max(1, progress?.totalDays ?? 1);
 
-  // Fetch corruption score once per mount
+  // Fetch corruption + displacement scores once per mount
   useEffect(() => {
     if (!user?.id || fetchedRef.current) return;
     fetchedRef.current = true;
@@ -143,11 +164,14 @@ export function useSubliminalUI(): SubliminalUIState {
     fetchCorruptionScore(user.id).then((score) => {
       corruptionRef.current = score;
     });
+    fetchDisplacementScore(user.id).then((score) => {
+      displacementRef.current = score;
+    });
   }, [user?.id]);
 
   // Compute shift
   const shift = useMemo(
-    () => calculateUIShift(totalDays, corruptionRef.current),
+    () => calculateUIShift(totalDays, corruptionRef.current, displacementRef.current),
     [totalDays],
   );
 
@@ -161,6 +185,15 @@ export function useSubliminalUI(): SubliminalUIState {
     root.style.setProperty('--subliminal-font-weight', `${shift.fontWeight}`);
     root.style.setProperty('--subliminal-letter-spacing', `${shift.letterSpacing}em`);
     root.style.setProperty('--subliminal-border-radius-boost', `${shift.borderRadiusBoost}px`);
+
+    // Displacement-driven accent color shift (purple → pink)
+    const accentHue = 270 - (displacementRef.current * 50);
+    const accentSat = 50 + (displacementRef.current * 30);
+    root.style.setProperty('--subliminal-accent-hue', `${accentHue}`);
+    root.style.setProperty('--subliminal-accent-sat', `${accentSat}%`);
+    if (displacementRef.current > 0.6) {
+      root.style.setProperty('--subliminal-bg-tint', 'rgba(255, 192, 203, 0.03)');
+    }
 
     // String values stored as CSS custom properties for potential CSS usage
     root.style.setProperty('--subliminal-handler-name', `"${shift.handlerName}"`);

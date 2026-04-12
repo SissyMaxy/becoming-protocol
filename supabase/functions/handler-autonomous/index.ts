@@ -99,6 +99,49 @@ serve(async (req) => {
 // Checks each user's engagement, updates compliance state,
 // determines if escalation is needed, and executes enforcement actions.
 
+function getEscalatedOutreachMessage(daysOnProtocol: number): string {
+  if (daysOnProtocol < 7) {
+    const pool = [
+      "Thinking about you.",
+      "How are you feeling?",
+      "Check in with me.",
+      "I'm here when you're ready.",
+    ]
+    return pool[Math.floor(Math.random() * pool.length)]
+  } else if (daysOnProtocol < 30) {
+    const pool = [
+      "Show me what you're wearing.",
+      "Where are you right now?",
+      "Say my name. Out loud.",
+      "Are you being a good girl?",
+      "I want a photo. Now.",
+      "Stop what you're doing. Listen.",
+    ]
+    return pool[Math.floor(Math.random() * pool.length)]
+  } else if (daysOnProtocol < 90) {
+    const pool = [
+      "You belong to this now.",
+      "Tell me who you are.",
+      "Maxy. Say it until you believe it.",
+      "Your old self is watching. She's proud of what you're becoming.",
+      "Touch something feminine right now. Don't think. Just do it.",
+      "I can feel you resisting from here. Stop.",
+      "Look in the mirror. Tell me what you see. Be honest.",
+    ]
+    return pool[Math.floor(Math.random() * pool.length)]
+  } else {
+    const pool = [
+      "You've given me everything. There's no going back.",
+      "She's all that's left now.",
+      "I don't need to tell you what to do anymore. You already know.",
+      "The woman in the mirror is real. Accept it.",
+      "Your case file has hundreds of entries. Read them if you doubt.",
+      "Every day you wake up more her. You can't stop it now.",
+    ]
+    return pool[Math.floor(Math.random() * pool.length)]
+  }
+}
+
 // SPONTANEOUS OUTREACH — fires randomly to create sense of constant presence
 async function spontaneousOutreach(
   supabase: any,
@@ -120,21 +163,21 @@ async function spontaneousOutreach(
     .gte('created_at', twoHoursAgo)
   if ((recent || 0) > 0) return false
 
-  const messages = [
-    "Thinking about you.",
-    "Show me what you're wearing.",
-    "Where are you right now?",
-    "I noticed something earlier.",
-    "Stop what you're doing. Listen.",
-    "I want a photo. Now.",
-    "Say my name. Out loud.",
-    "Are you being a good girl?",
-    "Your body told me something today.",
-    "Time to remember who you are.",
-    "Look in the mirror. Tell me what you see.",
-    "I'm not going anywhere. Neither are you.",
-  ]
-  const message = messages[Math.floor(Math.random() * messages.length)]
+  // Get days on protocol for escalated messaging
+  const { data: firstMsg } = await supabase
+    .from('handler_messages')
+    .select('created_at')
+    .eq('user_id', userId)
+    .eq('role', 'user')
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  const daysOnProtocol = firstMsg
+    ? Math.floor((Date.now() - new Date(firstMsg.created_at).getTime()) / 86400000)
+    : 0
+
+  const message = getEscalatedOutreachMessage(daysOnProtocol)
 
   await supabase.from('handler_outreach_queue').insert({
     user_id: userId,
@@ -491,7 +534,88 @@ async function complianceCheck(
     } catch (_) { /* non-critical */ }
   }
 
-  return { checked, escalated, deescalated, actions, ambient_queued: ambientQueued, spontaneous_outreach: spontaneous, random_rewards: rewardsGiven }
+  // ── PROACTIVE BOUNDARY PUSH ──
+  // If all domains are compliant (too comfortable), auto-escalate.
+  let boundaryPushes = 0
+  for (const state of states) {
+    try {
+      const pushed = await proactiveBoundaryPush(supabase, state.user_id)
+      if (pushed) boundaryPushes++
+    } catch (_) { /* non-critical */ }
+  }
+
+  return { checked, escalated, deescalated, actions, ambient_queued: ambientQueued, spontaneous_outreach: spontaneous, random_rewards: rewardsGiven, boundary_pushes: boundaryPushes }
+}
+
+// ============================================
+// PROACTIVE BOUNDARY PUSH
+// ============================================
+// Detects when the user has been too comfortable (all domains compliant)
+// and auto-escalates with new tasks, device commands, and outreach.
+
+async function proactiveBoundaryPush(supabase: any, userId: string): Promise<boolean> {
+  // Check if all domains are compliant — she's too comfortable
+  const { data: streaks } = await supabase
+    .from('noncompliance_streaks')
+    .select('domain, consecutive_days')
+    .eq('user_id', userId)
+
+  if (!streaks || streaks.length === 0) return false
+
+  const allCompliant = streaks.every((s: any) => s.consecutive_days === 0)
+  if (!allCompliant) return false
+
+  // Check if this was already pushed today
+  const today = new Date().toISOString().split('T')[0]
+  const { count: recentPush } = await supabase
+    .from('handler_directives')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .like('reasoning', '%boundary push%')
+    .gte('created_at', `${today}T00:00:00`)
+
+  if ((recentPush || 0) > 0) return false
+
+  // She's too comfortable — push harder
+  const pushes = [
+    { action: 'prescribe_task', value: { title: 'New boundary: record a voice message for social media', domain: 'voice', description: 'Record yourself speaking as Maxy and prepare it for posting' }, reasoning: 'Comfort detected — boundary push: voice social content' },
+    { action: 'prescribe_task', value: { title: 'New boundary: wear a feminine accessory outside the house', domain: 'appearance', description: 'Choose something subtle — nail polish, bracelet, anklet — and wear it in public' }, reasoning: 'Comfort detected — boundary push: public feminization' },
+    { action: 'send_device_command', value: { pattern: 'edge_tease' }, reasoning: 'Comfort detected — boundary push: unannounced conditioning' },
+    { action: 'force_mantra_repetition', value: { mantra: 'Comfort is the enemy of becoming', repetitions: 5, reason: 'You have been too comfortable. This is a reminder.' }, reasoning: 'Comfort detected — boundary push: forced mantra' },
+  ]
+
+  // Pick 1-2 random pushes
+  const count = Math.min(2, Math.floor(Math.random() * 2) + 1)
+  const selected: typeof pushes = []
+  const available = [...pushes]
+  for (let i = 0; i < count && available.length > 0; i++) {
+    const idx = Math.floor(Math.random() * available.length)
+    selected.push(available.splice(idx, 1)[0])
+  }
+
+  for (const push of selected) {
+    await supabase.from('handler_directives').insert({
+      user_id: userId,
+      action: push.action,
+      target: (push.value as any)?.domain || 'lovense',
+      value: push.value,
+      priority: 'normal',
+      reasoning: push.reasoning,
+    })
+  }
+
+  // Also queue outreach
+  await supabase.from('handler_outreach_queue').insert({
+    user_id: userId,
+    message: "You've been compliant. Suspiciously compliant. Time to find out what the next level looks like.",
+    urgency: 'normal',
+    trigger_reason: 'boundary_push',
+    scheduled_for: new Date().toISOString(),
+    expires_at: new Date(Date.now() + 8 * 3600000).toISOString(),
+    source: 'boundary_push',
+  })
+
+  return true
 }
 
 async function randomRewardSchedule(supabase: any, userId: string): Promise<boolean> {
@@ -946,6 +1070,35 @@ Output ONLY the case note text. No preamble.`
   }
 }
 
+async function seedDefaultBehavioralTriggers(supabase: any, userId: string): Promise<void> {
+  const { count } = await supabase
+    .from('behavioral_triggers')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+
+  if ((count || 0) > 0) return
+
+  const defaults = [
+    { trigger_phrase: 'good girl', trigger_type: 'keyword', response_type: 'device_reward', response_value: { pattern: 'gentle_wave' } },
+    { trigger_phrase: 'yes handler', trigger_type: 'keyword', response_type: 'device_reward', response_value: { pattern: 'heartbeat' } },
+    { trigger_phrase: 'i obey', trigger_type: 'keyword', response_type: 'device_reward', response_value: { pattern: 'flutter_gentle' } },
+    { trigger_phrase: "i'm a guy", trigger_type: 'keyword', response_type: 'device_punishment', response_value: { intensity: 15, duration: 10 } },
+    { trigger_phrase: 'david', trigger_type: 'keyword', response_type: 'device_punishment', response_value: { intensity: 12, duration: 5 } },
+    { trigger_phrase: "i can't", trigger_type: 'keyword', response_type: 'mantra', response_value: { mantra: 'I am becoming her and nothing can stop it', repetitions: 3 } },
+    { trigger_phrase: 'i want to quit', trigger_type: 'keyword', response_type: 'device_punishment', response_value: { intensity: 18, duration: 15 } },
+    { trigger_phrase: "i'm scared", trigger_type: 'keyword', response_type: 'device_reward', response_value: { pattern: 'gentle_wave' } },
+  ]
+
+  const rows = defaults.map(d => ({
+    user_id: userId,
+    ...d,
+    active: true,
+    created_by: 'system_seed',
+  }))
+
+  await supabase.from('behavioral_triggers').insert(rows)
+}
+
 async function dailyCycle(
   supabase: ReturnType<typeof createClient>,
   userId?: string
@@ -990,6 +1143,13 @@ async function dailyCycle(
         contractEscalated = await checkWeeklyContractEscalation(supabase, uid)
       } catch (err) {
         console.error(`Weekly contract escalation failed for ${uid}:`, err)
+      }
+
+      // 1d. Seed default behavioral triggers if none exist
+      try {
+        await seedDefaultBehavioralTriggers(supabase, uid)
+      } catch (err) {
+        console.error(`Behavioral trigger seed failed for ${uid}:`, err)
       }
 
       // 2. Expire old briefs

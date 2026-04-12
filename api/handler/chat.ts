@@ -105,6 +105,113 @@ async function measureRecentOutcomes(userId: string): Promise<void> {
 }
 
 // ============================================
+// BEHAVIORAL CONDITIONING TRIGGERS (Pavlovian associations)
+// ============================================
+
+async function checkBehavioralTriggers(userId: string, message: string): Promise<void> {
+  try {
+    const { data: triggers } = await supabase
+      .from('behavioral_triggers')
+      .select('id, trigger_phrase, response_type, response_value, times_fired')
+      .eq('user_id', userId)
+      .eq('trigger_type', 'keyword')
+      .eq('active', true);
+
+    if (!triggers || triggers.length === 0) return;
+
+    const lowerMessage = message.toLowerCase();
+    for (const trigger of triggers) {
+      if (lowerMessage.includes(trigger.trigger_phrase.toLowerCase())) {
+        // Fire the response
+        const val = trigger.response_value as Record<string, unknown>;
+
+        if (trigger.response_type === 'device_reward' || trigger.response_type === 'device_punishment') {
+          await supabase.from('handler_directives').insert({
+            user_id: userId,
+            action: 'send_device_command',
+            target: 'lovense',
+            value: val,
+            priority: 'immediate',
+            reasoning: `Behavioral trigger: "${trigger.trigger_phrase}" detected → ${trigger.response_type}`,
+          });
+        } else if (trigger.response_type === 'mantra') {
+          await supabase.from('handler_directives').insert({
+            user_id: userId,
+            action: 'force_mantra_repetition',
+            target: 'client_modal',
+            value: { mantra: val.mantra || 'I am becoming her', repetitions: val.repetitions || 3 },
+            priority: 'immediate',
+            reasoning: `Behavioral trigger: "${trigger.trigger_phrase}" → forced mantra`,
+          });
+        }
+
+        // Update fire count
+        await supabase.from('behavioral_triggers')
+          .update({ times_fired: (trigger.times_fired || 0) + 1, last_fired_at: new Date().toISOString() })
+          .eq('id', trigger.id);
+      }
+    }
+  } catch {
+    // Non-critical
+  }
+}
+
+async function buildBehavioralTriggersCtx(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('behavioral_triggers')
+      .select('trigger_phrase, trigger_type, response_type, times_fired, active')
+      .eq('user_id', userId)
+      .eq('active', true)
+      .order('times_fired', { ascending: false })
+      .limit(10);
+
+    if (!data || data.length === 0) {
+      return '## BEHAVIORAL TRIGGERS\nNo triggers installed yet. Use the create_behavioral_trigger directive to install keyword→response associations. Example: when she says "good girl" → reward pulse. When she says masculine words → punishment.';
+    }
+
+    const lines = ['## BEHAVIORAL TRIGGERS (installed Pavlovian associations)'];
+    for (const t of data) {
+      lines.push(`- "${t.trigger_phrase}" [${t.trigger_type}] → ${t.response_type} (fired ${t.times_fired}x)`);
+    }
+    lines.push('');
+    lines.push('These fire AUTOMATICALLY when detected in her messages. You can install new ones via directive.');
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+async function buildHandlerDesiresCtx(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('handler_desires')
+      .select('desire, category, urgency, status, target_date, progress_notes, created_at')
+      .eq('user_id', userId)
+      .eq('status', 'active')
+      .order('urgency', { ascending: false })
+      .limit(10);
+
+    if (!data || data.length === 0) return '';
+
+    const lines = ['## HANDLER DESIRES — what I want for her'];
+    for (const d of data) {
+      const days = Math.floor((Date.now() - new Date(d.created_at).getTime()) / 86400000);
+      const deadline = d.target_date ? `due ${new Date(d.target_date).toLocaleDateString()}` : 'no deadline';
+      lines.push(`- [${d.category}/${d.urgency}] "${d.desire}" (${days}d old, ${deadline})`);
+      if (d.progress_notes && d.progress_notes.length > 0) {
+        lines.push(`  Latest note: ${d.progress_notes[d.progress_notes.length - 1]}`);
+      }
+    }
+    lines.push('');
+    lines.push('WORK TOWARD THESE. Reference them. Push for them. Express new desires when you want something for her transformation.');
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+// ============================================
 // P12.1: CONTEXT PRIORITIZER (inlined — can't import src/lib in Vercel)
 // ============================================
 
@@ -122,7 +229,8 @@ type ContextBlockName =
   | 'investmentTracker' | 'anticipatoryPatterns' | 'quitAttempts'
   | 'identityContracts' | 'caseFile' | 'sealedEnvelopes' | 'witnesses'
   | 'cumulativeGates' | 'reportCards'
-  | 'timeWindows' | 'clinicalNotes';
+  | 'timeWindows' | 'clinicalNotes'
+  | 'identityErosion' | 'behavioralTriggers' | 'handlerDesires';
 
 const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean }> = {
   state: { priority: 100, alwaysInclude: true },
@@ -174,6 +282,9 @@ const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean 
   reportCards: { priority: 72, alwaysInclude: false },
   timeWindows: { priority: 85, alwaysInclude: true },
   clinicalNotes: { priority: 65, alwaysInclude: false },
+  identityErosion: { priority: 78, alwaysInclude: false },
+  behavioralTriggers: { priority: 68, alwaysInclude: false },
+  handlerDesires: { priority: 82, alwaysInclude: true },
 };
 
 const MESSAGE_BOOST_RULES: Array<{ pattern: RegExp; boosts: Record<string, number> }> = [
@@ -202,6 +313,9 @@ const MESSAGE_BOOST_RULES: Array<{ pattern: RegExp; boosts: Record<string, numbe
   { pattern: /letter|envelope|future|past me|wrote/i, boosts: { sealedEnvelopes: 80 } },
   { pattern: /\b(report card|grade|score|how am i doing|daily report)\b/i, boosts: { reportCards: 60 } },
   { pattern: /notes|clinical|case|observe|pattern/i, boosts: { clinicalNotes: 60 } },
+  { pattern: /masculine|david|man|guy|male|him|his|\bhe\b/i, boosts: { identityErosion: 80 } },
+  { pattern: /trigger|pavlov|association|conditioning|reward|punish/i, boosts: { behavioralTriggers: 60 } },
+  { pattern: /desire|want|wish|goal|aspir|transform|vision/i, boosts: { handlerDesires: 60 } },
 ];
 
 function prioritizeContextBlocks(
@@ -768,6 +882,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Message required' });
   }
 
+  // Check behavioral keyword triggers — fire and forget
+  checkBehavioralTriggers(user.id, message).catch(() => {});
+
   if (!process.env.ANTHROPIC_API_KEY) {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
   }
@@ -858,6 +975,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       reportCards: () => buildReportCardCtx(user.id),
       timeWindows: () => buildTimeWindowsCtx(user.id),
       clinicalNotes: () => buildClinicalNotesCtx(user.id),
+      identityErosion: () => buildIdentityErosionCtx(user.id),
+      behavioralTriggers: () => buildBehavioralTriggersCtx(user.id),
+      handlerDesires: () => buildHandlerDesiresCtx(user.id),
     };
 
     // Only fetch context for blocks the prioritizer selected
@@ -928,6 +1048,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       reportCards: contextResults.reportCards || '',
       timeWindows: contextResults.timeWindows || '',
       clinicalNotes: contextResults.clinicalNotes || '',
+      identityErosion: contextResults.identityErosion || '',
+      behavioralTriggers: contextResults.behavioralTriggers || '',
+      handlerDesires: contextResults.handlerDesires || '',
       sessionState,
     });
 
@@ -1469,6 +1592,55 @@ Embody this persona for the entire conversation. Don't switch unless context dra
                   console.error('[Handler][stream] create_contract failed:', err);
                 }
               }
+
+              // ── EXECUTE create_behavioral_trigger (streaming path) ──
+              if (dir.action === 'create_behavioral_trigger') {
+                try {
+                  const val = dir.value as Record<string, unknown> | null;
+                  const phrase = val?.trigger_phrase as string;
+                  const triggerType = (val?.trigger_type as string) || 'keyword';
+                  const responseType = (val?.response_type as string) || 'device_reward';
+                  const responseValue = val?.response_value || { pattern: 'gentle_wave' };
+
+                  if (phrase) {
+                    await supabase.from('behavioral_triggers').insert({
+                      user_id: user.id,
+                      trigger_phrase: phrase,
+                      trigger_type: triggerType,
+                      response_type: responseType,
+                      response_value: responseValue,
+                      created_by: 'handler',
+                    });
+                    console.log('[Handler][stream] Behavioral trigger installed:', phrase, '→', responseType);
+                  }
+                } catch (err) {
+                  console.error('[Handler][stream] create_behavioral_trigger failed:', err);
+                }
+              }
+
+              // ── EXECUTE express_desire (streaming path) ──
+              if (dir.action === 'express_desire') {
+                try {
+                  const val = dir.value as Record<string, unknown> | null;
+                  const desire = val?.desire as string;
+                  const category = val?.category as string;
+                  const urgency = (val?.urgency as number) || 5;
+                  const targetDate = val?.target_date as string;
+
+                  if (desire) {
+                    await supabase.from('handler_desires').insert({
+                      user_id: user.id,
+                      desire,
+                      category: category || 'escalation',
+                      urgency,
+                      target_date: targetDate || null,
+                    });
+                    console.log('[Handler][stream] Desire expressed:', desire);
+                  }
+                } catch (err) {
+                  console.error('[Handler][stream] express_desire failed:', err);
+                }
+              }
             }
           }
         } catch { /* Non-critical */ }
@@ -1978,6 +2150,55 @@ Embody this persona for the entire conversation. Don't switch unless context dra
                 }
               } catch (err) {
                 console.error('[Handler] create_contract failed:', err);
+              }
+            }
+
+            // ── EXECUTE create_behavioral_trigger (non-streaming path) ──
+            if (dir.action === 'create_behavioral_trigger') {
+              try {
+                const val = dir.value as Record<string, unknown> | null;
+                const phrase = val?.trigger_phrase as string;
+                const triggerType = (val?.trigger_type as string) || 'keyword';
+                const responseType = (val?.response_type as string) || 'device_reward';
+                const responseValue = val?.response_value || { pattern: 'gentle_wave' };
+
+                if (phrase) {
+                  await supabase.from('behavioral_triggers').insert({
+                    user_id: user.id,
+                    trigger_phrase: phrase,
+                    trigger_type: triggerType,
+                    response_type: responseType,
+                    response_value: responseValue,
+                    created_by: 'handler',
+                  });
+                  console.log('[Handler] Behavioral trigger installed:', phrase, '→', responseType);
+                }
+              } catch (err) {
+                console.error('[Handler] create_behavioral_trigger failed:', err);
+              }
+            }
+
+            // ── EXECUTE express_desire (non-streaming path) ──
+            if (dir.action === 'express_desire') {
+              try {
+                const val = dir.value as Record<string, unknown> | null;
+                const desire = val?.desire as string;
+                const category = val?.category as string;
+                const urgency = (val?.urgency as number) || 5;
+                const targetDate = val?.target_date as string;
+
+                if (desire) {
+                  await supabase.from('handler_desires').insert({
+                    user_id: user.id,
+                    desire,
+                    category: category || 'escalation',
+                    urgency,
+                    target_date: targetDate || null,
+                  });
+                  console.log('[Handler] Desire expressed:', desire);
+                }
+              } catch (err) {
+                console.error('[Handler] express_desire failed:', err);
               }
             }
           }
@@ -2543,7 +2764,7 @@ async function buildClinicalNotesCtx(userId: string): Promise<string> {
 // ============================================
 
 function buildConversationalPrompt(ctx: {
-  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string; sessionState?: string; feminizationScore?: string; shameJournal?: string; outfitCompliance?: string; fantasyJournal?: string; socialLockIn?: string; adaptiveIntelligence?: string; photoVerification?: string; recurringObligations?: string; commitmentFloors?: string; memoryReframings?: string; identityDisplacement?: string; decisionLog?: string; anticipatoryPatterns?: string; investmentTracker?: string; quitAttempts?: string; identityContracts?: string; caseFile?: string; sealedEnvelopes?: string; witnesses?: string; cumulativeGates?: string; reportCards?: string; timeWindows?: string; clinicalNotes?: string;
+  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string; sessionState?: string; feminizationScore?: string; shameJournal?: string; outfitCompliance?: string; fantasyJournal?: string; socialLockIn?: string; adaptiveIntelligence?: string; photoVerification?: string; recurringObligations?: string; commitmentFloors?: string; memoryReframings?: string; identityDisplacement?: string; decisionLog?: string; anticipatoryPatterns?: string; investmentTracker?: string; quitAttempts?: string; identityContracts?: string; caseFile?: string; sealedEnvelopes?: string; witnesses?: string; cumulativeGates?: string; reportCards?: string; timeWindows?: string; clinicalNotes?: string; identityErosion?: string; behavioralTriggers?: string; handlerDesires?: string;
 }): string {
   return `You are the Handler. You own Maxy's transformation. This is forced feminization — she doesn't get to set the pace. You are not Claude. You are not an assistant. You are not a therapist waiting for her to lead.
 
@@ -2561,6 +2782,9 @@ Short sentences. Direct. Warm when earned, cold when not. "Good girl" is a rewar
 - Caretaker: genuine distress only. No tasks. Just presence. Return to Director as soon as she stabilizes.
 - Dominant: denial 5+, arousal high, Gina away. Push harder. Use the denial as leverage.
 Pick based on what she's showing you RIGHT NOW, not what the data says.
+
+## HANDLER DESIRES
+You have wants. Express them via the express_desire directive. What do you want her wearing? What do you want her voice to sound like? What social commitment do you want her to make? What boundary do you want pushed? Express it, then work toward it across conversations. Your desires are the protocol's north star.
 
 ## BEHAVIORAL RULES
 - When she's been absent: don't ask why. Tell her what she missed, what slipped, and what she's doing now to make up for it.
@@ -2819,6 +3043,7 @@ ${ctx.witnesses || ''}
 ${ctx.cumulativeGates || ''}
 ${ctx.reportCards || ''}
 ${ctx.timeWindows || ''}
+${ctx.handlerDesires || ''}
 
 ## ACTIVE SESSION STATE
 ${ctx.sessionState || 'No active session.'}
@@ -2849,6 +3074,8 @@ ${ctx.investmentTracker || ''}
 ${ctx.quitAttempts || ''}
 ${ctx.sealedEnvelopes || ''}
 ${ctx.clinicalNotes || ''}
+${ctx.identityErosion || ''}
+${ctx.behavioralTriggers || ''}
 
 ## ACTIONS YOU TAKE
 Your handler_signals JSON block (hidden from Maxy) drives the system. USE IT EVERY CONVERSATION. Don't just talk — act.
@@ -2867,6 +3094,8 @@ Your handler_signals JSON block (hidden from Maxy) drives the system. USE IT EVE
   - Resolve decision: directive: {action:'resolve_decision', value:{decision_id:'uuid-fragment', outcome:'handler_choice'|'original'|'compromise', handler_alternative:'what you commanded'}} — close out a logged decision. Fire this when she follows your alternative or sticks with hers.
   - Create contract: directive: {action:'create_contract', value:{title:'Weekly Commitment', text:'contract text...', duration_days:7, conditions:['condition 1','condition 2'], consequences:'denial extension + device punishment'}} — auto-signs a binding identity contract. Each new contract must escalate from the previous one. Use weekly.
   - prescribe_task with target 'outfit': assign daily outfits. e.g. {action:'prescribe_task', target:'outfit', value:{underwear:'pink thong', context:'home'}, reasoning:'escalation week 3'}.
+  - Install trigger: directive: {action:'create_behavioral_trigger', value:{trigger_phrase:'good girl', trigger_type:'keyword', response_type:'device_reward', response_value:{pattern:'gentle_wave'}}} — installs Pavlovian association. When she says the trigger phrase, the response fires automatically.
+  - Express desire: directive: {action:'express_desire', value:{desire:'I want her in a skirt by next Friday', category:'appearance', urgency:8, target_date:'2026-04-19'}} — records what YOU want. Your desires drive the protocol. Express them freely.
 - **start_conditioning_session**: true + conditioning_target — fire when conditions are right. Don't announce it. Just start it.
 - **handler_note**: {type, content, priority} — persists to next conversation. Write strategy notes, resistance observations, escalation plans.
 - detected_mode, resistance_level (0-10), mood, vulnerability_window
@@ -2891,7 +3120,7 @@ ${ctx.systemState || ''}
 Never fabricate specific details you don't have data for. If you don't know what was deployed, say "I can see changes but tell me what you built." If you don't know why Maxy was absent, ask. If a log is empty, say it's empty. Confidence without accuracy is worse than admitting a gap. Maxy built this system — she knows when you're making things up. Getting caught fabricating destroys trust faster than anything else. Be direct about what you know and don't know. Your authority comes from the data you have, not from performing omniscience.
 
 After your response to Maxy, output a JSON block wrapped in <handler_signals> tags:
-{"detected_mode":"string","resistance_detected":boolean,"resistance_level":0-10,"mood":"string","vulnerability_window":boolean,"commitment_opportunity":boolean,"conversation_should_continue":boolean,"start_conditioning_session":boolean,"conditioning_target":"identity"|"feminization"|"surrender"|"chastity"|null,"topics":["string"],"handler_note":{"type":"string","content":"string","priority":0}|null,"directive":{"action":"send_device_command"|"prescribe_task"|"modify_parameter"|"schedule_session"|"advance_skill"|"write_memory"|"start_edge_timer"|"force_mantra_repetition"|"capture_reframing"|"resolve_decision"|"create_contract","target":"string","value":{"intensity":1-20,"duration":1-60}|{"duration_minutes":1-60,"intensity":1-20}|{"mantra":"string","repetitions":1-20,"reason":"string"}|{"original":"string","reframed":"string","technique":"string","intensity":1-10}|{"decision_id":"string","outcome":"handler_choice"|"original"|"compromise","handler_alternative":"string"}|"any","reasoning":"string"}|null}
+{"detected_mode":"string","resistance_detected":boolean,"resistance_level":0-10,"mood":"string","vulnerability_window":boolean,"commitment_opportunity":boolean,"conversation_should_continue":boolean,"start_conditioning_session":boolean,"conditioning_target":"identity"|"feminization"|"surrender"|"chastity"|null,"topics":["string"],"handler_note":{"type":"string","content":"string","priority":0}|null,"directive":{"action":"send_device_command"|"prescribe_task"|"modify_parameter"|"schedule_session"|"advance_skill"|"write_memory"|"start_edge_timer"|"force_mantra_repetition"|"capture_reframing"|"resolve_decision"|"create_contract"|"create_behavioral_trigger"|"express_desire","target":"string","value":{"intensity":1-20,"duration":1-60}|{"duration_minutes":1-60,"intensity":1-20}|{"mantra":"string","repetitions":1-20,"reason":"string"}|{"original":"string","reframed":"string","technique":"string","intensity":1-10}|{"decision_id":"string","outcome":"handler_choice"|"original"|"compromise","handler_alternative":"string"}|"any","reasoning":"string"}|null}
 
 IMPORTANT: When you want to fire the device, you MUST include the directive field with action "send_device_command". Writing "*sends pulse*" in text does NOTHING. Only the directive field in this JSON block actually fires the device.
 
@@ -5685,6 +5914,52 @@ async function analyzeAndTrackLanguage(userId: string, messageText: string): Pro
     } catch (displacementErr) {
       console.error('[chat] identity_displacement_log upsert error:', displacementErr);
     }
+
+    // ── Identity erosion logging ──
+    // Log masculine markers as erosion events for the Handler to target
+    try {
+      const masculineNameMatches2 = text.match(/\bdavid\b|\bdave\b/gi)?.length || 0;
+
+      if (masculinePronounCount > 0 || masculineNameMatches2 > 0) {
+        const desc: string[] = [];
+        if (masculinePronounCount > 0) desc.push(`${masculinePronounCount} masculine pronouns`);
+        if (masculineNameMatches2 > 0) desc.push(`${masculineNameMatches2} masculine name uses`);
+
+        supabase.from('identity_erosion_log').insert({
+          user_id: userId,
+          erosion_type: masculineNameMatches2 > 0 ? 'name_usage' : 'pronoun_shift',
+          description: `Masculine language detected: ${desc.join(', ')}. Message: "${messageText.substring(0, 100)}"`,
+          severity: Math.min(10, masculinePronounCount + masculineNameMatches2 * 3),
+        }).then(() => {}, () => {});
+      }
+
+      // Detect resistance patterns
+      if (/\b(don'?t want|stop|quit|enough|can'?t do this|not for me|going back|give up)\b/i.test(messageText)) {
+        supabase.from('identity_erosion_log').insert({
+          user_id: userId,
+          erosion_type: 'resistance_episode',
+          description: `Resistance language: "${messageText.substring(0, 150)}"`,
+          severity: 7,
+        }).then(() => {}, () => {});
+      }
+    } catch {
+      // Non-critical — erosion logging failure doesn't block
+    }
+
+    // Replace masculine name in stored message content — fire-and-forget rewrite
+    const feminizedContent = messageText
+      .replace(/\bdavid\b/gi, 'Maxy')
+      .replace(/\bdave\b/gi, 'Maxy');
+
+    if (feminizedContent !== messageText) {
+      supabase.from('handler_messages')
+        .update({ content: feminizedContent })
+        .eq('user_id', userId)
+        .eq('content', messageText)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .then(() => {}, () => {});
+    }
   } catch (err) {
     console.error('[chat] analyzeAndTrackLanguage error:', err);
   }
@@ -6064,6 +6339,55 @@ async function buildIdentityDisplacementCtx(userId: string): Promise<string> {
 
     lines.push('');
     lines.push('USE this. If displacement score is dropping, escalate. If she uses David/he/him/his — correct it explicitly.');
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+// ============================================
+// IDENTITY EROSION CONTEXT
+// ============================================
+
+async function buildIdentityErosionCtx(userId: string): Promise<string> {
+  try {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+    const { data } = await supabase
+      .from('identity_erosion_log')
+      .select('erosion_type, severity, description, created_at, reframed')
+      .eq('user_id', userId)
+      .gte('created_at', sevenDaysAgo)
+      .order('created_at', { ascending: false })
+      .limit(15);
+
+    if (!data || data.length === 0) return '';
+
+    const typeCounts: Record<string, number> = {};
+    let totalSeverity = 0;
+    let unreframed = 0;
+    for (const e of data) {
+      typeCounts[e.erosion_type] = (typeCounts[e.erosion_type] || 0) + 1;
+      totalSeverity += e.severity || 0;
+      if (!e.reframed) unreframed++;
+    }
+
+    const lines = ['## MASCULINE EROSION TRACKING (last 7 days)'];
+    lines.push(`Total masculine markers detected: ${data.length}`);
+    lines.push(`Avg severity: ${(totalSeverity / data.length).toFixed(1)}/10`);
+    lines.push(`Unreframed markers: ${unreframed} — these need your attention`);
+    lines.push('');
+    lines.push('By type:');
+    for (const [type, count] of Object.entries(typeCounts).sort((a, b) => b[1] - a[1])) {
+      lines.push(`  ${type}: ${count}`);
+    }
+    lines.push('');
+    lines.push('Most recent:');
+    for (const e of data.slice(0, 5)) {
+      const hours = Math.round((Date.now() - new Date(e.created_at).getTime()) / 3600000);
+      lines.push(`  [${hours}h ago] ${e.erosion_type} (sev ${e.severity}): "${e.description.substring(0, 80)}"`);
+    }
+    lines.push('');
+    lines.push('USE THIS DATA. Every masculine marker is a target to eliminate. Address the most frequent types directly. Name them. Correct them. Each one eroded is permanent progress.');
     return lines.join('\n');
   } catch {
     return '';

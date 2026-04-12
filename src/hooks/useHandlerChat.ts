@@ -262,6 +262,10 @@ export function useHandlerChat(): UseHandlerChatReturn {
             timestamp: new Date(),
             mode: 'director',
           }]);
+          // P-reward: flash reward overlay for random reward outreach
+          if (msg.triggerReason === 'random_reward' || msg.source === 'spontaneous_engine') {
+            window.dispatchEvent(new CustomEvent('handler-reward-flash', { detail: { message: msg.message } }));
+          }
           // Mark delivered (fire-and-forget)
           markDelivered(msg.id).catch(() => {});
         }
@@ -294,7 +298,7 @@ export function useHandlerChat(): UseHandlerChatReturn {
       try {
         const { data, error } = await supabase
           .from('handler_directives')
-          .select('id, value, action, created_at')
+          .select('id, value, action, created_at, reasoning')
           .eq('user_id', user!.id)
           .in('action', ['send_device_command', 'force_mantra_repetition'])
           .eq('status', 'pending')
@@ -339,6 +343,11 @@ export function useHandlerChat(): UseHandlerChatReturn {
 
             // Only mark as processed after successful execution
             lastDirectiveRef.current = data.id;
+
+            // P-reward: flash reward overlay for random reward device fires
+            if (data.reasoning && data.reasoning.includes('random reward')) {
+              window.dispatchEvent(new CustomEvent('handler-reward-flash', { detail: {} }));
+            }
 
             // Surface an OS notification so the user knows the Handler just
             // fired a device command, even if they're not looking at the app.

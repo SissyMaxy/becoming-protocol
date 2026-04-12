@@ -32,7 +32,7 @@ import { OnboardingFlow } from './components/Onboarding';
 import { SharedWishlistView } from './components/wishlist';
 // AchievementModal, RewardLevelUpModal now rendered via useOrchestratedModals
 import { SettingsView, SystemAuditView } from './components/settings';
-import { WitnessManager, CaseFileView, SealedEnvelopesPage, QuitFrictionGate } from './components/handler';
+import { WitnessManager, CaseFileView, SealedEnvelopesPage, QuitFrictionGate, EscalationLadder } from './components/handler';
 import { DailyReportCard } from './components/handler/DailyReportCard';
 import { SessionContainer } from './components/session';
 import type { SessionConfig } from './components/session';
@@ -137,7 +137,7 @@ function LoadingScreen() {
   );
 }
 
-type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | 'goon-session' | 'progress-page' | 'sealed-page' | 'content-capture' | 'content-queue' | 'content-calendar' | 'content-fans' | 'content-polls' | 'content-revenue' | 'content-settings' | 'vault-browser' | 'log-release' | 'conditioning-library' | 'social-dashboard' | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol' | null;
+type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | 'goon-session' | 'progress-page' | 'sealed-page' | 'content-capture' | 'content-queue' | 'content-calendar' | 'content-fans' | 'content-polls' | 'content-revenue' | 'content-settings' | 'vault-browser' | 'log-release' | 'conditioning-library' | 'social-dashboard' | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol' | 'escalation_ladder' | null;
 
 /** Session picker → launches immersive SessionContainer */
 function SessionPickerOrContainer({ onBack }: { onBack: () => void }) {
@@ -866,6 +866,18 @@ function AuthenticatedAppInner() {
                 />
               </div>
             </div>
+          </div>
+        );
+      case 'escalation_ladder':
+        return (
+          <div>
+            <button
+              onClick={handleBackFromSubView}
+              className="mb-4 text-protocol-text-muted hover:text-protocol-text transition-colors"
+            >
+              &larr; Back to Menu
+            </button>
+            <EscalationLadder />
           </div>
         );
       case 'settings':
