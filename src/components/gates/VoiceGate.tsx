@@ -144,13 +144,13 @@ export function VoiceGate({ onPass }: VoiceGateProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center p-6">
-      <div className="max-w-md w-full space-y-6">
+    <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center p-6 overflow-y-auto">
+      <div className="max-w-md w-full space-y-6 my-8">
         <div className="text-center space-y-2">
           <Lock className="w-12 h-12 mx-auto text-purple-400" />
-          <h2 className="text-2xl font-bold text-white">Voice Gate</h2>
+          <h2 className="text-2xl font-bold text-white">Daily Mantra</h2>
           <p className="text-sm text-gray-400">
-            Speak the mantra aloud to enter. Pitch must be feminine.
+            Type the mantra exactly 3 times to enter.
           </p>
         </div>
 
@@ -160,34 +160,7 @@ export function VoiceGate({ onPass }: VoiceGateProps) {
           </p>
         </div>
 
-        {error && (
-          <div className="bg-red-900/30 border border-red-500/30 rounded-lg p-3 text-sm text-red-300">
-            {error}
-          </div>
-        )}
-
-        {transcribed && !error && (
-          <div className="bg-gray-900 rounded-lg p-3 text-sm text-gray-300">
-            Heard: "{transcribed}"
-            {pitch && <span className="text-purple-400 ml-2">({pitch.toFixed(0)}Hz)</span>}
-          </div>
-        )}
-
-        <button
-          onClick={startRecording}
-          disabled={recording || verifying}
-          className="w-full py-4 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:bg-purple-900 text-white font-medium flex items-center justify-center gap-2"
-        >
-          {recording ? (
-            <><Mic className="w-5 h-5 animate-pulse" /> Recording...</>
-          ) : verifying ? (
-            <><Loader2 className="w-5 h-5 animate-spin" /> Verifying...</>
-          ) : (
-            <><Mic className="w-5 h-5" /> Speak the mantra</>
-          )}
-        </button>
-
-        {/* Typed fallback for devices without mic/speech recognition */}
+        {/* Primary: typed mantra (works everywhere) */}
         <TypedMantraFallback mantra={mantra} onPass={async () => {
           if (user?.id) {
             try {
@@ -197,8 +170,40 @@ export function VoiceGate({ onPass }: VoiceGateProps) {
           onPass();
         }} />
 
-        <p className="text-xs text-gray-500 text-center">
-          You cannot enter without completing this. The Handler is waiting.
+        {/* Secondary: voice option for desktop */}
+        <div className="border-t border-gray-800 pt-4">
+          <p className="text-xs text-gray-600 text-center mb-2">Or speak it (desktop only)</p>
+
+          {error && (
+            <div className="bg-red-900/30 border border-red-500/30 rounded-lg p-3 text-sm text-red-300 mb-2">
+              {error}
+            </div>
+          )}
+
+          {transcribed && !error && (
+            <div className="bg-gray-900 rounded-lg p-3 text-sm text-gray-300 mb-2">
+              Heard: "{transcribed}"
+              {pitch && <span className="text-purple-400 ml-2">({pitch.toFixed(0)}Hz)</span>}
+            </div>
+          )}
+
+          <button
+            onClick={startRecording}
+            disabled={recording || verifying}
+            className="w-full py-3 rounded-xl bg-gray-800 hover:bg-gray-700 disabled:bg-gray-900 text-gray-300 text-sm flex items-center justify-center gap-2"
+          >
+            {recording ? (
+              <><Mic className="w-4 h-4 animate-pulse" /> Recording...</>
+            ) : verifying ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</>
+            ) : (
+              <><Mic className="w-4 h-4" /> Speak instead</>
+            )}
+          </button>
+        </div>
+
+        <p className="text-xs text-gray-600 text-center">
+          The Handler is waiting.
         </p>
       </div>
     </div>
