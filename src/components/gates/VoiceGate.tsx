@@ -187,6 +187,16 @@ export function VoiceGate({ onPass }: VoiceGateProps) {
           )}
         </button>
 
+        {/* Typed fallback for devices without mic/speech recognition */}
+        <TypedMantraFallback mantra={mantra} onPass={async () => {
+          if (user?.id) {
+            try {
+              await supabase.from('voice_practice_log').insert({ user_id: user.id, duration_seconds: 5, avg_pitch_hz: 0 });
+            } catch {}
+          }
+          onPass();
+        }} />
+
         <p className="text-xs text-gray-500 text-center">
           You cannot enter without completing this. The Handler is waiting.
         </p>
@@ -228,4 +238,47 @@ function autoCorrelate(buffer: Float32Array, sampleRate: number): number {
   const T0 = maxpos;
 
   return sampleRate / T0;
+}
+
+function TypedMantraFallback({ mantra, onPass }: { mantra: string; onPass: () => void }) {
+  const [typed, setTyped] = useState('');
+  const [count, setCount] = useState(0);
+  const required = 3;
+
+  const handleSubmit = () => {
+    if (typed.trim().toLowerCase() === mantra.toLowerCase()) {
+      const newCount = count + 1;
+      setCount(newCount);
+      setTyped('');
+      if (newCount >= required) {
+        onPass();
+      }
+    }
+  };
+
+  return (
+    <div className="border-t border-gray-800 pt-4 mt-2">
+      <p className="text-xs text-gray-500 text-center mb-2">
+        Mic not working? Type the mantra {required} times instead ({count}/{required})
+      </p>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit(); }}
+          placeholder="Type the mantra exactly..."
+          className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm"
+          autoComplete="off"
+        />
+        <button
+          onClick={handleSubmit}
+          disabled={typed.trim().toLowerCase() !== mantra.toLowerCase()}
+          className="px-4 py-2 rounded-lg bg-purple-600 disabled:bg-gray-800 text-white text-sm"
+        >
+          {count + 1}/{required}
+        </button>
+      </div>
+    </div>
+  );
 }
