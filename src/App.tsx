@@ -279,6 +279,13 @@ function AuthenticatedAppInner() {
     return localStorage.getItem(`report_card_done_${today}`) === '1';
   });
 
+  // Failsafe: force past loading after 10 seconds
+  const [loadingTimedOut, setLoadingTimedOut] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setLoadingTimedOut(true), 10000);
+    return () => clearTimeout(timer);
+  }, []);
+
   // P6.5: Conditioning session triggered by Handler conversation
   const [conditioningSession, setConditioningSession] = useState<{
     audioUrl?: string;
@@ -551,7 +558,7 @@ function AuthenticatedAppInner() {
     }
   };
 
-  if (isLoading || showOnboarding === null || compulsoryLoading) {
+  if ((isLoading || showOnboarding === null || compulsoryLoading) && !loadingTimedOut) {
     return <LoadingScreen />;
   }
 
