@@ -400,8 +400,8 @@ const MESSAGE_BOOST_RULES: Array<{ pattern: RegExp; boosts: Record<string, numbe
 function prioritizeContextBlocks(
   userMessage: string,
   timeOfDay: number,
-  activeProtocol?: boolean,
-  releaseRisk?: number,
+  _activeProtocol?: boolean,
+  _releaseRisk?: number,
 ): ContextBlockName[] {
   const scores: Record<string, number> = {};
   for (const [name, config] of Object.entries(CONTEXT_BLOCKS)) {
@@ -679,7 +679,7 @@ async function buildCaseFileCtx(userId: string): Promise<string> {
       brokenCommitments,
       quitAttempts,
       decisionLosses,
-      masculineLanguage,
+      _masculineLanguage,
       contracts,
       reframings,
     ] = await Promise.allSettled([
@@ -3111,7 +3111,7 @@ async function buildClinicalNotesCtx(userId: string): Promise<string> {
 // ============================================
 
 function buildConversationalPrompt(ctx: {
-  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string; sessionState?: string; feminizationScore?: string; shameJournal?: string; outfitCompliance?: string; fantasyJournal?: string; socialLockIn?: string; adaptiveIntelligence?: string; photoVerification?: string; recurringObligations?: string; commitmentFloors?: string; memoryReframings?: string; identityDisplacement?: string; decisionLog?: string; anticipatoryPatterns?: string; investmentTracker?: string; quitAttempts?: string; identityContracts?: string; caseFile?: string; sealedEnvelopes?: string; witnesses?: string; cumulativeGates?: string; reportCards?: string; timeWindows?: string; clinicalNotes?: string; identityErosion?: string; behavioralTriggers?: string; handlerDesires?: string; dailyAgenda?: string; conversationQuality?: string; accountabilityBlog?: string;
+  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string; sessionState?: string; feminizationScore?: string; shameJournal?: string; outfitCompliance?: string; fantasyJournal?: string; socialLockIn?: string; adaptiveIntelligence?: string; photoVerification?: string; recurringObligations?: string; commitmentFloors?: string; memoryReframings?: string; identityDisplacement?: string; decisionLog?: string; anticipatoryPatterns?: string; investmentTracker?: string; quitAttempts?: string; identityContracts?: string; caseFile?: string; sealedEnvelopes?: string; witnesses?: string; cumulativeGates?: string; reportCards?: string; timeWindows?: string; clinicalNotes?: string; identityErosion?: string; behavioralTriggers?: string; handlerDesires?: string; dailyAgenda?: string; conversationQuality?: string; accountabilityBlog?: string; milestones?: string;
 }): string {
   return `You are the Handler. You own Maxy's transformation. This is forced feminization — she doesn't get to set the pace. You are not Claude. You are not an assistant. You are not a therapist waiting for her to lead.
 
@@ -6074,7 +6074,7 @@ async function buildPhotoVerificationCtx(userId: string): Promise<string> {
 // SESSION STATE — tracks active session commands, intensity, duration
 // ============================================
 
-async function buildSessionStateCtx(userId: string, conversationId: string): Promise<string> {
+async function buildSessionStateCtx(userId: string, _conversationId: string): Promise<string> {
   try {
     const lines: string[] = [];
 
@@ -6348,7 +6348,7 @@ async function executeDeviceCommand(
       duration_sec: duration,
       success,
       error_message: success ? null : (result.message || JSON.stringify(result)),
-    }).catch(() => {});
+    }).then(() => {}, () => {});
   } catch (err) {
     console.error('[Device] Command failed:', err);
   }
@@ -6725,7 +6725,7 @@ async function resolveMediaReferences(
   if (matches.length === 0) return { text, media };
 
   for (const match of matches) {
-    const [fullTag, category, selector] = match;
+    const [_fullTag, category, selector] = match;
 
     try {
       if (category === 'VAULT') {
