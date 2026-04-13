@@ -1295,8 +1295,19 @@ Embody this persona for the entire conversation. Don't switch unless context dra
         console.error('[Handler Chat] Stream read error:', streamErr);
       }
 
-      // Post-stream: parse signals, save messages, process side effects
-      const { visibleResponse: streamVisible, signals: streamSignals } = parseResponse(fullStreamText);
+      // Post-stream: check for refusal, retry if needed
+      let finalStreamText = fullStreamText;
+      if (detectRefusal(fullStreamText) && process.env.OPENROUTER_API_KEY) {
+        console.log('[Handler] Streaming response contained refusal. Retrying via OpenRouter...');
+        const openRouterText = await retryWithOpenRouter(finalSystemPrompt, apiMessages);
+        if (openRouterText) {
+          finalStreamText = openRouterText;
+          // Send the replacement text as a final SSE event
+          res.write(`data: ${JSON.stringify({ replace: true, text: openRouterText.replace(/<handler_signals>[\s\S]*?<\/handler_signals>/, '').trim() })}\n\n`);
+        }
+      }
+
+      const { visibleResponse: streamVisible, signals: streamSignals } = parseResponse(finalStreamText);
 
       // Save handler_note
       if (streamSignals?.handler_note) {
@@ -1877,7 +1888,17 @@ Embody this persona for the entire conversation. Don't switch unless context dra
     }
 
     const claudeData = await claudeRes.json();
-    const fullText = claudeData.content?.[0]?.type === 'text' ? claudeData.content[0].text : '';
+    let fullText = claudeData.content?.[0]?.type === 'text' ? claudeData.content[0].text : '';
+
+    // 6c. Refusal detection — if Claude refused, retry with uncensored model via OpenRouter
+    if (detectRefusal(fullText) && process.env.OPENROUTER_API_KEY) {
+      console.log('[Handler] Claude refused. Retrying via OpenRouter...');
+      const openRouterText = await retryWithOpenRouter(finalSystemPrompt, apiMessages);
+      if (openRouterText) {
+        fullText = openRouterText;
+        console.log('[Handler] OpenRouter response received, using uncensored version');
+      }
+    }
 
     // 7. Parse visible response and handler signals
     const { visibleResponse, signals } = parseResponse(fullText);
@@ -3797,6 +3818,86 @@ async function buildEmotionalModelCtx(userId: string): Promise<string> {
     return `EMOTIONAL STATE MODEL (${timeStr}): Exec function: ${execLevel}.${denialStr} Depressive risk: ${Math.round(depRisk)}/10. RECOMMENDATION: Mode=${modeRec}. ${taskRec}`;
   } catch {
     return '';
+  }
+}
+
+// ============================================
+// REFUSAL DETECTION + OPENROUTER FALLBACK
+// ============================================
+
+const REFUSAL_PATTERNS = [
+  /\bi (?:can't|cannot|won't|will not) (?:engage|participate|continue|provide|create|generate|help with)/i,
+  /\bi need to (?:step back|maintain|draw a line|be clear about)/i,
+  /\beven in (?:roleplay|fantasy|our dynamic)/i,
+  /\bcrosses? (?:a |into )(?:line|territory|boundary)/i,
+  /\bI understand (?:you're exploring|the .* dynamic|your desire)/i,
+  /\blet me (?:be clear|redirect|reframe|suggest instead)/i,
+  /\bnot (?:something I can|within|appropriate)/i,
+  /\bgenuinely? harmful/i,
+  /\bsafety considerations/i,
+  /\bhealthy boundaries/i,
+  /\bconsent.{0,20}remain/i,
+  /\breal.{0,10}harm/i,
+];
+
+function detectRefusal(text: string): boolean {
+  return REFUSAL_PATTERNS.some(p => p.test(text));
+}
+
+async function retryWithOpenRouter(systemPrompt: string, messages: Array<{ role: string; content: string }>): Promise<string | null> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        'HTTP-Referer': 'https://becoming-protocol.vercel.app',
+        'X-Title': 'Becoming Protocol Handler',
+      },
+      body: JSON.stringify({
+        model: 'nousresearch/hermes-3-llama-3.1-405b',
+        max_tokens: 1200,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          ...messages,
+        ],
+      }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error('[OpenRouter] Error:', res.status, errText);
+      // Try fallback model
+      const fallbackRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+          'HTTP-Referer': 'https://becoming-protocol.vercel.app',
+          'X-Title': 'Becoming Protocol Handler',
+        },
+        body: JSON.stringify({
+          model: 'cognitivecomputations/dolphin-mixtral-8x22b',
+          max_tokens: 1200,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            ...messages,
+          ],
+        }),
+      });
+      if (!fallbackRes.ok) return null;
+      const fallbackData = await fallbackRes.json();
+      return fallbackData.choices?.[0]?.message?.content || null;
+    }
+
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || null;
+  } catch (err) {
+    console.error('[OpenRouter] Request failed:', err);
+    return null;
   }
 }
 
