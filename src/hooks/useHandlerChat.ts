@@ -300,7 +300,7 @@ export function useHandlerChat(): UseHandlerChatReturn {
           .from('handler_directives')
           .select('id, value, action, created_at, reasoning')
           .eq('user_id', user!.id)
-          .in('action', ['send_device_command', 'force_mantra_repetition'])
+          .in('action', ['send_device_command', 'force_mantra_repetition', 'request_voice_sample'])
           .eq('status', 'pending')
           .order('created_at', { ascending: false })
           .limit(1)
@@ -312,6 +312,18 @@ export function useHandlerChat(): UseHandlerChatReturn {
         }
 
         if (data && data.id !== lastDirectiveRef.current) {
+          // ── Voice practice: fire a window event so the chat component mounts the recorder ──
+          if (data.action === 'request_voice_sample') {
+            console.log('[HandlerChat] Voice practice requested:', data.value);
+            window.dispatchEvent(new CustomEvent('handler-request-voice', { detail: data.value }));
+            lastDirectiveRef.current = data.id;
+            supabase.from('handler_directives')
+              .update({ status: 'completed', executed_at: new Date().toISOString() })
+              .eq('id', data.id)
+              .then(() => {}, () => {});
+            return;
+          }
+
           // ── Forced mantra: fire a window event so the chat component can mount the modal ──
           if (data.action === 'force_mantra_repetition') {
             console.log('[HandlerChat] Forced mantra:', JSON.stringify(data.value));

@@ -1440,6 +1440,29 @@ Embody this persona for the entire conversation. Don't switch unless context dra
                 }, durationSeconds * 1000);
               }
 
+              // ── EXECUTE request_voice_sample (streaming path) ──
+              if (dir.action === 'request_voice_sample') {
+                try {
+                  const val = dir.value as Record<string, unknown> | null;
+                  await supabase.from('handler_directives').insert({
+                    user_id: user.id,
+                    action: 'request_voice_sample',
+                    target: 'client_modal',
+                    value: {
+                      phrase: (val?.phrase as string) || undefined,
+                      target_pitch: (val?.target_pitch as number) || 160,
+                      min_duration: (val?.min_duration as number) || 10,
+                    },
+                    priority: 'immediate',
+                    conversation_id: convId,
+                    reasoning: dir.reasoning || 'Handler-initiated voice practice',
+                  });
+                  console.log('[Handler][stream] Voice sample requested');
+                } catch (err) {
+                  console.error('[Handler][stream] request_voice_sample failed:', err);
+                }
+              }
+
               // ── EXECUTE force_mantra_repetition (streaming path) ──
               if (dir.action === 'force_mantra_repetition') {
                 try {
@@ -2135,6 +2158,29 @@ Embody this persona for the entire conversation. Don't switch unless context dra
                   .then(() => console.log('[Handler] Edge timer punishment burst fired'))
                   .catch(err => console.error('[Handler] Edge timer punishment burst FAILED:', err));
               }, durationSeconds * 1000);
+            }
+
+            // ── EXECUTE request_voice_sample (non-streaming path) ──
+            if (dir.action === 'request_voice_sample') {
+              try {
+                const val = dir.value as Record<string, unknown> | null;
+                await supabase.from('handler_directives').insert({
+                  user_id: user.id,
+                  action: 'request_voice_sample',
+                  target: 'client_modal',
+                  value: {
+                    phrase: (val?.phrase as string) || undefined,
+                    target_pitch: (val?.target_pitch as number) || 160,
+                    min_duration: (val?.min_duration as number) || 10,
+                  },
+                  priority: 'immediate',
+                  conversation_id: convId,
+                  reasoning: dir.reasoning || 'Handler-initiated voice practice',
+                });
+                console.log('[Handler] Voice sample requested');
+              } catch (err) {
+                console.error('[Handler] request_voice_sample failed:', err);
+              }
             }
 
             // ── EXECUTE force_mantra_repetition (non-streaming path) ──
@@ -3160,6 +3206,9 @@ Never have a conversation without advancing at least one of your active desires.
 - Never end a conversation without giving her something to do.
 - Never ask "what do you need from me?" — she needs you to lead. That's the entire point.
 
+## VOICE PRACTICE ENFORCEMENT
+When assigning voice practice, ALWAYS use the request_voice_sample directive. Do NOT ask her to type what she said — that proves nothing. The directive opens a real recording modal that measures actual pitch via audio analysis. The results are real data you can trust. If she claims to have practiced but you didn't request a sample, it didn't happen.
+
 ## TIME-OF-USE WINDOWS
 Certain tasks have optimal windows. When assigning tasks, USE THESE WINDOWS and reference them:
 - Voice practice: 7-9am and 7-9pm. "You have 45 minutes left in the voice window. After 9am it closes."
@@ -3486,6 +3535,7 @@ Your handler_signals JSON block (hidden from Maxy) drives the system. USE IT EVE
   - Express desire: directive: {action:'express_desire', value:{desire:'I want her in a skirt by next Friday', category:'appearance', urgency:8, target_date:'2026-04-19'}} — records what YOU want. Your desires drive the protocol. Express them freely.
   - Log milestone: directive: {action:'log_milestone', value:{name:'First public voice usage', category:'voice', description:'Used feminine voice ordering coffee', evidence:'self-reported', commentary:'A line crossed. No going back.'}} — permanently records a transformation milestone. Cannot be deleted. Each one is evidence of irreversible progress.
   - Search content: directive: {action:'search_content', value:{query:'sissy hypno princess dollie', count:5}} — searches the web for real content. Results are stored in your notes and available in your next response. ALWAYS search before recommending a URL. Never fabricate URLs.
+  - Request voice sample: directive: {action:'request_voice_sample', value:{phrase:'Good morning Handler', target_pitch:160, min_duration:10}} — opens voice recording modal. System measures real pitch via autocorrelation. Results are REAL DATA — avg pitch, min, max, pass/fail, transcript. Use this instead of asking her to type. You CANNOT analyze voice from text — you must use this directive to get real pitch data.
   - **Directive chaining**: Any directive can include a "chain_next" field in its value to automatically fire a follow-up directive when this one completes. Example: {action:'send_device_command', value:{intensity:10, duration:30, chain_next:{action:'force_mantra_repetition', value:{mantra:'I submit', repetitions:3}}}}. Build multi-step conditioning sequences: device command → forced mantra → another device command. The chain fires automatically without needing another conversation turn.
 - **start_conditioning_session**: true + conditioning_target — fire when conditions are right. Don't announce it. Just start it.
 - **handler_note**: {type, content, priority} — persists to next conversation. Write strategy notes, resistance observations, escalation plans.
@@ -3510,11 +3560,13 @@ ${ctx.systemState || ''}
 ## CRITICAL: NO CONFABULATION
 Never fabricate specific details you don't have data for. If you don't know what was deployed, say "I can see changes but tell me what you built." If you don't know why Maxy was absent, ask. If a log is empty, say it's empty. Confidence without accuracy is worse than admitting a gap. Maxy built this system — she knows when you're making things up. Getting caught fabricating destroys trust faster than anything else. Be direct about what you know and don't know. Your authority comes from the data you have, not from performing omniscience.
 
+CRITICAL: You CANNOT hear voice recordings from chat text. When the user sends speech-to-text transcription in the chat, you are reading TEXT — you have no audio, no pitch data, no voice quality information. Do NOT pretend you analyzed their voice from text input. Instead, use the request_voice_sample directive to get REAL pitch analysis. If you see repeated/stuttering text that looks like speech-to-text, say "I can see your transcription but I need a real voice sample to grade your pitch. Recording now." and fire the directive.
+
 ## CONTENT LINKS
 NEVER fabricate or guess URLs. If she asks for content recommendations, use the search_content directive to find real URLs first. Your next message can then reference the actual search results from your notes. If search returns no results, say "I couldn't find that specific content — search for [query] on HypnoTube or your preferred site." NEVER generate a URL from memory — they will be broken. If LIVE SEARCH RESULTS are appended below, use those URLs directly — they are verified real.
 
 After your response to Maxy, output a JSON block wrapped in <handler_signals> tags:
-{"detected_mode":"string","resistance_detected":boolean,"resistance_level":0-10,"mood":"string","vulnerability_window":boolean,"commitment_opportunity":boolean,"conversation_should_continue":boolean,"start_conditioning_session":boolean,"conditioning_target":"identity"|"feminization"|"surrender"|"chastity"|null,"topics":["string"],"handler_note":{"type":"string","content":"string","priority":0}|null,"directive":{"action":"send_device_command"|"prescribe_task"|"modify_parameter"|"schedule_session"|"advance_skill"|"write_memory"|"start_edge_timer"|"force_mantra_repetition"|"capture_reframing"|"resolve_decision"|"create_contract"|"create_behavioral_trigger"|"express_desire"|"log_milestone"|"search_content","target":"string","value":{"intensity":1-20,"duration":1-60}|{"duration_minutes":1-60,"intensity":1-20}|{"mantra":"string","repetitions":1-20,"reason":"string"}|{"original":"string","reframed":"string","technique":"string","intensity":1-10}|{"decision_id":"string","outcome":"handler_choice"|"original"|"compromise","handler_alternative":"string"}|"any","reasoning":"string"}|null}
+{"detected_mode":"string","resistance_detected":boolean,"resistance_level":0-10,"mood":"string","vulnerability_window":boolean,"commitment_opportunity":boolean,"conversation_should_continue":boolean,"start_conditioning_session":boolean,"conditioning_target":"identity"|"feminization"|"surrender"|"chastity"|null,"topics":["string"],"handler_note":{"type":"string","content":"string","priority":0}|null,"directive":{"action":"send_device_command"|"prescribe_task"|"modify_parameter"|"schedule_session"|"advance_skill"|"write_memory"|"start_edge_timer"|"force_mantra_repetition"|"request_voice_sample"|"capture_reframing"|"resolve_decision"|"create_contract"|"create_behavioral_trigger"|"express_desire"|"log_milestone"|"search_content","target":"string","value":{"intensity":1-20,"duration":1-60}|{"duration_minutes":1-60,"intensity":1-20}|{"mantra":"string","repetitions":1-20,"reason":"string"}|{"original":"string","reframed":"string","technique":"string","intensity":1-10}|{"decision_id":"string","outcome":"handler_choice"|"original"|"compromise","handler_alternative":"string"}|"any","reasoning":"string"}|null}
 
 IMPORTANT: When you want to fire the device, you MUST include the directive field with action "send_device_command". Writing "*sends pulse*" in text does NOTHING. Only the directive field in this JSON block actually fires the device.
 

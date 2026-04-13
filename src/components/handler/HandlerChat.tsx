@@ -12,6 +12,7 @@ import { useAmbientAudio } from '../../hooks/useAmbientAudio';
 import { useSleepAudioConditioning } from '../../hooks/useSleepAudioConditioning';
 import { PhotoVerificationUpload } from './PhotoVerificationUpload';
 import { MantraRepetition } from './MantraRepetition';
+import { VoicePracticeRecorder } from './VoicePracticeRecorder';
 import { IdentityFadingBar } from './IdentityFadingBar';
 import { RewardFlash } from './RewardFlash';
 import { useAuth } from '../../context/AuthContext';
@@ -63,6 +64,21 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
   const [input, setInput] = useState('');
   const [showPhotoUpload, setShowPhotoUpload] = useState(false);
   const [forcedMantra, setForcedMantra] = useState<{ mantra: string; repetitions: number; reason?: string } | null>(null);
+  const [voicePracticeRequest, setVoicePracticeRequest] = useState<{ targetPhrase?: string; targetPitchHz?: number; minDuration?: number } | null>(null);
+
+  // Listen for handler-initiated voice practice directive
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail || {};
+      setVoicePracticeRequest({
+        targetPhrase: detail.phrase || detail.targetPhrase,
+        targetPitchHz: detail.targetPitchHz || detail.target_pitch || 160,
+        minDuration: detail.minDuration || detail.min_duration || 10,
+      });
+    };
+    window.addEventListener('handler-request-voice', handler);
+    return () => window.removeEventListener('handler-request-voice', handler);
+  }, []);
 
   // Listen for handler-initiated forced mantra directive — mounted modal blocks everything
   useEffect(() => {
@@ -204,6 +220,18 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
   return (
     <>
     <RewardFlash />
+    {voicePracticeRequest && (
+      <VoicePracticeRecorder
+        targetPhrase={voicePracticeRequest.targetPhrase}
+        targetPitchHz={voicePracticeRequest.targetPitchHz}
+        minDurationSeconds={voicePracticeRequest.minDuration}
+        onComplete={(result) => {
+          setVoicePracticeRequest(null);
+          sendMessage(`[Voice practice result: avg pitch ${result.avgPitch.toFixed(0)}Hz, ${result.passed ? 'PASSED' : 'FAILED'}, transcript: "${result.transcript.substring(0, 100)}"]`);
+        }}
+        onCancel={() => setVoicePracticeRequest(null)}
+      />
+    )}
     {forcedMantra && (
       <MantraRepetition
         mantra={forcedMantra.mantra}
