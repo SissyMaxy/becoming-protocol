@@ -418,7 +418,7 @@ function prioritizeContextBlocks(
 
   if (timeOfDay >= 6 && timeOfDay < 10) scores.whoop += 20;
   if (timeOfDay >= 20 || timeOfDay === 0) { scores.journal += 20; }
-  if (releaseRisk != null && releaseRisk > 0.5) { scores.predictions += 30; }
+  if (_releaseRisk != null && _releaseRisk > 0.5) { scores.predictions += 30; }
 
   const alwaysInclude: ContextBlockName[] = [];
   const optional: Array<{ name: ContextBlockName; score: number }> = [];
