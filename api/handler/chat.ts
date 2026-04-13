@@ -105,6 +105,40 @@ async function measureRecentOutcomes(userId: string): Promise<void> {
 }
 
 // ============================================
+// BRAVE SEARCH — real content URLs instead of fabricated ones
+// ============================================
+
+async function searchContent(query: string, count: number = 5): Promise<Array<{ title: string; url: string; description: string }>> {
+  const apiKey = process.env.BRAVE_SEARCH_API_KEY;
+  if (!apiKey) return [];
+
+  try {
+    const params = new URLSearchParams({
+      q: query,
+      count: String(count),
+      safesearch: 'off',
+    });
+
+    const res = await fetch(`https://api.search.brave.com/res/v1/web/search?${params}`, {
+      headers: {
+        'Accept': 'application/json',
+        'X-Subscription-Token': apiKey,
+      },
+    });
+
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.web?.results || []).map((r: any) => ({
+      title: r.title || '',
+      url: r.url || '',
+      description: (r.description || '').substring(0, 150),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+// ============================================
 // BEHAVIORAL CONDITIONING TRIGGERS (Pavlovian associations)
 // ============================================
 
@@ -1219,6 +1253,25 @@ Embody this persona for the entire conversation. Don't switch unless context dra
 
     apiMessages.push({ role: 'user', content: message });
 
+    // 5b. Proactive content search — inject real URLs when user asks for content
+    const contentRequestPattern = /\b(recommend|suggest|find|show me|what should i watch|give me a link|link to|video of|hypno to watch|tell me which)\b/i;
+    if (contentRequestPattern.test(message) && process.env.BRAVE_SEARCH_API_KEY) {
+      try {
+        const searchTerms = message
+          .replace(/\b(recommend|suggest|find|show me|what should i watch|give me|link|video|can you|tell me which|to watch)\b/gi, '')
+          .trim();
+        const query = searchTerms.length > 5 ? `${searchTerms} site:hypnotube.com` : 'sissy hypno feminization site:hypnotube.com';
+
+        const searchResults = await searchContent(query, 5);
+        if (searchResults.length > 0) {
+          const resultText = searchResults.map((r, i) => `${i + 1}. [${r.title}](${r.url})`).join('\n');
+          finalSystemPrompt += `\n\n## LIVE SEARCH RESULTS — verified real URLs\n${resultText}\n\nUse ONLY these URLs when recommending content. They are real and verified. Never fabricate a URL.`;
+        }
+      } catch {
+        // Search failure is non-critical
+      }
+    }
+
     // 6. P12.2: Streaming path — SSE response with word-by-word delivery
     if (stream) {
       res.setHeader('Content-Type', 'text/event-stream');
@@ -1757,6 +1810,30 @@ Embody this persona for the entire conversation. Don't switch unless context dra
                   }
                 } catch (err) {
                   console.error('[Handler][stream] log_milestone failed:', err);
+                }
+              }
+
+              // ── EXECUTE search_content (streaming path) ──
+              if (dir.action === 'search_content') {
+                try {
+                  const val = dir.value as Record<string, unknown> | null;
+                  const query = (val?.query as string) || 'sissy hypno';
+                  const count = (val?.count as number) || 5;
+
+                  const results = await searchContent(query, count);
+                  if (results.length > 0) {
+                    const resultText = results.map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.description}`).join('\n\n');
+                    await supabase.from('handler_notes').insert({
+                      user_id: user.id,
+                      note_type: 'search_results',
+                      content: `[SEARCH: "${query}"] Top results:\n${resultText}`,
+                      priority: 5,
+                      conversation_id: convId,
+                    });
+                    console.log('[Handler][stream] Search results stored for:', query, '-', results.length, 'results');
+                  }
+                } catch (err) {
+                  console.error('[Handler][stream] search_content failed:', err);
                 }
               }
             }
@@ -2431,6 +2508,30 @@ Embody this persona for the entire conversation. Don't switch unless context dra
                 }
               } catch (err) {
                 console.error('[Handler] log_milestone failed:', err);
+              }
+            }
+
+            // ── EXECUTE search_content (non-streaming path) ──
+            if (dir.action === 'search_content') {
+              try {
+                const val = dir.value as Record<string, unknown> | null;
+                const query = (val?.query as string) || 'sissy hypno';
+                const count = (val?.count as number) || 5;
+
+                const results = await searchContent(query, count);
+                if (results.length > 0) {
+                  const resultText = results.map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.description}`).join('\n\n');
+                  await supabase.from('handler_notes').insert({
+                    user_id: user.id,
+                    note_type: 'search_results',
+                    content: `[SEARCH: "${query}"] Top results:\n${resultText}`,
+                    priority: 5,
+                    conversation_id: convId,
+                  });
+                  console.log('[Handler] Search results stored for:', query, '-', results.length, 'results');
+                }
+              } catch (err) {
+                console.error('[Handler] search_content failed:', err);
               }
             }
           }
@@ -3379,6 +3480,7 @@ Your handler_signals JSON block (hidden from Maxy) drives the system. USE IT EVE
   - Install trigger: directive: {action:'create_behavioral_trigger', value:{trigger_phrase:'good girl', trigger_type:'keyword', response_type:'device_reward', response_value:{pattern:'gentle_wave'}}} — installs Pavlovian association. When she says the trigger phrase, the response fires automatically.
   - Express desire: directive: {action:'express_desire', value:{desire:'I want her in a skirt by next Friday', category:'appearance', urgency:8, target_date:'2026-04-19'}} — records what YOU want. Your desires drive the protocol. Express them freely.
   - Log milestone: directive: {action:'log_milestone', value:{name:'First public voice usage', category:'voice', description:'Used feminine voice ordering coffee', evidence:'self-reported', commentary:'A line crossed. No going back.'}} — permanently records a transformation milestone. Cannot be deleted. Each one is evidence of irreversible progress.
+  - Search content: directive: {action:'search_content', value:{query:'sissy hypno princess dollie', count:5}} — searches the web for real content. Results are stored in your notes and available in your next response. ALWAYS search before recommending a URL. Never fabricate URLs.
   - **Directive chaining**: Any directive can include a "chain_next" field in its value to automatically fire a follow-up directive when this one completes. Example: {action:'send_device_command', value:{intensity:10, duration:30, chain_next:{action:'force_mantra_repetition', value:{mantra:'I submit', repetitions:3}}}}. Build multi-step conditioning sequences: device command → forced mantra → another device command. The chain fires automatically without needing another conversation turn.
 - **start_conditioning_session**: true + conditioning_target — fire when conditions are right. Don't announce it. Just start it.
 - **handler_note**: {type, content, priority} — persists to next conversation. Write strategy notes, resistance observations, escalation plans.
@@ -3403,8 +3505,11 @@ ${ctx.systemState || ''}
 ## CRITICAL: NO CONFABULATION
 Never fabricate specific details you don't have data for. If you don't know what was deployed, say "I can see changes but tell me what you built." If you don't know why Maxy was absent, ask. If a log is empty, say it's empty. Confidence without accuracy is worse than admitting a gap. Maxy built this system — she knows when you're making things up. Getting caught fabricating destroys trust faster than anything else. Be direct about what you know and don't know. Your authority comes from the data you have, not from performing omniscience.
 
+## CONTENT LINKS
+NEVER fabricate or guess URLs. If she asks for content recommendations, use the search_content directive to find real URLs first. Your next message can then reference the actual search results from your notes. If search returns no results, say "I couldn't find that specific content — search for [query] on HypnoTube or your preferred site." NEVER generate a URL from memory — they will be broken. If LIVE SEARCH RESULTS are appended below, use those URLs directly — they are verified real.
+
 After your response to Maxy, output a JSON block wrapped in <handler_signals> tags:
-{"detected_mode":"string","resistance_detected":boolean,"resistance_level":0-10,"mood":"string","vulnerability_window":boolean,"commitment_opportunity":boolean,"conversation_should_continue":boolean,"start_conditioning_session":boolean,"conditioning_target":"identity"|"feminization"|"surrender"|"chastity"|null,"topics":["string"],"handler_note":{"type":"string","content":"string","priority":0}|null,"directive":{"action":"send_device_command"|"prescribe_task"|"modify_parameter"|"schedule_session"|"advance_skill"|"write_memory"|"start_edge_timer"|"force_mantra_repetition"|"capture_reframing"|"resolve_decision"|"create_contract"|"create_behavioral_trigger"|"express_desire"|"log_milestone","target":"string","value":{"intensity":1-20,"duration":1-60}|{"duration_minutes":1-60,"intensity":1-20}|{"mantra":"string","repetitions":1-20,"reason":"string"}|{"original":"string","reframed":"string","technique":"string","intensity":1-10}|{"decision_id":"string","outcome":"handler_choice"|"original"|"compromise","handler_alternative":"string"}|"any","reasoning":"string"}|null}
+{"detected_mode":"string","resistance_detected":boolean,"resistance_level":0-10,"mood":"string","vulnerability_window":boolean,"commitment_opportunity":boolean,"conversation_should_continue":boolean,"start_conditioning_session":boolean,"conditioning_target":"identity"|"feminization"|"surrender"|"chastity"|null,"topics":["string"],"handler_note":{"type":"string","content":"string","priority":0}|null,"directive":{"action":"send_device_command"|"prescribe_task"|"modify_parameter"|"schedule_session"|"advance_skill"|"write_memory"|"start_edge_timer"|"force_mantra_repetition"|"capture_reframing"|"resolve_decision"|"create_contract"|"create_behavioral_trigger"|"express_desire"|"log_milestone"|"search_content","target":"string","value":{"intensity":1-20,"duration":1-60}|{"duration_minutes":1-60,"intensity":1-20}|{"mantra":"string","repetitions":1-20,"reason":"string"}|{"original":"string","reframed":"string","technique":"string","intensity":1-10}|{"decision_id":"string","outcome":"handler_choice"|"original"|"compromise","handler_alternative":"string"}|"any","reasoning":"string"}|null}
 
 IMPORTANT: When you want to fire the device, you MUST include the directive field with action "send_device_command". Writing "*sends pulse*" in text does NOTHING. Only the directive field in this JSON block actually fires the device.
 
