@@ -37,35 +37,48 @@ export function VoiceGate({ onPass }: VoiceGateProps) {
     setTranscribed('');
     setPitch(null);
 
+    // Check for SpeechRecognition first (don't request mic if no speech API)
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setError('Speech recognition not available on this device. Use the typed fallback below.');
+      setRecording(false);
+      recordingRef.current = false;
+      return;
+    }
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      audioContextRef.current = audioContext;
-      const source = audioContext.createMediaStreamSource(stream);
-      const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 2048;
-      source.connect(analyser);
+      // On mobile Chrome, start SpeechRecognition ONLY (no getUserMedia)
+      // getUserMedia conflicts with SpeechRecognition on Android
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-      const buffer = new Float32Array(analyser.fftSize);
-      const pitches: number[] = [];
+      let stream: MediaStream | null = null;
+      let pitches: number[] = [];
 
-      const measurePitch = () => {
-        if (!recordingRef.current) return;
-        analyser.getFloatTimeDomainData(buffer);
-        const detectedPitch = autoCorrelate(buffer, audioContext.sampleRate);
-        if (detectedPitch > 80 && detectedPitch < 400) {
-          pitches.push(detectedPitch);
+      // Desktop: also capture pitch via getUserMedia
+      if (!isMobile) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+          audioContextRef.current = audioContext;
+          const source = audioContext.createMediaStreamSource(stream);
+          const analyser = audioContext.createAnalyser();
+          analyser.fftSize = 2048;
+          source.connect(analyser);
+          const buffer = new Float32Array(analyser.fftSize);
+
+          const measurePitch = () => {
+            if (!recordingRef.current) return;
+            analyser.getFloatTimeDomainData(buffer);
+            const detectedPitch = autoCorrelate(buffer, audioContext.sampleRate);
+            if (detectedPitch > 80 && detectedPitch < 400) {
+              pitches.push(detectedPitch);
+            }
+            if (recordingRef.current) requestAnimationFrame(measurePitch);
+          };
+          measurePitch();
+        } catch {
+          // Pitch detection failed — continue with speech recognition only
         }
-        if (recordingRef.current) requestAnimationFrame(measurePitch);
-      };
-      measurePitch();
-
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (!SpeechRecognition) {
-        setError('Speech recognition not supported in this browser');
-        setRecording(false);
-        recordingRef.current = false;
-        return;
       }
 
       const recognition = new SpeechRecognition();
@@ -78,30 +91,37 @@ export function VoiceGate({ onPass }: VoiceGateProps) {
         setTranscribed(text);
         setRecording(false);
         recordingRef.current = false;
-        stream.getTracks().forEach((t) => t.stop());
+        if (stream) stream.getTracks().forEach((t) => t.stop());
 
-        const avgPitch = pitches.length > 0 ? pitches.reduce((s, p) => s + p, 0) / pitches.length : 0;
+        const avgPitch = pitches.length > 0 ? pitches.reduce((s, p) => s + p, 0) / pitches.length : 150;
         setPitch(avgPitch);
 
-        await verify(text, avgPitch);
+        // On mobile, skip pitch check (no getUserMedia data)
+        await verify(text, isMobile ? 150 : avgPitch);
       };
 
       recognition.onerror = (event: any) => {
-        setError(`Recognition error: ${event.error}`);
+        setError(`Recognition error: ${event.error}. Use the typed fallback below.`);
         setRecording(false);
         recordingRef.current = false;
-        stream.getTracks().forEach((t) => t.stop());
+        if (stream) stream.getTracks().forEach((t) => t.stop());
       };
 
       recognition.onend = () => {
-        setRecording(false);
-        recordingRef.current = false;
+        if (recordingRef.current) {
+          // Ended without result — might need retry
+          setRecording(false);
+          recordingRef.current = false;
+          if (!transcribed) {
+            setError('No speech detected. Try again or use the typed fallback below.');
+          }
+        }
       };
 
       recognitionRef.current = recognition;
       recognition.start();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Microphone access denied');
+      setError(err instanceof Error ? err.message : 'Speech recognition failed. Use the typed fallback below.');
       setRecording(false);
       recordingRef.current = false;
     }
