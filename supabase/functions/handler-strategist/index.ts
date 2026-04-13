@@ -166,29 +166,63 @@ ${notesData?.slice(0, 5).map(n => `- [${n.note_type}] ${n.content?.substring(0, 
 
 Make strategic decisions. Output the JSON object only, no preamble.`
 
-  // Call Claude
-  const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': anthropicKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-opus-4-6',
-      max_tokens: 2000,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }],
-    }),
-  })
+  let responseText = '';
+  const openRouterKey = Deno.env.get('OPENROUTER_API_KEY');
 
-  if (!claudeRes.ok) {
-    const err = await claudeRes.text()
-    throw new Error(`Claude error ${claudeRes.status}: ${err}`)
+  if (openRouterKey) {
+    try {
+      const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${openRouterKey}`,
+          'HTTP-Referer': 'https://becoming-protocol.vercel.app',
+          'X-Title': 'Becoming Protocol Strategist',
+        },
+        body: JSON.stringify({
+          model: 'nousresearch/hermes-3-llama-3.1-405b',
+          max_tokens: 2000,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+        }),
+      });
+
+      if (orRes.ok) {
+        const orData = await orRes.json();
+        responseText = orData.choices?.[0]?.message?.content || '';
+        console.log('[Strategist] Used OpenRouter (unrestricted)');
+      }
+    } catch (err) {
+      console.error('[Strategist] OpenRouter failed, falling back to Claude:', err);
+    }
   }
 
-  const claudeData = await claudeRes.json()
-  const responseText = claudeData.content?.[0]?.type === 'text' ? claudeData.content[0].text : ''
+  if (!responseText) {
+    const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': anthropicKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-opus-4-6',
+        max_tokens: 2000,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+    });
+
+    if (!claudeRes.ok) {
+      const err = await claudeRes.text();
+      throw new Error(`Claude error ${claudeRes.status}: ${err}`);
+    }
+
+    const claudeData = await claudeRes.json();
+    responseText = claudeData.content?.[0]?.type === 'text' ? claudeData.content[0].text : '';
+  }
 
   // Extract JSON from response
   const jsonMatch = responseText.match(/\{[\s\S]*\}/)

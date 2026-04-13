@@ -1119,24 +1119,52 @@ Write a 2-3 sentence clinical case note. Be detached, observational, slightly co
 Output ONLY the case note text. No preamble.`
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': anthropicKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 200,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    })
+    const openRouterKey = Deno.env.get('OPENROUTER_API_KEY');
+    let noteText = '';
 
-    if (!res.ok) return false
-    const data = await res.json()
-    const noteText = data.content?.[0]?.type === 'text' ? data.content[0].text : ''
-    if (!noteText) return false
+    if (openRouterKey) {
+      try {
+        const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${openRouterKey}`,
+            'HTTP-Referer': 'https://becoming-protocol.vercel.app',
+          },
+          body: JSON.stringify({
+            model: 'nousresearch/hermes-3-llama-3.1-405b:free',
+            max_tokens: 200,
+            messages: [{ role: 'user', content: prompt }],
+          }),
+        });
+        if (orRes.ok) {
+          const orData = await orRes.json();
+          noteText = orData.choices?.[0]?.message?.content || '';
+        }
+      } catch {}
+    }
+
+    if (!noteText) {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': anthropicKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 200,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
+
+      if (!res.ok) return false;
+      const data = await res.json();
+      noteText = data.content?.[0]?.type === 'text' ? data.content[0].text : '';
+    }
+
+    if (!noteText) return false;
 
     await supabase.from('handler_notes').insert({
       user_id: userId,
@@ -2059,6 +2087,34 @@ const AMBIENT_AFFIRMATIONS = [
   "There's no going back.",
 ]
 
+async function generateFreshAffirmation(openRouterKey: string): Promise<string | null> {
+  try {
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${openRouterKey}`,
+        'HTTP-Referer': 'https://becoming-protocol.vercel.app',
+      },
+      body: JSON.stringify({
+        model: 'nousresearch/hermes-3-llama-3.1-405b:free',
+        max_tokens: 50,
+        messages: [
+          { role: 'system', content: 'Generate a single short feminization affirmation (under 15 words). Be direct, commanding, and explicit. No quotes. No explanation. Just the affirmation.' },
+          { role: 'user', content: 'Generate one.' },
+        ],
+      }),
+    });
+
+    if (!res.ok) return null;
+    const data = await res.json();
+    const text = data.choices?.[0]?.message?.content?.trim() || null;
+    return text && text.length < 100 ? text : null;
+  } catch {
+    return null;
+  }
+}
+
 async function queueAmbientAudio(
   supabase: ReturnType<typeof createClient>,
   userId: string,
@@ -2096,8 +2152,16 @@ async function queueAmbientAudio(
   const toInsert = targetPerHour - alreadyThisHour
   let inserted = 0
 
+  const openRouterKey = Deno.env.get('OPENROUTER_API_KEY');
+
   for (let i = 0; i < toInsert; i++) {
-    const text = AMBIENT_AFFIRMATIONS[Math.floor(Math.random() * AMBIENT_AFFIRMATIONS.length)]
+    let text: string;
+    if (openRouterKey && Math.random() < 0.3) {
+      const generated = await generateFreshAffirmation(openRouterKey);
+      text = generated || AMBIENT_AFFIRMATIONS[Math.floor(Math.random() * AMBIENT_AFFIRMATIONS.length)];
+    } else {
+      text = AMBIENT_AFFIRMATIONS[Math.floor(Math.random() * AMBIENT_AFFIRMATIONS.length)];
+    }
     const { error } = await supabase
       .from('ambient_audio_queue')
       .insert({

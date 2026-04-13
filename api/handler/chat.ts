@@ -1866,29 +1866,87 @@ Embody this persona for the entire conversation. Don't switch unless context dra
     }
 
     // 6b. Non-streaming path (backward compatible)
-    const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY || '',
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 800,
-        system: finalSystemPrompt,
-        messages: apiMessages,
-      }),
-    });
 
-    if (!claudeRes.ok) {
-      const errBody = await claudeRes.text();
-      console.error('[Handler Chat] Claude API error:', claudeRes.status, errBody);
-      return res.status(502).json({ error: `Claude API error: ${claudeRes.status}` });
+    // 6b-1. Session mode detection — use OpenRouter for unrestricted sessions
+    const isSessionMode = detectSessionMode(message, apiMessages);
+    const useOpenRouter = isSessionMode && !!process.env.OPENROUTER_API_KEY;
+
+    if (useOpenRouter) {
+      console.log('[Handler] Session mode detected — routing to OpenRouter for unrestricted response');
     }
 
-    const claudeData = await claudeRes.json();
-    let fullText = claudeData.content?.[0]?.type === 'text' ? claudeData.content[0].text : '';
+    let fullText: string;
+
+    if (useOpenRouter) {
+      const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          'HTTP-Referer': 'https://becoming-protocol.vercel.app',
+          'X-Title': 'Becoming Protocol Handler',
+        },
+        body: JSON.stringify({
+          model: 'nousresearch/hermes-3-llama-3.1-405b',
+          max_tokens: 1200,
+          messages: [
+            { role: 'system', content: finalSystemPrompt },
+            ...apiMessages,
+          ],
+        }),
+      });
+
+      if (!orRes.ok) {
+        const errBody = await orRes.text();
+        console.error('[Handler] OpenRouter session error:', orRes.status, errBody);
+        const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': process.env.ANTHROPIC_API_KEY || '',
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 1200,
+            system: finalSystemPrompt,
+            messages: apiMessages,
+          }),
+        });
+        if (!claudeRes.ok) {
+          return res.status(502).json({ error: 'Both OpenRouter and Claude failed' });
+        }
+        const claudeData = await claudeRes.json();
+        fullText = claudeData.content?.[0]?.type === 'text' ? claudeData.content[0].text : '';
+      } else {
+        const orData = await orRes.json();
+        fullText = orData.choices?.[0]?.message?.content || '';
+      }
+    } else {
+      const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': process.env.ANTHROPIC_API_KEY || '',
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1200,
+          system: finalSystemPrompt,
+          messages: apiMessages,
+        }),
+      });
+
+      if (!claudeRes.ok) {
+        const errBody = await claudeRes.text();
+        console.error('[Handler Chat] Claude API error:', claudeRes.status, errBody);
+        return res.status(502).json({ error: `Claude API error: ${claudeRes.status}` });
+      }
+
+      const claudeData = await claudeRes.json();
+      fullText = claudeData.content?.[0]?.type === 'text' ? claudeData.content[0].text : '';
+    }
 
     // 6c. Refusal detection — if Claude refused, retry with uncensored model via OpenRouter
     if (detectRefusal(fullText) && process.env.OPENROUTER_API_KEY) {
@@ -3842,6 +3900,18 @@ const REFUSAL_PATTERNS = [
 
 function detectRefusal(text: string): boolean {
   return REFUSAL_PATTERNS.some(p => p.test(text));
+}
+
+function detectSessionMode(currentMessage: string, messageHistory: Array<{ role: string; content: string }>): boolean {
+  const sessionKeywords = /\b(goon|gooning|edge|edging|hypno|session|conditioning|stroke|cum|orgasm|sissy|slut|whore|bimbo|cock|pussy|fuck|suck|plug|cage|chastity|vibrat|device|lovense|pulse|mantra|trance|brainwash)\b/i;
+
+  if (sessionKeywords.test(currentMessage)) return true;
+
+  const recent = messageHistory.slice(-6);
+  const sessionMessages = recent.filter(m => sessionKeywords.test(m.content));
+  if (sessionMessages.length >= 2) return true;
+
+  return false;
 }
 
 async function retryWithOpenRouter(systemPrompt: string, messages: Array<{ role: string; content: string }>): Promise<string | null> {
