@@ -553,7 +553,81 @@ async function complianceCheck(
     } catch (_) { /* non-critical */ }
   }
 
-  return { checked, escalated, deescalated, actions, ambient_queued: ambientQueued, spontaneous_outreach: spontaneous, random_rewards: rewardsGiven, boundary_pushes: boundaryPushes, pattern_exploits: patternExploits }
+  // ── BIOMETRIC DEVICE AUTO-ADJUST ──
+  let bioAdjustments = 0
+  for (const state of states) {
+    try {
+      const adjusted = await biometricDeviceAutoAdjust(supabase, state.user_id)
+      if (adjusted) bioAdjustments++
+    } catch (_) { /* non-critical */ }
+  }
+
+  return { checked, escalated, deescalated, actions, ambient_queued: ambientQueued, spontaneous_outreach: spontaneous, random_rewards: rewardsGiven, boundary_pushes: boundaryPushes, pattern_exploits: patternExploits, bio_adjustments: bioAdjustments }
+}
+
+// ============================================
+// BIOMETRIC DEVICE AUTO-ADJUST
+// ============================================
+// During active sessions (recent biometric data), auto-adjusts device
+// intensity based on heart rate trends. Backs off on HR spikes (edge
+// maintenance), escalates on HR drops (arousal recovery).
+
+async function biometricDeviceAutoAdjust(supabase: any, userId: string): Promise<boolean> {
+  const recentCutoff = new Date(Date.now() - 180000).toISOString()
+  const { data: recentBio } = await supabase
+    .from('session_biometrics')
+    .select('avg_heart_rate, max_heart_rate, created_at')
+    .eq('user_id', userId)
+    .gte('created_at', recentCutoff)
+    .order('created_at', { ascending: false })
+    .limit(5)
+
+  if (!recentBio || recentBio.length < 2) return false
+
+  const twoMinAgo = new Date(Date.now() - 120000).toISOString()
+  const { count: recentAdjust } = await supabase
+    .from('handler_directives')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .like('reasoning', '%BIO-ADJUST%')
+    .gte('created_at', twoMinAgo)
+
+  if ((recentAdjust || 0) > 0) return false
+
+  const latest = recentBio[0]
+  const previous = recentBio[1]
+  const hrDelta = (latest.avg_heart_rate || 0) - (previous.avg_heart_rate || 0)
+  const currentHR = latest.avg_heart_rate || 70
+
+  let intensity: number
+  let reasoning: string
+
+  if (hrDelta > 10) {
+    intensity = Math.max(3, 8 - Math.floor(hrDelta / 5))
+    reasoning = `[BIO-ADJUST] HR spiking (+${hrDelta}bpm at ${currentHR}) — reducing to maintain edge`
+  } else if (hrDelta < -5) {
+    intensity = Math.min(18, 10 + Math.abs(Math.floor(hrDelta / 3)))
+    reasoning = `[BIO-ADJUST] HR dropping (${hrDelta}bpm at ${currentHR}) — escalating`
+  } else if (currentHR > 130) {
+    intensity = 6
+    reasoning = `[BIO-ADJUST] HR elevated (${currentHR}bpm) — gentle maintenance`
+  } else if (currentHR < 80) {
+    intensity = 14
+    reasoning = `[BIO-ADJUST] HR low (${currentHR}bpm) — strong push`
+  } else {
+    return false
+  }
+
+  await supabase.from('handler_directives').insert({
+    user_id: userId,
+    action: 'send_device_command',
+    target: 'lovense',
+    value: { intensity, duration: 60 },
+    priority: 'immediate',
+    reasoning,
+  })
+
+  return true
 }
 
 // ============================================

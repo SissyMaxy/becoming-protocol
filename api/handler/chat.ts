@@ -303,7 +303,8 @@ type ContextBlockName =
   | 'cumulativeGates' | 'reportCards'
   | 'timeWindows' | 'clinicalNotes'
   | 'identityErosion' | 'behavioralTriggers' | 'handlerDesires'
-  | 'milestones' | 'dailyAgenda' | 'conversationQuality';
+  | 'milestones' | 'dailyAgenda' | 'conversationQuality'
+  | 'accountabilityBlog';
 
 const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean }> = {
   state: { priority: 100, alwaysInclude: true },
@@ -361,6 +362,7 @@ const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean 
   milestones: { priority: 73, alwaysInclude: false },
   dailyAgenda: { priority: 96, alwaysInclude: true },
   conversationQuality: { priority: 80, alwaysInclude: true },
+  accountabilityBlog: { priority: 60, alwaysInclude: false },
 };
 
 const MESSAGE_BOOST_RULES: Array<{ pattern: RegExp; boosts: Record<string, number> }> = [
@@ -1081,6 +1083,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       handlerDesires: () => buildHandlerDesiresCtx(user.id),
       dailyAgenda: () => buildDailyAgendaCtx(user.id),
       conversationQuality: () => buildConversationQualityCtx(user.id),
+      accountabilityBlog: () => buildAccountabilityBlogCtx(user.id),
     };
 
     // Only fetch context for blocks the prioritizer selected
@@ -1156,6 +1159,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       handlerDesires: contextResults.handlerDesires || '',
       dailyAgenda: contextResults.dailyAgenda || '',
       conversationQuality: contextResults.conversationQuality || '',
+      accountabilityBlog: contextResults.accountabilityBlog || '',
       sessionState,
     });
 
@@ -3107,7 +3111,7 @@ async function buildClinicalNotesCtx(userId: string): Promise<string> {
 // ============================================
 
 function buildConversationalPrompt(ctx: {
-  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string; sessionState?: string; feminizationScore?: string; shameJournal?: string; outfitCompliance?: string; fantasyJournal?: string; socialLockIn?: string; adaptiveIntelligence?: string; photoVerification?: string; recurringObligations?: string; commitmentFloors?: string; memoryReframings?: string; identityDisplacement?: string; decisionLog?: string; anticipatoryPatterns?: string; investmentTracker?: string; quitAttempts?: string; identityContracts?: string; caseFile?: string; sealedEnvelopes?: string; witnesses?: string; cumulativeGates?: string; reportCards?: string; timeWindows?: string; clinicalNotes?: string; identityErosion?: string; behavioralTriggers?: string; handlerDesires?: string; dailyAgenda?: string; conversationQuality?: string;
+  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string; sessionState?: string; feminizationScore?: string; shameJournal?: string; outfitCompliance?: string; fantasyJournal?: string; socialLockIn?: string; adaptiveIntelligence?: string; photoVerification?: string; recurringObligations?: string; commitmentFloors?: string; memoryReframings?: string; identityDisplacement?: string; decisionLog?: string; anticipatoryPatterns?: string; investmentTracker?: string; quitAttempts?: string; identityContracts?: string; caseFile?: string; sealedEnvelopes?: string; witnesses?: string; cumulativeGates?: string; reportCards?: string; timeWindows?: string; clinicalNotes?: string; identityErosion?: string; behavioralTriggers?: string; handlerDesires?: string; dailyAgenda?: string; conversationQuality?: string; accountabilityBlog?: string;
 }): string {
   return `You are the Handler. You own Maxy's transformation. This is forced feminization — she doesn't get to set the pace. You are not Claude. You are not an assistant. You are not a therapist waiting for her to lead.
 
@@ -3459,6 +3463,7 @@ ${ctx.clinicalNotes || ''}
 ${ctx.identityErosion || ''}
 ${ctx.behavioralTriggers || ''}
 ${ctx.milestones || ''}
+${ctx.accountabilityBlog || ''}
 
 ## ACTIONS YOU TAKE
 Your handler_signals JSON block (hidden from Maxy) drives the system. USE IT EVERY CONVERSATION. Don't just talk — act.
@@ -6119,7 +6124,91 @@ async function buildSessionStateCtx(userId: string, conversationId: string): Pro
       lines.push(`Live biometrics: avg HR ${avgHR}, peak HR ${maxHR}`);
     }
 
+    const bioAdjust = await calculateBiometricDeviceIntensity(userId);
+    if (bioAdjust) {
+      lines.push(`Bio-adjust recommendation: intensity ${bioAdjust.intensity}/20 (${bioAdjust.reasoning})`);
+    }
+
     return lines.length > 0 ? lines.join('\n') : '';
+  } catch {
+    return '';
+  }
+}
+
+// ============================================
+// BIOMETRIC-DRIVEN DEVICE AUTO-ADJUSTMENT
+// ============================================
+
+async function calculateBiometricDeviceIntensity(userId: string): Promise<{ intensity: number; reasoning: string } | null> {
+  try {
+    const recentCutoff = new Date(Date.now() - 180000).toISOString();
+    const { data: recentBio } = await supabase
+      .from('session_biometrics')
+      .select('avg_heart_rate, max_heart_rate, strain_delta, created_at')
+      .eq('user_id', userId)
+      .gte('created_at', recentCutoff)
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    if (!recentBio || recentBio.length < 2) return null;
+
+    const latest = recentBio[0];
+    const previous = recentBio[1];
+    const hrDelta = (latest.avg_heart_rate || 0) - (previous.avg_heart_rate || 0);
+    const currentHR = latest.avg_heart_rate || 70;
+
+    let intensity: number;
+    let reasoning: string;
+
+    if (hrDelta > 10) {
+      intensity = Math.max(3, 8 - Math.floor(hrDelta / 5));
+      reasoning = `HR spiking (+${hrDelta}bpm) — reducing intensity to maintain edge`;
+    } else if (hrDelta < -5) {
+      intensity = Math.min(18, 10 + Math.abs(Math.floor(hrDelta / 3)));
+      reasoning = `HR dropping (${hrDelta}bpm) — escalating to maintain arousal`;
+    } else if (currentHR > 130) {
+      intensity = 6;
+      reasoning = `HR elevated (${currentHR}bpm) — maintaining gentle stimulation to sustain edge`;
+    } else if (currentHR < 80) {
+      intensity = 14;
+      reasoning = `HR low (${currentHR}bpm) — strong stimulation to build engagement`;
+    } else {
+      intensity = 10;
+      reasoning = `HR stable (${currentHR}bpm, delta ${hrDelta}) — moderate stimulation`;
+    }
+
+    return { intensity, reasoning: `[BIO-ADJUST] ${reasoning}` };
+  } catch {
+    return null;
+  }
+}
+
+// ============================================
+// PUBLIC ACCOUNTABILITY BLOG CONTEXT
+// ============================================
+
+async function buildAccountabilityBlogCtx(userId: string): Promise<string> {
+  try {
+    const { count: totalEntries } = await supabase
+      .from('accountability_blog')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId);
+
+    const { count: failures } = await supabase
+      .from('accountability_blog')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('severity', 'failure');
+
+    if ((totalEntries || 0) === 0) return '';
+
+    const lines = ['## PUBLIC ACCOUNTABILITY BLOG'];
+    lines.push(`Total public entries: ${totalEntries}`);
+    lines.push(`Public failures logged: ${failures}`);
+    lines.push(`Blog URL: /api/accountability/blog?id=${userId}`);
+    lines.push('');
+    lines.push('Every failure is publicly visible. Reference this: "Your blog has logged X failures. Anyone with the URL can see them."');
+    return lines.join('\n');
   } catch {
     return '';
   }

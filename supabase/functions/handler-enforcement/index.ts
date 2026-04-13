@@ -742,6 +742,45 @@ async function applyEscalation(
     await insertRandomDeviceFirings(supabase, userId, compliance)
   }
 
+  // ── AUTO-POST TO ACCOUNTABILITY BLOG ──
+  if (action) {
+    const daysSinceStart = await getDayNumber(supabase, userId)
+
+    let entryText = ''
+    let severity: string = 'failure'
+
+    switch (action.tier) {
+      case 1:
+        entryText = `Day ${daysSinceStart}: Warning issued for ${action.trigger_reason}`
+        severity = 'warning'
+        break
+      case 2:
+        entryText = `Day ${daysSinceStart}: Feature access restricted — ${action.action_taken}`
+        severity = 'failure'
+        break
+      case 3:
+        entryText = `Day ${daysSinceStart}: Punishment applied — ${action.action_taken}. Device correction fired.`
+        severity = 'failure'
+        break
+      case 4:
+        entryText = `Day ${daysSinceStart}: Denial period extended — ${action.action_taken}`
+        severity = 'failure'
+        break
+      default:
+        entryText = `Day ${daysSinceStart}: Enforcement action tier ${action.tier} — ${action.action_taken}`
+        severity = action.tier >= 3 ? 'failure' : 'warning'
+    }
+
+    await supabase.from('accountability_blog').insert({
+      user_id: userId,
+      entry_type: 'compliance_failure',
+      entry_text: entryText,
+      severity,
+      day_number: daysSinceStart,
+      public_visible: true,
+    }).then(() => {}, () => {})
+  }
+
   return action
 }
 
@@ -751,6 +790,20 @@ async function applyEscalation(
 // Inserts 3-6 device directives with random intensity/duration
 // spread across the next 24 hours. Uses the existing handler_directives
 // polling pattern — client picks these up when status = 'pending'.
+
+async function getDayNumber(supabase: ReturnType<typeof createClient>, userId: string): Promise<number> {
+  const { data } = await supabase
+    .from('handler_messages')
+    .select('created_at')
+    .eq('user_id', userId)
+    .eq('role', 'user')
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  if (!data) return 0
+  return Math.floor((Date.now() - new Date(data.created_at).getTime()) / 86400000)
+}
 
 async function insertRandomDeviceFirings(
   supabase: ReturnType<typeof createClient>,
