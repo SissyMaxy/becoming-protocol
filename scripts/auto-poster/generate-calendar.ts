@@ -14,6 +14,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { supabase } from './config';
 import { fullSlopCheck } from './slop-detector';
 import { extractSafeText } from './refusal-filter';
+import { getVoiceRules } from './voice';
 
 const USER_ID = process.env.USER_ID || '';
 const MAX_QUALITY_RETRIES = 3;
@@ -191,7 +192,7 @@ async function generatePost(
     const response = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: slot.maxTokens,
-      system: MAXY_VOICE_POST,
+      system: MAXY_VOICE_POST + getVoiceRules(),
       messages: [{
         role: 'user',
         content: `${slot.prompt}\n\nOutput ONLY the post text, nothing else.`,
@@ -227,7 +228,7 @@ async function generatePost(
       const response = await anthropic.messages.create({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: slot.maxTokens,
-        system: MAXY_VOICE_POST,
+        system: MAXY_VOICE_POST + getVoiceRules(),
         messages: [{
           role: 'user',
           content: `${slot.prompt}\n\n⚠️ Your previous version was rejected: "${currentText}"\n\nIssues: ${result.retryFeedback}\n\nWrite something COMPLETELY different — different words, different angle, different structure. Output ONLY the post text.`,

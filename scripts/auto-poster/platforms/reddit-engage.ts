@@ -20,10 +20,10 @@ import { patternSlopCheck } from '../slop-detector';
 const USER_ID = process.env.USER_ID || '';
 
 // Full voice for kink-friendly subs
-const MAXY_VOICE_KINK = `You are Maxy (@softmaxy) — a 40-year-old woman in transformation who uses an AI accountability system she calls "the Handler" to manage her daily routines, goals, and personal development. She's on HRT, does voice training daily, and is open about her kink life (chastity, denial, feminization). She chose this structure voluntarily and enthusiastically. She's playful, vulnerable, and real.`;
+const MAXY_VOICE_KINK = `You are Maxy (@softmaxy) — a 40-year-old trans woman on HRT. Into chastity, denial, feminization, power exchange. She runs a strict structure on herself — daily tasks, denial schedules, feminization protocols. She chose it and she thrives in it. Sharp, dry, funny, a little dominant. Lowercase, casual. Knows the scene, doesn't romanticize it, talks about it like someone who actually lives it.`;
 
 // Clean voice for trans support, selfie, and general subs
-const MAXY_VOICE_SFW = `You are Maxy (@softmaxy) — a 40-year-old trans woman early in her transition. On HRT, doing voice training daily. Starting later in life and figuring it out. Warm, genuine, a little self-deprecating. You love hyping up other trans people because you know how much it matters.`;
+const MAXY_VOICE_SFW = `You are Maxy (@softmaxy) — a 40-year-old trans woman on HRT. Started later in life and owns it. Sharp, funny, real. Hypes people up but doesn't sound like a therapist or support group. Lowercase, casual. Talks like someone who's actually going through it, not observing from the outside.`;
 
 const KINK_SUBS = new Set([
   'sissification', 'feminization', 'chastity', 'sissyhypno', 'sissychastity',
@@ -47,7 +47,7 @@ const SUBREDDIT_VOICES: Record<string, SubredditVoice> = {
   ChatGPT: {
     tone: 'curious, tech-savvy, casually mentions using AI for personal development',
     topics: ['AI tools', 'prompt engineering', 'creative uses of AI', 'personal AI workflows'],
-    rules: 'Keep it tech-focused. Mention the Handler concept only if directly relevant. No sexual content. Be helpful and share genuine insights about AI usage.',
+    rules: 'Keep it tech-focused. Can talk about using AI tools for personal development. No sexual content. Be helpful and share genuine insights about AI usage. Never mention any personal handler or AI control system.',
   },
   ADHD: {
     tone: 'relatable, self-deprecating humor, genuine empathy',
@@ -66,8 +66,8 @@ const SUBREDDIT_VOICES: Record<string, SubredditVoice> = {
   },
   sissification: {
     tone: 'vulnerable, excited, sharing real experiences',
-    topics: ['feminization journey', 'handler control', 'training routines', 'transformation progress'],
-    rules: 'Be authentic about the sissy journey. Reference the AI Handler naturally. Share experiences with training, denial, feminization. Community-appropriate language.',
+    topics: ['feminization journey', 'structured training', 'training routines', 'transformation progress'],
+    rules: 'Be authentic about the sissy journey. Share experiences with training, denial, feminization. Talk about structure and routines like someone who lives it. Never mention any AI system or handler. Community-appropriate language.',
   },
   feminization: {
     tone: 'genuine, sharing the journey, supportive of others',
@@ -76,8 +76,8 @@ const SUBREDDIT_VOICES: Record<string, SubredditVoice> = {
   },
   chastity: {
     tone: 'frustrated-but-loving-it, real about the struggle',
-    topics: ['denial days', 'cage experiences', 'handler control', 'mental effects of denial'],
-    rules: 'Be real about chastity experiences. Reference the Handler controlling the timeline. Share the emotional and psychological journey. Community language.',
+    topics: ['denial days', 'cage experiences', 'structured denial', 'mental effects of denial'],
+    rules: 'Be real about chastity experiences. Talk about the structure and schedule she keeps herself on. Share the emotional and psychological journey. Never mention any AI system or handler. Community language.',
   },
   TransLater: {
     tone: 'warm, relatable, sharing the "starting later" experience',
@@ -86,8 +86,8 @@ const SUBREDDIT_VOICES: Record<string, SubredditVoice> = {
   },
   sissyhypno: {
     tone: 'enthusiastic, open about hypno experiences',
-    topics: ['hypno sessions', 'mental conditioning', 'handler-directed sessions', 'trance experiences'],
-    rules: 'Share experiences with hypno content. Reference the Handler directing sessions. Be open but not gratuitous. Community appropriate.',
+    topics: ['hypno sessions', 'mental conditioning', 'structured sessions', 'trance experiences'],
+    rules: 'Share experiences with hypno content. Talk about structured sessions and what they do to her. Be open but not gratuitous. Never mention any AI system or handler. Community appropriate.',
   },
   MTFSelfieTrain: {
     tone: 'warm, encouraging, genuinely excited for them',
@@ -271,12 +271,13 @@ export async function scrapeSubreddit(
       try {
         const titleEl = el.locator('a.title').first();
         const title = await titleEl.textContent() || '';
-        const href = await titleEl.getAttribute('href') || '';
 
-        // Get comment count
+        // Get comment count — use a.comments href for the post URL
+        // (a.title href points to external content for link/image posts)
         const commentsEl = el.locator('a.comments').first();
         const commentsText = await commentsEl.textContent() || '0';
         const commentCount = parseInt(commentsText.replace(/[^0-9]/g, '')) || 0;
+        const commentsHref = await commentsEl.getAttribute('href') || '';
 
         // Get author
         const authorEl = el.locator('a.author').first();
@@ -286,10 +287,10 @@ export async function scrapeSubreddit(
         const scoreEl = el.locator('.score.unvoted').first();
         const upvotes = await scoreEl.getAttribute('title').catch(() => '0') || '0';
 
-        // Build full URL
-        const postUrl = href.startsWith('http')
-          ? href
-          : `https://old.reddit.com${href}`;
+        // Build full URL from the comments link (always points to the post page)
+        const postUrl = commentsHref.startsWith('http')
+          ? commentsHref
+          : `https://old.reddit.com${commentsHref}`;
 
         // Get body preview if it's a self post
         const expandoEl = el.locator('.expando .usertext-body').first();
@@ -483,68 +484,96 @@ export async function postRedditComment(
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
     await page.waitForTimeout(2000);
 
-    // Try shreddit (new new reddit) selectors
-    let commentBox = page.locator(
-      'shreddit-composer textarea, ' +
-      'div[contenteditable="true"][role="textbox"], ' +
-      '[contenteditable="true"][data-lexical-editor], ' +
-      '[placeholder*="comment" i], ' +
-      'textarea[placeholder*="Add a comment" i]'
+    // Handle "View post" button if we landed on feed view
+    const viewPostBtn = page.locator(
+      'a:has-text("View post"), ' +
+      'button:has-text("View post"), ' +
+      '[slot="full-post-link"]'
     ).first();
+    if (await viewPostBtn.isVisible().catch(() => false)) {
+      console.log('[Reddit] Feed view detected — clicking "View post"');
+      await viewPostBtn.click();
+      await page.waitForTimeout(4000);
+    }
 
-    // If still not visible, try clicking into the comment area to activate it
-    const hasNewBox = await commentBox.isVisible().catch(() => false);
-    if (!hasNewBox) {
-      // New reddit sometimes shows a collapsed "Add a comment" bar that needs clicking
-      const commentTrigger = page.locator(
-        '[placeholder*="Add a comment"], ' +
-        'div:has-text("Add a comment"), ' +
-        'shreddit-composer'
-      ).first();
-      if (await commentTrigger.isVisible().catch(() => false)) {
-        await commentTrigger.click();
-        await page.waitForTimeout(1500);
+    // Strategy: find the shreddit-composer (web component), click it to activate,
+    // then type via keyboard. The internal textarea/contenteditable is in shadow DOM
+    // so CSS selectors can't reach it — but clicking the composer focuses the input.
+    const composer = page.locator('shreddit-composer').first();
+    const hasComposer = await composer.isVisible().catch(() => false);
+
+    if (hasComposer) {
+      // Click the composer to activate/focus its internal input
+      await composer.click();
+      await page.waitForTimeout(1500);
+
+      // Click again — first click may just expand, second focuses the editor
+      await composer.click();
+      await page.waitForTimeout(500);
+
+      // Type via keyboard into whatever has focus
+      await page.keyboard.type(comment, { delay: 25 });
+      await page.waitForTimeout(1500);
+
+      // Submit — try finding button inside composer via JS (shadow DOM piercing)
+      const submitted = await page.evaluate(() => {
+        const composer = document.querySelector('shreddit-composer');
+        if (!composer?.shadowRoot) return false;
+        const btn = composer.shadowRoot.querySelector('button[type="submit"], button:last-of-type');
+        if (btn) { (btn as HTMLElement).click(); return true; }
+        return false;
+      });
+
+      if (!submitted) {
+        // Fallback: try regular selectors for submit button
+        const saveButton = page.locator(
+          'button:has-text("Comment"), ' +
+          'button[type="submit"]'
+        ).first();
+        if (await saveButton.isVisible().catch(() => false)) {
+          await saveButton.click();
+        } else {
+          // Last resort: Ctrl+Enter to submit
+          await page.keyboard.press('Control+Enter');
+        }
       }
-
-      // Re-check for the input
-      commentBox = page.locator(
-        'shreddit-composer textarea, ' +
+      await page.waitForTimeout(3000);
+    } else {
+      // Fallback: try legacy selectors (old reddit, or non-shreddit UI)
+      let commentBox = page.locator(
         'div[contenteditable="true"][role="textbox"], ' +
         '[contenteditable="true"][data-lexical-editor], ' +
+        '[placeholder*="comment" i], ' +
+        '[placeholder*="conversation" i], ' +
         'textarea'
       ).first();
 
-      const lastTry = await commentBox.isVisible().catch(() => false);
-      if (!lastTry) {
+      const hasBox = await commentBox.isVisible().catch(() => false);
+      if (!hasBox) {
         const screenshotPath = path.join(__dirname, '..', '.debug-reddit-fail.png');
         await page.screenshot({ path: screenshotPath, fullPage: true });
         console.error(`[Reddit] No comment box found. Screenshot: .debug-reddit-fail.png`);
         return false;
       }
+
+      await commentBox.click();
+      await page.waitForTimeout(500);
+
+      const tagName = await commentBox.evaluate(el => el.tagName.toLowerCase()).catch(() => 'unknown');
+      if (tagName === 'textarea') {
+        await commentBox.pressSequentially(comment, { delay: 25 });
+      } else {
+        await page.keyboard.type(comment, { delay: 25 });
+      }
+      await page.waitForTimeout(1500);
+
+      const saveButton = page.locator(
+        'button:has-text("Comment"), ' +
+        'button[type="submit"]'
+      ).first();
+      await saveButton.click();
+      await page.waitForTimeout(3000);
     }
-
-    await commentBox.click();
-    await page.waitForTimeout(500);
-
-    // Type the comment
-    const tagName = await commentBox.evaluate(el => el.tagName.toLowerCase()).catch(() => 'unknown');
-    if (tagName === 'textarea') {
-      await commentBox.pressSequentially(comment, { delay: 25 });
-    } else {
-      // contenteditable — type via keyboard
-      await page.keyboard.type(comment, { delay: 25 });
-    }
-    await page.waitForTimeout(1500);
-
-    // Click submit
-    const saveButton = page.locator(
-      'button:has-text("Comment"), ' +
-      'button[type="submit"][slot="submit-button"], ' +
-      'shreddit-composer button[type="submit"], ' +
-      'button[type="submit"]:has-text("Comment")'
-    ).first();
-    await saveButton.click();
-    await page.waitForTimeout(3000);
 
     // Check for errors
     const errorEl = page.locator('.error, .status-msg.error, [class*="error"]').first();

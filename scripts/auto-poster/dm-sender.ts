@@ -13,9 +13,9 @@ import { supabase, PLATFORMS } from './config';
 interface PendingReply {
   id: string;
   platform: string;
-  fan_identifier: string;
-  last_fan_message: string;
-  response_text: string;
+  subscriber_id: string;
+  incoming_message: string;
+  handler_response: string;
 }
 
 async function sendFanslyDM(fanId: string, message: string): Promise<boolean> {
@@ -116,14 +116,85 @@ async function sendOnlyFansDM(fanId: string, message: string): Promise<boolean> 
   }
 }
 
+async function sendTwitterDM(fanId: string, message: string): Promise<boolean> {
+  const config = PLATFORMS.twitter;
+  if (!config.enabled) return false;
+
+  let context: BrowserContext | null = null;
+  try {
+    context = await chromium.launchPersistentContext(config.profileDir, {
+      headless: true,
+      viewport: { width: 1280, height: 800 },
+      args: ['--disable-blink-features=AutomationControlled'],
+    });
+
+    const page = context.pages()[0] || await context.newPage();
+    await page.goto('https://x.com/messages', { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(5000);
+
+    // Handle PIN gate
+    if (page.url().includes('pin/recovery') || page.url().includes('chat/pin')) {
+      const passcode = process.env.TWITTER_DM_PIN;
+      if (passcode && passcode.length === 4) {
+        for (const digit of passcode) {
+          await page.keyboard.press(digit);
+          await page.waitForTimeout(200);
+        }
+        await page.waitForTimeout(5000);
+      }
+    }
+
+    // Click into the conversation by name
+    const convoLink = page.locator(`text=${fanId}`).first();
+    const hasConvo = await convoLink.isVisible().catch(() => false);
+    if (!hasConvo) {
+      console.error(`[DM-Send/Twitter] Conversation not found for: ${fanId}`);
+      return false;
+    }
+    await convoLink.click();
+    await page.waitForTimeout(3000);
+
+    // Type into the message input — new Twitter chat UI
+    // Try multiple selectors, then fall back to keyboard typing
+    const msgBox = page.locator('[data-testid="dmComposerTextInput"], [role="textbox"], [contenteditable="true"]').first();
+    const hasBox = await msgBox.isVisible({ timeout: 5000 }).catch(() => false);
+
+    if (hasBox) {
+      await msgBox.click();
+      await msgBox.pressSequentially(message, { delay: 25 });
+    } else {
+      // Fallback: click in the chat area and type
+      await page.keyboard.type(message, { delay: 25 });
+    }
+    await page.waitForTimeout(500);
+
+    // Send — try button first, then Enter key
+    const sendBtn = page.locator('[data-testid="dmComposerSendButton"], button[aria-label="Send"]').first();
+    const hasSend = await sendBtn.isVisible().catch(() => false);
+    if (hasSend) {
+      await sendBtn.click();
+    } else {
+      await page.keyboard.press('Enter');
+    }
+    await page.waitForTimeout(2000);
+
+    return true;
+  } catch (err) {
+    console.error('[DM-Send/Twitter] Error:', err);
+    return false;
+  } finally {
+    if (context) await context.close();
+  }
+}
+
 export async function sendPendingDMReplies(): Promise<number> {
   // Get unsent outbound replies
   const { data: pending, error } = await supabase
     .from('paid_conversations')
-    .select('id, platform, fan_identifier, last_fan_message, response_text')
+    .select('id, platform, subscriber_id, incoming_message, handler_response')
     .eq('message_direction', 'outbound')
     .is('sent_at', null)
-    .not('response_text', 'is', null)
+    .neq('handler_response', '')
     .limit(10);
 
   if (error || !pending || pending.length === 0) return 0;
@@ -144,10 +215,13 @@ export async function sendPendingDMReplies(): Promise<number> {
 
       switch (platform) {
         case 'fansly':
-          success = await sendFanslyDM(reply.fan_identifier, reply.response_text);
+          success = await sendFanslyDM(reply.subscriber_id, reply.handler_response);
           break;
         case 'onlyfans':
-          success = await sendOnlyFansDM(reply.fan_identifier, reply.response_text);
+          success = await sendOnlyFansDM(reply.subscriber_id, reply.handler_response);
+          break;
+        case 'twitter':
+          success = await sendTwitterDM(reply.subscriber_id, reply.handler_response);
           break;
         default:
           console.log(`[DM-Send] Unsupported platform: ${platform}`);
@@ -159,10 +233,10 @@ export async function sendPendingDMReplies(): Promise<number> {
           .from('paid_conversations')
           .update({ sent_at: new Date().toISOString() })
           .eq('id', reply.id);
-        console.log(`  ✓ Sent to ${platform}/${reply.fan_identifier}`);
+        console.log(`  ✓ Sent to ${platform}/${reply.subscriber_id}`);
         sent++;
       } else {
-        console.error(`  ✗ Failed: ${platform}/${reply.fan_identifier}`);
+        console.error(`  ✗ Failed: ${platform}/${reply.subscriber_id}`);
       }
 
       // Rate limit

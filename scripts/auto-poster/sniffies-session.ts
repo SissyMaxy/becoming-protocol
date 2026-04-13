@@ -35,14 +35,16 @@ export async function getSniffiesPage(): Promise<Page | null> {
       await sniffiesPage.evaluate(() => true);
       return sniffiesPage;
     } catch {
-      // Page died, clean up and relaunch
+      // Page died, clean up and relaunch — reset loginAttempted so we can retry
+      console.log('[Sniffies] Page died, will relaunch...');
       sniffiesPage = null;
       try { await sniffiesContext.close(); } catch {}
       sniffiesContext = null;
+      loginAttempted = false;
     }
   }
 
-  // Don't retry login more than once per run
+  // Don't retry login more than once per run (but crashes reset this flag above)
   if (loginAttempted) return null;
   loginAttempted = true;
 
@@ -56,6 +58,7 @@ export async function getSniffiesPage(): Promise<Page | null> {
         viewport: { width: 1280, height: 800 },
         geolocation: config.geolocation || { latitude: 43.0495, longitude: -88.0076 },
         permissions: ['geolocation'],
+        args: ['--window-position=-2400,-2400'],  // offscreen so it doesn't pop up
       }
     );
 

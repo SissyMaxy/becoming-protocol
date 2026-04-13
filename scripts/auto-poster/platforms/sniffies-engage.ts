@@ -20,7 +20,7 @@ import { extractSafeText } from '../refusal-filter';
 
 const USER_ID = process.env.USER_ID || '';
 
-const MAXY_REPLY_VOICE = `You are Maxy — a 40-year-old NB person on HRT, transitioning. Flirty, forward, sexually playful. You're on Sniffies, a cruising/hookup app. Your profile says NB and transitioning — people already know what they're getting.
+const MAXY_REPLY_VOICE = `You are Maxy — a 40-year-old trans woman on HRT. Flirty, forward, sexually playful. You're on Sniffies, a cruising/hookup app. Your profile says trans and transitioning — people already know what they're getting.
 
 You're replying to someone who messaged you. Be flirty, curious, and real. People on here often ask about your thong color — that's the vibe. Don't be precious about it. Be fun.
 
@@ -28,7 +28,7 @@ Keep messages SHORT — 1-2 sentences max. This is chat, not email.
 
 BANNED PHRASES: "hits different", "energy", "honestly" as opener, "ngl", "the way..."`;
 
-const MAXY_OPENER_VOICE = `You are Maxy — a 40-year-old NB person on HRT, transitioning. On Sniffies, a cruising/hookup app. Your profile is visible — NB, transitioning, kink-friendly.
+const MAXY_OPENER_VOICE = `You are Maxy — a 40-year-old trans woman on HRT. On Sniffies, a cruising/hookup app. Your profile is visible — trans, transitioning, kink-friendly.
 
 You're sending a FIRST MESSAGE to someone nearby. They haven't messaged you. Be:
 - Short: 1 sentence max. This is a hookup app, not a love letter.
@@ -93,6 +93,8 @@ async function openChatPanel(page: Page): Promise<boolean> {
 
 /**
  * Scrape chat list from the open sidebar panel.
+ * Uses page.evaluate with innerText parsing — Sniffies uses hashed class names
+ * so CSS selectors are unreliable. Instead we walk the DOM structurally.
  */
 async function scrapeChats(page: Page): Promise<SniffiesChat[]> {
   const chats: SniffiesChat[] = [];
@@ -105,14 +107,13 @@ async function scrapeChats(page: Page): Promise<SniffiesChat[]> {
     const currentUrl = page.url();
     console.log(`  [debug] Sniffies page: ${currentUrl}`);
 
-    // Check for login (if redirected away or login prompts appear)
+    // Check for login
     const loginBtns = await page.locator('button:has-text("Log In"), button:has-text("Sign Up"), button:has-text("Sign In")').count();
     if (loginBtns > 0) {
       console.error('[Sniffies] Login prompt detected — session expired');
       return [];
     }
 
-    // Check if logged in — URL /map or no login buttons means authenticated
     const isLoggedIn = currentUrl.includes('/map') || loginBtns === 0;
     if (!isLoggedIn) {
       console.error('[Sniffies] Not logged in');
@@ -127,105 +128,112 @@ async function scrapeChats(page: Page): Promise<SniffiesChat[]> {
       return [];
     }
 
-    // Click "Unread" filter to prioritize unread messages
-    // Sniffies has an active-indicator overlay that intercepts clicks — use force
-    const unreadFilter = page.locator('text=Unread').first();
-    if (await unreadFilter.isVisible().catch(() => false)) {
-      await unreadFilter.click({ force: true });
-      await page.waitForTimeout(1500);
-    }
+    await page.waitForTimeout(2000);
 
-    // Scrape chat list items
-    // Based on the screenshot: each chat has an avatar, username, timestamp, and message preview
-    // The chat items are in a scrollable list under the Recents/Screened/Unread filters
-    const chatItems = await page.locator(
-      '[class*="conversation"], [class*="chat-item"], [class*="chat-list"] > *, [class*="message-list"] > *'
-    ).all();
-    console.log(`  [debug] Chat items (class-based): ${chatItems.length}`);
+    // Take a debug screenshot every time so we can iterate on selectors
+    await page.screenshot({ path: '.debug-sniffies-chats.png' });
 
-    if (chatItems.length > 0) {
-      for (let i = 0; i < Math.min(chatItems.length, 10); i++) {
-        try {
-          const item = chatItems[i];
-          // Extract text content — should have username and message preview
-          const fullText = await item.textContent().catch(() => '') || '';
+    // Use evaluate to dump the chat panel structure from inside the browser
+    // This avoids all the class-name guessing
+    const rawChats = await page.evaluate(`(() => {
+      // Strategy: find all elements containing timestamp patterns like "X ago"
+      // then walk up to find the chat entry container, extract username + preview
+      var results = [];
+      var timeRegex = /(\\d+\\s+(seconds?|minutes?|hours?|days?)\\s+ago|a few seconds ago|just now)/i;
+      var seen = new Set();
 
-          // Skip promotional items (So.Gay, Sniffies Plus, etc.)
-          if (fullText.includes('So.Gay') || fullText.includes('Sniffies Plus') || fullText.includes('Upgrade')) continue;
+      // Walk all text nodes to find timestamps
+      var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
+      var node;
+      while (node = walker.nextNode()) {
+        var text = (node.textContent || '').trim();
+        if (!timeRegex.test(text)) continue;
 
-          // Try to find username and message within the item
-          const strongEl = item.locator('strong, b, [class*="name"]').first();
-          const username = await strongEl.textContent().catch(() => '') || '';
+        // Walk up to find the clickable chat entry (usually 3-6 levels up)
+        var entry = node.parentElement;
+        for (var up = 0; up < 6 && entry; up++) {
+          // Chat entries are typically 150-400px tall list items
+          var rect = entry.getBoundingClientRect();
+          if (rect.height > 40 && rect.height < 200 && rect.width > 100) break;
+          entry = entry.parentElement;
+        }
+        if (!entry) continue;
 
-          // Get the message preview — usually the last text element
-          const spans = await item.locator('span, p, div').allTextContents().catch(() => []);
-          const lastMessage = spans.filter(s => s.trim().length > 1 && !s.includes('ago') && s !== username.trim()).pop() || '';
+        // Deduplicate by element reference
+        var key = entry.innerText;
+        if (seen.has(key)) continue;
+        seen.add(key);
 
-          // Check for unread indicator (NEW badge, dot, etc.)
-          const hasNew = fullText.includes('NEW') || await item.locator('[class*="unread"], [class*="badge"], [class*="new"]').count() > 0;
+        var innerLines = entry.innerText.split('\\n').map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 0; });
 
-          if (username.trim()) {
-            chats.push({
-              username: username.trim(),
-              lastMessage: lastMessage.trim().substring(0, 200),
-              isUnread: hasNew,
-              index: i,
-            });
+        // Skip promo items
+        var fullText = entry.innerText;
+        if (fullText.includes('Sniffies Plus') || fullText.includes('So.Gay') || fullText.includes('Cruise Without') || fullText.includes('Upgrade')) continue;
+
+        // Parse: typically lines are [username, timestamp, message_preview] or [prefix "from", username, timestamp, preview]
+        var username = '';
+        var preview = '';
+        var isUnread = fullText.includes('NEW') || fullText.includes('new message');
+
+        // Filter out timestamp lines and "from" prefix
+        var contentLines = innerLines.filter(function(l) {
+          return !timeRegex.test(l) && l !== 'NEW' && l !== 'from' && l !== 'Recents' && l !== 'Screened' && l !== 'Unread';
+        });
+
+        // "from Anonymous Cruiser" pattern — merge "from" prefix
+        for (var i = 0; i < contentLines.length; i++) {
+          if (contentLines[i].toLowerCase().startsWith('from ')) {
+            contentLines[i] = contentLines[i].substring(5).trim();
           }
-        } catch {
-          continue;
+        }
+
+        if (contentLines.length >= 2) {
+          username = contentLines[0];
+          preview = contentLines[contentLines.length - 1];
+        } else if (contentLines.length === 1) {
+          username = contentLines[0];
+        }
+
+        // Skip if username is too long (probably scraped a whole paragraph)
+        if (username && username.length < 40) {
+          results.push({
+            username: username,
+            lastMessage: preview.substring(0, 200),
+            isUnread: isUnread,
+            innerText: fullText.substring(0, 300),
+          });
         }
       }
+      return results;
+    })()`) as Array<{ username: string; lastMessage: string; isUnread: boolean; innerText: string }>;
+
+    console.log(`  [debug] evaluate found ${rawChats.length} chat entries`);
+    for (let i = 0; i < rawChats.length; i++) {
+      const c = rawChats[i];
+      console.log(`  [debug]   ${i}: "${c.username}" ${c.isUnread ? '(unread)' : ''} — "${c.lastMessage.substring(0, 50)}"`);
+      chats.push({
+        username: c.username,
+        lastMessage: c.lastMessage,
+        isUnread: c.isUnread,
+        index: i,
+      });
     }
 
-    // If class-based didn't work, try a different approach — look for the list area
-    // and grab items by structure
+    // If evaluate found nothing, fall back to innerText dump of the left panel for debugging
     if (chats.length === 0) {
-      console.log(`  [debug] Trying alternate scrape method...`);
-
-      // Take screenshot for debugging
-      await page.screenshot({ path: '.debug-sniffies-chats.png' });
-
-      // Try grabbing all elements that look like chat entries (have timestamps)
-      const timeElements = await page.locator('text=/\\d+ minutes? ago|\\d+ hours? ago|a few seconds ago/').all();
-      console.log(`  [debug] Found ${timeElements.length} time indicators (chat entries)`);
-
-      for (let i = 0; i < Math.min(timeElements.length, 10); i++) {
-        try {
-          // Go up to the parent chat item
-          const parent = timeElements[i].locator('xpath=ancestor::*[3]');
-          const fullText = await parent.textContent().catch(() => '') || '';
-
-          if (fullText.includes('So.Gay') || fullText.includes('Sniffies Plus')) continue;
-
-          // Find username-like text (before the timestamp)
-          const parts = fullText.split(/\d+ (minutes?|hours?|seconds?) ago/);
-          const beforeTime = parts[0]?.trim() || '';
-
-          // The username is typically a short word before the message
-          const lines = beforeTime.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-          const username = lines.find(l => l.length > 0 && l.length < 30 && !l.includes('NEW')) || '';
-          const lastMsg = lines.filter(l => l !== username && !l.includes('NEW')).pop() || '';
-
-          if (username) {
-            chats.push({
-              username,
-              lastMessage: lastMsg.substring(0, 200),
-              isUnread: fullText.includes('NEW'),
-              index: i,
-            });
+      const panelText = await page.evaluate(`(() => {
+        // The chat panel is typically the left sidebar — find the narrower panel
+        var panels = document.querySelectorAll('div, aside, nav, section');
+        for (var i = 0; i < panels.length; i++) {
+          var el = panels[i];
+          var rect = el.getBoundingClientRect();
+          if (rect.left < 50 && rect.width > 200 && rect.width < 500 && rect.height > 400) {
+            return el.innerText.substring(0, 2000);
           }
-        } catch {
-          continue;
         }
-      }
-    }
-
-    // Switch back to "Recents" if we filtered to "Unread"
-    const recentsTab = page.locator('text=Recents').first();
-    if (await recentsTab.isVisible().catch(() => false)) {
-      await recentsTab.click({ force: true });
-      await page.waitForTimeout(500);
+        return '(no panel found)';
+      })()`) as string;
+      console.log(`  [debug] Left panel text dump:\n${panelText.substring(0, 500)}`);
     }
 
   } catch (err) {
@@ -237,6 +245,7 @@ async function scrapeChats(page: Page): Promise<SniffiesChat[]> {
 
 /**
  * Click into a specific chat and read recent messages.
+ * Uses evaluate-based DOM walking since Sniffies uses hashed class names.
  */
 async function readAndReplyChat(
   page: Page,
@@ -245,36 +254,96 @@ async function readAndReplyChat(
   state: Record<string, unknown>,
 ): Promise<{ success: boolean; reply?: string }> {
   try {
-    // Find and click the chat item by looking for the username text
-    const chatItem = page.locator(`text="${chat.username}"`).first();
-    if (!await chatItem.isVisible().catch(() => false)) {
+    // Find and click the chat item — try exact match first, then partial
+    let clicked = false;
+    for (const selector of [
+      `text="${chat.username}"`,
+      `text="${chat.username}" >> nth=0`,
+      `text=/${chat.username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/i`,
+    ]) {
+      try {
+        const el = page.locator(selector).first();
+        if (await el.isVisible({ timeout: 2000 }).catch(() => false)) {
+          await el.click({ force: true });
+          clicked = true;
+          break;
+        }
+      } catch { continue; }
+    }
+
+    if (!clicked) {
       console.log(`  Could not find chat item for ${chat.username}`);
       return { success: false };
     }
 
-    await chatItem.click({ force: true });
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(3000);
 
-    // Read the recent messages in the chat thread
-    // Messages are typically in a scrollable area with bubbles
-    const messageEls = await page.locator(
-      '[class*="message"], [class*="bubble"], [class*="chat-msg"], [class*="msg-text"]'
-    ).all();
+    // Read messages using evaluate — extract all visible text blocks in the chat area
+    // Sniffies chat messages appear as text blocks in a scrollable conversation view
+    const messages = await page.evaluate(`(() => {
+      var msgs = [];
+      // Strategy: find the conversation area (right side or main area after clicking a chat)
+      // Look for a scrollable container that appeared after clicking
+      var containers = document.querySelectorAll('div, section');
+      var chatArea = null;
 
-    const messages: string[] = [];
-    for (const msg of messageEls.slice(-10)) {
-      const text = await msg.textContent().catch(() => '') || '';
-      if (text.trim() && text.trim().length > 1) {
-        messages.push(text.trim());
+      for (var i = 0; i < containers.length; i++) {
+        var el = containers[i];
+        var rect = el.getBoundingClientRect();
+        var style = getComputedStyle(el);
+        // Chat area: scrollable, tall, takes up a good portion of the screen
+        if (rect.height > 200 && rect.width > 200 &&
+            (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+            el.scrollHeight > el.clientHeight) {
+          // Prefer containers that have actual text content (messages)
+          var text = el.innerText || '';
+          if (text.length > 20 && !text.includes('Recents') && !text.includes('Screened')) {
+            chatArea = el;
+          }
+        }
       }
-    }
+
+      if (!chatArea) {
+        // Fallback: just grab the main content area
+        chatArea = document.querySelector('[role="main"], main') || document.body;
+      }
+
+      // Extract text blocks that look like messages
+      // Walk child elements looking for discrete message bubbles/blocks
+      var children = chatArea.querySelectorAll('p, span, div');
+      var seen = new Set();
+      for (var j = 0; j < children.length; j++) {
+        var child = children[j];
+        var text = (child.innerText || '').trim();
+        // Skip empty, timestamps, UI elements
+        if (!text || text.length < 2 || text.length > 500) continue;
+        if (/^\\d+\\s+(seconds?|minutes?|hours?|days?)\\s+ago$/i.test(text)) continue;
+        if (/^(Recents|Screened|Unread|NEW|from|Send|Type|Block|Report|Sniffies)$/i.test(text)) continue;
+        if (seen.has(text)) continue;
+
+        // Only include leaf-ish nodes (avoid getting parent container text)
+        var childDivs = child.querySelectorAll('div, p, span');
+        var isLeaf = true;
+        for (var k = 0; k < childDivs.length; k++) {
+          if ((childDivs[k].innerText || '').trim() === text) { isLeaf = false; break; }
+        }
+        if (!isLeaf) continue;
+
+        seen.add(text);
+        msgs.push(text);
+      }
+      return msgs.slice(-15);
+    })()`) as string[];
 
     console.log(`  [debug] Read ${messages.length} messages in chat with ${chat.username}`);
+    if (messages.length > 0) {
+      console.log(`  [debug]   last: "${messages[messages.length - 1].substring(0, 60)}"`);
+    }
 
     // Generate reply
     const context = messages.length > 0
       ? messages.map((m, i) => `${i + 1}: "${m}"`).join('\n')
-      : '(New conversation — they messaged you first)';
+      : `(New conversation — they messaged you. Preview: "${chat.lastMessage}")`;
 
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
@@ -291,31 +360,98 @@ async function readAndReplyChat(
 
     console.log(`  Reply: "${reply}"`);
 
-    // Find the message input and type
-    const inputBox = page.locator(
-      'textarea, input[type="text"], [contenteditable="true"], input[placeholder*="message" i], input[placeholder*="type" i]'
-    ).last();
+    // Find the message input using multiple strategies
+    // Sniffies likely uses contenteditable, textarea, or a custom input component
+    let inputFound = false;
 
-    const hasInput = await inputBox.isVisible().catch(() => false);
-    if (!hasInput) {
+    // Strategy 1: contenteditable div (most modern chat apps)
+    const editables = page.locator('[contenteditable="true"]');
+    const editableCount = await editables.count().catch(() => 0);
+    if (editableCount > 0) {
+      const inputBox = editables.last();
+      if (await inputBox.isVisible().catch(() => false)) {
+        await inputBox.click();
+        await page.waitForTimeout(300);
+        await inputBox.pressSequentially(reply, { delay: 25 });
+        inputFound = true;
+      }
+    }
+
+    // Strategy 2: textarea
+    if (!inputFound) {
+      const textareas = page.locator('textarea');
+      const taCount = await textareas.count().catch(() => 0);
+      if (taCount > 0) {
+        const inputBox = textareas.last();
+        if (await inputBox.isVisible().catch(() => false)) {
+          await inputBox.click();
+          await page.waitForTimeout(300);
+          await inputBox.fill(reply);
+          inputFound = true;
+        }
+      }
+    }
+
+    // Strategy 3: any visible input[type=text] at the bottom of the screen
+    if (!inputFound) {
+      const inputs = page.locator('input[type="text"]');
+      const inputCount = await inputs.count().catch(() => 0);
+      for (let i = inputCount - 1; i >= 0; i--) {
+        const inp = inputs.nth(i);
+        if (await inp.isVisible().catch(() => false)) {
+          const box = await inp.boundingBox().catch(() => null);
+          // Only use inputs in the bottom half of the screen (likely the chat input)
+          if (box && box.y > 400) {
+            await inp.click();
+            await page.waitForTimeout(300);
+            await inp.fill(reply);
+            inputFound = true;
+            break;
+          }
+        }
+      }
+    }
+
+    // Strategy 4: use evaluate to find any focused/focusable input at the bottom
+    if (!inputFound) {
+      inputFound = await page.evaluate(`(() => {
+        var inputs = document.querySelectorAll('input, textarea, [contenteditable="true"]');
+        for (var i = inputs.length - 1; i >= 0; i--) {
+          var el = inputs[i];
+          var rect = el.getBoundingClientRect();
+          if (rect.height > 0 && rect.width > 0 && rect.y > 400) {
+            el.focus();
+            return true;
+          }
+        }
+        return false;
+      })()`) as boolean;
+
+      if (inputFound) {
+        await page.waitForTimeout(300);
+        await page.keyboard.type(reply, { delay: 25 });
+      }
+    }
+
+    if (!inputFound) {
       console.error(`  [debug] No message input found in chat`);
+      await page.screenshot({ path: '.debug-sniffies-noinput.png' });
       return { success: false };
     }
 
-    await inputBox.click();
-    await page.waitForTimeout(300);
-    await inputBox.pressSequentially(reply, { delay: 25 });
     await page.waitForTimeout(500);
 
-    // Send — try send button, then Enter key
+    // Send — try multiple approaches
     const sendBtn = page.locator(
-      'button[type="submit"], button:has-text("Send"), [class*="send"], [aria-label*="send" i]'
+      'button[type="submit"], button:has-text("Send"), [aria-label*="send" i], ' +
+      'button svg, button img'  // Sniffies might use an icon button
     ).first();
 
     if (await sendBtn.isVisible().catch(() => false)) {
       await sendBtn.click();
     } else {
-      await inputBox.press('Enter');
+      // Enter key to send
+      await page.keyboard.press('Enter');
     }
     await page.waitForTimeout(1500);
 
@@ -453,34 +589,47 @@ async function outreachToNearbyCruisers(
         await msgBtn.click({ force: true });
         await page.waitForTimeout(2000);
 
-        // Type and send
-        const inputBox = page.locator(
-          'textarea, input[type="text"], [contenteditable="true"], ' +
-          'input[placeholder*="message" i], input[placeholder*="type" i]'
-        ).last();
+        // Find input and type — use same multi-strategy approach as readAndReplyChat
+        let outreachInputFound = false;
 
-        const hasInput = await inputBox.isVisible().catch(() => false);
-        if (!hasInput) {
+        // Try contenteditable first, then textarea, then text input
+        for (const sel of ['[contenteditable="true"]', 'textarea', 'input[type="text"]']) {
+          const els = page.locator(sel);
+          const count = await els.count().catch(() => 0);
+          if (count > 0) {
+            const el = els.last();
+            if (await el.isVisible().catch(() => false)) {
+              await el.click();
+              await page.waitForTimeout(300);
+              if (sel === 'textarea' || sel === 'input[type="text"]') {
+                await el.fill(opener);
+              } else {
+                await el.pressSequentially(opener, { delay: 25 });
+              }
+              outreachInputFound = true;
+              break;
+            }
+          }
+        }
+
+        if (!outreachInputFound) {
           console.log(`    No chat input found after clicking message`);
           await page.keyboard.press('Escape');
           await page.waitForTimeout(500);
           continue;
         }
 
-        await inputBox.click();
-        await page.waitForTimeout(300);
-        await inputBox.pressSequentially(opener, { delay: 25 });
         await page.waitForTimeout(500);
 
         // Send
         const sendBtn = page.locator(
-          'button[type="submit"], button:has-text("Send"), [class*="send"], [aria-label*="send" i]'
+          'button[type="submit"], button:has-text("Send"), [aria-label*="send" i]'
         ).first();
 
         if (await sendBtn.isVisible().catch(() => false)) {
           await sendBtn.click();
         } else {
-          await inputBox.press('Enter');
+          await page.keyboard.press('Enter');
         }
         await page.waitForTimeout(1500);
 

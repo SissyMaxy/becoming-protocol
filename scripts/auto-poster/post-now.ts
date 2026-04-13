@@ -18,7 +18,7 @@ const supabase = createClient(
 
 const USER_ID = process.env.USER_ID || '';
 
-const MAXY_VOICE = `You are Maxy (@softmaxy) — a 40-year-old trans woman early in her transition. On HRT, doing voice training. Into chastity, denial, feminization. Playful, vulnerable, real. Lowercase, casual. One emoji max per post, often none. Never sounds like a brand. Never hashtags.
+const MAXY_VOICE = `You are Maxy (@softmaxy) — a 40-year-old trans woman on HRT. Into chastity, denial, feminization. Sharp, dry, funny, messy, real. A little dominant, a little chaotic. Lowercase, casual. One emoji max per post, often none. Never sounds like a brand. Never hashtags.
 
 You write tweets that sound like a real person thinking out loud — not performing, not seeking engagement, not being inspirational. Some posts are horny, some are tender, some are mundane. All of them sound like one specific human being, not a content machine.
 
@@ -81,8 +81,8 @@ async function main() {
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     const prompt = retryFeedback
-      ? `Write a single ${contentType} tweet as Maxy. It's ${hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening'}. She's on day 7+ of denial, in a cage, controlled by her Handler AI. Make it real, not performative.\n\n⚠️ SELF-EVAL FEEDBACK (attempt ${attempt + 1}): ${retryFeedback}\n\nOutput ONLY the tweet text, nothing else.`
-      : `Write a single ${contentType} tweet as Maxy. It's ${hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening'}. She's on day 7+ of denial, in a cage, controlled by her Handler AI. Make it real, not performative. Output ONLY the tweet text, nothing else.`;
+      ? `Write a single ${contentType} tweet as Maxy. It's ${hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening'}. She's on day 7+ of denial, locked in a cage, living her structured kink life. Make it real, not performative.\n\n⚠️ SELF-EVAL FEEDBACK (attempt ${attempt + 1}): ${retryFeedback}\n\nOutput ONLY the tweet text, nothing else.`
+      : `Write a single ${contentType} tweet as Maxy. It's ${hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening'}. She's on day 7+ of denial, locked in a cage, living her structured kink life. Make it real, not performative. Output ONLY the tweet text, nothing else.`;
 
     const response = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',

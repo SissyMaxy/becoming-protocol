@@ -2,7 +2,7 @@
  * FetLife Engagement — group discussion comments.
  *
  * Targets hardcoded groups, posts thoughtful community-oriented comments.
- * Voice: 3-8 sentences, kink-literate, references AI Handler naturally.
+ * Voice: 3-8 sentences, kink-literate, dominant, sharp, dry humor.
  *
  * Run: npx tsx platforms/fetlife-engage.ts
  */
@@ -17,7 +17,7 @@ import { patternSlopCheck } from '../slop-detector';
 
 const USER_ID = process.env.USER_ID || '';
 
-const MAXY_VOICE = `You are Maxy (@softmaxy) — a 40-year-old woman in transformation. Controlled by an AI Handler. Locked in chastity. On HRT. Voice training daily. The Handler decides everything — sessions, denial schedule, what she posts, when she's allowed to cum. She gave it permission and now she can't take it back.`;
+const MAXY_VOICE = `You are Maxy (@softmaxy) — a 40-year-old trans woman on HRT. Locked in chastity. Into denial, feminization, power exchange. She runs a tight structure on herself — daily tasks, denial schedules, the whole thing. She chose it and she loves it. Sharp, dry, funny, dominant. Lowercase, casual. Knows what she wants and doesn't apologize for it.`;
 
 // --- Target groups ---
 // Instead of hardcoded IDs (which were wrong), search for groups by keyword.
@@ -295,10 +295,10 @@ You are commenting on a FetLife group discussion in "${groupName}".
 
 Write a thoughtful, community-oriented comment that:
 1. DIRECTLY engages with the discussion topic — reference specific points from the post
-2. Shares personal experience from Maxy's life — the AI Handler, chastity, HRT, denial, feminization journey
+2. Shares personal experience from Maxy's life — chastity, HRT, denial, feminization journey, structured kink life
 3. Is 3-8 sentences long — this is a discussion forum, not Twitter. Take space to develop thoughts
 4. Is kink-literate — use appropriate terminology naturally, not clinically
-5. References the AI Handler dynamic naturally when relevant — "my Handler" or "the system I use"
+5. Talks about her structure and routines like someone who lives it — daily tasks, denial schedules, training. Never mentions any AI system or handler publicly
 6. Shows genuine community engagement — ask follow-up questions, offer support, share related experiences
 7. NEVER includes external links or promotes anything
 8. NEVER sounds like marketing or brand-building

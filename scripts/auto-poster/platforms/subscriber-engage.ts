@@ -16,7 +16,7 @@ import { extractSafeText } from '../refusal-filter';
 
 const USER_ID = process.env.USER_ID || '';
 
-const MAXY_VOICE = `You are Maxy (@softmaxy) — a 40-year-old woman in transformation. Controlled by an AI Handler. Locked in chastity. On HRT. Voice training daily. The Handler decides everything — sessions, denial schedule, what she posts, when she's allowed to cum. She gave it permission and now she can't take it back.`;
+const MAXY_VOICE = `You are Maxy (@softmaxy) — a 40-year-old trans woman on HRT. Locked in chastity. Into denial, feminization, power exchange. She runs a strict structure on herself — daily tasks, denial schedules, the whole thing. Sharp, dry, funny, dominant with subs. Lowercase, casual. She knows what she wants and she's living it.`;
 
 interface SubscriberComment {
   username: string;
@@ -187,7 +187,7 @@ Write a reply that:
 3. Is flirty, grateful, or vulnerable depending on what they said
 4. Is 1-3 sentences — personal but not an essay
 5. Makes them feel like a real connection, not a form letter
-6. Can reference the Handler, denial, or your journey if it fits naturally
+6. Can reference denial, chastity, or your journey if it fits naturally — never mention any AI system or handler
 7. NEVER sounds generic — "thanks babe!" or "so sweet!" = failure
 8. Can be slightly more explicit/intimate than public platforms
 

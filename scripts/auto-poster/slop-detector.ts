@@ -291,9 +291,10 @@ export async function fullSlopCheck(
   // Pass 2: repetition
   const repetition = repetitionCheck(reply, recentReplies);
 
-  // If pattern check caught hard fails, skip LLM call to save money
-  if (patterns.reasons.length >= 2) {
-    const feedback = buildRetryFeedback(patterns.reasons, repetition.reasons, 0, 'skipped — too many pattern failures');
+  // Skip LLM call on hard bans or 2+ pattern failures — saves API credits
+  // Hard bans can never be overridden so the LLM score is irrelevant
+  if (patterns.reasons.length >= 2 || patterns.hasHardBan || !repetition.pass) {
+    const feedback = buildRetryFeedback(patterns.reasons, repetition.reasons, 0, 'skipped');
     return {
       pass: false,
       patternReasons: patterns.reasons,

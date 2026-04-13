@@ -465,9 +465,10 @@ async function tick() {
       if (fanslyCtx) { try { await (fanslyCtx as BrowserContext).close(); } catch {} }
     }
 
-    // --- Every 2nd tick: Sniffies chats (5) --- (2 min timeout)
+    // --- Every tick: Sniffies chats (5) --- (5 min timeout)
     // Uses persistent Firefox session — browser stays open between ticks
-    if (tickCount % 2 === 0 && PLATFORMS.sniffies.enabled) {
+    // Sniffies is a hookup app — DMs go stale fast, check every tick
+    if (PLATFORMS.sniffies.enabled) {
       await withTimeout('Sniffies', async () => {
         const hasBudget = await checkBudget(supabase, USER_ID, 'sniffies', 'chat');
         if (hasBudget) {
@@ -536,7 +537,8 @@ async function main() {
   console.log(`  Every ${intervalMinutes * 4} min: Growth — Quote tweets (offset tick)`);
   console.log(`  Every ${intervalMinutes * 8} min: Growth — Strategic follows + Unfollow stales`);
   console.log(`  Every ${intervalMinutes} min: Reddit comments (1) [slow]`);
-  console.log(`  Every ${intervalMinutes * 2} min: FetLife (1) + Subscribers + Sniffies + DMs [slow]`);
+  console.log(`  Every ${intervalMinutes} min: Sniffies chats (5)`);
+  console.log(`  Every ${intervalMinutes * 2} min: FetLife (1) + Subscribers + DMs [slow]`);
   console.log('');
   console.log('Platforms:');
   for (const [name, cfg] of Object.entries(PLATFORMS)) {
