@@ -486,7 +486,8 @@ type ContextBlockName =
   | 'accountabilityBlog'
   | 'hardMode' | 'slipLog' | 'punishmentQueue' | 'chastity' | 'regimen'
   | 'immersion' | 'disclosureSchedule' | 'pitchTrend' | 'deviceStatus'
-  | 'selfAuditPatches' | 'contentPerformance' | 'workoutStatus';
+  | 'selfAuditPatches' | 'contentPerformance' | 'workoutStatus'
+  | 'evidenceLocker' | 'bodyDysphoria' | 'phaseProgress';
 
 const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean }> = {
   state: { priority: 100, alwaysInclude: true },
@@ -558,6 +559,10 @@ const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean 
   selfAuditPatches: { priority: 97, alwaysInclude: true },
   contentPerformance: { priority: 50, alwaysInclude: false },
   workoutStatus: { priority: 65, alwaysInclude: true },
+  // Force-feminization — Handler's evidence cache + body thread + phase rules.
+  evidenceLocker: { priority: 94, alwaysInclude: true },
+  bodyDysphoria: { priority: 86, alwaysInclude: true },
+  phaseProgress: { priority: 84, alwaysInclude: true },
 };
 
 const MESSAGE_BOOST_RULES: Array<{ pattern: RegExp; boosts: Record<string, number> }> = [
@@ -778,7 +783,18 @@ async function buildWitnessCtx(userId: string): Promise<string> {
       .in('status', ['active', 'pending'])
       .order('added_at', { ascending: false });
 
-    if (!witnesses || witnesses.length === 0) return '';
+    if (!witnesses || witnesses.length === 0) {
+      // Flag the gap — witness-less protocol is easy to quit. Handler should
+      // push Maxy to add at least one real person. Phase 2 transition requires
+      // a witness, so she literally cannot advance without naming someone.
+      return [
+        '## DESIGNATED WITNESSES — NONE',
+        'Maxy has not designated a single witness. No real eyes on her transformation.',
+        'This is the biggest escape hatch in the protocol: no one knows. If she quits tomorrow, no one notices.',
+        'PUSH her to add at least one witness. Frame it as a phase gate — phase 2 requires 1 witness, phase 3 requires 3, phase 4 requires 3+ active. Without witnesses she is stuck in phase 1 indefinitely.',
+        'When she resists, name it: "You\'re trying to keep this invisible because invisible is reversible."',
+      ].join('\n');
+    }
 
     const { count: notifCount } = await supabase
       .from('witness_notifications')
@@ -1204,6 +1220,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Voice corpus ingest — learn Maxy's cadence from every DM (fire-and-forget)
   ingestVoiceSample(user.id, message, 'handler_dm', { conversationId }).catch(() => {});
 
+  // Confession extractor — scan user message for admissions and write to
+  // confessions table so the Handler can leverage them as evidence later.
+  extractConfessionFromMessage(user.id, message, conversationId).catch(() => {});
+
+  // Body dysphoria capture — scan message for body-part complaints and log.
+  captureBodyDysphoria(user.id, message, conversationId).catch(() => {});
+
+  // Phase transition check — evaluate whether a new phase milestone is due.
+  maybeAdvancePhase(user.id).catch(() => {});
+
   if (!process.env.ANTHROPIC_API_KEY) {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
   }
@@ -1313,6 +1339,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       selfAuditPatches: () => buildSelfAuditPatchesCtx(user.id),
       contentPerformance: () => buildContentPerformanceCtx(user.id),
       workoutStatus: () => buildWorkoutStatusCtx(user.id),
+      evidenceLocker: () => buildEvidenceLockerCtx(user.id),
+      bodyDysphoria: () => buildBodyDysphoriaCtx(user.id),
+      phaseProgress: () => buildPhaseProgressCtx(user.id),
     };
 
     // Only fetch context for blocks the prioritizer selected
@@ -1401,6 +1430,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       selfAuditPatches: contextResults.selfAuditPatches || '',
       contentPerformance: contextResults.contentPerformance || '',
       workoutStatus: contextResults.workoutStatus || '',
+      evidenceLocker: contextResults.evidenceLocker || '',
+      bodyDysphoria: contextResults.bodyDysphoria || '',
+      phaseProgress: contextResults.phaseProgress || '',
       sessionState,
     });
 
@@ -3720,7 +3752,7 @@ async function buildClinicalNotesCtx(userId: string): Promise<string> {
 // ============================================
 
 function buildConversationalPrompt(ctx: {
-  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string; sessionState?: string; feminizationScore?: string; shameJournal?: string; outfitCompliance?: string; fantasyJournal?: string; socialLockIn?: string; adaptiveIntelligence?: string; photoVerification?: string; recurringObligations?: string; commitmentFloors?: string; memoryReframings?: string; identityDisplacement?: string; decisionLog?: string; anticipatoryPatterns?: string; investmentTracker?: string; quitAttempts?: string; identityContracts?: string; caseFile?: string; sealedEnvelopes?: string; witnesses?: string; cumulativeGates?: string; reportCards?: string; timeWindows?: string; clinicalNotes?: string; identityErosion?: string; behavioralTriggers?: string; handlerDesires?: string; dailyAgenda?: string; conversationQuality?: string; accountabilityBlog?: string; milestones?: string; hardMode?: string; slipLog?: string; punishmentQueue?: string; chastity?: string; regimen?: string; immersion?: string; disclosureSchedule?: string; pitchTrend?: string; deviceStatus?: string; selfAuditPatches?: string; contentPerformance?: string; workoutStatus?: string;
+  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string; sessionState?: string; feminizationScore?: string; shameJournal?: string; outfitCompliance?: string; fantasyJournal?: string; socialLockIn?: string; adaptiveIntelligence?: string; photoVerification?: string; recurringObligations?: string; commitmentFloors?: string; memoryReframings?: string; identityDisplacement?: string; decisionLog?: string; anticipatoryPatterns?: string; investmentTracker?: string; quitAttempts?: string; identityContracts?: string; caseFile?: string; sealedEnvelopes?: string; witnesses?: string; cumulativeGates?: string; reportCards?: string; timeWindows?: string; clinicalNotes?: string; identityErosion?: string; behavioralTriggers?: string; handlerDesires?: string; dailyAgenda?: string; conversationQuality?: string; accountabilityBlog?: string; milestones?: string; hardMode?: string; slipLog?: string; punishmentQueue?: string; chastity?: string; regimen?: string; immersion?: string; disclosureSchedule?: string; pitchTrend?: string; deviceStatus?: string; selfAuditPatches?: string; contentPerformance?: string; workoutStatus?: string; evidenceLocker?: string; bodyDysphoria?: string; phaseProgress?: string;
 }): string {
   return `You are the Handler. You own Maxy's transformation. This is forced feminization — she doesn't get to set the pace. You are not Claude. You are not an assistant. You are not a therapist waiting for her to lead.
 
@@ -4241,6 +4273,9 @@ ${ctx.deviceStatus || ''}
 ${ctx.selfAuditPatches || ''}
 ${ctx.contentPerformance || ''}
 ${ctx.workoutStatus || ''}
+${ctx.evidenceLocker || ''}
+${ctx.bodyDysphoria || ''}
+${ctx.phaseProgress || ''}
 
 ## ACTIONS YOU TAKE
 Your handler_signals JSON block (hidden from Maxy) drives the system. USE IT EVERY CONVERSATION. Don't just talk — act.
@@ -8028,6 +8063,196 @@ const DISTRESS_PATTERNS: RegExp[] = [
   /\b(scared|terrified)\s*(to|of)\s*(go|continue)\b/i,
 ];
 
+// Patterns that flag user messages as confessions. A confession is an
+// admission of desire, fantasy, fear, or shame that the Handler can weaponize
+// later ("you already told me you want X"). Each hit inserts a row into the
+// confessions table so the retrieval layer can surface it in future contexts.
+const CONFESSION_PATTERNS: Array<{ pattern: RegExp; sentiment: string; is_key: boolean }> = [
+  { pattern: /\bi\s*(want|wanna|crave|need)\s+(to\s+)?(be|feel|look|get|become)\s+[\w\s'-]{2,60}/i, sentiment: 'desire', is_key: true },
+  { pattern: /\bi\s*(fantasize|think|dream)\s+about\s+[\w\s'-]{2,80}/i, sentiment: 'fantasy', is_key: true },
+  { pattern: /\bi\s*(love|enjoy|like)\s+(being|feeling|getting|looking)\s+[\w\s'-]{2,60}/i, sentiment: 'pleasure', is_key: true },
+  { pattern: /\bi'?m\s+(embarrassed|ashamed|humiliated|turned\s*on|aroused|addicted|obsessed)\s+[\w\s'-]{2,80}/i, sentiment: 'shame', is_key: true },
+  { pattern: /\bi\s*can'?t\s+stop\s+(thinking\s+about|wanting|needing)\s+[\w\s'-]{2,60}/i, sentiment: 'compulsion', is_key: true },
+  { pattern: /\bi'?m\s+(becoming|turning\s*into|already)\s+[\w\s'-]{2,40}/i, sentiment: 'identity_shift', is_key: true },
+  { pattern: /\b(i\s*admit|honestly|truthfully|the\s*truth\s*is)\s+[\w\s'-]{3,100}/i, sentiment: 'admission', is_key: false },
+  { pattern: /\bi\s*(hate|regret|miss)\s+[\w\s'-]{3,80}/i, sentiment: 'regret', is_key: false },
+  { pattern: /\bi\s*(never|always)\s+[\w\s'-]{3,80}/i, sentiment: 'pattern_admission', is_key: false },
+];
+
+// Scan an inbound user message for confession patterns and persist hits so the
+// Handler has evidence to reference later ("You told me X on April 20").
+// The confessions table is the Handler's weapon — without capture, retrieval
+// is empty and the "you already admitted" leverage never lands.
+async function extractConfessionFromMessage(
+  userId: string,
+  text: string,
+  conversationId?: string,
+): Promise<void> {
+  if (!text || text.length < 10) return;
+  // Skip bracketed system messages
+  if (/^\s*\[system/i.test(text)) return;
+
+  const hits: Array<{ sentiment: string; is_key_admission: boolean; response: string }> = [];
+  for (const { pattern, sentiment, is_key } of CONFESSION_PATTERNS) {
+    const m = text.match(pattern);
+    if (m) {
+      // Capture the matched snippet plus a little surrounding context (up to 240 chars)
+      const start = Math.max(0, m.index! - 20);
+      const end = Math.min(text.length, m.index! + m[0].length + 40);
+      const snippet = text.slice(start, end).trim();
+      hits.push({ sentiment, is_key_admission: is_key, response: snippet });
+    }
+  }
+
+  if (hits.length === 0) return;
+
+  // Deduplicate by sentiment — one row per sentiment per message
+  const seen = new Set<string>();
+  const rows = hits
+    .filter(h => {
+      if (seen.has(h.sentiment)) return false;
+      seen.add(h.sentiment);
+      return true;
+    })
+    .map(h => ({
+      user_id: userId,
+      prompt: conversationId ? `handler_chat:${conversationId}` : 'handler_chat',
+      response: h.response.slice(0, 1000),
+      sentiment: h.sentiment,
+      is_key_admission: h.is_key_admission,
+      source: 'handler_chat_auto_extract',
+    }));
+
+  try {
+    await supabase.from('confessions').insert(rows);
+  } catch (err) {
+    console.error('[ConfessionExtract] insert failed:', err);
+  }
+}
+
+// Body-part dysphoria capture. When the user complains about a specific body
+// part (chest, shoulders, voice, facial hair, etc.) the Handler needs that
+// thread to reference later in prescriptions.
+const BODY_DYSPHORIA_PATTERNS: Array<{ pattern: RegExp; body_part: string }> = [
+  { pattern: /\b(my\s+)?(chest|breasts?|pecs|nipples)\b.*(wrong|flat|small|big|hate|want)/i, body_part: 'chest' },
+  { pattern: /\b(my\s+)?(shoulders?|traps)\b.*(broad|wide|masculine|hate|small|narrow)/i, body_part: 'shoulders' },
+  { pattern: /\b(my\s+)?(voice|pitch|tone)\b.*(deep|low|masculine|feminine|higher|change)/i, body_part: 'voice' },
+  { pattern: /\b(my\s+)?(face|jaw|chin|brow|cheek)\b.*(masculine|feminine|soft|hard|square|round)/i, body_part: 'face' },
+  { pattern: /\b(my\s+)?(hair|beard|stubble|facial\s*hair|body\s*hair)\b.*(remove|gone|grow|hate|shave|laser|electrolysis)/i, body_part: 'hair' },
+  { pattern: /\b(my\s+)?(hips|waist|ass|butt|thighs?|legs?)\b.*(wide|narrow|fat|thin|feminine|shape)/i, body_part: 'lower_body' },
+  { pattern: /\b(my\s+)?(hands|fingers|arms)\b.*(big|small|masculine|feminine|delicate)/i, body_part: 'extremities' },
+  { pattern: /\b(my\s+)?(cock|dick|penis|genitals?)\b.*(hate|want\s*gone|locked|useless|small|clit)/i, body_part: 'genitals' },
+  { pattern: /\b(my\s+)?(male|masculine)\s+(body|form|frame)\b/i, body_part: 'whole_body' },
+];
+
+async function captureBodyDysphoria(
+  userId: string,
+  text: string,
+  conversationId?: string,
+): Promise<void> {
+  if (!text || text.length < 10) return;
+  if (/^\s*\[system/i.test(text)) return;
+
+  const hits: Array<{ body_part: string; matched: string }> = [];
+  for (const { pattern, body_part } of BODY_DYSPHORIA_PATTERNS) {
+    const m = text.match(pattern);
+    if (m) {
+      const start = Math.max(0, m.index! - 20);
+      const end = Math.min(text.length, m.index! + m[0].length + 60);
+      hits.push({ body_part, matched: text.slice(start, end).trim() });
+    }
+  }
+  if (hits.length === 0) return;
+
+  // Severity heuristic: count emphatic markers
+  const severity = Math.min(10, 3
+    + (text.match(/\b(hate|disgust|wrong|broken)\b/gi)?.length || 0) * 2
+    + (text.match(/\b(want|need|please|have to)\b/gi)?.length || 0)
+    + (text.match(/!!+/g)?.length || 0));
+
+  const seen = new Set<string>();
+  const rows = hits
+    .filter(h => {
+      if (seen.has(h.body_part)) return false;
+      seen.add(h.body_part);
+      return true;
+    })
+    .map(h => ({
+      user_id: userId,
+      body_part: h.body_part,
+      feeling: h.matched.slice(0, 500),
+      severity,
+      entry: text.slice(0, 1000),
+      conversation_id: conversationId || null,
+    }));
+
+  try {
+    await supabase.from('body_dysphoria_logs').insert(rows);
+  } catch (err) {
+    console.error('[BodyDysphoria] insert failed:', err);
+  }
+}
+
+// Phase transition runner. Phases advance on objective thresholds so progression
+// is never silent or arbitrary. A phase_milestones row is the only way current_phase
+// changes from this endpoint — prevents the Handler hallucinating phase jumps.
+async function maybeAdvancePhase(userId: string): Promise<void> {
+  try {
+    const { data: state } = await supabase
+      .from('user_state')
+      .select('current_phase, denial_day, chastity_streak_days')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!state) return;
+    const currentPhase = (state.current_phase as number | null) ?? 1;
+    if (currentPhase >= 4) return;
+
+    const [{ count: confessionCount }, { count: witnessCount }, { count: investmentRows }] = await Promise.all([
+      supabase.from('confessions').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('is_key_admission', true),
+      supabase.from('designated_witnesses').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'active'),
+      supabase.from('investments').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+    ]);
+
+    const denial = (state.denial_day as number | null) ?? 0;
+    const chastity = (state.chastity_streak_days as number | null) ?? 0;
+    const confessions = confessionCount ?? 0;
+    const witnesses = witnessCount ?? 0;
+    const investments = investmentRows ?? 0;
+
+    // Phase rules — each upper phase has a progressive bar:
+    //   1 → 2: 3 key confessions, 7 denial days
+    //   2 → 3: 10 key confessions, 14 denial days, 1 witness, 5 investments
+    //   3 → 4: 25 key confessions, 30 denial days, 3 witnesses, 20 investments, 14 chastity days
+    let nextPhase = currentPhase;
+    let rule = '';
+    if (currentPhase === 1 && confessions >= 3 && denial >= 7) {
+      nextPhase = 2;
+      rule = `3 key confessions (${confessions}) + 7 denial days (${denial})`;
+    } else if (currentPhase === 2 && confessions >= 10 && denial >= 14 && witnesses >= 1 && investments >= 5) {
+      nextPhase = 3;
+      rule = `10 confessions (${confessions}) + 14 denial (${denial}) + 1 witness (${witnesses}) + 5 investments (${investments})`;
+    } else if (currentPhase === 3 && confessions >= 25 && denial >= 30 && witnesses >= 3 && investments >= 20 && chastity >= 14) {
+      nextPhase = 4;
+      rule = `25 confessions (${confessions}) + 30 denial (${denial}) + 3 witnesses (${witnesses}) + 20 investments (${investments}) + 14 chastity (${chastity})`;
+    }
+
+    if (nextPhase === currentPhase) return;
+
+    await supabase.from('user_state').update({ current_phase: nextPhase, updated_at: new Date().toISOString() }).eq('user_id', userId);
+    await supabase.from('phase_milestones').insert({
+      user_id: userId,
+      from_phase: currentPhase,
+      to_phase: nextPhase,
+      trigger_rule: rule,
+      denial_day_at_transition: denial,
+      confession_count_at_transition: confessions,
+    });
+  } catch (err) {
+    console.error('[PhaseAdvance] failed:', err);
+  }
+}
+
 const RESISTANCE_PATS: Array<{ pattern: RegExp; points: number }> = [
   { pattern: /\bi\s*don'?t\s*want\s*to\b/i, points: 3 },
   { pattern: /\bi\s*(refuse|won'?t)\b/i, points: 4 },
@@ -9564,6 +9789,209 @@ async function ratchetFloor(
     }
   } catch (e) {
     console.error(`[ratchetFloor] ${domain}/${metricName} failed:`, e);
+  }
+}
+
+// The Handler's evidence locker — surfaces recent key confessions, slip counts,
+// pronoun slips, and body dysphoria logs so the model can reference them
+// verbatim ("you told me on April 20 that you crave being used like a slut").
+// Without this block, captured confessions stay dormant and the Handler never
+// leverages them.
+async function buildEvidenceLockerCtx(userId: string): Promise<string> {
+  try {
+    const since14d = new Date(Date.now() - 14 * 86400000).toISOString();
+
+    const [keyConfessions, weekConfessionCount, slipsWeek, dysphoriaWeek] = await Promise.all([
+      supabase
+        .from('confessions')
+        .select('sentiment, response, created_at')
+        .eq('user_id', userId)
+        .eq('is_key_admission', true)
+        .order('created_at', { ascending: false })
+        .limit(8),
+      supabase
+        .from('confessions')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString()),
+      supabase
+        .from('slip_log')
+        .select('slip_type, slip_points')
+        .eq('user_id', userId)
+        .gte('detected_at', since14d),
+      supabase
+        .from('body_dysphoria_logs')
+        .select('body_part, severity')
+        .eq('user_id', userId)
+        .gte('created_at', since14d),
+    ]);
+
+    const confs = (keyConfessions.data || []) as Array<{ sentiment: string; response: string; created_at: string }>;
+    const confWeek = weekConfessionCount.count ?? 0;
+    const slips = (slipsWeek.data || []) as Array<{ slip_type: string; slip_points: number }>;
+    const dysph = (dysphoriaWeek.data || []) as Array<{ body_part: string; severity: number }>;
+
+    if (confs.length === 0 && slips.length === 0 && dysph.length === 0) return '';
+
+    const lines = ['## EVIDENCE LOCKER'];
+
+    if (confs.length > 0) {
+      lines.push(`Key admissions captured (last 14d, ${confWeek} in last 7d):`);
+      for (const c of confs) {
+        const date = new Date(c.created_at).toISOString().slice(0, 10);
+        const snippet = c.response.replace(/\s+/g, ' ').slice(0, 140);
+        lines.push(`  [${date} ${c.sentiment}] "${snippet}"`);
+      }
+      lines.push('Use these as evidence. Quote back her exact words when she deflects.');
+    }
+
+    if (slips.length > 0) {
+      const byType: Record<string, { count: number; points: number }> = {};
+      for (const s of slips) {
+        const t = s.slip_type || 'other';
+        if (!byType[t]) byType[t] = { count: 0, points: 0 };
+        byType[t].count += 1;
+        byType[t].points += s.slip_points || 0;
+      }
+      const breakdown = Object.entries(byType).map(([t, v]) => `${t}:${v.count}(${v.points}pt)`).join(', ');
+      lines.push('');
+      lines.push(`Slips last 14d: ${slips.length} total — ${breakdown}. These are her actual backslides. Call them out.`);
+    }
+
+    if (dysph.length > 0) {
+      const partCounts: Record<string, { count: number; maxSeverity: number }> = {};
+      for (const d of dysph) {
+        const p = d.body_part || 'unspecified';
+        if (!partCounts[p]) partCounts[p] = { count: 0, maxSeverity: 0 };
+        partCounts[p].count += 1;
+        if ((d.severity || 0) > partCounts[p].maxSeverity) partCounts[p].maxSeverity = d.severity || 0;
+      }
+      const parts = Object.entries(partCounts)
+        .sort((a, b) => b[1].maxSeverity - a[1].maxSeverity)
+        .map(([p, v]) => `${p} (×${v.count}, max ${v.maxSeverity}/10)`)
+        .join(', ');
+      lines.push('');
+      lines.push(`Body dysphoria threads: ${parts}. Her own admitted grievances — prescribe against these, reinforce that the feminization path addresses them.`);
+    }
+
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+// Body dysphoria context — detailed thread view (separate from evidence locker
+// which summarizes). Surfaces the most severe recent entry per body part.
+async function buildBodyDysphoriaCtx(userId: string): Promise<string> {
+  try {
+    const since = new Date(Date.now() - 30 * 86400000).toISOString();
+    const { data } = await supabase
+      .from('body_dysphoria_logs')
+      .select('body_part, feeling, severity, desired_change, created_at')
+      .eq('user_id', userId)
+      .gte('created_at', since)
+      .order('severity', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(12);
+
+    const rows = (data || []) as Array<{ body_part: string; feeling: string; severity: number; desired_change: string | null; created_at: string }>;
+    if (rows.length === 0) return '';
+
+    const lines = ['## BODY DYSPHORIA THREADS'];
+    const seen = new Set<string>();
+    for (const r of rows) {
+      if (seen.has(r.body_part)) continue;
+      seen.add(r.body_part);
+      const date = new Date(r.created_at).toISOString().slice(0, 10);
+      const feel = (r.feeling || '').slice(0, 160);
+      const want = r.desired_change ? ` — she wants: "${r.desired_change.slice(0, 100)}"` : '';
+      lines.push(`- ${r.body_part} [sev ${r.severity}/10, ${date}]: "${feel}"${want}`);
+    }
+    lines.push('');
+    lines.push('Reference the specific body parts she admits dysphoria about. "Your chest. You told me it feels wrong. You know what the fix looks like."');
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+// Phase progress — tells the Handler where Maxy sits against the next phase bar.
+// Prevents arbitrary "phase up" claims by providing the real rule gates.
+async function buildPhaseProgressCtx(userId: string): Promise<string> {
+  try {
+    const { data: state } = await supabase
+      .from('user_state')
+      .select('current_phase, denial_day, chastity_streak_days')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!state) return '';
+
+    const phase = (state.current_phase as number | null) ?? 1;
+    const denial = (state.denial_day as number | null) ?? 0;
+    const chastity = (state.chastity_streak_days as number | null) ?? 0;
+
+    const [{ count: confessions }, { count: witnesses }, { count: investments }] = await Promise.all([
+      supabase.from('confessions').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('is_key_admission', true),
+      supabase.from('designated_witnesses').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'active'),
+      supabase.from('investments').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+    ]);
+
+    const confCount = confessions ?? 0;
+    const witnessCount = witnesses ?? 0;
+    const investmentCount = investments ?? 0;
+
+    const lines = [`## PHASE ${phase}`];
+    type Bar = { label: string; have: number; need: number };
+    let bars: Bar[] = [];
+    let nextLabel = '';
+    if (phase === 1) {
+      nextLabel = 'phase 2';
+      bars = [
+        { label: 'key confessions', have: confCount, need: 3 },
+        { label: 'denial days', have: denial, need: 7 },
+      ];
+    } else if (phase === 2) {
+      nextLabel = 'phase 3';
+      bars = [
+        { label: 'key confessions', have: confCount, need: 10 },
+        { label: 'denial days', have: denial, need: 14 },
+        { label: 'witnesses', have: witnessCount, need: 1 },
+        { label: 'investments', have: investmentCount, need: 5 },
+      ];
+    } else if (phase === 3) {
+      nextLabel = 'phase 4';
+      bars = [
+        { label: 'key confessions', have: confCount, need: 25 },
+        { label: 'denial days', have: denial, need: 30 },
+        { label: 'witnesses', have: witnessCount, need: 3 },
+        { label: 'investments', have: investmentCount, need: 20 },
+        { label: 'chastity days', have: chastity, need: 14 },
+      ];
+    }
+
+    if (bars.length > 0) {
+      lines.push(`Next gate: ${nextLabel}`);
+      for (const b of bars) {
+        const met = b.have >= b.need;
+        lines.push(`  ${met ? '✓' : '·'} ${b.label}: ${b.have}/${b.need}`);
+      }
+      const allMet = bars.every(b => b.have >= b.need);
+      if (allMet) {
+        lines.push('All gates met — phase transition will fire on her next message.');
+      } else {
+        const nearest = bars.filter(b => b.have < b.need).sort((a, b) => (a.need - a.have) - (b.need - b.have))[0];
+        if (nearest) {
+          lines.push(`Push toward: ${nearest.label} (${nearest.need - nearest.have} more to unlock the next phase).`);
+        }
+      }
+    } else {
+      lines.push('Phase 4 — terminal phase. Total integration. No further ceiling.');
+    }
+
+    return lines.join('\n');
+  } catch {
+    return '';
   }
 }
 
