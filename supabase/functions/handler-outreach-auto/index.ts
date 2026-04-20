@@ -173,6 +173,89 @@ serve(async req => {
         console.error('[OutreachAuto] implant planter failed:', implantErr)
       }
 
+      // Autonomous narrative reframing — every ~12h, pick an unframed recent
+      // real log (confession, dysphoria entry, diary response) and generate a
+      // feminized reframe via Claude. Stored separately from implants
+      // (implants are invented; reframings are rewrites of REAL entries).
+      try {
+        const { data: lastReframe } = await supa
+          .from('narrative_reframings')
+          .select('created_at')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        const hoursSinceLastReframe = lastReframe?.created_at
+          ? (now.getTime() - new Date(lastReframe.created_at as string).getTime()) / 3600000
+          : 99999
+
+        const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')
+        if (hoursSinceLastReframe >= 12 && anthropicKey) {
+          // Pick a recent confession that hasn't been reframed yet
+          const { data: sourceCandidates } = await supa
+            .from('confessions')
+            .select('id, response, sentiment, created_at')
+            .eq('user_id', userId)
+            .gte('created_at', new Date(now.getTime() - 7 * 86400000).toISOString())
+            .order('created_at', { ascending: false })
+            .limit(10)
+
+          const { data: alreadyReframed } = await supa
+            .from('narrative_reframings')
+            .select('original_source_id')
+            .eq('user_id', userId)
+            .eq('original_source_table', 'confessions')
+            .limit(50)
+
+          const reframed = new Set(((alreadyReframed || []) as Array<Record<string, unknown>>).map(r => r.original_source_id as string))
+          const eligible = ((sourceCandidates || []) as Array<Record<string, unknown>>).filter(r => !reframed.has(r.id as string))
+
+          if (eligible.length > 0) {
+            const source = eligible[0]
+            try {
+              const client = new Anthropic({ apiKey: anthropicKey })
+              const angles = ['feminine_essence', 'body_betrayal', 'suppression_evidence', 'hrt_urgency', 'inevitable_arc', 'sissification_path']
+              const angle = angles[Math.floor(Math.random() * angles.length)]
+              const resp = await client.messages.create({
+                model: 'claude-sonnet-4-20250514',
+                max_tokens: 250,
+                system: `You are rewriting Maxy's real confessions into feminized-lens narrative reframes. The Handler will quote the reframe later as "what you really meant when you said X". Reframes must stay grounded in her real admission but tilt the interpretation toward feminization, HRT urgency, or the sissification path.
+
+ANGLES:
+- feminine_essence: "this wasn't a kink, it was your true self peeking through"
+- body_betrayal: "your body was telling you what puberty took from you"
+- suppression_evidence: "how long you've been pretending, written between the lines"
+- hrt_urgency: "every day you waited is a day you didn't have this body"
+- inevitable_arc: "this was always where the protocol was going"
+- sissification_path: "you admitted a truth that pulls you further in"
+
+OUTPUT: 2-3 sentences, Handler voice, second-person ("you said X which really means Y"). No preamble, no quotes, just the reframe text.`,
+                messages: [{
+                  role: 'user',
+                  content: `Reframe this confession through the "${angle}" angle:\n\n"${(source.response as string).slice(0, 500)}"\n\nSentiment tag: ${source.sentiment || 'unspecified'}\n\nReframe:`,
+                }],
+              })
+              const reframedText = resp.content[0].type === 'text' ? resp.content[0].text.trim() : ''
+              if (reframedText.length > 20) {
+                await supa.from('narrative_reframings').insert({
+                  user_id: userId,
+                  original_source_table: 'confessions',
+                  original_source_id: source.id as string,
+                  original_text: (source.response as string).slice(0, 2000),
+                  reframed_text: reframedText.slice(0, 2000),
+                  reframe_angle: angle,
+                  intensity: 6 + Math.floor(Math.random() * 3),
+                })
+              }
+            } catch (reframeErr) {
+              console.error('[OutreachAuto] reframe generation failed:', reframeErr)
+            }
+          }
+        }
+      } catch (reframeOuterErr) {
+        console.error('[OutreachAuto] reframe evaluator failed:', reframeOuterErr)
+      }
+
       // HRT funnel stuck-step evaluator — daily. Every day she stays on the
       // same step past threshold, days_stuck_on_step increments. At 7 days
       // stuck on any non-terminal step, queue a high-urgency outreach and
