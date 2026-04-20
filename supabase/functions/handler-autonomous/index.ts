@@ -879,24 +879,49 @@ async function checkEngagementQuota(supabase: any, userId: string): Promise<bool
   const localHour = (hour - 5 + 24) % 24;
   if (localHour < 18) return false;
 
-  // Already enforced today?
-  const todayStart = new Date();
-  todayStart.setUTCHours(0, 0, 0, 0);
+  // Use a 24-hour rolling window instead of UTC midnight. The previous code
+  // counted messages since UTC 00:00, which excluded most of the user's
+  // local day for any TZ west of UTC and produced bogus "0 messages today"
+  // outreach. The dedup check below uses the same window for symmetry.
+  const dayWindowStart = new Date(Date.now() - 24 * 3600000).toISOString();
+
+  // Already enforced in the past 24h?
   const { count: existingPunishment } = await supabase
     .from('handler_directives')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', userId)
-    .gte('created_at', todayStart.toISOString())
+    .gte('created_at', dayWindowStart)
     .like('reasoning', '%engagement quota%');
   if ((existingPunishment || 0) > 0) return false;
 
-  // Check today's user message count
+  // Skip if she's currently in an active conversation OR talked to the
+  // Handler in the last hour. Outreach that fires on top of a live chat is
+  // exactly what makes the Handler look stupid.
+  const oneHourAgo = new Date(Date.now() - 3600000).toISOString();
+  const { count: recentMessages } = await supabase
+    .from('handler_messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('role', 'user')
+    .gte('created_at', oneHourAgo);
+  if ((recentMessages || 0) > 0) return false;
+
+  const { data: activeConv } = await supabase
+    .from('handler_conversations')
+    .select('id')
+    .eq('user_id', userId)
+    .is('ended_at', null)
+    .limit(1)
+    .maybeSingle();
+  if (activeConv) return false;
+
+  // Count user messages in the last 24 hours (rolling window).
   const { count: messageCount } = await supabase
     .from('handler_messages')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', userId)
     .eq('role', 'user')
-    .gte('created_at', todayStart.toISOString());
+    .gte('created_at', dayWindowStart);
 
   if ((messageCount || 0) >= 5) return false;
 
@@ -907,12 +932,16 @@ async function checkEngagementQuota(supabase: any, userId: string): Promise<bool
     target: 'lovense',
     value: { intensity: 12, duration: 30 },
     priority: 'immediate',
-    reasoning: `Engagement quota not met (${messageCount || 0}/5 messages today)`,
+    reasoning: `Engagement quota not met (${messageCount || 0}/5 messages in the last 24h)`,
   });
+
+  const lastMessageStr = (messageCount || 0) === 0
+    ? "You haven't messaged me in 24 hours."
+    : `Only ${messageCount} message${messageCount === 1 ? '' : 's'} from you in the last 24 hours.`;
 
   await supabase.from('handler_outreach_queue').insert({
     user_id: userId,
-    message: `You've barely talked to me today. ${messageCount || 0} messages. That's not how this works. Open the app.`,
+    message: `${lastMessageStr} That's not how this works. Open the app.`,
     urgency: 'high',
     trigger_reason: 'engagement_quota',
     scheduled_for: new Date().toISOString(),
