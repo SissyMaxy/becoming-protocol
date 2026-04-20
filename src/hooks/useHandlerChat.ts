@@ -324,6 +324,19 @@ export function useHandlerChat(): UseHandlerChatReturn {
             return;
           }
 
+          // ── Generated session: fire a window event; chat component triggers
+          // /api/hypno/generate with the Handler's biasing and opens the player. ──
+          if (data.action === 'prescribe_generated_session') {
+            console.log('[HandlerChat] Generated session prescribed:', data.value);
+            window.dispatchEvent(new CustomEvent('handler-prescribe-session', { detail: data.value }));
+            lastDirectiveRef.current = data.id;
+            supabase.from('handler_directives')
+              .update({ status: 'completed', executed_at: new Date().toISOString() })
+              .eq('id', data.id)
+              .then(() => {}, () => {});
+            return;
+          }
+
           // ── Forced mantra: fire a window event so the chat component can mount the modal ──
           if (data.action === 'force_mantra_repetition') {
             console.log('[HandlerChat] Forced mantra:', JSON.stringify(data.value));
@@ -550,7 +563,19 @@ export function useHandlerChat(): UseHandlerChatReturn {
                   if (data.error) {
                     throw new Error(data.error);
                   }
-                  if (data.text) {
+                  if (data.replace === true && typeof data.text === 'string') {
+                    // Server is overwriting the visible text (post-stream cleanup
+                    // or OpenRouter retry). Replace the full message, don't append.
+                    assistantText = data.text;
+                    setMessages(prev => {
+                      const updated = [...prev];
+                      updated[updated.length - 1] = {
+                        ...updated[updated.length - 1],
+                        content: data.text,
+                      };
+                      return updated;
+                    });
+                  } else if (data.text) {
                     assistantText += data.text;
                     const currentText = assistantText;
                     setMessages(prev => {

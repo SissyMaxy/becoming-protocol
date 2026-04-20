@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Lock, Loader2, Heart } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { detectRelease } from '../../lib/release-detection';
 
 const SHAME_PROMPTS = [
   "What embarrassed you about being a sissy today?",
@@ -53,6 +54,7 @@ export function DailyConfessionGate({ onComplete }: DailyConfessionGateProps) {
         if (total >= 2) {
           // Both phases done
           setHasConfessedToday(true);
+          onComplete();
         } else if (total === 1) {
           // Check if the existing entry is a shame or gratitude entry
           const hasGratitude = (data || []).some(d => d.prompt_used?.startsWith('[GRATITUDE]'));
@@ -90,12 +92,49 @@ export function DailyConfessionGate({ onComplete }: DailyConfessionGateProps) {
     if (!user?.id || text.trim().length < 20) return;
     setSubmitting(true);
     try {
+      const trimmed = text.trim();
       await supabase.from('shame_journal').insert({
         user_id: user.id,
-        entry_text: text.trim(),
+        entry_text: trimmed,
         prompt_used: isGratitude ? `[GRATITUDE] ${currentPrompt}` : currentPrompt,
         emotional_intensity: intensity,
       });
+
+      // Confession-channel release detection. The chat handler runs the same
+      // regex on DMs; without this, an orgasm disclosure made via the daily
+      // confession never resets denial_day and the Handler keeps citing the
+      // stale count.
+      const detection = detectRelease(trimmed);
+      if (detection.matched) {
+        await Promise.all([
+          supabase
+            .from('user_state')
+            .update({
+              denial_day: 0,
+              last_release_at: detection.releaseDate,
+              current_arousal: 0,
+            })
+            .eq('user_id', user.id),
+          supabase
+            .from('denial_streaks')
+            .update({ ended_at: detection.releaseDate })
+            .eq('user_id', user.id)
+            .is('ended_at', null),
+          supabase.from('handler_memory').insert({
+            user_id: user.id,
+            memory_type: 'disclosure',
+            content: `RELEASE DISCLOSED IN DAILY CONFESSION: "${trimmed.slice(0, 500)}". denial_day reset to 0, last_release_at = ${detection.releaseDate}. Do NOT cite a stale denial count — the system has been corrected.`,
+            importance: 5,
+            decay_rate: 0,
+            source_type: 'confession_release',
+            context: {
+              full_text: trimmed.slice(0, 1000),
+              release_date: detection.releaseDate,
+              prompt_used: currentPrompt,
+            },
+          }),
+        ]);
+      }
 
       if (phase === 1) {
         // Move to gratitude phase
