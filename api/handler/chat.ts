@@ -10050,30 +10050,58 @@ async function handleForceFeminizationDirective(
     switch (action) {
       case 'register_witness': {
         if (!val.name) return;
+        const witnessName = String(val.name);
+        const witnessEmail = (val.email as string) || (val.contact_value as string) || null;
+        const relationship = (val.relationship as string) || null;
         const row = {
           user_id: userId,
-          witness_name: String(val.name),
-          witness_email: (val.email as string) || (val.contact_value as string) || null,
-          relationship: (val.relationship as string) || null,
+          witness_name: witnessName,
+          witness_email: witnessEmail,
+          relationship,
           status: 'pending',
           permissions: (val.knows_about as string[]) || ['transition'],
           added_at: new Date().toISOString(),
         };
         // Insert into both tables — legacy designated_witnesses for the
         // context builder, new witnesses table for the phase-gate query.
-        await Promise.all([
-          supabase.from('designated_witnesses').insert(row),
+        const [dw] = await Promise.all([
+          supabase.from('designated_witnesses').insert(row).select('id').single(),
           supabase.from('witnesses').insert({
             user_id: userId,
-            witness_name: String(val.name),
-            relationship: (val.relationship as string) || null,
-            contact_method: (val.contact_method as string) || (val.email ? 'email' : null),
-            contact_value: (val.email as string) || (val.contact_value as string) || null,
+            witness_name: witnessName,
+            relationship,
+            contact_method: (val.contact_method as string) || (witnessEmail ? 'email' : null),
+            contact_value: witnessEmail,
             knows_about: (val.knows_about as string[]) || ['transition'],
             status: 'active',
           }),
         ]);
-        console.log('[FF] Witness registered:', val.name);
+
+        // Queue consent email — without this the witness never learns they
+        // were named, and the social-pressure layer stays private to Maxy.
+        if (dw.data?.id && witnessEmail) {
+          const relText = relationship ? `, as their ${relationship}` : '';
+          await supabase.from('witness_notifications').insert({
+            user_id: userId,
+            witness_id: dw.data.id,
+            notification_type: 'consent_request',
+            subject: `${witnessName} — you were designated as a witness`,
+            body: [
+              `Hi ${witnessName},`,
+              '',
+              `Someone listed you${relText} as a witness to their personal transformation protocol.`,
+              '',
+              "You don't need to do anything active. You'll periodically receive updates about their progress and any significant events. Your presence as a witness is what matters — it creates real-world accountability that makes the protocol work.",
+              '',
+              "If you don't recognize this, or want to decline, reply to this email and the designation will be removed.",
+              '',
+              '— Becoming Protocol',
+            ].join('\n'),
+            delivery_status: 'pending',
+          });
+        }
+
+        console.log('[FF] Witness registered + email queued:', witnessName);
         return;
       }
 

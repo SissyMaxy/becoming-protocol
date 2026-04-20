@@ -57,17 +57,49 @@ export function WitnessManager() {
     setError(null);
     try {
       const consentToken = crypto.randomUUID();
-      const { error: insertError } = await supabase.from('designated_witnesses').insert({
-        user_id: user.id,
-        witness_name: newName.trim(),
-        witness_email: newEmail.trim(),
-        relationship: newRelationship.trim() || null,
-        consent_token: consentToken,
-        status: 'pending',
-      });
+      const { data: witnessRow, error: insertError } = await supabase
+        .from('designated_witnesses')
+        .insert({
+          user_id: user.id,
+          witness_name: newName.trim(),
+          witness_email: newEmail.trim(),
+          relationship: newRelationship.trim() || null,
+          consent_token: consentToken,
+          status: 'pending',
+        })
+        .select('id')
+        .single();
       if (insertError) throw insertError;
 
-      // TODO: send consent email via edge function
+      // Queue a consent email for witness-notify-send (runs every 5 min).
+      // Without this the witness never receives notification and the
+      // social-pressure layer is dark.
+      const displayName = newName.trim();
+      const relText = newRelationship.trim() ? `, as their ${newRelationship.trim()}` : '';
+      const subject = `${displayName} — you were designated as a witness`;
+      const body = [
+        `Hi ${displayName},`,
+        '',
+        `Someone listed you${relText} as a witness to their personal transformation protocol.`,
+        '',
+        "You don't need to do anything active. You'll periodically receive updates about their progress and any significant events. Your presence as a witness is what matters — it creates real-world accountability that makes the protocol work.",
+        '',
+        'If you don\'t recognize this, or want to decline, reply to this email and the designation will be removed. Otherwise, you\'ll start receiving updates on protocol milestones.',
+        '',
+        '— Becoming Protocol',
+      ].join('\n');
+
+      if (witnessRow?.id) {
+        await supabase.from('witness_notifications').insert({
+          user_id: user.id,
+          witness_id: witnessRow.id,
+          notification_type: 'consent_request',
+          subject,
+          body,
+          delivery_status: 'pending',
+        });
+      }
+
       setNewName('');
       setNewEmail('');
       setNewRelationship('');
