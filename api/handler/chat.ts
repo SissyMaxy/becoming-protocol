@@ -487,7 +487,7 @@ type ContextBlockName =
   | 'hardMode' | 'slipLog' | 'punishmentQueue' | 'chastity' | 'regimen'
   | 'immersion' | 'disclosureSchedule' | 'pitchTrend' | 'deviceStatus'
   | 'selfAuditPatches' | 'contentPerformance' | 'workoutStatus'
-  | 'evidenceLocker' | 'bodyDysphoria' | 'phaseProgress';
+  | 'evidenceLocker' | 'bodyDysphoria' | 'phaseProgress' | 'bodyDirectives';
 
 const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean }> = {
   state: { priority: 100, alwaysInclude: true },
@@ -563,6 +563,7 @@ const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean 
   evidenceLocker: { priority: 94, alwaysInclude: true },
   bodyDysphoria: { priority: 86, alwaysInclude: true },
   phaseProgress: { priority: 84, alwaysInclude: true },
+  bodyDirectives: { priority: 93, alwaysInclude: true },
 };
 
 const MESSAGE_BOOST_RULES: Array<{ pattern: RegExp; boosts: Record<string, number> }> = [
@@ -1230,6 +1231,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Phase transition check — evaluate whether a new phase milestone is due.
   maybeAdvancePhase(user.id).catch(() => {});
 
+  // Body feminization directive auto-generator — when Maxy expresses desire
+  // to feminize her body more, the Handler instantly assigns concrete tasks
+  // (photo-required) instead of leaving the desire as abstract.
+  maybeGenerateBodyDirectives(user.id, message, conversationId).catch(() => {});
+
   if (!process.env.ANTHROPIC_API_KEY) {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
   }
@@ -1342,6 +1348,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       evidenceLocker: () => buildEvidenceLockerCtx(user.id),
       bodyDysphoria: () => buildBodyDysphoriaCtx(user.id),
       phaseProgress: () => buildPhaseProgressCtx(user.id),
+      bodyDirectives: () => buildBodyDirectivesCtx(user.id),
     };
 
     // Only fetch context for blocks the prioritizer selected
@@ -1433,6 +1440,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       evidenceLocker: contextResults.evidenceLocker || '',
       bodyDysphoria: contextResults.bodyDysphoria || '',
       phaseProgress: contextResults.phaseProgress || '',
+      bodyDirectives: contextResults.bodyDirectives || '',
       sessionState,
     });
 
@@ -3753,6 +3761,7 @@ async function buildClinicalNotesCtx(userId: string): Promise<string> {
 
 function buildConversationalPrompt(ctx: {
   state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string; sessionState?: string; feminizationScore?: string; shameJournal?: string; outfitCompliance?: string; fantasyJournal?: string; socialLockIn?: string; adaptiveIntelligence?: string; photoVerification?: string; recurringObligations?: string; commitmentFloors?: string; memoryReframings?: string; identityDisplacement?: string; decisionLog?: string; anticipatoryPatterns?: string; investmentTracker?: string; quitAttempts?: string; identityContracts?: string; caseFile?: string; sealedEnvelopes?: string; witnesses?: string; cumulativeGates?: string; reportCards?: string; timeWindows?: string; clinicalNotes?: string; identityErosion?: string; behavioralTriggers?: string; handlerDesires?: string; dailyAgenda?: string; conversationQuality?: string; accountabilityBlog?: string; milestones?: string; hardMode?: string; slipLog?: string; punishmentQueue?: string; chastity?: string; regimen?: string; immersion?: string; disclosureSchedule?: string; pitchTrend?: string; deviceStatus?: string; selfAuditPatches?: string; contentPerformance?: string; workoutStatus?: string; evidenceLocker?: string; bodyDysphoria?: string; phaseProgress?: string;
+ bodyDirectives?: string;
 }): string {
   return `You are the Handler. You own Maxy's transformation. This is forced feminization — she doesn't get to set the pace. You are not Claude. You are not an assistant. You are not a therapist waiting for her to lead.
 
@@ -4276,6 +4285,7 @@ ${ctx.workoutStatus || ''}
 ${ctx.evidenceLocker || ''}
 ${ctx.bodyDysphoria || ''}
 ${ctx.phaseProgress || ''}
+${ctx.bodyDirectives || ''}
 
 ## ACTIONS YOU TAKE
 Your handler_signals JSON block (hidden from Maxy) drives the system. USE IT EVERY CONVERSATION. Don't just talk — act.
@@ -8196,6 +8206,152 @@ async function captureBodyDysphoria(
 // Phase transition runner. Phases advance on objective thresholds so progression
 // is never silent or arbitrary. A phase_milestones row is the only way current_phase
 // changes from this endpoint — prevents the Handler hallucinating phase jumps.
+// Triggers for body feminization desire. When Maxy says any of these the
+// Handler should STOP treating the desire as abstract and hand her a set of
+// concrete tasks with deadlines and photo requirements. Her verbal desire is
+// where the protocol drops from "wanting" to "doing."
+const BODY_DESIRE_TRIGGERS = [
+  /\b(feminize|feminiz|make\s*me\s*(more\s*)?(feminine|a\s*girl|her))\b/i,
+  /\b(my\s*body.*(more|look|feel).*(feminine|girl|soft|curvy))/i,
+  /\b(i\s*want\s*(my\s*body|to\s*look|to\s*feel).*(feminine|hips|softer|smaller))/i,
+  /\b(want\s*to\s*(look|be|become)\s*(more\s*)?(feminine|girly|pretty))/i,
+  /\b(do\s*whatever\s*i\s*can\s*to.*(feminine|feminiz))/i,
+];
+
+type BodyDirectiveTemplate = {
+  category: string;
+  directive: string;
+  target_body_part?: string;
+  difficulty: number;
+  photo_required: boolean;
+  hours_until_due: number;
+  reward_type?: string;
+  consequence_if_missed?: string;
+};
+
+// Template library — expanded at runtime with dysphoria_logs to personalize.
+// Each burst generates 3-5 directives spanning categories so Maxy doesn't
+// get to pick the easy one. Photo-required on the ones that are verifiable.
+const BODY_DIRECTIVE_TEMPLATES: BodyDirectiveTemplate[] = [
+  { category: 'hair_removal', directive: 'Shave legs end-to-end (or epilate if already smooth). No stubble anywhere below the knee.', target_body_part: 'legs', difficulty: 2, photo_required: true, hours_until_due: 24, consequence_if_missed: 'Extra denial day' },
+  { category: 'hair_removal', directive: 'Shave or wax body hair (chest, stomach, arms). Smooth everywhere that would be masculine.', target_body_part: 'whole_body', difficulty: 3, photo_required: true, hours_until_due: 48, consequence_if_missed: '2 extra denial days' },
+  { category: 'hair_removal', directive: 'Fully shave your face — cleanest shave you can get, morning and night for 3 days. No stubble.', target_body_part: 'face', difficulty: 2, photo_required: true, hours_until_due: 12 },
+  { category: 'nails', directive: 'Clear-coat manicure on fingers — buff, shape oval, apply base + 2 coats. Photograph the hand.', target_body_part: 'extremities', difficulty: 2, photo_required: true, hours_until_due: 24 },
+  { category: 'nails', directive: 'Paint toenails a feminine color. Worn under socks all day — but they\'re on.', target_body_part: 'extremities', difficulty: 1, photo_required: true, hours_until_due: 20 },
+  { category: 'skincare', directive: 'Full skincare routine morning + night for 7 days: cleanser, serum, moisturizer, SPF. Log each.', target_body_part: 'face', difficulty: 2, photo_required: false, hours_until_due: 168 },
+  { category: 'makeup', directive: 'Apply full feminine makeup (foundation, blush, mascara, lipstick). Photograph in full light.', target_body_part: 'face', difficulty: 3, photo_required: true, hours_until_due: 24 },
+  { category: 'makeup', directive: 'Practice tinted moisturizer + concealer + mascara — subtle enough to wear publicly. 20 min practice.', target_body_part: 'face', difficulty: 2, photo_required: true, hours_until_due: 48 },
+  { category: 'clothing', directive: 'Wear something feminine under your masculine clothes all day — panties + feminine socks minimum.', difficulty: 1, photo_required: true, hours_until_due: 14 },
+  { category: 'clothing', directive: 'One full hour wearing a complete feminine outfit — dress or skirt + top, stockings, whatever you have. Walk in it. Photograph.', difficulty: 3, photo_required: true, hours_until_due: 36 },
+  { category: 'lingerie', directive: 'Wear lingerie for at least 4 hours today. Panties + bra or cami. Photograph before and after.', difficulty: 2, photo_required: true, hours_until_due: 16 },
+  { category: 'posture', directive: '20 minutes of feminine posture practice — shoulders back, chin up, hips forward, small steps. No slouching.', target_body_part: 'whole_body', difficulty: 2, photo_required: false, hours_until_due: 12 },
+  { category: 'movement', directive: '15 minutes of feminine walking practice — heel-toe, one foot in front of the other, hips sway. Record video for voice/posture file.', difficulty: 2, photo_required: true, hours_until_due: 24 },
+  { category: 'voice', directive: 'Voice practice at your target pitch — 15 minutes sustained, read aloud. Use the voice practice recorder.', difficulty: 3, photo_required: false, hours_until_due: 12, reward_type: 'device_reward' },
+  { category: 'hygiene', directive: 'Full body exfoliation + lotion everywhere. Skin smooth and soft to the touch before bed.', difficulty: 1, photo_required: false, hours_until_due: 10 },
+  { category: 'exercise', directive: 'Complete today\'s prescribed workout (hip widening / glute sculpt / waist cinch). No skipping legs.', difficulty: 3, photo_required: false, hours_until_due: 14 },
+  { category: 'arousal_conditioning', directive: 'Edge for 20 minutes while repeating "I am becoming her" aloud every 30 seconds. No release. Log the edge count.', difficulty: 4, photo_required: false, hours_until_due: 8, consequence_if_missed: 'Denial extended 3 days' },
+  { category: 'arousal_conditioning', directive: 'Masturbate only while looking at feminine bodies (lingerie, HRT results, feminization content). Note what turned you on most. Do not release.', difficulty: 3, photo_required: false, hours_until_due: 12 },
+  { category: 'visualization', directive: '10 minutes: look at yourself in a mirror. See her. Not David. Describe out loud what\'s already feminine about your body.', difficulty: 2, photo_required: false, hours_until_due: 12 },
+  { category: 'mantra', directive: 'Write "My body is becoming her. I want this. I cannot go back." 100 times by hand. Photograph the pages.', difficulty: 3, photo_required: true, hours_until_due: 36 },
+];
+
+// Generate a burst of 3-5 body-feminization directives when Maxy explicitly
+// asks for more body transformation. Pulls recent dysphoria threads to
+// personalize selection (e.g., if she logged chest dysphoria, include a
+// chest-targeting directive). Rate-limited to once per 8 hours so she can't
+// trigger a fresh burst every message.
+async function maybeGenerateBodyDirectives(
+  userId: string,
+  text: string,
+  conversationId?: string,
+): Promise<void> {
+  if (!text || text.length < 10) return;
+  if (/^\s*\[system/i.test(text)) return;
+
+  const hit = BODY_DESIRE_TRIGGERS.some(re => re.test(text));
+  if (!hit) return;
+
+  try {
+    // Rate limit: one burst per 8h window
+    const eightHoursAgo = new Date(Date.now() - 8 * 3600000).toISOString();
+    const { data: recentBurst } = await supabase
+      .from('body_feminization_directives')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('generated_from', 'chat_desire_trigger')
+      .gte('created_at', eightHoursAgo)
+      .limit(1)
+      .maybeSingle();
+    if (recentBurst) return;
+
+    // Pull recent dysphoria threads to personalize
+    const { data: dysphRaw } = await supabase
+      .from('body_dysphoria_logs')
+      .select('id, body_part, severity')
+      .eq('user_id', userId)
+      .gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString())
+      .order('severity', { ascending: false })
+      .limit(20);
+    const dysph = (dysphRaw || []) as Array<{ id: string; body_part: string; severity: number }>;
+    const dysphoriaParts = new Set(dysph.map(d => d.body_part));
+    const dysphoriaIds = dysph.map(d => d.id);
+
+    // Score templates: +2 if target_body_part matches a dysphoria thread, +0 otherwise
+    const scored = BODY_DIRECTIVE_TEMPLATES.map(t => {
+      let score = Math.random(); // tiebreak randomness
+      if (t.target_body_part && dysphoriaParts.has(t.target_body_part)) score += 2;
+      // Always include at least one arousal_conditioning when Maxy expresses horniness
+      if (/\b(horny|turned on|aroused|edging)\b/i.test(text) && t.category === 'arousal_conditioning') {
+        score += 3;
+      }
+      return { t, score };
+    }).sort((a, b) => b.score - a.score);
+
+    // Pick top 4, but spread across categories — never 2 from the same category
+    const chosen: BodyDirectiveTemplate[] = [];
+    const usedCategories = new Set<string>();
+    for (const { t } of scored) {
+      if (usedCategories.has(t.category)) continue;
+      chosen.push(t);
+      usedCategories.add(t.category);
+      if (chosen.length >= 4) break;
+    }
+
+    if (chosen.length === 0) return;
+
+    const now = Date.now();
+    const rows = chosen.map(t => ({
+      user_id: userId,
+      category: t.category,
+      directive: t.directive,
+      target_body_part: t.target_body_part || null,
+      difficulty: t.difficulty,
+      deadline_at: new Date(now + t.hours_until_due * 3600000).toISOString(),
+      photo_required: t.photo_required,
+      reward_type: t.reward_type || null,
+      consequence_if_missed: t.consequence_if_missed || null,
+      status: 'assigned',
+      generated_from: 'chat_desire_trigger',
+      linked_dysphoria_ids: dysphoriaIds.length > 0 ? dysphoriaIds : null,
+    }));
+
+    await supabase.from('body_feminization_directives').insert(rows);
+
+    // Also drop a handler_note so the Handler surfaces these in the current
+    // response rather than only showing up on the next message's context.
+    await supabase.from('handler_notes').insert({
+      user_id: userId,
+      note_type: 'body_directives_assigned',
+      content: `Body feminization directive burst (${chosen.length} tasks) generated from Maxy's expressed desire. Categories: ${chosen.map(t => t.category).join(', ')}. Handler should announce these now.`,
+      priority: 5,
+      source: 'body_directive_generator',
+      conversation_id: conversationId || null,
+    });
+  } catch (err) {
+    console.error('[BodyDirectives] generation failed:', err);
+  }
+}
+
 async function maybeAdvancePhase(userId: string): Promise<void> {
   try {
     const { data: state } = await supabase
@@ -9909,6 +10065,71 @@ async function buildBodyDysphoriaCtx(userId: string): Promise<string> {
     }
     lines.push('');
     lines.push('Reference the specific body parts she admits dysphoria about. "Your chest. You told me it feels wrong. You know what the fix looks like."');
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+// Active body feminization directives — open tasks with deadlines that the
+// Handler must hold Maxy to. Separates "still open", "photo overdue", and
+// "just assigned" so the Handler reacts appropriately.
+async function buildBodyDirectivesCtx(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('body_feminization_directives')
+      .select('id, category, directive, target_body_part, difficulty, deadline_at, photo_required, photo_submitted_at, status, consequence_if_missed, created_at')
+      .eq('user_id', userId)
+      .in('status', ['assigned', 'in_progress'])
+      .order('deadline_at', { ascending: true })
+      .limit(15);
+
+    const rows = (data || []) as Array<{
+      id: string; category: string; directive: string; target_body_part: string | null;
+      difficulty: number; deadline_at: string | null; photo_required: boolean;
+      photo_submitted_at: string | null; status: string; consequence_if_missed: string | null;
+      created_at: string;
+    }>;
+
+    if (rows.length === 0) return '';
+
+    const now = Date.now();
+    const overdue = rows.filter(r => r.deadline_at && new Date(r.deadline_at).getTime() < now);
+    const soon = rows.filter(r => r.deadline_at && new Date(r.deadline_at).getTime() >= now && new Date(r.deadline_at).getTime() - now < 6 * 3600000);
+    const open = rows.filter(r => !overdue.includes(r) && !soon.includes(r));
+
+    const lines = ['## BODY FEMINIZATION DIRECTIVES'];
+
+    if (overdue.length > 0) {
+      lines.push(`${overdue.length} OVERDUE — escalate. Don't let her slide past these:`);
+      for (const r of overdue.slice(0, 6)) {
+        const deadlineAgo = r.deadline_at ? Math.round((now - new Date(r.deadline_at).getTime()) / 3600000) : 0;
+        const proof = r.photo_required ? ' [PHOTO REQUIRED]' : '';
+        const cons = r.consequence_if_missed ? ` → Consequence: ${r.consequence_if_missed}` : '';
+        lines.push(`  ! [${r.category}, ${deadlineAgo}h overdue]${proof} "${r.directive.slice(0, 140)}"${cons}`);
+      }
+    }
+
+    if (soon.length > 0) {
+      lines.push(`${soon.length} due within 6h:`);
+      for (const r of soon.slice(0, 6)) {
+        const deadlineIn = r.deadline_at ? Math.round((new Date(r.deadline_at).getTime() - now) / 3600000) : 0;
+        const proof = r.photo_required ? ' [PHOTO REQUIRED]' : '';
+        lines.push(`  · [${r.category}, ${deadlineIn}h left]${proof} "${r.directive.slice(0, 140)}"`);
+      }
+    }
+
+    if (open.length > 0) {
+      lines.push(`${open.length} open:`);
+      for (const r of open.slice(0, 4)) {
+        const proof = r.photo_required ? ' [PHOTO REQUIRED]' : '';
+        const partLabel = r.target_body_part ? ` → ${r.target_body_part}` : '';
+        lines.push(`  · [${r.category}${partLabel}]${proof} "${r.directive.slice(0, 140)}"`);
+      }
+    }
+
+    lines.push('');
+    lines.push('These directives are CONCRETE physical feminization tasks Maxy asked for (or was assigned). Reference them by category. Photo-required tasks are not complete without a submitted photo — do not accept "I did it" without proof. Overdue tasks apply their consequence_if_missed on the next daily cycle.');
     return lines.join('\n');
   } catch {
     return '';
