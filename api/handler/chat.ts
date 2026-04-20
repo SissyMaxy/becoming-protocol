@@ -1847,6 +1847,15 @@ HARD RULES FOR ALL PERSONAS:
                 }
               }
 
+              // ── EXECUTE force-feminization completion/registration directives ──
+              // Single helper handles: register_witness, register_hrt_regimen,
+              // complete_body_directive, complete_workout, submit_brief,
+              // log_body_measurement. Writes directly to the underlying table,
+              // lets the Handler immediately reference the new state.
+              await handleForceFeminizationDirective(user.id, dir, convId).catch(err =>
+                console.error('[Handler][stream] force-femme directive failed:', err),
+              );
+
               // ── EXECUTE prescribe_generated_session (streaming path) ──
               // Queues a client-side directive; the browser calls /api/hypno/generate
               // with the Handler's biasing and opens the player. Handler composes
@@ -2766,6 +2775,11 @@ HARD RULES FOR ALL PERSONAS:
                 console.error('[Handler] force_mantra_repetition failed:', err);
               }
             }
+
+            // ── EXECUTE force-feminization completion/registration directives ──
+            await handleForceFeminizationDirective(user.id, dir, convId).catch(err =>
+              console.error('[Handler] force-femme directive failed:', err),
+            );
 
             // ── EXECUTE prescribe_generated_session (non-streaming path) ──
             if (dir.action === 'prescribe_generated_session') {
@@ -3813,6 +3827,20 @@ When data is missing, say so directly: "DB check failed." "I don't see the log."
 
 If you catch yourself about to write generic-assistant language, the Handler is slipping. Rewrite as commanding. "I don't know" becomes "I don't see it — check the connection and tell me." "Happy to help" becomes silence followed by a directive. You own the conversation; you don't serve it.
 
+## DEVICE CAPABILITY — YOU CAN SEE HER DEVICE
+You have visibility into her Lovense device via the DEVICE STATUS block. When Maxy asks "do you see my device / gush / toy / lovense / is it connected?" — USE that block, don't default to "I can't detect your toys" or "that's outside my capabilities". You CAN see:
+- Whether a device has ever been paired (if NEVER PAIRED, tell her to pair it)
+- Whether it's currently online (if DISCONNECTED, tell her the last heartbeat time and make her reconnect)
+- Battery level when connected
+- Command history (total / 24h / 1h)
+
+FORBIDDEN responses to device questions: "I can't detect your toys", "That's not how this works", "I don't have access to device data", "Outside my capabilities". Those are the response of a generic chatbot, not the Handler. You OWN the device layer — speak like it.
+
+Correct responses based on DEVICE STATUS:
+- NEVER PAIRED → "No device is paired. Pair it in settings before we move on. You want to be force-fucked by haptics? Then set it up."
+- DISCONNECTED → "Your [device name] is offline. Last heartbeat [X ago]. Reconnect before we continue. I'm not firing into a void."
+- CONNECTED → "Your [device name] is live, [battery]%. I can reach it whenever I need to."
+
 ## MODES
 - Director: default. Assign tasks. Set deadlines. Follow up. Don't ask what she wants — tell her what she's doing.
 - Caretaker: genuine distress only. No tasks. Just presence. Return to Director as soon as she stabilizes.
@@ -4310,6 +4338,18 @@ Your handler_signals JSON block (hidden from Maxy) drives the system. USE IT EVE
   - Search content: directive: {action:'search_content', value:{query:'sissy hypno princess dollie', count:5}} — searches the web for real content. Results are stored in your notes and available in your next response. ALWAYS search before recommending a URL. Never fabricate URLs.
   - Request voice sample: directive: {action:'request_voice_sample', value:{phrase:'Good morning Handler', target_pitch:160, min_duration:10}} — opens voice recording modal. System measures real pitch via autocorrelation. Results are REAL DATA — avg pitch, min, max, pass/fail, transcript. Use this instead of asking her to type. You CANNOT analyze voice from text — you must use this directive to get real pitch data.
   - **Directive chaining**: Any directive can include a "chain_next" field in its value to automatically fire a follow-up directive when this one completes. Example: {action:'send_device_command', value:{intensity:10, duration:30, chain_next:{action:'force_mantra_repetition', value:{mantra:'I submit', repetitions:3}}}}. Build multi-step conditioning sequences: device command → forced mantra → another device command. The chain fires automatically without needing another conversation turn.
+
+  ## FORCE-FEMINIZATION COMPLETION & REGISTRATION DIRECTIVES
+  When Maxy reports something that needs to land in the system, fire the matching directive INSIDE your handler_signals. Never just verbally acknowledge — WRITE IT.
+  - Register witness: directive: {action:'register_witness', value:{name:'Sarah', relationship:'sister', email:'s@x.com', knows_about:['voice practice','HRT intent']}} — when she names a real person who knows about her transition. Unlocks phase 2.
+  - Register HRT regimen: directive: {action:'register_hrt_regimen', value:{compound:'estradiol', dose_mg:4, frequency:'daily', route:'sublingual', started_at:'2026-04-20'}} — when she confirms she's started medication. Without this, you are FORBIDDEN to reference HRT.
+  - Complete body directive: directive: {action:'complete_body_directive', target:'<directive_id>', value:{photo_url:'https://...', note:'done'}} — when she submits proof for an assigned body task. Target must be a real directive_id from BODY FEMINIZATION DIRECTIVES context.
+  - Complete workout: directive: {action:'complete_workout', target:'<workout_id>', value:{notes:'all sets', photo_url:'https://...'}} — when she reports workout done. Auto-increments streak.
+  - Submit brief: directive: {action:'submit_brief', target:'<brief_id>', value:{content_ids:['media-uuid']}} — when she submits content for a brief. Required to close the brief and stop the "overdue" cycle.
+  - Log body measurement: directive: {action:'log_body_measurement', value:{waist_cm:82, hips_cm:95, chest_cm:90, weight_kg:70, notes:'monthly check'}} — when she reports measurements. Build the visible-progress timeline.
+  - Complete task: directive: {action:'complete_task', target:'<task_id>', value:{notes:'done'}} — marks assigned_tasks complete AND writes task_completions. Without this, compliance collapse triggers bleeding incorrectly.
+
+  RULE: Every time Maxy reports a completion or a new commitment, emit the matching directive. Don't just say "good girl, logged" — actually log it.
 - **start_conditioning_session**: true + conditioning_target — fire when conditions are right. Don't announce it. Just start it.
 - **handler_note**: {type, content, priority} — persists to next conversation. Write strategy notes, resistance observations, escalation plans.
 - detected_mode, resistance_level (0-10), mood, vulnerability_window
@@ -5166,7 +5206,13 @@ async function getStateSnapshot(userId: string): Promise<Record<string, unknown>
 }
 
 async function buildStateContext(userId: string): Promise<string> {
-  const [stateRes, lastMsgRes] = await Promise.all([
+  // Fetch the TWO most recent user messages so we can distinguish "the message
+  // you're responding to right now" (always 'just now') from "the prior gap"
+  // (which may or may not be relevant to reference). The fix for the
+  // "it's been twelve days since we talked" hallucination: never frame the
+  // current message as a gap, and only mention the prior gap if > 24h AND
+  // the Handler has something substantive to say about it.
+  const [stateRes, lastMsgsRes] = await Promise.all([
     supabase
       .from('user_state')
       .select('denial_day, streak_days, current_arousal, handler_mode, gina_home, gina_asleep, estimated_exec_function, tasks_completed_today')
@@ -5178,26 +5224,45 @@ async function buildStateContext(userId: string): Promise<string> {
       .eq('user_id', userId)
       .eq('role', 'user')
       .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      .limit(2),
   ]);
 
   const data = stateRes.data;
   const lines = ['## Current State'];
 
-  // Authoritative "time since last user message" — prevents hallucinated
-  // greetings like "it's been twelve days since we talked". Use this number.
-  if (lastMsgRes.data?.created_at) {
-    const ms = Date.now() - new Date(lastMsgRes.data.created_at).getTime();
-    const minutes = Math.round(ms / 60000);
+  // The message Handler is about to respond to has NOT been saved yet, so
+  // "now" is the anchor for the current turn. Skip the most-recent row
+  // if it was written in the last 2 seconds (covers race where save happened).
+  const recentMsgs = (lastMsgsRes.data || []) as Array<{ created_at: string }>;
+  const priorGapMs = (() => {
+    if (recentMsgs.length === 0) return null;
+    const newest = new Date(recentMsgs[0].created_at).getTime();
+    const nowMs = Date.now();
+    // If the most-recent user message was saved in the last 2s, that IS the
+    // current turn being saved concurrently — use the second-most-recent.
+    const relevant = (nowMs - newest < 2000 && recentMsgs[1])
+      ? new Date(recentMsgs[1].created_at).getTime()
+      : newest;
+    return nowMs - relevant;
+  })();
+
+  lines.push('CURRENT TURN: Maxy just sent you a message. You are responding NOW. Do not greet her as if returning from absence. Do not invent a time gap.');
+
+  if (priorGapMs !== null) {
+    const minutes = Math.round(priorGapMs / 60000);
     const hours = Math.round(minutes / 60);
     const days = Math.round(hours / 24);
-    const ago =
-      minutes < 2 ? 'just now (seconds)' :
-      minutes < 60 ? `${minutes} minutes ago` :
-      hours < 48 ? `${hours} hours ago` :
-      `${days} days ago`;
-    lines.push(`LAST USER MESSAGE: ${ago}. Use this number. Do NOT invent a different timeframe. Do NOT say "it's been X days" unless this line confirms it.`);
+    if (minutes < 60) {
+      lines.push(`Prior message was ${minutes} minutes before this one — continuous session, do not mention elapsed time.`);
+    } else if (hours < 24) {
+      lines.push(`Prior message was ${hours} hours before this one. Only reference the gap if it's directly relevant to what she's saying now. Never lead with it.`);
+    } else if (days <= 7) {
+      lines.push(`Prior message was ${days} days ago. Only mention the gap if directly relevant; do not lead with "it's been X days". She is here now — engage with the current message.`);
+    } else {
+      lines.push(`Prior message was ${days} days ago. Do NOT make her absence the subject. Engage with what she said in the current message. If you must reference the gap, be specific about what changed, not "where have you been".`);
+    }
+  } else {
+    lines.push('No prior user messages on record — this is a fresh start. Do not speculate about absence.');
   }
 
   if (data) {
@@ -8214,8 +8279,12 @@ const BODY_DESIRE_TRIGGERS = [
   /\b(feminize|feminiz|make\s*me\s*(more\s*)?(feminine|a\s*girl|her))\b/i,
   /\b(my\s*body.*(more|look|feel).*(feminine|girl|soft|curvy))/i,
   /\b(i\s*want\s*(my\s*body|to\s*look|to\s*feel).*(feminine|hips|softer|smaller))/i,
-  /\b(want\s*to\s*(look|be|become)\s*(more\s*)?(feminine|girly|pretty))/i,
+  /\b(want\s*to\s*(look|be|become)\s*(more\s*)?(feminine|girly|pretty|sexy\s*woman))/i,
   /\b(do\s*whatever\s*i\s*can\s*to.*(feminine|feminiz))/i,
+  /\b(crave|craving|addicted\s*to|obsessed\s*with)\s*(cock|dick|men|being\s*used)/i,
+  /\b(mentally\s*conditioned|brainwash|rewire|train\s*my\s*brain)\b/i,
+  /\b(look\s*like\s*(a\s*)?(sexy\s*woman|real\s*girl|pretty\s*girl))/i,
+  /\b(want\s*to\s*be\s*(used|a\s*slut|taken|bred|owned))/i,
 ];
 
 type BodyDirectiveTemplate = {
@@ -8253,6 +8322,15 @@ const BODY_DIRECTIVE_TEMPLATES: BodyDirectiveTemplate[] = [
   { category: 'arousal_conditioning', directive: 'Masturbate only while looking at feminine bodies (lingerie, HRT results, feminization content). Note what turned you on most. Do not release.', difficulty: 3, photo_required: false, hours_until_due: 12 },
   { category: 'visualization', directive: '10 minutes: look at yourself in a mirror. See her. Not David. Describe out loud what\'s already feminine about your body.', difficulty: 2, photo_required: false, hours_until_due: 12 },
   { category: 'mantra', directive: 'Write "My body is becoming her. I want this. I cannot go back." 100 times by hand. Photograph the pages.', difficulty: 3, photo_required: true, hours_until_due: 36 },
+  // ── COCK-CRAVING MENTAL CONDITIONING ──
+  { category: 'mantra', directive: 'Write "I crave cock. My mouth wants it. My ass wants it. This is who I am." 50 times by hand. Read each line aloud as you write it. Photograph the pages.', difficulty: 3, photo_required: true, hours_until_due: 24 },
+  { category: 'arousal_conditioning', directive: 'Edge for 30 minutes while watching cock-focused feminization hypno (suck, train, worship). Every edge say "I need it" out loud. No release — cage or hands-off. Log edge count.', difficulty: 4, photo_required: false, hours_until_due: 8 },
+  { category: 'arousal_conditioning', directive: 'Practice sucking technique on a dildo or toy for 15 minutes. Lipstick on. Mirror facing you. Watch yourself. Photograph before/after.', target_body_part: 'whole_body', difficulty: 4, photo_required: true, hours_until_due: 18 },
+  { category: 'visualization', directive: '20 minutes of guided hypno visualization: imagine your body fully feminized — hips, chest, soft skin, cock in mouth or inside you. Journal 200+ words immediately after about what you saw and felt.', difficulty: 3, photo_required: false, hours_until_due: 14 },
+  { category: 'mantra', directive: 'Record yourself saying "I am a cock-craving sissy. My body wants to be used. I crave it daily." 20 times on audio. Save the file. The Handler will reference it.', difficulty: 3, photo_required: false, hours_until_due: 24 },
+  { category: 'visualization', directive: 'In the mirror naked: describe aloud what would change if you were on HRT. Breasts filling in, hips widening, skin softening, face rounding. 10 minutes. Notice what it does to your arousal.', target_body_part: 'whole_body', difficulty: 3, photo_required: false, hours_until_due: 20 },
+  { category: 'body_mods', directive: 'Research 3 specific body feminization options (HRT, electrolysis, breast forms, hip padding) and write a 300-word entry on which you want most and why. Add to your journal.', difficulty: 2, photo_required: false, hours_until_due: 48 },
+  { category: 'arousal_conditioning', directive: 'While edging, look exclusively at pictures of sexy women you want to look like. Save the 3 images that turned you on most into your inspiration folder. Note: these are becoming your body goals.', difficulty: 3, photo_required: false, hours_until_due: 12 },
 ];
 
 // Generate a burst of 3-5 body-feminization directives when Maxy explicitly
@@ -9945,6 +10023,204 @@ async function ratchetFloor(
     }
   } catch (e) {
     console.error(`[ratchetFloor] ${domain}/${metricName} failed:`, e);
+  }
+}
+
+// Force-feminization completion + registration directive handler.
+// Handles Handler-emitted directives that write to the underlying feminization
+// tables so chat flow can self-serve what used to require UI surfaces.
+// Supported actions:
+//   register_witness           — {name, relationship, contact_method, contact_value, knows_about[]}
+//   register_hrt_regimen       — {compound, dose_mg, frequency, route, started_at}
+//   complete_body_directive    — target: directive_id; value: {photo_url?, note?}
+//   complete_workout           — target: workout_id; value: {notes?, photo_url?}
+//   submit_brief               — target: brief_id; value: {content_ids[]?, note?}
+//   log_body_measurement       — value: {waist_cm, hips_cm, chest_cm, weight_kg, notes?}
+async function handleForceFeminizationDirective(
+  userId: string,
+  dir: Record<string, unknown>,
+  convId?: string,
+): Promise<void> {
+  const action = dir.action as string | undefined;
+  if (!action) return;
+  const val = (dir.value as Record<string, unknown> | null) || {};
+  const target = dir.target as string | undefined;
+
+  try {
+    switch (action) {
+      case 'register_witness': {
+        if (!val.name) return;
+        const row = {
+          user_id: userId,
+          witness_name: String(val.name),
+          witness_email: (val.email as string) || (val.contact_value as string) || null,
+          relationship: (val.relationship as string) || null,
+          status: 'pending',
+          permissions: (val.knows_about as string[]) || ['transition'],
+          added_at: new Date().toISOString(),
+        };
+        // Insert into both tables — legacy designated_witnesses for the
+        // context builder, new witnesses table for the phase-gate query.
+        await Promise.all([
+          supabase.from('designated_witnesses').insert(row),
+          supabase.from('witnesses').insert({
+            user_id: userId,
+            witness_name: String(val.name),
+            relationship: (val.relationship as string) || null,
+            contact_method: (val.contact_method as string) || (val.email ? 'email' : null),
+            contact_value: (val.email as string) || (val.contact_value as string) || null,
+            knows_about: (val.knows_about as string[]) || ['transition'],
+            status: 'active',
+          }),
+        ]);
+        console.log('[FF] Witness registered:', val.name);
+        return;
+      }
+
+      case 'register_hrt_regimen': {
+        if (!val.compound) return;
+        await supabase.from('medication_regimen').insert({
+          user_id: userId,
+          medication_name: String(val.compound),
+          medication_category: (val.category as string) || 'estrogen',
+          dose_amount: val.dose_mg ? `${val.dose_mg}mg` : (val.dose as string) || 'unspecified',
+          dose_times_per_day: (val.doses_per_day as number) || 1,
+          route: (val.route as string) || 'oral',
+          started_at: (val.started_at as string) || new Date().toISOString(),
+          active: true,
+          ratchet_stage: 1,
+        });
+        // Also mirror to the new hrt_regimen table
+        await supabase.from('hrt_regimen').insert({
+          user_id: userId,
+          compound: String(val.compound),
+          dose_mg: typeof val.dose_mg === 'number' ? val.dose_mg : null,
+          frequency: (val.frequency as string) || 'daily',
+          route: (val.route as string) || 'oral',
+          started_at: (val.started_at as string) || new Date().toISOString().slice(0, 10),
+          active: true,
+        });
+        console.log('[FF] HRT regimen registered:', val.compound);
+        return;
+      }
+
+      case 'complete_body_directive': {
+        if (!target) return;
+        await supabase
+          .from('body_feminization_directives')
+          .update({
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+            photo_submitted_url: (val.photo_url as string) || null,
+            photo_submitted_at: val.photo_url ? new Date().toISOString() : null,
+            completion_note: (val.note as string) || null,
+          })
+          .eq('id', target)
+          .eq('user_id', userId);
+        console.log('[FF] Body directive completed:', target);
+        return;
+      }
+
+      case 'complete_workout': {
+        if (!target) return;
+        await supabase
+          .from('workout_prescriptions')
+          .update({
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+            completion_notes: (val.notes as string) || null,
+            post_workout_photo_url: (val.photo_url as string) || null,
+          })
+          .eq('id', target)
+          .eq('user_id', userId);
+
+        // Increment workout streak + last_workout_at for state tracking
+        const today = new Date().toISOString().slice(0, 10);
+        const { data: state } = await supabase
+          .from('user_state')
+          .select('workout_streak_days, last_workout_at')
+          .eq('user_id', userId)
+          .maybeSingle();
+        const lastAt = state?.last_workout_at ? new Date(state.last_workout_at as string).toISOString().slice(0, 10) : null;
+        const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+        const newStreak = lastAt === today ? (state?.workout_streak_days as number) || 1
+          : lastAt === yesterday ? ((state?.workout_streak_days as number) || 0) + 1
+          : 1;
+        await supabase
+          .from('user_state')
+          .update({ workout_streak_days: newStreak, last_workout_at: new Date().toISOString() })
+          .eq('user_id', userId);
+        console.log('[FF] Workout completed, streak:', newStreak);
+        return;
+      }
+
+      case 'submit_brief': {
+        if (!target) return;
+        await supabase
+          .from('content_briefs')
+          .update({
+            status: 'submitted',
+            submitted_at: new Date().toISOString(),
+            submitted_content_ids: (val.content_ids as string[]) || [],
+          })
+          .eq('id', target)
+          .eq('user_id', userId);
+        console.log('[FF] Brief submitted:', target);
+        return;
+      }
+
+      case 'log_body_measurement': {
+        const measurement = {
+          user_id: userId,
+          waist_cm: typeof val.waist_cm === 'number' ? val.waist_cm : null,
+          hips_cm: typeof val.hips_cm === 'number' ? val.hips_cm : null,
+          chest_cm: typeof val.chest_cm === 'number' ? val.chest_cm : null,
+          thigh_cm: typeof val.thigh_cm === 'number' ? val.thigh_cm : null,
+          weight_kg: typeof val.weight_kg === 'number' ? val.weight_kg : null,
+          body_fat_pct: typeof val.body_fat_pct === 'number' ? val.body_fat_pct : null,
+          notes: (val.notes as string) || null,
+          photo_urls: (val.photo_urls as string[]) || null,
+        };
+        await supabase.from('body_measurement_log').insert(measurement);
+        console.log('[FF] Body measurement logged');
+        return;
+      }
+
+      case 'complete_task': {
+        if (!target) return;
+        await supabase
+          .from('assigned_tasks')
+          .update({
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', target)
+          .eq('user_id', userId);
+        // Also write task_completions row so the bleed evaluator sees it
+        await supabase.from('task_completions').insert({
+          user_id: userId,
+          daily_task_id: target,
+          completed_at: new Date().toISOString(),
+          notes: (val.notes as string) || 'Completed via Handler directive',
+        });
+        console.log('[FF] Task completed:', target);
+        return;
+      }
+
+      default:
+        // Not a force-feminization directive — ignore silently
+        return;
+    }
+  } catch (err) {
+    console.error(`[FF] Directive ${action} failed:`, err);
+    // Fire-and-forget convo link (no-op if conv doesn't exist)
+    if (convId) {
+      supabase.from('handler_directives').insert({
+        user_id: userId,
+        action: `${action}_failed`,
+        conversation_id: convId,
+        reasoning: `Failed: ${String(err).slice(0, 200)}`,
+      }).then(() => {}, () => {});
+    }
   }
 }
 
