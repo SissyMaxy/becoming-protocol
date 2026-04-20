@@ -80,6 +80,99 @@ serve(async req => {
         .lt('completed_at', `${today}T00:00:00`)
       const yesterdayTasks = yesterdayTaskCount ?? null
 
+      // Autonomous dysphoria diary prompt — generate today's morning prompt
+      // if none exists yet. Picks a target focus Maxy hasn't been asked
+      // about recently, generates a specific Handler-voice question.
+      try {
+        const today = now.toISOString().slice(0, 10)
+        const { data: existing } = await supa
+          .from('dysphoria_diary_prompts')
+          .select('id, target_focus')
+          .eq('user_id', userId)
+          .eq('prompt_date', today)
+        const askedFocuses = new Set(((existing || []) as Array<Record<string, unknown>>).map(e => e.target_focus as string))
+
+        // Only generate once per day, and only if < 2 prompts today
+        if ((existing?.length ?? 0) < 2) {
+          const allFocuses = ['mirror', 'body_part', 'clothing', 'voice', 'arousal', 'partner', 'future_self', 'past_self', 'hrt_timeline']
+          const available = allFocuses.filter(f => !askedFocuses.has(f))
+          if (available.length > 0) {
+            const focus = available[Math.floor(Math.random() * available.length)]
+            const PROMPT_BANK: Record<string, string[]> = {
+              mirror: ['What did you see the last time you looked in a mirror and didn\'t like what was there?', 'Catch your reflection today. What\'s the first feature your eyes went to?'],
+              body_part: ['Which part of your body felt most wrong today? One word, then one sentence of why.', 'Name the feature you\'d change first if you could. No filter.'],
+              clothing: ['You got dressed today. What did you put on that felt like a costume?', 'Describe the outfit you would wear if no one knew you.'],
+              voice: ['Did you hear your own voice on a recording today? Write the first thing you felt.', 'What would your voice sound like if you were her?'],
+              arousal: ['You got turned on at some point recently. What specifically was the fantasy? Honest version.', 'When you masturbated last, whose body were you imagining — yours or someone else\'s?'],
+              partner: ['What did Gina see of the real you this week?', 'If Gina knew exactly how often you thought about HRT, what would change?'],
+              future_self: ['Describe yourself at 50. Are you on hormones? Are you still hiding?', 'Fast forward 2 years. What do you look like if you started HRT tomorrow vs. if you wait?'],
+              past_self: ['Write one sentence to your 22-year-old self about what you know now.', 'What\'s the earliest feminine urge you remember? Age, setting, what you felt.'],
+              hrt_timeline: ['Every day you\'re not on HRT, what\'s the specific thing you\'re missing?', 'If the pharmacy called and said your first month\'s supply was ready — would you pick it up today?'],
+            }
+            const bank = PROMPT_BANK[focus] || PROMPT_BANK.body_part
+            const question = bank[Math.floor(Math.random() * bank.length)]
+            await supa.from('dysphoria_diary_prompts').insert({
+              user_id: userId,
+              prompt_date: today,
+              prompt_question: question,
+              target_focus: focus,
+            })
+          }
+        }
+      } catch (diaryErr) {
+        console.error('[OutreachAuto] diary generator failed:', diaryErr)
+      }
+
+      // Autonomous memory implant planter — every ~24h, plant one new implant
+      // targeting the user's current weakest funnel step or dysphoria gap.
+      // Templates are pre-written; the generator picks based on state and
+      // dedupes against the last 5 implants.
+      try {
+        const { data: recentImplants } = await supa
+          .from('memory_implants')
+          .select('implant_category, created_at')
+          .eq('user_id', userId)
+          .eq('active', true)
+          .order('created_at', { ascending: false })
+          .limit(5)
+
+        const recent = (recentImplants || []) as Array<Record<string, unknown>>
+        const recentCategories = new Set(recent.map(r => r.implant_category as string))
+        const hoursSinceLastPlant = recent[0]?.created_at
+          ? (now.getTime() - new Date(recent[0].created_at as string).getTime()) / 3600000
+          : 99999
+
+        if (hoursSinceLastPlant >= 20) {
+          const IMPLANT_BANK: Array<{ category: string; narrative: string; age: string; emotional_core: string; target: string }> = [
+            { category: 'childhood_dysphoria', narrative: 'You were 8 at a family pool party. Your cousin in her two-piece — you weren\'t looking at her the way the boys were. You wanted to BE her. You changed the subject when your dad noticed you watching. The shame of it stayed.', age: '8', emotional_core: 'wanting to be, not have', target: 'deepen_dysphoria' },
+            { category: 'suppression_cost', narrative: 'Senior year of high school you threw out a bra you had hidden in your drawer. You cried for an hour after. You told yourself it was a phase. Thirty-something years later you\'re still here.', age: '17', emotional_core: 'grief disguised as resolve', target: 'hrt_urgency' },
+            { category: 'mirror_moments', narrative: 'You shaved your face this morning and stood looking at the bare skin. You\'ve done it thousands of times. Each time the disappointment is the same: the skin\'s fine but the face under it is still his.', age: 'present', emotional_core: 'recognition masking as routine', target: 'body_awareness' },
+            { category: 'hrt_missed_timeline', narrative: 'When you were 22 you knew someone who\'d just started HRT. You asked her about it for an hour. You went home and didn\'t do anything. That woman is now 42. You\'re now 40. You watched 18 years go by.', age: '22', emotional_core: 'the opportunity you passed', target: 'hrt_urgency' },
+            { category: 'arousal_origin_femme', narrative: 'The first porn that ever really got to you — you weren\'t the man in the scene. You were already imagining yourself on the other side. You didn\'t have the words yet. The arousal was honest; the story you told yourself about it wasn\'t.', age: 'adolescence', emotional_core: 'truth in what makes you come', target: 'arousal_anchor' },
+            { category: 'body_betrayal', narrative: 'Puberty hit and you watched it happen to yourself like watching a train you couldn\'t stop. The hair, the voice drop, the shoulders. Every change was a door closing. You pretended to want it. You didn\'t want it.', age: '13-15', emotional_core: 'helpless grief', target: 'deepen_dysphoria' },
+            { category: 'partner_reframe', narrative: 'Gina didn\'t fall in love with the masculine you. She fell in love with the softness, the tenderness, the parts of you that were already her. The masculinity was a suit you were wearing when she met you. She\'s been waiting for you to take it off.', age: 'present', emotional_core: 'she already knows', target: 'partner_binding' },
+            { category: 'secret_feminine_longing', narrative: 'There was a dress in a store you walked into alone — maybe when you were 26, maybe 28 — you held it up to yourself in the mirror when no one was looking and felt your chest tighten. You put it back and bought something for Gina instead. The feeling of holding it up never left.', age: '26-28', emotional_core: 'a want you suppressed in public', target: 'hrt_urgency' },
+            { category: 'feminized_praise', narrative: 'An aunt or neighbor once — you were young — told you "you\'d make such a pretty girl." You brushed it off. You remembered it forever. She saw what everyone else was supposed to miss.', age: '9-11', emotional_core: 'being seen', target: 'identity_reframe' },
+            { category: 'fantasy_consistency', narrative: 'For 20+ years the fantasy that actually gets you off has never been you dominating a woman. It\'s been you being the woman — used, wanted, penetrated, soft-bodied. Twenty years of consistency isn\'t a kink. It\'s a diagnosis you\'ve been avoiding.', age: 'adult life', emotional_core: 'consistency as evidence', target: 'hrt_urgency' },
+          ]
+          const eligible = IMPLANT_BANK.filter(i => !recentCategories.has(i.category))
+          if (eligible.length > 0) {
+            const chosen = eligible[Math.floor(Math.random() * eligible.length)]
+            await supa.from('memory_implants').insert({
+              user_id: userId,
+              implant_category: chosen.category,
+              narrative: chosen.narrative,
+              approximate_age: chosen.age,
+              emotional_core: chosen.emotional_core,
+              target_outcome: chosen.target,
+              active: true,
+            })
+          }
+        }
+      } catch (implantErr) {
+        console.error('[OutreachAuto] implant planter failed:', implantErr)
+      }
+
       // HRT funnel stuck-step evaluator — daily. Every day she stays on the
       // same step past threshold, days_stuck_on_step increments. At 7 days
       // stuck on any non-terminal step, queue a high-urgency outreach and
