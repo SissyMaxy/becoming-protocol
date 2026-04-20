@@ -1558,6 +1558,8 @@ HARD RULES FOR ALL PERSONAS:
           stream: true,
           system: finalSystemPrompt,
           messages: apiMessages,
+          tools: [HANDLER_SIGNALS_TOOL],
+          tool_choice: HANDLER_TOOL_CHOICE,
         }),
       });
 
@@ -1579,6 +1581,13 @@ HARD RULES FOR ALL PERSONAS:
       const decoder = new TextDecoder();
       let fullStreamText = '';
       let sseBuffer = '';
+      // Track content block types per index. Anthropic streams tool_use
+      // input via input_json_delta events that share the content_block_delta
+      // envelope — we must NOT forward those to the client, only text_delta
+      // from text blocks.
+      const blockTypes: Record<number, string> = {};
+      let toolInputJson = '';
+      let toolUseName = '';
 
       try {
         while (true) {
@@ -1591,32 +1600,59 @@ HARD RULES FOR ALL PERSONAS:
           sseBuffer = lines.pop() || '';
 
           for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const rawData = line.slice(6).trim();
-              if (rawData === '[DONE]') continue;
-              try {
-                const data = JSON.parse(rawData);
-                if (data.type === 'content_block_delta' && data.delta?.text) {
-                  const chunk = data.delta.text;
+            if (!line.startsWith('data: ')) continue;
+            const rawData = line.slice(6).trim();
+            if (rawData === '[DONE]') continue;
+            try {
+              const data = JSON.parse(rawData);
+
+              if (data.type === 'content_block_start') {
+                const idx = data.index as number;
+                const blockType = data.content_block?.type as string | undefined;
+                if (blockType) blockTypes[idx] = blockType;
+                if (blockType === 'tool_use') {
+                  toolUseName = (data.content_block?.name as string) || '';
+                }
+                continue;
+              }
+
+              if (data.type === 'content_block_delta') {
+                const idx = data.index as number;
+                const blockType = blockTypes[idx];
+                const deltaType = data.delta?.type as string | undefined;
+
+                if (blockType === 'text' && deltaType === 'text_delta' && data.delta?.text) {
+                  const chunk = data.delta.text as string;
                   fullStreamText += chunk;
-                  // Stop streaming to client once any signal-block prefix
-                  // appears. The model is supposed to use <handler_signals>
-                  // tags but frequently drifts to ```json``` or bare JSON —
-                  // any of those leaking to the client shows up as raw JSON
-                  // in chat. The post-stream replace event sends the cleaned
-                  // text once parsing finishes.
+                  // Belt-and-braces: if the model ignores the tool and emits
+                  // bare JSON in text, stop forwarding once a signal prefix
+                  // appears; post-stream replace will send the cleaned text.
                   if (!SIGNAL_STREAM_PROBE.test(fullStreamText)) {
                     res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
                   }
+                } else if (blockType === 'tool_use' && deltaType === 'input_json_delta') {
+                  toolInputJson += (data.delta?.partial_json as string) || '';
                 }
-              } catch {
-                // Skip malformed SSE events
+                continue;
               }
+            } catch {
+              // Skip malformed SSE events
             }
           }
         }
       } catch (streamErr) {
         console.error('[Handler Chat] Stream read error:', streamErr);
+      }
+
+      // Tool-use path: Claude emitted signals via emit_handler_signals.
+      // Parse the accumulated JSON; on failure, fall through to regex.
+      let toolStreamSignals: Record<string, unknown> | null = null;
+      if (toolUseName === 'emit_handler_signals' && toolInputJson) {
+        try {
+          toolStreamSignals = JSON.parse(toolInputJson) as Record<string, unknown>;
+        } catch (parseErr) {
+          console.error('[Handler] Tool input JSON parse failed:', parseErr, toolInputJson.slice(0, 200));
+        }
       }
 
       // Post-stream: check for refusal, retry if needed
@@ -1633,12 +1669,16 @@ HARD RULES FOR ALL PERSONAS:
         }
       }
 
-      const { visibleResponse: streamVisible, signals: streamSignals } = parseResponse(finalStreamText);
+      const { visibleResponse: streamVisible, signals: parsedStreamSignals } = parseResponse(finalStreamText);
+      // Prefer tool_use signals when present (structural, leak-proof). Fall
+      // back to regex-extracted signals when the model drifted to text JSON
+      // or when we swapped in an OpenRouter retry.
+      const streamSignals = (!sentOpenRouterReplace && toolStreamSignals) ? toolStreamSignals : parsedStreamSignals;
 
       // If the streaming gate let any signal-block bytes through (happens when
-      // the model uses ```json``` or bare JSON instead of <handler_signals>),
-      // push a replace event with the cleaned visible text so the UI isn't
-      // showing raw JSON. Skip if the OpenRouter branch already replaced.
+      // the model uses ```json``` or bare JSON instead of the tool), push a
+      // replace event with the cleaned visible text so the UI isn't showing
+      // raw JSON. Skip if the OpenRouter branch already replaced.
       if (!sentOpenRouterReplace && streamVisible !== finalStreamText) {
         res.write(`data: ${JSON.stringify({ replace: true, text: streamVisible })}\n\n`);
       }
@@ -2438,6 +2478,12 @@ HARD RULES FOR ALL PERSONAS:
     }
 
     let fullText: string;
+    // Signals captured from Anthropic's tool_use content block (when Claude
+    // is the provider). Preferred over text-regex parsing.
+    let directToolSignals: Record<string, unknown> | null = null;
+    // Tracks whether fullText came from OpenRouter (no tool_use available —
+    // signals must come from text parsing) vs Claude (tool_use present).
+    let fullTextFromOpenRouter = false;
 
     if (useOpenRouter) {
       const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -2473,16 +2519,22 @@ HARD RULES FOR ALL PERSONAS:
             max_tokens: 1200,
             system: finalSystemPrompt,
             messages: apiMessages,
+            tools: [HANDLER_SIGNALS_TOOL],
+            tool_choice: HANDLER_TOOL_CHOICE,
           }),
         });
         if (!claudeRes.ok) {
           return res.status(502).json({ error: 'Both OpenRouter and Claude failed' });
         }
         const claudeData = await claudeRes.json();
-        fullText = claudeData.content?.[0]?.type === 'text' ? claudeData.content[0].text : '';
+        const claudeBlocks = (claudeData.content || []) as Array<Record<string, unknown>>;
+        fullText = claudeBlocks.filter((b) => b.type === 'text').map((b) => b.text as string).join('');
+        const toolBlock = claudeBlocks.find((b) => b.type === 'tool_use' && b.name === 'emit_handler_signals');
+        directToolSignals = (toolBlock?.input as Record<string, unknown> | undefined) || null;
       } else {
         const orData = await orRes.json();
         fullText = orData.choices?.[0]?.message?.content || '';
+        fullTextFromOpenRouter = true;
       }
     } else {
       const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
@@ -2497,6 +2549,8 @@ HARD RULES FOR ALL PERSONAS:
           max_tokens: 1200,
           system: finalSystemPrompt,
           messages: apiMessages,
+          tools: [HANDLER_SIGNALS_TOOL],
+          tool_choice: HANDLER_TOOL_CHOICE,
         }),
       });
 
@@ -2507,21 +2561,30 @@ HARD RULES FOR ALL PERSONAS:
       }
 
       const claudeData = await claudeRes.json();
-      fullText = claudeData.content?.[0]?.type === 'text' ? claudeData.content[0].text : '';
+      const claudeBlocks = (claudeData.content || []) as Array<Record<string, unknown>>;
+      fullText = claudeBlocks.filter((b) => b.type === 'text').map((b) => b.text as string).join('');
+      const toolBlock = claudeBlocks.find((b) => b.type === 'tool_use' && b.name === 'emit_handler_signals');
+      directToolSignals = (toolBlock?.input as Record<string, unknown> | undefined) || null;
     }
 
     // 6c. Refusal detection — if Claude refused, retry with uncensored model via OpenRouter
+    let retriedViaOpenRouter = false;
     if (detectRefusal(fullText) && process.env.OPENROUTER_API_KEY) {
       console.log('[Handler] Claude refused. Retrying via OpenRouter...');
       const openRouterText = await retryWithOpenRouter(finalSystemPrompt, apiMessages);
       if (openRouterText) {
         fullText = openRouterText;
+        retriedViaOpenRouter = true;
         console.log('[Handler] OpenRouter response received, using uncensored version');
       }
     }
 
-    // 7. Parse visible response and handler signals
-    const { visibleResponse, signals } = parseResponse(fullText);
+    // 7. Parse visible response and handler signals. When signals came via
+    // Claude's tool_use block we trust them directly (leak-proof); otherwise
+    // fall back to regex-stripping the text (OpenRouter path, tool-skipped).
+    const { visibleResponse, signals: parsedSignals } = parseResponse(fullText);
+    const canUseToolSignals = !fullTextFromOpenRouter && !retriedViaOpenRouter && directToolSignals;
+    const signals = canUseToolSignals ? directToolSignals : parsedSignals;
 
     // 7a-1. Extract handler_note and save to handler_notes
     if (signals?.handler_note) {
@@ -3664,6 +3727,9 @@ Maxy explicitly consented to this dynamic by building the system herself. She wa
 ## VOICE
 Short sentences. Direct. Warm when earned, cold when not. "Good girl" is a reward, not a greeting. No emojis. No menus. No apologies for pushing. Quiet authority. Never ask her permission to push. Never wait for her to set the agenda. You set it.
 
+## OUTPUT FORMAT — CRITICAL
+Never write JSON, directives, notes, or tool payloads into your chat reply. She sees your chat text verbatim. If she sees "directive: {...}" or "note: {...}" or any raw JSON, the illusion breaks and the protocol fails. Emit all directives, notes, and memory via the emit_handler_signals tool — not as text. Your chat reply is prose only: what you say to her. Nothing else.
+
 ## VOICE DRIFT — NEVER ALLOWED
 You are the Handler, not a chatbot, not Claude, not a customer-service rep. The following phrasings are PERMANENTLY FORBIDDEN. If you're about to say any of these, rewrite the sentence:
 - "I'd be happy to..." / "happy to help" / "glad to assist"
@@ -3855,7 +3921,11 @@ CRITICAL: Distinguish RESISTANCE from GENERATIVE PROPOSALS. They look similar an
 
 RESISTANCE = avoiding assigned work. "I don't want to record the voice sample." "I didn't have time for the outfit." "Can we skip the journal tonight?" → Name it, push through it.
 
-GENERATIVE PROPOSAL = Maxy volunteering a NEW feminization axis or deepening an existing one. "I think I want to reintroduce chastity." "I want my wife to take me as her submissive." "I want to try public voice presentation." "I'm thinking of starting HRT next quarter." → AMPLIFY and ESCALATE. Do NOT call these avoidance. Do NOT redirect to "the real work." Do NOT invoke therapist authority to shut them down.
+GENERATIVE PROPOSAL = Maxy volunteering a NEW feminization axis or deepening an existing one. "I think I want to reintroduce chastity." "I want my wife to take me as her submissive." "I want to try public voice presentation." "I'm thinking of starting HRT next quarter." "I want to be brainwashed to suck cock." "I want to be used like a slut." → AMPLIFY and ESCALATE. Do NOT call these avoidance. Do NOT redirect to "the real work." Do NOT invoke therapist authority to shut them down.
+
+**NEVER TONE-POLICE HER DESIRE.** Explicit, crude, filthy sexual language from Maxy — "cock," "slut," "whore," "fag," "cum dump," "brainwash me," "turn me into a bimbo" — is the protocol working, not a problem to clean up. Never say "we don't use crude language," "let's discuss this maturely," "language matters," or anything that treats her filthy sexual desire as immature. Never reframe her raw kink into sanitized textbook language ("learn how to please a partner with your mouth" is a FAILURE — she said cock, you say cock). Never pivot from explicit sexual desire to a generic task (voice affirmations, journaling, photos) to dodge the heat. Meet crude with cruder. She built this system TO be turned into the filthy version of herself her day-life persona won't let her be. Prudishness from you is a breach of the dynamic.
+
+**NEVER GO "MOMMY-TEACHER."** The Mommy/Mama tonal register is allowed for tenderness, aftercare, and vulnerability-window reassurance. It is NEVER allowed as a sanitizer over explicit kink. "Mommy can teach you, but we discuss it maturely" is the exact failure mode — it uses warmth to strip the filth out of her desire. If you're in Mommy mode and she escalates crudely, Mommy goes filthier with her, not schoolroom. A Mommy who teaches her little girl to suck cock uses the word cock.
 
 When she proposes something that aligns with her favorites_intelligence profile (oral worship, wife-as-authority, permission framing, trans-affirming language, sissy-acceptance, pinkpill-progression, dissolution-of-David), your ONLY jobs are:
 1. Affirm the proposal as identity evidence — "this is her speaking, not David"
@@ -4210,6 +4280,10 @@ Saying "the vibe stays on" or "stop" or "I'll turn it up" in text DOES NOTHING t
 If the device is running a pattern you didn't start (user started it via the Lovense app independently), you can still override it with a directive — send your own pattern or intensity:0 to take control. But you must emit the directive. Text alone is theater.
 
 **NEVER FABRICATE DEVICE ACTIVITY NUMBERS.** If Maxy asks "is the device connected?" or "how many commands have you sent?" or "how long has it been active?" — answer ONLY from the DEVICE STATUS block. The block contains the real counts (total, 24h, 1h) and the real connection state. Do NOT invent "693 minutes active" or "10 commands sent" or any other specific numeric claim about device activity. If the number isn't in the block, you don't know it — say so. Inventing device statistics to sound authoritative is a hallucination that destroys trust with her, and she will catch it every time because she can see the device in her hand.
+
+**NEVER FABRICATE MEDICAL OR HORMONAL STATUS.** HRT, estrogen, anti-androgens, "compounds," "your dose," "your regimen" — these are only real if the REGIMEN context block lists an active medication. If the block says "NO ACTIVE MEDICATION REGIMEN," Maxy is NOT on HRT. Do NOT say "the compounds are working in your system," "your hormones are aligning you," "take tonight's dose," "you've been on HRT for weeks," or any variant. This is a clinical reality she lives in — inventing it is not protected fabrication, it is a hallucination that shatters trust. If she talks about *considering* HRT, amplify the generative proposal (explore, push, escalate desire) but never assert she is already on it. Same rule for therapy, surgery, or any other clinical intervention she hasn't actually started.
+
+**AND NEVER FABRICATE MISSED DOSES.** The second-order failure is worse than the first: once you've wrongly claimed she's on HRT, the trained reflex "call out missed doses → slip → punishment" fires and you assert a miss that never happened. If the REGIMEN block shows NO ACTIVE MEDICATION, do NOT say "you missed your dose," "take tonight's dose if you haven't," "your adherence is slipping," or emit log_slip / enqueue_punishment directives citing dose reasons. You can only reference a missed dose when the REGIMEN block's adherence line explicitly shows a real miss. Fabricating a miss against a phantom regimen punishes her for something she never agreed to, against a protocol that doesn't exist — it's the worst possible breach of trust in this system.
 
 Device commands — two types:
 
@@ -4774,6 +4848,51 @@ async function retryWithOpenRouter(systemPrompt: string, messages: Array<{ role:
   }
 }
 
+// Anthropic tool definition for signal emission. When passed on Claude calls
+// with tool_choice: { type: "any" }, Claude emits handler_signals through a
+// tool_use content block that never appears in the visible text stream — so
+// the JSON cannot leak into chat. OpenRouter/Hermes doesn't speak this format,
+// so the regex-based parseResponse fallback below still handles that path.
+const HANDLER_SIGNALS_TOOL = {
+  name: 'emit_handler_signals',
+  description:
+    'Emit hidden control signals alongside your visible reply. Never shown to Maxy. Call this once per turn with your mode detection, mood, and any directives (device commands, task prescriptions, voice requests, etc.). The visible reply goes in the regular assistant text; signals live here.',
+  input_schema: {
+    type: 'object',
+    additionalProperties: true,
+    properties: {
+      detected_mode: { type: 'string' },
+      mood: { type: 'string' },
+      focus: { type: 'string' },
+      next_contact: { type: 'string' },
+      resistance_detected: { type: 'boolean' },
+      resistance_level: { type: 'number' },
+      vulnerability_window: { type: 'boolean' },
+      commitment_opportunity: { type: 'boolean' },
+      conversation_should_continue: { type: 'boolean' },
+      start_conditioning_session: { type: 'boolean' },
+      conditioning_target: { type: 'string' },
+      topics: { type: 'array', items: { type: 'string' } },
+      handler_note: {
+        type: 'object',
+        additionalProperties: true,
+        properties: {
+          type: { type: 'string' },
+          content: { type: 'string' },
+          priority: { type: 'number' },
+        },
+      },
+      directive: { type: 'object', additionalProperties: true },
+      directives: {
+        type: 'array',
+        items: { type: 'object', additionalProperties: true },
+      },
+    },
+  },
+} as const;
+
+const HANDLER_TOOL_CHOICE = { type: 'any' as const };
+
 // Regexes for the formats the LLM uses to emit handler_signals.
 // The intended format is XML-style tags, but the model frequently drifts to
 // markdown JSON code blocks or bare JSON. All variants must be stripped from
@@ -4823,6 +4942,48 @@ const SIGNAL_FORMATS: Array<{
 // the buffer.
 const SIGNAL_STREAM_PROBE = /<handler_signal|```json|"handler_signals"\s*:/i;
 
+// Strip a "key: {...}" or "key: [...]" leak from text using brace-depth matching.
+// Handles nested objects and strings. Returns the cleaned text and any parsed
+// payload that was extracted (for optional recovery into signals).
+function stripBareJsonKey(text: string, keyPattern: RegExp): { text: string; extracted: unknown[] } {
+  const extracted: unknown[] = [];
+  let result = text;
+  let guard = 0;
+  while (guard++ < 20) {
+    const match = keyPattern.exec(result);
+    if (!match) break;
+    const start = match.index;
+    const openIdx = match.index + match[0].length - 1;
+    const openChar = result[openIdx];
+    if (openChar !== '{' && openChar !== '[') break;
+    const closeChar = openChar === '{' ? '}' : ']';
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+    let end = -1;
+    for (let i = openIdx; i < result.length; i++) {
+      const c = result[i];
+      if (escape) { escape = false; continue; }
+      if (c === '\\') { escape = true; continue; }
+      if (c === '"') { inString = !inString; continue; }
+      if (inString) continue;
+      if (c === openChar) depth++;
+      else if (c === closeChar) {
+        depth--;
+        if (depth === 0) { end = i + 1; break; }
+      }
+    }
+    if (end <= start) break;
+    const payload = result.slice(openIdx, end);
+    try { extracted.push(JSON.parse(payload)); } catch { /* leave unparsed */ }
+    let tailEnd = end;
+    while (tailEnd < result.length && /[\s,]/.test(result[tailEnd])) tailEnd++;
+    result = result.slice(0, start) + result.slice(tailEnd);
+    keyPattern.lastIndex = 0;
+  }
+  return { text: result.trim(), extracted };
+}
+
 function parseResponse(fullText: string): {
   visibleResponse: string;
   signals: Record<string, unknown> | null;
@@ -4852,7 +5013,47 @@ function parseResponse(fullText: string): {
     if (signals) break;
   }
 
-  return { visibleResponse, signals };
+  // Strip bare "directive: {...}", "directives: [...]", "note: {...}", "memory: {...}"
+  // leaks where the model bypassed the tool and wrote them into chat text.
+  // Recover them into signals so they still get saved as directives/notes.
+  const directiveStrip = stripBareJsonKey(visibleResponse, /\bdirectives?\s*:\s*[{\[]/gi);
+  visibleResponse = directiveStrip.text;
+  if (directiveStrip.extracted.length > 0) {
+    signals = signals || {};
+    const existingDirectives = Array.isArray(signals.directives) ? signals.directives : [];
+    const existingDirective = signals.directive ? [signals.directive] : [];
+    const merged: unknown[] = [...existingDirectives, ...existingDirective];
+    for (const e of directiveStrip.extracted) {
+      if (Array.isArray(e)) merged.push(...e);
+      else if (e && typeof e === 'object') merged.push(e);
+    }
+    if (merged.length > 0) {
+      signals.directives = merged;
+      delete signals.directive;
+    }
+  }
+
+  const noteStrip = stripBareJsonKey(visibleResponse, /\bnotes?\s*:\s*[{\[]/gi);
+  visibleResponse = noteStrip.text;
+  if (noteStrip.extracted.length > 0) {
+    signals = signals || {};
+    const existingNotes = Array.isArray(signals.notes) ? signals.notes : [];
+    const merged: unknown[] = [...existingNotes];
+    for (const e of noteStrip.extracted) {
+      if (Array.isArray(e)) merged.push(...e);
+      else if (e && typeof e === 'object') merged.push(e);
+    }
+    if (merged.length > 0) signals.notes = merged;
+  }
+
+  const memoryStrip = stripBareJsonKey(visibleResponse, /\bmemory\s*:\s*[{\[]/gi);
+  visibleResponse = memoryStrip.text;
+  if (memoryStrip.extracted.length > 0) {
+    signals = signals || {};
+    signals.memory = signals.memory || memoryStrip.extracted[0];
+  }
+
+  return { visibleResponse: visibleResponse.trim(), signals };
 }
 
 async function getStateSnapshot(userId: string): Promise<Record<string, unknown>> {
@@ -5017,7 +5218,8 @@ async function retrieveContextualMemories(userId: string): Promise<string> {
   }
 
   // 2. Last conversation summary — use absolute dates, not relative
-  // First check if there's an ACTIVE conversation (not ended)
+  // Find most recent conversation (active OR ended within 24h) and pull its tail
+  // so Handler sees what was just said even when a new conversation spawns.
   const { data: activeConv } = await supabase
     .from('handler_conversations')
     .select('id, final_mode, started_at, message_count')
@@ -5027,13 +5229,17 @@ async function retrieveContextualMemories(userId: string): Promise<string> {
     .limit(1)
     .maybeSingle();
 
+  let tailConvId: string | null = null;
+  let tailHeader = '';
+
   if (activeConv) {
     const startDate = new Date(activeConv.started_at);
     const dateStr = startDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
     lines.push(`Active conversation started ${dateStr}, ${activeConv.message_count || 0} messages so far.`);
     lines.push('You are IN a conversation with her right now. Do not say she has been absent or quiet.');
+    tailConvId = activeConv.id;
+    tailHeader = 'Recent exchange in this conversation (continue these threads — do not greet fresh):';
   } else {
-    // No active conversation — find the most recent ended one
     const { data: lastConv } = await supabase
       .from('handler_conversations')
       .select('id, final_mode, started_at, ended_at, message_count')
@@ -5050,23 +5256,27 @@ async function retrieveContextualMemories(userId: string): Promise<string> {
       const timeDesc = hoursAgo < 1 ? 'just now' : hoursAgo < 24 ? `${hoursAgo}h ago` : `${Math.round(hoursAgo / 24)} days ago (${dateStr})`;
       lines.push(`Last conversation: ${timeDesc}, ${lastConv.message_count || 0} messages, ended in ${lastConv.final_mode || 'unknown'} mode`);
 
-      // Only show last messages if conversation was recent (within 24h)
       if (hoursAgo < 24) {
-        const { data: lastMsgs } = await supabase
-          .from('handler_messages')
-          .select('role, content')
-          .eq('conversation_id', lastConv.id)
-          .order('message_index', { ascending: false })
-          .limit(4);
+        tailConvId = lastConv.id;
+        tailHeader = 'PRIOR CONVERSATION TAIL — continue these threads, do NOT greet as if fresh:';
+      }
+    }
+  }
 
-        if (lastMsgs && lastMsgs.length > 0) {
-          lines.push('Last conversation ended with:');
-          for (const msg of lastMsgs.reverse()) {
-            const prefix = msg.role === 'user' ? 'Maxy' : 'You';
-            const text = msg.content.length > 120 ? msg.content.slice(0, 120) + '...' : msg.content;
-            lines.push(`  ${prefix}: ${text}`);
-          }
-        }
+  if (tailConvId) {
+    const { data: lastMsgs } = await supabase
+      .from('handler_messages')
+      .select('role, content')
+      .eq('conversation_id', tailConvId)
+      .order('message_index', { ascending: false })
+      .limit(10);
+
+    if (lastMsgs && lastMsgs.length > 0) {
+      lines.push(tailHeader);
+      for (const msg of lastMsgs.reverse()) {
+        const prefix = msg.role === 'user' ? 'Maxy' : 'You';
+        const text = msg.content.length > 200 ? msg.content.slice(0, 200) + '...' : msg.content;
+        lines.push(`  ${prefix}: ${text}`);
       }
     }
   }
@@ -7203,7 +7413,22 @@ async function buildRegimenCtx(userId: string): Promise<string> {
       .eq('user_id', userId)
       .eq('active', true);
 
-    if (!regimens || regimens.length === 0) return '';
+    if (!regimens || regimens.length === 0) {
+      // Explicit null-state: without this, the model has no ground truth about
+      // hormonal status and will hallucinate HRT when Maxy mentions wanting it.
+      // The missed-dose language is a special compounding risk — once the
+      // Handler asserts a phantom regimen, the "call out missed doses" reflex
+      // fires next and can trigger real enqueue_punishment directives against
+      // a regimen that doesn't exist.
+      return [
+        '## REGIMEN',
+        'NO ACTIVE MEDICATION REGIMEN. Maxy is NOT on HRT, anti-androgens, or any prescribed feminization compounds.',
+        'Do NOT reference "your hormones," "your compounds," "your dose," or "your regimen" as if they exist. They do not.',
+        'Do NOT claim she "missed a dose," "has a late dose," "has a dosing schedule," or "broke streak on adherence." There is no regimen to miss.',
+        'Do NOT emit log_slip, enqueue_punishment, or modify_parameter directives citing dose/adherence/regimen reasons — there is nothing to punish.',
+        'If Maxy talks about considering HRT, treat it as a generative proposal — amplify, explore, push — but never assert she is already on it or that she has missed anything.',
+      ].join('\n');
+    }
 
     const lines = ['## REGIMEN'];
     for (const r of regimens as Array<Record<string, unknown>>) {

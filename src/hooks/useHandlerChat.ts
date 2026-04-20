@@ -149,7 +149,7 @@ export function useHandlerChat(): UseHandlerChatReturn {
       let needsAutoOpen = false;
       try {
         // Find most recent conversation that isn't ended (any date)
-        const { data: conv } = await supabase
+        let { data: conv } = await supabase
           .from('handler_conversations')
           .select('id, final_mode')
           .eq('user_id', user!.id)
@@ -157,6 +157,28 @@ export function useHandlerChat(): UseHandlerChatReturn {
           .order('started_at', { ascending: false })
           .limit(1)
           .maybeSingle();
+
+        // Fallback: resume most recent conversation ended within 24h.
+        // Prevents memory loss when a prior-night conversation got marked ended
+        // and a new morning conversation would otherwise spawn without its context.
+        if (!conv) {
+          const dayAgo = new Date(Date.now() - 86400000).toISOString();
+          const { data: recent } = await supabase
+            .from('handler_conversations')
+            .select('id, final_mode')
+            .eq('user_id', user!.id)
+            .gte('started_at', dayAgo)
+            .order('started_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (recent) {
+            conv = recent;
+            await supabase
+              .from('handler_conversations')
+              .update({ ended_at: null })
+              .eq('id', recent.id);
+          }
+        }
 
         if (conv) {
           conversationIdRef.current = conv.id;
@@ -214,8 +236,8 @@ export function useHandlerChat(): UseHandlerChatReturn {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            conversationId: null,
-            message: '[system: start of day — Handler opens. Assign tasks. Set the tone. Lead.]',
+            conversationId: conversationIdRef.current,
+            message: '[system: start of day — Handler opens. Continue any open threads. Assign tasks. Set the tone. Lead.]',
             conversationType: 'morning',
             stream: false,
           }),
