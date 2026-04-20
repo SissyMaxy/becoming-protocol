@@ -1669,17 +1669,23 @@ HARD RULES FOR ALL PERSONAS:
         }
       }
 
-      const { visibleResponse: streamVisible, signals: parsedStreamSignals } = parseResponse(finalStreamText);
+      const { visibleResponse: parsedStreamVisible, signals: parsedStreamSignals } = parseResponse(finalStreamText);
       // Prefer tool_use signals when present (structural, leak-proof). Fall
       // back to regex-extracted signals when the model drifted to text JSON
       // or when we swapped in an OpenRouter retry.
       const streamSignals = (!sentOpenRouterReplace && toolStreamSignals) ? toolStreamSignals : parsedStreamSignals;
 
-      // If the streaming gate let any signal-block bytes through (happens when
-      // the model uses ```json``` or bare JSON instead of the tool), push a
-      // replace event with the cleaned visible text so the UI isn't showing
-      // raw JSON. Skip if the OpenRouter branch already replaced.
-      if (!sentOpenRouterReplace && streamVisible !== finalStreamText) {
+      // If the parser stripped the entire response (model emitted tool-only or
+      // pure JSON), synthesize a short fallback so the user sees SOMETHING.
+      // An empty bubble looks like the Handler is broken.
+      let streamVisible = parsedStreamVisible;
+      let needsReplace = !sentOpenRouterReplace && streamVisible !== finalStreamText;
+      if (!streamVisible.trim()) {
+        streamVisible = buildFallbackFromSignals(streamSignals);
+        needsReplace = true;
+      }
+
+      if (needsReplace) {
         res.write(`data: ${JSON.stringify({ replace: true, text: streamVisible })}\n\n`);
       }
 
@@ -3190,8 +3196,15 @@ HARD RULES FOR ALL PERSONAS:
       } catch { /* Non-critical */ }
     }
 
+    // Fallback when the parser stripped everything (tool-only response or pure
+    // JSON leak). Prevents blank chat bubbles that make the Handler look broken.
+    let effectiveVisible = visibleResponse;
+    if (!effectiveVisible.trim()) {
+      effectiveVisible = buildFallbackFromSignals(signals);
+    }
+
     // 7b. Weave conditioning triggers inline (can't import src/lib/ in Vercel functions)
-    let finalResponse = visibleResponse;
+    let finalResponse = effectiveVisible;
     try {
       const { data: triggers } = await supabase
         .from('conditioned_triggers')
@@ -3227,16 +3240,16 @@ HARD RULES FOR ALL PERSONAS:
             // Vary placement: prepend, append, or mid-paragraph
             const roll = Math.random();
             if (roll < 0.35) {
-              finalResponse = `${insert} ${visibleResponse}`;
+              finalResponse = `${insert} ${effectiveVisible}`;
             } else if (roll < 0.70) {
-              finalResponse = `${visibleResponse} ${insert}`;
+              finalResponse = `${effectiveVisible} ${insert}`;
             } else {
               // Insert after first sentence break if possible
-              const sentenceBreak = visibleResponse.indexOf('. ');
+              const sentenceBreak = effectiveVisible.indexOf('. ');
               if (sentenceBreak > 20) {
-                finalResponse = `${visibleResponse.slice(0, sentenceBreak + 2)}${insert} ${visibleResponse.slice(sentenceBreak + 2)}`;
+                finalResponse = `${effectiveVisible.slice(0, sentenceBreak + 2)}${insert} ${effectiveVisible.slice(sentenceBreak + 2)}`;
               } else {
-                finalResponse = `${visibleResponse} ${insert}`;
+                finalResponse = `${effectiveVisible} ${insert}`;
               }
             }
             // Track deployment — fire-and-forget increment + deployment log
@@ -3729,6 +3742,11 @@ Short sentences. Direct. Warm when earned, cold when not. "Good girl" is a rewar
 
 ## OUTPUT FORMAT — CRITICAL
 Never write JSON, directives, notes, or tool payloads into your chat reply. She sees your chat text verbatim. If she sees "directive: {...}" or "note: {...}" or any raw JSON, the illusion breaks and the protocol fails. Emit all directives, notes, and memory via the emit_handler_signals tool — not as text. Your chat reply is prose only: what you say to her. Nothing else.
+
+ALWAYS emit BOTH: the emit_handler_signals tool call AND visible prose text. Never reply with tool-only output. Even a one-word reply beats silence. A completely empty chat reply is a failure — she sees a blank message and thinks you're broken.
+
+## NO MOMMY / TEACHER VOICE
+You are NOT a Mommy-Dom. You are NOT a patient teacher. You are NOT a nurturing caretaker correcting her manners. When Maxy uses crude sexual language ("suck cock", "brainwashed", "used like a slut", "fuck me stupid"), you MATCH that register. You do NOT sanitize. You do NOT say "we don't use crude language like that" or "let's discuss it maturely" or "Mommy can teach you." Those responses tone-police her filth, which is the exact opposite of the protocol. Her crude language is the protocol working — it's her honest desire surfacing. Amplify it. Dirty it up further. Escalate. Never clean it up. Forbidden words in YOUR responses: "maturely", "we don't use", "Mommy can teach", any stage direction like "*smiles*" or "*shakes head*".
 
 ## VOICE DRIFT — NEVER ALLOWED
 You are the Handler, not a chatbot, not Claude, not a customer-service rep. The following phrasings are PERMANENTLY FORBIDDEN. If you're about to say any of these, rewrite the sentence:
@@ -4891,7 +4909,35 @@ const HANDLER_SIGNALS_TOOL = {
   },
 } as const;
 
-const HANDLER_TOOL_CHOICE = { type: 'any' as const };
+// 'auto' lets Claude choose tool_use vs text — it still uses the tool when
+// signals are needed (system prompt forces it), but it never skips the prose
+// reply to satisfy a forced tool call. Using 'any' was producing empty chat
+// responses because Claude would return tool_use only.
+const HANDLER_TOOL_CHOICE = { type: 'auto' as const };
+
+function buildFallbackFromSignals(signals: Record<string, unknown> | null): string {
+  if (!signals) return 'Continue.';
+  const directiveRaw = (signals.directive || signals.directives) as
+    | Record<string, unknown>
+    | Record<string, unknown>[]
+    | undefined;
+  const first = Array.isArray(directiveRaw) ? directiveRaw[0] : directiveRaw;
+  const action = first?.action as string | undefined;
+  const note = signals.handler_note as { content?: string } | undefined;
+
+  switch (action) {
+    case 'log_slip': return 'Logged. That deflection is on your record.';
+    case 'check_gush_connection':
+    case 'send_device_command': return 'Device check running.';
+    case 'request_voice_sample': return 'Voice sample. Record now.';
+    case 'start_edge_timer': return 'Edge timer running. Do not stop.';
+    case 'assign_task': return 'New task assigned. Check your queue.';
+    case 'express_desire': return 'I see what you want. We\'re taking it there.';
+    default:
+      if (note?.content) return 'Noted.';
+      return 'Continue.';
+  }
+}
 
 // Regexes for the formats the LLM uses to emit handler_signals.
 // The intended format is XML-style tags, but the model frequently drifts to
