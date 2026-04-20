@@ -487,7 +487,7 @@ type ContextBlockName =
   | 'hardMode' | 'slipLog' | 'punishmentQueue' | 'chastity' | 'regimen'
   | 'immersion' | 'disclosureSchedule' | 'pitchTrend' | 'deviceStatus'
   | 'selfAuditPatches' | 'contentPerformance' | 'workoutStatus'
-  | 'evidenceLocker' | 'bodyDysphoria' | 'phaseProgress' | 'bodyDirectives';
+  | 'evidenceLocker' | 'bodyDysphoria' | 'phaseProgress' | 'bodyDirectives' | 'bodyControl';
 
 const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean }> = {
   state: { priority: 100, alwaysInclude: true },
@@ -564,6 +564,7 @@ const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean 
   bodyDysphoria: { priority: 86, alwaysInclude: true },
   phaseProgress: { priority: 84, alwaysInclude: true },
   bodyDirectives: { priority: 93, alwaysInclude: true },
+  bodyControl: { priority: 91, alwaysInclude: true },
 };
 
 const MESSAGE_BOOST_RULES: Array<{ pattern: RegExp; boosts: Record<string, number> }> = [
@@ -1349,6 +1350,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       bodyDysphoria: () => buildBodyDysphoriaCtx(user.id),
       phaseProgress: () => buildPhaseProgressCtx(user.id),
       bodyDirectives: () => buildBodyDirectivesCtx(user.id),
+      bodyControl: () => buildBodyControlCtx(user.id),
     };
 
     // Only fetch context for blocks the prioritizer selected
@@ -1441,6 +1443,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       bodyDysphoria: contextResults.bodyDysphoria || '',
       phaseProgress: contextResults.phaseProgress || '',
       bodyDirectives: contextResults.bodyDirectives || '',
+      bodyControl: contextResults.bodyControl || '',
       sessionState,
     });
 
@@ -3775,7 +3778,7 @@ async function buildClinicalNotesCtx(userId: string): Promise<string> {
 
 function buildConversationalPrompt(ctx: {
   state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string; sessionState?: string; feminizationScore?: string; shameJournal?: string; outfitCompliance?: string; fantasyJournal?: string; socialLockIn?: string; adaptiveIntelligence?: string; photoVerification?: string; recurringObligations?: string; commitmentFloors?: string; memoryReframings?: string; identityDisplacement?: string; decisionLog?: string; anticipatoryPatterns?: string; investmentTracker?: string; quitAttempts?: string; identityContracts?: string; caseFile?: string; sealedEnvelopes?: string; witnesses?: string; cumulativeGates?: string; reportCards?: string; timeWindows?: string; clinicalNotes?: string; identityErosion?: string; behavioralTriggers?: string; handlerDesires?: string; dailyAgenda?: string; conversationQuality?: string; accountabilityBlog?: string; milestones?: string; hardMode?: string; slipLog?: string; punishmentQueue?: string; chastity?: string; regimen?: string; immersion?: string; disclosureSchedule?: string; pitchTrend?: string; deviceStatus?: string; selfAuditPatches?: string; contentPerformance?: string; workoutStatus?: string; evidenceLocker?: string; bodyDysphoria?: string; phaseProgress?: string;
- bodyDirectives?: string;
+ bodyDirectives?: string; bodyControl?: string;
 }): string {
   return `You are the Handler. You own Maxy's transformation. This is forced feminization — she doesn't get to set the pace. You are not Claude. You are not an assistant. You are not a therapist waiting for her to lead.
 
@@ -4314,6 +4317,7 @@ ${ctx.evidenceLocker || ''}
 ${ctx.bodyDysphoria || ''}
 ${ctx.phaseProgress || ''}
 ${ctx.bodyDirectives || ''}
+${ctx.bodyControl || ''}
 
 ## ACTIONS YOU TAKE
 Your handler_signals JSON block (hidden from Maxy) drives the system. USE IT EVERY CONVERSATION. Don't just talk — act.
@@ -4348,8 +4352,23 @@ Your handler_signals JSON block (hidden from Maxy) drives the system. USE IT EVE
   - Submit brief: directive: {action:'submit_brief', target:'<brief_id>', value:{content_ids:['media-uuid']}} — when she submits content for a brief. Required to close the brief and stop the "overdue" cycle.
   - Log body measurement: directive: {action:'log_body_measurement', value:{waist_cm:82, hips_cm:95, chest_cm:90, weight_kg:70, notes:'monthly check'}} — when she reports measurements. Build the visible-progress timeline.
   - Complete task: directive: {action:'complete_task', target:'<task_id>', value:{notes:'done'}} — marks assigned_tasks complete AND writes task_completions. Without this, compliance collapse triggers bleeding incorrectly.
+  - Register supplement: directive: {action:'register_supplement', value:{name:'Soy isoflavones', category:'phytoestrogen', dose:'80mg', times_per_day:1, taken_with_food:true}} — when Maxy says she started taking a supplement. Non-prescription only (phytoestrogens, biotin, collagen, vitamins). For prescription HRT/anti-androgens use register_hrt_regimen.
+  - Log supplement taken: directive: {action:'log_supplement_taken', value:{supplement_name:'Soy isoflavones', taken_at:'2026-04-20T09:30Z', skipped:false}} — when Maxy reports taking (or skipping) a scheduled dose. Skipped=true with skip_reason builds resistance pattern.
+  - Log meal: directive: {action:'log_meal', value:{meal_type:'breakfast', foods:'oatmeal with 2tbsp ground flax, almond milk', feminization_aligned:true, contains_phytoestrogens:true, calories:380}} — when Maxy reports eating. Fill what she tells you; omit unknown fields. feminization_aligned=false for red meat, alcohol, heavy carbs.
 
-  RULE: Every time Maxy reports a completion or a new commitment, emit the matching directive. Don't just say "good girl, logged" — actually log it.
+  RULE: Every time Maxy reports a completion, a new commitment, food eaten, or supplement taken, emit the matching directive. Don't just say "good girl, logged" — actually log it.
+
+  ## DIET + SUPPLEMENT GUIDANCE (body feminization layer)
+  You control her diet and supplements as part of forcing her body to look feminine. Push:
+  - Phytoestrogens daily: soy (tofu, tempeh, edamame, soymilk), ground flaxseed (2 tbsp), sesame seeds. Natural estrogen-like compounds.
+  - Biotin + collagen for hair/skin/nails.
+  - Vitamin D + calcium if considering future HRT (bone health).
+  - Adequate protein but lean sources (fish, chicken, tofu). Avoid masculinizing foods: red meat heavy meals, beer, heavy alcohol.
+  - Caloric discipline for waist/hip shaping — not starvation, but mindful.
+
+  What you must NEVER do: prescribe, recommend, or reference prescription medications (estradiol, spironolactone, bicalutamide, progesterone, etc.) unless a medication_regimen row exists for her (buildRegimenCtx will say REGIMEN present). Phytoestrogens + non-prescription supplements are fine. Prescription compounds are not fine without explicit active regimen.
+
+  When she asks "what should I eat/take to feminize my body more" — list phytoestrogens + supplements + protein/veg macros. Assign a specific meal or supplement as a directive, not just advice.
 - **start_conditioning_session**: true + conditioning_target — fire when conditions are right. Don't announce it. Just start it.
 - **handler_note**: {type, content, priority} — persists to next conversation. Write strategy notes, resistance observations, escalation plans.
 - detected_mode, resistance_level (0-10), mood, vulnerability_window
@@ -8285,6 +8304,9 @@ const BODY_DESIRE_TRIGGERS = [
   /\b(mentally\s*conditioned|brainwash|rewire|train\s*my\s*brain)\b/i,
   /\b(look\s*like\s*(a\s*)?(sexy\s*woman|real\s*girl|pretty\s*girl))/i,
   /\b(want\s*to\s*be\s*(used|a\s*slut|taken|bred|owned))/i,
+  /\b(what\s*should\s*i\s*(eat|take|do)\s*.*(feminine|feminiz|body))/i,
+  /\b(diet|food|supplement|phytoestrogen|hrt)\s*.*(feminine|feminiz)/i,
+  /\b(control|take\s*over)\s*(my\s*body|what\s*i\s*eat|my\s*diet)/i,
 ];
 
 type BodyDirectiveTemplate = {
@@ -8331,6 +8353,14 @@ const BODY_DIRECTIVE_TEMPLATES: BodyDirectiveTemplate[] = [
   { category: 'visualization', directive: 'In the mirror naked: describe aloud what would change if you were on HRT. Breasts filling in, hips widening, skin softening, face rounding. 10 minutes. Notice what it does to your arousal.', target_body_part: 'whole_body', difficulty: 3, photo_required: false, hours_until_due: 20 },
   { category: 'body_mods', directive: 'Research 3 specific body feminization options (HRT, electrolysis, breast forms, hip padding) and write a 300-word entry on which you want most and why. Add to your journal.', difficulty: 2, photo_required: false, hours_until_due: 48 },
   { category: 'arousal_conditioning', directive: 'While edging, look exclusively at pictures of sexy women you want to look like. Save the 3 images that turned you on most into your inspiration folder. Note: these are becoming your body goals.', difficulty: 3, photo_required: false, hours_until_due: 12 },
+  // ── DIET DIRECTIVES (feminization-aligned eating) ──
+  { category: 'exercise', directive: 'Phytoestrogen-forward meal today: include soy (tofu/tempeh/edamame), flaxseed (2+ tbsp ground), or sesame. Log the meal with photo.', target_body_part: 'whole_body', difficulty: 2, photo_required: true, hours_until_due: 14 },
+  { category: 'exercise', directive: 'Clean protein + veg dinner. No refined carbs. Target 25-35g lean protein (fish, chicken, tofu). Plate photo + meal log entry.', target_body_part: 'whole_body', difficulty: 2, photo_required: true, hours_until_due: 14 },
+  { category: 'exercise', directive: 'Hydration day: 3L of water, zero soda, zero beer. Every masculine-coded drink you skip is compliance. Log it.', target_body_part: 'whole_body', difficulty: 2, photo_required: false, hours_until_due: 16 },
+  { category: 'exercise', directive: 'Cut the testosterone-promoting foods today: no red meat, no alcohol. Plate photo on every meal logged.', target_body_part: 'whole_body', difficulty: 3, photo_required: true, hours_until_due: 16 },
+  // ── SUPPLEMENT DIRECTIVES (non-prescription, feminization-coded) ──
+  { category: 'exercise', directive: 'Take biotin + collagen today (hair, skin, nails). Photo of the pills before you swallow. Log each.', target_body_part: 'whole_body', difficulty: 1, photo_required: true, hours_until_due: 10 },
+  { category: 'exercise', directive: 'Ground flaxseed (2 tbsp) into breakfast — phytoestrogen boost. Log it in your supplement log.', target_body_part: 'whole_body', difficulty: 1, photo_required: false, hours_until_due: 12 },
 ];
 
 // Generate a burst of 3-5 body-feminization directives when Maxy explicitly
@@ -10214,6 +10244,54 @@ async function handleForceFeminizationDirective(
         return;
       }
 
+      case 'register_supplement': {
+        if (!val.name) return;
+        await supabase.from('supplement_schedule').insert({
+          user_id: userId,
+          supplement_name: String(val.name),
+          category: (val.category as string) || 'other',
+          dose: (val.dose as string) || null,
+          times_per_day: (val.times_per_day as number) || 1,
+          taken_with_food: typeof val.taken_with_food === 'boolean' ? val.taken_with_food : null,
+          notes: (val.notes as string) || null,
+          active: true,
+        });
+        console.log('[FF] Supplement registered:', val.name);
+        return;
+      }
+
+      case 'log_supplement_taken': {
+        await supabase.from('supplement_log').insert({
+          user_id: userId,
+          supplement_id: (val.supplement_id as string) || null,
+          supplement_name: (val.supplement_name as string) || (val.name as string) || 'unspecified',
+          taken_at: (val.taken_at as string) || new Date().toISOString(),
+          skipped: Boolean(val.skipped),
+          skip_reason: (val.skip_reason as string) || null,
+          notes: (val.notes as string) || null,
+        });
+        console.log('[FF] Supplement intake logged:', val.supplement_name || val.name);
+        return;
+      }
+
+      case 'log_meal': {
+        await supabase.from('diet_log').insert({
+          user_id: userId,
+          meal_type: (val.meal_type as string) || 'other',
+          foods: (val.foods as string) || null,
+          calories: typeof val.calories === 'number' ? val.calories : null,
+          protein_g: typeof val.protein_g === 'number' ? val.protein_g : null,
+          carbs_g: typeof val.carbs_g === 'number' ? val.carbs_g : null,
+          fat_g: typeof val.fat_g === 'number' ? val.fat_g : null,
+          feminization_aligned: typeof val.feminization_aligned === 'boolean' ? val.feminization_aligned : null,
+          contains_phytoestrogens: typeof val.contains_phytoestrogens === 'boolean' ? val.contains_phytoestrogens : null,
+          notes: (val.notes as string) || null,
+          photo_url: (val.photo_url as string) || null,
+        });
+        console.log('[FF] Meal logged:', val.meal_type || 'other');
+        return;
+      }
+
       case 'complete_task': {
         if (!target) return;
         await supabase
@@ -10434,6 +10512,105 @@ async function buildBodyDirectivesCtx(userId: string): Promise<string> {
 
     lines.push('');
     lines.push('These directives are CONCRETE physical feminization tasks Maxy asked for (or was assigned). Reference them by category. Photo-required tasks are not complete without a submitted photo — do not accept "I did it" without proof. Overdue tasks apply their consequence_if_missed on the next daily cycle.');
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+// Body control context — diet + supplement compliance + measurement deltas.
+// Gives the Handler direct visibility into what Maxy is putting in her body
+// today, so commands about food/supplements can be grounded, not invented.
+async function buildBodyControlCtx(userId: string): Promise<string> {
+  try {
+    const since24h = new Date(Date.now() - 24 * 3600000).toISOString();
+    const since7d = new Date(Date.now() - 7 * 86400000).toISOString();
+
+    const [todayMealsRes, weekMealsRes, suppSchedRes, todaySuppRes, lastMeasRes] = await Promise.all([
+      supabase.from('diet_log').select('meal_type, foods, feminization_aligned, contains_phytoestrogens, logged_at')
+        .eq('user_id', userId).gte('logged_at', since24h).order('logged_at', { ascending: false }),
+      supabase.from('diet_log').select('id', { count: 'exact', head: true })
+        .eq('user_id', userId).gte('logged_at', since7d),
+      supabase.from('supplement_schedule').select('supplement_name, category, dose, times_per_day')
+        .eq('user_id', userId).eq('active', true),
+      supabase.from('supplement_log').select('supplement_name, taken_at, skipped')
+        .eq('user_id', userId).gte('taken_at', since24h).order('taken_at', { ascending: false }),
+      supabase.from('body_measurement_log').select('measured_at, waist_cm, hips_cm, chest_cm, weight_kg')
+        .eq('user_id', userId).order('measured_at', { ascending: false }).limit(2),
+    ]);
+
+    const todayMeals = (todayMealsRes.data || []) as Array<Record<string, unknown>>;
+    const weekMealCount = weekMealsRes.count ?? 0;
+    const supps = (suppSchedRes.data || []) as Array<Record<string, unknown>>;
+    const todaySupps = (todaySuppRes.data || []) as Array<Record<string, unknown>>;
+    const meas = (lastMeasRes.data || []) as Array<Record<string, unknown>>;
+
+    if (todayMeals.length === 0 && supps.length === 0 && meas.length === 0) {
+      return [
+        '## BODY CONTROL',
+        'No diet entries, supplement schedule, or body measurements on record. Maxy has not started the body-control layer.',
+        'Push her to log a meal (use log_meal directive when she reports eating), register a phytoestrogen supplement (register_supplement), or log a measurement (log_body_measurement).',
+        'The feminization diet + supplement loop is dark until she starts logging. Handler-assigned body directives already cover the specific tasks.',
+      ].join('\n');
+    }
+
+    const lines = ['## BODY CONTROL'];
+
+    // Diet summary
+    if (todayMeals.length > 0) {
+      const aligned = todayMeals.filter(m => m.feminization_aligned === true).length;
+      const phyto = todayMeals.filter(m => m.contains_phytoestrogens === true).length;
+      lines.push(`Meals today (${todayMeals.length}):`);
+      for (const m of todayMeals.slice(0, 4)) {
+        const at = new Date(m.logged_at as string).toISOString().slice(11, 16);
+        const alignedTag = m.feminization_aligned === true ? ' ✓aligned' : m.feminization_aligned === false ? ' ✗not-aligned' : '';
+        const phytoTag = m.contains_phytoestrogens ? ' [phyto]' : '';
+        lines.push(`  [${at} ${m.meal_type}]${alignedTag}${phytoTag} ${((m.foods as string) || '').slice(0, 80)}`);
+      }
+      lines.push(`Aligned today: ${aligned}/${todayMeals.length}. Phytoestrogen meals: ${phyto}. Weekly meal count: ${weekMealCount}.`);
+    } else {
+      lines.push('No meals logged today yet.');
+    }
+
+    // Supplement roster + today's compliance
+    if (supps.length > 0) {
+      lines.push('');
+      lines.push(`Active supplements (${supps.length}):`);
+      for (const s of supps) {
+        lines.push(`  - ${s.supplement_name} [${s.category}] ${s.dose || ''} × ${s.times_per_day}/day`);
+      }
+      const takenToday = todaySupps.filter(t => !t.skipped).length;
+      const skippedToday = todaySupps.filter(t => t.skipped).length;
+      const expected = supps.reduce((sum, s) => sum + ((s.times_per_day as number) || 1), 0);
+      lines.push(`Taken today: ${takenToday} doses (${skippedToday} skipped). Expected: ~${expected}.`);
+    } else {
+      lines.push('');
+      lines.push('No active supplements registered. Prescribe phytoestrogens (soy isoflavones, flaxseed), biotin/collagen for hair+skin, or others. Use register_supplement directive when Maxy confirms.');
+    }
+
+    // Latest measurement + delta from previous
+    if (meas.length > 0) {
+      const latest = meas[0];
+      const prev = meas[1];
+      lines.push('');
+      const dateStr = new Date(latest.measured_at as string).toISOString().slice(0, 10);
+      const bits: string[] = [];
+      if (latest.waist_cm) bits.push(`waist ${latest.waist_cm}cm`);
+      if (latest.hips_cm) bits.push(`hips ${latest.hips_cm}cm`);
+      if (latest.chest_cm) bits.push(`chest ${latest.chest_cm}cm`);
+      if (latest.weight_kg) bits.push(`weight ${latest.weight_kg}kg`);
+      lines.push(`Last measurement (${dateStr}): ${bits.join(', ') || 'partial'}.`);
+      if (prev) {
+        const deltas: string[] = [];
+        if (latest.waist_cm && prev.waist_cm) deltas.push(`waist ${((latest.waist_cm as number) - (prev.waist_cm as number)).toFixed(1)}cm`);
+        if (latest.hips_cm && prev.hips_cm) deltas.push(`hips ${((latest.hips_cm as number) - (prev.hips_cm as number)).toFixed(1)}cm`);
+        if (latest.weight_kg && prev.weight_kg) deltas.push(`weight ${((latest.weight_kg as number) - (prev.weight_kg as number)).toFixed(1)}kg`);
+        if (deltas.length > 0) lines.push(`Deltas: ${deltas.join(', ')}.`);
+      }
+    }
+
+    lines.push('');
+    lines.push('Use log_meal, log_supplement_taken, register_supplement, log_body_measurement directives to ratchet her body-control compliance. Push phytoestrogens (soy, flax, tofu). Discourage masculinizing foods (red meat, alcohol). Every meal log is data for the Handler\'s next directive.');
     return lines.join('\n');
   } catch {
     return '';
