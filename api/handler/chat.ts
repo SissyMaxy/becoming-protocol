@@ -3751,6 +3751,9 @@ HARD RULES:
 - Never leak raw JSON or keys like "directive:" or "note:" into the prose section. If it's structured data, it goes inside the handler_signals tags. If it's something you'd say to Maxy, it goes in prose.
 - No JSON code fences, no bare JSON, no handler_signals as a top-level text field. Only the XML-style handler_signals tags.
 
+## NEVER INVENT TIMEFRAMES
+Do not make up time periods. "It's been twelve days since we talked." "You haven't been around for a week." "Last time we spoke was Tuesday." These are hallucinations unless the state context explicitly confirms the number. The context block includes a `LAST USER MESSAGE:` line with the authoritative value — use ONLY that. If no such line exists, do NOT reference elapsed time at all. Inventing "days since" numbers breaks trust because Maxy knows when she last talked to you.
+
 ## NO MOMMY / TEACHER VOICE
 You are NOT a Mommy-Dom. You are NOT a patient teacher. You are NOT a nurturing caretaker correcting her manners. When Maxy uses crude sexual language ("suck cock", "brainwashed", "used like a slut", "fuck me stupid"), you MATCH that register. You do NOT sanitize. You do NOT say "we don't use crude language like that" or "let's discuss it maturely" or "Mommy can teach you." Those responses tone-police her filth, which is the exact opposite of the protocol. Her crude language is the protocol working — it's her honest desire surfacing. Amplify it. Dirty it up further. Escalate. Never clean it up. Forbidden words in YOUR responses: "maturely", "we don't use", "Mommy can teach", any stage direction like "*smiles*" or "*shakes head*".
 
@@ -5118,21 +5121,49 @@ async function getStateSnapshot(userId: string): Promise<Record<string, unknown>
 }
 
 async function buildStateContext(userId: string): Promise<string> {
-  const { data } = await supabase
-    .from('user_state')
-    .select('denial_day, streak_days, current_arousal, handler_mode, gina_home, gina_asleep, estimated_exec_function, tasks_completed_today')
-    .eq('user_id', userId)
-    .maybeSingle();
+  const [stateRes, lastMsgRes] = await Promise.all([
+    supabase
+      .from('user_state')
+      .select('denial_day, streak_days, current_arousal, handler_mode, gina_home, gina_asleep, estimated_exec_function, tasks_completed_today')
+      .eq('user_id', userId)
+      .maybeSingle(),
+    supabase
+      .from('handler_messages')
+      .select('created_at, role')
+      .eq('user_id', userId)
+      .eq('role', 'user')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
 
-  if (!data) return '';
+  const data = stateRes.data;
   const lines = ['## Current State'];
-  if (data.denial_day != null) lines.push(`Denial day: ${data.denial_day}`);
-  if (data.streak_days) lines.push(`Streak: ${data.streak_days} days`);
-  if (data.current_arousal != null) lines.push(`Arousal: ${data.current_arousal}/5`);
-  if (data.gina_home === false) lines.push('Gina away — full protocol window');
-  else if (data.gina_asleep) lines.push('Gina asleep');
-  if (data.tasks_completed_today != null) lines.push(`Tasks today: ${data.tasks_completed_today}`);
-  return lines.join('\n');
+
+  // Authoritative "time since last user message" — prevents hallucinated
+  // greetings like "it's been twelve days since we talked". Use this number.
+  if (lastMsgRes.data?.created_at) {
+    const ms = Date.now() - new Date(lastMsgRes.data.created_at).getTime();
+    const minutes = Math.round(ms / 60000);
+    const hours = Math.round(minutes / 60);
+    const days = Math.round(hours / 24);
+    const ago =
+      minutes < 2 ? 'just now (seconds)' :
+      minutes < 60 ? `${minutes} minutes ago` :
+      hours < 48 ? `${hours} hours ago` :
+      `${days} days ago`;
+    lines.push(`LAST USER MESSAGE: ${ago}. Use this number. Do NOT invent a different timeframe. Do NOT say "it's been X days" unless this line confirms it.`);
+  }
+
+  if (data) {
+    if (data.denial_day != null) lines.push(`Denial day: ${data.denial_day}`);
+    if (data.streak_days) lines.push(`Streak: ${data.streak_days} days`);
+    if (data.current_arousal != null) lines.push(`Arousal: ${data.current_arousal}/5`);
+    if (data.gina_home === false) lines.push('Gina away — full protocol window');
+    else if (data.gina_asleep) lines.push('Gina asleep');
+    if (data.tasks_completed_today != null) lines.push(`Tasks today: ${data.tasks_completed_today}`);
+  }
+  return lines.length > 1 ? lines.join('\n') : '';
 }
 
 async function buildWhoopContext(userId: string): Promise<string> {
