@@ -80,6 +80,57 @@ serve(async req => {
         .lt('completed_at', `${today}T00:00:00`)
       const yesterdayTasks = yesterdayTaskCount ?? null
 
+      // HRT funnel stuck-step evaluator — daily. Every day she stays on the
+      // same step past threshold, days_stuck_on_step increments. At 7 days
+      // stuck on any non-terminal step, queue a high-urgency outreach and
+      // bleed event so "I'll do it next week" has real cost. Terminal step
+      // 'adherent' and pre-commit step 'uncommitted' are exempt.
+      try {
+        const { data: funnel } = await supa
+          .from('hrt_funnel')
+          .select('current_step, step_entered_at, days_stuck_on_step')
+          .eq('user_id', userId)
+          .maybeSingle()
+
+        if (funnel && funnel.current_step && funnel.step_entered_at) {
+          const skipSteps = new Set(['uncommitted', 'adherent'])
+          if (!skipSteps.has(funnel.current_step as string)) {
+            const entered = new Date(funnel.step_entered_at as string).getTime()
+            const daysOnStep = Math.floor((now.getTime() - entered) / 86400000)
+            if (daysOnStep !== (funnel.days_stuck_on_step as number)) {
+              await supa
+                .from('hrt_funnel')
+                .update({ days_stuck_on_step: daysOnStep })
+                .eq('user_id', userId)
+            }
+
+            if (daysOnStep >= 7) {
+              const { data: existingBleed } = await supa
+                .from('financial_bleed_events')
+                .select('id')
+                .eq('user_id', userId)
+                .eq('reason', `hrt_funnel_stuck: ${funnel.current_step}`)
+                .gte('created_at', new Date(now.getTime() - 7 * 86400000).toISOString())
+                .limit(1)
+                .maybeSingle()
+
+              if (!existingBleed) {
+                await supa.from('financial_bleed_events').insert({
+                  user_id: userId,
+                  amount_cents: 2500,
+                  reason: `hrt_funnel_stuck: ${funnel.current_step}`,
+                  tasks_missed: daysOnStep,
+                  destination: 'queued',
+                  status: 'queued',
+                })
+              }
+            }
+          }
+        }
+      } catch (hrtErr) {
+        console.error('[OutreachAuto] HRT funnel evaluator failed:', hrtErr)
+      }
+
       // Financial bleeding evaluator — queue a bleed event when compliance
       // collapses. Queue only; actual money transfer requires human-in-loop.
       // Trigger: fewer than 2 task completions in the last 72h AND at least 1

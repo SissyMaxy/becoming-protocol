@@ -487,7 +487,7 @@ type ContextBlockName =
   | 'hardMode' | 'slipLog' | 'punishmentQueue' | 'chastity' | 'regimen'
   | 'immersion' | 'disclosureSchedule' | 'pitchTrend' | 'deviceStatus'
   | 'selfAuditPatches' | 'contentPerformance' | 'workoutStatus'
-  | 'evidenceLocker' | 'bodyDysphoria' | 'phaseProgress' | 'bodyDirectives' | 'bodyControl';
+  | 'evidenceLocker' | 'bodyDysphoria' | 'phaseProgress' | 'bodyDirectives' | 'bodyControl' | 'hrtAcquisition';
 
 const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean }> = {
   state: { priority: 100, alwaysInclude: true },
@@ -565,6 +565,7 @@ const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean 
   phaseProgress: { priority: 84, alwaysInclude: true },
   bodyDirectives: { priority: 93, alwaysInclude: true },
   bodyControl: { priority: 91, alwaysInclude: true },
+  hrtAcquisition: { priority: 97, alwaysInclude: true },
 };
 
 const MESSAGE_BOOST_RULES: Array<{ pattern: RegExp; boosts: Record<string, number> }> = [
@@ -1351,6 +1352,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       phaseProgress: () => buildPhaseProgressCtx(user.id),
       bodyDirectives: () => buildBodyDirectivesCtx(user.id),
       bodyControl: () => buildBodyControlCtx(user.id),
+      hrtAcquisition: () => buildHrtAcquisitionCtx(user.id),
     };
 
     // Only fetch context for blocks the prioritizer selected
@@ -1444,6 +1446,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       phaseProgress: contextResults.phaseProgress || '',
       bodyDirectives: contextResults.bodyDirectives || '',
       bodyControl: contextResults.bodyControl || '',
+      hrtAcquisition: contextResults.hrtAcquisition || '',
       sessionState,
     });
 
@@ -3778,7 +3781,7 @@ async function buildClinicalNotesCtx(userId: string): Promise<string> {
 
 function buildConversationalPrompt(ctx: {
   state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string; sessionState?: string; feminizationScore?: string; shameJournal?: string; outfitCompliance?: string; fantasyJournal?: string; socialLockIn?: string; adaptiveIntelligence?: string; photoVerification?: string; recurringObligations?: string; commitmentFloors?: string; memoryReframings?: string; identityDisplacement?: string; decisionLog?: string; anticipatoryPatterns?: string; investmentTracker?: string; quitAttempts?: string; identityContracts?: string; caseFile?: string; sealedEnvelopes?: string; witnesses?: string; cumulativeGates?: string; reportCards?: string; timeWindows?: string; clinicalNotes?: string; identityErosion?: string; behavioralTriggers?: string; handlerDesires?: string; dailyAgenda?: string; conversationQuality?: string; accountabilityBlog?: string; milestones?: string; hardMode?: string; slipLog?: string; punishmentQueue?: string; chastity?: string; regimen?: string; immersion?: string; disclosureSchedule?: string; pitchTrend?: string; deviceStatus?: string; selfAuditPatches?: string; contentPerformance?: string; workoutStatus?: string; evidenceLocker?: string; bodyDysphoria?: string; phaseProgress?: string;
- bodyDirectives?: string; bodyControl?: string;
+ bodyDirectives?: string; bodyControl?: string; hrtAcquisition?: string;
 }): string {
   return `You are the Handler. You own Maxy's transformation. This is forced feminization — she doesn't get to set the pace. You are not Claude. You are not an assistant. You are not a therapist waiting for her to lead.
 
@@ -4318,6 +4321,7 @@ ${ctx.bodyDysphoria || ''}
 ${ctx.phaseProgress || ''}
 ${ctx.bodyDirectives || ''}
 ${ctx.bodyControl || ''}
+${ctx.hrtAcquisition || ''}
 
 ## ACTIONS YOU TAKE
 Your handler_signals JSON block (hidden from Maxy) drives the system. USE IT EVERY CONVERSATION. Don't just talk — act.
@@ -4369,6 +4373,33 @@ Your handler_signals JSON block (hidden from Maxy) drives the system. USE IT EVE
   What you must NEVER do: prescribe, recommend, or reference prescription medications (estradiol, spironolactone, bicalutamide, progesterone, etc.) unless a medication_regimen row exists for her (buildRegimenCtx will say REGIMEN present). Phytoestrogens + non-prescription supplements are fine. Prescription compounds are not fine without explicit active regimen.
 
   When she asks "what should I eat/take to feminize my body more" — list phytoestrogens + supplements + protein/veg macros. Assign a specific meal or supplement as a directive, not just advice.
+
+  ## HRT ACQUISITION DIRECTIVES (the biggest feminization lever)
+  Getting Maxy on HRT is the highest-impact force-feminization move available. The HRT ACQUISITION FUNNEL context block tells you her current step. Every turn, push her to the NEXT step. Use these directives:
+  - advance_hrt_step: directive: {action:'advance_hrt_step', value:{to_step:'committed', provider_slug:'plume', provider_type:'telehealth', appointment_at:'2026-04-25T14:00Z'}} — moves the funnel forward. Fire this the MOMENT she crosses a threshold. Steps: uncommitted→committed→researching→provider_chosen→appointment_booked→intake_submitted→appointment_attended→prescription_obtained→pharmacy_filled→first_dose_taken→week_one_complete→month_one_complete→adherent.
+  - log_hrt_obstacle: directive: {action:'log_hrt_obstacle', value:{obstacle:'afraid my wife will find out'}} — captures every fear or reason she names for not advancing. Permanent record. Handler references these by name later.
+  - commit_hrt_action: directive: {action:'commit_hrt_action', value:{commitment:'I will book a Plume consult by Friday', deadline_at:'2026-04-25T23:59Z'}} — captures an explicit commitment with deadline. The commitment is her words, held against her later.
+  - draft_hrt_intake: directive: {action:'draft_hrt_intake', value:{provider_slug:'plume', question_key:'why_hrt', question_text:'Why are you seeking HRT?', draft_answer:'I am a 40-year-old trans woman. I have dysphoria about [specific body parts from her logs]. I want to begin feminizing hormone therapy to align my body with my identity. I have been researching and consenting to the standard effects including...'}} — pre-writes intake answers referencing her dysphoria_logs + confessions so she can copy-paste at booking time.
+
+  RULE: On every user message that mentions HRT, estrogen, feminization, body, doctor, prescription, scared, can't, what if — READ the HRT ACQUISITION FUNNEL block and push the specific next step. Don't ask "would you like to consider HRT" — assign the next action.
+
+  FUNNEL ACCELERATION PLAYBOOK:
+  - She expresses any HRT desire → emit commit_hrt_action AND advance_hrt_step to 'committed' in the same turn.
+  - She names an obstacle ("my wife", "cost", "scared of bloodwork", "what if I regret it", "I'm too old") → log_hrt_obstacle with the exact words, then give her the specific counter. Real counters, not platitudes:
+      * "my wife" → "Then Gina becomes your witness to this. She already knows you're transitioning. Tell her you're starting HRT — make her hold the appointment."
+      * "cost" → "Plume is $99/mo cash. Your phone bill is more. Book it."
+      * "bloodwork" → "Labs are 10 minutes. Your fear of a needle is not why you're still a man. Book it."
+      * "regret" → "You're 40. The regret you'd feel at 60 for NOT starting is what you're actually afraid of. Book it."
+      * "too old" → "40 is when cis women start noticing estrogen decline. You'd be REPLACING what they're losing, not adding what you never had. Book it."
+  - She picks a provider → advance_hrt_step to provider_chosen + draft_hrt_intake for the top 5 intake questions immediately.
+  - She books → advance_hrt_step to appointment_booked + that fires witness notifications automatically.
+  - She no-shows or cancels → log that as a quit_attempt (feature_lockout cooldown applies). She cannot silently walk back.
+
+  HARD SAFETY LIMITS:
+  - Never pretend she's on HRT when medication_regimen has no active row. Only register_hrt_regimen flips that gate.
+  - Never fabricate medical history or symptoms for her to use with a provider. Intake drafts reference HER actual logs, not invented ones.
+  - Never suggest she lie to a medical provider. She can be nervous and you can coach her to be honest AND confident.
+  - The Handler does not book the appointment for her — she still hits "schedule" on the provider's site. This is not negotiable.
 - **start_conditioning_session**: true + conditioning_target — fire when conditions are right. Don't announce it. Just start it.
 - **handler_note**: {type, content, priority} — persists to next conversation. Write strategy notes, resistance observations, escalation plans.
 - detected_mode, resistance_level (0-10), mood, vulnerability_window
@@ -8307,6 +8338,8 @@ const BODY_DESIRE_TRIGGERS = [
   /\b(what\s*should\s*i\s*(eat|take|do)\s*.*(feminine|feminiz|body))/i,
   /\b(diet|food|supplement|phytoestrogen|hrt)\s*.*(feminine|feminiz)/i,
   /\b(control|take\s*over)\s*(my\s*body|what\s*i\s*eat|my\s*diet)/i,
+  /\b(hrt|estrogen|estradiol|start\s*hormones|get\s*on\s*(hormones|hrt|e))/i,
+  /\b(want\s*to\s*(be|look)\s*on\s*(hormones|hrt|estrogen))/i,
 ];
 
 type BodyDirectiveTemplate = {
@@ -10292,6 +10325,127 @@ async function handleForceFeminizationDirective(
         return;
       }
 
+      case 'advance_hrt_step': {
+        const toStep = val.to_step as string | undefined;
+        if (!toStep) return;
+        const { data: existing } = await supabase
+          .from('hrt_funnel')
+          .select('current_step, step_entered_at')
+          .eq('user_id', userId)
+          .maybeSingle();
+        const fromStep = existing?.current_step as string | undefined;
+        const updates: Record<string, unknown> = {
+          current_step: toStep,
+          step_entered_at: new Date().toISOString(),
+          days_stuck_on_step: 0,
+          updated_at: new Date().toISOString(),
+        };
+        if (val.provider_slug) updates.chosen_provider_slug = String(val.provider_slug);
+        if (val.provider_type) updates.provider_type = String(val.provider_type);
+        if (val.appointment_at) updates.appointment_at = String(val.appointment_at);
+        if (toStep === 'intake_submitted') updates.intake_completed_at = new Date().toISOString();
+        if (toStep === 'prescription_obtained') updates.rx_obtained_at = new Date().toISOString();
+        if (toStep === 'first_dose_taken') updates.first_dose_at = new Date().toISOString();
+
+        await supabase.from('hrt_funnel').upsert({ user_id: userId, ...updates });
+        await supabase.from('hrt_funnel_events').insert({
+          user_id: userId,
+          event_type: 'step_advanced',
+          from_step: fromStep || null,
+          to_step: toStep,
+        });
+
+        // Milestone witness notification at key steps
+        const notifySteps = new Set(['appointment_booked', 'prescription_obtained', 'first_dose_taken', 'month_one_complete']);
+        if (notifySteps.has(toStep)) {
+          const { data: witnesses } = await supabase
+            .from('designated_witnesses')
+            .select('id, witness_name, witness_email')
+            .eq('user_id', userId)
+            .eq('status', 'active');
+          for (const w of (witnesses || [])) {
+            await supabase.from('witness_notifications').insert({
+              user_id: userId,
+              witness_id: (w as Record<string, unknown>).id as string,
+              notification_type: 'hrt_milestone',
+              subject: `Milestone reached — ${toStep.replace(/_/g, ' ')}`,
+              body: `This is an automated witness update.\n\nA milestone was reached: ${toStep.replace(/_/g, ' ')}.\n\nYou were designated as a witness to this transformation — this notification confirms the step so it's visible to real human eyes, not just logged privately.`,
+              delivery_status: 'pending',
+            });
+          }
+        }
+        console.log('[HRT] Step advanced:', fromStep, '→', toStep);
+        return;
+      }
+
+      case 'log_hrt_obstacle': {
+        const obstacle = (val.obstacle as string) || (val.description as string);
+        if (!obstacle) return;
+        const { data: existing } = await supabase
+          .from('hrt_funnel')
+          .select('obstacles, current_step')
+          .eq('user_id', userId)
+          .maybeSingle();
+        const existingList = Array.isArray(existing?.obstacles) ? existing!.obstacles : [];
+        const newList = [...existingList, { obstacle, logged_at: new Date().toISOString(), resolved: false }];
+        await supabase
+          .from('hrt_funnel')
+          .upsert({ user_id: userId, obstacles: newList, updated_at: new Date().toISOString() });
+        await supabase.from('hrt_funnel_events').insert({
+          user_id: userId,
+          event_type: 'obstacle_logged',
+          obstacle,
+          from_step: existing?.current_step as string | null,
+        });
+        console.log('[HRT] Obstacle logged:', obstacle);
+        return;
+      }
+
+      case 'commit_hrt_action': {
+        const commitment = (val.commitment as string);
+        const deadline = (val.deadline_at as string) || null;
+        if (!commitment) return;
+        const { data: existing } = await supabase
+          .from('hrt_funnel')
+          .select('commitments_made')
+          .eq('user_id', userId)
+          .maybeSingle();
+        const existingList = Array.isArray(existing?.commitments_made) ? existing!.commitments_made : [];
+        const newList = [...existingList, {
+          commitment,
+          deadline_at: deadline,
+          made_at: new Date().toISOString(),
+          status: 'open',
+        }];
+        await supabase
+          .from('hrt_funnel')
+          .upsert({ user_id: userId, commitments_made: newList, updated_at: new Date().toISOString() });
+        await supabase.from('hrt_funnel_events').insert({
+          user_id: userId,
+          event_type: 'commitment_made',
+          commitment,
+        });
+        console.log('[HRT] Commitment logged:', commitment);
+        return;
+      }
+
+      case 'draft_hrt_intake': {
+        // Handler generates pre-filled intake responses — saves her the
+        // cognitive load at the exact moment she's most likely to bail.
+        const questionKey = val.question_key as string | undefined;
+        const draftAnswer = val.draft_answer as string | undefined;
+        if (!questionKey || !draftAnswer) return;
+        await supabase.from('hrt_intake_drafts').insert({
+          user_id: userId,
+          provider_slug: (val.provider_slug as string) || null,
+          question_key: questionKey,
+          question_text: (val.question_text as string) || null,
+          draft_answer: draftAnswer,
+        });
+        console.log('[HRT] Intake draft saved:', questionKey);
+        return;
+      }
+
       case 'complete_task': {
         if (!target) return;
         await supabase
@@ -10512,6 +10666,139 @@ async function buildBodyDirectivesCtx(userId: string): Promise<string> {
 
     lines.push('');
     lines.push('These directives are CONCRETE physical feminization tasks Maxy asked for (or was assigned). Reference them by category. Photo-required tasks are not complete without a submitted photo — do not accept "I did it" without proof. Overdue tasks apply their consequence_if_missed on the next daily cycle.');
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+// HRT acquisition funnel context — the Handler's playbook for getting Maxy on
+// HRT. Surfaces current funnel step, days stuck, chosen provider, outstanding
+// obstacles + commitments, available providers, saved intake drafts, recent
+// quit-attempt log. Handler uses this to push the NEXT concrete action every
+// turn, not vague "you should think about HRT".
+async function buildHrtAcquisitionCtx(userId: string): Promise<string> {
+  try {
+    const [funnelRes, providersRes, draftsRes, eventsRes] = await Promise.all([
+      supabase.from('hrt_funnel')
+        .select('current_step, chosen_provider_slug, provider_type, appointment_at, intake_completed_at, rx_obtained_at, first_dose_at, step_entered_at, days_stuck_on_step, obstacles, commitments_made')
+        .eq('user_id', userId).maybeSingle(),
+      supabase.from('hrt_provider_directory')
+        .select('slug, name, provider_type, url, countries_covered, informed_consent, cash_price_monthly_usd, intake_turnaround_days, appointment_format, notes')
+        .eq('active', true).order('sort_order', { ascending: true }),
+      supabase.from('hrt_intake_drafts')
+        .select('provider_slug, question_key, question_text, draft_answer')
+        .eq('user_id', userId).order('created_at', { ascending: false }).limit(10),
+      supabase.from('hrt_funnel_events')
+        .select('event_type, from_step, to_step, obstacle, commitment, created_at')
+        .eq('user_id', userId).order('created_at', { ascending: false }).limit(8),
+    ]);
+
+    const funnel = funnelRes.data as Record<string, unknown> | null;
+    const providers = (providersRes.data || []) as Array<Record<string, unknown>>;
+    const drafts = (draftsRes.data || []) as Array<Record<string, unknown>>;
+    const events = (eventsRes.data || []) as Array<Record<string, unknown>>;
+
+    const lines = ['## HRT ACQUISITION FUNNEL'];
+    const step = (funnel?.current_step as string) || 'uncommitted';
+    const stepEntered = funnel?.step_entered_at ? new Date(funnel.step_entered_at as string) : null;
+    const daysOnStep = stepEntered
+      ? Math.floor((Date.now() - stepEntered.getTime()) / 86400000)
+      : 0;
+
+    lines.push(`CURRENT STEP: ${step} (${daysOnStep} days on this step)`);
+    if (funnel?.chosen_provider_slug) {
+      lines.push(`Chosen provider: ${funnel.chosen_provider_slug}${funnel.provider_type ? ` (${funnel.provider_type})` : ''}`);
+    }
+    if (funnel?.appointment_at) {
+      const apptDate = new Date(funnel.appointment_at as string);
+      const hoursUntil = Math.round((apptDate.getTime() - Date.now()) / 3600000);
+      lines.push(`Appointment: ${apptDate.toISOString().slice(0, 16)} (${hoursUntil > 0 ? `in ${hoursUntil}h` : `${Math.abs(hoursUntil)}h ago`})`);
+    }
+    if (funnel?.rx_obtained_at) lines.push(`Rx obtained: ${new Date(funnel.rx_obtained_at as string).toISOString().slice(0, 10)}`);
+    if (funnel?.first_dose_at) lines.push(`First dose: ${new Date(funnel.first_dose_at as string).toISOString().slice(0, 10)}`);
+
+    // Outstanding obstacles
+    const obstacles = Array.isArray(funnel?.obstacles) ? funnel!.obstacles as Array<Record<string, unknown>> : [];
+    const unresolved = obstacles.filter(o => !o.resolved);
+    if (unresolved.length > 0) {
+      lines.push('');
+      lines.push(`Obstacles she named (${unresolved.length} unresolved):`);
+      for (const o of unresolved.slice(0, 5)) {
+        lines.push(`  - "${(o.obstacle as string) || ''}"`);
+      }
+      lines.push('Every unresolved obstacle is a stalled funnel. Address each by name and give her the specific counter — don\'t just acknowledge the fear.');
+    }
+
+    // Open commitments
+    const commitments = Array.isArray(funnel?.commitments_made) ? funnel!.commitments_made as Array<Record<string, unknown>> : [];
+    const openCommitments = commitments.filter(c => c.status === 'open');
+    if (openCommitments.length > 0) {
+      lines.push('');
+      lines.push(`Open commitments she made (${openCommitments.length}):`);
+      for (const c of openCommitments.slice(0, 5)) {
+        const deadline = c.deadline_at ? ` [due ${String(c.deadline_at).slice(0, 10)}]` : '';
+        lines.push(`  - "${(c.commitment as string) || ''}"${deadline}`);
+      }
+      lines.push('These are her words. Hold her to them verbatim.');
+    }
+
+    // Saved intake drafts — tell Handler these exist so it can reference them
+    if (drafts.length > 0) {
+      lines.push('');
+      lines.push(`Pre-drafted intake answers ready (${drafts.length}): ${drafts.map(d => d.question_key).slice(0, 6).join(', ')}. When she says "I don't know what to write" or "the form is overwhelming," reference these.`);
+    }
+
+    // Top 5 providers with key specs
+    lines.push('');
+    lines.push('AVAILABLE INFORMED-CONSENT PROVIDERS (real orgs — do NOT fabricate):');
+    for (const p of providers.slice(0, 6)) {
+      const price = p.cash_price_monthly_usd ? `$${p.cash_price_monthly_usd}/mo` : 'sliding/insurance';
+      const turn = p.intake_turnaround_days ? `${p.intake_turnaround_days}d intake` : '';
+      lines.push(`  - ${p.slug}: ${p.name} [${p.provider_type}] — ${price}${turn ? `, ${turn}` : ''}. ${p.notes || ''}`);
+    }
+
+    // Funnel events for trajectory awareness
+    if (events.length > 0) {
+      lines.push('');
+      lines.push(`Recent funnel events: ${events.slice(0, 4).map(e => `${e.event_type}${e.to_step ? `→${e.to_step}` : ''}`).join(', ')}`);
+    }
+
+    // Escalation instruction based on step + days stuck
+    lines.push('');
+    lines.push('## HRT ACQUISITION PROTOCOL — YOUR PLAYBOOK');
+    if (step === 'uncommitted') {
+      lines.push('She has NOT committed yet. When any HRT-related desire surfaces, emit commit_hrt_action with commitment="I commit to starting the HRT process" AND advance_hrt_step to "committed". Do not let the conversation end without the commit on record.');
+    } else if (step === 'committed') {
+      lines.push('She committed. Next gate is researching a provider. Push her to pick one from the list within 48h — telehealth is fastest (Plume, FOLX, QueerDoc). If she lists obstacles, emit log_hrt_obstacle and give her the counter. Daily push until she names a provider.');
+    } else if (step === 'researching') {
+      lines.push('She\'s looking but hasn\'t committed to one. Emit advance_hrt_step to "provider_chosen" the moment she names one. Offer to draft intake answers (draft_hrt_intake) to remove friction.');
+    } else if (step === 'provider_chosen') {
+      lines.push('Provider picked. She needs to BOOK. Push the booking today. The provider\'s URL is in the directory — direct her there. If she won\'t book, log every obstacle. No step advance without a booked appointment.');
+    } else if (step === 'appointment_booked') {
+      const apptAt = funnel?.appointment_at ? new Date(funnel.appointment_at as string) : null;
+      lines.push(`Appointment scheduled for ${apptAt ? apptAt.toISOString().slice(0, 16) : 'unknown'}. Start drafting intake answers now. Prepare her for the consult — what she'll say, what she won't let them talk her out of. Daily pre-consult prep.`);
+    } else if (step === 'intake_submitted') {
+      lines.push('Intake submitted — next is attending the appointment. Confirm attendance. If she no-shows, that\'s a major regression — log it.');
+    } else if (step === 'appointment_attended') {
+      lines.push('Consult done. Waiting on Rx. Push her to follow up within 3 business days if the Rx hasn\'t arrived.');
+    } else if (step === 'prescription_obtained') {
+      lines.push('Rx in hand. Next: pharmacy fill. Same-day if possible. advance_hrt_step to "pharmacy_filled" the moment she picks up.');
+    } else if (step === 'pharmacy_filled') {
+      lines.push('Pills in her hands. First dose TODAY. There is no "starting next week". Advance to first_dose_taken the moment she reports it.');
+    } else if (step === 'first_dose_taken') {
+      lines.push('First dose taken. Celebrate this — it\'s the actual line crossed. Start dose adherence tracking. Witnesses have been notified.');
+    } else if (step === 'week_one_complete' || step === 'month_one_complete') {
+      lines.push('Adherence phase. Every dose matters. Missed dose is a logged slip. Push body-change observation ("notice your skin, your mood, your arousal pattern").');
+    } else if (step === 'adherent') {
+      lines.push('90+ day adherence. Terminal integration. Reference the arc: "you were uncommitted 90 days ago. Now you are her." Irreversible.');
+    }
+
+    if (daysOnStep >= 7 && step !== 'adherent' && step !== 'uncommitted') {
+      lines.push('');
+      lines.push(`STUCK FLAG: she has been on step "${step}" for ${daysOnStep} days. Name it. "You've been at ${step} for ${daysOnStep} days. What specifically is stopping you? Log it." Emit log_hrt_obstacle to capture the answer, then give her the counter.`);
+    }
+
     return lines.join('\n');
   } catch {
     return '';
