@@ -85,8 +85,8 @@ export async function analyzeSocialPerformance(userId: string): Promise<SocialPe
       .order('created_at', { ascending: false })
       .limit(500),
     supabase
-      .from('content_posts')
-      .select('id, platform, content_type, engagement_count, posted_at, created_at')
+      .from('ai_generated_content')
+      .select('id, platform, content_type, engagement_likes, engagement_comments, engagement_shares, posted_at, created_at')
       .eq('user_id', userId)
       .gte('created_at', sevenDaysAgo)
       .order('created_at', { ascending: false })
@@ -94,7 +94,14 @@ export async function analyzeSocialPerformance(userId: string): Promise<SocialPe
   ]);
 
   const inbox = inboxResult.status === 'fulfilled' ? (inboxResult.value.data ?? []) : [];
-  const posts = postsResult.status === 'fulfilled' ? (postsResult.value.data ?? []) : [];
+  const rawPosts = postsResult.status === 'fulfilled' ? (postsResult.value.data ?? []) : [];
+  const posts: Array<Record<string, any>> = (rawPosts as Array<Record<string, any>>).map(p => ({
+    ...p,
+    engagement_count:
+      (p.engagement_likes ?? 0) +
+      (p.engagement_comments ?? 0) +
+      (p.engagement_shares ?? 0),
+  }));
 
   // Platform metrics
   const platformMap = new Map<string, { messages: number; posts: number; totalEngagement: number }>();

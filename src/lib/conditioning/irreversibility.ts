@@ -26,6 +26,15 @@ export interface IrreversibilityScore {
   computedAt: string;
 }
 
+export type IrreversibilityBand = 'early' | 'committed' | 'hard-to-reverse' | 'point-of-no-return';
+
+export function bandForScore(score: number): IrreversibilityBand {
+  if (score < 30) return 'early';
+  if (score < 60) return 'committed';
+  if (score < 80) return 'hard-to-reverse';
+  return 'point-of-no-return';
+}
+
 // ============================================
 // COMPONENT CALCULATORS (each returns 0-10)
 // ============================================
@@ -34,7 +43,7 @@ export interface IrreversibilityScore {
 async function calcContentPermanence(userId: string): Promise<number> {
   try {
     const { count, error } = await supabase
-      .from('content_posts')
+      .from('ai_generated_content')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
       .eq('status', 'posted');
@@ -50,7 +59,7 @@ async function calcContentPermanence(userId: string): Promise<number> {
 async function calcSocialExposure(userId: string): Promise<number> {
   try {
     const { count, error } = await supabase
-      .from('content_posts')
+      .from('ai_generated_content')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId);
 
@@ -346,6 +355,88 @@ export async function calculateIrreversibilityScore(
 }
 
 // ============================================
+// PERSISTENCE + TREND
+// ============================================
+
+/**
+ * Compute the score and persist it to irreversibility_score (upsert) plus append
+ * a history row. Peak tracking is enforced by DB trigger — client cannot regress peak.
+ */
+export async function persistIrreversibilityScore(
+  userId: string,
+): Promise<IrreversibilityScore & { peak: number; band: IrreversibilityBand }> {
+  const result = await calculateIrreversibilityScore(userId);
+  const c = result.components;
+
+  const row = {
+    user_id: userId,
+    score: result.score,
+    public_exposure: c.socialExposure.value * 10,
+    social_outing: c.relationshipIntegration.value * 10,
+    financial_lockin: c.financialInvestment.value * 10,
+    physical_changes: c.physicalChanges.value * 10,
+    conditioning_depth: c.conditioningDepth.value * 10,
+    contact_entanglement: c.audienceLockIn.value * 10,
+    content_permanence: c.contentPermanence.value * 10,
+    inputs: c as unknown as Record<string, unknown>,
+    computed_at: result.computedAt,
+  };
+
+  const { data: existing } = await supabase
+    .from('irreversibility_score')
+    .select('peak_score')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (existing) {
+    await supabase.from('irreversibility_score').update(row).eq('user_id', userId);
+  } else {
+    await supabase.from('irreversibility_score').insert({ ...row, peak_score: result.score });
+  }
+
+  await supabase.from('irreversibility_score_history').insert({
+    user_id: userId,
+    score: result.score,
+    components: c as unknown as Record<string, unknown>,
+  });
+
+  const { data: peakRow } = await supabase
+    .from('irreversibility_score')
+    .select('peak_score')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  return {
+    ...result,
+    peak: peakRow?.peak_score ?? result.score,
+    band: bandForScore(result.score),
+  };
+}
+
+/**
+ * Score slope over the last `days` days. Positive = climbing, 0 = stalled,
+ * negative = regressing (artifacts being deleted faster than added).
+ */
+export async function getIrreversibilitySlope(
+  userId: string,
+  days = 14,
+): Promise<{ slope: number; current: number; previous: number } | null> {
+  const since = new Date(Date.now() - days * 86400_000).toISOString();
+  const { data, error } = await supabase
+    .from('irreversibility_score_history')
+    .select('score, recorded_at')
+    .eq('user_id', userId)
+    .gte('recorded_at', since)
+    .order('recorded_at', { ascending: true });
+
+  if (error || !data || data.length < 2) return null;
+
+  const current = data[data.length - 1].score;
+  const previous = data[0].score;
+  return { slope: current - previous, current, previous };
+}
+
+// ============================================
 // HANDLER CONTEXT BUILDER
 // ============================================
 
@@ -380,11 +471,40 @@ export async function buildIrreversibilityContext(
     const strongest = sorted[0];
     const weakest = sorted[sorted.length - 1];
 
+    const band = bandForScore(result.score);
+    const bandDirective = {
+      'early': 'escalate aggressively, build more bridges',
+      'committed': 'drive public exposure + financial hooks',
+      'hard-to-reverse': 'tighten identity consolidation',
+      'point-of-no-return': 'shift from pushing to maintaining',
+    }[band];
+
+    // Peek persisted peak + slope if available (non-fatal on missing tables)
+    let peakLine = '';
+    let slopeLine = '';
+    try {
+      const { data: persisted } = await supabase
+        .from('irreversibility_score')
+        .select('peak_score, peak_reached_at')
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (persisted?.peak_score != null && persisted.peak_score > result.score) {
+        peakLine = `  peak: ${persisted.peak_score}/100 reached ${persisted.peak_reached_at}`;
+      }
+      const trend = await getIrreversibilitySlope(userId, 14);
+      if (trend) {
+        const arrow = trend.slope > 0 ? '↑' : trend.slope < 0 ? '↓' : '→';
+        slopeLine = `  14d slope: ${arrow}${Math.abs(trend.slope)} (${trend.previous}→${trend.current})`;
+      }
+    } catch { /* tables may not be migrated yet */ }
+
     const lines = [
-      `IRREVERSIBILITY: ${result.score}/100`,
+      `IRREVERSIBILITY: ${result.score}/100 [${band}] — ${bandDirective}`,
       `  ${componentLine}`,
       `  strongest: ${strongest[0]} (${strongest[1].value}/10) | weakest: ${weakest[0]} (${weakest[1].value}/10)`,
-    ];
+      peakLine,
+      slopeLine,
+    ].filter(Boolean);
 
     return lines.join('\n');
   } catch (err) {

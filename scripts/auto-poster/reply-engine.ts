@@ -20,6 +20,9 @@ import { supabase, PLATFORMS } from './config';
 import { extractSafeText } from './refusal-filter';
 import { fullSlopCheck, patternSlopCheck } from './slop-detector';
 import { getVoiceRules } from './voice';
+import { resolveContact, recordEvent, getContactContext, recomputeTier, flagContact } from './contact-graph';
+import { gateOutbound } from './pii-guard';
+import { loadCycleContext, summarizeSlop, buildContext, type CycleContext, type SlopSummary } from './generation-context';
 
 const USER_ID = process.env.USER_ID || '';
 const OWN_HANDLE = process.env.TWITTER_HANDLE || 'softmaxy';
@@ -308,13 +311,22 @@ async function getRecentReplyTexts(limit: number = 30): Promise<string[]> {
 
 // ── Generate reply with self-evaluation ─────────────────────────────
 
+interface ReplyGenResult {
+  text: string | null;
+  slop?: SlopSummary;
+  attempts: number;
+  skipped?: boolean;
+}
+
 async function generateReply(
   anthropic: Anthropic,
   tweet: SearchResultTweet,
   nsfw: boolean,
   recentReplies: string[],
-): Promise<string | null> {
+  contactCtx: string = '',
+): Promise<ReplyGenResult> {
   let retryFeedback = '';
+  let lastSlop: SlopSummary | undefined;
 
   for (let attempt = 0; attempt <= MAX_SLOP_RETRIES; attempt++) {
     try {
@@ -352,25 +364,26 @@ async function generateReply(
       const response = await anthropic.messages.create({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 200,
-        system: (nsfw ? NSFW_MAXY_REPLY_PROMPT : MAXY_REPLY_PROMPT) + getVoiceRules(),
+        system: (nsfw ? NSFW_MAXY_REPLY_PROMPT : MAXY_REPLY_PROMPT) + getVoiceRules() + (contactCtx ? `\n\n${contactCtx}` : ''),
         messages: [{ role: 'user', content: contentBlocks }],
       });
 
       const text = extractSafeText(response, 3, `Twitter reply @${tweet.username}`);
-      if (!text) return null;
+      if (!text) return { text: null, attempts: attempt + 1, slop: lastSlop };
 
       if (text.trim().toUpperCase() === 'SKIP') {
         console.log(`  ⊘ Model skipped (off-topic tweet)`);
-        return null;
+        return { text: null, attempts: attempt + 1, skipped: true, slop: lastSlop };
       }
 
       if (text.length > 280) {
         console.error(`[Reply] Too long (${text.length} chars), skipping`);
-        return null;
+        return { text: null, attempts: attempt + 1, slop: lastSlop };
       }
 
       // ── Self-evaluation ──
       const slopResult = await fullSlopCheck(anthropic, tweet.text, text, recentReplies);
+      lastSlop = summarizeSlop(slopResult, attempt + 1);
 
       if (slopResult.pass) {
         if (attempt > 0) {
@@ -378,7 +391,7 @@ async function generateReply(
         } else {
           console.log(`  ✓ Slop check passed (score: ${slopResult.llmScore}/10)`);
         }
-        return text;
+        return { text, slop: lastSlop, attempts: attempt + 1 };
       }
 
       // Failed — log why and retry
@@ -392,12 +405,12 @@ async function generateReply(
       }
     } catch (err) {
       console.error('[Reply] Generation failed:', err instanceof Error ? err.message : err);
-      return null;
+      return { text: null, attempts: attempt + 1, slop: lastSlop };
     }
   }
 
   console.log(`  ⊘ All ${MAX_SLOP_RETRIES + 1} attempts failed slop check, skipping tweet`);
-  return null;
+  return { text: null, attempts: MAX_SLOP_RETRIES + 1, slop: lastSlop };
 }
 
 // ── Post reply ───────────────────────────────────────────────────────
@@ -431,7 +444,7 @@ async function postReply(
 
 // ── Main cycle ───────────────────────────────────────────────────────
 
-export async function runReplyCycle(maxReplies: number = 4): Promise<{
+export async function runReplyCycle(maxReplies: number = 4, dryRun: boolean = false): Promise<{
   attempted: number;
   posted: number;
   failed: number;
@@ -450,6 +463,7 @@ export async function runReplyCycle(maxReplies: number = 4): Promise<{
   const { urls: repliedUrls, recentUsers } = await getReplyHistory();
   const recentReplyTexts = await getRecentReplyTexts(30);
   const anthropic = new Anthropic();
+  const cycleCtx: CycleContext = await loadCycleContext(supabase, USER_ID);
   let context: BrowserContext | null = null;
   let attempted = 0;
   let posted = 0;
@@ -457,11 +471,10 @@ export async function runReplyCycle(maxReplies: number = 4): Promise<{
 
   try {
     context = await chromium.launchPersistentContext(config.profileDir, {
-      headless: false,
+      headless: true,
       viewport: { width: 1280, height: 800 },
       args: [
         '--disable-blink-features=AutomationControlled',
-        '--window-position=-2400,-2400',
       ],
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     });
@@ -486,7 +499,40 @@ export async function runReplyCycle(maxReplies: number = 4): Promise<{
         console.log(`  @${tweet.username}: "${tweet.text.substring(0, 60)}..."`);
         attempted++;
 
-        const reply = await generateReply(anthropic, tweet, sq.nsfw, recentReplyTexts);
+        // Resolve contact + pull their context for the system prompt.
+        let contactId: string | null = null;
+        let contactCtxBlock = '';
+        try {
+          const contact = await resolveContact(supabase, USER_ID, 'twitter', tweet.username);
+          contactId = contact.id;
+          contactCtxBlock = await getContactContext(supabase, contact.id);
+          if (tweet.text) {
+            await recordEvent(supabase, USER_ID, contact.id, 'reply_in', 'in', 'twitter', tweet.text, 0, { url: tweet.url });
+          }
+        } catch (err) {
+          console.error(`  [contact-graph] resolve failed:`, err instanceof Error ? err.message : err);
+        }
+
+        const genResult = await generateReply(anthropic, tweet, sq.nsfw, recentReplyTexts, contactCtxBlock);
+        let reply: string | null = genResult.text;
+        let piiAction: 'suppress' | 'deflect' | null = null;
+        let piiReason: string | null = null;
+        if (reply) {
+          const gate = gateOutbound(tweet.text, reply);
+          if (gate.action === 'suppress') {
+            console.log(`  [pii-guard] SUPPRESSED (${gate.severity}): ${gate.reason}`);
+            if (contactId) { try { await flagContact(supabase, contactId, `outbound_blocked:${gate.reason}`); } catch {} }
+            piiAction = 'suppress';
+            piiReason = gate.reason;
+            reply = null;
+          } else if (gate.action === 'deflect') {
+            console.log(`  [pii-guard] DEFLECTING`);
+            reply = gate.text;
+            piiAction = 'deflect';
+            piiReason = gate.inboundSignal.keywords[0] || 'meetup';
+            if (contactId) { try { await flagContact(supabase, contactId, `asked_logistics:${piiReason}`); } catch {} }
+          }
+        }
         if (!reply) {
           failed++;
           // Mark this tweet as "seen" so it doesn't resurface — both in-memory and DB
@@ -503,6 +549,15 @@ export async function runReplyCycle(maxReplies: number = 4): Promise<{
                 target_account: tweet.username,
                 status: 'failed',
                 posted_at: new Date().toISOString(),
+                generation_context: buildContext(cycleCtx, {
+                  voice_flavor: sq.nsfw ? 'reply_nsfw' : 'reply_sfw',
+                  slop: genResult.slop,
+                  contact: { id: contactId },
+                  target: { platform: 'twitter', username: tweet.username, url: tweet.url, nsfw: sq.nsfw, strategy: sq.label },
+                  pii_action: piiAction,
+                  pii_reason: piiReason,
+                  notes: genResult.skipped ? 'model_skip' : 'slop_or_refusal',
+                }),
               });
             } catch {} // Don't fail if insert fails
           }
@@ -510,6 +565,14 @@ export async function runReplyCycle(maxReplies: number = 4): Promise<{
         }
 
         console.log(`  Reply: "${reply}"`);
+
+        if (dryRun) {
+          console.log(`  [DRY RUN] would post to ${tweet.url} — skipping`);
+          posted++;
+          repliedUrls.add(tweet.url);
+          recentReplyTexts.unshift(reply);
+          continue;
+        }
 
         if (tweet.url) {
           const success = await postReply(page, tweet.url, reply);
@@ -531,7 +594,25 @@ export async function runReplyCycle(maxReplies: number = 4): Promise<{
               target_account: tweet.username,
               status: 'posted',
               posted_at: new Date().toISOString(),
+              generation_context: buildContext(cycleCtx, {
+                voice_flavor: sq.nsfw ? 'reply_nsfw' : 'reply_sfw',
+                slop: genResult.slop,
+                contact: { id: contactId },
+                target: { platform: 'twitter', username: tweet.username, url: tweet.url, nsfw: sq.nsfw, strategy: sq.label },
+                pii_action: piiAction,
+                pii_reason: piiReason,
+              }),
             });
+
+            // Contact graph: log outbound reply + refresh tier.
+            if (contactId) {
+              try {
+                await recordEvent(supabase, USER_ID, contactId, 'reply_out', 'out', 'twitter', reply, 0, { url: tweet.url });
+                await recomputeTier(supabase, contactId);
+              } catch (err) {
+                console.error(`  [contact-graph] record reply failed:`, err instanceof Error ? err.message : err);
+              }
+            }
           } else {
             console.log(`  ✗ Failed to post`);
             failed++;
@@ -556,11 +637,14 @@ export async function runReplyCycle(maxReplies: number = 4): Promise<{
 
 // Direct invocation
 if (require.main === module) {
-  const maxReplies = parseInt(process.argv[2] || '4', 10);
-  console.log(`[Reply Engine] Starting cycle (max ${maxReplies} replies)...\n`);
+  const args = process.argv.slice(2);
+  const dryRun = args.includes('--dry-run');
+  const numArg = args.find(a => /^\d+$/.test(a));
+  const maxReplies = parseInt(numArg || '4', 10);
+  console.log(`[Reply Engine] Starting cycle (max ${maxReplies} replies${dryRun ? ', DRY RUN — no posts' : ''})...\n`);
 
-  runReplyCycle(maxReplies).then(result => {
-    console.log(`\n[Reply Engine] Done: ${result.posted} posted, ${result.failed} failed out of ${result.attempted} attempted`);
+  runReplyCycle(maxReplies, dryRun).then(result => {
+    console.log(`\n[Reply Engine] Done: ${result.posted} ${dryRun ? 'simulated' : 'posted'}, ${result.failed} failed out of ${result.attempted} attempted`);
     process.exit(0);
   }).catch(err => {
     console.error('Fatal:', err);

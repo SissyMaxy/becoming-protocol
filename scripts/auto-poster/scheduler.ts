@@ -37,6 +37,21 @@ import { runEngageFollowCycle } from './engage-follow-engine';
 import { runStrategicFollowCycle } from './strategic-follow-engine';
 import { runUnfollowStalesCycle } from './unfollow-stales';
 import { runQuoteTweetCycle } from './quote-tweet-engine';
+import { runVoiceLearn } from './voice-learn';
+import { invalidateVoiceCache } from './voice-system';
+import { runAllMoneyIngest } from './money-ingest';
+import { runAnnounceLive } from './announce-live';
+import { persistIrreversibilityScore } from './irreversibility-persist';
+import { runIrreversibilityPressure } from './irreversibility-pressure';
+import { runRedditOriginalPost } from './platforms/reddit-original-posts';
+import { runFanslyPost } from './platforms/fansly-post';
+import { runFetLifeBlogPost } from './platforms/fetlife-blog';
+import { ensureWeeklyContentPlan } from './content-plan-generator';
+import { maybeGenerateBriefs, autoFulfillTextBriefs } from './brief-auto-generator';
+import { processInbox } from './inbox-watcher';
+import { checkStreamSchedule, postStreamPreAnnounce, recordStreamConsistency } from './stream-scheduler';
+import { processReadyBriefs } from './cross-post-orchestrator';
+import { armStealthWindowHider } from './window-hider';
 import { supabase, PLATFORMS, POLL_INTERVAL_MS } from './config';
 
 const USER_ID = process.env.USER_ID || '';
@@ -175,13 +190,22 @@ async function launchPlatform(platform: keyof typeof PLATFORMS, retries = 2): Pr
       const needsGeo = platform === 'sniffies' && 'geolocation' in config;
       const geoConfig = needsGeo ? (config as any).geolocation : undefined;
 
+      // Non-stealth platforms run headless (no visible window at all).
+      // Stealth platforms (Sniffies, OnlyFans) need real Chrome because their bot detection
+      // flags headless — keep them visible-but-minimized off-screen.
+      if (useStealth) armStealthWindowHider();
       const context = await chromium.launchPersistentContext(config.profileDir, {
         ...(useStealth ? { channel: 'chrome' } : {}),
-        headless: false,
+        headless: !useStealth,
         viewport: { width: 1280, height: 800 },
         args: [
           '--disable-blink-features=AutomationControlled',
-          '--window-position=-2400,-2400',
+          ...(useStealth ? [
+            '--window-position=-32000,-32000',
+            '--window-size=1,1',
+            '--start-minimized',
+            '--silent-launch',
+          ] : []),
         ],
         ...(useStealth ? {
           ignoreDefaultArgs: ['--enable-automation'],
@@ -215,20 +239,54 @@ async function launchPlatform(platform: keyof typeof PLATFORMS, retries = 2): Pr
   return null;
 }
 
-/** Run a function with a timeout — prevents one module from blocking the whole tick */
-async function withTimeout<T>(label: string, fn: () => Promise<T>, timeoutMs: number = 120000): Promise<T | null> {
-  let timer: ReturnType<typeof setTimeout>;
+/**
+ * Run a function with a timeout — prevents one module from blocking the whole tick.
+ *
+ * `onSettled` (optional): cleanup callback that runs ONLY after the inner work actually
+ * finishes (resolves or rejects), regardless of whether the outer timeout already fired.
+ * Use this for browser-context teardown so the cleanup doesn't kill an in-flight task.
+ *
+ * To prevent leaks if the inner hangs forever, cleanup is force-fired after
+ * `timeoutMs + GRACE_MS` even if the inner hasn't settled.
+ */
+const CLEANUP_GRACE_MS = 60000;
+
+async function withTimeout<T>(
+  label: string,
+  fn: () => Promise<T>,
+  timeoutMs: number = 120000,
+  onSettled?: () => Promise<void>,
+): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let timedOut = false;
+  const inner = fn();
+
+  if (onSettled) {
+    let cleanupRan = false;
+    const runCleanup = () => {
+      if (cleanupRan) return;
+      cleanupRan = true;
+      onSettled().catch(err => {
+        console.error(`[Scheduler] ${label} cleanup failed:`, err instanceof Error ? err.message : err);
+      });
+    };
+    // Run cleanup when inner actually settles
+    inner.then(runCleanup, runCleanup);
+    // Hard force after timeout + grace, in case inner hangs forever (prevents browser leak)
+    setTimeout(runCleanup, timeoutMs + CLEANUP_GRACE_MS).unref?.();
+  }
+
   try {
     return await Promise.race([
-      fn().finally(() => clearTimeout(timer)),
-      new Promise<null>((_, reject) => {
-        timer = setTimeout(() => reject(new Error(`TIMEOUT`)), timeoutMs);
+      inner.finally(() => { if (timer) clearTimeout(timer); }),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => { timedOut = true; reject(new Error('TIMEOUT')); }, timeoutMs);
       }),
     ]);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (msg === 'TIMEOUT') {
-      console.error(`[Scheduler] ⏱ ${label} timed out after ${timeoutMs / 1000}s — moving on`);
+    if (timedOut) {
+      console.error(`[Scheduler] ⏱ ${label} timed out after ${timeoutMs / 1000}s — moving on (cleanup deferred until in-flight task settles)`);
     } else {
       console.error(`[Scheduler] ${label} error: ${msg}`);
     }
@@ -265,6 +323,21 @@ async function tick() {
     const total = vault + ai;
     if (total > 0) {
       console.log(`[${timestamp}] Posted ${vault} vault + ${ai} AI = ${total} item(s)`);
+    }
+
+    // --- Every 16th tick (~4h): scrape Twitter DMs for new voice samples ---
+    // Auto-poster must keep learning from manually-typed DMs. Invalidates the
+    // voice cache so subsequent ticks pick up the new exemplars immediately.
+    if (tickCount % 16 === 1 && PLATFORMS.twitter.enabled) {
+      await withTimeout('Voice learn', async () => {
+        try {
+          const r = await runVoiceLearn();
+          console.log(`[${timestamp}] Voice learn: +${r.learned} new, total ${r.total}`);
+          if (r.learned > 0) invalidateVoiceCache();
+        } catch (err) {
+          console.error(`[${timestamp}] Voice learn failed:`, err instanceof Error ? err.message : err);
+        }
+      }, 180000);
     }
 
     // --- Every tick: Twitter replies (4-5) --- (5 min timeout)
@@ -315,11 +388,9 @@ async function tick() {
         if (efResult.followed > 0) {
           console.log(`[${timestamp}] Engage-follow: ${efResult.followed} followed from ${efResult.interactorsFound} interactors`);
         }
-
-        await twitterFollowCtx.close().catch(() => {});
-        twitterFollowCtx = null;
-      }, 600000); // 10 min — follow ops involve many profile visits with delays
-      if (twitterFollowCtx) { try { await (twitterFollowCtx as BrowserContext).close(); } catch {} }
+      }, 600000, async () => {
+        if (twitterFollowCtx) { try { await twitterFollowCtx.close(); } catch {} twitterFollowCtx = null; }
+      }); // 10 min — follow ops involve many profile visits with delays
     }
 
     // --- Every 8th tick (~2h): Strategic follows + unfollow stales ---
@@ -352,11 +423,9 @@ async function tick() {
             console.log(`[${timestamp}] Unfollow stales: ${usResult.unfollowed} unfollowed, ${usResult.reciprocated} kept`);
           }
         }
-
-        await twitterGrowthCtx.close().catch(() => {});
-        twitterGrowthCtx = null;
-      }, 600000); // 10 min
-      if (twitterGrowthCtx) { try { await (twitterGrowthCtx as BrowserContext).close(); } catch {} }
+      }, 600000, async () => {
+        if (twitterGrowthCtx) { try { await twitterGrowthCtx.close(); } catch {} twitterGrowthCtx = null; }
+      }); // 10 min
     }
 
     // --- Every 4th tick (~1h): Quote tweets (2-3) ---
@@ -376,7 +445,7 @@ async function tick() {
 
     // ═══ PLATFORM ENGAGEMENT (slow, browser-heavy) ════════════════════
 
-    // --- Every tick: Reddit comments (2-3) --- (3 min timeout, self-contained)
+    // --- Every tick: Reddit comments (2-3) --- (10 min timeout, self-contained)
     if (PLATFORMS.reddit.enabled) {
       let redditCtx: BrowserContext | null = null;
       await withTimeout('Reddit comments', async () => {
@@ -394,20 +463,25 @@ async function tick() {
             if (redditResult.posted > 0) {
               console.log(`[${timestamp}] Reddit comments: ${redditResult.posted} posted`);
             }
-            await redditCtx.close().catch(() => {});
-            redditCtx = null;
+            // --- Reddit original post (every 4th tick, when a brief is ready) ---
+            if (tickCount % 4 === 2) {
+              const origResult = await runRedditOriginalPost(redditCtx, redditPage, supabase, anthropic, USER_ID);
+              if (origResult.posted) {
+                console.log(`[${timestamp}] Reddit original post → r/${origResult.subreddit} (brief ${origResult.briefId?.slice(0, 8)})`);
+              } else if (origResult.error && origResult.error !== 'no ready reddit brief') {
+                console.log(`[${timestamp}] Reddit original skipped: ${origResult.error}`);
+              }
+            }
           }
         } else {
           console.log(`[${timestamp}] Reddit comment budget exhausted`);
         }
-      }, 600000); // 10 min — reddit: scrape + vision + slop retries + slow character-by-character typing
-      // Force-close if timeout killed the function mid-run
-      if (redditCtx) {
-        try { await (redditCtx as BrowserContext).close(); } catch {}
-      }
+      }, 600000, async () => {
+        if (redditCtx) { try { await redditCtx.close(); } catch {} redditCtx = null; }
+      });
     }
 
-    // --- Every 2nd tick: FetLife engagement (1) --- (2 min timeout)
+    // --- Every 2nd tick: FetLife engagement (1) --- (5 min timeout)
     if (tickCount % 2 === 0 && PLATFORMS.fetlife.enabled) {
       let fetCtx: BrowserContext | null = null;
       await withTimeout('FetLife', async () => {
@@ -423,14 +497,20 @@ async function tick() {
             if (fetResult.posted > 0) {
               console.log(`[${timestamp}] FetLife discussions: ${fetResult.posted} posted`);
             }
-            await fetCtx.close().catch(() => {});
-            fetCtx = null;
+            // --- Every 4th tick: FetLife blog post (ready brief) ---
+            if (tickCount % 4 === 3) {
+              const blogResult = await runFetLifeBlogPost(fetCtx, fetPage, supabase, anthropic, USER_ID);
+              if (blogResult.posted) {
+                console.log(`[${timestamp}] FetLife blog posted (brief ${blogResult.briefId?.slice(0, 8)})`);
+              }
+            }
           }
         } else {
           console.log(`[${timestamp}] FetLife budget exhausted`);
         }
-      }, 300000); // 5 min
-      if (fetCtx) { try { await (fetCtx as BrowserContext).close(); } catch {} }
+      }, 300000, async () => {
+        if (fetCtx) { try { await fetCtx.close(); } catch {} fetCtx = null; }
+      });
     }
 
     // --- Every 2nd tick: Subscriber replies --- (90s timeout)
@@ -459,10 +539,17 @@ async function tick() {
           }
         }
 
-        if (fanslyCtx) { await fanslyCtx.close().catch(() => {}); fanslyCtx = null; }
+        // --- Every 4th tick: Fansly original post (ready brief) ---
+        if (tickCount % 4 === 1 && fanslyPage && fanslyCtx) {
+          const fanslyResult = await runFanslyPost(fanslyCtx, fanslyPage, supabase, anthropic, USER_ID);
+          if (fanslyResult.posted) {
+            console.log(`[${timestamp}] Fansly post published (brief ${fanslyResult.briefId?.slice(0, 8)})`);
+          }
+        }
         // OnlyFans is persistent — don't close it here
-      }, 90000);
-      if (fanslyCtx) { try { await (fanslyCtx as BrowserContext).close(); } catch {} }
+      }, 90000, async () => {
+        if (fanslyCtx) { try { await fanslyCtx.close(); } catch {} fanslyCtx = null; }
+      });
     }
 
     // --- Every tick: Sniffies chats (5) --- (5 min timeout)
@@ -500,6 +587,100 @@ async function tick() {
       });
     }
 
+    // --- Every tick: detect going-live on Chaturbate + fire cross-platform announce ---
+    // Cheap (one page fetch). Cooldown is enforced inside runAnnounceLive so re-firing
+    // during the same stream is a no-op.
+    if (PLATFORMS.chaturbate.enabled && process.env.CHATURBATE_USERNAME) {
+      await withTimeout('Live announce', async () => {
+        const result = await runAnnounceLive(false);
+        if (result.announced) {
+          console.log(`[${timestamp}] Live announce fired: tweet=${result.tweeted} dm=${result.dmCount}`);
+        }
+      }, 90000);
+
+      // --- Stream schedule: pre-announce, nag, track consistency ---
+      await withTimeout('Stream scheduler', async () => {
+        try {
+          const stream = await checkStreamSchedule(supabase, USER_ID);
+          if (stream.action === 'pre_announce' && stream.message) {
+            await postStreamPreAnnounce(supabase, USER_ID, stream.message);
+            console.log(`[${timestamp}] Stream pre-announce queued: "${stream.message}"`);
+          } else if (stream.action === 'go_live_now' && stream.message) {
+            console.log(`[${timestamp}] ⚠ STREAM: ${stream.message}`);
+            // Queue Handler attention so the Handler confronts Maxy
+            await supabase.from('handler_attention').insert({
+              user_id: USER_ID,
+              kind: 'custom',
+              severity: 'high',
+              platform: 'chaturbate',
+              summary: stream.message,
+              payload: { next_stream: stream.nextStream },
+            });
+          }
+        } catch {}
+      }, 10000);
+    }
+
+    // --- Every 4th tick (~1h): Money ingestion (tips, subs, PPV, cam tokens) ---
+    // Feeds the contact graph with lifetime_value updates so tier computation
+    // moves paying contacts into paid/regular/inner.
+    if (tickCount % 4 === 3) {
+      await withTimeout('Money ingest', async () => {
+        const result = await runAllMoneyIngest();
+        if (result.ingested > 0) {
+          console.log(`[${timestamp}] Money ingest: ${result.ingested} new payment(s) from ${result.seen} row(s) scanned`);
+        }
+      }, 180000); // 3 min — three scrapers + dedup reads
+
+      // --- Same cadence: irreversibility score snapshot ---
+      // After money ingest (which updates the inputs the score depends on),
+      // compute + persist. Score is monotonic in peak; history grows so
+      // the Handler can read slope and escalation band.
+      await withTimeout('Irreversibility', async () => {
+        try {
+          const r = await persistIrreversibilityScore(supabase, USER_ID);
+          console.log(`[${timestamp}] Irreversibility: ${r.score}/100 [${r.band}] peak=${r.peak}`);
+          const p = await runIrreversibilityPressure(supabase, USER_ID);
+          if (p.issued > 0 || p.skipped > 0) {
+            console.log(`[${timestamp}] Pressure: issued=${p.issued} skipped=${p.skipped} axes=[${p.axes.join(',')}]`);
+          }
+        } catch (e) {
+          console.log(`[${timestamp}] Irreversibility failed: ${e instanceof Error ? e.message : e}`);
+        }
+      }, 30000);
+
+      // --- Content coercion: weekly plan + auto brief top-up ---
+      await withTimeout('Content planning', async () => {
+        try {
+          const plan = await ensureWeeklyContentPlan(supabase, USER_ID);
+          if (plan.created) {
+            console.log(`[${timestamp}] Content plan for week ${plan.week_start} — theme: ${plan.theme}`);
+          }
+          const created = await maybeGenerateBriefs(supabase, USER_ID, { minPending: 3, toCreate: 3 });
+          if (created > 0) {
+            console.log(`[${timestamp}] Generated ${created} new content brief(s)`);
+          }
+          // Auto-fulfill text_only briefs (FetLife writings, etc.) — no photo needed
+          const textFulfilled = await autoFulfillTextBriefs(supabase, USER_ID, anthropic);
+          if (textFulfilled > 0) {
+            console.log(`[${timestamp}] Auto-fulfilled ${textFulfilled} text brief(s)`);
+          }
+          // Inbox folder watcher — drag-and-drop photo fulfillment
+          const inboxed = await processInbox(supabase, USER_ID);
+          if (inboxed > 0) {
+            console.log(`[${timestamp}] Inbox: matched ${inboxed} file(s) to pending brief(s)`);
+          }
+          // Cross-post orchestrator — process ready_to_post production briefs
+          const crossPosted = await processReadyBriefs(supabase, anthropic, USER_ID);
+          if (crossPosted > 0) {
+            console.log(`[${timestamp}] Cross-posted: ${crossPosted} platform caption(s) queued`);
+          }
+        } catch (e) {
+          console.log(`[${timestamp}] Content planning failed: ${e instanceof Error ? e.message : e}`);
+        }
+      }, 30000);
+    }
+
     // --- Every 2nd tick: DMs (read + reply) --- (90s timeout)
     if (tickCount % 2 === 0) {
       await withTimeout('DM read/send', async () => {
@@ -525,6 +706,10 @@ async function main() {
     console.error('Missing USER_ID environment variable');
     process.exit(1);
   }
+
+  // Arm the stealth window hider FIRST, before any import-time or launch-time
+  // browser window can appear. Polls at 100ms on Windows only.
+  armStealthWindowHider();
 
   const intervalMinutes = POLL_INTERVAL_MS / 60000;
 

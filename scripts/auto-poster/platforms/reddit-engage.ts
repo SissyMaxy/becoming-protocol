@@ -13,9 +13,15 @@ import path from 'path';
 import { chromium, type BrowserContext, type Page } from 'playwright';
 import Anthropic from '@anthropic-ai/sdk';
 import { supabase, PLATFORMS } from '../config';
+import { buildMaxyVoiceSystem } from '../voice-system';
+// rotateFansly intentionally NOT wired into comments — Reddit shadowbans
+// accounts that drop links in comment replies. Link rotation happens only
+// in original posts (platforms/reddit-original-posts.ts).
 import { checkBudget, incrementBudget } from '../engagement-budget';
 import { extractSafeText } from '../refusal-filter';
 import { patternSlopCheck } from '../slop-detector';
+import { resolveContact, recordEvent, getContactContext, recomputeTier, flagContact } from '../contact-graph';
+import { gateOutbound } from '../pii-guard';
 
 const USER_ID = process.env.USER_ID || '';
 
@@ -349,14 +355,21 @@ export async function generateRedditComment(
   post: ScrapedRedditPost,
   subreddit: string,
   state: Record<string, unknown>,
+  contactCtx: string = '',
+  sb?: typeof supabase,
+  userId?: string,
 ): Promise<string | null> {
   const voice = getSubredditVoice(subreddit);
+  const flavor = KINK_SUBS.has(subreddit) ? 'reddit_kink' : 'reddit_sfw';
+  const maxyVoice = (sb && userId)
+    ? await buildMaxyVoiceSystem(sb, userId, flavor)
+    : getMaxyVoice(subreddit);
 
   try {
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 300,
-      system: `${getMaxyVoice(subreddit)}
+      system: `${maxyVoice}
 
 You are commenting on a Reddit post in r/${subreddit}.
 
@@ -393,7 +406,7 @@ BANNED PHRASES (overused crutches — using these = failure):
 - "i respect it/that"
 - "confidence" as a compliment
 
-`,
+${contactCtx ? `\n${contactCtx}\n` : ''}`,
       messages: [{
         role: 'user',
         content: (() => {
@@ -437,7 +450,7 @@ BANNED PHRASES (overused crutches — using these = failure):
       const retry = await client.messages.create({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 300,
-        system: `${getMaxyVoice(subreddit)}\n\nYou are commenting on a Reddit post in r/${subreddit}.\nVoice: ${voice.tone}\nRules: ${voice.rules}\n\nYour previous reply was rejected for sounding like AI. Issues: ${slopResult.reasons.join('; ')}.\nWrite a COMPLETELY different reply — different words, different angle, different structure. 1-3 sentences. Lowercase, casual. Output ONLY the comment.`,
+        system: `${maxyVoice}\n\nYou are commenting on a Reddit post in r/${subreddit}.\nVoice: ${voice.tone}\nRules: ${voice.rules}\n\nYour previous reply was rejected for sounding like AI. Issues: ${slopResult.reasons.join('; ')}.\nWrite a COMPLETELY different reply — different words, different angle, different structure. 1-3 sentences. Lowercase, casual. Output ONLY the comment.`,
         messages: [{
           role: 'user',
           content: `Post title: "${post.title}"\nPost body: "${post.body || '(no body)'}"\nAuthor: u/${post.author}\n\nWrite Maxy's comment. Output ONLY the comment text.`,
@@ -496,55 +509,87 @@ export async function postRedditComment(
       await page.waitForTimeout(4000);
     }
 
-    // Strategy: find the shreddit-composer (web component), click it to activate,
-    // then type via keyboard. The internal textarea/contenteditable is in shadow DOM
-    // so CSS selectors can't reach it — but clicking the composer focuses the input.
+    // Detect login wall / join wall before hunting for composer
+    const wallText = await page.locator('body').textContent().catch(() => '') || '';
+    if (/log in to (comment|reddit)/i.test(wallText) && !/^Log In$/m.test(wallText)) {
+      console.error('[Reddit] Not logged in — comment composer hidden behind auth wall');
+      return false;
+    }
+
+    // Scroll comment section into view (composer renders below post body)
+    const commentsAnchor = page.locator(
+      'shreddit-comments-page-banner, shreddit-comment-tree, [id*="comments"], #comment-tree'
+    ).first();
+    if (await commentsAnchor.count() > 0) {
+      await commentsAnchor.scrollIntoViewIfNeeded({ timeout: 3000 }).catch(() => {});
+    } else {
+      await page.evaluate(() => window.scrollBy(0, window.innerHeight));
+    }
+    await page.waitForTimeout(1500);
+
+    // Wait for composer to mount (lazy-loaded). 8s timeout vs failing immediately.
     const composer = page.locator('shreddit-composer').first();
-    const hasComposer = await composer.isVisible().catch(() => false);
+    await composer.waitFor({ state: 'attached', timeout: 8000 }).catch(() => {});
+    await composer.scrollIntoViewIfNeeded({ timeout: 3000 }).catch(() => {});
+    await page.waitForTimeout(500);
+
+    const hasComposer = await composer.count() > 0;
 
     if (hasComposer) {
-      // Click the composer to activate/focus its internal input
-      await composer.click();
-      await page.waitForTimeout(1500);
+      // The composer's editable is sometimes light-DOM (faceplate-textarea-input wrapping
+      // a <textarea> or contenteditable). Click composer to expand, then locate the editable.
+      await composer.click({ timeout: 5000 }).catch(() => {});
+      await page.waitForTimeout(800);
 
-      // Click again — first click may just expand, second focuses the editor
-      await composer.click();
-      await page.waitForTimeout(500);
+      // Try to find the actual editable inside or adjacent to composer
+      const editable = page.locator(
+        'shreddit-composer textarea, ' +
+        'shreddit-composer [contenteditable="true"], ' +
+        'faceplate-textarea-input textarea, ' +
+        'faceplate-textarea-input [contenteditable="true"], ' +
+        'div[contenteditable="true"][role="textbox"], ' +
+        '[name="comment"]'
+      ).first();
 
-      // Type via keyboard into whatever has focus
-      await page.keyboard.type(comment, { delay: 25 });
-      await page.waitForTimeout(1500);
-
-      // Submit — try finding button inside composer via JS (shadow DOM piercing)
-      const submitted = await page.evaluate(() => {
-        const composer = document.querySelector('shreddit-composer');
-        if (!composer?.shadowRoot) return false;
-        const btn = composer.shadowRoot.querySelector('button[type="submit"], button:last-of-type');
-        if (btn) { (btn as HTMLElement).click(); return true; }
-        return false;
-      });
-
-      if (!submitted) {
-        // Fallback: try regular selectors for submit button
-        const saveButton = page.locator(
-          'button:has-text("Comment"), ' +
-          'button[type="submit"]'
-        ).first();
-        if (await saveButton.isVisible().catch(() => false)) {
-          await saveButton.click();
+      const hasEditable = await editable.isVisible().catch(() => false);
+      if (hasEditable) {
+        await editable.click().catch(() => {});
+        await page.waitForTimeout(300);
+        const tag = await editable.evaluate(el => el.tagName.toLowerCase()).catch(() => '');
+        if (tag === 'textarea') {
+          await editable.pressSequentially(comment, { delay: 20 });
         } else {
-          // Last resort: Ctrl+Enter to submit
-          await page.keyboard.press('Control+Enter');
+          await page.keyboard.type(comment, { delay: 20 });
         }
+      } else {
+        // Editable not found in light DOM — type into whatever the composer focused
+        await composer.click({ timeout: 3000 }).catch(() => {});
+        await page.waitForTimeout(500);
+        await page.keyboard.type(comment, { delay: 20 });
+      }
+      await page.waitForTimeout(1200);
+
+      // Submit: prefer the actual Comment button, fall back to Ctrl+Enter
+      const saveButton = page.locator(
+        'shreddit-composer button:has-text("Comment"), ' +
+        'button[slot="submit-button"], ' +
+        'button:has-text("Comment"):not([aria-label*="Sort" i]), ' +
+        'button[type="submit"]'
+      ).first();
+      if (await saveButton.isVisible().catch(() => false)) {
+        await saveButton.click().catch(() => {});
+      } else {
+        await page.keyboard.press('Control+Enter');
       }
       await page.waitForTimeout(3000);
     } else {
-      // Fallback: try legacy selectors (old reddit, or non-shreddit UI)
+      // Fallback: legacy/old reddit selectors
       let commentBox = page.locator(
         'div[contenteditable="true"][role="textbox"], ' +
         '[contenteditable="true"][data-lexical-editor], ' +
         '[placeholder*="comment" i], ' +
         '[placeholder*="conversation" i], ' +
+        'textarea[name="text"], ' +
         'textarea'
       ).first();
 
@@ -552,7 +597,8 @@ export async function postRedditComment(
       if (!hasBox) {
         const screenshotPath = path.join(__dirname, '..', '.debug-reddit-fail.png');
         await page.screenshot({ path: screenshotPath, fullPage: true });
-        console.error(`[Reddit] No comment box found. Screenshot: .debug-reddit-fail.png`);
+        const url = page.url();
+        console.error(`[Reddit] No comment box found at ${url}. Screenshot: .debug-reddit-fail.png`);
         return false;
       }
 
@@ -722,12 +768,45 @@ export async function runRedditComments(
       }
     }
 
+    // Resolve OP in the contact graph + record their inbound post as context.
+    let contactId: string | null = null;
+    let contactCtxBlock = '';
+    const opHandle = target.author && target.author !== '[deleted]' ? target.author : null;
+    if (opHandle) {
+      try {
+        const contact = await resolveContact(sb, userId, 'reddit', opHandle);
+        contactId = contact.id;
+        contactCtxBlock = await getContactContext(sb, contact.id);
+        const inboundContent = `[r/${subreddit}] ${target.title}${target.body ? `\n\n${target.body}` : ''}`;
+        await recordEvent(sb, userId, contact.id, 'reply_in', 'in', 'reddit', inboundContent, 0, { url: target.url, subreddit });
+      } catch (err) {
+        console.error(`  [contact-graph] resolve failed:`, err instanceof Error ? err.message : err);
+      }
+    }
+
     // Generate comment
-    const comment = await generateRedditComment(client, target, subreddit, state);
+    let comment = await generateRedditComment(client, target, subreddit, state, contactCtxBlock, sb, userId);
     if (!comment) {
       console.log(`  Comment generation failed`);
       failed++;
       continue;
+    }
+
+    // PII guardrail
+    {
+      const gate = gateOutbound(target.body || target.title, comment);
+      if (gate.action === 'suppress') {
+        console.log(`  [pii-guard] SUPPRESSED (${gate.severity}): ${gate.reason}`);
+        if (contactId) { try { await flagContact(sb, contactId, `outbound_blocked:${gate.reason}`); } catch {} }
+        failed++;
+        continue;
+      }
+      if (gate.action === 'deflect') {
+        // Reddit is public — don't post a deflection, just skip.
+        console.log(`  [pii-guard] skipping comment (inbound had logistics intent)`);
+        failed++;
+        continue;
+      }
     }
 
     console.log(`  Comment: "${comment.substring(0, 80)}..."`);
@@ -750,6 +829,15 @@ export async function runRedditComments(
         status: 'posted',
         posted_at: new Date().toISOString(),
       });
+
+      if (contactId) {
+        try {
+          await recordEvent(sb, userId, contactId, 'reply_out', 'out', 'reddit', comment, 0, { url: target.url, subreddit });
+          await recomputeTier(sb, contactId);
+        } catch (err) {
+          console.error(`  [contact-graph] record comment failed:`, err instanceof Error ? err.message : err);
+        }
+      }
     } else {
       console.log(`  Failed to post comment`);
       failed++;

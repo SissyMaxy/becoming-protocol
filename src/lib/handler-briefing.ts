@@ -207,10 +207,10 @@ async function getTodayData(userId: string) {
 
   // Scheduled posts for today
   const { data: scheduledPosts } = await supabase
-    .from('content_posts')
+    .from('ai_generated_content')
     .select('platform, scheduled_at')
     .eq('user_id', userId)
-    .eq('post_status', 'scheduled')
+    .eq('status', 'scheduled')
     .gte('scheduled_at', `${today}T00:00:00`)
     .lte('scheduled_at', `${today}T23:59:59`);
 

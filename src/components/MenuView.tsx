@@ -4,7 +4,7 @@
  * settings, legacy Today view access, and help.
  */
 
-import { Settings, ChevronRight, HelpCircle, Calendar, Radio, Eye, FileText, Mail, ShieldAlert, PauseCircle, ArrowUpRight } from 'lucide-react';
+import { Settings, ChevronRight, HelpCircle, Calendar, Radio, Eye, FileText, Mail, ShieldAlert, PauseCircle, ArrowUpRight, Flame } from 'lucide-react';
 
 type MenuItemId =
   | 'settings' | 'help'
@@ -17,7 +17,7 @@ type MenuItemId =
   | 'exercise' | 'her-world' | 'vault-swipe' | 'content-dashboard' | 'cam-session' | 'hypno-session'
   | 'progress-page' | 'sealed-page' | 'log-release' | 'social-dashboard'
   | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol'
-  | 'escalation_ladder';
+  | 'escalation_ladder' | 'force';
 
 interface MenuViewProps {
   onNavigate: (view: MenuItemId) => void;
@@ -73,6 +73,13 @@ export function MenuView({ onNavigate }: MenuViewProps) {
       label: 'Transformation Ladder',
       description: 'Where you are on the journey. Only goes up.',
       color: '#a855f7',
+    },
+    {
+      id: 'force' as MenuItemId,
+      icon: Flame,
+      label: 'Force Layer',
+      description: 'Hard Mode, slips, punishments, chastity, disclosure ladder.',
+      color: '#ef4444',
     },
     {
       id: 'system_audit' as MenuItemId,

@@ -15,6 +15,8 @@ import { supabase } from './config';
 import { fullSlopCheck } from './slop-detector';
 import { extractSafeText } from './refusal-filter';
 import { getVoiceRules } from './voice';
+import { buildMaxyVoiceSystem } from './voice-system';
+import { loadCycleContext, summarizeSlop, buildContext, type CycleContext, type SlopSummary } from './generation-context';
 
 const USER_ID = process.env.USER_ID || '';
 const MAX_QUALITY_RETRIES = 3;
@@ -184,15 +186,19 @@ async function generatePost(
   anthropic: Anthropic,
   slot: ContentSlot,
   recentPosts: string[],
-): Promise<{ text: string; subreddit?: string } | null> {
+): Promise<{ text: string; subreddit?: string; slop?: SlopSummary; attempts: number } | null> {
 
-  // Generate initial text
+  // Generate initial text — voice pulled from user_voice_corpus
+  const maxyVoice = USER_ID
+    ? await buildMaxyVoiceSystem(supabase, USER_ID, 'post')
+    : MAXY_VOICE_POST;
+
   let currentText: string | null = null;
   try {
     const response = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: slot.maxTokens,
-      system: MAXY_VOICE_POST + getVoiceRules(),
+      system: maxyVoice + getVoiceRules(),
       messages: [{
         role: 'user',
         content: `${slot.prompt}\n\nOutput ONLY the post text, nothing else.`,
@@ -215,7 +221,7 @@ async function generatePost(
       if (attempt > 0) {
         console.log(`  ✓ Quality gate passed on attempt ${attempt + 1} (score: ${result.llmScore}/10)`);
       }
-      return { text: currentText!, subreddit: slot.subreddit };
+      return { text: currentText!, subreddit: slot.subreddit, slop: summarizeSlop(result, attempt + 1), attempts: attempt + 1 };
     }
 
     const allReasons = [...result.patternReasons, ...result.repetitionReasons];
@@ -228,7 +234,7 @@ async function generatePost(
       const response = await anthropic.messages.create({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: slot.maxTokens,
-        system: MAXY_VOICE_POST + getVoiceRules(),
+        system: maxyVoice + getVoiceRules(),
         messages: [{
           role: 'user',
           content: `${slot.prompt}\n\n⚠️ Your previous version was rejected: "${currentText}"\n\nIssues: ${result.retryFeedback}\n\nWrite something COMPLETELY different — different words, different angle, different structure. Output ONLY the post text.`,
@@ -283,6 +289,13 @@ export async function generateCalendar(feminizationTier?: number): Promise<numbe
   console.log('[Calendar] No scheduled posts found for next 24h — generating content calendar');
 
   const anthropic = new Anthropic();
+  const cycleCtx: CycleContext = await loadCycleContext(supabase, USER_ID);
+  if (feminizationTier != null) {
+    cycleCtx.handler_state = {
+      ...(cycleCtx.handler_state || {}),
+      feminization_tier: feminizationTier,
+    };
+  }
   const slots = buildDailySlots(feminizationTier);
   if (feminizationTier) {
     console.log(`[Calendar] Feminization tier ${feminizationTier} active — content strategy adjusted`);
@@ -340,6 +353,14 @@ export async function generateCalendar(feminizationTier?: number): Promise<numbe
       generation_strategy: `calendar_${slot.contentType}`,
       status: 'scheduled',
       scheduled_at: scheduledAt.toISOString(),
+      generation_context: buildContext(cycleCtx, {
+        voice_flavor: `post_${slot.platform}`,
+        slop: result.slop,
+        target: {
+          platform: slot.platform,
+          strategy: `calendar_${slot.contentType}`,
+        },
+      }),
     });
 
     if (insertError) {

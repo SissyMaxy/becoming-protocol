@@ -50,17 +50,18 @@ async function main() {
     console.log(`  [${r.platform}] "${(r.content || '').substring(0, 80)}..." @ ${r.posted_at}`);
   }
 
-  // 4. Check content_posts (vault-based)
+  // 4. Check vault-based posts (now unified in ai_generated_content)
   const { data: vaultPosts } = await sb
-    .from('content_posts')
-    .select('id, platform, caption, post_status, scheduled_at')
-    .in('post_status', ['scheduled', 'posted'])
+    .from('ai_generated_content')
+    .select('id, platform, content, status, scheduled_at')
+    .not('vault_item_id', 'is', null)
+    .in('status', ['scheduled', 'posted'])
     .order('scheduled_at', { ascending: false })
     .limit(5);
 
   console.log(`\nVault posts (scheduled/posted): ${vaultPosts?.length || 0}`);
   for (const r of vaultPosts || []) {
-    console.log(`  [${r.platform}] ${r.post_status} — "${(r.caption || '').substring(0, 60)}..." @ ${r.scheduled_at}`);
+    console.log(`  [${r.platform}] ${r.status} — "${(r.content || '').substring(0, 60)}..." @ ${r.scheduled_at}`);
   }
 
   // 5. Check revenue_content_calendar

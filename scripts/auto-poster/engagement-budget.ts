@@ -9,10 +9,13 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 const DEFAULT_LIMITS: Record<string, Record<string, number>> = {
   twitter: { reply: 20, follow: 25, unfollow: 20, quote_tweet: 4, dm: 10 },
-  reddit: { comment: 8 },
-  fetlife: { group_discussion: 3 },
-  fansly: { subscriber_reply: 999 },
-  onlyfans: { subscriber_reply: 999 },
+  reddit: { comment: 8, original_post: 2 },
+  fetlife: { group_discussion: 3, blog_post: 1 },
+  fansly: { subscriber_reply: 999, original_post: 3 },
+  onlyfans: { subscriber_reply: 999, original_post: 1 },
+  // Sniffies: keep propositioning men who want to meet. Hookup context —
+  // the platform doesn't spam-flag like Twitter; high ceiling is intentional.
+  sniffies: { chat: 200 },
 };
 
 function getDefaultLimit(platform: string, type: string): number {

@@ -35,56 +35,71 @@ export function createPitchDetector(onPitch?: (hz: number) => void): PitchDetect
   const readings: number[] = [];
 
   const SAMPLE_RATE = 44100;
-  const FFT_SIZE = 2048;
+  const FFT_SIZE = 4096; // Larger buffer = stable low-frequency detection
   const MIN_HZ = 75;   // Below male fundamental
-  const MAX_HZ = 400;  // Above soprano range
+  const MAX_HZ = 500;  // Above soprano range
+  const YIN_THRESHOLD = 0.15; // CMND threshold — lower = stricter
 
-  function autoCorrelate(buffer: Float32Array, sampleRate: number): number {
-    // Find RMS — if too quiet, return -1
+  // YIN pitch detection (de Cheveigné & Kawahara 2002).
+  // Far more accurate than plain autocorrelation — resists octave errors
+  // and subharmonics that previously reported 2x/0.5x the true pitch.
+  function detectPitchYin(buffer: Float32Array, sampleRate: number): number {
+    // RMS gate
     let rms = 0;
-    for (let i = 0; i < buffer.length; i++) {
-      rms += buffer[i] * buffer[i];
-    }
+    for (let i = 0; i < buffer.length; i++) rms += buffer[i] * buffer[i];
     rms = Math.sqrt(rms / buffer.length);
     if (rms < 0.01) return -1;
 
-    // Autocorrelation
-    const minSamples = Math.floor(sampleRate / MAX_HZ);
-    const maxSamples = Math.floor(sampleRate / MIN_HZ);
-    let bestCorrelation = -1;
-    let bestOffset = -1;
+    const tauMin = Math.max(2, Math.floor(sampleRate / MAX_HZ));
+    const tauMax = Math.min(buffer.length >> 1, Math.floor(sampleRate / MIN_HZ));
+    if (tauMax <= tauMin) return -1;
 
-    for (let offset = minSamples; offset < maxSamples && offset < buffer.length; offset++) {
-      let correlation = 0;
-      for (let i = 0; i < buffer.length - offset; i++) {
-        correlation += buffer[i] * buffer[i + offset];
+    // Step 1+2: squared difference + cumulative mean normalization
+    const yinBuf = new Float32Array(tauMax + 1);
+    yinBuf[0] = 1;
+    let runningSum = 0;
+
+    for (let tau = 1; tau <= tauMax; tau++) {
+      let sum = 0;
+      for (let i = 0; i < tauMax; i++) {
+        const delta = buffer[i] - buffer[i + tau];
+        sum += delta * delta;
       }
-      correlation /= (buffer.length - offset);
+      runningSum += sum;
+      yinBuf[tau] = runningSum > 0 ? (sum * tau) / runningSum : 1;
+    }
 
-      if (correlation > bestCorrelation) {
-        bestCorrelation = correlation;
-        bestOffset = offset;
+    // Step 3: absolute threshold — first dip below YIN_THRESHOLD
+    let tauEstimate = -1;
+    for (let tau = tauMin; tau <= tauMax; tau++) {
+      if (yinBuf[tau] < YIN_THRESHOLD) {
+        // Descend to local minimum
+        while (tau + 1 <= tauMax && yinBuf[tau + 1] < yinBuf[tau]) tau++;
+        tauEstimate = tau;
+        break;
       }
     }
 
-    if (bestCorrelation < 0.01 || bestOffset < 1) return -1;
+    if (tauEstimate === -1) return -1;
 
-    // Parabolic interpolation for sub-sample accuracy
-    const prev = bestOffset > 0 ? correlationAt(buffer, bestOffset - 1) : 0;
-    const curr = correlationAt(buffer, bestOffset);
-    const next = bestOffset < buffer.length - 1 ? correlationAt(buffer, bestOffset + 1) : 0;
-    const shift = (prev - next) / (2 * (prev - 2 * curr + next));
-    const refinedOffset = bestOffset + (isFinite(shift) ? shift : 0);
+    // Step 4: parabolic interpolation for sub-sample precision
+    const x0 = tauEstimate > 0 ? yinBuf[tauEstimate - 1] : yinBuf[tauEstimate];
+    const x1 = yinBuf[tauEstimate];
+    const x2 = tauEstimate < tauMax ? yinBuf[tauEstimate + 1] : yinBuf[tauEstimate];
+    const denom = x0 + x2 - 2 * x1;
+    const refinedTau = Math.abs(denom) < 1e-10 ? tauEstimate : tauEstimate + (x0 - x2) / (2 * denom);
 
-    return sampleRate / refinedOffset;
+    return sampleRate / refinedTau;
   }
 
-  function correlationAt(buffer: Float32Array, offset: number): number {
-    let correlation = 0;
-    for (let i = 0; i < buffer.length - offset; i++) {
-      correlation += buffer[i] * buffer[i + offset];
-    }
-    return correlation / (buffer.length - offset);
+  // Median smoothing over last N readings — rejects transient octave flips
+  const smoothWindow: number[] = [];
+  const SMOOTH_SIZE = 5;
+  function smoothPitch(hz: number): number {
+    smoothWindow.push(hz);
+    if (smoothWindow.length > SMOOTH_SIZE) smoothWindow.shift();
+    const sorted = [...smoothWindow].sort((a, b) => a - b);
+    return sorted[Math.floor(sorted.length / 2)];
   }
 
   function detect() {
@@ -93,8 +108,9 @@ export function createPitchDetector(onPitch?: (hz: number) => void): PitchDetect
     const buffer = new Float32Array(analyser.fftSize);
     analyser.getFloatTimeDomainData(buffer);
 
-    const hz = autoCorrelate(buffer, audioContext!.sampleRate);
-    if (hz > 0 && hz >= MIN_HZ && hz <= MAX_HZ) {
+    const rawHz = detectPitchYin(buffer, audioContext!.sampleRate);
+    if (rawHz > 0 && rawHz >= MIN_HZ && rawHz <= MAX_HZ) {
+      const hz = smoothPitch(rawHz);
       readings.push(hz);
       onPitch?.(Math.round(hz * 10) / 10);
     }

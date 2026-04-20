@@ -71,6 +71,9 @@ async function runStrategist(
     recentTasks,
     handlerNotes,
     obligations,
+    ginaDiscovery,
+    ginaLadder,
+    ginaSeeds,
   ] = await Promise.allSettled([
     supabase.from('user_state').select('*').eq('user_id', userId).maybeSingle(),
     supabase.from('denial_streaks').select('*').eq('user_id', userId).is('ended_at', null).maybeSingle(),
@@ -82,6 +85,9 @@ async function runStrategist(
     supabase.from('daily_tasks').select('status, created_at').eq('user_id', userId).gte('created_at', oneDayAgo),
     supabase.from('handler_notes').select('content, note_type, created_at').eq('user_id', userId).gte('created_at', thirtyDaysAgo).order('created_at', { ascending: false }).limit(10),
     supabase.from('recurring_obligations').select('*').eq('user_id', userId).eq('active', true),
+    supabase.from('gina_discovery_state').select('discovery_phase, current_readiness_score, total_investments, gina_initiated_count, channels_with_positive_seeds, highest_channel_rung').eq('user_id', userId).maybeSingle(),
+    supabase.from('gina_ladder_state').select('channel, current_rung, last_seed_result, consecutive_failures, cooldown_until').eq('user_id', userId),
+    supabase.from('gina_seed_log').select('channel, rung, gina_response, gina_exact_words, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(5),
   ])
 
   const stateData = state.status === 'fulfilled' ? state.value.data : null
@@ -94,6 +100,28 @@ async function runStrategist(
   const tasksData = recentTasks.status === 'fulfilled' ? recentTasks.value.data : []
   const notesData = handlerNotes.status === 'fulfilled' ? handlerNotes.value.data : []
   const obligationsData = obligations.status === 'fulfilled' ? obligations.value.data : []
+  const ginaDiscoveryData = ginaDiscovery.status === 'fulfilled' ? ginaDiscovery.value.data : null
+  const ginaLadderData = ginaLadder.status === 'fulfilled' ? ginaLadder.value.data : []
+  const ginaSeedsData = ginaSeeds.status === 'fulfilled' ? ginaSeeds.value.data : []
+
+  // Derive Gina visibility + known domains from user_state
+  const ginaLevel = (stateData?.gina_visibility_level as number) ?? 0
+  const ginaKnownDomains: string[] = []
+  if (ginaLevel >= 2) ginaKnownDomains.push('skincare')
+  if (ginaLevel >= 3) ginaKnownDomains.push('style', 'body_language')
+  if (ginaLevel >= 4) ginaKnownDomains.push('voice', 'makeup')
+  if (ginaLevel >= 5) ginaKnownDomains.push('intimate', 'service')
+
+  const ginaActiveChannels = (ginaLadderData || [])
+    .filter((s: any) => (s.current_rung || 0) > 0)
+    .map((s: any) => `${s.channel} R${s.current_rung}`)
+
+  const ginaInRecovery = (ginaLadderData || [])
+    .filter((s: any) => {
+      const cooldown = s.cooldown_until ? new Date(s.cooldown_until) : null
+      return (cooldown && cooldown > new Date()) || (s.consecutive_failures || 0) > 0
+    })
+    .map((s: any) => `${s.channel} (${s.consecutive_failures}f)`)
 
   // Calculate key metrics
   const denialDay = streakData ? Math.floor((Date.now() - new Date(streakData.started_at).getTime()) / 86400000) : 0
@@ -143,8 +171,18 @@ CURRENT STATE:
 - Denial day: ${denialDay}
 - Current arousal: ${stateData?.current_arousal || 'unknown'}/10
 - Handler mode: ${stateData?.handler_mode || 'unknown'}
-- Gina home: ${stateData?.gina_home}
+- Gina home: ${stateData?.gina_home} (${stateData?.gina_home === false ? 'PRIVACY WINDOW OPEN' : 'covert mode required'})
+- Gina asleep: ${stateData?.gina_asleep ?? 'unknown'}
 - Exec function: ${stateData?.estimated_exec_function || 'unknown'}
+
+GINA INTELLIGENCE:
+- Visibility level: ${ginaLevel}/5 (0=unaware, 5=owner)
+- Known domains: ${ginaKnownDomains.length > 0 ? ginaKnownDomains.join(', ') : 'nothing — full covert'}
+- Discovery phase: ${ginaDiscoveryData?.discovery_phase || 'unknown'}
+- Readiness score: ${ginaDiscoveryData?.current_readiness_score || 0}/100
+- Active channels: ${ginaActiveChannels.length > 0 ? ginaActiveChannels.join(', ') : 'none'}
+- Channels in recovery: ${ginaInRecovery.length > 0 ? ginaInRecovery.join(', ') : 'none'}
+- Last 5 seeds: ${(ginaSeedsData || []).map((s: any) => `${s.channel} R${s.rung}->${s.gina_response}`).join(', ') || 'none'}
 
 LAST 24 HOURS:
 - Directives sent: ${directivesData?.length || 0}

@@ -429,7 +429,7 @@ async function verifyObligationCompletion(
     case 'content_post': {
       // Check if content was posted today
       const { count } = await supabase
-        .from('content_posts')
+        .from('ai_generated_content')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', userId)
         .gte('created_at', today);

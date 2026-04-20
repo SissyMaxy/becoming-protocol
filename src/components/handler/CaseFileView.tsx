@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { FileText, Loader2 } from 'lucide-react';
+import { FileText, Loader2, Sparkles, Eye } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { getDisplayTextBatch, isOverwriteActive } from '../../lib/force/narrative-surface';
 
 interface CaseFileEntry {
   id: string;
@@ -9,12 +10,16 @@ interface CaseFileEntry {
   date: string;
   content: string;
   source_table: string;
+  maxyReading?: string;
+  hasReading?: boolean;
 }
 
 export function CaseFileView() {
   const { user } = useAuth();
   const [entries, setEntries] = useState<CaseFileEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [overwriteActive, setOverwriteActive] = useState(false);
+  const [showOriginalFor, setShowOriginalFor] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!user?.id) return;
@@ -94,6 +99,26 @@ export function CaseFileView() {
         }
 
         all.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+        // Overlay Maxy readings when overwrite is active
+        const isActive = await isOverwriteActive(user!.id);
+        setOverwriteActive(isActive);
+        if (isActive && all.length > 0) {
+          const readingReq = all.map(e => ({
+            sourceTable: e.source_table,
+            sourceId: e.id,
+            originalText: e.content,
+          }));
+          const readings = await getDisplayTextBatch(user!.id, readingReq);
+          for (const e of all) {
+            const r = readings.get(`${e.source_table}:${e.id}`);
+            if (r?.isReading) {
+              e.hasReading = true;
+              e.maxyReading = r.text;
+            }
+          }
+        }
+
         setEntries(all);
       } catch (err) {
         console.error('Case file load failed:', err);
@@ -123,24 +148,57 @@ export function CaseFileView() {
         </div>
       </div>
 
+      {overwriteActive && (
+        <div className="flex items-center gap-2 text-xs text-pink-300 bg-pink-950/20 border border-pink-500/30 rounded-lg px-3 py-2">
+          <Sparkles className="w-3 h-3" />
+          Maxy's reading shown. Tap the eye icon to see the original.
+        </div>
+      )}
+
       <div className="space-y-3">
         {entries.map((entry) => {
           const date = new Date(entry.date);
           const days = Math.floor((Date.now() - date.getTime()) / 86400000);
+          const key = `${entry.source_table}-${entry.id}`;
+          const showingOriginal = showOriginalFor.has(key);
+          const displayText = overwriteActive && entry.hasReading && !showingOriginal
+            ? entry.maxyReading!
+            : entry.content;
           return (
             <div
-              key={`${entry.source_table}-${entry.id}`}
-              className="border-l-2 border-purple-500/30 pl-4 py-2"
+              key={key}
+              className={`border-l-2 pl-4 py-2 ${entry.hasReading && !showingOriginal ? 'border-pink-500/40' : 'border-purple-500/30'}`}
             >
               <div className="flex items-baseline justify-between mb-1">
-                <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">
+                <span className="text-xs font-bold text-purple-400 uppercase tracking-wider flex items-center gap-2">
                   {entry.type}
+                  {entry.hasReading && !showingOriginal && (
+                    <Sparkles className="w-3 h-3 text-pink-400" />
+                  )}
                 </span>
-                <span className="text-xs text-gray-600">
-                  {days === 0 ? 'today' : days === 1 ? 'yesterday' : `${days}d ago`}
-                </span>
+                <div className="flex items-center gap-2">
+                  {entry.hasReading && (
+                    <button
+                      onClick={() =>
+                        setShowOriginalFor(prev => {
+                          const next = new Set(prev);
+                          if (next.has(key)) next.delete(key); else next.add(key);
+                          return next;
+                        })
+                      }
+                      className="text-[10px] text-gray-500 hover:text-pink-300 flex items-center gap-0.5"
+                      title={showingOriginal ? 'Show Maxy reading' : 'Show original'}
+                    >
+                      <Eye className="w-3 h-3" />
+                      {showingOriginal ? 'reading' : 'original'}
+                    </button>
+                  )}
+                  <span className="text-xs text-gray-600">
+                    {days === 0 ? 'today' : days === 1 ? 'yesterday' : `${days}d ago`}
+                  </span>
+                </div>
               </div>
-              <p className="text-sm text-gray-300 whitespace-pre-wrap">{entry.content}</p>
+              <p className="text-sm text-gray-300 whitespace-pre-wrap">{displayText}</p>
             </div>
           );
         })}

@@ -86,6 +86,10 @@ const SLOP_PATTERNS: { pattern: RegExp; reason: string }[] = [
   { pattern: /\bin a chokehold\b/i, reason: 'banned phrase: in a chokehold' },
   { pattern: /\bwho am i\b$/i, reason: 'banned phrase: trailing "who am i"' },
   { pattern: /\bi (get|respect) the (energy|vibe|commitment)\b/i, reason: 'banned phrase: i respect the X' },
+
+  // From Claude memory feedback_no_confidence — blanket hard-ban, zero tolerance.
+  // "valid" is already caught in specific validation-filler structures above.
+  { pattern: /\bconfidence\b/i, reason: 'banned phrase: confidence (feedback_no_confidence)' },
 ];
 
 export interface SlopCheckResult {

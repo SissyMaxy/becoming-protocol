@@ -2,11 +2,13 @@
  * Poster — reads scheduled posts from Supabase and dispatches to platforms.
  * Called by the scheduler or manually via: npm run post
  *
- * Processes both content_posts (vault-based) and ai_generated_content
- * (Handler-generated text posts from the revenue engine).
+ * All posts (vault-based + Handler-generated) live in ai_generated_content.
+ * Vault-based posts are identified by a non-null vault_item_id.
  */
 
 import { supabase } from './config';
+import { buildMaxyVoiceSystem } from './voice-system';
+import { rotateAllPlatforms } from './link-rotator';
 import { postToTwitter } from './platforms/twitter';
 import { postToReddit } from './platforms/reddit';
 import { postToFansly } from './platforms/fansly';
@@ -29,22 +31,25 @@ interface ScheduledPost {
   user_id: string;
   vault_item_id: string | null;
   platform: string;
-  caption: string;
-  hashtags: string[];
-  subreddit: string | null;
+  content: string;
+  target_hashtags: string[] | null;
+  target_subreddit: string | null;
   scheduled_at: string;
 }
 
 /**
- * Process all due posts.
+ * Process all due posts. Only processes posts with a vault_item_id —
+ * pure-text posts (no media) are handled by scheduler.ts which writes them
+ * in the ready-to-send state. This function dispatches vault-media posts.
  */
 export async function processDuePosts(): Promise<number> {
   const now = new Date().toISOString();
 
   const { data: posts, error } = await supabase
-    .from('content_posts')
-    .select('*')
-    .eq('post_status', 'scheduled')
+    .from('ai_generated_content')
+    .select('id, user_id, vault_item_id, platform, content, target_hashtags, target_subreddit, scheduled_at')
+    .eq('status', 'scheduled')
+    .not('vault_item_id', 'is', null)
     .lte('scheduled_at', now)
     .order('scheduled_at', { ascending: true })
     .limit(10);
@@ -62,10 +67,10 @@ export async function processDuePosts(): Promise<number> {
   let processed = 0;
 
   for (const post of posts as ScheduledPost[]) {
-    console.log(`[Poster] Processing: ${post.platform} — "${post.caption.substring(0, 50)}..."`);
+    console.log(`[Poster] Processing: ${post.platform} — "${post.content.substring(0, 50)}..."`);
 
     // Mark as posting (prevent double-processing)
-    await supabase.from('content_posts').update({ post_status: 'posting' }).eq('id', post.id);
+    await supabase.from('ai_generated_content').update({ status: 'posting' }).eq('id', post.id);
 
     // Download media if vault item exists
     let localMediaPath: string | undefined;
@@ -74,9 +79,10 @@ export async function processDuePosts(): Promise<number> {
     }
 
     // Build full caption with hashtags
-    const fullCaption = post.hashtags?.length > 0
-      ? `${post.caption}\n\n${post.hashtags.map(h => `#${h}`).join(' ')}`
-      : post.caption;
+    const hashtags = post.target_hashtags || [];
+    const fullCaption = hashtags.length > 0
+      ? `${post.content}\n\n${hashtags.map(h => `#${h}`).join(' ')}`
+      : post.content;
 
     // Dispatch to platform
     let result: { success: boolean; postUrl?: string; error?: string };
@@ -86,7 +92,7 @@ export async function processDuePosts(): Promise<number> {
         result = await postToTwitter(fullCaption, localMediaPath);
         break;
       case 'reddit':
-        result = await postToReddit(fullCaption, post.subreddit || undefined, localMediaPath);
+        result = await postToReddit(fullCaption, post.target_subreddit || undefined, localMediaPath);
         break;
       case 'fansly':
         result = await postToFansly(fullCaption, localMediaPath);
@@ -109,16 +115,16 @@ export async function processDuePosts(): Promise<number> {
 
     // Update post status
     if (result.success) {
-      await supabase.from('content_posts').update({
-        post_status: 'posted',
+      await supabase.from('ai_generated_content').update({
+        status: 'posted',
         posted_at: new Date().toISOString(),
         platform_url: result.postUrl || null,
       }).eq('id', post.id);
       console.log(`  ✓ Posted to ${post.platform}${result.postUrl ? ` — ${result.postUrl}` : ''}`);
       processed++;
     } else {
-      await supabase.from('content_posts').update({
-        post_status: 'failed',
+      await supabase.from('ai_generated_content').update({
+        status: 'failed',
       }).eq('id', post.id);
       console.error(`  ✗ Failed: ${result.error}`);
     }
@@ -215,8 +221,10 @@ async function qualityGate(
   contentType: string,
   platform: string,
   recentPosts: string[],
+  userId?: string,
 ): Promise<{ text: string; wasRegenerated: boolean } | null> {
   let currentText = originalText;
+  const maxyVoice = userId ? await buildMaxyVoiceSystem(supabase, userId, 'post') : MAXY_VOICE_POST;
 
   for (let attempt = 0; attempt <= MAX_QUALITY_RETRIES; attempt++) {
     // The slop check's LLM judge needs an "original" to compare against.
@@ -244,7 +252,7 @@ async function qualityGate(
       const response = await anthropic.messages.create({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 280,
-        system: MAXY_VOICE_POST,
+        system: maxyVoice,
         messages: [{
           role: 'user',
           content: `Write a ${contentType} ${platform} post as Maxy.\n\n⚠️ Your previous version was rejected: "${currentText}"\n\nIssues: ${result.retryFeedback}\n\nWrite something COMPLETELY different — different words, different angle, different structure. Output ONLY the post text.`,
@@ -337,6 +345,7 @@ export async function processDueAIContent(): Promise<number> {
       post.content_type,
       post.platform,
       recentByPlatform[post.platform],
+      (post as any).user_id || process.env.USER_ID,
     );
 
     if (!gateResult) {
@@ -362,24 +371,27 @@ export async function processDueAIContent(): Promise<number> {
       ? `${approvedText}\n\n${post.target_hashtags.map(h => `#${h}`).join(' ')}`
       : approvedText;
 
+    // Inject Fansly cross-promo link at 20% rate (skips fansly/onlyfans/DMs)
+    const captionWithLink = rotateAllPlatforms(fullCaption, post.platform, { rate: 0.2 });
+
     // Dispatch to platform (text-only, no media)
     let result: { success: boolean; postUrl?: string; error?: string };
 
     switch (post.platform) {
       case 'twitter':
-        result = await postToTwitter(fullCaption);
+        result = await postToTwitter(captionWithLink);
         break;
       case 'reddit':
-        result = await postToReddit(fullCaption, post.target_subreddit || undefined);
+        result = await postToReddit(captionWithLink, post.target_subreddit || undefined);
         break;
       case 'fansly':
-        result = await postToFansly(fullCaption);
+        result = await postToFansly(fullCaption);  // no link rotation on own platform
         break;
       case 'onlyfans':
         result = await postToOnlyFans(fullCaption);
         break;
       case 'fetlife':
-        result = await postToFetLife(fullCaption);
+        result = await postToFetLife(captionWithLink);
         break;
       default:
         result = { success: false, error: `Unsupported platform for AI content: ${post.platform}` };

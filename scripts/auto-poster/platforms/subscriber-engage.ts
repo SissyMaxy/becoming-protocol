@@ -11,8 +11,11 @@ import 'dotenv/config';
 import { chromium, type BrowserContext, type Page } from 'playwright';
 import Anthropic from '@anthropic-ai/sdk';
 import { supabase, PLATFORMS } from '../config';
+import { buildMaxyVoiceSystem } from '../voice-system';
 import { checkBudget, incrementBudget } from '../engagement-budget';
 import { extractSafeText } from '../refusal-filter';
+import { resolveContact, recordEvent, getContactContext, recomputeTier, flagContact } from '../contact-graph';
+import { gateOutbound } from '../pii-guard';
 
 const USER_ID = process.env.USER_ID || '';
 
@@ -172,12 +175,16 @@ export async function generateSubscriberReply(
   comment: SubscriberComment,
   platform: 'fansly' | 'onlyfans',
   state: Record<string, unknown>,
+  contactCtx: string = '',
+  sb?: typeof supabase,
+  userId?: string,
 ): Promise<string | null> {
+  const maxyVoice = (sb && userId) ? await buildMaxyVoiceSystem(sb, userId, 'subscriber') : MAXY_VOICE;
   try {
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 200,
-      system: `${MAXY_VOICE}
+      system: `${maxyVoice}
 
 You are replying to a subscriber's comment on your ${platform === 'fansly' ? 'Fansly' : 'OnlyFans'} post. This person is PAYING to see your content. Make them feel seen.
 
@@ -192,7 +199,7 @@ Write a reply that:
 8. Can be slightly more explicit/intimate than public platforms
 
 ${state.denialDay ? `Current state: day ${state.denialDay} of denial.` : ''}
-${state.hrtDay ? `HRT day: ${state.hrtDay}.` : ''}`,
+${state.hrtDay ? `HRT day: ${state.hrtDay}.` : ''}${contactCtx ? `\n\n${contactCtx}` : ''}`,
       messages: [{
         role: 'user',
         content: `Subscriber @${comment.username} commented: "${comment.text}"\n\nWrite Maxy's reply. Output ONLY the reply text.`,
@@ -288,10 +295,34 @@ export async function runSubscriberReplies(
         attempted++;
         console.log(`  @${comment.username}: "${comment.text.substring(0, 60)}..."`);
 
-        const reply = await generateSubscriberReply(client, comment, 'fansly', state);
+        // Resolve as Fansly contact (paying audience — promote to 'paid' tier
+        // automatically on first interaction since they're already subscribed).
+        let contactId: string | null = null;
+        let contactCtxBlock = '';
+        try {
+          const contact = await resolveContact(sb, userId, 'fansly', comment.username);
+          contactId = contact.id;
+          contactCtxBlock = await getContactContext(sb, contact.id);
+          await recordEvent(sb, userId, contact.id, 'reply_in', 'in', 'fansly', comment.text, 0, { url: comment.postUrl });
+        } catch (err) {
+          console.error(`  [contact-graph] resolve failed:`, err instanceof Error ? err.message : err);
+        }
+
+        let reply = await generateSubscriberReply(client, comment, 'fansly', state, contactCtxBlock, sb, userId);
         if (!reply) {
           failed++;
           continue;
+        }
+
+        {
+          const gate = gateOutbound(comment.text, reply);
+          if (gate.action === 'suppress') {
+            console.log(`  [pii-guard] SUPPRESSED (${gate.severity}): ${gate.reason}`);
+            if (contactId) { try { await flagContact(sb, contactId, `outbound_blocked:${gate.reason}`); } catch {} }
+            failed++;
+            continue;
+          }
+          if (gate.action === 'deflect') { reply = gate.text; }
         }
 
         console.log(`  Reply: "${reply.substring(0, 60)}..."`);
@@ -311,6 +342,15 @@ export async function runSubscriberReplies(
             status: 'posted',
             posted_at: new Date().toISOString(),
           });
+
+          if (contactId) {
+            try {
+              await recordEvent(sb, userId, contactId, 'reply_out', 'out', 'fansly', reply, 0, { url: comment.postUrl });
+              await recomputeTier(sb, contactId);
+            } catch (err) {
+              console.error(`  [contact-graph] record reply failed:`, err instanceof Error ? err.message : err);
+            }
+          }
 
           // Rate limit
           const delay = 30000 + Math.floor(Math.random() * 30000);
@@ -353,10 +393,32 @@ export async function runSubscriberReplies(
         attempted++;
         console.log(`  @${comment.username}: "${comment.text.substring(0, 60)}..."`);
 
-        const reply = await generateSubscriberReply(client, comment, 'onlyfans', state);
+        let contactId: string | null = null;
+        let contactCtxBlock = '';
+        try {
+          const contact = await resolveContact(sb, userId, 'onlyfans', comment.username);
+          contactId = contact.id;
+          contactCtxBlock = await getContactContext(sb, contact.id);
+          await recordEvent(sb, userId, contact.id, 'reply_in', 'in', 'onlyfans', comment.text, 0, { url: comment.postUrl });
+        } catch (err) {
+          console.error(`  [contact-graph] resolve failed:`, err instanceof Error ? err.message : err);
+        }
+
+        let reply = await generateSubscriberReply(client, comment, 'onlyfans', state, contactCtxBlock, sb, userId);
         if (!reply) {
           failed++;
           continue;
+        }
+
+        {
+          const gate = gateOutbound(comment.text, reply);
+          if (gate.action === 'suppress') {
+            console.log(`  [pii-guard] SUPPRESSED (${gate.severity}): ${gate.reason}`);
+            if (contactId) { try { await flagContact(sb, contactId, `outbound_blocked:${gate.reason}`); } catch {} }
+            failed++;
+            continue;
+          }
+          if (gate.action === 'deflect') { reply = gate.text; }
         }
 
         console.log(`  Reply: "${reply.substring(0, 60)}..."`);
@@ -376,6 +438,15 @@ export async function runSubscriberReplies(
             status: 'posted',
             posted_at: new Date().toISOString(),
           });
+
+          if (contactId) {
+            try {
+              await recordEvent(sb, userId, contactId, 'reply_out', 'out', 'onlyfans', reply, 0, { url: comment.postUrl });
+              await recomputeTier(sb, contactId);
+            } catch (err) {
+              console.error(`  [contact-graph] record reply failed:`, err instanceof Error ? err.message : err);
+            }
+          }
 
           // Rate limit
           const delay = 30000 + Math.floor(Math.random() * 30000);

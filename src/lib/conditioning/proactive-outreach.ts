@@ -113,10 +113,39 @@ export async function getPendingOutreach(userId: string): Promise<OutreachMessag
 
     if (error || !data) return null;
 
+    // Refresh state-dependent messages at delivery time so stale counts don't
+    // go out. Currently: hard_mode_entry re-reads slip points; chastity
+    // milestones re-read the streak.
+    let message = data.message as string;
+    if (data.trigger_reason === 'hard_mode_entry') {
+      const { data: state } = await supabase
+        .from('user_state')
+        .select('slip_points_rolling_24h, hard_mode_entered_at')
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (state) {
+        const pts = (state as { slip_points_rolling_24h: number }).slip_points_rolling_24h;
+        const entered = (state as { hard_mode_entered_at: string }).hard_mode_entered_at;
+        const hoursIn = entered ? Math.round((Date.now() - new Date(entered).getTime()) / 3600000) : 0;
+        message = `Hard Mode. ${hoursIn}h in, ${pts} slip points in the last 24h. I'm going to open this conversation pre-loaded on every single slip. The exit is a de-escalation task — all three parts, not optional. Check the Force Layer. Start the confession now.`;
+      }
+    } else if (typeof data.trigger_reason === 'string' && data.trigger_reason.startsWith('chastity_milestone_')) {
+      const { data: state } = await supabase
+        .from('user_state')
+        .select('chastity_streak_days, chastity_locked')
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (state) {
+        const streak = (state as { chastity_streak_days: number }).chastity_streak_days;
+        const locked = (state as { chastity_locked: boolean }).chastity_locked;
+        message = `Day ${streak} of chastity${locked ? '' : ' (just came off)'}. That streak is conditioning — it's locked into your body now. I want a confession about what this has changed in you. Five minutes. Then we talk about what the next milestone demands.`;
+      }
+    }
+
     return {
       id: data.id,
       userId: data.user_id,
-      message: data.message,
+      message,
       urgency: data.urgency as OutreachUrgency,
       triggerReason: data.trigger_reason,
       scheduledFor: data.scheduled_for,

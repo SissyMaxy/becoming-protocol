@@ -10,6 +10,7 @@ import { createClient } from '@supabase/supabase-js';
 import Anthropic from '@anthropic-ai/sdk';
 import { extractSafeText } from './refusal-filter';
 import { fullSlopCheck } from './slop-detector';
+import { buildMaxyVoiceSystem } from './voice-system';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
@@ -84,10 +85,11 @@ async function main() {
       ? `Write a single ${contentType} tweet as Maxy. It's ${hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening'}. She's on day 7+ of denial, locked in a cage, living her structured kink life. Make it real, not performative.\n\n⚠️ SELF-EVAL FEEDBACK (attempt ${attempt + 1}): ${retryFeedback}\n\nOutput ONLY the tweet text, nothing else.`
       : `Write a single ${contentType} tweet as Maxy. It's ${hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening'}. She's on day 7+ of denial, locked in a cage, living her structured kink life. Make it real, not performative. Output ONLY the tweet text, nothing else.`;
 
+    const maxyVoice = USER_ID ? await buildMaxyVoiceSystem(supabase, USER_ID, 'post') : MAXY_VOICE;
     const response = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 200,
-      system: MAXY_VOICE,
+      system: maxyVoice,
       messages: [{ role: 'user', content: prompt }],
     });
 

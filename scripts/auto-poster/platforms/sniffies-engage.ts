@@ -17,6 +17,13 @@ import Anthropic from '@anthropic-ai/sdk';
 import { supabase, PLATFORMS } from '../config';
 import { checkBudget, incrementBudget } from '../engagement-budget';
 import { extractSafeText } from '../refusal-filter';
+import { resolveContact, recordEvent, getContactContext, recomputeTier, flagContact } from '../contact-graph';
+import { gateOutbound } from '../pii-guard';
+import { queueAttentionDedup } from '../handler-attention';
+import { extractContactIntelligence } from '../contact-intelligence';
+import { buildMaxyVoiceSystem } from '../voice-system';
+import { loadMaxyFactsBlock, needsMaxyInput } from '../grounded-facts';
+import { consumePendingForChat, markPendingSent, markPendingFailed } from '../pending-outbound-sender';
 
 const USER_ID = process.env.USER_ID || '';
 
@@ -61,6 +68,20 @@ async function openChatPanel(page: Page): Promise<boolean> {
     // Check if chat panel is already open (look for "Recents" text)
     const recentsVisible = await page.locator('text=Recents').isVisible().catch(() => false);
     if (recentsVisible) return true;
+
+    // We may be inside a single conversation — try clicking a back/close button
+    // to return to the chat list. Common patterns: arrow icon, "Back", "Close", "<".
+    const backBtn = page.locator(
+      'button[aria-label*="back" i], a[aria-label*="back" i], ' +
+      'button[aria-label*="close" i], button:has-text("Back"), ' +
+      '[class*="back-button"], [class*="back-btn"], [class*="chat-header"] button:first-child'
+    ).first();
+    if (await backBtn.isVisible().catch(() => false)) {
+      await backBtn.click({ force: true }).catch(() => {});
+      await page.waitForTimeout(1200);
+      const recentsAfter = await page.locator('text=Recents').isVisible().catch(() => false);
+      if (recentsAfter) return true;
+    }
 
     // Click the chat bubble icon at bottom-left of the screen
     // It's typically a speech bubble SVG in the bottom nav
@@ -252,6 +273,8 @@ async function readAndReplyChat(
   chat: SniffiesChat,
   client: Anthropic,
   state: Record<string, unknown>,
+  sb: typeof supabase,
+  userId: string,
 ): Promise<{ success: boolean; reply?: string }> {
   try {
     // Find and click the chat item — try exact match first, then partial
@@ -308,20 +331,28 @@ async function readAndReplyChat(
         chatArea = document.querySelector('[role="main"], main') || document.body;
       }
 
-      // Extract text blocks that look like messages
-      // Walk child elements looking for discrete message bubbles/blocks
+      // Extract text blocks that look like messages with author attribution.
+      // Sniffies bubbles for self vs other typically differ in alignment/position.
+      // We compute each leaf text node's horizontal center relative to the chat
+      // area — outbound (self) bubbles sit on the right, inbound (them) on left.
       var children = chatArea.querySelectorAll('p, span, div');
       var seen = new Set();
+      var areaRect = chatArea.getBoundingClientRect();
+      var areaMid = areaRect.left + areaRect.width / 2;
       for (var j = 0; j < children.length; j++) {
         var child = children[j];
         var text = (child.innerText || '').trim();
-        // Skip empty, timestamps, UI elements
         if (!text || text.length < 2 || text.length > 500) continue;
         if (/^\\d+\\s+(seconds?|minutes?|hours?|days?)\\s+ago$/i.test(text)) continue;
         if (/^(Recents|Screened|Unread|NEW|from|Send|Type|Block|Report|Sniffies)$/i.test(text)) continue;
+        // Skip Sniffies system labels: distance, photo notices, typing, read receipts
+        if (/^\\d+(\\.\\d+)?\\s*(mi|miles?|ft|feet|km|m)$/i.test(text)) continue;
+        if (/^you sent \\d+ photos?$/i.test(text)) continue;
+        if (/^sent \\d+ photos?$/i.test(text)) continue;
+        if (/^typing\\.?\\.?\\.?$/i.test(text)) continue;
+        if (/^(read|delivered|sent)$/i.test(text)) continue;
         if (seen.has(text)) continue;
 
-        // Only include leaf-ish nodes (avoid getting parent container text)
         var childDivs = child.querySelectorAll('div, p, span');
         var isLeaf = true;
         for (var k = 0; k < childDivs.length; k++) {
@@ -329,34 +360,229 @@ async function readAndReplyChat(
         }
         if (!isLeaf) continue;
 
+        // Author detection via bubble position. Walk up to find the bubble
+        // container that has meaningful width, then check its center vs areaMid.
+        var bubble: any = child;
+        for (var u = 0; u < 6 && bubble && bubble.parentElement; u++) {
+          var r = bubble.getBoundingClientRect();
+          if (r.width > 30 && r.width < areaRect.width * 0.9) break;
+          bubble = bubble.parentElement;
+        }
+        var bRect = bubble ? bubble.getBoundingClientRect() : child.getBoundingClientRect();
+        var bCenter = bRect.left + bRect.width / 2;
+        var fromSelf = bCenter > areaMid;  // right side = outbound
+
         seen.add(text);
-        msgs.push(text);
+        msgs.push({ text: text, fromSelf: fromSelf });
       }
       return msgs.slice(-15);
-    })()`) as string[];
+    })()`) as Array<{ text: string; fromSelf: boolean }>;
 
-    console.log(`  [debug] Read ${messages.length} messages in chat with ${chat.username}`);
-    if (messages.length > 0) {
-      console.log(`  [debug]   last: "${messages[messages.length - 1].substring(0, 60)}"`);
+    // Bulletproof self-detection: query every outbound reply the bot has sent
+    // to this chat in the last 2 hours. Any scraped message whose text matches
+    // an outbound is definitely self. This is independent of DOM heuristics.
+    const outboundCutoff = new Date(Date.now() - 2 * 3600_000).toISOString();
+    let recentOutbounds: Set<string> = new Set();
+    try {
+      const { data: out } = await sb
+        .from('ai_generated_content')
+        .select('content')
+        .eq('user_id', userId)
+        .eq('platform', 'sniffies')
+        .eq('content_type', 'chat_reply')
+        .eq('target_account', chat.username)
+        .gte('posted_at', outboundCutoff);
+      recentOutbounds = new Set((out || []).map(r => (r.content || '').trim()));
+    } catch {}
+
+    // Override fromSelf for any scraped message whose text matches a recent outbound.
+    for (const m of messages) {
+      if (recentOutbounds.has(m.text.trim())) m.fromSelf = true;
     }
 
-    // Generate reply
+    const lastMsg = messages[messages.length - 1];
+    console.log(`  [debug] Read ${messages.length} messages in chat with ${chat.username}`);
+    if (lastMsg) {
+      console.log(`  [debug]   last (${lastMsg.fromSelf ? 'me' : 'them'}): "${lastMsg.text.substring(0, 60)}"`);
+    }
+
+    // Chat-list preview self-check: the chat list shows the newest message in
+    // the conversation. If that preview matches or is a prefix of any recent
+    // outbound, the newest message is ours. This catches the case where DOM
+    // message scraping fails silently and lastMsg is undefined — without it,
+    // we'd fall through and reply to our own preview text.
+    const previewText = (chat.lastMessage || '').trim().replace(/[…\.]+$/, '').trim();
+    if (previewText.length > 0) {
+      const outboundArr = [...recentOutbounds];
+      const previewIsOurs = outboundArr.some(out =>
+        out === previewText ||
+        (previewText.length >= 15 && out.startsWith(previewText)) ||
+        (out.length >= 15 && previewText.startsWith(out))
+      );
+      if (previewIsOurs) {
+        console.log(`  Skipping: chat preview matches a recent outbound — we sent the last message.`);
+        return { success: false };
+      }
+    }
+
+    // Skip if the newest message is from the bot itself — otherwise the bot
+    // replies to its own previous outbound and creates a self-conversation loop.
+    if (lastMsg && lastMsg.fromSelf) {
+      console.log(`  Skipping: last message was from us — waiting for them to respond.`);
+      return { success: false };
+    }
+
+    // No messages scraped + chat not unread = preview is most likely our own
+    // outbound that's too old to match recentOutbounds (>2h). Safest: skip.
+    if (!lastMsg && !chat.isUnread) {
+      console.log(`  Skipping: no messages scraped and chat not unread — likely our own last message.`);
+      return { success: false };
+    }
+
+    // Resolve contact + record their last incoming message so the Handler has memory.
+    let contactId: string | null = null;
+    let contactCtxBlock = '';
+    try {
+      const contact = await resolveContact(sb, userId, 'sniffies', chat.username);
+      contactId = contact.id;
+      contactCtxBlock = await getContactContext(sb, contact.id);
+      const lastInbound = [...messages].reverse().find(m => !m.fromSelf);
+      const inboundSnippet = lastInbound ? lastInbound.text : chat.lastMessage;
+      if (inboundSnippet) {
+        await recordEvent(sb, userId, contact.id, 'chat_in', 'in', 'sniffies', inboundSnippet);
+      }
+    } catch (err) {
+      console.error(`  [contact-graph] resolve/record failed:`, err instanceof Error ? err.message : err);
+    }
+
+    // Pending outbound check: if Maxy already wrote a reply manually via the
+    // Handler chat, it's queued in pending_outbound. Send it verbatim — no
+    // Claude rewrite. This is how the "needs Maxy" loop closes.
+    const pending = await consumePendingForChat(sb, userId, 'sniffies', chat.username);
+    if (pending) {
+      console.log(`  [pending] Using Maxy's queued reply: "${pending.body.slice(0, 60)}"`);
+      // Fall through: we set `reply` later to pending.body and skip Claude.
+      // Handled below via pendingOutbound variable.
+    }
+
+    // Needs-Maxy detection: if the latest inbound is a question that requires
+    // grounded state (availability, location, hard personal detail, or a
+    // meetup commitment), skip Claude and queue Handler attention. Maxy
+    // answers in the app; next tick picks up pending_outbound.
+    const lastInboundForDetect = [...messages].reverse().find(m => !m.fromSelf);
+    if (!pending && lastInboundForDetect) {
+      const needs = needsMaxyInput(lastInboundForDetect.text);
+      if (needs.needs) {
+        console.log(`  [needs-maxy] ${needs.reason} (${needs.category}) — queueing attention, skipping auto-reply`);
+        if (contactId) {
+          await queueAttentionDedup(sb, userId, {
+            kind: 'logistics_ask',
+            severity: 'medium',
+            contactId,
+            platform: 'sniffies',
+            summary: `${chat.username}: "${lastInboundForDetect.text.slice(0, 200)}" — ${needs.reason}`,
+            payload: {
+              category: needs.category,
+              inbound: lastInboundForDetect.text,
+              recent_messages: messages.slice(-5).map(m => ({ from: m.fromSelf ? 'me' : 'them', text: m.text })),
+            },
+          }, 30);
+        }
+        return { success: false };
+      }
+    }
+
+    // Generate reply — include author markers so the model knows who said what.
     const context = messages.length > 0
-      ? messages.map((m, i) => `${i + 1}: "${m}"`).join('\n')
+      ? messages.map((m, i) => `${i + 1}. ${m.fromSelf ? 'Me' : 'Them'}: "${m.text}"`).join('\n')
       : `(New conversation — they messaged you. Preview: "${chat.lastMessage}")`;
 
-    const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 150,
-      system: `${MAXY_REPLY_VOICE}\n\nYou are replying in a Sniffies chat with "${chat.username}".\n${state.denialDay ? `You're on day ${state.denialDay} of denial.` : ''}`,
-      messages: [{
-        role: 'user',
-        content: `Chat with ${chat.username}:\n${context}\n\nWrite Maxy's reply. Output ONLY the message.`,
-      }],
-    });
+    // Pull the Handler's current strategic briefing. This is what the Handler
+    // in the Becoming app is pushing this week (escalation band, weak axes,
+    // narrative theme, meetup stance). Without this, replies are voice-
+    // consistent but strategy-blind.
+    let handlerBriefing = '';
+    try {
+      const { data: briefing } = await sb
+        .from('handler_briefing')
+        .select('prompt_snippet')
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (briefing?.prompt_snippet) handlerBriefing = briefing.prompt_snippet;
+    } catch {}
 
-    const reply = extractSafeText(response, 3, `Sniffies @${chat.username}`);
-    if (!reply) return { success: false };
+    // Pending-outbound short-circuit: if Maxy queued a manual reply via the
+    // Handler, send her exact words. Skip Claude entirely.
+    let reply: string;
+    if (pending) {
+      reply = pending.body;
+    } else {
+      // Voice: pulls from user_voice_corpus (same source the Handler learns from)
+      // so the auto-poster mirrors Maxy's real cadence, not a static description.
+      const maxyVoice = await buildMaxyVoiceSystem(sb, userId, 'reply');
+      // Facts block: hard ground-truth Maxy may claim. Forces deflection on
+      // anything not in the list. This is the anti-fabrication gate.
+      const factsBlock = await loadMaxyFactsBlock(sb, userId);
+      const systemPromptParts = [maxyVoice, factsBlock];
+      systemPromptParts.push(`You are replying in a Sniffies chat with "${chat.username}".`);
+      if (state.denialDay) systemPromptParts.push(`You're on day ${state.denialDay} of denial.`);
+      if (handlerBriefing) systemPromptParts.push(`HANDLER STRATEGY (this week's directives — follow them):\n${handlerBriefing}`);
+      if (contactCtxBlock) systemPromptParts.push(contactCtxBlock);
+
+      const response = await client.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 150,
+        system: systemPromptParts.join('\n\n'),
+        messages: [{
+          role: 'user',
+          content: `Chat with ${chat.username}:\n${context}\n\nWrite Maxy's reply. Output ONLY the message.`,
+        }],
+      });
+
+      const extracted = extractSafeText(response, 3, `Sniffies @${chat.username}`);
+      if (!extracted) return { success: false };
+      reply = extracted;
+    }
+
+    // PII guardrail — hardest gate on Sniffies since it's a cruising app.
+    const lastInboundForGate = [...messages].reverse().find(m => !m.fromSelf);
+    const inboundText = lastInboundForGate ? lastInboundForGate.text : chat.lastMessage;
+    const gate = gateOutbound(inboundText, reply);
+    if (gate.action === 'suppress') {
+      console.log(`  [pii-guard] SUPPRESSED (${gate.severity}): ${gate.reason}`);
+      console.log(`  [pii-guard] Original reply: "${reply}"`);
+      if (contactId) {
+        try {
+          await flagContact(sb, contactId, `outbound_blocked:${gate.reason}`);
+          await queueAttentionDedup(sb, userId, {
+            kind: 'outbound_suppressed',
+            severity: gate.severity,
+            contactId,
+            platform: 'sniffies',
+            summary: `Blocked outbound to ${chat.username}: ${gate.reason}`,
+            payload: { original_reply: reply, inbound: inboundText },
+          });
+        } catch {}
+      }
+      return { success: false };
+    }
+    if (gate.action === 'deflect') {
+      console.log(`  [pii-guard] DEFLECTING — inbound asked for logistics (${gate.inboundSignal.keywords.join(', ')})`);
+      reply = gate.text;
+      if (contactId) {
+        try {
+          await flagContact(sb, contactId, `asked_logistics:${gate.inboundSignal.keywords[0] || 'meetup'}`);
+          await queueAttentionDedup(sb, userId, {
+            kind: 'logistics_ask',
+            severity: 'high',
+            contactId,
+            platform: 'sniffies',
+            summary: `${chat.username} asked for ${gate.inboundSignal.keywords.join(', ')}`,
+            payload: { inbound: inboundText, deflection_sent: gate.text },
+          });
+        } catch {}
+      }
+    }
 
     console.log(`  Reply: "${reply}"`);
 
@@ -454,6 +680,57 @@ async function readAndReplyChat(
       await page.keyboard.press('Enter');
     }
     await page.waitForTimeout(1500);
+
+    // If this reply came from pending_outbound, mark it sent. Otherwise the
+    // same row would fire every tick.
+    if (pending) {
+      try { await markPendingSent(sb, pending.id); } catch {}
+    }
+
+    // Log outbound reply to contact graph + refresh tier.
+    if (contactId) {
+      try {
+        await recordEvent(sb, userId, contactId, 'chat_out', 'out', 'sniffies', reply);
+        await recomputeTier(sb, contactId);
+      } catch (err) {
+        console.error(`  [contact-graph] record reply failed:`, err instanceof Error ? err.message : err);
+      }
+
+      // Extract structured intelligence from the conversation
+      try {
+        const fullConvo = [...messages, { text: reply, fromSelf: true }];
+        const result = await extractContactIntelligence(sb, client, userId, contactId, chat.username, fullConvo);
+        if (result.extracted) {
+          console.log(`  [intel] stage=${result.stage} safety=${result.safety}/10`);
+        }
+
+        // Sniffies → Fansly funnel: after 3+ exchanges with a warm contact,
+        // drop the Fansly link once. Check if we already dropped it for this contact.
+        const outCount = messages.filter(m => m.fromSelf).length;
+        if (outCount >= 3) {
+          const { count: linkDropped } = await sb.from('contact_events')
+            .select('id', { count: 'exact', head: true })
+            .eq('contact_id', contactId)
+            .eq('event_type', 'chat_out')
+            .ilike('content', '%fansly%');
+          if ((linkDropped ?? 0) === 0) {
+            const fanslyUrl = process.env.FANSLY_PUBLIC_URL || 'https://fansly.com/SoftMaxy';
+            const funnelMsg = `btw i post way more on fansly if you wanna see everything — ${fanslyUrl}`;
+            // Type and send
+            try {
+              const input = page.locator('textarea, input[type="text"], [contenteditable="true"]').last();
+              await input.fill(funnelMsg);
+              await page.keyboard.press('Enter');
+              await page.waitForTimeout(1500);
+              await recordEvent(sb, userId, contactId, 'chat_out', 'out', 'sniffies', funnelMsg, 0, { strategy: 'fansly_funnel' });
+              console.log(`  [funnel] Dropped Fansly link to ${chat.username}`);
+            } catch {}
+          }
+        }
+      } catch (err) {
+        console.error(`  [intel] failed:`, err instanceof Error ? err.message : err);
+      }
+    }
 
     return { success: true, reply };
   } catch (err) {
@@ -567,11 +844,12 @@ async function outreachToNearbyCruisers(
           continue;
         }
 
-        // Generate an opener
+        // Generate an opener — voice pulled from user_voice_corpus
+        const openerVoice = await buildMaxyVoiceSystem(sb, userId, 'reply');
         const response = await client.messages.create({
           model: 'claude-haiku-4-5-20251001',
           max_tokens: 80,
-          system: MAXY_OPENER_VOICE,
+          system: `${openerVoice}\n\nYou are sending an opener on Sniffies — a cruising/hookup app. Direct, curious, not thirsty. Under 12 words.`,
           messages: [{
             role: 'user',
             content: `Send a first message to "${username}" on Sniffies. Output ONLY the message.`,
@@ -649,6 +927,14 @@ async function outreachToNearbyCruisers(
           posted_at: new Date().toISOString(),
         });
 
+        // Register in contact graph — cold outbound, tier starts at stranger.
+        try {
+          const contact = await resolveContact(sb, userId, 'sniffies', username);
+          await recordEvent(sb, userId, contact.id, 'chat_out', 'out', 'sniffies', opener, 0, { strategy: 'outreach' });
+        } catch (err) {
+          console.error(`  [contact-graph] outreach record failed:`, err instanceof Error ? err.message : err);
+        }
+
         // Rate limit between outreach messages
         const delay = 15000 + Math.floor(Math.random() * 15000);
         await new Promise(r => setTimeout(r, delay));
@@ -704,14 +990,28 @@ export async function runSniffiesEngagement(
     const unreadCount = chats.filter(c => c.isUnread).length;
     console.log(`[Sniffies] ${chats.length} chat(s), ${unreadCount} unread`);
 
-    for (const chat of sorted.slice(0, maxReplies)) {
+    const targets = sorted.slice(0, maxReplies);
+    for (let idx = 0; idx < targets.length; idx++) {
+      const chat = targets[idx];
       const stillHasBudget = await checkBudget(sb, userId, 'sniffies', 'chat');
       if (!stillHasBudget) break;
+
+      // Between iterations, return to the chat list so we can locate the next chat item.
+      // After a reply we're inside a single conversation view, where the other chat
+      // items aren't in the DOM. Re-open the chat panel and give it a moment to render.
+      if (idx > 0) {
+        const reopened = await openChatPanel(page);
+        if (!reopened) {
+          console.log(`[Sniffies] Could not return to chat panel — stopping reply loop`);
+          break;
+        }
+        await page.waitForTimeout(1500);
+      }
 
       console.log(`[Sniffies] Replying to ${chat.username}${chat.isUnread ? ' (unread)' : ''}...`);
       attempted++;
 
-      const result = await readAndReplyChat(page, chat, client, state);
+      const result = await readAndReplyChat(page, chat, client, state, sb, userId);
       if (result.success && result.reply) {
         console.log(`  ✓ Replied to ${chat.username}`);
         posted++;

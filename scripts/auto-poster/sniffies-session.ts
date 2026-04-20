@@ -13,8 +13,9 @@
  *   5. Browser stays open until the scheduler shuts down
  */
 
-import { firefox, type BrowserContext, type Page } from 'playwright';
+import { type BrowserContext, type Page } from 'playwright';
 import { PLATFORMS } from './config';
+import { launchInvisible } from './invisible-launch';
 
 let sniffiesContext: BrowserContext | null = null;
 let sniffiesPage: Page | null = null;
@@ -51,16 +52,14 @@ export async function getSniffiesPage(): Promise<Page | null> {
   console.log('[Sniffies] Launching persistent Firefox session...');
 
   try {
-    sniffiesContext = await firefox.launchPersistentContext(
-      config.profileDir + '-firefox',
-      {
-        headless: false,
-        viewport: { width: 1280, height: 800 },
-        geolocation: config.geolocation || { latitude: 43.0495, longitude: -88.0076 },
-        permissions: ['geolocation'],
-        args: ['--window-position=-2400,-2400'],  // offscreen so it doesn't pop up
-      }
-    );
+    sniffiesContext = await launchInvisible({
+      engine: 'firefox',
+      profileDir: config.profileDir + '-firefox',
+      viewport: { width: 1280, height: 800 },
+      geolocation: config.geolocation || { latitude: 43.0495, longitude: -88.0076 },
+      permissions: ['geolocation'],
+      requireHeaded: true,  // Sniffies detects headless via Cloudflare
+    });
 
     sniffiesPage = sniffiesContext.pages()[0] || await sniffiesContext.newPage();
     await sniffiesPage.goto('https://sniffies.com/', { waitUntil: 'domcontentloaded', timeout: 20000 });
@@ -74,10 +73,12 @@ export async function getSniffiesPage(): Promise<Page | null> {
     const isLoggedIn = currentUrl.includes('/map') || loginBtns === 0;
 
     if (!isLoggedIn) {
-      console.log('[Sniffies] Not logged in — opening visible window for manual login...');
-      console.log('[Sniffies] Log in manually in the Firefox window. The engine will continue without Sniffies.');
-      console.log('[Sniffies] After logging in, Sniffies will work on the next tick.\n');
+      console.log('[Sniffies] Not logged in. Run `npx tsx login-firefox.ts sniffies` in a separate terminal to authenticate.');
+      console.log('[Sniffies] Scheduler will NOT open a visible browser. Skipping until login is present.');
 
+      try { await sniffiesContext.close(); } catch {}
+      sniffiesContext = null;
+      sniffiesPage = null;
       // Reset login flag so we can check again next tick
       loginAttempted = false;
       return null;

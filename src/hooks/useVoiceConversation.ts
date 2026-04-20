@@ -1,20 +1,22 @@
 /**
  * useVoiceConversation — P12.3
  *
- * Web Speech API for speech-to-text input. Maxy speaks, the system transcribes,
- * sends to Handler, Handler responds in Serafina's voice via useHandlerVoice TTS.
+ * Speech-to-text via OpenAI Whisper (replacing the Web Speech API, which
+ * produced the "test testing 1 2 3" partial-result spam and was wildly
+ * inaccurate for soft/trans voices). Records with MediaRecorder, POSTs
+ * the audio blob to /api/transcribe on stop, returns a clean transcript.
  *
- * Simultaneously captures pitch data from the microphone for voice training tracking.
- * Records pitch samples to voice_pitch_samples with context='conversation'.
+ * Pitch is sampled in parallel via YIN detection on the same mic stream
+ * and written to voice_pitch_samples with context='conversation'.
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { recordPitchSample } from '../lib/voice/pitch-tracker';
 
-// Pitch detection constants (same as useAmbientVoiceMonitor)
-const MIN_VOICE_HZ = 80;
-const MAX_VOICE_HZ = 400;
+const MIN_VOICE_HZ = 75;
+const MAX_VOICE_HZ = 500;
+const YIN_THRESHOLD = 0.15;
 
 interface UseVoiceConversationReturn {
   isListening: boolean;
@@ -23,128 +25,87 @@ interface UseVoiceConversationReturn {
   stopListening: () => void;
   isSupported: boolean;
   currentPitch: number | null;
+  isTranscribing: boolean;
 }
 
-/**
- * Autocorrelation-based pitch detection.
- * Returns fundamental frequency in Hz, or null if no voice detected.
- */
-function detectPitch(audioBuffer: Float32Array, sampleRate: number): number | null {
-  const SIZE = audioBuffer.length;
-  const MAX_SAMPLES = Math.floor(SIZE / 2);
-
+// YIN pitch detection — resists octave errors of plain autocorrelation.
+function detectPitchYin(buffer: Float32Array, sampleRate: number): number | null {
   let rms = 0;
-  for (let i = 0; i < SIZE; i++) {
-    rms += audioBuffer[i] * audioBuffer[i];
-  }
-  rms = Math.sqrt(rms / SIZE);
+  for (let i = 0; i < buffer.length; i++) rms += buffer[i] * buffer[i];
+  rms = Math.sqrt(rms / buffer.length);
   if (rms < 0.01) return null;
 
-  let bestOffset = -1;
-  let bestCorrelation = 0;
-  let foundGoodCorrelation = false;
+  const tauMin = Math.max(2, Math.floor(sampleRate / MAX_VOICE_HZ));
+  const tauMax = Math.min(buffer.length >> 1, Math.floor(sampleRate / MIN_VOICE_HZ));
+  if (tauMax <= tauMin) return null;
 
-  for (let offset = 50; offset < MAX_SAMPLES; offset++) {
-    let correlation = 0;
-    for (let i = 0; i < MAX_SAMPLES; i++) {
-      correlation += Math.abs(audioBuffer[i] - audioBuffer[i + offset]);
-    }
-    correlation = 1 - correlation / MAX_SAMPLES;
+  const yinBuf = new Float32Array(tauMax + 1);
+  yinBuf[0] = 1;
+  let runningSum = 0;
 
-    if (correlation > 0.9 && correlation > bestCorrelation) {
-      bestCorrelation = correlation;
-      bestOffset = offset;
-      foundGoodCorrelation = true;
+  for (let tau = 1; tau <= tauMax; tau++) {
+    let sum = 0;
+    for (let i = 0; i < tauMax; i++) {
+      const delta = buffer[i] - buffer[i + tau];
+      sum += delta * delta;
     }
+    runningSum += sum;
+    yinBuf[tau] = runningSum > 0 ? (sum * tau) / runningSum : 1;
   }
 
-  if (!foundGoodCorrelation || bestOffset === -1) return null;
+  let tauEstimate = -1;
+  for (let tau = tauMin; tau <= tauMax; tau++) {
+    if (yinBuf[tau] < YIN_THRESHOLD) {
+      while (tau + 1 <= tauMax && yinBuf[tau + 1] < yinBuf[tau]) tau++;
+      tauEstimate = tau;
+      break;
+    }
+  }
+  if (tauEstimate === -1) return null;
 
-  const frequency = sampleRate / bestOffset;
-  return frequency >= MIN_VOICE_HZ && frequency <= MAX_VOICE_HZ ? frequency : null;
+  const x0 = tauEstimate > 0 ? yinBuf[tauEstimate - 1] : yinBuf[tauEstimate];
+  const x1 = yinBuf[tauEstimate];
+  const x2 = tauEstimate < tauMax ? yinBuf[tauEstimate + 1] : yinBuf[tauEstimate];
+  const denom = x0 + x2 - 2 * x1;
+  const refinedTau = Math.abs(denom) < 1e-10 ? tauEstimate : tauEstimate + (x0 - x2) / (2 * denom);
+
+  const hz = sampleRate / refinedTau;
+  return hz >= MIN_VOICE_HZ && hz <= MAX_VOICE_HZ ? hz : null;
 }
 
-// Extend Window for Speech Recognition API
-interface SpeechRecognitionEvent {
-  results: SpeechRecognitionResultList;
-  resultIndex: number;
+function pickMimeType(): string {
+  const candidates = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/ogg;codecs=opus',
+    'audio/ogg',
+    'audio/mp4',
+  ];
+  for (const c of candidates) {
+    if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(c)) return c;
+  }
+  return '';
 }
-
-interface SpeechRecognitionErrorEvent {
-  error: string;
-  message?: string;
-}
-
-type SpeechRecognitionInstance = {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  start: () => void;
-  stop: () => void;
-  abort: () => void;
-  onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
-  onend: (() => void) | null;
-  onstart: (() => void) | null;
-};
 
 export function useVoiceConversation(): UseVoiceConversationReturn {
   const { user } = useAuth();
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [currentPitch, setCurrentPitch] = useState<number | null>(null);
+  const [isTranscribing, setIsTranscribing] = useState(false);
 
-  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
   const pitchIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const shouldRestartRef = useRef(false);
+  const chunksRef = useRef<Blob[]>([]);
+  const mimeTypeRef = useRef<string>('');
 
-  // Check browser support
-  const isSupported = typeof window !== 'undefined' && (
-    'SpeechRecognition' in window ||
-    'webkitSpeechRecognition' in window
-  );
-
-  // Pitch sampling — runs while mic is active
-  const startPitchTracking = useCallback(async () => {
-    if (!user?.id) return;
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-
-      const audioCtx = new AudioContext();
-      audioContextRef.current = audioCtx;
-
-      const source = audioCtx.createMediaStreamSource(stream);
-      const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 2048;
-      source.connect(analyser);
-      analyserRef.current = analyser;
-
-      const bufferLength = analyser.fftSize;
-      const dataArray = new Float32Array(bufferLength);
-
-      // Sample pitch every 2 seconds
-      pitchIntervalRef.current = setInterval(() => {
-        if (!analyserRef.current) return;
-        analyserRef.current.getFloatTimeDomainData(dataArray);
-        const pitch = detectPitch(dataArray, audioCtx.sampleRate);
-
-        if (pitch !== null) {
-          setCurrentPitch(Math.round(pitch * 10) / 10);
-          // Record to DB — fire and forget
-          if (user?.id) {
-            recordPitchSample(user.id, pitch, 'conversation').catch(() => {});
-          }
-        }
-      }, 2000);
-    } catch (err) {
-      console.warn('[VoiceConversation] Pitch tracking failed:', err);
-    }
-  }, [user?.id]);
+  const isSupported =
+    typeof window !== 'undefined' &&
+    !!navigator?.mediaDevices?.getUserMedia &&
+    typeof MediaRecorder !== 'undefined';
 
   const stopPitchTracking = useCallback(() => {
     if (pitchIntervalRef.current) {
@@ -155,127 +116,120 @@ export function useVoiceConversation(): UseVoiceConversationReturn {
       audioContextRef.current.close().catch(() => {});
       audioContextRef.current = null;
     }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop());
-      streamRef.current = null;
-    }
     analyserRef.current = null;
     setCurrentPitch(null);
   }, []);
 
-  const startListening = useCallback(() => {
-    if (!isSupported) return;
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const SpeechRecognitionCtor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognitionCtor) return;
-
-    const recognition = new SpeechRecognitionCtor() as SpeechRecognitionInstance;
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-
-    recognition.onstart = () => {
-      setIsListening(true);
-      shouldRestartRef.current = true;
-    };
-
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let interimTranscript = '';
-      let finalTranscript = '';
-
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i];
-        if (result.isFinal) {
-          finalTranscript += result[0].transcript;
-        } else {
-          interimTranscript += result[0].transcript;
-        }
-      }
-
-      // Show interim results for real-time feedback, final when confirmed
-      setTranscript(prev => {
-        if (finalTranscript) {
-          return (prev + ' ' + finalTranscript).trim();
-        }
-        // For interim, show the stable transcript + current interim
-        return prev ? prev + ' ' + interimTranscript : interimTranscript;
-      });
-    };
-
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      console.warn('[VoiceConversation] Recognition error:', event.error);
-      if (event.error === 'not-allowed' || event.error === 'service-not-available') {
-        shouldRestartRef.current = false;
-        setIsListening(false);
-      }
-      // For transient errors like 'network', onend will fire and we restart
-    };
-
-    recognition.onend = () => {
-      // Auto-restart if we haven't explicitly stopped
-      if (shouldRestartRef.current) {
-        try {
-          recognition.start();
-        } catch {
-          setIsListening(false);
-          shouldRestartRef.current = false;
-        }
-      } else {
-        setIsListening(false);
-      }
-    };
-
-    recognitionRef.current = recognition;
-
-    try {
-      recognition.start();
-    } catch {
-      // Already started or unavailable
+  const cleanupStream = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
     }
-
-    // Start pitch tracking in parallel
-    startPitchTracking();
-  }, [isSupported, startPitchTracking]);
-
-  const stopListening = useCallback(() => {
-    shouldRestartRef.current = false;
-
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch {
-        // Already stopped
-      }
-      recognitionRef.current = null;
-    }
-
-    setIsListening(false);
-    stopPitchTracking();
-  }, [stopPitchTracking]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      shouldRestartRef.current = false;
-      if (recognitionRef.current) {
-        try { recognitionRef.current.abort(); } catch { /* noop */ }
-      }
-      stopPitchTracking();
-    };
-  }, [stopPitchTracking]);
-
-  // Clear transcript when not listening (ready for next round)
-  const clearTranscript = useCallback(() => {
-    setTranscript('');
   }, []);
 
-  // Expose clearTranscript via transcript reset when starting
-  useEffect(() => {
-    if (isListening) {
-      clearTranscript();
+  const startListening = useCallback(async () => {
+    if (!isSupported || isListening) return;
+    setTranscript('');
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+
+      // Pitch tracking branch
+      const audioCtx = new AudioContext();
+      audioContextRef.current = audioCtx;
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 4096;
+      source.connect(analyser);
+      analyserRef.current = analyser;
+
+      const pitchBuf = new Float32Array(analyser.fftSize);
+      pitchIntervalRef.current = setInterval(() => {
+        if (!analyserRef.current) return;
+        analyserRef.current.getFloatTimeDomainData(pitchBuf);
+        const hz = detectPitchYin(pitchBuf, audioCtx.sampleRate);
+        if (hz !== null) {
+          setCurrentPitch(Math.round(hz * 10) / 10);
+          if (user?.id) recordPitchSample(user.id, hz, 'conversation').catch(() => {});
+        }
+      }, 2000);
+
+      // Recording branch — Whisper
+      const mimeType = pickMimeType();
+      mimeTypeRef.current = mimeType;
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      recorderRef.current = recorder;
+      chunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        const blob = new Blob(chunksRef.current, { type: mimeTypeRef.current || 'audio/webm' });
+        stopPitchTracking();
+        cleanupStream();
+        setIsListening(false);
+
+        if (blob.size < 1000) {
+          setIsTranscribing(false);
+          return;
+        }
+
+        setIsTranscribing(true);
+        try {
+          const resp = await fetch('/api/transcribe', {
+            method: 'POST',
+            headers: { 'Content-Type': blob.type || 'audio/webm' },
+            body: blob,
+          });
+          if (resp.ok) {
+            const data = (await resp.json()) as { text?: string };
+            setTranscript((data.text || '').trim());
+          } else {
+            console.warn('[VoiceConversation] Whisper failed:', resp.status);
+          }
+        } catch (err) {
+          console.warn('[VoiceConversation] transcription error:', err);
+        } finally {
+          setIsTranscribing(false);
+        }
+      };
+
+      recorder.start();
+      setIsListening(true);
+    } catch (err) {
+      console.warn('[VoiceConversation] startListening failed:', err);
+      stopPitchTracking();
+      cleanupStream();
+      setIsListening(false);
     }
-  }, [isListening, clearTranscript]);
+  }, [isSupported, isListening, user?.id, stopPitchTracking, cleanupStream]);
+
+  const stopListening = useCallback(() => {
+    if (recorderRef.current && recorderRef.current.state === 'recording') {
+      try {
+        recorderRef.current.stop();
+      } catch {
+        // ignore
+      }
+    } else {
+      stopPitchTracking();
+      cleanupStream();
+      setIsListening(false);
+    }
+  }, [stopPitchTracking, cleanupStream]);
+
+  useEffect(() => {
+    return () => {
+      if (recorderRef.current && recorderRef.current.state === 'recording') {
+        try { recorderRef.current.stop(); } catch { /* noop */ }
+      }
+      stopPitchTracking();
+      cleanupStream();
+    };
+  }, [stopPitchTracking, cleanupStream]);
 
   return {
     isListening,
@@ -284,5 +238,6 @@ export function useVoiceConversation(): UseVoiceConversationReturn {
     stopListening,
     isSupported,
     currentPitch,
+    isTranscribing,
   };
 }

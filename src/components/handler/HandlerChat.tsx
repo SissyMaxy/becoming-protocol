@@ -13,6 +13,7 @@ import { useSleepAudioConditioning } from '../../hooks/useSleepAudioConditioning
 import { PhotoVerificationUpload } from './PhotoVerificationUpload';
 import { MantraRepetition } from './MantraRepetition';
 import { VoicePracticeRecorder } from './VoicePracticeRecorder';
+import { GeneratedSessionPlayer } from '../hypno/GeneratedSessionPlayer';
 import { IdentityFadingBar } from './IdentityFadingBar';
 import { RewardFlash } from './RewardFlash';
 import { useAuth } from '../../context/AuthContext';
@@ -95,6 +96,51 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
     window.addEventListener('handler-force-mantra', handler);
     return () => window.removeEventListener('handler-force-mantra', handler);
   }, []);
+
+  // Listen for handler-prescribed generated session — trigger /api/hypno/generate
+  // with the Handler's biasing, then open the player with the returned audio.
+  const [generatedSession, setGeneratedSession] = useState<{
+    sourceId: string;
+    audioUrl: string;
+    scriptText: string;
+  } | null>(null);
+  const [generatingSession, setGeneratingSession] = useState(false);
+  useEffect(() => {
+    const handler = async (e: Event) => {
+      const detail = (e as CustomEvent).detail || {};
+      setGeneratingSession(true);
+      try {
+        const { supabase: sb } = await import('../../lib/supabase');
+        const session = (await sb.auth.getSession()).data.session;
+        if (!session) return;
+        const resp = await fetch('/api/hypno/generate', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            durationMin: detail.durationMin || 5,
+            themeBias: detail.themeBias || [],
+            phraseBias: detail.phraseBias || [],
+            voiceStyle: detail.voiceStyle || undefined,
+            prescribedBy: 'handler',
+            handlerMessageId: detail.handlerMessageId,
+          }),
+        });
+        if (resp.ok) {
+          const data = (await resp.json()) as { sourceId: string; audioUrl: string; scriptText: string };
+          setGeneratedSession(data);
+        } else {
+          console.error('[HandlerChat] prescribe_generated_session failed:', await resp.text());
+        }
+      } finally {
+        setGeneratingSession(false);
+      }
+    };
+    window.addEventListener('handler-prescribe-session', handler);
+    return () => window.removeEventListener('handler-prescribe-session', handler);
+  }, []);
   const [photoTaskType, setPhotoTaskType] = useState<'outfit' | 'mirror_check' | 'pose' | 'makeup' | 'nails' | 'general'>('outfit');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -173,26 +219,31 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
     inputRef.current?.focus();
   }, [messages]);
 
-  // P12.3: Sync voice transcript to input field
+  // P12.3: Whisper transcription lands once after stopListening.
+  // When it arrives, place it in the input field; if user tapped mic to send,
+  // auto-dispatch via the pendingSend ref.
+  const pendingSendRef = useRef(false);
   useEffect(() => {
-    if (voiceInput.isListening && voiceInput.transcript !== prevTranscriptRef.current) {
+    if (voiceInput.transcript && voiceInput.transcript !== prevTranscriptRef.current) {
       prevTranscriptRef.current = voiceInput.transcript;
       setInput(voiceInput.transcript);
+      if (pendingSendRef.current && !isSending) {
+        pendingSendRef.current = false;
+        sendMessage(voiceInput.transcript);
+        setInput('');
+      }
     }
-  }, [voiceInput.isListening, voiceInput.transcript]);
+  }, [voiceInput.transcript, isSending, sendMessage]);
 
   const handleMicToggle = () => {
     if (voiceInput.isListening) {
+      // Tap to stop & send: transcript will arrive async via Whisper
+      pendingSendRef.current = true;
       voiceInput.stopListening();
-      // Send the transcribed message if we have content
-      if (input.trim() && !isSending) {
-        sendMessage(input.trim());
-        setInput('');
-        prevTranscriptRef.current = '';
-      }
     } else {
       setInput('');
       prevTranscriptRef.current = '';
+      pendingSendRef.current = false;
       voiceInput.startListening();
     }
   };
@@ -238,6 +289,22 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
         repetitions={forcedMantra.repetitions}
         reasonShown={forcedMantra.reason}
         onComplete={() => setForcedMantra(null)}
+      />
+    )}
+    {generatingSession && (
+      <div className="fixed inset-0 z-[85] bg-[#0a0a0a]/90 flex items-center justify-center">
+        <div className="bg-[#141414] rounded-xl p-6 border border-gray-800/50 flex items-center gap-3">
+          <Loader2 className="w-5 h-5 animate-spin text-pink-400" />
+          <span className="text-sm text-gray-200">Handler is composing your session…</span>
+        </div>
+      </div>
+    )}
+    {generatedSession && (
+      <GeneratedSessionPlayer
+        sourceId={generatedSession.sourceId}
+        audioUrl={generatedSession.audioUrl}
+        scriptPreview={generatedSession.scriptText}
+        onClose={() => setGeneratedSession(null)}
       />
     )}
     <div className="fixed inset-0 z-[80] flex flex-col bg-[#0a0a0a]">
@@ -374,17 +441,23 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
 
       {/* Input */}
       <div className="px-4 py-3 border-t border-gray-800/50 bg-[#0a0a0a]">
-        {/* P12.3: Listening indicator */}
+        {/* P12.3: Listening / transcribing indicator */}
         {voiceInput.isListening && (
           <div className="flex items-center gap-2 mb-2 px-1">
             <span className="relative flex h-2.5 w-2.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
             </span>
-            <span className="text-xs text-red-400">Listening</span>
+            <span className="text-xs text-red-400">Recording — tap mic to send</span>
             {voiceInput.currentPitch && (
               <span className="text-xs text-gray-500 ml-auto">{voiceInput.currentPitch}Hz</span>
             )}
+          </div>
+        )}
+        {voiceInput.isTranscribing && (
+          <div className="flex items-center gap-2 mb-2 px-1">
+            <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
+            <span className="text-xs text-amber-400">Transcribing…</span>
           </div>
         )}
         <div className="flex items-center gap-2">

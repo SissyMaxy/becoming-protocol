@@ -11,9 +11,12 @@ import 'dotenv/config';
 import { chromium, type BrowserContext, type Page } from 'playwright';
 import Anthropic from '@anthropic-ai/sdk';
 import { supabase, PLATFORMS } from '../config';
+import { buildMaxyVoiceSystem } from '../voice-system';
 import { checkBudget, incrementBudget } from '../engagement-budget';
 import { extractSafeText } from '../refusal-filter';
 import { patternSlopCheck } from '../slop-detector';
+import { resolveContact, recordEvent, getContactContext, recomputeTier, flagContact } from '../contact-graph';
+import { gateOutbound } from '../pii-guard';
 
 const USER_ID = process.env.USER_ID || '';
 
@@ -284,12 +287,16 @@ export async function generateFetLifeComment(
   post: ScrapedGroupPost,
   groupName: string,
   state: Record<string, unknown>,
+  contactCtx: string = '',
+  sb?: typeof supabase,
+  userId?: string,
 ): Promise<string | null> {
+  const maxyVoice = (sb && userId) ? await buildMaxyVoiceSystem(sb, userId, 'fetlife') : MAXY_VOICE;
   try {
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 500,
-      system: `${MAXY_VOICE}
+      system: `${maxyVoice}
 
 You are commenting on a FetLife group discussion in "${groupName}".
 
@@ -305,7 +312,7 @@ Write a thoughtful, community-oriented comment that:
 9. Reads like a real community member contributing to the conversation
 
 ${state.denialDay ? `Current state: day ${state.denialDay} of denial.` : ''}
-${state.hrtDay ? `HRT day: ${state.hrtDay}.` : ''}`,
+${state.hrtDay ? `HRT day: ${state.hrtDay}.` : ''}${contactCtx ? `\n\n${contactCtx}` : ''}`,
       messages: [{
         role: 'user',
         content: `Discussion title: "${post.title}"\n\nPost body: "${post.body || '(no body available)'}"\n\nAuthor: ${post.author || 'unknown'}\nGroup: ${groupName}\n\nWrite Maxy's comment. Output ONLY the comment text.`,
@@ -321,7 +328,7 @@ ${state.hrtDay ? `HRT day: ${state.hrtDay}.` : ''}`,
       const retry = await client.messages.create({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 500,
-        system: `${MAXY_VOICE}\n\nYou are commenting on a FetLife group discussion in "${groupName}".\nYour previous reply was rejected for sounding like AI. Issues: ${slopResult.reasons.join('; ')}.\nWrite a COMPLETELY different comment — different words, different angle. 3-8 sentences. Kink-literate, community voice. Output ONLY the comment.`,
+        system: `${maxyVoice}\n\nYou are commenting on a FetLife group discussion in "${groupName}".\nYour previous reply was rejected for sounding like AI. Issues: ${slopResult.reasons.join('; ')}.\nWrite a COMPLETELY different comment — different words, different angle. 3-8 sentences. Kink-literate, community voice. Output ONLY the comment.`,
         messages: [{
           role: 'user',
           content: `Discussion title: "${post.title}"\nPost body: "${post.body || '(no body)'}"\nAuthor: ${post.author || 'unknown'}\n\nWrite Maxy's comment. Output ONLY the comment text.`,
@@ -358,7 +365,18 @@ export async function postFetLifeComment(
       // Click the "Join Group" button (the one in the header, not the "Join Group to comment" link)
       const joinBtn = page.locator('button:has-text("Join Group"), a:has-text("Join Group")').first();
       await joinBtn.click({ timeout: 5000 });
-      await page.waitForTimeout(3000);
+      await page.waitForTimeout(4000);
+
+      // Detect approval-required groups — these never grant immediate access
+      const pending = page.locator(
+        ':text-matches("(pending|awaiting) approval", "i"), ' +
+        ':text-matches("request to join", "i"), ' +
+        ':text-matches("moderator(s)? (must|will) approve", "i")'
+      ).first();
+      if (await pending.count() > 0) {
+        console.log(`  [debug] Group requires moderator approval — skipping (will retry once approved)`);
+        return false;
+      }
 
       // Reload the post page after joining
       await page.goto(postUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
@@ -370,15 +388,35 @@ export async function postFetLifeComment(
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
     await page.waitForTimeout(1500);
 
-    // FetLife's textarea has placeholder="What say you?" and starts hidden
+    // Check for "members only" gate that survived the join attempt (private/closed group)
+    const membersOnlyGate = page.locator(
+      ':text-matches("members only", "i"), ' +
+      ':text-matches("must be a member to (comment|reply|view)", "i"), ' +
+      ':text-matches("join (this )?group to (comment|reply)", "i")'
+    ).first();
+    if (await membersOnlyGate.count() > 0) {
+      console.error(`[FetLife] Membership gate still present after join — group is private/closed`);
+      return false;
+    }
+
+    // FetLife's textarea has placeholder="What say you?" — wait for it to attach (lazy-rendered)
     let commentBox = page.locator('textarea[placeholder="What say you?"]').first();
+    await commentBox.waitFor({ state: 'attached', timeout: 5000 }).catch(() => {});
     let found = await commentBox.count() > 0;
 
     if (!found) {
-      // Fallback to generic textarea selectors
+      // Fallback to generic textarea selectors — note: trigger lazy-mount by scrolling first
+      await page.evaluate(() => window.scrollBy(0, -300)); // reveal area above footer
+      await page.waitForTimeout(500);
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      await page.waitForTimeout(1000);
+
       commentBox = page.locator(
-        'textarea[name*="body"], textarea[name*="comment"], textarea#comment_body, textarea'
+        'textarea[name*="body"], textarea[name*="comment"], textarea#comment_body, ' +
+        'form[action*="comment"] textarea, form[action*="reply"] textarea, ' +
+        'textarea'
       ).last();
+      await commentBox.waitFor({ state: 'attached', timeout: 5000 }).catch(() => {});
       found = await commentBox.count() > 0;
     }
 
@@ -517,12 +555,43 @@ export async function runFetLifeEngagement(
     console.log(`  Target: "${target.title.substring(0, 60)}..."`);
     attempted++;
 
+    // Resolve OP in contact graph, if we have an author handle.
+    let contactId: string | null = null;
+    let contactCtxBlock = '';
+    if (target.author) {
+      try {
+        const contact = await resolveContact(sb, userId, 'fetlife', target.author);
+        contactId = contact.id;
+        contactCtxBlock = await getContactContext(sb, contact.id);
+        const inboundContent = `[${group.name}] ${target.title}${target.body ? `\n\n${target.body}` : ''}`;
+        await recordEvent(sb, userId, contact.id, 'reply_in', 'in', 'fetlife', inboundContent, 0, { url: target.url, group: group.name });
+      } catch (err) {
+        console.error(`  [contact-graph] resolve failed:`, err instanceof Error ? err.message : err);
+      }
+    }
+
     // Generate comment
-    const comment = await generateFetLifeComment(client, target, group.name, state);
+    const comment = await generateFetLifeComment(client, target, group.name, state, contactCtxBlock, sb, userId);
     if (!comment) {
       console.log(`  Comment generation failed`);
       failed++;
       continue;
+    }
+
+    // PII guardrail
+    {
+      const gate = gateOutbound(target.body || target.title, comment);
+      if (gate.action === 'suppress') {
+        console.log(`  [pii-guard] SUPPRESSED (${gate.severity}): ${gate.reason}`);
+        if (contactId) { try { await flagContact(sb, contactId, `outbound_blocked:${gate.reason}`); } catch {} }
+        failed++;
+        continue;
+      }
+      if (gate.action === 'deflect') {
+        console.log(`  [pii-guard] skipping discussion post (inbound had logistics intent)`);
+        failed++;
+        continue;
+      }
     }
 
     console.log(`  Comment: "${comment.substring(0, 80)}..."`);
@@ -545,6 +614,15 @@ export async function runFetLifeEngagement(
         status: 'posted',
         posted_at: new Date().toISOString(),
       });
+
+      if (contactId) {
+        try {
+          await recordEvent(sb, userId, contactId, 'reply_out', 'out', 'fetlife', comment, 0, { url: target.url, group: group.name });
+          await recomputeTier(sb, contactId);
+        } catch (err) {
+          console.error(`  [contact-graph] record comment failed:`, err instanceof Error ? err.message : err);
+        }
+      }
     } else {
       console.log(`  Failed to post`);
       failed++;

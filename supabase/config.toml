@@ -166,6 +166,49 @@ verify_jwt = false
 [functions.conditioning-engine]
 verify_jwt = false
 
+# Handler Memory — weekly consolidation job. Invoked by pg_cron with service role.
+[functions.handler-memory]
+verify_jwt = false
+
+# Handler Strategist — outing-risk + escalation planning. Auth handled internally.
+[functions.handler-strategist]
+verify_jwt = false
+
+# Envelope Release — time-locked sealed envelope delivery. Invoked by cron.
+[functions.envelope-release]
+verify_jwt = false
+
+# Investment Update — recomputes investment totals. Invoked by cron + authed users.
+[functions.investment-update]
+verify_jwt = false
+
+# Witness Notify Send — delivers witness notifications. Invoked by cron.
+[functions.witness-notify-send]
+verify_jwt = false
+
+# Force Processor — 5-min cron: missed doses, dodged punishments, missed Gina
+# deadlines, expired chastity locks. Service role.
+[functions.force-processor]
+verify_jwt = false
+
+# Content Generator — daily: generates themed posts across platforms.
+[functions.content-generator]
+verify_jwt = false
+
+# Workout Prescriber — daily: assigns feminization-aligned workouts.
+[functions.workout-prescriber]
+verify_jwt = false
+
+# Handler Self-Audit — daily: reviews own conversations for failures,
+# generates prompt patches, tracks effectiveness. Service role.
+[functions.handler-self-audit]
+verify_jwt = false
+
+# Handler Outreach Auto — hourly: generates contextual proactive messages
+# based on time of day + user state. Service role.
+[functions.handler-outreach-auto]
+verify_jwt = false
+
 [analytics]
 enabled = false
 port = 54327

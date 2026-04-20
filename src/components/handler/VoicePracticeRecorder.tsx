@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Mic, MicOff, Loader2, Check, X } from 'lucide-react';
+import { Mic, MicOff, Loader2, Check } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 
@@ -14,7 +14,7 @@ interface VoicePracticeRecorderProps {
 export function VoicePracticeRecorder({
   targetPhrase,
   minDurationSeconds = 10,
-  targetPitchHz = 160,
+  targetPitchHz: _targetPitchHz = 160,
   onComplete,
   onCancel,
 }: VoicePracticeRecorderProps) {
@@ -105,7 +105,8 @@ export function VoicePracticeRecorder({
     const avgPitch = allPitches.length > 0 ? allPitches.reduce((s, p) => s + p, 0) / allPitches.length : 0;
     const minPitch = allPitches.length > 0 ? Math.min(...allPitches) : 0;
     const maxPitch = allPitches.length > 0 ? Math.max(...allPitches) : 0;
-    const passed = avgPitch >= targetPitchHz && elapsed >= minDurationSeconds;
+    // No pass/fail — voice tracking is longitudinal, not target-based
+    const passed = elapsed >= minDurationSeconds;
 
     const analysisResult = { avgPitch, minPitch, maxPitch, transcript: transcript.trim(), passed };
     setResult(analysisResult);
@@ -127,7 +128,7 @@ export function VoicePracticeRecorder({
         await supabase.from('handler_notes').insert({
           user_id: user.id,
           note_type: 'voice_analysis',
-          content: `[VOICE ANALYSIS] Duration: ${elapsed}s, Avg pitch: ${avgPitch.toFixed(0)}Hz (target: ${targetPitchHz}Hz), Min: ${minPitch.toFixed(0)}Hz, Max: ${maxPitch.toFixed(0)}Hz, Samples: ${allPitches.length}, Passed: ${passed}. Transcript: "${transcript.trim().substring(0, 200)}"`,
+          content: `[VOICE SAMPLE] Duration: ${elapsed}s, Avg pitch: ${avgPitch.toFixed(0)}Hz, Min: ${minPitch.toFixed(0)}Hz, Max: ${maxPitch.toFixed(0)}Hz, Samples: ${allPitches.length}. Transcript: "${transcript.trim().substring(0, 200)}"`,
           priority: 4,
         });
       } catch {}
@@ -156,9 +157,9 @@ export function VoicePracticeRecorder({
           <Mic className="w-10 h-10 mx-auto text-purple-400 mb-2" />
           <h2 className="text-xl font-bold text-white">Voice Practice</h2>
           <p className="text-sm text-gray-400">
-            {targetPhrase ? `Say: "${targetPhrase}"` : `Speak in your feminine voice for ${minDurationSeconds}+ seconds`}
+            {targetPhrase ? `Say: "${targetPhrase}"` : `Speak in your normal voice for ${minDurationSeconds}+ seconds`}
           </p>
-          <p className="text-xs text-gray-500 mt-1">Target pitch: {targetPitchHz}Hz+</p>
+          <p className="text-xs text-gray-500 mt-1">Just be you — we're tracking the trend over time</p>
         </div>
 
         <div className="bg-gray-900 rounded-xl p-4">
@@ -169,15 +170,13 @@ export function VoicePracticeRecorder({
           </div>
           <div className="h-3 bg-gray-800 rounded-full overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all duration-200 ${
-                (liveAvg || 0) >= targetPitchHz ? 'bg-purple-500' : 'bg-red-500'
-              }`}
-              style={{ width: `${Math.min(100, ((liveAvg || 0) / (targetPitchHz * 1.5)) * 100)}%` }}
+              className="h-full rounded-full transition-all duration-200 bg-purple-500"
+              style={{ width: `${Math.min(100, ((liveAvg || 0) / 300) * 100)}%` }}
             />
           </div>
           <div className="flex justify-between text-xs text-gray-600 mt-1">
             <span>80Hz</span>
-            <span className="text-purple-400">{targetPitchHz}Hz target</span>
+            <span>190Hz</span>
             <span>300Hz</span>
           </div>
         </div>
@@ -189,15 +188,16 @@ export function VoicePracticeRecorder({
         )}
 
         {result && (
-          <div className={`rounded-xl p-4 ${result.passed ? 'bg-green-900/30 border border-green-500/30' : 'bg-red-900/30 border border-red-500/30'}`}>
+          <div className="rounded-xl p-4 bg-purple-900/30 border border-purple-500/30">
             <div className="flex items-center gap-2 mb-2">
-              {result.passed ? <Check className="w-5 h-5 text-green-400" /> : <X className="w-5 h-5 text-red-400" />}
-              <span className={`font-bold ${result.passed ? 'text-green-400' : 'text-red-400'}`}>
-                {result.passed ? 'PASSED' : 'FAILED'}
-              </span>
+              <Check className="w-5 h-5 text-purple-400" />
+              <span className="font-bold text-purple-400">Recorded</span>
             </div>
             <p className="text-sm text-gray-300">
-              Avg: {result.avgPitch.toFixed(0)}Hz | Min: {result.minPitch.toFixed(0)}Hz | Max: {result.maxPitch.toFixed(0)}Hz | {elapsed}s
+              Avg: {result.avgPitch.toFixed(0)}Hz | Range: {result.minPitch.toFixed(0)}–{result.maxPitch.toFixed(0)}Hz | {elapsed}s
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              Sample saved. The Handler will track your trend over time.
             </p>
           </div>
         )}
@@ -232,34 +232,51 @@ export function VoicePracticeRecorder({
   );
 }
 
+// YIN pitch detection — resists octave errors and subharmonics that plagued the
+// previous peak-picking autocorrelation. Based on de Cheveigné & Kawahara 2002.
 function autoCorrelate(buffer: Float32Array, sampleRate: number): number {
-  const SIZE = buffer.length;
+  const MIN_HZ = 75;
+  const MAX_HZ = 500;
+  const YIN_THRESHOLD = 0.15;
+
   let rms = 0;
-  for (let i = 0; i < SIZE; i++) rms += buffer[i] * buffer[i];
-  rms = Math.sqrt(rms / SIZE);
+  for (let i = 0; i < buffer.length; i++) rms += buffer[i] * buffer[i];
+  rms = Math.sqrt(rms / buffer.length);
   if (rms < 0.01) return -1;
 
-  let r1 = 0, r2 = SIZE - 1;
-  const thres = 0.2;
-  for (let i = 0; i < SIZE / 2; i++) if (Math.abs(buffer[i]) < thres) { r1 = i; break; }
-  for (let i = 1; i < SIZE / 2; i++) if (Math.abs(buffer[SIZE - i]) < thres) { r2 = SIZE - i; break; }
+  const tauMin = Math.max(2, Math.floor(sampleRate / MAX_HZ));
+  const tauMax = Math.min(buffer.length >> 1, Math.floor(sampleRate / MIN_HZ));
+  if (tauMax <= tauMin) return -1;
 
-  const trimmedBuffer = buffer.slice(r1, r2);
-  const trimmedSize = trimmedBuffer.length;
+  const yinBuf = new Float32Array(tauMax + 1);
+  yinBuf[0] = 1;
+  let runningSum = 0;
 
-  const c = new Array(trimmedSize).fill(0);
-  for (let i = 0; i < trimmedSize; i++) {
-    for (let j = 0; j < trimmedSize - i; j++) {
-      c[i] = c[i] + trimmedBuffer[j] * trimmedBuffer[j + i];
+  for (let tau = 1; tau <= tauMax; tau++) {
+    let sum = 0;
+    for (let i = 0; i < tauMax; i++) {
+      const delta = buffer[i] - buffer[i + tau];
+      sum += delta * delta;
+    }
+    runningSum += sum;
+    yinBuf[tau] = runningSum > 0 ? (sum * tau) / runningSum : 1;
+  }
+
+  let tauEstimate = -1;
+  for (let tau = tauMin; tau <= tauMax; tau++) {
+    if (yinBuf[tau] < YIN_THRESHOLD) {
+      while (tau + 1 <= tauMax && yinBuf[tau + 1] < yinBuf[tau]) tau++;
+      tauEstimate = tau;
+      break;
     }
   }
+  if (tauEstimate === -1) return -1;
 
-  let d = 0;
-  while (c[d] > c[d + 1]) d++;
-  let maxval = -1, maxpos = -1;
-  for (let i = d; i < trimmedSize; i++) {
-    if (c[i] > maxval) { maxval = c[i]; maxpos = i; }
-  }
+  const x0 = tauEstimate > 0 ? yinBuf[tauEstimate - 1] : yinBuf[tauEstimate];
+  const x1 = yinBuf[tauEstimate];
+  const x2 = tauEstimate < tauMax ? yinBuf[tauEstimate + 1] : yinBuf[tauEstimate];
+  const denom = x0 + x2 - 2 * x1;
+  const refinedTau = Math.abs(denom) < 1e-10 ? tauEstimate : tauEstimate + (x0 - x2) / (2 * denom);
 
-  return sampleRate / maxpos;
+  return sampleRate / refinedTau;
 }

@@ -80,6 +80,45 @@ serve(async req => {
         .lt('completed_at', `${today}T00:00:00`)
       const yesterdayTasks = yesterdayTaskCount ?? null
 
+      // Financial bleeding evaluator — queue a bleed event when compliance
+      // collapses. Queue only; actual money transfer requires human-in-loop.
+      // Trigger: fewer than 2 task completions in the last 72h AND at least 1
+      // assigned task that's past due. Dedupe against any open bleed from the
+      // last 24h so we don't stack.
+      try {
+        const [{ count: completionsRecent }, { count: overdueAssigned }, { data: recentBleed }] = await Promise.all([
+          supa.from('task_completions').select('id', { count: 'exact', head: true })
+            .eq('user_id', userId)
+            .gte('completed_at', new Date(now.getTime() - 72 * 3600000).toISOString()),
+          supa.from('assigned_tasks').select('id', { count: 'exact', head: true })
+            .eq('user_id', userId)
+            .is('completed_at', null)
+            .is('skipped_at', null)
+            .lt('deadline', now.toISOString()),
+          supa.from('financial_bleed_events').select('id, created_at')
+            .eq('user_id', userId)
+            .gte('created_at', new Date(now.getTime() - 24 * 3600000).toISOString())
+            .limit(1)
+            .maybeSingle(),
+        ])
+
+        const completions72h = completionsRecent ?? 0
+        const overdue = overdueAssigned ?? 0
+        if (!recentBleed && completions72h < 2 && overdue >= 1) {
+          const amountCents = Math.min(5000, 500 + overdue * 500)
+          await supa.from('financial_bleed_events').insert({
+            user_id: userId,
+            amount_cents: amountCents,
+            reason: `compliance_collapse: ${completions72h} completions in 72h, ${overdue} overdue assigned tasks`,
+            tasks_missed: overdue,
+            destination: 'queued',
+            status: 'queued',
+          })
+        }
+      } catch (bleedErr) {
+        console.error('[OutreachAuto] bleed evaluator failed:', bleedErr)
+      }
+
       // Build state context for message generation
       const denial = (user.denial_day as number) || 0
       const hardMode = Boolean(user.hard_mode_active)

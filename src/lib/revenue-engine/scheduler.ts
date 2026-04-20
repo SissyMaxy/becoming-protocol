@@ -164,9 +164,9 @@ export async function processNewVaultItems(
   let processed = 0;
 
   for (const item of items) {
-    // Check if already multiplied (has derivatives in content_posts)
+    // Check if already multiplied (has derivatives)
     const { count } = await supabase
-      .from('content_posts')
+      .from('ai_generated_content')
       .select('id', { count: 'exact', head: true })
       .eq('vault_item_id', item.id);
 

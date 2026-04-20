@@ -106,7 +106,17 @@
       "WebFetch(domain:developer.whoop.com)",
       "Bash(cd \"D:\\\\Projects\\\\Becoming Protocol\\\\scripts\\\\auto-poster\" && mkdir -p .browser-profiles/sniffies && npx playwright open --browser chromium --save-storage .browser-profiles/sniffies/state.json https://sniffies.com 2>&1)",
       "Bash(/tmp/analysis.txt:*)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:hypnotube.com)",
+      "WebFetch(domain:bambicloud.com)",
+      "mcp__claude_ai_Supabase__list_projects",
+      "mcp__claude_ai_Supabase__execute_sql",
+      "mcp__claude_ai_Vercel__list_deployments",
+      "mcp__claude_ai_Vercel__get_runtime_logs",
+      "mcp__claude_ai_Vercel__get_deployment_build_logs",
+      "mcp__claude_ai_Supabase__deploy_edge_function",
+      "mcp__claude_ai_Supabase__apply_migration"
     ]
   }
 }

@@ -8,8 +8,9 @@
  * Browser stays open for all subsequent ticks.
  */
 
-import { firefox, type BrowserContext, type Page } from 'playwright';
+import { type BrowserContext, type Page } from 'playwright';
 import { PLATFORMS } from './config';
+import { launchInvisible } from './invisible-launch';
 
 let ofContext: BrowserContext | null = null;
 let ofPage: Page | null = null;
@@ -40,13 +41,12 @@ export async function getOnlyFansPage(): Promise<Page | null> {
   console.log('[OnlyFans] Launching persistent Firefox session...');
 
   try {
-    ofContext = await firefox.launchPersistentContext(
-      config.profileDir + '-firefox',
-      {
-        headless: false,
-        viewport: { width: 1280, height: 800 },
-      }
-    );
+    ofContext = await launchInvisible({
+      engine: 'firefox',
+      profileDir: config.profileDir + '-firefox',
+      viewport: { width: 1280, height: 800 },
+      requireHeaded: true,  // OnlyFans kills Playwright Chromium + detects headless
+    });
 
     ofPage = ofContext.pages()[0] || await ofContext.newPage();
     await ofPage.goto('https://onlyfans.com/', { waitUntil: 'domcontentloaded', timeout: 20000 });
@@ -57,9 +57,12 @@ export async function getOnlyFansPage(): Promise<Page | null> {
     const loginBtns = await ofPage.locator('a:has-text("Log in"), button:has-text("Log in")').count();
 
     if (hasLogin || loginBtns > 0) {
-      console.log('[OnlyFans] Not logged in — log in manually in the Firefox window.');
-      console.log('[OnlyFans] After logging in, OnlyFans will work on the next tick.\n');
-      loginAttempted = false; // Allow retry next tick after manual login
+      console.log('[OnlyFans] Not logged in. Run `npx tsx login-firefox.ts onlyfans` in a separate terminal.');
+      console.log('[OnlyFans] Scheduler will NOT open a visible browser. Skipping until login is present.');
+      try { await ofContext.close(); } catch {}
+      ofContext = null;
+      ofPage = null;
+      loginAttempted = false;
       return null;
     }
 

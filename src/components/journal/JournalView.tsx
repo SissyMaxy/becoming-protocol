@@ -8,7 +8,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   BookOpen, Star, Sparkles, CloudRain, FileText, Save, Check,
-  ChevronDown, ChevronUp, Loader2, Camera,
+  ChevronDown, ChevronUp, Loader2, Camera, Eye,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useBambiMode } from '../../context/BambiModeContext';
@@ -17,6 +17,7 @@ import {
   saveJournalEntry,
   type JournalEntryData,
 } from '../../lib/dashboard-analytics';
+import { getDisplayTextBatch, isOverwriteActive } from '../../lib/force/narrative-surface';
 
 // ── Alignment slider ──
 
@@ -96,9 +97,16 @@ function JournalField({ icon, label, placeholder, value, onChange, color, isBamb
 
 // ── Timeline entry ──
 
-function TimelineEntry({ entry, isBambiMode }: { entry: JournalEntryData; isBambiMode: boolean }) {
+function TimelineEntry({ entry, isBambiMode, maxyReading, overwriteActive }: {
+  entry: JournalEntryData;
+  isBambiMode: boolean;
+  maxyReading: string | null;
+  overwriteActive: boolean;
+}) {
   const [expanded, setExpanded] = useState(false);
+  const [showOriginal, setShowOriginal] = useState(false);
   const hasContent = entry.euphoriaNote || entry.dysphoriaNote || entry.freeText;
+  const showReading = overwriteActive && maxyReading && !showOriginal;
 
   return (
     <div className={`rounded-lg p-3 ${isBambiMode ? 'bg-pink-50' : 'bg-white/5'}`}>
@@ -136,29 +144,60 @@ function TimelineEntry({ entry, isBambiMode }: { entry: JournalEntryData; isBamb
 
       {expanded && hasContent && (
         <div className="mt-2 pt-2 border-t border-white/5 space-y-2">
-          {entry.euphoriaNote && (
+          {showReading ? (
             <div>
-              <span className="text-[10px] text-green-400 font-medium">Euphoria</span>
-              <p className={`text-xs ${isBambiMode ? 'text-pink-700' : 'text-gray-300'}`}>
-                {entry.euphoriaNote}
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-pink-400 font-medium flex items-center gap-1">
+                  <Sparkles className="w-3 h-3" /> Maxy reading
+                </span>
+                <button
+                  onClick={() => setShowOriginal(true)}
+                  className="text-[10px] text-gray-500 hover:text-pink-300 flex items-center gap-0.5"
+                >
+                  <Eye className="w-3 h-3" /> original
+                </button>
+              </div>
+              <p className={`text-xs ${isBambiMode ? 'text-pink-700' : 'text-pink-200/90'} italic`}>
+                {maxyReading}
               </p>
             </div>
-          )}
-          {entry.dysphoriaNote && (
-            <div>
-              <span className="text-[10px] text-yellow-400 font-medium">Dysphoria</span>
-              <p className={`text-xs ${isBambiMode ? 'text-pink-700' : 'text-gray-300'}`}>
-                {entry.dysphoriaNote}
-              </p>
-            </div>
-          )}
-          {entry.freeText && (
-            <div>
-              <span className="text-[10px] text-purple-400 font-medium">Notes</span>
-              <p className={`text-xs ${isBambiMode ? 'text-pink-700' : 'text-gray-300'}`}>
-                {entry.freeText}
-              </p>
-            </div>
+          ) : (
+            <>
+              {overwriteActive && maxyReading && (
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => setShowOriginal(false)}
+                    className="text-[10px] text-gray-500 hover:text-pink-300 flex items-center gap-0.5"
+                  >
+                    <Sparkles className="w-3 h-3" /> reading
+                  </button>
+                </div>
+              )}
+              {entry.euphoriaNote && (
+                <div>
+                  <span className="text-[10px] text-green-400 font-medium">Euphoria</span>
+                  <p className={`text-xs ${isBambiMode ? 'text-pink-700' : 'text-gray-300'}`}>
+                    {entry.euphoriaNote}
+                  </p>
+                </div>
+              )}
+              {entry.dysphoriaNote && (
+                <div>
+                  <span className="text-[10px] text-yellow-400 font-medium">Dysphoria</span>
+                  <p className={`text-xs ${isBambiMode ? 'text-pink-700' : 'text-gray-300'}`}>
+                    {entry.dysphoriaNote}
+                  </p>
+                </div>
+              )}
+              {entry.freeText && (
+                <div>
+                  <span className="text-[10px] text-purple-400 font-medium">Notes</span>
+                  <p className={`text-xs ${isBambiMode ? 'text-pink-700' : 'text-gray-300'}`}>
+                    {entry.freeText}
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -188,6 +227,8 @@ export function JournalView() {
   // Timeline state
   const [entries, setEntries] = useState<JournalEntryData[]>([]);
   const [loadingEntries, setLoadingEntries] = useState(false);
+  const [readings, setReadings] = useState<Map<string, string>>(new Map());
+  const [overwriteActive, setOverwriteActive] = useState(false);
 
   const loadEntries = useCallback(async () => {
     if (!user) return;
@@ -195,6 +236,27 @@ export function JournalView() {
     try {
       const data = await getJournalEntries(user.id, 30);
       setEntries(data);
+
+      // Fetch Maxy readings in batch if overwrite active
+      const isActive = await isOverwriteActive(user.id);
+      setOverwriteActive(isActive);
+      if (isActive && data.length > 0) {
+        const req = data
+          .filter(e => e.euphoriaNote || e.dysphoriaNote || e.freeText)
+          .map(e => ({
+            sourceTable: 'daily_entries',
+            sourceId: e.id,
+            originalText: [e.euphoriaNote, e.dysphoriaNote, e.freeText].filter(Boolean).join(' | '),
+          }));
+        if (req.length > 0) {
+          const r = await getDisplayTextBatch(user.id, req);
+          const m = new Map<string, string>();
+          for (const [key, dt] of r.entries()) {
+            if (dt.isReading) m.set(key.split(':')[1], dt.text);
+          }
+          setReadings(m);
+        }
+      }
 
       // If today's entry exists, load it into the form
       const todayEntry = data.find(e => e.date === today);
@@ -377,7 +439,13 @@ export function JournalView() {
             </p>
           ) : (
             entries.map(entry => (
-              <TimelineEntry key={entry.id} entry={entry} isBambiMode={isBambiMode} />
+              <TimelineEntry
+                key={entry.id}
+                entry={entry}
+                isBambiMode={isBambiMode}
+                maxyReading={readings.get(entry.id) || null}
+                overwriteActive={overwriteActive}
+              />
             ))
           )}
         </div>

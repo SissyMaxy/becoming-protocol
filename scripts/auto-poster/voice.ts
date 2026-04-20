@@ -25,6 +25,20 @@ interface VoiceExample {
 
 const VOICE_FILE = path.join(__dirname, '.voice-training.json');
 
+/**
+ * Voice corpus user_ids — the Handler API auth user and the auto-poster env user
+ * can differ (verified 2026-04-20). VOICE_USER_IDS is a comma-separated list;
+ * falls back to MAXY_USER_ID, then USER_ID. Both Handler-chat and platform-DM
+ * samples live under these IDs and must be read together.
+ */
+function getVoiceUserIds(): string[] {
+  const list = process.env.VOICE_USER_IDS;
+  if (list) return list.split(',').map(s => s.trim()).filter(Boolean);
+  const single = process.env.MAXY_USER_ID || process.env.USER_ID;
+  return single ? [single] : [];
+}
+const VOICE_USER_IDS = getVoiceUserIds();
+
 export function loadVoiceExamples(): VoiceExample[] {
   try {
     if (fs.existsSync(VOICE_FILE)) {
@@ -38,6 +52,27 @@ export function saveVoiceExample(example: VoiceExample): void {
   const examples = loadVoiceExamples();
   examples.push(example);
   fs.writeFileSync(VOICE_FILE, JSON.stringify(examples.slice(-200), null, 2));
+
+  // Mirror into the unified DB corpus so the Handler learns from platform edits too.
+  // Fire-and-forget — don't block the caller.
+  const isCorrection = example.wasEdited && !!example.generatedReply && example.generatedReply !== example.finalReply;
+  const text = (example.finalReply || '').trim();
+  const writeUserId = VOICE_USER_IDS[0];
+  if (text.length >= 4 && writeUserId) {
+    supabase.from('user_voice_corpus').insert({
+      user_id: writeUserId,
+      text: text.slice(0, 2000),
+      source: isCorrection ? 'ai_edit_correction' : 'platform_dm',
+      source_context: {
+        contact: example.contact,
+        their_message: (example.theirMessage || '').slice(0, 500),
+        ai_wrong: isCorrection ? (example.generatedReply || '').slice(0, 500) : null,
+        origin: 'auto-poster',
+      },
+      length: text.length,
+      signal_score: isCorrection ? 15 : 3,
+    }).then(() => {}, () => {});
+  }
 }
 
 // ── DB voice cache ──────────────────────────────────────────────────
@@ -104,6 +139,65 @@ async function loadDbVoice(): Promise<string> {
   }
 }
 
+// ── Unified voice corpus (shared with Handler) ─────────────────────
+
+let corpusCache: string = '';
+let corpusCacheTime = 0;
+
+async function loadCorpusBlock(): Promise<string> {
+  if (corpusCache && Date.now() - corpusCacheTime < 600_000) return corpusCache;
+
+  try {
+    if (VOICE_USER_IDS.length === 0) return '';
+    const { data } = await supabase
+      .from('user_voice_corpus')
+      .select('text, source, signal_score')
+      .in('user_id', VOICE_USER_IDS)
+      .gte('created_at', new Date(Date.now() - 60 * 86400_000).toISOString())
+      .order('signal_score', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(40);
+
+    if (!data || data.length === 0) return '';
+
+    // Prefer a profile with the highest sample_count across configured users
+    const { data: profs } = await supabase
+      .from('user_voice_profile')
+      .select('sample_count, avg_length, exclamation_rate, all_lower_rate, signature_bigrams')
+      .in('user_id', VOICE_USER_IDS)
+      .order('sample_count', { ascending: false })
+      .limit(1);
+    const prof = profs && profs.length > 0 ? profs[0] : null;
+
+    const seen = new Set<string>();
+    const lines: string[] = [];
+    for (const row of data) {
+      const t = (row.text || '').trim();
+      const key = t.slice(0, 60).toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      lines.push(`- "${t.replace(/\s+/g, ' ').slice(0, 220)}"`);
+      if (lines.length >= 15) break;
+    }
+
+    let stats = '';
+    if (prof && (prof.sample_count ?? 0) >= 20) {
+      const bg = ((prof.signature_bigrams as Array<{ phrase: string }>) || [])
+        .slice(0, 6)
+        .map(b => `"${b.phrase}"`)
+        .join(', ');
+      stats = `\nCadence: avg ${Math.round(prof.avg_length ?? 0)} chars, exclamations ${Math.round((prof.exclamation_rate ?? 0) * 100)}%, all-lower ${Math.round((prof.all_lower_rate ?? 0) * 100)}%.${bg ? ` Signature phrases: ${bg}.` : ''}`;
+    }
+
+    const block = `\n\nMAXY VOICE CORPUS (her actual writing, cross-platform — match this):\n${lines.join('\n')}${stats}`;
+    corpusCache = block;
+    corpusCacheTime = Date.now();
+    return block;
+  } catch {
+    return '';
+  }
+}
+
 // ── Public API ──────────────────────────────────────────────────────
 
 /**
@@ -111,7 +205,7 @@ async function loadDbVoice(): Promise<string> {
  * Append this to any system prompt to get Maxy's real voice.
  */
 export async function getVoiceBlock(): Promise<string> {
-  const dbBlock = await loadDbVoice();
+  const [dbBlock, corpusBlock] = await Promise.all([loadDbVoice(), loadCorpusBlock()]);
 
   const examples = loadVoiceExamples();
   let editBlock = '';
@@ -134,7 +228,7 @@ export async function getVoiceBlock(): Promise<string> {
     }
   }
 
-  return dbBlock + editBlock;
+  return corpusBlock + dbBlock + editBlock;
 }
 
 /**

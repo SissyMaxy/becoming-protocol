@@ -33,6 +33,10 @@ import { SharedWishlistView } from './components/wishlist';
 // AchievementModal, RewardLevelUpModal now rendered via useOrchestratedModals
 import { SettingsView, SystemAuditView } from './components/settings';
 import { WitnessManager, CaseFileView, SealedEnvelopesPage, QuitFrictionGate, EscalationLadder } from './components/handler';
+import { ForceDashboard } from './components/force/ForceDashboard';
+import { ForceStatusStrip } from './components/force/ForceStatusStrip';
+import { GinaKeyHolderPage } from './components/gina/GinaKeyHolderPage';
+import { usePunishmentNotifications } from './hooks/usePunishmentNotifications';
 import { DailyReportCard } from './components/handler/DailyReportCard';
 import { SessionContainer } from './components/session';
 import type { SessionConfig } from './components/session';
@@ -84,7 +88,7 @@ import { JournalView } from './components/journal';
 import { ProtocolAnalytics } from './components/analytics/ProtocolAnalytics';
 import { HandlerAutonomousView } from './components/autonomous';
 import { CamDashboard } from './components/cam/CamDashboard';
-import { HypnoDashboard } from './components/hypno';
+import { HypnoDashboard, HypnoLearningView } from './components/hypno';
 import { GoonSessionView } from './components/sessions/GoonSessionView';
 import { SleepContentPlayer } from './components/sleep-content';
 import { ConditioningLibrary, ConditioningPlayer } from './components/conditioning';
@@ -100,6 +104,14 @@ function parseWishlistToken(): string | null {
   const hash = window.location.hash;
   const match = hash.match(/#\/wishlist\/([a-zA-Z0-9]+)/);
   return match ? match[1] : null;
+}
+
+// Parse `/gina-key?token=xxx` for Gina's key-holder surface (no auth required)
+function parseGinaKeyToken(): string | null {
+  const path = window.location.pathname;
+  if (path !== '/gina-key' && path !== '/gina-key/') return null;
+  const params = new URLSearchParams(window.location.search);
+  return params.get('token');
 }
 
 // Parse URL path for deep-linking into menu sub-views (e.g. /social-dashboard)
@@ -137,7 +149,7 @@ function LoadingScreen() {
   );
 }
 
-type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | 'goon-session' | 'progress-page' | 'sealed-page' | 'content-capture' | 'content-queue' | 'content-calendar' | 'content-fans' | 'content-polls' | 'content-revenue' | 'content-settings' | 'vault-browser' | 'log-release' | 'conditioning-library' | 'social-dashboard' | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol' | 'escalation_ladder' | null;
+type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | 'hypno-learning' | 'goon-session' | 'progress-page' | 'sealed-page' | 'content-capture' | 'content-queue' | 'content-calendar' | 'content-fans' | 'content-polls' | 'content-revenue' | 'content-settings' | 'vault-browser' | 'log-release' | 'conditioning-library' | 'social-dashboard' | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol' | 'escalation_ladder' | 'force' | null;
 
 /** Session picker → launches immersive SessionContainer */
 function SessionPickerOrContainer({ onBack }: { onBack: () => void }) {
@@ -255,6 +267,9 @@ function AuthenticatedAppInner() {
     }
   }, [whoopToast]);
 
+  // Force-layer punishment notifications (polls every 60s)
+  usePunishmentNotifications();
+
   const deepLinkView = parseDeepLinkView();
   const [activeTab, setActiveTab] = useState<Tab>(deepLinkView ? 'menu' : 'protocol');
   const [menuSubView, setMenuSubView] = useState<MenuSubView>((deepLinkView as MenuSubView) || null);
@@ -308,15 +323,26 @@ function AuthenticatedAppInner() {
     return () => window.removeEventListener('handler-conditioning-session', handleConditioningSession);
   }, []);
 
-  // Check for pending Handler outreach on load
+  // Check for pending Handler outreach on load + poll every 60s so queued
+  // force-layer messages (Hard Mode entry, chastity milestones, etc.) surface.
   const { user: authUser } = useAuth();
   useEffect(() => {
     if (!authUser?.id) return;
     const user = authUser;
-    // Check for existing outreach
-    getPendingOutreach(user.id).then(o => {
-      if (o) setPendingOutreach({ id: o.id, openingLine: o.openingLine });
-    }).catch(() => {});
+
+    const check = () => {
+      getPendingOutreach(user.id).then(o => {
+        if (!o) return;
+        // OutreachMessage.message is the text; map to openingLine for HandlerChat
+        const line = (o as unknown as { message?: string; openingLine?: string }).message
+          || (o as unknown as { openingLine?: string }).openingLine
+          || '';
+        if (line) setPendingOutreach({ id: o.id, openingLine: line });
+      }).catch(() => {});
+    };
+    check();
+    const iv = setInterval(check, 60_000);
+
     // Evaluate if new outreach should fire
     const params = new HandlerParameters(user.id);
     evaluateAndQueueOutreach(user.id, params).then(result => {
@@ -324,6 +350,8 @@ function AuthenticatedAppInner() {
         setPendingOutreach({ id: '', openingLine: result.line });
       }
     }).catch(() => {});
+
+    return () => clearInterval(iv);
   }, [authUser?.id]);
 
   // Feminization reminders - all day presence
@@ -398,6 +426,10 @@ function AuthenticatedAppInner() {
       setActiveTab('menu');
       setMenuSubView('hypno-session');
     };
+    const handleNavigateToHypnoLearning = () => {
+      setActiveTab('menu');
+      setMenuSubView('hypno-learning');
+    };
     const handleOpenReleaseLog = () => setShowOrgasmLog(true);
     window.addEventListener('navigate-to-investments', handleNavigateToInvestments);
     window.addEventListener('navigate-to-wishlist', handleNavigateToWishlist);
@@ -406,6 +438,7 @@ function AuthenticatedAppInner() {
     window.addEventListener('navigate-to-exercise', handleNavigateToExercise);
     window.addEventListener('navigate-to-cam', handleNavigateToCam);
     window.addEventListener('navigate-to-hypno', handleNavigateToHypno);
+    window.addEventListener('navigate-to-hypno-learning', handleNavigateToHypnoLearning);
     window.addEventListener('open-release-log', handleOpenReleaseLog);
     return () => {
       window.removeEventListener('navigate-to-investments', handleNavigateToInvestments);
@@ -415,6 +448,7 @@ function AuthenticatedAppInner() {
       window.removeEventListener('navigate-to-exercise', handleNavigateToExercise);
       window.removeEventListener('navigate-to-cam', handleNavigateToCam);
       window.removeEventListener('navigate-to-hypno', handleNavigateToHypno);
+      window.removeEventListener('navigate-to-hypno-learning', handleNavigateToHypnoLearning);
       window.removeEventListener('open-release-log', handleOpenReleaseLog);
     };
   }, []);
@@ -773,6 +807,21 @@ function AuthenticatedAppInner() {
         return <CamDashboard onBack={handleBackFromSubView} />;
       case 'hypno-session':
         return <HypnoDashboard onBack={handleBackFromSubView} />;
+      case 'hypno-learning':
+        return (
+          <div className="min-h-screen bg-[#0a0a0a]">
+            <div className="px-4 py-3 flex items-center gap-2 border-b border-gray-800/50">
+              <button
+                onClick={handleBackFromSubView}
+                className="text-gray-400 hover:text-gray-200 text-sm"
+              >
+                &larr; Back
+              </button>
+              <span className="text-sm font-medium text-gray-200">Hypno Learning</span>
+            </div>
+            <HypnoLearningView />
+          </div>
+        );
       case 'goon-session':
         return <GoonSessionView onBack={handleBackFromSubView} />;
       case 'conditioning-library':
@@ -887,6 +936,19 @@ function AuthenticatedAppInner() {
             <EscalationLadder />
           </div>
         );
+      case 'force':
+        return (
+          <div>
+            <button
+              onClick={handleBackFromSubView}
+              className="mb-4 text-protocol-text-muted hover:text-protocol-text transition-colors"
+            >
+              &larr; Back to Menu
+            </button>
+            <h2 className="text-lg font-semibold mb-3">Force Layer</h2>
+            <ForceDashboard />
+          </div>
+        );
       case 'settings':
         return <SettingsView onBack={handleBackFromSubView} onEditIntake={handleEditIntake} />;
       case 'help':
@@ -923,16 +985,24 @@ function AuthenticatedAppInner() {
     <div className="min-h-screen bg-[#0a0a0a]">
       {/* PRIMARY: The Conversation — always visible unless settings open */}
       {!showSettings && (
-        <ErrorBoundary componentName="HandlerChat">
-          <HandlerChat
-            onClose={() => {}} // Can't close — it IS the app
-            openingLine={pendingOutreach?.openingLine}
-            onOpenSettings={() => {
+        <>
+          <ForceStatusStrip
+            onNavigate={() => {
               setShowSettings(true);
-              setMenuSubView(null);
+              setMenuSubView('force');
             }}
           />
-        </ErrorBoundary>
+          <ErrorBoundary componentName="HandlerChat">
+            <HandlerChat
+              onClose={() => {}} // Can't close — it IS the app
+              openingLine={pendingOutreach?.openingLine}
+              onOpenSettings={() => {
+                setShowSettings(true);
+                setMenuSubView(null);
+              }}
+            />
+          </ErrorBoundary>
+        </>
       )}
 
       {/* SETTINGS: Accessed via gear icon in chat header */}
@@ -1115,6 +1185,11 @@ function AppInner() {
         }}
       />
     );
+  }
+
+  // Handle Gina key-holder surface (no auth required — token-auth via API)
+  if (parseGinaKeyToken()) {
+    return <GinaKeyHolderPage />;
   }
 
   if (isLoading) {

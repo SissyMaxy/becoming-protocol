@@ -37,18 +37,6 @@ async function cancelScheduledPosts(options: KillOptions): Promise<number> {
 
   const { count } = await query.select('id', { count: 'exact', head: true });
 
-  // Also kill vault-based posts
-  let vaultQuery = supabase
-    .from('content_posts')
-    .update({ post_status: 'killed' })
-    .in('post_status', ['scheduled', 'posting']);
-
-  if (options.platform) {
-    vaultQuery = vaultQuery.eq('platform', options.platform);
-  }
-
-  await vaultQuery;
-
   return count || 0;
 }
 

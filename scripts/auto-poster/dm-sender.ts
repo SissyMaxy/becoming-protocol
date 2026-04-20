@@ -9,6 +9,7 @@
 
 import { chromium, type BrowserContext } from 'playwright';
 import { supabase, PLATFORMS } from './config';
+import { resolveContact, recordEvent, recomputeTier, type ContactPlatform } from './contact-graph';
 
 interface PendingReply {
   id: string;
@@ -235,6 +236,22 @@ export async function sendPendingDMReplies(): Promise<number> {
           .eq('id', reply.id);
         console.log(`  ✓ Sent to ${platform}/${reply.subscriber_id}`);
         sent++;
+
+        // Contact graph: log the actual send (dm_out with sent=true).
+        // The queued-reply event was logged by dm-reader; this records the delivered moment.
+        const userId = process.env.USER_ID || '';
+        if (userId) {
+          try {
+            const graphPlatform = (
+              ['twitter', 'fansly', 'onlyfans'].includes(platform) ? platform : 'dm'
+            ) as ContactPlatform;
+            const contact = await resolveContact(supabase, userId, graphPlatform, reply.subscriber_id);
+            await recordEvent(supabase, userId, contact.id, 'dm_out', 'out', graphPlatform, reply.handler_response, 0, { sent: true });
+            await recomputeTier(supabase, contact.id);
+          } catch (err) {
+            console.error(`  [contact-graph] send record failed:`, err instanceof Error ? err.message : err);
+          }
+        }
       } else {
         console.error(`  ✗ Failed: ${platform}/${reply.subscriber_id}`);
       }

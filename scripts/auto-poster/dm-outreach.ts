@@ -13,6 +13,7 @@ import { chromium, type BrowserContext, type Page } from 'playwright';
 import Anthropic from '@anthropic-ai/sdk';
 import { supabase, PLATFORMS } from './config';
 import { extractSafeText } from './refusal-filter';
+import { loadCycleContext, buildContext, type CycleContext } from './generation-context';
 
 const USER_ID = process.env.USER_ID || '';
 
@@ -242,6 +243,7 @@ export async function runDMOutreach(maxDMs: number = MAX_DMS_PER_CYCLE): Promise
   console.log(`[DM] ${targets.length} candidates, sending up to ${maxDMs}`);
 
   const anthropic = new Anthropic();
+  const cycleCtx: CycleContext = await loadCycleContext(supabase, USER_ID);
   let context: BrowserContext | null = null;
   let attempted = 0;
   let sent = 0;
@@ -249,11 +251,10 @@ export async function runDMOutreach(maxDMs: number = MAX_DMS_PER_CYCLE): Promise
 
   try {
     context = await chromium.launchPersistentContext(config.profileDir, {
-      headless: false,
+      headless: true,
       viewport: { width: 1280, height: 800 },
       args: [
         '--disable-blink-features=AutomationControlled',
-        '--window-position=-2400,-2400',
       ],
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     });
@@ -308,6 +309,16 @@ export async function runDMOutreach(maxDMs: number = MAX_DMS_PER_CYCLE): Promise
           target_account: target.target_handle,
           status: 'posted',
           posted_at: new Date().toISOString(),
+          generation_context: buildContext(cycleCtx, {
+            voice_flavor: target.nsfw_engagement ? 'dm_cold_nsfw' : 'dm_cold_sfw',
+            target: {
+              platform: 'twitter',
+              username: target.target_handle,
+              nsfw: target.nsfw_engagement,
+              strategy: target.strategy,
+            },
+            notes: 'dm_outreach_cold',
+          }),
         });
       } else {
         console.log(`  ✗ Failed to send DM`);

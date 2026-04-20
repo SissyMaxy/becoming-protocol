@@ -115,15 +115,15 @@ export async function generateCopy(
 
   // Get recent top-performing captions for this platform
   const { data: topPosts } = await supabase
-    .from('content_posts')
-    .select('caption, likes, comments')
+    .from('ai_generated_content')
+    .select('content, engagement_likes, engagement_comments')
     .eq('user_id', userId)
     .eq('platform', platform)
-    .eq('post_status', 'posted')
-    .order('likes', { ascending: false })
+    .eq('status', 'posted')
+    .order('engagement_likes', { ascending: false })
     .limit(3);
 
-  const topCaptions = (topPosts || []).map(p => p.caption).filter(Boolean);
+  const topCaptions = (topPosts || []).map(p => p.content).filter(Boolean);
 
   const platformRules: Record<string, string> = {
     twitter: 'Max 280 chars. Teasing, drives to link. No explicit language.',
@@ -167,9 +167,10 @@ export async function scheduleDistribution(
   // Check daily post count
   const today = new Date().toISOString().split('T')[0];
   const { count: todayCount } = await supabase
-    .from('content_posts')
+    .from('ai_generated_content')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', userId)
+    .not('vault_item_id', 'is', null)
     .gte('scheduled_at', `${today}T00:00:00`)
     .lt('scheduled_at', `${today}T23:59:59`);
 
@@ -188,14 +189,19 @@ export async function scheduleDistribution(
     const caption = await generateCopy(userId, vaultItemId, platform);
     if (!caption) continue;
 
-    const { error } = await supabase.from('content_posts').insert({
+    const { error } = await supabase.from('ai_generated_content').insert({
       user_id: userId,
       vault_item_id: vaultItemId,
       platform,
-      caption,
-      hashtags: [],
+      content: caption,
+      content_type: platform === 'twitter' ? 'tweet'
+        : platform === 'reddit' ? 'reddit_post'
+        : platform === 'fetlife' ? 'fetlife_post'
+        : 'caption',
+      target_hashtags: [],
+      generation_strategy: 'vault_distribution',
       scheduled_at: scheduledAt.toISOString(),
-      post_status: 'scheduled',
+      status: 'scheduled',
     });
 
     if (!error) scheduled++;
@@ -328,18 +334,18 @@ export async function getScheduledPosts(userId: string): Promise<Array<{
   status: string;
 }>> {
   const { data } = await supabase
-    .from('content_posts')
-    .select('id, platform, caption, scheduled_at, post_status')
+    .from('ai_generated_content')
+    .select('id, platform, content, scheduled_at, status')
     .eq('user_id', userId)
-    .eq('post_status', 'scheduled')
+    .eq('status', 'scheduled')
     .order('scheduled_at', { ascending: true })
     .limit(20);
 
   return (data || []).map(d => ({
     id: d.id,
     platform: d.platform,
-    caption: d.caption,
+    caption: d.content,
     scheduledAt: d.scheduled_at,
-    status: d.post_status,
+    status: d.status,
   }));
 }

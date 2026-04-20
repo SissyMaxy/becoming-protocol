@@ -664,9 +664,9 @@ async function verifyContentPost(
   userId: string,
   date: string,
 ): Promise<VerificationResult> {
-  // Check content_posts
+  // Check ai_generated_content (unified post table)
   const { data: posts } = await supabase
-    .from('content_posts')
+    .from('ai_generated_content')
     .select('id')
     .eq('user_id', userId)
     .gte('created_at', `${date}T00:00:00`)

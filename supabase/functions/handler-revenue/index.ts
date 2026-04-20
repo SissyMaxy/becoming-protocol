@@ -505,7 +505,7 @@ async function multiplyNewContent(
   let processed = 0
   for (const item of items) {
     const { count } = await supabase
-      .from('content_posts')
+      .from('ai_generated_content')
       .select('id', { count: 'exact', head: true })
       .eq('vault_item_id', item.id)
 
@@ -527,15 +527,20 @@ async function multiplyNewContent(
       const caption = response.content[0].type === 'text' ? response.content[0].text.trim() : ''
       if (!caption) continue
 
-      await supabase.from('content_posts').insert({
+      await supabase.from('ai_generated_content').insert({
         user_id: userId,
         vault_item_id: item.id,
         platform: d.platform,
-        caption,
-        subreddit: d.subreddit || null,
-        hashtags: [],
+        content: caption,
+        content_type: d.platform === 'twitter' ? 'tweet'
+          : d.platform === 'reddit' ? 'reddit_post'
+          : d.platform === 'fetlife' ? 'fetlife_post'
+          : 'caption',
+        target_subreddit: d.subreddit || null,
+        target_hashtags: [],
+        generation_strategy: 'handler_revenue_derivative',
         scheduled_at: scheduledAt.toISOString(),
-        post_status: 'scheduled',
+        status: 'scheduled',
       })
     }
     processed++

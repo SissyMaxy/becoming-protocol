@@ -18,6 +18,10 @@ import { chromium, type BrowserContext, type Page } from 'playwright';
 import Anthropic from '@anthropic-ai/sdk';
 import { supabase, PLATFORMS } from './config';
 import { getVoiceBlock } from './voice';
+import { resolveContact, recordEvent, getContactContext, recomputeTier, flagContact, type ContactPlatform } from './contact-graph';
+import { gateOutbound } from './pii-guard';
+import { queueAttentionDedup } from './handler-attention';
+import { getOpenTributeFor } from './tributes';
 
 interface IncomingDM {
   platform: string;
@@ -564,6 +568,7 @@ async function generateDMResponse(
   anthropic: Anthropic,
   msg: IncomingDM,
   conversationHistory: string[],
+  contactCtx: string = '',
 ): Promise<string | null> {
   try {
     const historyContext = conversationHistory.length > 0
@@ -574,7 +579,7 @@ async function generateDMResponse(
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 200,
-      system: MAXY_DM_PROMPT + voiceBlock,
+      system: MAXY_DM_PROMPT + voiceBlock + (contactCtx ? `\n\n${contactCtx}` : ''),
       messages: [{
         role: 'user',
         content: `Reply as Maxy to ${msg.fanDisplayName} on ${msg.platform} DMs.${historyContext}\n\nTheir latest message: "${msg.messageText}"\n\nReply in Maxy's voice. Match the example messages in your instructions. If LEARNED VOICE examples exist, match those even more closely. NO asterisks. NO roleplay narration. NO "sweetie" energy. Be Maxy.`,
@@ -671,6 +676,35 @@ async function storeThreadsAndRespond(threads: ConversationThread[], anthropic: 
       stored += newMessages;
     }
 
+    // Resolve contact and mirror every stored message into contact_events.
+    // DMs are the highest-signal channel — getting this into the graph is critical
+    // so any future Twitter/Sniffies/Fansly interaction knows who this person already is.
+    let contactId: string | null = null;
+    let contactCtxBlock = '';
+    try {
+      const graphPlatform = (
+        ['twitter', 'fansly', 'onlyfans'].includes(thread.platform) ? thread.platform : 'dm'
+      ) as ContactPlatform;
+      const contact = await resolveContact(supabase, userId, graphPlatform, thread.fanIdentifier, thread.fanDisplayName);
+      contactId = contact.id;
+      contactCtxBlock = await getContactContext(supabase, contact.id);
+
+      // If there's an open tribute outstanding, append it to the context so the
+      // Handler can bring it up when appropriate.
+      const tribute = await getOpenTributeFor(supabase as any, userId, contact.id);
+      if (tribute) {
+        contactCtxBlock += `\n\n━━ OPEN TRIBUTE ━━\nCode: ${tribute.code}  Amount: $${(tribute.amountCents/100).toFixed(2)}  (${tribute.offerTitle})\n${tribute.paymentUrl ? `URL: ${tribute.paymentUrl}\n` : ''}Remind them of this tribute if the conversation warrants. Don't nag; bring it up when they're already horny or asking for more. Include the URL + code naturally.\n━━━━━━━━━━━━━━━━━━━━`;
+      }
+
+      // Log just the most recent unread message as an event to avoid spamming on every re-scrape.
+      const lastInbound = [...thread.messages].reverse().find(m => m.from === 'them');
+      if (lastInbound) {
+        await recordEvent(supabase, userId, contact.id, 'dm_in', 'in', graphPlatform, lastInbound.text);
+      }
+    } catch (err) {
+      console.error(`[contact-graph] DM resolve failed:`, err instanceof Error ? err.message : err);
+    }
+
     // Generate response if the last message is from them
     const lastMsg = thread.messages[thread.messages.length - 1];
     if (lastMsg?.from === 'them' && anthropic) {
@@ -688,8 +722,44 @@ async function storeThreadsAndRespond(threads: ConversationThread[], anthropic: 
         receivedAt: new Date().toISOString(),
       };
 
-      const reply = await generateDMResponse(anthropic, dmMsg, historyLines);
+      let reply = await generateDMResponse(anthropic, dmMsg, historyLines, contactCtxBlock);
       if (reply) {
+        // Guardrail: block/deflect outbound before queueing.
+        const gate = gateOutbound(lastMsg.text, reply);
+        if (gate.action === 'suppress') {
+          console.log(`[DM] [pii-guard] SUPPRESSED (${gate.severity}): ${gate.reason}`);
+          if (contactId) {
+            try {
+              await flagContact(supabase, contactId, `outbound_blocked:${gate.reason}`);
+              await queueAttentionDedup(supabase, userId, {
+                kind: 'outbound_suppressed',
+                severity: gate.severity,
+                contactId,
+                platform: thread.platform,
+                summary: `Blocked DM to ${thread.fanDisplayName}: ${gate.reason}`,
+                payload: { original_reply: reply, inbound: lastMsg.text },
+              });
+            } catch {}
+          }
+          continue;
+        }
+        if (gate.action === 'deflect') {
+          console.log(`[DM] [pii-guard] DEFLECTING — ${gate.inboundSignal.keywords.join(', ')}`);
+          reply = gate.text;
+          if (contactId) {
+            try {
+              await flagContact(supabase, contactId, `asked_logistics:${gate.inboundSignal.keywords[0] || 'meetup'}`);
+              await queueAttentionDedup(supabase, userId, {
+                kind: 'logistics_ask',
+                severity: 'high',
+                contactId,
+                platform: thread.platform,
+                summary: `${thread.fanDisplayName} asked for ${gate.inboundSignal.keywords.join(', ')}`,
+                payload: { inbound: lastMsg.text, deflection_sent: gate.text },
+              });
+            } catch {}
+          }
+        }
         await supabase.from('paid_conversations').insert({
           user_id: userId,
           platform: thread.platform,
@@ -700,6 +770,18 @@ async function storeThreadsAndRespond(threads: ConversationThread[], anthropic: 
           message_direction: 'outbound',
           sent_at: null,
         });
+
+        if (contactId) {
+          try {
+            const graphPlatform = (
+              ['twitter', 'fansly', 'onlyfans'].includes(thread.platform) ? thread.platform : 'dm'
+            ) as ContactPlatform;
+            await recordEvent(supabase, userId, contactId, 'dm_out', 'out', graphPlatform, reply, 0, { queued: true });
+            await recomputeTier(supabase, contactId);
+          } catch (err) {
+            console.error(`[contact-graph] DM record failed:`, err instanceof Error ? err.message : err);
+          }
+        }
         console.log(`[DM] Response queued for ${thread.platform}/${thread.fanIdentifier}: "${reply.substring(0, 50)}..."`);
       }
     }

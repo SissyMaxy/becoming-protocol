@@ -164,16 +164,21 @@ export async function multiplyContent(
     const caption = await generateCaption(client, userId, item, d);
     if (!caption) continue;
 
-    const { error } = await supabase.from('content_posts').insert({
+    const { error } = await supabase.from('ai_generated_content').insert({
       user_id: userId,
       vault_item_id: vaultItemId,
       platform: d.platform,
-      caption,
-      subreddit: d.subreddit || null,
-      hashtags: [],
+      content: caption,
+      content_type: d.platform === 'twitter' ? 'tweet'
+        : d.platform === 'reddit' ? 'reddit_post'
+        : d.platform === 'fetlife' ? 'fetlife_post'
+        : 'caption',
+      target_subreddit: d.subreddit || null,
+      target_hashtags: [],
+      generation_strategy: 'content_multiplier',
       scheduled_at: scheduledAt.toISOString(),
-      post_status: 'scheduled',
-      caption_variant: d.type,
+      status: 'scheduled',
+      variant: d.type,
     });
 
     if (!error) created++;
@@ -208,7 +213,7 @@ export async function getMultiplicationStats(
 
   const ids = vaultItems.map(v => v.id);
   const { count } = await supabase
-    .from('content_posts')
+    .from('ai_generated_content')
     .select('id', { count: 'exact', head: true })
     .in('vault_item_id', ids);
 

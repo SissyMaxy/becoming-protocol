@@ -21,6 +21,9 @@ import Anthropic from '@anthropic-ai/sdk';
 import { supabase, PLATFORMS } from './config';
 import { extractSafeText } from './refusal-filter';
 import { fullSlopCheck } from './slop-detector';
+import { resolveContact, recordEvent, getContactContext, recomputeTier, flagContact } from './contact-graph';
+import { gateOutbound } from './pii-guard';
+import { loadCycleContext, summarizeSlop, buildContext, type CycleContext, type SlopSummary } from './generation-context';
 
 const USER_ID = process.env.USER_ID || '';
 const OWN_HANDLE = process.env.TWITTER_HANDLE || 'softmaxy';
@@ -258,12 +261,21 @@ async function getRecentQTTexts(limit: number = 30): Promise<string[]> {
 
 // ── Generate quote tweet text ───────────────────────────────────────
 
+interface QTGenResult {
+  text: string | null;
+  slop?: SlopSummary;
+  attempts: number;
+  skipped?: boolean;
+}
+
 async function generateQuoteTweet(
   anthropic: Anthropic,
   tweet: SearchResultTweet,
   recentQTs: string[],
-): Promise<string | null> {
+  contactCtx: string = '',
+): Promise<QTGenResult> {
   let retryFeedback = '';
+  let lastSlop: SlopSummary | undefined;
 
   for (let attempt = 0; attempt <= MAX_SLOP_RETRIES; attempt++) {
     try {
@@ -289,25 +301,26 @@ async function generateQuoteTweet(
       const response = await anthropic.messages.create({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 200,
-        system: MAXY_QT_PROMPT,
+        system: MAXY_QT_PROMPT + (contactCtx ? `\n\n${contactCtx}` : ''),
         messages: [{ role: 'user', content: contentBlocks }],
       });
 
       const text = extractSafeText(response, 3, `Twitter QT @${tweet.username}`);
-      if (!text) return null;
+      if (!text) return { text: null, attempts: attempt + 1, slop: lastSlop };
 
       if (text.trim().toUpperCase() === 'SKIP') {
         console.log(`  ⊘ Model skipped (off-topic tweet)`);
-        return null;
+        return { text: null, attempts: attempt + 1, skipped: true, slop: lastSlop };
       }
 
       if (text.length > 240) {
         console.error(`[QT] Too long (${text.length} chars), skipping`);
-        return null;
+        return { text: null, attempts: attempt + 1, slop: lastSlop };
       }
 
       // Self-evaluation via slop detector
       const slopResult = await fullSlopCheck(anthropic, tweet.text, text, recentQTs);
+      lastSlop = summarizeSlop(slopResult, attempt + 1);
 
       if (slopResult.pass) {
         if (attempt > 0) {
@@ -315,7 +328,7 @@ async function generateQuoteTweet(
         } else {
           console.log(`  ✓ Slop check passed (score: ${slopResult.llmScore}/10)`);
         }
-        return text;
+        return { text, slop: lastSlop, attempts: attempt + 1 };
       }
 
       const allReasons = [...slopResult.patternReasons, ...slopResult.repetitionReasons];
@@ -327,12 +340,12 @@ async function generateQuoteTweet(
       }
     } catch (err) {
       console.error('[QT] Generation failed:', err instanceof Error ? err.message : err);
-      return null;
+      return { text: null, attempts: attempt + 1, slop: lastSlop };
     }
   }
 
   console.log(`  ⊘ All ${MAX_SLOP_RETRIES + 1} attempts failed slop check, skipping tweet`);
-  return null;
+  return { text: null, attempts: MAX_SLOP_RETRIES + 1, slop: lastSlop };
 }
 
 // ── Post quote tweet via Playwright ─────────────────────────────────
@@ -398,6 +411,7 @@ export async function runQuoteTweetCycle(maxQuotes: number = 3): Promise<{
   const { urls: quotedUrls, recentUsers } = await getQuoteHistory();
   const recentQTTexts = await getRecentQTTexts(30);
   const anthropic = new Anthropic();
+  const cycleCtx: CycleContext = await loadCycleContext(supabase, USER_ID);
   let context: BrowserContext | null = null;
   let attempted = 0;
   let posted = 0;
@@ -405,11 +419,10 @@ export async function runQuoteTweetCycle(maxQuotes: number = 3): Promise<{
 
   try {
     context = await chromium.launchPersistentContext(config.profileDir, {
-      headless: false,
+      headless: true,
       viewport: { width: 1280, height: 800 },
       args: [
         '--disable-blink-features=AutomationControlled',
-        '--window-position=-2400,-2400',
       ],
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     });
@@ -434,7 +447,39 @@ export async function runQuoteTweetCycle(maxQuotes: number = 3): Promise<{
         console.log(`  @${tweet.username}: "${tweet.text.substring(0, 60)}..."`);
         attempted++;
 
-        const qtText = await generateQuoteTweet(anthropic, tweet, recentQTTexts);
+        let contactId: string | null = null;
+        let contactCtxBlock = '';
+        try {
+          const contact = await resolveContact(supabase, USER_ID, 'twitter', tweet.username);
+          contactId = contact.id;
+          contactCtxBlock = await getContactContext(supabase, contact.id);
+          if (tweet.text) {
+            await recordEvent(supabase, USER_ID, contact.id, 'reply_in', 'in', 'twitter', tweet.text, 0, { url: tweet.url, kind: 'qt_source' });
+          }
+        } catch (err) {
+          console.error(`  [contact-graph] resolve failed:`, err instanceof Error ? err.message : err);
+        }
+
+        const genResult = await generateQuoteTweet(anthropic, tweet, recentQTTexts, contactCtxBlock);
+        let qtText: string | null = genResult.text;
+        let piiAction: 'suppress' | 'deflect' | null = null;
+        let piiReason: string | null = null;
+        if (qtText) {
+          const gate = gateOutbound(tweet.text, qtText);
+          if (gate.action === 'suppress') {
+            console.log(`  [pii-guard] SUPPRESSED (${gate.severity}): ${gate.reason}`);
+            if (contactId) { try { await flagContact(supabase, contactId, `outbound_blocked:${gate.reason}`); } catch {} }
+            piiAction = 'suppress';
+            piiReason = gate.reason;
+            qtText = null;
+          } else if (gate.action === 'deflect') {
+            // QT is public — deflection text is fine to post but rare. Skip instead.
+            console.log(`  [pii-guard] skipping QT (inbound had logistics intent)`);
+            piiAction = 'deflect';
+            piiReason = 'logistics_inbound';
+            qtText = null;
+          }
+        }
         if (!qtText) {
           failed++;
           // Mark as seen so it doesn't resurface
@@ -451,6 +496,15 @@ export async function runQuoteTweetCycle(maxQuotes: number = 3): Promise<{
                 target_account: tweet.username,
                 status: 'failed',
                 posted_at: new Date().toISOString(),
+                generation_context: buildContext(cycleCtx, {
+                  voice_flavor: 'quote_tweet',
+                  slop: genResult.slop,
+                  contact: { id: contactId },
+                  target: { platform: 'twitter', username: tweet.username, url: tweet.url, strategy: sq.label },
+                  pii_action: piiAction,
+                  pii_reason: piiReason,
+                  notes: genResult.skipped ? 'model_skip' : 'slop_or_refusal',
+                }),
               });
             } catch {} // Don't fail if insert fails
           }
@@ -478,7 +532,24 @@ export async function runQuoteTweetCycle(maxQuotes: number = 3): Promise<{
               target_account: tweet.username,
               status: 'posted',
               posted_at: new Date().toISOString(),
+              generation_context: buildContext(cycleCtx, {
+                voice_flavor: 'quote_tweet',
+                slop: genResult.slop,
+                contact: { id: contactId },
+                target: { platform: 'twitter', username: tweet.username, url: tweet.url, strategy: sq.label },
+                pii_action: piiAction,
+                pii_reason: piiReason,
+              }),
             });
+
+            if (contactId) {
+              try {
+                await recordEvent(supabase, USER_ID, contactId, 'reply_out', 'out', 'twitter', qtText, 0, { url: tweet.url, kind: 'qt' });
+                await recomputeTier(supabase, contactId);
+              } catch (err) {
+                console.error(`  [contact-graph] record QT failed:`, err instanceof Error ? err.message : err);
+              }
+            }
           } else {
             console.log(`  ✗ Failed to post`);
             failed++;

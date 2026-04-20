@@ -210,6 +210,20 @@ export function HypnoDashboard({
       {/* Idle — show session options */}
       {phase === 'idle' && !activeSession && (
         <div className="px-4 space-y-4">
+          {/* Learning + generation entry */}
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('navigate-to-hypno-learning'))}
+            className="w-full flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-pink-600/20 to-purple-600/20 border border-pink-500/30 hover:border-pink-400/50 transition-all"
+          >
+            <div className="text-left">
+              <div className="text-sm font-medium text-pink-200">Learning &amp; Generation</div>
+              <div className="text-xs text-pink-300/70 mt-0.5">
+                Ingest hypno · learn what moves you · generate custom sessions
+              </div>
+            </div>
+            <Sparkles className="w-5 h-5 text-pink-300" />
+          </button>
+
           {/* Quick start card */}
           <HypnoSessionCard
             taskCode={initialTaskCode || HYPNO_TASK_CODES.HYPNO_SESSION}

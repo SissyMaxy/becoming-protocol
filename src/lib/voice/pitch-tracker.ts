@@ -30,6 +30,11 @@ export async function recordPitchSample(
     console.error('[pitch-tracker] recordPitchSample error:', error);
     return null;
   }
+
+  // No pitch slip detection — voice tracking is longitudinal, not target-based.
+  // Forcing feminine pitch targets causes dysphoria. The Handler should
+  // reference pitch TRENDS ("up 3Hz this month") not compliance ("below 140Hz = slip").
+
   return data.id;
 }
 

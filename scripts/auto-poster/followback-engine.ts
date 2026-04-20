@@ -67,6 +67,15 @@ async function scrapeAndRecordFollowerCount(page: Page, followerPageCount?: numb
       } else {
         console.log(`[Followback] Recorded: ${followers} followers, ${following} following`);
       }
+
+      // Unified snapshot for cross-platform growth tracking
+      try {
+        const { snapshotFollowers } = await import('./follower-snapshots');
+        await snapshotFollowers(supabase, USER_ID, 'twitter', {
+          followerCount: followers,
+          followingCount: following,
+        });
+      } catch {}
     } else {
       console.log('[Followback] Could not scrape follower count (profile says 0, no fallback available)');
     }

@@ -74,6 +74,10 @@ import { buildNarrativeContext } from './conditioning/narrative-engine';
 import { buildVoicePitchContext } from './voice/pitch-tracker';
 import { buildVoiceEvolutionContext } from './voice/voice-evolution';
 import { buildInvestmentContext } from './handler-v2/auto-purchase';
+import { buildAutoPosterActivityContext } from './handler-v2/auto-poster-activity';
+import { buildLeadIntelligenceContext } from './handler-v2/lead-intelligence';
+import { buildBriefContext } from './content/brief-context';
+import { buildStreamContext } from './content/stream-context';
 import { getFundBalance } from './handler-v2/auto-purchase';
 import { buildFeminizationPrescriptionContext } from './conditioning/feminization-prescriptions';
 import { buildExercisePrescriptionContext } from './conditioning/exercise-prescriptions';
@@ -934,7 +938,7 @@ async function buildAutoPurchaseCtx(userId: string): Promise<string> {
  * All systems, maximum data density.
  */
 export async function buildFullSystemsContext(userId: string): Promise<string> {
-  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social, memory, conditioningEngine, impactTracking, irreversibility, narrativeArc, autoPoster, socialInbox, voicePitch, autoPurchase, femPrescription, exerciseRx, postReleaseBridge, serviceAdvancement, ambushScheduler, voiceEvolution, corruptionActivation, camHandlerControl, failureRecovery, communityMirror, handlerDirectives, journal, skillTree, contentOptimization, denialMapping, languageDrift, sleepPhaseTargeting, photoTimeline, correlationEngine, commitmentLadder, ginaMicroExposure, socialIntelligence, accountability, proactiveOutreach, conversationAgenda, predictiveEngine, protocolManager, handlerReflection, emotionalModel, personalityEvolution, libraryGrowth, sessionChaining, autonomousCycle, consequenceEng, obligationsCtx, variableRatio, femMandates, outfitCtrl, wardrobeInv, complianceVerif, sleepTracking, goonEng, arousalMaint, progressiveExp, consumptionMand, antiCircumvent, proofOfLife, videoVerif, verifSequences, streakStakes, difficultyEsc, rewardGating, resistanceClass] = await Promise.allSettled([
+  const [gina, content, voice, cam, sleep, exercise, hypno, sessionTelemetry, sexting, marketplace, passiveVoice, denialContent, industry, weekendPostRelease, feminization, evidenceConfrontation, shootEscalation, contentIntelligence, contentCalendar, overnightSummary, dopamine, whoop, commitments, prediction, conditioning, hrt, shame, revenue, davidElim, social, memory, conditioningEngine, impactTracking, irreversibility, narrativeArc, autoPoster, socialInbox, autoPosterActivity, leadIntelligence, briefPipeline, streamSchedule, voicePitch, autoPurchase, femPrescription, exerciseRx, postReleaseBridge, serviceAdvancement, ambushScheduler, voiceEvolution, corruptionActivation, camHandlerControl, failureRecovery, communityMirror, handlerDirectives, journal, skillTree, contentOptimization, denialMapping, languageDrift, sleepPhaseTargeting, photoTimeline, correlationEngine, commitmentLadder, ginaMicroExposure, socialIntelligence, accountability, proactiveOutreach, conversationAgenda, predictiveEngine, protocolManager, handlerReflection, emotionalModel, personalityEvolution, libraryGrowth, sessionChaining, autonomousCycle, consequenceEng, obligationsCtx, variableRatio, femMandates, outfitCtrl, wardrobeInv, complianceVerif, sleepTracking, goonEng, arousalMaint, progressiveExp, consumptionMand, antiCircumvent, proofOfLife, videoVerif, verifSequences, streakStakes, difficultyEsc, rewardGating, resistanceClass] = await Promise.allSettled([
     buildGinaContext(userId),
     buildContentContext(userId),
     buildVoiceContext(userId),
@@ -972,6 +976,10 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     buildNarrativeContext(userId),
     buildAutoPostCtx(userId),
     buildSocialInboxCtx(userId),
+    buildAutoPosterActivityContext(userId),
+    buildLeadIntelligenceContext(userId),
+    buildBriefContext(userId),
+    buildStreamContext(userId),
     buildVoicePitchContext(userId),
     buildAutoPurchaseCtx(userId),
     buildFeminizationPrescriptionContext(userId),
@@ -1067,6 +1075,10 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     narrativeArc.status === 'fulfilled' ? narrativeArc.value : '',
     autoPoster.status === 'fulfilled' ? autoPoster.value : '',
     socialInbox.status === 'fulfilled' ? socialInbox.value : '',
+    autoPosterActivity.status === 'fulfilled' ? autoPosterActivity.value : '',
+    leadIntelligence.status === 'fulfilled' ? leadIntelligence.value : '',
+    briefPipeline.status === 'fulfilled' ? briefPipeline.value : '',
+    streamSchedule.status === 'fulfilled' ? streamSchedule.value : '',
     voicePitch.status === 'fulfilled' ? voicePitch.value : '',
     autoPurchase.status === 'fulfilled' ? autoPurchase.value : '',
     femPrescription.status === 'fulfilled' ? femPrescription.value : '',

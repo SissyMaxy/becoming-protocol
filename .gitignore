@@ -57,3 +57,6 @@ public/hypno/
 
 # Claude Code temp files
 tmpclaude-*
+
+.vercel
+.env*.local
