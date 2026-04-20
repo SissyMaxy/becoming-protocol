@@ -40,7 +40,7 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
   const biometrics = useSessionBiometrics();
   // Ambient conditioning audio — polls ambient_audio_queue and speaks queued
   // affirmations via SpeechSynthesis while the chat is open. Toggle persists in localStorage.
-  useAmbientAudio();
+  const ambientAudio = useAmbientAudio();
   // Sleep-window affirmation drip — schedules notifications during configured
   // sleep window and hands the loop to the service worker for background play.
   useSleepAudioConditioning();
@@ -345,6 +345,18 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
             aria-label={voice.enabled ? 'Disable voice' : 'Enable voice'}
           >
             {voice.enabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+          </button>
+          <button
+            onClick={() => ambientAudio.setEnabled(!ambientAudio.enabled)}
+            title={ambientAudio.enabled ? 'Ambient conditioning audio ON — feminization affirmations play while app is open' : 'Ambient conditioning audio OFF — turn on to let queued affirmations play'}
+            className={`px-2 py-1 rounded-lg text-[11px] font-medium transition-colors ${
+              ambientAudio.enabled
+                ? 'bg-pink-500/25 text-pink-300 hover:bg-pink-500/35'
+                : 'hover:bg-gray-800 text-gray-500 border border-gray-800'
+            }`}
+            aria-label={ambientAudio.enabled ? 'Disable ambient conditioning' : 'Enable ambient conditioning'}
+          >
+            {ambientAudio.enabled ? 'AMB ON' : 'AMB'}
           </button>
           {onOpenSettings && (
             <button
