@@ -309,6 +309,18 @@ export async function maybeGenerateBriefs(
     },
   };
 
+  // Femboy aesthetic bias — if her confessions contain femboy-coded language,
+  // shift the brief concept toward twink/soft-boy/smooth presentation instead
+  // of traditional fem/woman framing.
+  const confessionText = keyConf.map(c => (c.response as string) || '').join(' ').toLowerCase();
+  const femboyBias = /\b(femboy|twink|soft\s*boy|pretty\s*boy|smooth|boyish|thigh\s*gap|slim\s*waist)\b/i.test(confessionText);
+  const FEMBOY_OVERRIDE = {
+    concept: 'femboy-aesthetic shoot — smooth skin, soft shoulders, boy face with girl body under the clothes',
+    outfit: 'boy shorts or short denim, thigh-high socks, oversized shirt or crop top, bare stomach visible',
+    framing: 'full body or three-quarter, knees together, weight on one hip, softly lit',
+    purpose: 'femboy content — the in-between aesthetic she has been admitting she craves',
+  };
+
   let briefNum = await getNextBriefNumber(sb, userId);
   let created = 0;
 
@@ -332,6 +344,15 @@ export async function maybeGenerateBriefs(
       framing = custom.framing;
       purpose = custom.purpose;
       technicalNotes.push(`Personalized on body_dysphoria_logs: ${topDysphoria.part} severity ${topDysphoria.severity}/10 in last 14d`);
+    }
+    // Femboy aesthetic override — applies after body-part customization when
+    // her confessions show femboy-coded language
+    if (femboyBias && Math.random() < 0.55) {
+      concept = FEMBOY_OVERRIDE.concept;
+      outfit = FEMBOY_OVERRIDE.outfit;
+      framing = FEMBOY_OVERRIDE.framing;
+      purpose = FEMBOY_OVERRIDE.purpose;
+      technicalNotes.push('Femboy aesthetic bias from recent confessions');
     }
     // Reference a key confession as motivation
     if (keyConf.length > 0 && Math.random() < 0.5) {

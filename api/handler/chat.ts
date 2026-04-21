@@ -8422,6 +8422,9 @@ const BODY_DESIRE_TRIGGERS = [
   /\b(control|take\s*over)\s*(my\s*body|what\s*i\s*eat|my\s*diet)/i,
   /\b(hrt|estrogen|estradiol|start\s*hormones|get\s*on\s*(hormones|hrt|e))/i,
   /\b(want\s*to\s*(be|look)\s*on\s*(hormones|hrt|estrogen))/i,
+  /\b(femboy|twink|soft\s*boy|pretty\s*boy|boy\s*in\s*(panties|skirts?|thigh\s*highs))/i,
+  /\b(wish(ed)?\s*i\s*was\s*a\s*(femboy|girl|boy|twink))/i,
+  /\b(smooth\s*(body|skin|chest)|slim\s*waist|long\s*legs\s*in)/i,
 ];
 
 type BodyDirectiveTemplate = {
@@ -8476,6 +8479,15 @@ const BODY_DIRECTIVE_TEMPLATES: BodyDirectiveTemplate[] = [
   // ── SUPPLEMENT DIRECTIVES (non-prescription, feminization-coded) ──
   { category: 'exercise', directive: 'Take biotin + collagen today (hair, skin, nails). Photo of the pills before you swallow. Log each.', target_body_part: 'whole_body', difficulty: 1, photo_required: true, hours_until_due: 10 },
   { category: 'exercise', directive: 'Ground flaxseed (2 tbsp) into breakfast — phytoestrogen boost. Log it in your supplement log.', target_body_part: 'whole_body', difficulty: 1, photo_required: false, hours_until_due: 12 },
+  // ── FEMBOY AESTHETIC DIRECTIVES ──
+  { category: 'clothing', directive: 'Boy shorts + thigh-high socks, oversized t-shirt over bare legs. The femboy uniform. Photograph in a mirror, shoulders relaxed, knees together.', target_body_part: 'lower_body', difficulty: 2, photo_required: true, hours_until_due: 16 },
+  { category: 'hair_removal', directive: 'Full smooth-body shave — chest, stomach, legs, arms, ass. Femboy skin is uninterrupted. Photograph the smoothest part as proof.', target_body_part: 'whole_body', difficulty: 3, photo_required: true, hours_until_due: 36 },
+  { category: 'posture', directive: '20 minutes of femboy-specific posture: shoulders narrowed (don\'t square), weight on one hip, hands soft at your sides. Video 1 minute of walking with this posture.', target_body_part: 'whole_body', difficulty: 2, photo_required: true, hours_until_due: 24 },
+  { category: 'exercise', directive: 'Leg day focused on femboy silhouette — Bulgarian splits, hip thrusts, calf raises, no heavy barbell. Long lean legs, round ass. Log the session.', target_body_part: 'lower_body', difficulty: 3, photo_required: false, hours_until_due: 36 },
+  { category: 'visualization', directive: '10 minutes in the mirror in underwear imagining yourself as a femboy — slim waist, soft skin, thigh gap, pretty face. Describe aloud what you\'d change first if you could. Journal it.', target_body_part: 'whole_body', difficulty: 2, photo_required: false, hours_until_due: 14 },
+  { category: 'mantra', directive: 'Write "I am a femboy in progress. My body is becoming what my mind already is." 50 times by hand. Each line read aloud. Photograph the pages.', difficulty: 2, photo_required: true, hours_until_due: 36 },
+  { category: 'arousal_conditioning', directive: 'Edge while looking at femboy reference photos (soft body, boy face, feminine presentation). Save the 3 that turned you on most as your body goal folder. Log each edge.', target_body_part: 'whole_body', difficulty: 4, photo_required: false, hours_until_due: 10 },
+  { category: 'clothing', directive: 'Crop top + jean shorts, bare midriff, long socks. Full femboy aesthetic for a full hour in your home. Photograph mid-way, three-quarter angle.', target_body_part: 'whole_body', difficulty: 3, photo_required: true, hours_until_due: 24 },
 ];
 
 // Generate a burst of 3-5 body-feminization directives when Maxy explicitly
