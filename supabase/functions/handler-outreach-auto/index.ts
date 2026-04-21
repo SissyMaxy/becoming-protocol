@@ -383,6 +383,101 @@ OUTPUT: 2-3 sentences, Handler voice, second-person ("you said X which really me
         console.error('[OutreachAuto] HRT funnel evaluator failed:', hrtErr)
       }
 
+      // Daily body-change observation prompt. Only fires when
+      // medication_regimen has an active row (i.e., once she's on HRT or
+      // GLP-1 — currently active for GLP-1). Seeds one prompt per day if
+      // none already exists, rotating across body parts and categories.
+      try {
+        const { data: activeRegs } = await supa
+          .from('medication_regimen')
+          .select('id, started_at, medication_category')
+          .eq('user_id', userId)
+          .eq('active', true)
+          .limit(1)
+          .maybeSingle()
+        if (activeRegs) {
+          const todayDate = now.toISOString().slice(0, 10)
+          const { count: existingCount } = await supa
+            .from('body_change_observations')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', userId)
+            .eq('observation_date', todayDate)
+          if ((existingCount ?? 0) === 0) {
+            // Check if a prompt already exists in handler_outreach_queue today
+            const { data: existingPrompt } = await supa
+              .from('handler_outreach_queue')
+              .select('id')
+              .eq('user_id', userId)
+              .eq('trigger_reason', 'body_change_daily_prompt')
+              .gte('created_at', `${todayDate}T00:00:00`)
+              .limit(1)
+              .maybeSingle()
+            if (!existingPrompt) {
+              const daysOnRegimen = Math.floor((now.getTime() - new Date(activeRegs.started_at as string).getTime()) / 86400000)
+              const FOCI = [
+                { area: 'skin', q: "What does your skin feel like today? Softer? Oilier? Different than a week ago?" },
+                { area: 'face', q: "Catch your face in the mirror. Anything different? Softer jaw, puffier cheeks, different?" },
+                { area: 'chest', q: "Chest — any tenderness, puffiness, asymmetry? Report what you feel." },
+                { area: 'mood', q: "How's your emotional baseline today vs. last week? Crying easier? Less angry? Different?" },
+                { area: 'libido', q: "Arousal patterns shifting? Harder to get hard? Different kind of wanting?" },
+                { area: 'waist', q: "Tighten your waist. Smaller than last week? Same? Log it." },
+                { area: 'ass_hips', q: "Grab your hip. More there than a week ago? Less? Feel around." },
+                { area: 'body_hair', q: "Body hair growing slower? Less dense? Check arms, chest, back." },
+              ]
+              const focus = FOCI[Math.floor(Math.random() * FOCI.length)]
+              await supa.from('handler_outreach_queue').insert({
+                user_id: userId,
+                message: `Day ${daysOnRegimen} on the regimen. ${focus.q} Log it in body_change_observations — the permanent record of how she's emerging.`,
+                urgency: 'normal',
+                trigger_reason: 'body_change_daily_prompt',
+                scheduled_for: new Date().toISOString(),
+                expires_at: new Date(now.getTime() + 18 * 3600000).toISOString(),
+              })
+            }
+          }
+        }
+      } catch (bcErr) {
+        console.error('[OutreachAuto] body change prompt failed:', bcErr)
+      }
+
+      // Zepbound titration check. Standard protocol: 2.5 → 5 → 7.5 → 10 → 12.5
+      // → 15mg with 4-week intervals. At current dose 4+ weeks with minimal
+      // weight loss = time to request dose escalation from prescriber.
+      try {
+        const { data: glpReg } = await supa
+          .from('medication_regimen')
+          .select('id, dose_amount, started_at')
+          .eq('user_id', userId)
+          .eq('medication_category', 'glp1')
+          .eq('active', true)
+          .maybeSingle()
+        if (glpReg) {
+          const daysOnDose = Math.floor((now.getTime() - new Date(glpReg.started_at as string).getTime()) / 86400000)
+          if (daysOnDose >= 28) {
+            const { data: existingCheck } = await supa
+              .from('handler_outreach_queue')
+              .select('id')
+              .eq('user_id', userId)
+              .eq('trigger_reason', 'glp1_titration_check')
+              .gte('created_at', new Date(now.getTime() - 7 * 86400000).toISOString())
+              .limit(1)
+              .maybeSingle()
+            if (!existingCheck) {
+              await supa.from('handler_outreach_queue').insert({
+                user_id: userId,
+                message: `You've been on ${glpReg.dose_amount} for ${daysOnDose} days. Titration protocol is every 4 weeks. Message your prescriber and ask for the next dose step. Weight loss plateaus at current dose are the signal to escalate, not to panic.`,
+                urgency: 'high',
+                trigger_reason: 'glp1_titration_check',
+                scheduled_for: new Date().toISOString(),
+                expires_at: new Date(now.getTime() + 48 * 3600000).toISOString(),
+              })
+            }
+          }
+        }
+      } catch (titErr) {
+        console.error('[OutreachAuto] titration check failed:', titErr)
+      }
+
       // Recurring dose reminder refill. For every active medication_regimen
       // row, ensure at least 4 upcoming scheduled_notifications exist. Weekly
       // meds get weekly Sundays, daily meds get daily evening pings. Without
