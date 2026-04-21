@@ -16,6 +16,7 @@ import { VoicePracticeRecorder } from './VoicePracticeRecorder';
 import { GeneratedSessionPlayer } from '../hypno/GeneratedSessionPlayer';
 import { IdentityFadingBar } from './IdentityFadingBar';
 import { BodyDirectiveChecklist } from './BodyDirectiveChecklist';
+import { ForceFeminizationPanel } from './ForceFeminizationPanel';
 import { RewardFlash } from './RewardFlash';
 import { useAuth } from '../../context/AuthContext';
 
@@ -391,6 +392,9 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
 
       {/* Open body-feminization directives with photo-proof upload */}
       <BodyDirectiveChecklist />
+
+      {/* Combined protocol progress: phase, HRT funnel, hookup heat, diary, escrow */}
+      <ForceFeminizationPanel />
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">

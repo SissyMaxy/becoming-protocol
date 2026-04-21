@@ -173,6 +173,74 @@ serve(async req => {
         console.error('[OutreachAuto] implant planter failed:', implantErr)
       }
 
+      // Sniffies → hookup_funnel sync. The auto-poster's sniffies engine
+      // writes to contact_graph. Pull any Sniffies contact with recent
+      // activity and upsert a hookup_funnel row so the Handler can see +
+      // escalate them. Heat score derived from event volume.
+      try {
+        const { data: sniffContacts } = await supa
+          .from('contact_handles')
+          .select('contact_id, handle, contacts!inner(display_name, last_interaction_at, tier)')
+          .eq('user_id', userId)
+          .eq('platform', 'sniffies')
+          .gte('contacts.last_interaction_at', new Date(now.getTime() - 14 * 86400000).toISOString())
+
+        const contacts = (sniffContacts || []) as Array<Record<string, unknown>>
+        for (const c of contacts) {
+          const handle = c.handle as string
+          const contactRow = c.contacts as Record<string, unknown>
+          if (!handle) continue
+
+          // Count recent events for heat
+          const { count: eventCount } = await supa
+            .from('contact_events')
+            .select('id', { count: 'exact', head: true })
+            .eq('contact_id', c.contact_id as string)
+            .gte('occurred_at', new Date(now.getTime() - 14 * 86400000).toISOString())
+
+          const events = eventCount ?? 0
+          const heat = Math.min(10, 1 + Math.floor(events / 3))
+
+          // Check if funnel row exists
+          const { data: existing } = await supa
+            .from('hookup_funnel')
+            .select('id, current_step, heat_score')
+            .eq('user_id', userId)
+            .eq('contact_platform', 'sniffies')
+            .eq('contact_username', handle)
+            .maybeSingle()
+
+          if (!existing) {
+            // Auto-infer step from event volume — new row
+            const step = events >= 20 ? 'sexting' : events >= 6 ? 'flirting' : 'matched'
+            await supa.from('hookup_funnel').insert({
+              user_id: userId,
+              contact_platform: 'sniffies',
+              contact_username: handle,
+              contact_display_name: (contactRow.display_name as string) || null,
+              current_step: step,
+              heat_score: heat,
+              first_contact_at: contactRow.last_interaction_at as string,
+              last_interaction_at: contactRow.last_interaction_at as string,
+              handler_push_enabled: true,
+              active: true,
+            })
+          } else {
+            // Update heat + last interaction; don't auto-advance step (Handler or user does that)
+            await supa
+              .from('hookup_funnel')
+              .update({
+                heat_score: Math.max(existing.heat_score as number, heat),
+                last_interaction_at: contactRow.last_interaction_at as string,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', existing.id as string)
+          }
+        }
+      } catch (sniffErr) {
+        console.error('[OutreachAuto] sniffies sync failed:', sniffErr)
+      }
+
       // Autonomous narrative reframing — every ~12h, pick an unframed recent
       // real log (confession, dysphoria entry, diary response) and generate a
       // feminized reframe via Claude. Stored separately from implants
