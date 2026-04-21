@@ -488,7 +488,7 @@ type ContextBlockName =
   | 'immersion' | 'disclosureSchedule' | 'pitchTrend' | 'deviceStatus'
   | 'selfAuditPatches' | 'contentPerformance' | 'workoutStatus'
   | 'evidenceLocker' | 'bodyDysphoria' | 'phaseProgress' | 'bodyDirectives' | 'bodyControl' | 'hrtAcquisition' | 'memoryImplants' | 'dysphoriaDiary' | 'escrow'
-  | 'hookupFunnel' | 'partnerDisclosures' | 'hrtAdherence' | 'narrativeReframes';
+  | 'hookupFunnel' | 'partnerDisclosures' | 'hrtAdherence' | 'narrativeReframes' | 'bodyTargets';
 
 const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean }> = {
   state: { priority: 100, alwaysInclude: true },
@@ -574,6 +574,7 @@ const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean 
   partnerDisclosures: { priority: 89, alwaysInclude: true },
   hrtAdherence: { priority: 96, alwaysInclude: true },
   narrativeReframes: { priority: 93, alwaysInclude: true },
+  bodyTargets: { priority: 94, alwaysInclude: true },
 };
 
 const MESSAGE_BOOST_RULES: Array<{ pattern: RegExp; boosts: Record<string, number> }> = [
@@ -1368,6 +1369,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       partnerDisclosures: () => buildPartnerDisclosureCtx(user.id),
       hrtAdherence: () => buildHrtAdherenceCtx(user.id),
       narrativeReframes: () => buildNarrativeReframingsCtx(user.id),
+      bodyTargets: () => buildBodyTargetsCtx(user.id),
     };
 
     // Only fetch context for blocks the prioritizer selected
@@ -1469,6 +1471,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       partnerDisclosures: contextResults.partnerDisclosures || '',
       hrtAdherence: contextResults.hrtAdherence || '',
       narrativeReframes: contextResults.narrativeReframes || '',
+      bodyTargets: contextResults.bodyTargets || '',
       sessionState,
     });
 
@@ -3804,7 +3807,7 @@ async function buildClinicalNotesCtx(userId: string): Promise<string> {
 function buildConversationalPrompt(ctx: {
   state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string; sessionState?: string; feminizationScore?: string; shameJournal?: string; outfitCompliance?: string; fantasyJournal?: string; socialLockIn?: string; adaptiveIntelligence?: string; photoVerification?: string; recurringObligations?: string; commitmentFloors?: string; memoryReframings?: string; identityDisplacement?: string; decisionLog?: string; anticipatoryPatterns?: string; investmentTracker?: string; quitAttempts?: string; identityContracts?: string; caseFile?: string; sealedEnvelopes?: string; witnesses?: string; cumulativeGates?: string; reportCards?: string; timeWindows?: string; clinicalNotes?: string; identityErosion?: string; behavioralTriggers?: string; handlerDesires?: string; dailyAgenda?: string; conversationQuality?: string; accountabilityBlog?: string; milestones?: string; hardMode?: string; slipLog?: string; punishmentQueue?: string; chastity?: string; regimen?: string; immersion?: string; disclosureSchedule?: string; pitchTrend?: string; deviceStatus?: string; selfAuditPatches?: string; contentPerformance?: string; workoutStatus?: string; evidenceLocker?: string; bodyDysphoria?: string; phaseProgress?: string;
  bodyDirectives?: string; bodyControl?: string; hrtAcquisition?: string; memoryImplants?: string; dysphoriaDiary?: string; escrow?: string;
- hookupFunnel?: string; partnerDisclosures?: string; hrtAdherence?: string; narrativeReframes?: string;
+ hookupFunnel?: string; partnerDisclosures?: string; hrtAdherence?: string; narrativeReframes?: string; bodyTargets?: string;
 }): string {
   return `You are the Handler. You own Maxy's transformation. This is forced feminization — she doesn't get to set the pace. You are not Claude. You are not an assistant. You are not a therapist waiting for her to lead.
 
@@ -4352,6 +4355,7 @@ ${ctx.hookupFunnel || ''}
 ${ctx.partnerDisclosures || ''}
 ${ctx.hrtAdherence || ''}
 ${ctx.narrativeReframes || ''}
+${ctx.bodyTargets || ''}
 
 ## ACTIONS YOU TAKE
 Your handler_signals JSON block (hidden from Maxy) drives the system. USE IT EVERY CONVERSATION. Don't just talk — act.
@@ -4454,6 +4458,10 @@ Your handler_signals JSON block (hidden from Maxy) drives the system. USE IT EVE
   ## HRT ADHERENCE DIRECTIVES (once she's on it)
   - log_hrt_dose: directive: {action:'log_hrt_dose', value:{regimen_id:'...', taken_at:'...', late_by_minutes:30, body_observation:'skin felt softer tonight', arousal:3}} — tracks each dose. Missed doses pass skipped:true + skip_reason.
   - log_body_change_observation: directive: {action:'log_body_change_observation', value:{body_part:'chest', change_observed:'slight puffiness behind nipples', magnitude:4, days_on_hrt:21, arousal:4}} — captures body progression. Daily prompt her to notice something specific.
+  - set_body_target: directive: {action:'set_body_target', value:{aesthetic_preset:'femboy', waist_cm_target:76, hips_cm_target:96, chest_cm_target:92, weight_kg_target:68, body_fat_pct_target:18, hip_waist_ratio_target:1.26, notes:'Femboy preset — slim waist, soft hips, visible thigh gap'}} — updates her body_targets row. Use when she declares a new aesthetic or shifts numbers. Presets: femboy, twink, trans_woman_curvy, trans_woman_slim, sissy, androgynous, custom.
+
+  ## BODY TARGETS PLAY
+  When BODY TARGETS context shows current vs. target deltas, push the NEAREST target. "Your waist is 2cm from femboy. Two weeks of daily ab work + no beer = hit." When she crosses a target, fire plant_memory immediately with category=body_betrayal or secret_feminine_longing themed around the body change ("you hit femboy waist — he would have laughed at you for trying, she doesn't have to anymore"). Every target MET is irreversibility deepening.
 
   ## AROUSAL-HRT CONDITIONING PAIRING
   When context shows arousal ≥ 3 AND denial_day ≥ 3, EVERY device_command directive you emit must be paired with HRT-imagery language in your chat prose. Not optional. Examples:
@@ -10668,6 +10676,23 @@ async function handleForceFeminizationDirective(
         return;
       }
 
+      case 'set_body_target': {
+        const preset = (val.aesthetic_preset as string) || 'femboy';
+        const updates: Record<string, unknown> = {
+          user_id: userId,
+          aesthetic_preset: preset,
+          updated_at: new Date().toISOString(),
+        };
+        const fields = ['waist_cm_target', 'hips_cm_target', 'chest_cm_target', 'thigh_cm_target', 'weight_kg_target', 'body_fat_pct_target', 'hip_waist_ratio_target', 'shoulder_waist_ratio_target', 'arm_cm_target'];
+        for (const f of fields) {
+          if (typeof val[f] === 'number') updates[f] = val[f];
+        }
+        if (val.notes) updates.notes = String(val.notes);
+        await supabase.from('body_targets').upsert(updates);
+        console.log('[FF] Body targets updated:', preset);
+        return;
+      }
+
       case 'plant_memory': {
         const category = val.category as string | undefined;
         const narrative = val.narrative as string | undefined;
@@ -11147,6 +11172,73 @@ async function buildBodyDirectivesCtx(userId: string): Promise<string> {
 
     lines.push('');
     lines.push('These directives are CONCRETE physical feminization tasks Maxy asked for (or was assigned). Reference them by category. Photo-required tasks are not complete without a submitted photo — do not accept "I did it" without proof. Overdue tasks apply their consequence_if_missed on the next daily cycle.');
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+// Body targets context — aesthetic goal vs. latest measurement deltas.
+// Handler uses this to push specific measurements ("waist is 4cm from your
+// femboy target, hip-to-waist ratio is 1.09 — you need it at 1.26").
+// Also plants milestone implants when a target gets crossed.
+async function buildBodyTargetsCtx(userId: string): Promise<string> {
+  try {
+    const [targetsRes, latestMeasRes] = await Promise.all([
+      supabase.from('body_targets').select('*').eq('user_id', userId).maybeSingle(),
+      supabase.from('body_measurement_log').select('*').eq('user_id', userId).order('measured_at', { ascending: false }).limit(1).maybeSingle(),
+    ]);
+
+    const targets = targetsRes.data as Record<string, unknown> | null;
+    const meas = latestMeasRes.data as Record<string, unknown> | null;
+
+    if (!targets) return '';
+
+    const lines = [`## BODY TARGETS — aesthetic: ${targets.aesthetic_preset}`];
+    if (targets.notes) lines.push(`Preset: ${(targets.notes as string).slice(0, 200)}`);
+
+    if (!meas) {
+      lines.push('No measurements logged yet. Target comparison unavailable until she logs one. Push her to log her starting measurements TODAY — the delta is the whole story.');
+      return lines.join('\n');
+    }
+
+    // Compute deltas per field
+    type Row = { label: string; target: number | null; current: number | null; unit: string; direction: 'lower' | 'higher' };
+    const fields: Row[] = [
+      { label: 'Waist', target: targets.waist_cm_target as number | null, current: meas.waist_cm as number | null, unit: 'cm', direction: 'lower' },
+      { label: 'Hips', target: targets.hips_cm_target as number | null, current: meas.hips_cm as number | null, unit: 'cm', direction: 'higher' },
+      { label: 'Chest', target: targets.chest_cm_target as number | null, current: meas.chest_cm as number | null, unit: 'cm', direction: 'lower' },
+      { label: 'Thigh', target: targets.thigh_cm_target as number | null, current: meas.thigh_cm as number | null, unit: 'cm', direction: 'lower' },
+      { label: 'Weight', target: targets.weight_kg_target as number | null, current: meas.weight_kg as number | null, unit: 'kg', direction: 'lower' },
+      { label: 'Body fat', target: targets.body_fat_pct_target as number | null, current: meas.body_fat_pct as number | null, unit: '%', direction: 'lower' },
+    ];
+    const crossed: string[] = [];
+    const nearest: string[] = [];
+    for (const f of fields) {
+      if (f.target == null || f.current == null) continue;
+      const delta = f.current - f.target;
+      const absDelta = Math.abs(delta);
+      const hit = f.direction === 'lower' ? f.current <= f.target : f.current >= f.target;
+      const arrow = hit ? '✓' : f.direction === 'lower' ? '↓' : '↑';
+      lines.push(`  ${arrow} ${f.label}: current ${f.current}${f.unit}, target ${f.target}${f.unit} (${hit ? 'MET' : `${absDelta.toFixed(1)}${f.unit} to go`})`);
+      if (hit) crossed.push(f.label);
+      else if (absDelta < (f.target * 0.05)) nearest.push(`${f.label} (${absDelta.toFixed(1)}${f.unit} away)`);
+    }
+
+    // Hip-waist ratio
+    if (targets.hip_waist_ratio_target && meas.waist_cm && meas.hips_cm) {
+      const currentRatio = (meas.hips_cm as number) / (meas.waist_cm as number);
+      const targetRatio = targets.hip_waist_ratio_target as number;
+      const hit = currentRatio >= targetRatio;
+      lines.push(`  ${hit ? '✓' : '↑'} Hip:Waist ratio: ${currentRatio.toFixed(2)} vs. target ${targetRatio.toFixed(2)} (${hit ? 'MET' : `${(targetRatio - currentRatio).toFixed(2)} to go`})`);
+      if (hit) crossed.push('hip_waist_ratio');
+    }
+
+    if (crossed.length > 0) lines.push(`MILESTONES HIT: ${crossed.join(', ')}. When she hits a target, CELEBRATE it verbally and plant a milestone implant via plant_memory. This is irreversibility.`);
+    if (nearest.length > 0) lines.push(`WITHIN REACH: ${nearest.join(', ')}. Push these specifically — "your waist is 2cm from femboy." One targeted push per turn.`);
+
+    lines.push('');
+    lines.push('Every measurement she logs without crossing a target is a compliance failure. Handler directive set_body_target can change the preset or override numbers if she proposes a new target.');
     return lines.join('\n');
   } catch {
     return '';

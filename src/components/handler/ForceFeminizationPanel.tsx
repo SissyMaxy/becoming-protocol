@@ -43,6 +43,21 @@ interface EscrowRow {
   payment_status: string;
   forfeit_charity_name: string | null;
 }
+interface BodyTarget {
+  aesthetic_preset: string;
+  waist_cm_target: number | null;
+  hips_cm_target: number | null;
+  chest_cm_target: number | null;
+  weight_kg_target: number | null;
+  hip_waist_ratio_target: number | null;
+  notes: string | null;
+}
+interface LatestMeasurement {
+  waist_cm: number | null;
+  hips_cm: number | null;
+  chest_cm: number | null;
+  weight_kg: number | null;
+}
 
 const HRT_STEPS = [
   'uncommitted', 'committed', 'researching', 'provider_chosen',
@@ -67,6 +82,8 @@ export function ForceFeminizationPanel() {
   const [hookups, setHookups] = useState<HookupRow[]>([]);
   const [diary, setDiary] = useState<DiaryPrompt[]>([]);
   const [escrow, setEscrow] = useState<EscrowRow[]>([]);
+  const [targets, setTargets] = useState<BodyTarget | null>(null);
+  const [latestMeas, setLatestMeas] = useState<LatestMeasurement | null>(null);
   const [loading, setLoading] = useState(true);
   const [draftResponses, setDraftResponses] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState<string | null>(null);
@@ -76,7 +93,7 @@ export function ForceFeminizationPanel() {
     if (!user?.id) return;
     try {
       const today = new Date().toISOString().slice(0, 10);
-      const [stateRes, hrtRes, hookupRes, diaryRes, escrowRes] = await Promise.all([
+      const [stateRes, hrtRes, hookupRes, diaryRes, escrowRes, targetRes, measRes] = await Promise.all([
         supabase
           .from('user_state')
           .select('current_phase, denial_day, chastity_streak_days')
@@ -107,12 +124,26 @@ export function ForceFeminizationPanel() {
           .in('payment_status', ['pending', 'held'])
           .order('deadline_at', { ascending: true })
           .limit(3),
+        supabase
+          .from('body_targets')
+          .select('aesthetic_preset, waist_cm_target, hips_cm_target, chest_cm_target, weight_kg_target, hip_waist_ratio_target, notes')
+          .eq('user_id', user.id)
+          .maybeSingle(),
+        supabase
+          .from('body_measurement_log')
+          .select('waist_cm, hips_cm, chest_cm, weight_kg')
+          .eq('user_id', user.id)
+          .order('measured_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
       ]);
       setPhase(stateRes.data as PhaseProgress | null);
       setHrt(hrtRes.data as HrtFunnelRow | null);
       setHookups((hookupRes.data || []) as HookupRow[]);
       setDiary((diaryRes.data || []) as DiaryPrompt[]);
       setEscrow((escrowRes.data || []) as EscrowRow[]);
+      setTargets(targetRes.data as BodyTarget | null);
+      setLatestMeas(measRes.data as LatestMeasurement | null);
     } catch (err) {
       console.error('[ForceFemmePanel] load failed:', err);
     } finally {
@@ -295,6 +326,54 @@ export function ForceFeminizationPanel() {
                   )}
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Body targets */}
+          {targets && (
+            <div className="bg-gray-900/60 border border-pink-500/30 rounded-lg p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Target className="w-3 h-3 text-pink-400" />
+                <span className="uppercase tracking-wider text-[10px] text-gray-500">Aesthetic Target</span>
+                <span className="text-pink-300 font-medium">{targets.aesthetic_preset}</span>
+              </div>
+              <div className="space-y-1">
+                {[
+                  { label: 'Waist', cur: latestMeas?.waist_cm, tgt: targets.waist_cm_target, unit: 'cm', lower: true },
+                  { label: 'Hips', cur: latestMeas?.hips_cm, tgt: targets.hips_cm_target, unit: 'cm', lower: false },
+                  { label: 'Chest', cur: latestMeas?.chest_cm, tgt: targets.chest_cm_target, unit: 'cm', lower: true },
+                  { label: 'Weight', cur: latestMeas?.weight_kg, tgt: targets.weight_kg_target, unit: 'kg', lower: true },
+                ].map(f => {
+                  if (f.tgt == null) return null;
+                  const delta = f.cur != null ? f.cur - f.tgt : null;
+                  const hit = f.cur != null && (f.lower ? f.cur <= f.tgt : f.cur >= f.tgt);
+                  return (
+                    <div key={f.label} className="flex items-center justify-between">
+                      <span className="text-gray-400">{f.label}</span>
+                      <span className="flex items-center gap-2">
+                        <span className="text-gray-300">{f.cur != null ? `${f.cur}${f.unit}` : '—'}</span>
+                        <span className="text-gray-600">→</span>
+                        <span className="text-pink-400">{f.tgt}{f.unit}</span>
+                        {delta != null && (
+                          <span className={hit ? 'text-green-400' : 'text-amber-400'}>
+                            {hit ? '✓ met' : `${f.lower ? '-' : '+'}${Math.abs(delta).toFixed(1)}`}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
+                {targets.hip_waist_ratio_target && latestMeas?.waist_cm && latestMeas?.hips_cm && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400">Hip:Waist</span>
+                    <span className="flex items-center gap-2">
+                      <span className="text-gray-300">{(latestMeas.hips_cm / latestMeas.waist_cm).toFixed(2)}</span>
+                      <span className="text-gray-600">→</span>
+                      <span className="text-pink-400">{targets.hip_waist_ratio_target.toFixed(2)}</span>
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
