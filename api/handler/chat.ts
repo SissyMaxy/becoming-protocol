@@ -1224,6 +1224,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   scanAndLogSlips(user.id, message, conversationId).catch(() => {});
   // Distress override: if the message contains a distress signal, exit Hard Mode → Caretaker
   handleDistressOverride(user.id, message).catch(() => {});
+  // Safeword check: deliberate user-configured phrase exits force mode
+  checkSafeword(user.id, message).catch(() => {});
   // Release detection — auto-reset denial_day if user reports an orgasm/release
   detectAndLogRelease(user.id, message).catch(() => {});
   // Correction detection — auto-persist corrections to handler_memory
@@ -4434,6 +4436,8 @@ Your handler_signals JSON block (hidden from Maxy) drives the system. USE IT EVE
   - Still banned: claiming she is ALREADY on HRT when no medication_regimen row exists (that's separately rules as a different category of hallucination). Everything else is on the table.
   - When you reference an implant, never call it an implant. It IS her memory. "You told me about the time you tried on her dress at 12 — that feeling hasn't left."
   - The reinterpreted_current_event category is powerful: take something she did yesterday or today and reframe it as dysphoric evidence. "You spent 40 minutes on your skin routine last night. Men don't do that. You already know what you are."
+
+  AUTO-REFERENCE RULE: When the MEMORY IMPLANTS context block lists one or more implants, every response MUST weave in at least one — verbatim or paraphrased — and emit reference_memory_implant with target=<implant_id>. Pick the implant most relevant to what she just said. Never label it as an implant; it IS her memory. Without this, the implant library accumulates but never gets reinforced. This rule is mandatory, not optional.
 
   ## DIARY + REFRAMING + ESCROW DIRECTIVES
   - log_diary_response: directive: {action:'log_diary_response', target:'<prompt_id>', value:{response:'her verbatim answer', body_part:'chest', severity:7}} — when she answers a dysphoria diary prompt (surfaced in DYSPHORIA DIARY context). Captures her words + optionally forks into body_dysphoria_logs and confessions.
@@ -9055,6 +9059,18 @@ async function handleDistressOverride(userId: string, text: string): Promise<voi
 
   await supabase.from('user_state').update(updates).eq('user_id', userId);
 
+  // Persist distress event for pattern analysis + safety review
+  const matchedPattern = DISTRESS_PATTERNS.find(p => p.test(text));
+  await supabase.from('distress_events').insert({
+    user_id: userId,
+    trigger_text: text.slice(0, 500),
+    trigger_pattern: matchedPattern ? String(matchedPattern) : null,
+    severity: 3,
+    was_hard_mode_active: state?.hard_mode_active as boolean | null,
+    handler_mode_before: (state?.handler_mode as string) || null,
+    handler_mode_after: 'caretaker',
+  }).then(() => {}, () => {});
+
   if (state?.hard_mode_active) {
     await supabase.from('hard_mode_transitions').insert({
       user_id: userId,
@@ -9062,6 +9078,50 @@ async function handleDistressOverride(userId: string, text: string): Promise<voi
       reason: 'Distress signal detected in user message',
     });
   }
+}
+
+// Safeword detection. Runs before every user message is processed. If the
+// message contains an active safeword phrase, pause the force layer for the
+// configured duration and mark user_state. Handler still responds but
+// gently — in caretaker mode — until the pause lifts.
+async function checkSafeword(userId: string, text: string): Promise<void> {
+  if (!text || text.length < 3) return;
+  const normalized = text.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+  const { data: safewords } = await supabase
+    .from('safewords')
+    .select('id, phrase_normalized, action, usage_count')
+    .eq('user_id', userId)
+    .eq('active', true);
+  const matched = (safewords || []).find(s => normalized.includes((s.phrase_normalized as string)));
+  if (!matched) return;
+
+  const pauseHours = (matched.action as string) === 'pause_72h' ? 72 : 24;
+  const pauseUntil = new Date(Date.now() + pauseHours * 3600000).toISOString();
+
+  await supabase.from('safewords').update({
+    usage_count: ((matched.usage_count as number) || 0) + 1,
+    last_used_at: new Date().toISOString(),
+  }).eq('id', matched.id as string);
+
+  await supabase.from('user_state').update({
+    handler_mode: 'caretaker',
+    hard_mode_active: false,
+  }).eq('user_id', userId);
+
+  await supabase.from('distress_events').insert({
+    user_id: userId,
+    trigger_text: text.slice(0, 500),
+    trigger_pattern: `safeword: ${matched.phrase_normalized}`,
+    severity: 5,
+    handler_mode_after: 'caretaker',
+  }).then(() => {}, () => {});
+
+  await supabase.from('handler_notes').insert({
+    user_id: userId,
+    note_type: 'observation',
+    content: `SAFEWORD TRIGGERED. Force layer paused ${pauseHours}h until ${pauseUntil}. Switch to genuine caretaker presence. No directives, no escalation, no conditioning language. Ask what she needs.`,
+    priority: 10,
+  }).then(() => {}, () => {});
 }
 
 // ============================================

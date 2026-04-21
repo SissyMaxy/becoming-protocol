@@ -383,6 +383,103 @@ OUTPUT: 2-3 sentences, Handler voice, second-person ("you said X which really me
         console.error('[OutreachAuto] HRT funnel evaluator failed:', hrtErr)
       }
 
+      // Weekly photo prompt — every Sunday, mandatory progress photo
+      // directive so the gallery gets a new month marker. Complements the
+      // baseline + month-over-month visual record.
+      try {
+        const todayDate = now.toISOString().slice(0, 10)
+        const dow = now.getUTCDay() // 0=Sunday
+        if (dow === 0) {
+          const { data: existing } = await supa
+            .from('body_feminization_directives')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('generated_from', 'weekly_photo_prompt')
+            .gte('created_at', `${todayDate}T00:00:00`)
+            .limit(1)
+            .maybeSingle()
+          if (!existing) {
+            await supa.from('body_feminization_directives').insert({
+              user_id: userId,
+              category: 'visualization',
+              directive: 'Weekly progress photos: full body front + side + back in underwear only, same lighting as last week. Add to your progress folder. The comparison is what makes the work visible.',
+              target_body_part: 'whole_body',
+              difficulty: 2,
+              deadline_at: new Date(now.getTime() + 18 * 3600000).toISOString(),
+              photo_required: true,
+              status: 'assigned',
+              generated_from: 'weekly_photo_prompt',
+            })
+          }
+        }
+      } catch (wpErr) {
+        console.error('[OutreachAuto] weekly photo prompt failed:', wpErr)
+      }
+
+      // Monthly measurement prompt — first of each month.
+      try {
+        const todayDate = now.toISOString().slice(0, 10)
+        if (now.getUTCDate() === 1) {
+          const { data: existing } = await supa
+            .from('body_feminization_directives')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('generated_from', 'monthly_measurement')
+            .gte('created_at', `${todayDate}T00:00:00`)
+            .limit(1)
+            .maybeSingle()
+          if (!existing) {
+            await supa.from('body_feminization_directives').insert({
+              user_id: userId,
+              category: 'visualization',
+              directive: 'Monthly measurements: waist, hips, chest, thigh, weight. Log via the Measurements button in the panel. Deltas from last month drive the Handler\'s specific pressure — without them every push is generic.',
+              target_body_part: 'whole_body',
+              difficulty: 1,
+              deadline_at: new Date(now.getTime() + 48 * 3600000).toISOString(),
+              photo_required: false,
+              status: 'assigned',
+              generated_from: 'monthly_measurement',
+            })
+          }
+        }
+      } catch (mmErr) {
+        console.error('[OutreachAuto] monthly measurement prompt failed:', mmErr)
+      }
+
+      // Auto-brief refill — ensures at least 3 assigned content_briefs exist.
+      // Template selection runs in scripts/auto-poster/brief-auto-generator;
+      // here we just trigger by writing a placeholder that handler-content
+      // picks up. Actual generation happens in the scheduler loop.
+      try {
+        const { count: pendingBriefs } = await supa
+          .from('content_briefs')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .in('status', ['assigned', 'in_progress'])
+        if ((pendingBriefs ?? 0) < 2) {
+          // Write a note so the scheduler + content-generator picks up the refill need
+          const { data: existingNote } = await supa
+            .from('handler_notes')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('note_type', 'context')
+            .eq('content', 'BRIEF QUEUE LOW — scheduler should call maybeGenerateBriefs on next cycle')
+            .gte('created_at', new Date(now.getTime() - 24 * 3600000).toISOString())
+            .limit(1)
+            .maybeSingle()
+          if (!existingNote) {
+            await supa.from('handler_notes').insert({
+              user_id: userId,
+              note_type: 'context',
+              content: 'BRIEF QUEUE LOW — scheduler should call maybeGenerateBriefs on next cycle',
+              priority: 5,
+            })
+          }
+        }
+      } catch (abErr) {
+        console.error('[OutreachAuto] auto-brief refill failed:', abErr)
+      }
+
       // Daily body-change observation prompt. Only fires when
       // medication_regimen has an active row (i.e., once she's on HRT or
       // GLP-1 — currently active for GLP-1). Seeds one prompt per day if
