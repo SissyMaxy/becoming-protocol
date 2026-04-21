@@ -383,6 +383,77 @@ OUTPUT: 2-3 sentences, Handler voice, second-person ("you said X which really me
         console.error('[OutreachAuto] HRT funnel evaluator failed:', hrtErr)
       }
 
+      // Recurring dose reminder refill. For every active medication_regimen
+      // row, ensure at least 4 upcoming scheduled_notifications exist. Weekly
+      // meds get weekly Sundays, daily meds get daily evening pings. Without
+      // this, the initial seed of reminders runs out and the compliance loop
+      // goes dark.
+      try {
+        const { data: activeRegs } = await supa
+          .from('medication_regimen')
+          .select('id, medication_name, medication_category, dose_amount, dose_times_per_day')
+          .eq('user_id', userId)
+          .eq('active', true)
+        for (const r of (activeRegs || []) as Array<Record<string, unknown>>) {
+          const category = (r.medication_category as string) || 'other'
+          const notifType = category === 'glp1' ? 'zepbound_injection' : 'hrt_dose'
+          const isWeekly = category === 'glp1' || /weekly/i.test((r.dose_amount as string) || '')
+          // Count upcoming pending notifications of this type for this user
+          const { count: upcoming } = await supa
+            .from('scheduled_notifications')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', userId)
+            .eq('notification_type', notifType)
+            .eq('status', 'pending')
+            .gte('scheduled_for', now.toISOString())
+          const have = upcoming ?? 0
+          const want = isWeekly ? 4 : 7
+          if (have < want) {
+            // Determine next scheduling slot
+            const { data: lastScheduled } = await supa
+              .from('scheduled_notifications')
+              .select('scheduled_for')
+              .eq('user_id', userId)
+              .eq('notification_type', notifType)
+              .order('scheduled_for', { ascending: false })
+              .limit(1)
+              .maybeSingle()
+            const lastTs = lastScheduled?.scheduled_for
+              ? new Date(lastScheduled.scheduled_for as string).getTime()
+              : now.getTime()
+            const intervalMs = isWeekly ? 7 * 86400000 : 86400000
+            const rowsToAdd = want - have
+            const payloadTitle = category === 'glp1' ? 'Zepbound injection' : `${r.medication_name} dose`
+            const payloadBody = isWeekly
+              ? `Sunday. Pen in hand. You committed to every week, no exceptions.`
+              : `Daily dose — log taken or skipped in the panel.`
+            const newRows = Array.from({ length: rowsToAdd }, (_, i) => {
+              const when = new Date(Math.max(lastTs, now.getTime()) + (i + 1) * intervalMs)
+              return {
+                user_id: userId,
+                notification_type: notifType,
+                scheduled_for: when.toISOString(),
+                expires_at: new Date(when.getTime() + 6 * 3600000).toISOString(),
+                payload: {
+                  title: payloadTitle,
+                  body: payloadBody,
+                  data: {
+                    regimen_id: r.id,
+                    medication: r.medication_name,
+                    dose: r.dose_amount,
+                    regimen_category: category,
+                  },
+                },
+                status: 'pending',
+              }
+            })
+            if (newRows.length > 0) await supa.from('scheduled_notifications').insert(newRows)
+          }
+        }
+      } catch (remErr) {
+        console.error('[OutreachAuto] reminder refill failed:', remErr)
+      }
+
       // Escrow release/forfeit evaluator. Held deposits either:
       //  - release when the hrt_funnel.current_step has reached trigger_step
       //  - forfeit when deadline_at is past without the trigger being met.

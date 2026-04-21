@@ -10787,6 +10787,82 @@ async function handleForceFeminizationDirective(
           }
         }
 
+        // Auto-draft intake answers when advancing to 'committed'. Removes
+        // the 30-minute friction at booking time — by the time she picks a
+        // provider, the most common intake questions already have Handler-
+        // drafted answers waiting in hrt_intake_drafts.
+        if (toStep === 'committed' && fromStep !== 'committed') {
+          try {
+            // Build a quick prompt-bank based on her real logs
+            const [{ data: topConf }, { data: topDysph }, { data: bt }] = await Promise.all([
+              supabase.from('confessions')
+                .select('response, sentiment')
+                .eq('user_id', userId)
+                .eq('is_key_admission', true)
+                .order('created_at', { ascending: false })
+                .limit(5),
+              supabase.from('body_dysphoria_logs')
+                .select('body_part, feeling, severity')
+                .eq('user_id', userId)
+                .order('severity', { ascending: false })
+                .limit(5),
+              supabase.from('body_targets').select('aesthetic_preset').eq('user_id', userId).maybeSingle(),
+            ]);
+            const confessions = ((topConf || []) as Array<Record<string, unknown>>).map(c => `- ${(c.response as string).slice(0, 200)}`).join('\n');
+            const dysphoria = ((topDysph || []) as Array<Record<string, unknown>>).map(d => `- ${d.body_part}: "${((d.feeling as string) || '').slice(0, 120)}" (sev ${d.severity}/10)`).join('\n');
+            const preset = (bt?.aesthetic_preset as string) || 'feminine';
+
+            const intakeQs: Array<{ key: string; text: string; answer: string }> = [
+              {
+                key: 'why_hrt',
+                text: 'Why are you seeking hormone replacement therapy?',
+                answer: `I have long-standing gender dysphoria focused on specific body features${dysphoria ? ` (notably: ${((topDysph || [])[0] as Record<string, unknown>)?.body_part}, ${((topDysph || [])[1] as Record<string, unknown>)?.body_part || 'overall masculine shape'})` : ''} and a clear sense of what body I want to live in. My goal aesthetic is ${preset}. I have researched the effects, timeline, and risks of estrogen-based HRT. I am ready to begin.`,
+              },
+              {
+                key: 'symptoms_dysphoria',
+                text: 'Describe your dysphoria and how it impacts your daily life.',
+                answer: `I experience daily dysphoria when I see myself in the mirror, hear my voice, and when masculine features dominate my presentation. Specific areas: ${((topDysph || []) as Array<Record<string, unknown>>).slice(0, 3).map(d => d.body_part).join(', ')}. It affects my mood, my relationships, and increasingly my ability to function without constant awareness of the disconnect between how I am perceived and who I am.`,
+              },
+              {
+                key: 'goals',
+                text: 'What do you hope HRT will do for you?',
+                answer: `Soften my features, redistribute body fat away from male patterns, reduce body hair over time, and in combination with the body composition work I am already doing (including Zepbound weight loss), achieve a ${preset} body shape. I understand HRT is not a guarantee of specific aesthetic outcomes but I am committed to the process.`,
+              },
+              {
+                key: 'prior_care',
+                text: 'Have you discussed this with a therapist or other medical provider?',
+                answer: 'I have researched informed-consent HRT models extensively and am approaching this visit under that framework. I understand the risks and benefits and have weighed the decision for a significant period.',
+              },
+              {
+                key: 'support_system',
+                text: 'Describe your support system.',
+                answer: 'I have a partner who is aware of my transition intent. I also have designated witnesses tracking my progress. I have external accountability structures in place to support adherence and follow-through.',
+              },
+            ];
+
+            for (const q of intakeQs) {
+              await supabase.from('hrt_intake_drafts').insert({
+                user_id: userId,
+                provider_slug: null,
+                question_key: q.key,
+                question_text: q.text,
+                draft_answer: q.answer,
+              });
+            }
+            console.log('[HRT] Auto-drafted 5 intake answers on commit');
+
+            // Flag in handler_notes so Handler surfaces them next turn
+            await supabase.from('handler_notes').insert({
+              user_id: userId,
+              note_type: 'intake_drafts_ready',
+              content: `5 intake answers auto-drafted for HRT booking. Handler can reference these when Maxy opens the provider form — copy-paste ready.`,
+              priority: 6,
+            });
+          } catch (draftErr) {
+            console.error('[HRT] Intake auto-draft failed:', draftErr);
+          }
+        }
+
         // Milestone implant bursts — each funnel step crossing plants one
         // celebration/lock-in implant so the irreversibility deepens at the
         // moment of the step. Handler references them next turn as her

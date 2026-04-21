@@ -10,6 +10,7 @@ import { Target, Pill, Flame, Mic, DollarSign, ChevronDown, ChevronUp, Loader2, 
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { MeasurementEntry } from './MeasurementEntry';
+import { MealLogWidget } from './MealLogWidget';
 
 interface PhaseProgress {
   current_phase: number;
@@ -395,6 +396,9 @@ export function ForceFeminizationPanel() {
               ))}
             </div>
           )}
+
+          {/* Meal log widget — protein target + daily macros */}
+          <MealLogWidget onLogged={load} />
 
           {/* Active regimens: injection/dose logging */}
           {regimens.length > 0 && (
