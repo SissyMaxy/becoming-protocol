@@ -174,6 +174,112 @@ const SEEDS_BY_BAND: Record<string, BriefSeed[]> = {
       },
     },
   ],
+  // ── FEMBOY AESTHETIC SEEDS — pulled when confessions/state lean femboy ──
+  'femboy': [
+    {
+      content_type: 'photo',
+      purpose: 'boy-shorts + thigh-highs baseline — the femboy uniform',
+      platforms: ['twitter', 'fansly', 'fetlife'],
+      difficulty: 2,
+      vulnerability_tier: 2,
+      instructions: {
+        concept: 'the femboy uniform — boy shorts + thigh highs + oversized t-shirt, bare legs',
+        setting: 'bedroom mirror or bed, soft light',
+        outfit: 'tight boy shorts, thigh-high socks, oversized t-shirt (cropped or tucked)',
+        lighting: 'natural window light or warm ring light',
+        framing: 'full body mirror, knees together, weight on one hip',
+        expression: 'soft, slightly shy, eyes down or half-lidded',
+        poses: ['knees touching, hands at collar', 'sitting on edge of bed, legs together', 'standing side profile'],
+        technicalNotes: ['shave legs day-of', 'face optional — focus is the silhouette'],
+      },
+    },
+    {
+      content_type: 'photo',
+      purpose: 'crop top + bare midriff — waist-forward femboy content',
+      platforms: ['twitter', 'fansly'],
+      difficulty: 3,
+      vulnerability_tier: 3,
+      instructions: {
+        concept: 'crop top + jean shorts or pleated skirt, waist + hip bones visible',
+        setting: 'kitchen, bathroom mirror, or plain wall',
+        outfit: 'white or pastel crop top (short), low-rise shorts or micro skirt, thigh highs optional',
+        lighting: 'overhead or side light that defines waist',
+        framing: 'torso + hips, three-quarter angle to show waist-to-hip curve',
+        expression: 'bratty, slightly amused',
+        poses: ['hand on hip, weight cocked', 'lifting shirt to show bare midriff', 'turning to show side profile'],
+        technicalNotes: ['vacuum hold before shoot for tighter waist', 'phone slightly above for flattering angle'],
+      },
+    },
+    {
+      content_type: 'photo_set',
+      purpose: 'smooth-body tease — full-body shave reveal + lingerie progression',
+      platforms: ['fansly', 'onlyfans'],
+      difficulty: 3,
+      vulnerability_tier: 4,
+      instructions: {
+        concept: 'post-shave smooth body shoot — document the softness',
+        setting: 'bathroom after shower, bedroom',
+        outfit: 'progression: towel → thong + thigh-highs → just panties → bare legs',
+        lighting: 'warm, intimate',
+        framing: '3-5 photo set, each moving closer to reveal',
+        expression: 'soft, vulnerable, intimate',
+        poses: ['toweled, mirror selfie', 'sitting on edge of bed', 'side profile smooth legs', 'back to camera, looking over shoulder'],
+        technicalNotes: ['full-body shave within 4h of shoot', 'baby oil on legs for shine'],
+      },
+    },
+    {
+      content_type: 'video',
+      purpose: 'walking practice — femboy gait documentation',
+      platforms: ['twitter', 'fansly'],
+      difficulty: 3,
+      vulnerability_tier: 3,
+      instructions: {
+        concept: '20-30 second clip of walking in femboy attire — hip sway, small steps',
+        setting: 'hallway or bedroom with space',
+        outfit: 'thigh highs + short shorts or skirt, oversized shirt',
+        lighting: 'even, no harsh shadows',
+        framing: 'full body, phone on stand, walking toward then away',
+        expression: 'natural, focused on gait',
+        script: 'No script. Walk to camera, turn, walk away. Heel-toe, one foot in front of the other.',
+        duration: '20-30 seconds',
+        technicalNotes: ['practice gait 5 min before recording', 'shoulders narrow, chin up, weight forward on balls of feet'],
+      },
+    },
+    {
+      content_type: 'photo',
+      purpose: 'stockings + garter — layered lingerie femboy',
+      platforms: ['fansly', 'onlyfans', 'fetlife'],
+      difficulty: 3,
+      vulnerability_tier: 4,
+      instructions: {
+        concept: 'stocking + garter belt shoot — classic fem lingerie on a boy body',
+        setting: 'bedroom, intimate',
+        outfit: 'black or nude stockings, garter belt, panties, nothing else (or thin cami)',
+        lighting: 'moody side-lit',
+        framing: 'hip-down and full-body variations',
+        expression: 'knowing, slightly submissive',
+        poses: ['seated edge of bed, legs crossed', 'kneeling, hands behind back', 'on stomach, looking back at camera'],
+        technicalNotes: ['cage optional but visible adds tier', 'stocking tops must show above thighs'],
+      },
+    },
+    {
+      content_type: 'text',
+      purpose: 'femboy journaling — reddit/fetlife post about the aesthetic pursuit',
+      platforms: ['reddit', 'fetlife'],
+      difficulty: 2,
+      vulnerability_tier: 3,
+      instructions: {
+        concept: 'first-person narrative about wanting the femboy aesthetic — GLP-1, workout, HRT journey',
+        setting: 'n/a',
+        outfit: 'n/a',
+        lighting: 'n/a',
+        framing: 'n/a',
+        expression: 'honest',
+        script: '300-500 words: what you want to look like, what you\'re doing to get there, what it means to you. No apology, no hedging.',
+        technicalNotes: ['include specific targets (waist, hips, ratio)', 'reference real Zepbound + HRT intent'],
+      },
+    },
+  ],
 };
 
 function pickRandom<T>(arr: T[]): T | undefined {
@@ -228,7 +334,27 @@ export async function maybeGenerateBriefs(
     band = score < 30 ? 'early' : score < 60 ? 'committed' : score < 80 ? 'hard-to-reverse' : 'point-of-no-return';
   } catch {}
 
-  const templates = SEEDS_BY_BAND[band] || SEEDS_BY_BAND['early'];
+  // Femboy aesthetic routing — if the user's body_targets preset is 'femboy'
+  // OR recent confessions use femboy-coded language, 60% chance of pulling
+  // from the femboy band directly instead of the irreversibility band.
+  let useFemboyBand = false;
+  try {
+    const { data: targets } = await sb.from('body_targets').select('aesthetic_preset').eq('user_id', userId).maybeSingle();
+    if ((targets?.aesthetic_preset as string) === 'femboy') useFemboyBand = Math.random() < 0.6;
+    if (!useFemboyBand) {
+      const { data: recentConf } = await sb.from('confessions')
+        .select('response').eq('user_id', userId)
+        .gte('created_at', new Date(Date.now() - 14 * 86400000).toISOString())
+        .limit(10);
+      const text = ((recentConf || []) as Array<Record<string, unknown>>)
+        .map(r => (r.response as string) || '').join(' ').toLowerCase();
+      if (/\b(femboy|twink|soft\s*boy|thigh\s*gap|slim\s*waist|boyish)\b/i.test(text)) {
+        useFemboyBand = Math.random() < 0.5;
+      }
+    }
+  } catch {}
+
+  const templates = useFemboyBand ? SEEDS_BY_BAND['femboy'] : (SEEDS_BY_BAND[band] || SEEDS_BY_BAND['early']);
 
   // Dysphoria-aware personalization. Pull recent dysphoria logs + confessions
   // + state (denial day, arousal). When we have real signals, we customize

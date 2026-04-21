@@ -58,6 +58,13 @@ interface LatestMeasurement {
   chest_cm: number | null;
   weight_kg: number | null;
 }
+interface ActiveRegimen {
+  id: string;
+  medication_name: string;
+  medication_category: string;
+  dose_amount: string;
+  last_dose_at: string | null;
+}
 
 const HRT_STEPS = [
   'uncommitted', 'committed', 'researching', 'provider_chosen',
@@ -84,6 +91,8 @@ export function ForceFeminizationPanel() {
   const [escrow, setEscrow] = useState<EscrowRow[]>([]);
   const [targets, setTargets] = useState<BodyTarget | null>(null);
   const [latestMeas, setLatestMeas] = useState<LatestMeasurement | null>(null);
+  const [regimens, setRegimens] = useState<ActiveRegimen[]>([]);
+  const [logging, setLogging] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [draftResponses, setDraftResponses] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState<string | null>(null);
@@ -93,7 +102,7 @@ export function ForceFeminizationPanel() {
     if (!user?.id) return;
     try {
       const today = new Date().toISOString().slice(0, 10);
-      const [stateRes, hrtRes, hookupRes, diaryRes, escrowRes, targetRes, measRes] = await Promise.all([
+      const [stateRes, hrtRes, hookupRes, diaryRes, escrowRes, targetRes, measRes, regRes, doseRes] = await Promise.all([
         supabase
           .from('user_state')
           .select('current_phase, denial_day, chastity_streak_days')
@@ -136,6 +145,18 @@ export function ForceFeminizationPanel() {
           .order('measured_at', { ascending: false })
           .limit(1)
           .maybeSingle(),
+        supabase
+          .from('medication_regimen')
+          .select('id, medication_name, medication_category, dose_amount')
+          .eq('user_id', user.id)
+          .eq('active', true),
+        supabase
+          .from('hrt_dose_log')
+          .select('regimen_id, dose_taken_at')
+          .eq('user_id', user.id)
+          .eq('skipped', false)
+          .order('dose_taken_at', { ascending: false })
+          .limit(20),
       ]);
       setPhase(stateRes.data as PhaseProgress | null);
       setHrt(hrtRes.data as HrtFunnelRow | null);
@@ -144,6 +165,19 @@ export function ForceFeminizationPanel() {
       setEscrow((escrowRes.data || []) as EscrowRow[]);
       setTargets(targetRes.data as BodyTarget | null);
       setLatestMeas(measRes.data as LatestMeasurement | null);
+      const regRows = (regRes.data || []) as Array<Record<string, unknown>>;
+      const doseRows = (doseRes.data || []) as Array<Record<string, unknown>>;
+      const mergedRegimens: ActiveRegimen[] = regRows.map(r => {
+        const latest = doseRows.find(d => d.regimen_id === r.id);
+        return {
+          id: r.id as string,
+          medication_name: r.medication_name as string,
+          medication_category: r.medication_category as string,
+          dose_amount: r.dose_amount as string,
+          last_dose_at: latest ? (latest.dose_taken_at as string) : null,
+        };
+      });
+      setRegimens(mergedRegimens);
     } catch (err) {
       console.error('[ForceFemmePanel] load failed:', err);
     } finally {
@@ -156,6 +190,39 @@ export function ForceFeminizationPanel() {
     const interval = setInterval(load, 90000);
     return () => clearInterval(interval);
   }, [user?.id]);
+
+  const logDose = async (regimen: ActiveRegimen, skipped: boolean) => {
+    if (!user?.id) return;
+    setLogging(regimen.id);
+    try {
+      await supabase.from('hrt_dose_log').insert({
+        user_id: user.id,
+        regimen_id: regimen.id,
+        dose_taken_at: skipped ? null : new Date().toISOString(),
+        skipped,
+        notes: `Logged via panel. ${regimen.medication_name} ${regimen.dose_amount}`,
+      });
+      if (!skipped) {
+        await supabase.from('dose_log').insert({
+          user_id: user.id,
+          regimen_id: regimen.id,
+          taken_at: new Date().toISOString(),
+        });
+      }
+      await supabase.from('handler_directives').insert({
+        user_id: user.id,
+        action: skipped ? 'dose_skipped_by_user' : 'dose_logged_by_user',
+        target: regimen.id,
+        value: { medication: regimen.medication_name, dose: regimen.dose_amount },
+        reasoning: skipped ? 'User reported skipped dose' : 'User logged dose taken',
+      });
+      await load();
+    } catch (err) {
+      console.error('[ForceFemmePanel] dose log failed:', err);
+    } finally {
+      setLogging(null);
+    }
+  };
 
   const submitDiary = async (promptId: string) => {
     const draft = draftResponses[promptId];
@@ -326,6 +393,54 @@ export function ForceFeminizationPanel() {
                   )}
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Active regimens: injection/dose logging */}
+          {regimens.length > 0 && (
+            <div className="bg-gray-900/60 border border-blue-500/30 rounded-lg p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Pill className="w-3 h-3 text-blue-400" />
+                <span className="uppercase tracking-wider text-[10px] text-gray-500">Active Regimens</span>
+              </div>
+              {regimens.map(r => {
+                const hoursSince = r.last_dose_at
+                  ? Math.round((Date.now() - new Date(r.last_dose_at).getTime()) / 3600000)
+                  : null;
+                const isWeekly = r.medication_category === 'glp1' || /weekly/i.test(r.dose_amount);
+                const overdue = hoursSince != null && (isWeekly ? hoursSince > 168 : hoursSince > 26);
+                const statusLabel = hoursSince == null
+                  ? 'never logged'
+                  : hoursSince < 24
+                  ? `taken ${hoursSince}h ago`
+                  : `taken ${Math.round(hoursSince / 24)}d ago`;
+                return (
+                  <div key={r.id} className="mb-2 last:mb-0">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-300">
+                        {r.medication_name} <span className="text-gray-500">{r.dose_amount}</span>
+                      </span>
+                      <span className={overdue ? 'text-red-400' : 'text-blue-400'}>{statusLabel}</span>
+                    </div>
+                    <div className="flex gap-2 mt-1">
+                      <button
+                        onClick={() => logDose(r, false)}
+                        disabled={logging === r.id}
+                        className="flex-1 px-2 py-1 rounded bg-green-500/20 hover:bg-green-500/30 text-green-300 text-[11px] disabled:opacity-50"
+                      >
+                        {logging === r.id ? <Loader2 className="w-3 h-3 animate-spin inline" /> : 'Taken today'}
+                      </button>
+                      <button
+                        onClick={() => logDose(r, true)}
+                        disabled={logging === r.id}
+                        className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-400 text-[11px]"
+                      >
+                        Skipped
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
 
