@@ -13,6 +13,8 @@ import { MeasurementEntry } from './MeasurementEntry';
 import { MealLogWidget } from './MealLogWidget';
 import { HrtFunnelTimeline } from './HrtFunnelTimeline';
 import { ProgressPhotoGallery } from './ProgressPhotoGallery';
+import { ArousalLogger } from './ArousalLogger';
+import { ConfessionReinforcer } from './ConfessionReinforcer';
 
 interface PhaseProgress {
   current_phase: number;
@@ -401,6 +403,12 @@ export function ForceFeminizationPanel() {
               ))}
             </div>
           )}
+
+          {/* Arousal slider — feeds Handler conditioning loop */}
+          <ArousalLogger />
+
+          {/* Confession reinforcer — one admission, "still true?" */}
+          <ConfessionReinforcer />
 
           {/* Meal log widget — protein target + daily macros */}
           <MealLogWidget onLogged={load} />
