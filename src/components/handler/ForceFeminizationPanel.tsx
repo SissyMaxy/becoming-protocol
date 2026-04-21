@@ -6,9 +6,10 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Target, Pill, Flame, Mic, DollarSign, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { Target, Pill, Flame, Mic, DollarSign, ChevronDown, ChevronUp, Loader2, Ruler } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { MeasurementEntry } from './MeasurementEntry';
 
 interface PhaseProgress {
   current_phase: number;
@@ -69,6 +70,7 @@ export function ForceFeminizationPanel() {
   const [loading, setLoading] = useState(true);
   const [draftResponses, setDraftResponses] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState<string | null>(null);
+  const [showMeasurements, setShowMeasurements] = useState(false);
 
   const load = async () => {
     if (!user?.id) return;
@@ -191,6 +193,10 @@ export function ForceFeminizationPanel() {
         {open ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
       </button>
 
+      {showMeasurements && (
+        <MeasurementEntry onClose={() => setShowMeasurements(false)} onSaved={load} />
+      )}
+
       {open && (
         <div className="px-4 pb-4 space-y-3 max-h-96 overflow-y-auto text-xs">
           {/* Phase */}
@@ -291,6 +297,16 @@ export function ForceFeminizationPanel() {
               ))}
             </div>
           )}
+
+          {/* Measurement shortcut */}
+          <button
+            onClick={() => setShowMeasurements(true)}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-900/60 border border-gray-800 hover:bg-gray-900 text-gray-300"
+          >
+            <Ruler className="w-3 h-3 text-pink-400" />
+            <span>Log body measurements</span>
+            <span className="text-gray-500 text-[10px] ml-auto">waist/hips/chest/weight</span>
+          </button>
 
           {/* Escrow */}
           {escrow.length > 0 && (

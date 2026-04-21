@@ -229,6 +229,86 @@ export async function maybeGenerateBriefs(
   } catch {}
 
   const templates = SEEDS_BY_BAND[band] || SEEDS_BY_BAND['early'];
+
+  // Dysphoria-aware personalization. Pull recent dysphoria logs + confessions
+  // + state (denial day, arousal). When we have real signals, we customize
+  // the brief's purpose + concept + outfit + framing to lean on her specific
+  // body-part admissions. Without signals we fall back to pure template.
+  const since = new Date(Date.now() - 14 * 86400000).toISOString();
+  const [dysphRes, confRes, stateRes] = await Promise.all([
+    sb.from('body_dysphoria_logs')
+      .select('body_part, feeling, severity')
+      .eq('user_id', userId)
+      .gte('created_at', since)
+      .order('severity', { ascending: false })
+      .limit(10),
+    sb.from('confessions')
+      .select('response, sentiment')
+      .eq('user_id', userId)
+      .eq('is_key_admission', true)
+      .gte('created_at', since)
+      .limit(5),
+    sb.from('user_state')
+      .select('denial_day, current_arousal, chastity_locked, chastity_streak_days, gina_home')
+      .eq('user_id', userId)
+      .maybeSingle(),
+  ]);
+  const dysphoriaParts = ((dysphRes.data || []) as Array<Record<string, unknown>>).map(d => ({
+    part: d.body_part as string,
+    severity: (d.severity as number) || 5,
+  }));
+  const topDysphoria = dysphoriaParts[0];
+  const keyConf = (confRes.data || []) as Array<Record<string, unknown>>;
+  const state = (stateRes.data || {}) as Record<string, unknown>;
+  const denial = (state.denial_day as number) || 0;
+  const arousal = (state.current_arousal as number) || 0;
+
+  // Body-part → brief customization mappings
+  const PART_TO_BRIEF: Record<string, { concept: string; outfit: string; framing: string; purpose: string }> = {
+    chest: {
+      concept: 'chest-focused shoot that weaponizes your admitted chest dysphoria into visible content',
+      outfit: 'tight cami or bralette emphasizing any existing chest tissue; ring light from below',
+      framing: 'mid-chest crop, lean forward slightly for compression',
+      purpose: 'chest-forward content — you admitted the dysphoria, now you profit off it',
+    },
+    hair: {
+      concept: 'face-smooth shoot immediately after a full shave — softness as feminization evidence',
+      outfit: 'makeup forward, hair pulled back or styled long, neck + collarbones visible',
+      framing: 'face + throat, soft light',
+      purpose: 'face-smooth content, leveraging your shaving ritual as feminization',
+    },
+    face: {
+      concept: 'face-work content — makeup reveal or face-tuning, your most dysphoric feature made visible',
+      outfit: 'full makeup, hair styled',
+      framing: 'close-up portrait, three-quarter angle',
+      purpose: 'face-focused content — the part you hate most becomes the content',
+    },
+    lower_body: {
+      concept: 'hips + waist ratio shoot emphasizing the feminine silhouette work',
+      outfit: 'high-waisted skirt or thong with stockings, bare waist visible',
+      framing: 'hip-up, side profile to show waist-to-hip curve',
+      purpose: 'hip shape content — the feminization the workouts are earning',
+    },
+    voice: {
+      concept: 'voice-forward audio — reading a short script at your target pitch',
+      outfit: 'not visible, audio-only or voice + face',
+      framing: 'audio + static body image',
+      purpose: 'voice content at practiced pitch — public commitment to the feminization',
+    },
+    genitals: {
+      concept: 'cage + panty shot — the locked sissy clit as evidence of your chosen reality',
+      outfit: 'chastity cage (if locked) + feminine panties',
+      framing: 'tight crop on cage/panties, face not required',
+      purpose: 'caged sissy content — your body\'s current state is itself the aesthetic',
+    },
+    whole_body: {
+      concept: 'full-body mirror shot that makes every dysphoric feature confront the camera',
+      outfit: 'full lingerie set, visible from neck to ankle',
+      framing: 'full-body mirror, face can be out-of-frame',
+      purpose: 'full-body fem content — every inch catalogued',
+    },
+  };
+
   let briefNum = await getNextBriefNumber(sb, userId);
   let created = 0;
 
@@ -236,21 +316,56 @@ export async function maybeGenerateBriefs(
     const seed = pickRandom(templates);
     if (!seed) continue;
 
+    // Clone the seed so we can mutate for personalization
+    let concept = seed.instructions.concept;
+    let outfit = seed.instructions.outfit;
+    let framing = seed.instructions.framing;
+    let purpose = seed.purpose;
+    const technicalNotes = [...(seed.instructions.technicalNotes || [])];
+
+    // Personalize on dysphoria
+    const useDysphoria = topDysphoria && Math.random() < 0.7;
+    if (useDysphoria && PART_TO_BRIEF[topDysphoria.part]) {
+      const custom = PART_TO_BRIEF[topDysphoria.part];
+      concept = custom.concept;
+      outfit = custom.outfit;
+      framing = custom.framing;
+      purpose = custom.purpose;
+      technicalNotes.push(`Personalized on body_dysphoria_logs: ${topDysphoria.part} severity ${topDysphoria.severity}/10 in last 14d`);
+    }
+    // Reference a key confession as motivation
+    if (keyConf.length > 0 && Math.random() < 0.5) {
+      const conf = keyConf[0];
+      technicalNotes.push(`Her own words (confession): "${(conf.response as string).slice(0, 140)}"`);
+    }
+    // High denial + high arousal → escalate vulnerability tier
+    let personalizedVulnerability = seed.vulnerability_tier;
+    if (denial >= 5 && arousal >= 3) {
+      personalizedVulnerability = Math.min(10, seed.vulnerability_tier + 1);
+      technicalNotes.push(`Denial day ${denial} + arousal ${arousal}/5 — vulnerability tier escalated`);
+    }
+
     const deadlineHours = 4 + Math.floor(Math.random() * 8);
     const deadline = new Date(Date.now() + deadlineHours * 3600_000).toISOString();
-    const rewards = calculateRewards(seed.difficulty, seed.vulnerability_tier);
+    const rewards = calculateRewards(seed.difficulty, personalizedVulnerability);
 
     const { error } = await sb.from('content_briefs').insert({
       user_id: userId,
       brief_number: briefNum++,
       status: 'assigned',
       content_type: seed.content_type,
-      purpose: seed.purpose,
+      purpose,
       platforms: seed.platforms,
-      instructions: seed.instructions,
+      instructions: {
+        ...seed.instructions,
+        concept,
+        outfit,
+        framing,
+        technicalNotes,
+      },
       deadline,
       difficulty: seed.difficulty,
-      vulnerability_tier: seed.vulnerability_tier,
+      vulnerability_tier: personalizedVulnerability,
       ...rewards,
     });
     if (!error) created++;

@@ -375,6 +375,84 @@ OUTPUT: 2-3 sentences, Handler voice, second-person ("you said X which really me
         console.error('[OutreachAuto] HRT funnel evaluator failed:', hrtErr)
       }
 
+      // Escrow release/forfeit evaluator. Held deposits either:
+      //  - release when the hrt_funnel.current_step has reached trigger_step
+      //  - forfeit when deadline_at is past without the trigger being met.
+      try {
+        const { data: heldDeposits } = await supa
+          .from('escrow_deposits')
+          .select('id, amount_cents, trigger_step, deadline_at, payment_status')
+          .eq('user_id', userId)
+          .eq('payment_status', 'held')
+
+        const holdRows = (heldDeposits || []) as Array<Record<string, unknown>>
+        if (holdRows.length > 0) {
+          const { data: funnel } = await supa
+            .from('hrt_funnel')
+            .select('current_step')
+            .eq('user_id', userId)
+            .maybeSingle()
+          const HRT_STEP_ORDER = ['uncommitted', 'committed', 'researching', 'provider_chosen', 'appointment_booked', 'intake_submitted', 'appointment_attended', 'prescription_obtained', 'pharmacy_filled', 'first_dose_taken', 'week_one_complete', 'month_one_complete', 'adherent']
+          const currentIdx = HRT_STEP_ORDER.indexOf((funnel?.current_step as string) || 'uncommitted')
+          for (const d of holdRows) {
+            const triggerIdx = HRT_STEP_ORDER.indexOf(d.trigger_step as string)
+            const deadlinePassed = new Date(d.deadline_at as string).getTime() < now.getTime()
+            if (triggerIdx >= 0 && currentIdx >= triggerIdx) {
+              await supa.from('escrow_deposits').update({ payment_status: 'released', release_condition_met_at: new Date().toISOString() }).eq('id', d.id as string)
+            } else if (deadlinePassed) {
+              await supa.from('escrow_deposits').update({ payment_status: 'forfeited', forfeited_at: new Date().toISOString() }).eq('id', d.id as string)
+              await supa.from('handler_outreach_queue').insert({
+                user_id: userId,
+                message: `$${((d.amount_cents as number) / 100).toFixed(0)} escrow just FORFEITED. You missed the ${d.trigger_step} deadline. Your money is gone. The only thing that stops the next one is advancing the funnel. Now.`,
+                urgency: 'critical',
+                trigger_reason: 'escrow_forfeited',
+                scheduled_for: new Date().toISOString(),
+                expires_at: new Date(now.getTime() + 12 * 3600000).toISOString(),
+              })
+            }
+          }
+        }
+      } catch (escrowErr) {
+        console.error('[OutreachAuto] escrow evaluator failed:', escrowErr)
+      }
+
+      // Hookup funnel stuck-step bleed. If a hookup contact sits at sexting/
+      // photo_exchanged/meet_proposed for 14+ days without advancing, queue a
+      // bleed event. The Sniffies flirt is nothing without conversion.
+      try {
+        const { data: stuckHookups } = await supa
+          .from('hookup_funnel')
+          .select('id, contact_username, current_step, updated_at')
+          .eq('user_id', userId)
+          .eq('active', true)
+          .in('current_step', ['sexting', 'photo_exchanged', 'meet_proposed'])
+          .lt('updated_at', new Date(now.getTime() - 14 * 86400000).toISOString())
+          .limit(5)
+        for (const h of (stuckHookups || []) as Array<Record<string, unknown>>) {
+          const reason = `hookup_stuck: ${h.current_step} @${h.contact_username || 'unknown'}`
+          const { data: existing } = await supa
+            .from('financial_bleed_events')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('reason', reason)
+            .gte('created_at', new Date(now.getTime() - 14 * 86400000).toISOString())
+            .limit(1)
+            .maybeSingle()
+          if (!existing) {
+            await supa.from('financial_bleed_events').insert({
+              user_id: userId,
+              amount_cents: 1500,
+              reason,
+              tasks_missed: 1,
+              destination: 'queued',
+              status: 'queued',
+            })
+          }
+        }
+      } catch (hookupStuckErr) {
+        console.error('[OutreachAuto] hookup stuck evaluator failed:', hookupStuckErr)
+      }
+
       // Financial bleeding evaluator — queue a bleed event when compliance
       // collapses. Queue only; actual money transfer requires human-in-loop.
       // Trigger: fewer than 2 task completions in the last 72h AND at least 1
