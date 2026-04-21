@@ -112,9 +112,17 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
 
         <div className="td-stats">
           <div className="td-stat">
-            <div className="td-stat-lbl">Mag charge</div>
-            <div className="td-stat-val">100<span className="td-stat-unit">%</span></div>
-            <div className="td-stat-bar"><div className="td-stat-fill" style={{ width: '100%' }} /></div>
+            <div className="td-stat-lbl">Compliance 7d</div>
+            <div className="td-stat-val">{data.compliancePct}<span className="td-stat-unit">%</span></div>
+            <div className="td-stat-bar">
+              <div className="td-stat-fill" style={{
+                width: `${data.compliancePct}%`,
+                background: data.compliancePct >= 80 ? '#5fc88f' : data.compliancePct >= 50 ? '#f4c272' : '#f47272',
+              }} />
+            </div>
+            {data.complianceSampleSize === 0 && (
+              <div className="td-stat-delta" style={{ color: '#6a656e' }}>no directives resolved 7d</div>
+            )}
           </div>
           <div className="td-stat">
             <div className="td-stat-lbl">Orgasm debt</div>

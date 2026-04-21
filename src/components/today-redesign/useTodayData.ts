@@ -66,6 +66,8 @@ export interface TodayData {
   proteinTarget: number;
   weightKg: number | null;
   weightStart: number | null;
+  compliancePct: number;
+  complianceSampleSize: number;
   mealsToday: TodayMeal[];
   aestheticPreset: string;
   targets: TodayTargetCell[];
@@ -153,6 +155,8 @@ export function useTodayData() {
     proteinTarget: PROTEIN_TARGET_G,
     weightKg: null,
     weightStart: null,
+    compliancePct: 0,
+    complianceSampleSize: 0,
     mealsToday: [],
     aestheticPreset: 'femboy',
     targets: [],
@@ -167,6 +171,8 @@ export function useTodayData() {
     const todayStart = `${todayStr}T00:00:00`;
     const todayEnd = `${todayStr}T23:59:59`;
 
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+
     const [
       stateRes,
       directivesRes,
@@ -176,6 +182,7 @@ export function useTodayData() {
       firstMeasurementRes,
       targetsRes,
       diaryRes,
+      complianceWindowRes,
     ] = await Promise.all([
       supabase
         .from('user_state')
@@ -229,7 +236,31 @@ export function useTodayData() {
         .eq('prompt_date', todayStr)
         .order('created_at', { ascending: true })
         .limit(2),
+      supabase
+        .from('body_feminization_directives')
+        .select('status, deadline_at, completed_at')
+        .eq('user_id', user.id)
+        .gte('created_at', sevenDaysAgo),
     ]);
+
+    // Compliance: % of directives in the last 7d that were completed on or
+    // before the deadline. Denominator is "resolved" directives (completed
+    // or with a passed deadline); open directives with time still left are
+    // not yet pass/fail and are excluded.
+    const windowRows = (complianceWindowRes.data || []) as Array<{ status: string; deadline_at: string | null; completed_at: string | null }>;
+    const now = Date.now();
+    let resolved = 0;
+    let onTime = 0;
+    for (const r of windowRows) {
+      const dl = r.deadline_at ? new Date(r.deadline_at).getTime() : null;
+      const done = r.status === 'completed';
+      const pastDeadline = dl != null && dl < now;
+      if (done || pastDeadline) {
+        resolved += 1;
+        if (done && (dl == null || new Date(r.completed_at || 0).getTime() <= dl)) onTime += 1;
+      }
+    }
+    const compliancePct = resolved === 0 ? 100 : Math.round((onTime / resolved) * 100);
 
     const state = stateRes.data as Record<string, unknown> | null;
     const m = measurementRes.data as Record<string, number | null> | null;
@@ -343,6 +374,8 @@ export function useTodayData() {
       proteinTarget: PROTEIN_TARGET_G,
       weightKg,
       weightStart,
+      compliancePct,
+      complianceSampleSize: resolved,
       mealsToday,
       aestheticPreset: (t?.aesthetic_preset as string) || 'femboy',
       targets,

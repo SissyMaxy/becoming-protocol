@@ -65,9 +65,14 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
       {(tab === 'today' || tab === 'body') && (
         <div className="tdm-stats">
           <div className="tdm-stat">
-            <div className="lbl">Mag charge</div>
-            <div className="val">100<span className="unit">%</span></div>
-            <div className="bar"><div className="fill" style={{ width: '100%' }} /></div>
+            <div className="lbl">Compliance 7d</div>
+            <div className="val">{data.compliancePct}<span className="unit">%</span></div>
+            <div className="bar">
+              <div className="fill" style={{
+                width: `${data.compliancePct}%`,
+                background: data.compliancePct >= 80 ? '#5fc88f' : data.compliancePct >= 50 ? '#f4c272' : '#f47272',
+              }} />
+            </div>
           </div>
           <div className="tdm-stat">
             <div className="lbl">Orgasm debt</div>
