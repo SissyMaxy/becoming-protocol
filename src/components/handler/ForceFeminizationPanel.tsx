@@ -11,6 +11,8 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { MeasurementEntry } from './MeasurementEntry';
 import { MealLogWidget } from './MealLogWidget';
+import { HrtFunnelTimeline } from './HrtFunnelTimeline';
+import { ProgressPhotoGallery } from './ProgressPhotoGallery';
 
 interface PhaseProgress {
   current_phase: number;
@@ -309,6 +311,9 @@ export function ForceFeminizationPanel() {
             </div>
           )}
 
+          {/* HRT funnel timeline (13-stage visual) */}
+          <HrtFunnelTimeline />
+
           {/* HRT funnel */}
           {hrt && (
             <div className="bg-gray-900/60 border border-pink-500/30 rounded-lg p-3">
@@ -495,6 +500,9 @@ export function ForceFeminizationPanel() {
               </div>
             </div>
           )}
+
+          {/* Progress photos — month-over-month gallery + compare */}
+          <ProgressPhotoGallery />
 
           {/* Measurement shortcut */}
           <button
