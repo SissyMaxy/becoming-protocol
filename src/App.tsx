@@ -35,6 +35,7 @@ import { SettingsView, SystemAuditView } from './components/settings';
 import { WitnessManager, CaseFileView, SealedEnvelopesPage, QuitFrictionGate, EscalationLadder } from './components/handler';
 import { ForceDashboard } from './components/force/ForceDashboard';
 import { ForceStatusStrip } from './components/force/ForceStatusStrip';
+import { TodayView as TodayRedesignView } from './components/today-redesign';
 import { GinaKeyHolderPage } from './components/gina/GinaKeyHolderPage';
 import { usePunishmentNotifications } from './hooks/usePunishmentNotifications';
 import { DailyReportCard } from './components/handler/DailyReportCard';
@@ -271,6 +272,18 @@ function AuthenticatedAppInner() {
   usePunishmentNotifications();
 
   const deepLinkView = parseDeepLinkView();
+  const [showTodayRedesign, setShowTodayRedesign] = useState(() => {
+    const h = window.location.hash.replace('#', '');
+    return h === '/today' || h === '/today/';
+  });
+  useEffect(() => {
+    const onHash = () => {
+      const h = window.location.hash.replace('#', '');
+      setShowTodayRedesign(h === '/today' || h === '/today/');
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
   const [activeTab, setActiveTab] = useState<Tab>(deepLinkView ? 'menu' : 'protocol');
   const [menuSubView, setMenuSubView] = useState<MenuSubView>((deepLinkView as MenuSubView) || null);
   const [showMorningFlow, setShowMorningFlow] = useState(false);
@@ -980,6 +993,17 @@ function AuthenticatedAppInner() {
   // Handler-Directed UI: Conversation is the primary screen.
   // Settings accessible via gear icon in chat header.
   // NOTE: showSettings useState moved above early returns (was causing Rules of Hooks violation / #310)
+
+  if (showTodayRedesign) {
+    return (
+      <TodayRedesignView
+        onExit={() => {
+          window.location.hash = '';
+          setShowTodayRedesign(false);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
