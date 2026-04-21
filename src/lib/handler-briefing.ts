@@ -312,13 +312,11 @@ async function getDenialData(userId: string) {
 
 function buildOvernightSection(
   data: Awaited<ReturnType<typeof getOvernightData>> | null,
-  denial: Awaited<ReturnType<typeof getDenialData>> | null,
+  _denial: Awaited<ReturnType<typeof getDenialData>> | null,
 ): OvernightSection {
   const items: BriefingItem[] = [];
 
-  if (!data) {
-    return { items: [{ icon: 'moon', text: 'Day 1. No data yet. Her first task creates the first data point.', type: 'info' }], summary: 'Day 1.' };
-  }
+  if (!data) return { items: [], summary: '' };
 
   // Yesterday's task completions with domains
   if (data.yesterdayTasks.length > 0) {
@@ -387,21 +385,14 @@ function buildOvernightSection(
     });
   }
 
-  // Nothing at all — true day 1
-  if (items.length === 0) {
-    const dayNum = denial?.streak_days || 0;
-    items.push({
-      icon: 'moon',
-      text: dayNum === 0
-        ? 'Day 1. No data yet. Her first task creates the first data point.'
-        : 'Nothing logged yesterday. The streak continues anyway.',
-      type: 'info',
-    });
-  }
+  // Nothing at all — only fallback. Do NOT say "Day 1 no data" if she
+  // actually has history; the section is hidden by the UI when empty.
 
-  const summary = items.length === 1
-    ? items[0].text
-    : `${items.length} data points from yesterday.`;
+  const summary = items.length === 0
+    ? ''
+    : items.length === 1
+      ? items[0].text
+      : `${items.length} data points from yesterday.`;
 
   return { items, summary };
 }

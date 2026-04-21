@@ -78,18 +78,20 @@ export function HandlerStatusBriefing({ className = '' }: HandlerStatusBriefingP
 
   return (
     <div className={`space-y-3 ${className}`}>
-      {/* OVERNIGHT */}
-      <BriefingSection
-        label="OVERNIGHT"
-        icon={<Moon className="w-4 h-4" />}
-        summary={briefing.overnight.summary}
-        items={briefing.overnight.items}
-        expanded={expandedSection === 'overnight'}
-        onToggle={() => toggleSection('overnight')}
-        isBambiMode={isBambiMode}
-        accentColor={isBambiMode ? 'text-purple-500' : 'text-indigo-400'}
-        bgColor={isBambiMode ? 'bg-purple-50' : 'bg-indigo-900/20'}
-      />
+      {/* OVERNIGHT — skip when nothing real to report */}
+      {briefing.overnight.items.some(i => !/^Day 1\. No data yet/.test(i.text) && !/^Nothing logged/.test(i.text)) && (
+        <BriefingSection
+          label="OVERNIGHT"
+          icon={<Moon className="w-4 h-4" />}
+          summary={briefing.overnight.summary}
+          items={briefing.overnight.items}
+          expanded={expandedSection === 'overnight'}
+          onToggle={() => toggleSection('overnight')}
+          isBambiMode={isBambiMode}
+          accentColor={isBambiMode ? 'text-purple-500' : 'text-indigo-400'}
+          bgColor={isBambiMode ? 'bg-purple-50' : 'bg-indigo-900/20'}
+        />
+      )}
 
       {/* TODAY */}
       <BriefingSection
@@ -104,7 +106,10 @@ export function HandlerStatusBriefing({ className = '' }: HandlerStatusBriefingP
         bgColor={isBambiMode ? 'bg-pink-50' : 'bg-protocol-accent/10'}
       />
 
-      {/* PROGRESS */}
+      {/* PROGRESS — hide when highlight is a single thin datum or placeholder */}
+      {briefing.progress.highlight &&
+       !/^No tasks completed/.test(briefing.progress.highlight) &&
+       briefing.progress.highlight.split('.').filter(Boolean).length >= 2 && (
       <div className={`rounded-xl p-4 ${
         isBambiMode ? 'bg-green-50 border-2 border-green-200' : 'bg-green-900/20 border border-green-500/30'
       }`}>
@@ -127,6 +132,7 @@ export function HandlerStatusBriefing({ className = '' }: HandlerStatusBriefingP
           </p>
         )}
       </div>
+      )}
 
       {/* AUDIENCE */}
       {briefing.audience.comments.length > 0 && (
@@ -205,9 +211,11 @@ function BriefingSection({
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <span className={`text-xs ${isBambiMode ? 'text-gray-500' : 'text-protocol-text-muted'}`}>
-            {summary}
-          </span>
+          {!expanded && (
+            <span className={`text-xs ${isBambiMode ? 'text-gray-500' : 'text-protocol-text-muted'}`}>
+              {summary}
+            </span>
+          )}
           {expanded
             ? <ChevronUp className={`w-4 h-4 ${isBambiMode ? 'text-gray-400' : 'text-protocol-text-muted'}`} />
             : <ChevronDown className={`w-4 h-4 ${isBambiMode ? 'text-gray-400' : 'text-protocol-text-muted'}`} />
