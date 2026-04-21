@@ -15,6 +15,11 @@ import { HrtFunnelTimeline } from './HrtFunnelTimeline';
 import { ProgressPhotoGallery } from './ProgressPhotoGallery';
 import { ArousalLogger } from './ArousalLogger';
 import { ConfessionReinforcer } from './ConfessionReinforcer';
+import { OutreachQueueView } from './OutreachQueueView';
+import { Glp1SideEffectsWidget } from './Glp1SideEffectsWidget';
+import { KeyholderDecisionsPanel } from './KeyholderDecisionsPanel';
+import { WhoopStaleBanner } from './WhoopStaleBanner';
+import { PushRegistrationWidget } from './PushRegistrationWidget';
 
 interface PhaseProgress {
   current_phase: number;
@@ -404,6 +409,15 @@ export function ForceFeminizationPanel() {
             </div>
           )}
 
+          {/* Outreach queue — Handler messages waiting to fire */}
+          <OutreachQueueView />
+
+          {/* Whoop stale/disconnected banner — re-auth prompt */}
+          <WhoopStaleBanner />
+
+          {/* Push notification registration — per-device subscription */}
+          <PushRegistrationWidget />
+
           {/* Arousal slider — feeds Handler conditioning loop */}
           <ArousalLogger />
 
@@ -412,6 +426,12 @@ export function ForceFeminizationPanel() {
 
           {/* Meal log widget — protein target + daily macros */}
           <MealLogWidget onLogged={load} />
+
+          {/* GLP-1 side effects — nausea/appetite/energy/sleep */}
+          <Glp1SideEffectsWidget />
+
+          {/* Keyholder decisions — unlock/reset/privilege requests */}
+          <KeyholderDecisionsPanel />
 
           {/* Active regimens: injection/dose logging */}
           {regimens.length > 0 && (
