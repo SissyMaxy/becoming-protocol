@@ -94,6 +94,15 @@ export interface PriorityBanner {
   actionHref?: string;
 }
 
+export interface DailyActivity {
+  directivesCompletedToday: number;
+  directivesAssignedToday: number;
+  handlerMessagesToday: number;
+  userMessagesToday: number;
+  lastHandlerMessageAt: string | null;
+  lastHandlerTimeDesc: string;
+}
+
 export interface TodayData {
   denialDay: number;
   currentPhase: number;
@@ -121,6 +130,7 @@ export interface TodayData {
   latestProgressPhotoUrl: string | null;
   banners: PriorityBanner[];
   heatmap: HeatmapDay[];
+  activity: DailyActivity;
   loading: boolean;
 }
 
@@ -235,6 +245,14 @@ export function useTodayData() {
     latestProgressPhotoUrl: null,
     banners: [],
     heatmap: [],
+    activity: {
+      directivesCompletedToday: 0,
+      directivesAssignedToday: 0,
+      handlerMessagesToday: 0,
+      userMessagesToday: 0,
+      lastHandlerMessageAt: null,
+      lastHandlerTimeDesc: 'no contact yet',
+    },
     loading: true,
   });
 
@@ -265,6 +283,7 @@ export function useTodayData() {
       latestPhotoRes,
       heldEscrowRes,
       taskCompletionsRes,
+      messagesTodayRes,
     ] = await Promise.all([
       supabase
         .from('user_state')
@@ -373,6 +392,13 @@ export function useTodayData() {
         .select('completed_at')
         .eq('user_id', user.id)
         .gte('completed_at', new Date(Date.now() - 30 * 86400000).toISOString()),
+      supabase
+        .from('handler_messages')
+        .select('role, created_at')
+        .eq('user_id', user.id)
+        .gte('created_at', todayStart)
+        .lte('created_at', todayEnd)
+        .order('created_at', { ascending: false }),
     ]);
 
     // Compliance: % of directives in the last 7d that were completed on or
@@ -465,6 +491,17 @@ export function useTodayData() {
       const d = c.completed_at.slice(0, 10);
       dayCounts[d] = (dayCounts[d] || 0) + 1;
     }
+    // Daily activity
+    const messagesToday = (messagesTodayRes.data || []) as Array<{ role: string; created_at: string }>;
+    const handlerMessagesToday = messagesToday.filter(m => m.role === 'assistant').length;
+    const userMessagesToday = messagesToday.filter(m => m.role === 'user').length;
+    const lastHandlerMsg = messagesToday.find(m => m.role === 'assistant');
+    const lastHandlerMessageAt = lastHandlerMsg?.created_at || null;
+    const lastHandlerTimeDesc = lastHandlerMessageAt ? timeAgo(lastHandlerMessageAt) : 'no contact yet';
+
+    // directivesCompletedToday / directivesAssignedToday — computed below after
+    // directives are constructed.
+
     const heatmap: HeatmapDay[] = [];
     const todayIso = new Date().toISOString().slice(0, 10);
     for (let i = 29; i >= 0; i--) {
@@ -648,6 +685,18 @@ export function useTodayData() {
       latestProgressPhotoUrl,
       banners: banners.slice(0, 3),
       heatmap,
+      activity: {
+        directivesCompletedToday: directives.filter(d =>
+          d.done && d.dueDate && d.dueDate.toISOString().slice(0, 10) === todayStr
+        ).length,
+        directivesAssignedToday: directives.filter(d =>
+          d.dueDate && d.dueDate.toISOString().slice(0, 10) === todayStr
+        ).length,
+        handlerMessagesToday,
+        userMessagesToday,
+        lastHandlerMessageAt,
+        lastHandlerTimeDesc,
+      },
       mealsToday,
       aestheticPreset: (t?.aesthetic_preset as string) || 'femboy',
       targets,

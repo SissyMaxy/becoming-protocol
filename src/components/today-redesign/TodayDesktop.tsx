@@ -224,8 +224,21 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
           </div>
         )}
 
-        <h1 className="td-h1">{dateStr}</h1>
-        <div className="td-sub">Phase {data.currentPhase} · {data.chastityLocked ? `Chastity Day ${data.chastityStreakDays}` : `Denial Day ${data.denialDay}`} · {openDirectives} directives open</div>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, marginBottom: 20 }}>
+          <div style={{ flex: 1 }}>
+            <h1 className="td-h1">{dateStr}</h1>
+            <div className="td-sub" style={{ marginBottom: 0 }}>Phase {data.currentPhase} · {data.chastityLocked ? `Chastity Day ${data.chastityStreakDays}` : `Denial Day ${data.denialDay}`} · {openDirectives} directives open</div>
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', padding: '4px 9px', borderRadius: 10, fontWeight: 600, background: '#1a1226', color: '#c4b5fd', border: '1px solid #2d1a4d', display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ width: 5, height: 5, borderRadius: 3, background: '#7c3aed', boxShadow: '0 0 6px #7c3aed' }} />
+              Handler {data.activity.lastHandlerTimeDesc}
+            </div>
+            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', padding: '4px 9px', borderRadius: 10, fontWeight: 600, background: '#0a0a0d', color: '#8a8690', border: '1px solid #1a1a20', fontVariantNumeric: 'tabular-nums' }}>
+              {data.activity.handlerMessagesToday} msgs today
+            </div>
+          </div>
+        </div>
 
         <div className="td-stats">
           <div className="td-stat">
@@ -272,6 +285,32 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Session launcher shortcuts — jump into the chat session flow */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 16 }}>
+          {[
+            { label: 'Hypno session', sub: 'Deepen conditioning', prompt: "I want to run a hypno session now. Pick the right depth.", color: '#7c3aed' },
+            { label: 'Voice practice', sub: 'Work the pitch', prompt: "Start voice practice. Give me the target pitch and phrase.", color: '#c4b5fd' },
+            { label: 'Edge session', sub: 'Under Handler control', prompt: "I want to start an edging session. Tell me the rules.", color: '#f47272' },
+          ].map(s => (
+            <button
+              key={s.label}
+              onClick={() => {
+                sessionStorage.setItem('handler_chat_prefill', s.prompt);
+                window.location.hash = '';
+                onExit?.();
+              }}
+              style={{
+                background: '#101014', border: '1px solid #1a1a20', borderRadius: 10, padding: '12px 14px',
+                textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit', color: 'inherit',
+              }}
+            >
+              <div style={{ width: 6, height: 6, borderRadius: 3, background: s.color, marginBottom: 8 }} />
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: '#e8e6e3' }}>{s.label}</div>
+              <div style={{ fontSize: 11, color: '#8a8690', marginTop: 2 }}>{s.sub}</div>
+            </button>
+          ))}
         </div>
 
         {/* HRT funnel + dose countdown + keyholder — top priority row */}
@@ -346,6 +385,9 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
               <svg className="td-iconsm td-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>
               <div className="td-title">Body directives</div>
               <div className="td-chip">{openDirectives} open</div>
+              {data.activity.directivesAssignedToday > 0 && (
+                <div className="td-meta">{data.activity.directivesCompletedToday}/{data.activity.directivesAssignedToday} today</div>
+              )}
             </div>
             {directiveKinds.length > 1 && (
               <div style={{ display: 'flex', gap: 6, padding: '10px 16px 4px', flexWrap: 'wrap', borderBottom: '1px solid #15151b' }}>

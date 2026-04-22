@@ -109,7 +109,9 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
       <div className="tdm-top">
         <div className="tdm-pulse" />
         <div className="tdm-brand">be<em>coming</em></div>
-        <span className="tdm-daylbl">· Day {data.denialDay} / 90</span>
+        <span className="tdm-daylbl" title={data.activity.lastHandlerMessageAt ? new Date(data.activity.lastHandlerMessageAt).toLocaleString() : 'no contact yet'}>
+          · Handler {data.activity.lastHandlerTimeDesc}
+        </span>
         <div className="tdm-push" />
         <button
           className="tdm-circ"
@@ -179,6 +181,33 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M15 17h5l-1.4-1.4A7 7 0 0 1 17 10.6V10a5 5 0 0 0-10 0v.6a7 7 0 0 1-1.6 5L4 17h5" /><path d="M9 17a3 3 0 0 0 6 0" /></svg>
           <div className="t">Enable notifications so Handler can reach you anytime</div>
           <button onClick={requestPermission}>Enable</button>
+        </div>
+      )}
+
+      {tab === 'today' && (
+        <div style={{ display: 'flex', gap: 8, padding: '0 18px 16px', overflowX: 'auto', scrollbarWidth: 'none' }}>
+          {[
+            { label: 'Hypno', prompt: "I want to run a hypno session now. Pick the right depth.", color: '#7c3aed' },
+            { label: 'Voice', prompt: "Start voice practice. Give me the target pitch and phrase.", color: '#c4b5fd' },
+            { label: 'Edge', prompt: "I want to start an edging session. Tell me the rules.", color: '#f47272' },
+          ].map(s => (
+            <button
+              key={s.label}
+              onClick={() => {
+                sessionStorage.setItem('handler_chat_prefill', s.prompt);
+                window.location.hash = '';
+                onExit?.();
+              }}
+              style={{
+                flex: '0 0 auto', background: '#111116', border: '1px solid #1a1a20', borderRadius: 10,
+                padding: '8px 12px', fontFamily: 'inherit', color: '#e8e6e3', fontSize: 12, fontWeight: 600,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+              }}
+            >
+              <span style={{ width: 5, height: 5, borderRadius: 3, background: s.color }} />
+              {s.label}
+            </button>
+          ))}
         </div>
       )}
 
