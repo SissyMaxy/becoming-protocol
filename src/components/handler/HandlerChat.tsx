@@ -64,7 +64,16 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
       }
     }
   }, [currentMode, messages, conversationId, biometrics.isPolling]);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState(() => {
+    try {
+      const prefill = sessionStorage.getItem('handler_chat_prefill');
+      if (prefill) {
+        sessionStorage.removeItem('handler_chat_prefill');
+        return prefill;
+      }
+    } catch { /* storage unavailable */ }
+    return '';
+  });
   const [showPhotoUpload, setShowPhotoUpload] = useState(false);
   const [forcedMantra, setForcedMantra] = useState<{ mantra: string; repetitions: number; reason?: string } | null>(null);
   const [voicePracticeRequest, setVoicePracticeRequest] = useState<{ targetPhrase?: string; targetPitchHz?: number; minDuration?: number } | null>(null);
@@ -351,7 +360,7 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
           <button
             onClick={() => ambientAudio.setEnabled(!ambientAudio.enabled)}
             title={ambientAudio.enabled ? 'Ambient conditioning audio ON — feminization affirmations play while app is open' : 'Ambient conditioning audio OFF — turn on to let queued affirmations play'}
-            className={`px-2 py-1 rounded-lg text-[11px] font-medium transition-colors ${
+            className={`hidden md:inline-flex px-2 py-1 rounded-lg text-[11px] font-medium transition-colors ${
               ambientAudio.enabled
                 ? 'bg-pink-500/25 text-pink-300 hover:bg-pink-500/35'
                 : 'hover:bg-gray-800 text-gray-500 border border-gray-800'
@@ -359,6 +368,14 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
             aria-label={ambientAudio.enabled ? 'Disable ambient conditioning' : 'Enable ambient conditioning'}
           >
             {ambientAudio.enabled ? 'AMB ON' : 'AMB'}
+          </button>
+          <button
+            onClick={() => { window.location.hash = '/today'; }}
+            className="text-[11px] font-medium px-2.5 py-1 rounded-lg text-purple-300 bg-purple-500/20 hover:bg-purple-500/30 transition-colors"
+            aria-label="Open Today screen"
+            title="Today — directives, protocol, queue"
+          >
+            Today
           </button>
           {onOpenSettings && (
             <button
@@ -390,11 +407,12 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
       {/* Identity Fading Indicator */}
       <IdentityFadingBar userId={authUser?.id} />
 
-      {/* Open body-feminization directives with photo-proof upload */}
-      <BodyDirectiveChecklist />
-
-      {/* Combined protocol progress: phase, HRT funnel, hookup heat, diary, escrow */}
-      <ForceFeminizationPanel />
+      {/* Mobile: stacked panels are hidden — full content lives on /#/today.
+          Desktop: panels show below the identity bar and above messages. */}
+      <div className="hidden md:block">
+        <BodyDirectiveChecklist />
+        <ForceFeminizationPanel />
+      </div>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">

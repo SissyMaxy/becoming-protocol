@@ -173,7 +173,17 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
                     ? <button className="td-btn" onClick={() => toggleDirective(d.id, true)}>Undo</button>
                     : <button className="td-btn primary" onClick={() => toggleDirective(d.id, false)}>Mark complete</button>}
                   {d.photoRequired && <button className="td-btn">Upload proof</button>}
-                  <button className="td-btn">Discuss</button>
+                  <button
+                    className="td-btn"
+                    onClick={() => {
+                      const snippet = d.body.slice(0, 100);
+                      sessionStorage.setItem('handler_chat_prefill', `About the ${d.kind.toLowerCase()} directive: "${snippet}${snippet.length < d.body.length ? '...' : ''}"`);
+                      window.location.hash = '';
+                      onExit?.();
+                    }}
+                  >
+                    Discuss
+                  </button>
                 </div>
               </div>
             ))}

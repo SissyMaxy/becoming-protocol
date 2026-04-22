@@ -61,14 +61,11 @@ export function IdentityFadingBar({ userId }: IdentityFadingBarProps) {
 
   return (
     <div className="px-4 py-1.5 border-b border-gray-800/30 bg-black/30">
-      <div className="flex items-center justify-between text-xs">
-        <span className="text-gray-500">
-          Maxy: <span className="text-purple-300 font-medium">{femininePercent}%</span>
-        </span>
+      <div className="flex items-center gap-2 text-[11px]">
+        <span className="uppercase tracking-wider text-gray-500 text-[10px]">Identity</span>
+        <span className="text-purple-300 font-medium tabular-nums">Maxy {femininePercent}%</span>
         <span className={trendColor}>{trendIcon}</span>
-        <span className="text-gray-500">
-          David: <span className="text-gray-400 font-medium">{masculinePercent}%</span>
-        </span>
+        <span className="text-gray-500 tabular-nums">David {masculinePercent}%</span>
       </div>
       <div className="h-1 bg-gray-800 rounded-full mt-1 overflow-hidden">
         <div

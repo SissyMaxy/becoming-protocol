@@ -9,6 +9,12 @@ import '../../styles/today-redesign.css';
 import { useTodayData } from './useTodayData';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 
+function truncateWords(text: string, maxWords: number): string {
+  const words = text.trim().split(/\s+/);
+  if (words.length <= maxWords) return text;
+  return words.slice(0, maxWords).join(' ') + '…';
+}
+
 const AROUSAL_LABELS = ['locked', 'simmering', 'attentive', 'wanting', 'desperate', 'edging'];
 
 type MobileTab = 'today' | 'proto' | 'queue' | 'body' | 'me';
@@ -21,6 +27,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
   const { data, toggleDirective, setArousal, ackQueueMsg, logMeal } = useTodayData();
   const [tab, setTab] = useState<MobileTab>('today');
   const [mealTab, setMealTab] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('breakfast');
+  const [expandedDirective, setExpandedDirective] = useState<string | null>(null);
   const { permission, requestPermission } = usePushNotifications();
 
   const today = new Date();
@@ -111,26 +118,46 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           <div className="tdm-card">
             {data.directives.length === 0 ? (
               <div style={{ padding: 14, color: '#6a656e', fontSize: 12.5 }}>No directives queued.</div>
-            ) : data.directives.slice(0, 5).map(d => (
-              <div key={d.id} className="tdm-dir">
-                <div className="tdm-dirhead">
-                  <button className={`tdm-check ${d.done ? 'on' : ''}`} onClick={() => toggleDirective(d.id, d.done)}>
-                    <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M2 5l2 2 4-5" /></svg>
+            ) : data.directives.slice(0, 5).map(d => {
+              const expanded = expandedDirective === d.id;
+              const bodyText = expanded || d.body.split(/\s+/).length <= 14 ? d.body : truncateWords(d.body, 14);
+              return (
+                <div key={d.id} className="tdm-dir">
+                  <div className="tdm-dirhead">
+                    <button className={`tdm-check ${d.done ? 'on' : ''}`} onClick={() => toggleDirective(d.id, d.done)}>
+                      <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M2 5l2 2 4-5" /></svg>
+                    </button>
+                    <span className="tdm-dirkind">{d.kind}</span>
+                    {d.target && <><span className="tdm-dirsep">/</span><span className="tdm-dirtarget">{d.target}</span></>}
+                    <span className="tdm-dirtime">{d.due}</span>
+                  </div>
+                  <button
+                    className={`tdm-dirbody ${d.done ? 'done' : ''}`}
+                    onClick={() => setExpandedDirective(expanded ? null : d.id)}
+                    style={{ background: 'none', border: 'none', textAlign: 'left', width: '100%', cursor: 'pointer', padding: 0, paddingLeft: 28, marginBottom: 10, color: 'inherit', font: 'inherit' }}
+                  >
+                    {bodyText}
                   </button>
-                  <span className="tdm-dirkind">{d.kind}</span>
-                  {d.target && <><span className="tdm-dirsep">/</span><span className="tdm-dirtarget">{d.target}</span></>}
-                  <span className="tdm-dirtime">{d.due}</span>
+                  <div className="tdm-diract">
+                    {d.done
+                      ? <button className="tdm-btn" onClick={() => toggleDirective(d.id, true)}>Undo</button>
+                      : <button className="tdm-btn primary" onClick={() => toggleDirective(d.id, false)}>Complete</button>}
+                    {d.photoRequired && <button className="tdm-btn">Proof</button>}
+                    <button
+                      className="tdm-btn"
+                      onClick={() => {
+                        const snippet = d.body.slice(0, 80);
+                        sessionStorage.setItem('handler_chat_prefill', `About the ${d.kind.toLowerCase()} directive: "${snippet}${snippet.length < d.body.length ? '...' : ''}"`);
+                        window.location.hash = '';
+                        onExit?.();
+                      }}
+                    >
+                      Discuss
+                    </button>
+                  </div>
                 </div>
-                <div className={`tdm-dirbody ${d.done ? 'done' : ''}`}>{d.body}</div>
-                <div className="tdm-diract">
-                  {d.done
-                    ? <button className="tdm-btn" onClick={() => toggleDirective(d.id, true)}>Undo</button>
-                    : <button className="tdm-btn primary" onClick={() => toggleDirective(d.id, false)}>Complete</button>}
-                  {d.photoRequired && <button className="tdm-btn">Proof</button>}
-                  <button className="tdm-btn">Discuss</button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
