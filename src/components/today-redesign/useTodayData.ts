@@ -102,6 +102,8 @@ export interface TodayData {
   nextDoses: NextDoseState[];
   orgasmDebt: OrgasmDebtState;
   keyholderPending: number;
+  weightSeries: { date: string; kg: number }[];
+  latestProgressPhotoUrl: string | null;
   loading: boolean;
 }
 
@@ -212,6 +214,8 @@ export function useTodayData() {
     nextDoses: [],
     orgasmDebt: { daysSinceRelease: null, slipPoints24h: 0, debtPct: 0, lastRelease: null },
     keyholderPending: 0,
+    weightSeries: [],
+    latestProgressPhotoUrl: null,
     loading: true,
   });
 
@@ -238,6 +242,8 @@ export function useTodayData() {
       regimensRes,
       doseLogRes,
       keyholderRes,
+      weightSeriesRes,
+      latestPhotoRes,
     ] = await Promise.all([
       supabase
         .from('user_state')
@@ -318,6 +324,21 @@ export function useTodayData() {
         .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id)
         .eq('status', 'pending'),
+      supabase
+        .from('body_measurement_log')
+        .select('measured_at, weight_kg')
+        .eq('user_id', user.id)
+        .not('weight_kg', 'is', null)
+        .order('measured_at', { ascending: true })
+        .limit(40),
+      supabase
+        .from('body_feminization_directives')
+        .select('proof_photo_url, completed_at')
+        .eq('user_id', user.id)
+        .not('proof_photo_url', 'is', null)
+        .order('completed_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ]);
 
     // Compliance: % of directives in the last 7d that were completed on or
@@ -396,6 +417,13 @@ export function useTodayData() {
 
     // Keyholder pending count
     const keyholderPending = (keyholderRes.count ?? 0);
+
+    const weightSeries = ((weightSeriesRes.data || []) as Array<{ measured_at: string; weight_kg: number }>).map(r => ({
+      date: r.measured_at,
+      kg: r.weight_kg,
+    }));
+
+    const latestProgressPhotoUrl = (latestPhotoRes.data as { proof_photo_url?: string } | null)?.proof_photo_url || null;
 
     const m = measurementRes.data as Record<string, number | null> | null;
     const firstM = firstMeasurementRes.data as { weight_kg: number | null } | null;
@@ -514,6 +542,8 @@ export function useTodayData() {
       nextDoses,
       orgasmDebt: { daysSinceRelease, slipPoints24h, debtPct, lastRelease },
       keyholderPending,
+      weightSeries,
+      latestProgressPhotoUrl,
       mealsToday,
       aestheticPreset: (t?.aesthetic_preset as string) || 'femboy',
       targets,
@@ -564,6 +594,26 @@ export function useTodayData() {
     setData(d => ({ ...d, diaryPrompts: d.diaryPrompts.map(p => p.id === id ? { ...p, response } : p) }));
   }, []);
 
+  const uploadDirectiveProof = useCallback(async (directiveId: string, file: File) => {
+    if (!user?.id) return;
+    const ext = file.name.split('.').pop() || 'jpg';
+    const path = `${user.id}/body-directives/${directiveId}-${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage
+      .from('verification-photos')
+      .upload(path, file, { contentType: file.type, upsert: false });
+    if (upErr) throw upErr;
+    const { data: pub } = supabase.storage.from('verification-photos').getPublicUrl(path);
+    await supabase
+      .from('body_feminization_directives')
+      .update({
+        proof_photo_url: pub.publicUrl,
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+      })
+      .eq('id', directiveId);
+    await load();
+  }, [user?.id, load]);
+
   const logMeal = useCallback(async (args: { mealType: string; foods: string; protein: number; calories: number }) => {
     if (!user?.id) return;
     await supabase.from('diet_log').insert({
@@ -577,5 +627,5 @@ export function useTodayData() {
     await load();
   }, [user?.id, load]);
 
-  return { data, reload: load, toggleDirective, setArousal, ackQueueMsg, saveDiaryResponse, logMeal };
+  return { data, reload: load, toggleDirective, setArousal, ackQueueMsg, saveDiaryResponse, logMeal, uploadDirectiveProof };
 }

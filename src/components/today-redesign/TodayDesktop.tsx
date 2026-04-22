@@ -4,10 +4,30 @@
  * aesthetic target. All data real-time via useTodayData.
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import '../../styles/today-redesign.css';
 import { useTodayData } from './useTodayData';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
+
+const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
+
+function Sparkline({ values, width = 80, height = 24 }: { values: number[]; width?: number; height?: number }) {
+  if (values.length < 2) return null;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const points = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * width;
+    const y = height - ((v - min) / range) * height;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  const trendDown = values[values.length - 1] < values[0];
+  return (
+    <svg width={width} height={height} style={{ display: 'block', marginTop: 4 }}>
+      <polyline points={points} fill="none" stroke={trendDown ? '#5fc88f' : '#f4c272'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
 const AROUSAL_LABELS = ['locked', 'simmering', 'attentive', 'wanting', 'desperate', 'edging'];
 
@@ -16,10 +36,31 @@ interface TodayDesktopProps {
 }
 
 export function TodayDesktop({ onExit }: TodayDesktopProps) {
-  const { data, toggleDirective, setArousal, ackQueueMsg, saveDiaryResponse, logMeal } = useTodayData();
+  const { data, toggleDirective, setArousal, ackQueueMsg, saveDiaryResponse, logMeal, uploadDirectiveProof } = useTodayData();
   const [mealTab, setMealTab] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('breakfast');
   const [mealForm, setMealForm] = useState({ foods: '', protein: '', calories: '', permission: false, photo: false });
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const pendingUploadDirectiveId = useRef<string | null>(null);
   const { permission, requestPermission } = usePushNotifications();
+
+  const handleProofClick = (directiveId: string) => {
+    pendingUploadDirectiveId.current = directiveId;
+    fileInputRef.current?.click();
+  };
+  const handleProofFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const directiveId = pendingUploadDirectiveId.current;
+    if (!file || !directiveId) return;
+    setUploadingId(directiveId);
+    try {
+      await uploadDirectiveProof(directiveId, file);
+    } finally {
+      setUploadingId(null);
+      pendingUploadDirectiveId.current = null;
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   const today = new Date();
   const dateStr = today.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
@@ -58,6 +99,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
 
   return (
     <div className="td-root">
+      <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleProofFile} />
       <aside className="td-side">
         <div className="td-brand">
           <div className="td-brandmark">b</div>
@@ -142,8 +184,15 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
           <div className="td-stat">
             <div className="td-stat-lbl">Weight</div>
             <div className="td-stat-val">{data.weightKg ? data.weightKg.toFixed(1) : '—'}<span className="td-stat-unit">kg</span></div>
-            {weightDelta != null && weightDelta !== 0 && (
+            {data.weightSeries.length >= 2 ? (
+              <Sparkline values={data.weightSeries.map(w => w.kg)} width={110} height={22} />
+            ) : weightDelta != null && weightDelta !== 0 ? (
               <div className={`td-stat-delta ${weightDelta < 0 ? 'neg' : ''}`}>
+                {weightDelta > 0 ? `−${weightDelta} kg vs start` : `+${Math.abs(weightDelta)} kg vs start`}
+              </div>
+            ) : null}
+            {weightDelta != null && weightDelta !== 0 && data.weightSeries.length >= 2 && (
+              <div className="td-stat-delta" style={{ marginTop: 2 }}>
                 {weightDelta > 0 ? `−${weightDelta} kg vs start` : `+${Math.abs(weightDelta)} kg vs start`}
               </div>
             )}
@@ -243,7 +292,15 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
                   {d.done
                     ? <button className="td-btn" onClick={() => toggleDirective(d.id, true)}>Undo</button>
                     : <button className="td-btn primary" onClick={() => toggleDirective(d.id, false)}>Mark complete</button>}
-                  {d.photoRequired && <button className="td-btn">Upload proof</button>}
+                  {d.photoRequired && (
+                    <button
+                      className="td-btn"
+                      onClick={() => handleProofClick(d.id)}
+                      disabled={uploadingId === d.id}
+                    >
+                      {uploadingId === d.id ? 'Uploading…' : 'Upload proof'}
+                    </button>
+                  )}
                   <button
                     className="td-btn"
                     onClick={() => {
@@ -269,6 +326,13 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
             <div className="td-protocol">
               <div className="td-phase">
                 {phaseDots.map((state, i) => <div key={i} className={`td-phasedot ${state}`} />)}
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 10, marginTop: -8 }}>
+                {PHASE_LABELS.map((label, i) => (
+                  <div key={i} style={{ flex: 1, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.06em', color: i === data.currentPhase ? '#c4b5fd' : i < data.currentPhase ? '#8a8690' : '#3a3540', fontWeight: 600, textAlign: 'center' }}>
+                    {label}
+                  </div>
+                ))}
               </div>
               <div className="td-phaseinfo">
                 <div className="td-num">{data.denialDay}</div>
@@ -408,14 +472,23 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
             </div>
           </div>
           <div className="td-target">
-            <div className="td-targrid">
-              {data.targets.map(cell => (
-                <div key={cell.part} className="td-targcell">
-                  <div className="part">{cell.part}</div>
-                  <div className="cur">{cell.current != null ? cell.current : '—'}<span className="u">{cell.unit}</span></div>
-                  <div className={`gap ${cell.onTrack ? 'ok' : ''}`}>{cell.gap}</div>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+              {data.latestProgressPhotoUrl && (
+                <div style={{ flexShrink: 0, width: 100, height: 130, borderRadius: 6, overflow: 'hidden', border: '1px solid #1a1a20', background: '#0a0a0d' }}>
+                  <img src={data.latestProgressPhotoUrl} alt="latest progress" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
-              ))}
+              )}
+              <div style={{ flex: 1 }}>
+                <div className="td-targrid">
+                  {data.targets.map(cell => (
+                    <div key={cell.part} className="td-targcell">
+                      <div className="part">{cell.part}</div>
+                      <div className="cur">{cell.current != null ? cell.current : '—'}<span className="u">{cell.unit}</span></div>
+                      <div className={`gap ${cell.onTrack ? 'ok' : ''}`}>{cell.gap}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>

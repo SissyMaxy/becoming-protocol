@@ -4,10 +4,12 @@
  * hook; each tab filters/scrolls to its section.
  */
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import '../../styles/today-redesign.css';
 import { useTodayData } from './useTodayData';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
+
+const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
 
 function truncateWords(text: string, maxWords: number): string {
   const words = text.trim().split(/\s+/);
@@ -24,11 +26,30 @@ interface TodayMobileProps {
 }
 
 export function TodayMobile({ onExit }: TodayMobileProps) {
-  const { data, toggleDirective, setArousal, ackQueueMsg, logMeal } = useTodayData();
+  const { data, toggleDirective, setArousal, ackQueueMsg, logMeal, uploadDirectiveProof } = useTodayData();
   const [tab, setTab] = useState<MobileTab>('today');
   const [mealTab, setMealTab] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('breakfast');
   const [expandedDirective, setExpandedDirective] = useState<string | null>(null);
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const pendingUploadDirectiveId = useRef<string | null>(null);
   const { permission, requestPermission } = usePushNotifications();
+
+  const handleProofClick = (directiveId: string) => {
+    pendingUploadDirectiveId.current = directiveId;
+    fileInputRef.current?.click();
+  };
+  const handleProofFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const directiveId = pendingUploadDirectiveId.current;
+    if (!file || !directiveId) return;
+    setUploadingId(directiveId);
+    try { await uploadDirectiveProof(directiveId, file); } finally {
+      setUploadingId(null);
+      pendingUploadDirectiveId.current = null;
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   const today = new Date();
   const weekday = today.toLocaleDateString(undefined, { weekday: 'long' });
@@ -46,6 +67,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
 
   return (
     <div className="tdm-root">
+      <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleProofFile} />
       <div className="tdm-top">
         <div className="tdm-pulse" />
         <div className="tdm-brand">be<em>coming</em></div>
@@ -202,7 +224,11 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
                     {d.done
                       ? <button className="tdm-btn" onClick={() => toggleDirective(d.id, true)}>Undo</button>
                       : <button className="tdm-btn primary" onClick={() => toggleDirective(d.id, false)}>Complete</button>}
-                    {d.photoRequired && <button className="tdm-btn">Proof</button>}
+                    {d.photoRequired && (
+                      <button className="tdm-btn" onClick={() => handleProofClick(d.id)} disabled={uploadingId === d.id}>
+                        {uploadingId === d.id ? '…' : 'Proof'}
+                      </button>
+                    )}
                     <button
                       className="tdm-btn"
                       onClick={() => {
@@ -231,6 +257,13 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           <div className="tdm-card">
             <div className="tdm-proto">
               <div className="tdm-phasebar">{phaseDots.map((s, i) => <div key={i} className={`tdm-phasecell ${s}`} />)}</div>
+              <div style={{ display: 'flex', gap: 4, marginTop: -6, marginBottom: 10 }}>
+                {PHASE_LABELS.map((label, i) => (
+                  <div key={i} style={{ flex: 1, fontSize: 8.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: i === data.currentPhase ? '#c4b5fd' : i < data.currentPhase ? '#8a8690' : '#3a3540', fontWeight: 600, textAlign: 'center' }}>
+                    {label}
+                  </div>
+                ))}
+              </div>
               <div className="tdm-protoh">
                 <div className="tdm-protonum">{data.denialDay}</div>
                 <div className="tdm-protosub">of 90 days</div>
@@ -361,6 +394,16 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             <span className="chip">{data.aestheticPreset}{weightDelta ? ` · −${weightDelta}kg` : ''}</span>
           </div>
           <div className="tdm-card">
+            {data.latestProgressPhotoUrl && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderBottom: '1px solid #15151b' }}>
+                <div style={{ flexShrink: 0, width: 54, height: 70, borderRadius: 6, overflow: 'hidden', border: '1px solid #1a1a20' }}>
+                  <img src={data.latestProgressPhotoUrl} alt="latest progress" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div style={{ fontSize: 11, color: '#8a8690', lineHeight: 1.4 }}>
+                  Latest proof photo. Every week the comparison tightens.
+                </div>
+              </div>
+            )}
             <div className="tdm-tgrid">
               {data.targets.map(cell => (
                 <div key={cell.part} className="tdm-tcell">
