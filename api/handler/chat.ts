@@ -1477,6 +1477,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       sessionState,
     });
 
+    console.log(`[Handler][prompt] systemPromptLen=${systemPrompt.length} stateIncluded=${systemPrompt.includes('## Current State') ? 'YES' : 'NO'} stateArousalLine=${(systemPrompt.match(/Arousal: .{0,40}/) || [''])[0]}`);
+
     // 4b. P12.10: Debate engine — append tactical suffix if resistance detected
     let finalSystemPrompt = systemPrompt;
     try {
@@ -5442,7 +5444,9 @@ async function buildStateContext(userId: string): Promise<string> {
     else if (data.gina_asleep) lines.push('Gina asleep');
     if (data.tasks_completed_today != null) lines.push(`Tasks today: ${data.tasks_completed_today}`);
   }
-  return lines.length > 1 ? lines.join('\n') : '';
+  const out = lines.length > 1 ? lines.join('\n') : '';
+  console.log(`[Handler][buildStateContext] user=${userId} dataRow=${data ? 'yes' : 'NULL'} arousal=${data?.current_arousal ?? 'n/a'} denial=${data?.denial_day ?? 'n/a'} last_release=${data?.last_release ?? 'n/a'} tasks=${data?.tasks_completed_today ?? 'n/a'} outLen=${out.length}`);
+  return out;
 }
 
 async function buildWhoopContext(userId: string): Promise<string> {
