@@ -79,6 +79,13 @@ export interface OrgasmDebtState {
   lastRelease: string | null;
 }
 
+export interface HeatmapDay {
+  date: string;
+  count: number;
+  intensity: 0 | 1 | 2 | 3 | 4;
+  isToday: boolean;
+}
+
 export interface PriorityBanner {
   kind: 'overdue_dose' | 'hrt_stuck' | 'escrow_deadline' | 'keyholder_pending' | 'compliance_low' | 'enable_push';
   severity: 'critical' | 'high' | 'info';
@@ -113,6 +120,7 @@ export interface TodayData {
   weightSeries: { date: string; kg: number }[];
   latestProgressPhotoUrl: string | null;
   banners: PriorityBanner[];
+  heatmap: HeatmapDay[];
   loading: boolean;
 }
 
@@ -226,6 +234,7 @@ export function useTodayData() {
     weightSeries: [],
     latestProgressPhotoUrl: null,
     banners: [],
+    heatmap: [],
     loading: true,
   });
 
@@ -255,6 +264,7 @@ export function useTodayData() {
       weightSeriesRes,
       latestPhotoRes,
       heldEscrowRes,
+      taskCompletionsRes,
     ] = await Promise.all([
       supabase
         .from('user_state')
@@ -358,6 +368,11 @@ export function useTodayData() {
         .order('deadline_at', { ascending: true })
         .limit(1)
         .maybeSingle(),
+      supabase
+        .from('task_completions')
+        .select('completed_at')
+        .eq('user_id', user.id)
+        .gte('completed_at', new Date(Date.now() - 30 * 86400000).toISOString()),
     ]);
 
     // Compliance: % of directives in the last 7d that were completed on or
@@ -443,6 +458,21 @@ export function useTodayData() {
     }));
 
     const latestProgressPhotoUrl = (latestPhotoRes.data as { proof_photo_url?: string } | null)?.proof_photo_url || null;
+
+    // 30-day heatmap — group task_completions by YYYY-MM-DD.
+    const dayCounts: Record<string, number> = {};
+    for (const c of ((taskCompletionsRes.data || []) as Array<{ completed_at: string }>)) {
+      const d = c.completed_at.slice(0, 10);
+      dayCounts[d] = (dayCounts[d] || 0) + 1;
+    }
+    const heatmap: HeatmapDay[] = [];
+    const todayIso = new Date().toISOString().slice(0, 10);
+    for (let i = 29; i >= 0; i--) {
+      const dateIso = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+      const count = dayCounts[dateIso] || 0;
+      const intensity: HeatmapDay['intensity'] = count === 0 ? 0 : count === 1 ? 1 : count <= 3 ? 2 : count <= 6 ? 3 : 4;
+      heatmap.push({ date: dateIso, count, intensity, isToday: dateIso === todayIso });
+    }
 
     // Build priority banners — most urgent first, cap at 3
     const banners: PriorityBanner[] = [];
@@ -617,6 +647,7 @@ export function useTodayData() {
       weightSeries,
       latestProgressPhotoUrl,
       banners: banners.slice(0, 3),
+      heatmap,
       mealsToday,
       aestheticPreset: (t?.aesthetic_preset as string) || 'femboy',
       targets,

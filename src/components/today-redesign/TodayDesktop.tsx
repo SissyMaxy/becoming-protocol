@@ -4,12 +4,33 @@
  * aesthetic target. All data real-time via useTodayData.
  */
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import '../../styles/today-redesign.css';
 import { useTodayData } from './useTodayData';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 
 const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
+
+const HEATMAP_COLORS = ['#1a1a20', '#2d1a4d', '#4d2a75', '#6a2a9a', '#7c3aed'];
+
+function Heatmap({ days, cellSize = 12, gap = 3 }: { days: Array<{ date: string; count: number; intensity: number; isToday: boolean }>; cellSize?: number; gap?: number }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: `repeat(30, ${cellSize}px)`, gap }}>
+      {days.map(d => (
+        <div
+          key={d.date}
+          title={`${d.date}: ${d.count} completion${d.count === 1 ? '' : 's'}`}
+          style={{
+            width: cellSize, height: cellSize, borderRadius: 2,
+            background: HEATMAP_COLORS[d.intensity],
+            outline: d.isToday ? '1px solid #c4b5fd' : undefined,
+            outlineOffset: d.isToday ? 1 : undefined,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
 
 function Sparkline({ values, width = 80, height = 24 }: { values: number[]; width?: number; height?: number }) {
   if (values.length < 2) return null;
@@ -57,6 +78,19 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
     () => directiveFilter === 'all' ? data.directives : data.directives.filter(d => d.kind === directiveFilter),
     [data.directives, directiveFilter],
   );
+
+  const [phaseToast, setPhaseToast] = useState<{ from: number; to: number } | null>(null);
+  useEffect(() => {
+    if (data.loading) return;
+    const key = 'td_last_phase_seen';
+    const lastSeen = Number(localStorage.getItem(key) ?? data.currentPhase);
+    if (data.currentPhase > lastSeen) {
+      setPhaseToast({ from: lastSeen, to: data.currentPhase });
+      localStorage.setItem(key, String(data.currentPhase));
+    } else if (localStorage.getItem(key) === null) {
+      localStorage.setItem(key, String(data.currentPhase));
+    }
+  }, [data.currentPhase, data.loading]);
 
   const sendCompose = () => {
     const text = composeText.trim();
@@ -415,6 +449,12 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
                 <div className="td-proto-row"><span className="lbl">Longest streak</span><span className="val">{data.longestStreak}</span></div>
                 <div className="td-proto-row"><span className="lbl">Open directives</span><span className={`val ${openDirectives > 0 ? 'warn' : 'ok'}`}>{openDirectives}</span></div>
               </div>
+              {data.heatmap.length > 0 && (
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6a656e', fontWeight: 600, marginBottom: 6 }}>Last 30 days</div>
+                  <Heatmap days={data.heatmap} cellSize={10} gap={2} />
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -563,6 +603,26 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         <div className="td-foot">becoming · phase {data.currentPhase} · day {data.denialDay} of 90</div>
       </main>
 
+      {phaseToast && (
+        <div
+          style={{
+            position: 'fixed', top: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 110,
+            background: 'linear-gradient(92deg, #2d1a4d 0%, #1a0f2e 100%)', border: '1px solid #7c3aed',
+            borderRadius: 10, padding: '12px 18px', color: '#e8dcff', fontSize: 13, fontWeight: 500,
+            boxShadow: '0 8px 24px rgba(124, 58, 237, 0.3)', display: 'flex', alignItems: 'center', gap: 12, maxWidth: 480,
+          }}
+        >
+          <span style={{ fontSize: 16 }}>↑</span>
+          <div>
+            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#c4b5fd', fontWeight: 700 }}>Phase advanced</div>
+            <div>{PHASE_LABELS[phaseToast.from] || `Phase ${phaseToast.from}`} → <strong>{PHASE_LABELS[phaseToast.to] || `Phase ${phaseToast.to}`}</strong>. The protocol just got harder.</div>
+          </div>
+          <button
+            onClick={() => setPhaseToast(null)}
+            style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#c4b5fd', cursor: 'pointer', fontSize: 16, fontFamily: 'inherit' }}
+          >×</button>
+        </div>
+      )}
       <button
         onClick={() => setComposeOpen(o => !o)}
         title="Talk to the Handler"

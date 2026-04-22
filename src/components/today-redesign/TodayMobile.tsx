@@ -4,12 +4,13 @@
  * hook; each tab filters/scrolls to its section.
  */
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import '../../styles/today-redesign.css';
 import { useTodayData } from './useTodayData';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 
 const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
+const HEATMAP_COLORS = ['#1a1a20', '#2d1a4d', '#4d2a75', '#6a2a9a', '#7c3aed'];
 
 function truncateWords(text: string, maxWords: number): string {
   const words = text.trim().split(/\s+/);
@@ -48,6 +49,19 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
     () => directiveFilter === 'all' ? data.directives : data.directives.filter(d => d.kind === directiveFilter),
     [data.directives, directiveFilter],
   );
+
+  const [phaseToast, setPhaseToast] = useState<{ from: number; to: number } | null>(null);
+  useEffect(() => {
+    if (data.loading) return;
+    const key = 'td_last_phase_seen';
+    const lastSeen = Number(localStorage.getItem(key) ?? data.currentPhase);
+    if (data.currentPhase > lastSeen) {
+      setPhaseToast({ from: lastSeen, to: data.currentPhase });
+      localStorage.setItem(key, String(data.currentPhase));
+    } else if (localStorage.getItem(key) === null) {
+      localStorage.setItem(key, String(data.currentPhase));
+    }
+  }, [data.currentPhase, data.loading]);
 
   const sendCompose = () => {
     const text = composeText.trim();
@@ -340,6 +354,20 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
               <div className="tdm-prrow"><span className="k">Current streak</span><span className="v ok">{data.denialDay} days</span></div>
               <div className="tdm-prrow"><span className="k">Longest</span><span className="v">{data.longestStreak} days</span></div>
               <div className="tdm-prrow"><span className="k">Open directives</span><span className={`v ${openDirectives > 0 ? 'warn' : 'ok'}`}>{openDirectives}</span></div>
+              {data.heatmap.length > 0 && (
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6a656e', fontWeight: 700, marginBottom: 6 }}>Last 30 days</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(30, 1fr)', gap: 2 }}>
+                    {data.heatmap.map(d => (
+                      <div
+                        key={d.date}
+                        title={`${d.date}: ${d.count}`}
+                        style={{ width: '100%', aspectRatio: '1', borderRadius: 2, background: HEATMAP_COLORS[d.intensity], outline: d.isToday ? '1px solid #c4b5fd' : undefined }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -520,6 +548,23 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
         </button>
       </div>
 
+      {phaseToast && (
+        <div
+          style={{
+            position: 'fixed', top: 'calc(16px + env(safe-area-inset-top))', left: 12, right: 12, zIndex: 110,
+            background: 'linear-gradient(92deg, #2d1a4d, #1a0f2e)', border: '1px solid #7c3aed',
+            borderRadius: 10, padding: '12px 14px', color: '#e8dcff', fontSize: 13,
+            display: 'flex', alignItems: 'center', gap: 10,
+          }}
+        >
+          <span style={{ fontSize: 16 }}>↑</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#c4b5fd', fontWeight: 700 }}>Phase advanced</div>
+            <div style={{ fontSize: 12 }}>{PHASE_LABELS[phaseToast.from] || phaseToast.from} → <strong>{PHASE_LABELS[phaseToast.to] || phaseToast.to}</strong></div>
+          </div>
+          <button onClick={() => setPhaseToast(null)} style={{ background: 'none', border: 'none', color: '#c4b5fd', fontSize: 18, cursor: 'pointer' }}>×</button>
+        </div>
+      )}
       {!composeOpen && (
         <button
           onClick={() => setComposeOpen(true)}
