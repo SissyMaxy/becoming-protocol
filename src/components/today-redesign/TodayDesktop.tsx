@@ -126,8 +126,13 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
           </div>
           <div className="td-stat">
             <div className="td-stat-lbl">Orgasm debt</div>
-            <div className="td-stat-val">{data.denialDay > 0 ? Math.min(100, data.denialDay * 10) : 0}<span className="td-stat-unit">%</span></div>
-            <div className="td-stat-bar"><div className="td-stat-fill" style={{ width: `${Math.min(100, data.denialDay * 10)}%`, background: '#c4272d' }} /></div>
+            <div className="td-stat-val">{data.orgasmDebt.debtPct}<span className="td-stat-unit">%</span></div>
+            <div className="td-stat-bar"><div className="td-stat-fill" style={{ width: `${data.orgasmDebt.debtPct}%`, background: '#c4272d' }} /></div>
+            {data.orgasmDebt.daysSinceRelease != null && (
+              <div className="td-stat-delta" style={{ color: '#6a656e' }}>
+                {data.orgasmDebt.daysSinceRelease}d since release{data.orgasmDebt.slipPoints24h > 0 ? ` · ${data.orgasmDebt.slipPoints24h} slip pts` : ''}
+              </div>
+            )}
           </div>
           <div className="td-stat">
             <div className="td-stat-lbl">Protein today</div>
@@ -145,6 +150,72 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
           </div>
         </div>
 
+        {/* HRT funnel + dose countdown + keyholder — top priority row */}
+        {(data.hrt || data.nextDoses.length > 0 || data.keyholderPending > 0) && (
+          <div className="td-grid even" style={{ marginBottom: 16 }}>
+            {data.hrt && (
+              <div className="td-card" style={{ gridColumn: data.nextDoses.length === 0 && data.keyholderPending === 0 ? 'span 2' : 'span 1' }}>
+                <div className="td-cardh">
+                  <svg className="td-iconsm td-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2v20M2 12h20" /></svg>
+                  <div className="td-title">HRT funnel</div>
+                  <div className="td-chip" style={{ color: data.hrt.step === 'adherent' ? '#5fc88f' : data.hrt.step === 'uncommitted' ? '#f47272' : '#c4b5fd' }}>
+                    {data.hrt.stepIndex + 1} / {data.hrt.totalSteps}
+                  </div>
+                  {data.hrt.daysStuck >= 7 && <div className="td-meta" style={{ color: '#f4c272' }}>{data.hrt.daysStuck}d stuck</div>}
+                </div>
+                <div style={{ padding: '14px 16px' }}>
+                  <div style={{ fontSize: 20, fontWeight: 650, color: '#fff', letterSpacing: '-0.02em', marginBottom: 6 }}>{data.hrt.stepLabel}</div>
+                  {data.hrt.provider && (
+                    <div style={{ fontSize: 12, color: '#8a8690' }}>Provider: <span style={{ color: '#c4b5fd' }}>{data.hrt.provider}</span></div>
+                  )}
+                  {data.hrt.appointmentAt && (
+                    <div style={{ fontSize: 12, color: '#8a8690', marginTop: 4 }}>Appointment: <span style={{ color: '#c4b5fd' }}>{new Date(data.hrt.appointmentAt).toLocaleDateString()}</span></div>
+                  )}
+                  <div style={{ display: 'flex', gap: 3, marginTop: 12 }}>
+                    {Array.from({ length: data.hrt.totalSteps }).map((_, i) => (
+                      <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= data.hrt!.stepIndex ? '#7c3aed' : '#1a1a20' }} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+            {(data.nextDoses.length > 0 || data.keyholderPending > 0) && (
+              <div className="td-card">
+                <div className="td-cardh">
+                  <svg className="td-iconsm td-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>
+                  <div className="td-title">Next up</div>
+                </div>
+                <div style={{ padding: '10px 16px' }}>
+                  {data.nextDoses.slice(0, 2).map(dose => {
+                    const rounded = Math.abs(Math.round(dose.hoursUntil));
+                    const humanTime = rounded >= 48 ? `${Math.round(rounded / 24)}d` : `${rounded}h`;
+                    return (
+                      <div key={dose.regimenId} style={{ display: 'flex', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #15151b' }}>
+                        <div>
+                          <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6a656e', fontWeight: 600 }}>{dose.medicationName}</div>
+                          <div style={{ fontSize: 13, color: dose.isOverdue ? '#f47272' : '#e8e6e3', fontWeight: 500 }}>{dose.isOverdue ? `Overdue by ${humanTime}` : `Due in ${humanTime}`}</div>
+                        </div>
+                        <span className="td-chip" style={{ marginLeft: 'auto', color: dose.isOverdue ? '#f47272' : '#c4b5fd', background: dose.isOverdue ? '#2a0f0f' : '#1a1226' }}>
+                          {dose.isWeekly ? 'weekly' : 'daily'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  {data.keyholderPending > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', padding: '8px 0' }}>
+                      <div>
+                        <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6a656e', fontWeight: 600 }}>Keyholder</div>
+                        <div style={{ fontSize: 13, color: '#e8e6e3', fontWeight: 500 }}>{data.keyholderPending} pending {data.keyholderPending === 1 ? 'request' : 'requests'}</div>
+                      </div>
+                      <span className="td-chip" style={{ marginLeft: 'auto', color: '#f4c272', background: '#2a1f0f' }}>awaiting</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="td-grid">
           <div className="td-card">
             <div className="td-cardh">
@@ -154,7 +225,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
               <div className="td-meta">{data.directives.length ? `Issued ${data.directives[0] ? '' : ''}` : ''}</div>
             </div>
             {data.directives.length === 0 ? (
-              <div style={{ padding: 16, color: '#6a656e', fontSize: 12.5 }}>No active directives. The Handler assigns these as part of the protocol.</div>
+              <div style={{ padding: 16, color: '#6a656e', fontSize: 12.5 }}>I haven't assigned anything yet. Sit with that.</div>
             ) : data.directives.map(d => (
               <div className="td-dir" key={d.id}>
                 <div className="td-dirhead">
@@ -226,7 +297,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
             </div>
             <div className="td-queue">
               {data.queue.length === 0 ? (
-                <div style={{ padding: 16, color: '#6a656e', fontSize: 12.5 }}>Queue empty. Handler will reach out when the moment is right.</div>
+                <div style={{ padding: 16, color: '#6a656e', fontSize: 12.5 }}>Silence on purpose. I reach when it moves the protocol.</div>
               ) : data.queue.map(m => (
                 <button key={m.id} className={`td-msg ${m.priority ? 'priority' : ''}`} onClick={() => ackQueueMsg(m.id)} style={{ textAlign: 'left', background: 'none', border: 'none', width: '100%', cursor: 'pointer', display: 'block' }}>
                   <div className="td-msghead">

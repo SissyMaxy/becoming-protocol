@@ -53,6 +53,32 @@ export interface DiaryPromptState {
   response: string;
 }
 
+export interface HrtFunnelState {
+  step: string;
+  stepIndex: number;
+  totalSteps: number;
+  provider: string | null;
+  daysStuck: number;
+  appointmentAt: string | null;
+  stepLabel: string;
+}
+
+export interface NextDoseState {
+  regimenId: string;
+  medicationName: string;
+  dueAt: string;
+  hoursUntil: number;
+  isOverdue: boolean;
+  isWeekly: boolean;
+}
+
+export interface OrgasmDebtState {
+  daysSinceRelease: number | null;
+  slipPoints24h: number;
+  debtPct: number;
+  lastRelease: string | null;
+}
+
 export interface TodayData {
   denialDay: number;
   currentPhase: number;
@@ -72,10 +98,31 @@ export interface TodayData {
   aestheticPreset: string;
   targets: TodayTargetCell[];
   diaryPrompts: DiaryPromptState[];
+  hrt: HrtFunnelState | null;
+  nextDoses: NextDoseState[];
+  orgasmDebt: OrgasmDebtState;
+  keyholderPending: number;
   loading: boolean;
 }
 
 const PROTEIN_TARGET_G = 150;
+
+const HRT_STEP_ORDER = ['uncommitted', 'committed', 'researching', 'provider_chosen', 'appointment_booked', 'intake_submitted', 'appointment_attended', 'prescription_obtained', 'pharmacy_filled', 'first_dose_taken', 'week_one_complete', 'month_one_complete', 'adherent'];
+const HRT_STEP_LABELS: Record<string, string> = {
+  uncommitted: 'Uncommitted',
+  committed: 'Committed',
+  researching: 'Researching providers',
+  provider_chosen: 'Provider chosen',
+  appointment_booked: 'Appointment booked',
+  intake_submitted: 'Intake submitted',
+  appointment_attended: 'Attended',
+  prescription_obtained: 'Prescription obtained',
+  pharmacy_filled: 'Pharmacy filled',
+  first_dose_taken: 'First dose taken',
+  week_one_complete: 'Week 1 complete',
+  month_one_complete: 'Month 1 complete',
+  adherent: 'Adherent',
+};
 
 function timeAgo(iso: string): string {
   const diffMin = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
@@ -161,6 +208,10 @@ export function useTodayData() {
     aestheticPreset: 'femboy',
     targets: [],
     diaryPrompts: [],
+    hrt: null,
+    nextDoses: [],
+    orgasmDebt: { daysSinceRelease: null, slipPoints24h: 0, debtPct: 0, lastRelease: null },
+    keyholderPending: 0,
     loading: true,
   });
 
@@ -183,10 +234,14 @@ export function useTodayData() {
       targetsRes,
       diaryRes,
       complianceWindowRes,
+      hrtRes,
+      regimensRes,
+      doseLogRes,
+      keyholderRes,
     ] = await Promise.all([
       supabase
         .from('user_state')
-        .select('denial_day, current_phase, chastity_streak_days, chastity_locked, current_arousal, streak_days')
+        .select('denial_day, current_phase, chastity_streak_days, chastity_locked, current_arousal, streak_days, last_release, slip_points_rolling_24h')
         .eq('user_id', user.id)
         .maybeSingle(),
       supabase
@@ -241,6 +296,28 @@ export function useTodayData() {
         .select('status, deadline_at, completed_at')
         .eq('user_id', user.id)
         .gte('created_at', sevenDaysAgo),
+      supabase
+        .from('hrt_funnel')
+        .select('current_step, chosen_provider_slug, days_stuck_on_step, appointment_at')
+        .eq('user_id', user.id)
+        .maybeSingle(),
+      supabase
+        .from('medication_regimen')
+        .select('id, medication_name, medication_category, dose_amount, dose_times_per_day, started_at')
+        .eq('user_id', user.id)
+        .eq('active', true),
+      supabase
+        .from('dose_log')
+        .select('regimen_id, taken_at, skipped')
+        .eq('user_id', user.id)
+        .not('taken_at', 'is', null)
+        .order('taken_at', { ascending: false })
+        .limit(20),
+      supabase
+        .from('keyholder_decisions')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('status', 'pending'),
     ]);
 
     // Compliance: % of directives in the last 7d that were completed on or
@@ -263,6 +340,63 @@ export function useTodayData() {
     const compliancePct = resolved === 0 ? 100 : Math.round((onTime / resolved) * 100);
 
     const state = stateRes.data as Record<string, unknown> | null;
+
+    // HRT funnel
+    const hrtRow = hrtRes.data as Record<string, unknown> | null;
+    let hrt: HrtFunnelState | null = null;
+    if (hrtRow?.current_step) {
+      const stepKey = hrtRow.current_step as string;
+      const idx = HRT_STEP_ORDER.indexOf(stepKey);
+      hrt = {
+        step: stepKey,
+        stepIndex: idx >= 0 ? idx : 0,
+        totalSteps: HRT_STEP_ORDER.length,
+        provider: (hrtRow.chosen_provider_slug as string) || null,
+        daysStuck: (hrtRow.days_stuck_on_step as number) || 0,
+        appointmentAt: (hrtRow.appointment_at as string) || null,
+        stepLabel: HRT_STEP_LABELS[stepKey] || stepKey,
+      };
+    }
+
+    // Next doses — for each active regimen find the latest taken dose + compute
+    // next scheduled based on weekly (glp1) or daily cadence.
+    const regimens = (regimensRes.data || []) as Array<Record<string, unknown>>;
+    const doseLog = (doseLogRes.data || []) as Array<{ regimen_id: string; taken_at: string; skipped: boolean }>;
+    const nowMs = Date.now();
+    const nextDoses: NextDoseState[] = [];
+    for (const r of regimens) {
+      const regimenId = r.id as string;
+      const category = (r.medication_category as string) || 'other';
+      const isWeekly = category === 'glp1' || /weekly/i.test((r.dose_amount as string) || '');
+      const intervalMs = isWeekly ? 7 * 86400000 : 86400000;
+      const lastTaken = doseLog.find(d => d.regimen_id === regimenId);
+      const anchorMs = lastTaken?.taken_at ? new Date(lastTaken.taken_at).getTime() : new Date(r.started_at as string).getTime();
+      const dueMs = anchorMs + intervalMs;
+      const hoursUntil = (dueMs - nowMs) / 3600000;
+      nextDoses.push({
+        regimenId,
+        medicationName: (r.medication_name as string) || 'medication',
+        dueAt: new Date(dueMs).toISOString(),
+        hoursUntil,
+        isOverdue: hoursUntil < 0,
+        isWeekly,
+      });
+    }
+    nextDoses.sort((a, b) => a.hoursUntil - b.hoursUntil);
+
+    // Orgasm debt — real calculation. Debt grows with days since release,
+    // capped at 100% after 14 days. Slip points add to the debt percent.
+    const lastRelease = (state?.last_release as string) || null;
+    const slipPoints24h = (state?.slip_points_rolling_24h as number) || 0;
+    const daysSinceRelease = lastRelease
+      ? Math.floor((nowMs - new Date(lastRelease).getTime()) / 86400000)
+      : null;
+    const releaseDebtBase = daysSinceRelease != null ? Math.min(100, (daysSinceRelease / 14) * 100) : 0;
+    const debtPct = Math.min(100, Math.round(releaseDebtBase + slipPoints24h * 3));
+
+    // Keyholder pending count
+    const keyholderPending = (keyholderRes.count ?? 0);
+
     const m = measurementRes.data as Record<string, number | null> | null;
     const firstM = firstMeasurementRes.data as { weight_kg: number | null } | null;
     const t = targetsRes.data as Record<string, unknown> | null;
@@ -376,6 +510,10 @@ export function useTodayData() {
       weightStart,
       compliancePct,
       complianceSampleSize: resolved,
+      hrt,
+      nextDoses,
+      orgasmDebt: { daysSinceRelease, slipPoints24h, debtPct, lastRelease },
+      keyholderPending,
       mealsToday,
       aestheticPreset: (t?.aesthetic_preset as string) || 'femboy',
       targets,

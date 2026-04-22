@@ -83,8 +83,8 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           </div>
           <div className="tdm-stat">
             <div className="lbl">Orgasm debt</div>
-            <div className="val">{Math.min(100, data.denialDay * 10)}<span className="unit">%</span></div>
-            <div className="bar"><div className="fill" style={{ width: `${Math.min(100, data.denialDay * 10)}%`, background: '#c4272d' }} /></div>
+            <div className="val">{data.orgasmDebt.debtPct}<span className="unit">%</span></div>
+            <div className="bar"><div className="fill" style={{ width: `${data.orgasmDebt.debtPct}%`, background: '#c4272d' }} /></div>
           </div>
           <div className="tdm-stat">
             <div className="lbl">Protein</div>
@@ -109,6 +109,66 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
         </div>
       )}
 
+      {(tab === 'today' || tab === 'proto') && data.hrt && (
+        <div className="tdm-sec">
+          <div className="tdm-sech">
+            <span className="t">HRT funnel</span>
+            <span className="chip" style={{ color: data.hrt.step === 'uncommitted' ? '#f47272' : '#c4b5fd', background: data.hrt.step === 'uncommitted' ? '#2a0f0f' : '#1a1226' }}>
+              {data.hrt.stepIndex + 1} / {data.hrt.totalSteps}
+            </span>
+            {data.hrt.daysStuck >= 7 && <span className="chip" style={{ color: '#f4c272', background: '#2a1f0f' }}>{data.hrt.daysStuck}d stuck</span>}
+          </div>
+          <div className="tdm-card" style={{ padding: '14px 16px' }}>
+            <div style={{ fontSize: 20, fontWeight: 650, color: '#fff', letterSpacing: '-0.02em', marginBottom: 6 }}>{data.hrt.stepLabel}</div>
+            {data.hrt.provider && (
+              <div style={{ fontSize: 12, color: '#8a8690' }}>Provider: <span style={{ color: '#c4b5fd' }}>{data.hrt.provider}</span></div>
+            )}
+            {data.hrt.appointmentAt && (
+              <div style={{ fontSize: 12, color: '#8a8690', marginTop: 4 }}>Appointment: <span style={{ color: '#c4b5fd' }}>{new Date(data.hrt.appointmentAt).toLocaleDateString()}</span></div>
+            )}
+            <div style={{ display: 'flex', gap: 2, marginTop: 12 }}>
+              {Array.from({ length: data.hrt.totalSteps }).map((_, i) => (
+                <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= data.hrt!.stepIndex ? '#7c3aed' : '#1a1a20' }} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(tab === 'today') && (data.nextDoses.length > 0 || data.keyholderPending > 0) && (
+        <div className="tdm-sec">
+          <div className="tdm-sech">
+            <span className="t">Next up</span>
+          </div>
+          <div className="tdm-card">
+            {data.nextDoses.slice(0, 2).map(dose => {
+              const rounded = Math.abs(Math.round(dose.hoursUntil));
+              const humanTime = rounded >= 48 ? `${Math.round(rounded / 24)}d` : `${rounded}h`;
+              return (
+                <div key={dose.regimenId} style={{ display: 'flex', alignItems: 'center', padding: '12px 14px', borderBottom: '1px solid #15151b' }}>
+                  <div>
+                    <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6a656e', fontWeight: 600 }}>{dose.medicationName}</div>
+                    <div style={{ fontSize: 13, color: dose.isOverdue ? '#f47272' : '#e8e6e3', fontWeight: 500 }}>{dose.isOverdue ? `Overdue by ${humanTime}` : `Due in ${humanTime}`}</div>
+                  </div>
+                  <span className="chip" style={{ marginLeft: 'auto', fontSize: 9.5, color: dose.isOverdue ? '#f47272' : '#c4b5fd', background: dose.isOverdue ? '#2a0f0f' : '#1a1226', padding: '2px 7px', borderRadius: 10, fontWeight: 700, letterSpacing: '0.02em', textTransform: 'uppercase' }}>
+                    {dose.isWeekly ? 'weekly' : 'daily'}
+                  </span>
+                </div>
+              );
+            })}
+            {data.keyholderPending > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', padding: '12px 14px' }}>
+                <div>
+                  <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6a656e', fontWeight: 600 }}>Keyholder</div>
+                  <div style={{ fontSize: 13, color: '#e8e6e3', fontWeight: 500 }}>{data.keyholderPending} pending {data.keyholderPending === 1 ? 'request' : 'requests'}</div>
+                </div>
+                <span className="chip" style={{ marginLeft: 'auto', fontSize: 9.5, color: '#f4c272', background: '#2a1f0f', padding: '2px 7px', borderRadius: 10, fontWeight: 700, letterSpacing: '0.02em', textTransform: 'uppercase' }}>awaiting</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {(tab === 'today' || tab === 'body') && (
         <div className="tdm-sec">
           <div className="tdm-sech">
@@ -117,7 +177,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           </div>
           <div className="tdm-card">
             {data.directives.length === 0 ? (
-              <div style={{ padding: 14, color: '#6a656e', fontSize: 12.5 }}>No directives queued.</div>
+              <div style={{ padding: 14, color: '#6a656e', fontSize: 12.5 }}>I haven't assigned anything yet. Sit with that.</div>
             ) : data.directives.slice(0, 5).map(d => {
               const expanded = expandedDirective === d.id;
               const bodyText = expanded || d.body.split(/\s+/).length <= 14 ? d.body : truncateWords(d.body, 14);
@@ -196,7 +256,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           </div>
           <div className="tdm-card">
             {data.queue.length === 0 ? (
-              <div style={{ padding: 14, color: '#6a656e', fontSize: 12.5 }}>Queue empty.</div>
+              <div style={{ padding: 14, color: '#6a656e', fontSize: 12.5 }}>Silence on purpose. I reach when it moves the protocol.</div>
             ) : data.queue.map(m => (
               <button key={m.id} className={`tdm-msg ${m.priority ? 'priority' : ''}`} onClick={() => ackQueueMsg(m.id)} style={{ textAlign: 'left', background: 'none', border: 'none', width: '100%', display: 'block', cursor: 'pointer' }}>
                 <div className="tdm-msghead">
