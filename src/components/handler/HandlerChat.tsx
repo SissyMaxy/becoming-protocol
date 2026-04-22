@@ -322,7 +322,7 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-[#0a0a0a]">
         <div className="flex items-center gap-3">
-          <span className="font-semibold text-gray-200">
+          <span className="hidden md:inline font-semibold text-gray-200">
             Handler
           </span>
           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${modeConfig.bg} ${modeConfig.text}`}>
@@ -338,7 +338,7 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
           {messages.length > 0 && (
             <button
               onClick={startNewConversation}
-              className="text-xs px-2 py-1 rounded-lg hover:bg-gray-800 text-gray-400"
+              className="hidden md:inline-flex text-xs px-2 py-1 rounded-lg hover:bg-gray-800 text-gray-400"
             >
               New
             </button>
@@ -389,9 +389,9 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
         </div>
       </div>
 
-      {/* Notification permission prompt — only shows when user hasn't decided */}
+      {/* Notification permission prompt — desktop only; Today has its own banner stack */}
       {notifPermission === 'default' && (
-        <div className="bg-purple-900/20 border border-purple-500/30 rounded-xl p-3 m-2 flex items-center justify-between">
+        <div className="hidden md:flex bg-purple-900/20 border border-purple-500/30 rounded-xl p-3 m-2 items-center justify-between">
           <span className="text-sm text-purple-300">
             Enable notifications so the Handler can reach you anytime
           </span>
@@ -404,8 +404,10 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
         </div>
       )}
 
-      {/* Identity Fading Indicator */}
-      <IdentityFadingBar userId={authUser?.id} />
+      {/* Identity Fading Indicator — desktop only (Today has pronoun morph) */}
+      <div className="hidden md:block">
+        <IdentityFadingBar userId={authUser?.id} />
+      </div>
 
       {/* Mobile: stacked panels are hidden — full content lives on /#/today.
           Desktop: panels show below the identity bar and above messages. */}

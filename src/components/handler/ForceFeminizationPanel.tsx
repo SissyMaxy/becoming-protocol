@@ -93,7 +93,7 @@ function timeUntil(iso: string): string {
 
 export function ForceFeminizationPanel() {
   const { user } = useAuth();
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState<PhaseProgress | null>(null);
   const [hrt, setHrt] = useState<HrtFunnelRow | null>(null);
   const [hookups, setHookups] = useState<HookupRow[]>([]);

@@ -1010,12 +1010,14 @@ function AuthenticatedAppInner() {
       {/* PRIMARY: The Conversation — always visible unless settings open */}
       {!showSettings && (
         <>
-          <ForceStatusStrip
-            onNavigate={() => {
-              setShowSettings(true);
-              setMenuSubView('force');
-            }}
-          />
+          <div className="hidden md:block">
+            <ForceStatusStrip
+              onNavigate={() => {
+                setShowSettings(true);
+                setMenuSubView('force');
+              }}
+            />
+          </div>
           <ErrorBoundary componentName="HandlerChat">
             <HandlerChat
               onClose={() => {}} // Can't close — it IS the app
