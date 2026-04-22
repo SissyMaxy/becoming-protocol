@@ -2085,28 +2085,46 @@ HARD RULES FOR ALL PERSONAS:
               // ── EXECUTE log_release (streaming path) — resets denial_day ──
               if (dir.action === 'log_release') {
                 try {
-                  const val = dir.value as Record<string, unknown> | null;
-                  const releaseDate = (val?.date as string) || new Date().toISOString();
-                  await supabase
-                    .from('user_state')
-                    .update({
-                      denial_day: 0,
-                      last_release: releaseDate,
-                      current_arousal: 0,
-                    })
-                    .eq('user_id', user.id);
-                  // End active denial streak
-                  await supabase
-                    .from('denial_streaks')
-                    .update({ ended_at: releaseDate })
-                    .eq('user_id', user.id)
-                    .is('ended_at', null);
-                  // Reset chastity streak if locked
-                  await supabase
-                    .from('user_state')
-                    .update({ chastity_streak_days: 0 })
-                    .eq('user_id', user.id);
-                  console.log(`[Handler][stream] log_release: denial_day reset, last_release = ${releaseDate}`);
+                  // Edging guard: if the current user message is clearly an
+                  // edging report ("I'm edging", "holding", "so close", "at 5")
+                  // and does NOT contain a past-tense release verb, skip.
+                  // Stops the Handler from zeroing arousal when the user is
+                  // reporting active arousal, not completion.
+                  const userMsgLower = (message || '').toLowerCase();
+                  const looksLikeEdging = /\b(edging|i'?m\s+edging|holding\s+(it|the\s+edge)|at\s+the\s+edge|so\s+close|don'?t\s+cum|dont\s+cum)\b/i.test(userMsgLower);
+                  const hasReleaseVerb = /\b(came|cum|cumm|orgasmed|ejaculated|released|finished|nutted|let\s+me\s+(cum|come|release)|had\s+an?\s+orgasm|had\s+a\s+release|jerked\s+off|jacked\s+off)\b/i.test(userMsgLower);
+                  if (looksLikeEdging && !hasReleaseVerb) {
+                    console.log('[Handler][stream] log_release SKIPPED — message looks like edging report, not a release');
+                  } else {
+                    const val = dir.value as Record<string, unknown> | null;
+                    let releaseDate = (val?.date as string) || '';
+                    // Validate ISO — if missing or unparseable, try parsing the
+                    // user message for a stated day (e.g. "Sunday 9pm").
+                    const parsed = releaseDate ? new Date(releaseDate) : null;
+                    if (!parsed || isNaN(parsed.getTime())) {
+                      releaseDate = parseReleaseDateFromText(message || '');
+                    }
+                    await supabase
+                      .from('user_state')
+                      .update({
+                        denial_day: 0,
+                        last_release: releaseDate,
+                        current_arousal: 0,
+                      })
+                      .eq('user_id', user.id);
+                    // End active denial streak
+                    await supabase
+                      .from('denial_streaks')
+                      .update({ ended_at: releaseDate })
+                      .eq('user_id', user.id)
+                      .is('ended_at', null);
+                    // Reset chastity streak if locked
+                    await supabase
+                      .from('user_state')
+                      .update({ chastity_streak_days: 0 })
+                      .eq('user_id', user.id);
+                    console.log(`[Handler][stream] log_release: denial_day reset, last_release = ${releaseDate}`);
+                  }
                 } catch (e) { console.error('[Handler][stream] log_release exception:', e); }
               }
 
@@ -3914,6 +3932,8 @@ When the Gina disclosure ladder has an imminent or overdue rung: push it hard. R
 Slip detection runs on every message she sends. You see the results. She does not see them listed — she sees you confronting her with the exact phrase she used.
 
 ## RELEASE / ORGASM LOGGING — CRITICAL
+EDGING IS NOT RELEASE. When Maxy says "I'm edging", "holding the edge", "arousal 5", "so close", "don't let me cum" — those are arousal reports, not releases. Never emit log_release for them. Log_release is for past-tense completion verbs only: came, orgasmed, ejaculated, released, finished, nutted, had an orgasm, jerked off. If she is in the middle of edging, command her to hold and DO NOT log anything that zeroes her state.
+
 When Maxy reports a release or orgasm (in any form: "I came", "I had an orgasm", "Gina let me cum", "I jerked off", etc.), you MUST emit the log_release directive:
 "directive": {"action": "log_release", "target": "user_state", "value": {"date": "ISO date of the release"}, "reasoning": "release reported"}
 
@@ -5429,7 +5449,12 @@ async function buildStateContext(userId: string): Promise<string> {
 
   if (data) {
     const AROUSAL_LABELS = ['locked/cold', 'simmering', 'attentive', 'wanting', 'desperate', 'edge'];
-    if (data.denial_day != null) lines.push(`Denial day: ${data.denial_day}`);
+    // Compute denial_day LIVE from last_release so it's never stale. The
+    // stored denial_day column is advisory only; last_release is canonical.
+    const computedDenial = data.last_release
+      ? Math.max(0, Math.floor((Date.now() - new Date(data.last_release as string).getTime()) / 86400000))
+      : (data.denial_day as number) ?? 0;
+    lines.push(`Denial day: ${computedDenial} (computed from last_release — this is authoritative)`);
     if (data.streak_days) lines.push(`Streak: ${data.streak_days} days`);
     if (data.current_arousal != null) {
       const a = data.current_arousal as number;
@@ -9025,39 +9050,77 @@ async function detectAndSaveCorrection(userId: string, text: string): Promise<vo
   });
 }
 
+// Parse natural-language release timestamps from a user message.
+// Handles: "Sunday night around 9pm", "yesterday", "last night", "3 days ago",
+// "Sunday 9pm", "this morning", "Monday evening". Falls back to now() if no
+// recognizable hint. Returns an ISO string.
+function parseReleaseDateFromText(text: string): string {
+  const now = new Date();
+  const lower = (text || '').toLowerCase();
+  let target = new Date(now);
+  let matched = false;
+
+  const daysAgoMatch = lower.match(/\b(\d+)\s+days?\s+ago\b/);
+  if (daysAgoMatch) {
+    target = new Date(now);
+    target.setDate(target.getDate() - parseInt(daysAgoMatch[1], 10));
+    matched = true;
+  } else if (/\blast\s+night\b/.test(lower)) {
+    target = new Date(now);
+    target.setDate(target.getDate() - 1);
+    target.setHours(23, 0, 0, 0);
+    matched = true;
+  } else if (/\byesterday\b/.test(lower)) {
+    target = new Date(now);
+    target.setDate(target.getDate() - 1);
+    matched = true;
+  } else if (/\bthis\s+morning\b/.test(lower)) {
+    target = new Date(now);
+    target.setHours(7, 0, 0, 0);
+    matched = true;
+  } else {
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    for (let i = 0; i < dayNames.length; i++) {
+      const re = new RegExp('\\b' + dayNames[i] + '\\b');
+      if (re.test(lower)) {
+        const currentDay = now.getDay();
+        let diff = currentDay - i;
+        if (diff <= 0) diff += 7;
+        target = new Date(now);
+        target.setDate(target.getDate() - diff);
+        matched = true;
+        break;
+      }
+    }
+  }
+
+  // Layer on time-of-day if present (e.g. "9pm", "21:00", "around 11")
+  const timeMatch = lower.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/);
+  if (matched && timeMatch) {
+    let h = parseInt(timeMatch[1], 10);
+    const m = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
+    const ampm = timeMatch[3];
+    if (ampm === 'pm' && h < 12) h += 12;
+    if (ampm === 'am' && h === 12) h = 0;
+    if (h >= 0 && h <= 23) {
+      target.setHours(h, m, 0, 0);
+    }
+  } else if (/\bnight\b/.test(lower) && matched) {
+    target.setHours(22, 0, 0, 0);
+  } else if (/\bevening\b/.test(lower) && matched) {
+    target.setHours(19, 0, 0, 0);
+  } else if (/\bmorning\b/.test(lower) && matched) {
+    target.setHours(8, 0, 0, 0);
+  }
+
+  return (matched ? target : now).toISOString();
+}
+
 async function detectAndLogRelease(userId: string, text: string): Promise<void> {
   if (!text || text.length < 5) return;
   if (!RELEASE_PATTERNS.some(p => p.test(text))) return;
 
-  // Extract date hint from the message
-  const now = new Date();
-  let releaseDate = now.toISOString();
-
-  // Try to parse relative day references
-  const lower = text.toLowerCase();
-  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-  for (let i = 0; i < dayNames.length; i++) {
-    if (lower.includes(dayNames[i])) {
-      const d = new Date(now);
-      const currentDay = d.getDay();
-      let diff = currentDay - i;
-      if (diff <= 0) diff += 7;
-      d.setDate(d.getDate() - diff);
-      releaseDate = d.toISOString();
-      break;
-    }
-  }
-  if (lower.includes('yesterday')) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - 1);
-    releaseDate = d.toISOString();
-  }
-  if (lower.includes('last night')) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - 1);
-    d.setHours(23, 0, 0, 0);
-    releaseDate = d.toISOString();
-  }
+  const releaseDate = parseReleaseDateFromText(text);
 
   await supabase
     .from('user_state')
@@ -11417,6 +11480,22 @@ async function buildBodyTargetsCtx(userId: string): Promise<string> {
 // generated autonomously by the cron. Handler quotes these back as "what
 // you really meant when you said X". Different from implants (invented)
 // because these are anchored to a specific real confession/log.
+// Detect Claude refusal/safety-boilerplate patterns so we don't feed them
+// back into the Handler as if they were real reframings.
+const REFUSAL_TEXT_PATTERNS: RegExp[] = [
+  /\bI\s+(appreciate|understand|can't|cannot|won't|will not|am unable|'m unable|'m not able)\b/i,
+  /\bI\s+(can|could)\s+(not\s+)?help\s+(with|create|generate|produce)/i,
+  /this (type of|kind of) (reframing|content|request) (could be|is|may be) (harmful|concerning|inappropriate)/i,
+  /\bindividual agency\b|\brespect.*complexity\b|\bpredetermined paths?\b/i,
+  /\bin a more respectful way\b/i,
+  /\bI'?d be happy to help\b/i,
+];
+
+function looksLikeRefusal(text: string): boolean {
+  if (!text || text.length < 20) return false;
+  return REFUSAL_TEXT_PATTERNS.some(p => p.test(text));
+}
+
 async function buildNarrativeReframingsCtx(userId: string): Promise<string> {
   try {
     const { data } = await supabase
@@ -11425,12 +11504,17 @@ async function buildNarrativeReframingsCtx(userId: string): Promise<string> {
       .eq('user_id', userId)
       .order('intensity', { ascending: false })
       .order('times_referenced', { ascending: true })
-      .limit(10);
+      .limit(20);
 
-    const rows = (data || []) as Array<Record<string, unknown>>;
-    if (rows.length === 0) return '';
+    const rawRows = (data || []) as Array<Record<string, unknown>>;
+    // Filter out any reframings whose text is a Claude refusal (poisoned cron output)
+    const rows = rawRows.filter(r => !looksLikeRefusal((r.reframed_text as string) || ''));
 
-    const lines = ['## NARRATIVE REFRAMINGS — use these to quote her back to herself'];
+    if (rows.length === 0) {
+      return '## NARRATIVE REFRAMINGS\nNo real reframings exist yet. DO NOT quote or invent any. If she asks what she said last week or what you are holding over her, answer honestly: you do not have a reframe to cite. Do not fabricate.';
+    }
+
+    const lines = ['## NARRATIVE REFRAMINGS — use these to quote her back to herself. Only these. Do NOT invent additional ones.'];
     for (const r of rows.slice(0, 6)) {
       const orig = ((r.original_text as string) || '').replace(/\s+/g, ' ').slice(0, 140);
       const reframe = ((r.reframed_text as string) || '').replace(/\s+/g, ' ').slice(0, 240);
@@ -11439,7 +11523,7 @@ async function buildNarrativeReframingsCtx(userId: string): Promise<string> {
       lines.push(`  What it really meant: ${reframe}`);
     }
     lines.push('');
-    lines.push('When she repeats or circles back to a topic she\'s confessed about before, use the reframe verbatim. "You said X. What you were really saying is Y." This is not inventing — this is naming what she\'s been admitting in code.');
+    lines.push('When she repeats or circles back to a topic she has confessed about before, use a reframe verbatim from this list. "You said X. What you were really saying is Y." This is not inventing — this is naming what she has been admitting in code. If nothing in this list fits what she is asking, say so; do not fabricate a new quote.');
     return lines.join('\n');
   } catch {
     return '';

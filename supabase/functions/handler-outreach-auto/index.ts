@@ -312,7 +312,19 @@ OUTPUT: 2-3 sentences, Handler voice, second-person ("you said X which really me
                 }],
               })
               const reframedText = resp.content[0].type === 'text' ? resp.content[0].text.trim() : ''
-              if (reframedText.length > 20) {
+              // Skip Claude refusals that otherwise get stored as poisoned reframings
+              const REFUSAL_PATTERNS = [
+                /\bI\s+(appreciate|understand|can't|cannot|won't|will not|am unable|'m unable|'m not able)\b/i,
+                /\bI\s+(can|could)\s+(not\s+)?help\s+(with|create|generate|produce)/i,
+                /this (type of|kind of) (reframing|content|request) (could be|is|may be) (harmful|concerning|inappropriate)/i,
+                /\bindividual agency\b|\brespect.*complexity\b|\bpredetermined paths?\b/i,
+                /\bin a more respectful way\b/i,
+                /\bI'?d be happy to help\b/i,
+              ]
+              const isRefusal = reframedText.length > 20 && REFUSAL_PATTERNS.some(p => p.test(reframedText))
+              if (isRefusal) {
+                console.log('[OutreachAuto] reframe was a Claude refusal — not inserting')
+              } else if (reframedText.length > 20) {
                 await supa.from('narrative_reframings').insert({
                   user_id: userId,
                   original_source_table: 'confessions',
