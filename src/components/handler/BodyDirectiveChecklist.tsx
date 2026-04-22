@@ -98,6 +98,15 @@ export function BodyDirectiveChecklist() {
         reasoning: `Maxy completed body directive "${directive.directive.slice(0, 80)}"`,
       });
 
+      // Also increment tasks_completed_today + insert a task_completions row
+      // so the Handler's live state context reflects the completion today.
+      try {
+        await supabase.from('task_completions').insert({ user_id: user.id, task_id: directive.id, completed_at: new Date().toISOString() });
+        const { data: st } = await supabase.from('user_state').select('tasks_completed_today').eq('user_id', user.id).maybeSingle();
+        const prev = (st?.tasks_completed_today as number) ?? 0;
+        await supabase.from('user_state').update({ tasks_completed_today: prev + 1, updated_at: new Date().toISOString() }).eq('user_id', user.id);
+      } catch { /* non-fatal */ }
+
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to mark complete');

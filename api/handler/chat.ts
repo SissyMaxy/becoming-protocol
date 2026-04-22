@@ -2088,7 +2088,7 @@ HARD RULES FOR ALL PERSONAS:
                     .from('user_state')
                     .update({
                       denial_day: 0,
-                      last_release_at: releaseDate,
+                      last_release: releaseDate,
                       current_arousal: 0,
                     })
                     .eq('user_id', user.id);
@@ -2103,7 +2103,7 @@ HARD RULES FOR ALL PERSONAS:
                     .from('user_state')
                     .update({ chastity_streak_days: 0 })
                     .eq('user_id', user.id);
-                  console.log(`[Handler][stream] log_release: denial_day reset, last_release_at = ${releaseDate}`);
+                  console.log(`[Handler][stream] log_release: denial_day reset, last_release = ${releaseDate}`);
                 } catch (e) { console.error('[Handler][stream] log_release exception:', e); }
               }
 
@@ -4965,7 +4965,7 @@ async function buildEmotionalModelCtx(userId: string): Promise<string> {
     // Denial + release effects
     const { data: state } = await supabase
       .from('user_state')
-      .select('denial_day, tasks_completed_today, last_release_at')
+      .select('denial_day, tasks_completed_today, last_release')
       .eq('user_id', userId)
       .maybeSingle();
 
@@ -4981,8 +4981,8 @@ async function buildEmotionalModelCtx(userId: string): Promise<string> {
 
     // Depressive risk from release cycle
     let depRisk = 0;
-    if (state?.last_release_at) {
-      const daysSince = Math.floor((Date.now() - new Date(state.last_release_at).getTime()) / 86400000);
+    if (state?.last_release) {
+      const daysSince = Math.floor((Date.now() - new Date(state.last_release).getTime()) / 86400000);
       if (daysSince <= 0) depRisk = 5;
       else if (daysSince === 1) depRisk = 7;
       else if (daysSince === 2) depRisk = 5;
@@ -5358,10 +5358,10 @@ async function buildStateContext(userId: string): Promise<string> {
   // the Handler has something substantive to say about it.
   const [stateRes, lastMsgsRes] = await Promise.all([
     supabase
-      .from('user_state')
-      .select('denial_day, streak_days, current_arousal, handler_mode, gina_home, gina_asleep, estimated_exec_function, tasks_completed_today')
-      .eq('user_id', userId)
-      .maybeSingle(),
+     .from('user_state')
+     .select('denial_day, streak_days, current_arousal, handler_mode, gina_home, gina_asleep, estimated_exec_function, tasks_completed_today, last_release, chastity_locked, chastity_streak_days, slip_points_rolling_24h')
+     .eq('user_id', userId)
+     .maybeSingle(),
     supabase
       .from('handler_messages')
       .select('created_at, role')
@@ -5410,9 +5410,21 @@ async function buildStateContext(userId: string): Promise<string> {
   }
 
   if (data) {
+    const AROUSAL_LABELS = ['locked/cold', 'simmering', 'attentive', 'wanting', 'desperate', 'edge'];
     if (data.denial_day != null) lines.push(`Denial day: ${data.denial_day}`);
     if (data.streak_days) lines.push(`Streak: ${data.streak_days} days`);
-    if (data.current_arousal != null) lines.push(`Arousal: ${data.current_arousal}/5`);
+    if (data.current_arousal != null) {
+      const a = data.current_arousal as number;
+      lines.push(`Arousal: ${a}/5 (${AROUSAL_LABELS[a] ?? 'unknown'})${a >= 3 ? ' — SHE IS HOT, do not say she is low or cold' : ''}`);
+    }
+    if (data.last_release) {
+      const days = Math.floor((Date.now() - new Date(data.last_release as string).getTime()) / 86400000);
+      const d = new Date(data.last_release as string);
+      const weekday = d.toLocaleDateString(undefined, { weekday: 'long' });
+      lines.push(`Last release: ${weekday} (${days} days ago). DO NOT claim you don't know when she last came — this is the authoritative record.`);
+    }
+    if (data.chastity_locked) lines.push(`Chastity: locked, day ${data.chastity_streak_days ?? 0}`);
+    if ((data.slip_points_rolling_24h as number) >= 3) lines.push(`Slip points (24h): ${data.slip_points_rolling_24h}`);
     if (data.gina_home === false) lines.push('Gina away — full protocol window');
     else if (data.gina_asleep) lines.push('Gina asleep');
     if (data.tasks_completed_today != null) lines.push(`Tasks today: ${data.tasks_completed_today}`);
@@ -9031,7 +9043,7 @@ async function detectAndLogRelease(userId: string, text: string): Promise<void> 
     .from('user_state')
     .update({
       denial_day: 0,
-      last_release_at: releaseDate,
+      last_release: releaseDate,
       current_arousal: 0,
     })
     .eq('user_id', userId);

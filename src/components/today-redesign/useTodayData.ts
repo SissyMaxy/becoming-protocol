@@ -798,11 +798,19 @@ export function useTodayData() {
 
   const toggleDirective = useCallback(async (id: string, done: boolean) => {
     if (!user?.id) return;
-    const newStatus = done ? 'assigned' : 'completed';
+    const becomingComplete = !done;
+    const newStatus = becomingComplete ? 'completed' : 'assigned';
     await supabase
       .from('body_feminization_directives')
-      .update({ status: newStatus, completed_at: newStatus === 'completed' ? new Date().toISOString() : null })
+      .update({ status: newStatus, completed_at: becomingComplete ? new Date().toISOString() : null })
       .eq('id', id);
+    if (becomingComplete) {
+      // Write a task_completion + bump tasks_completed_today so Handler context reflects it
+      await supabase.from('task_completions').insert({ user_id: user.id, task_id: id, completed_at: new Date().toISOString() });
+      const { data: st } = await supabase.from('user_state').select('tasks_completed_today').eq('user_id', user.id).maybeSingle();
+      const prev = (st?.tasks_completed_today as number) ?? 0;
+      await supabase.from('user_state').update({ tasks_completed_today: prev + 1, updated_at: new Date().toISOString() }).eq('user_id', user.id);
+    }
     setData(d => ({ ...d, directives: d.directives.map(x => x.id === id ? { ...x, done: !done } : x) }));
   }, [user?.id]);
 

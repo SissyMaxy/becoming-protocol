@@ -111,7 +111,7 @@ export function DailyConfessionGate({ onComplete }: DailyConfessionGateProps) {
             .from('user_state')
             .update({
               denial_day: 0,
-              last_release_at: detection.releaseDate,
+              last_release: detection.releaseDate,
               current_arousal: 0,
             })
             .eq('user_id', user.id),
@@ -123,7 +123,7 @@ export function DailyConfessionGate({ onComplete }: DailyConfessionGateProps) {
           supabase.from('handler_memory').insert({
             user_id: user.id,
             memory_type: 'disclosure',
-            content: `RELEASE DISCLOSED IN DAILY CONFESSION: "${trimmed.slice(0, 500)}". denial_day reset to 0, last_release_at = ${detection.releaseDate}. Do NOT cite a stale denial count — the system has been corrected.`,
+            content: `RELEASE DISCLOSED IN DAILY CONFESSION: "${trimmed.slice(0, 500)}". denial_day reset to 0, last_release = ${detection.releaseDate}. Do NOT cite a stale denial count — the system has been corrected.`,
             importance: 5,
             decay_rate: 0,
             source_type: 'confession_release',

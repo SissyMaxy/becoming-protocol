@@ -326,8 +326,12 @@ export async function completeDenialCycle(
     .update({
       current_denial_day: 0,
       is_locked: false,
-      last_release_at: new Date().toISOString(),
     })
+    .eq('user_id', userId);
+  // Canonical last_release lives on user_state — this engine doesn't own the column
+  await supabase
+    .from('user_state')
+    .update({ last_release: new Date().toISOString() })
     .eq('user_id', userId);
 
   return true;
@@ -404,7 +408,7 @@ export async function getDenialState(userId: string): Promise<{
   return {
     denialDay: data.current_denial_day || 0,
     isLocked: data.is_locked || false,
-    lastRelease: data.last_release_at,
+    lastRelease: null,
     longestStreak: data.longest_streak || 0,
   };
 }

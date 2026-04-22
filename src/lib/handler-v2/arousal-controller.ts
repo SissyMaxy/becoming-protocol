@@ -138,7 +138,7 @@ export async function getArousalState(userId: string): Promise<ArousalState> {
     denialDays: denial?.current_denial_day || 0,
     edgeCount: arousalPlan?.edge_count || 0,
     releaseThreshold: DEFAULT_RELEASE_THRESHOLD,
-    lastRelease: denial?.last_release_at || null,
+    lastRelease: null,
     isLocked: denial?.is_locked || false,
     earnedSessionMinutes: arousalPlan?.total_target_duration_minutes || 0,
     currentLovenseMode: activeCommand

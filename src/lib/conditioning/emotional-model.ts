@@ -96,7 +96,7 @@ export async function estimateCurrentState(userId: string): Promise<EmotionalSta
     const [stateResult, whoopResult, classResult, taskResult] = await Promise.allSettled([
       supabase
         .from('user_state')
-        .select('denial_day, current_arousal, compliance_rate, tasks_completed_today, last_release_at')
+        .select('denial_day, current_arousal, compliance_rate, tasks_completed_today, last_release')
         .eq('user_id', userId)
         .maybeSingle(),
       supabase
@@ -138,8 +138,8 @@ export async function estimateCurrentState(userId: string): Promise<EmotionalSta
 
     // 4. Post-release depression cycle
     let daysSinceRelease: number | null = null;
-    if (state?.last_release_at) {
-      daysSinceRelease = Math.floor((Date.now() - new Date(state.last_release_at).getTime()) / 86400000);
+    if (state?.last_release) {
+      daysSinceRelease = Math.floor((Date.now() - new Date(state.last_release).getTime()) / 86400000);
     }
     const releaseEffect = getPostReleaseEffect(daysSinceRelease);
 

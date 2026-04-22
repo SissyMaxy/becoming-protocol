@@ -130,13 +130,13 @@ async function collectSignals(
   // Denial day and days since release
   const { data: stateData } = await supabase
     .from('user_state')
-    .select('denial_day, last_release_at')
+    .select('denial_day, last_release')
     .eq('user_id', userId)
     .maybeSingle();
 
   const denialDay = stateData?.denial_day ?? 0;
-  const daysSinceLastRelease = stateData?.last_release_at
-    ? Math.floor((now.getTime() - new Date(stateData.last_release_at).getTime()) / 86400000)
+  const daysSinceLastRelease = stateData?.last_release
+    ? Math.floor((now.getTime() - new Date(stateData.last_release).getTime()) / 86400000)
     : 0;
 
   // Recent resistance flags
