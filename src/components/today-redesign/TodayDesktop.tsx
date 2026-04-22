@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import '../../styles/today-redesign.css';
 import { useTodayData } from './useTodayData';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
+import { ConditioningOverlay, morphPronouns } from './ConditioningOverlay';
 
 const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
 
@@ -157,6 +158,12 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
 
   return (
     <div className="td-root">
+      <ConditioningOverlay
+        reframings={data.conditioning.reframings}
+        implants={data.conditioning.implants}
+        displacementScore={data.conditioning.displacementScore}
+        enabled={!data.loading}
+      />
       <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleProofFile} />
       <aside className="td-side">
         <div className="td-brand">
@@ -227,7 +234,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, marginBottom: 20 }}>
           <div style={{ flex: 1 }}>
             <h1 className="td-h1">{dateStr}</h1>
-            <div className="td-sub" style={{ marginBottom: 0 }}>Phase {data.currentPhase} · {data.chastityLocked ? `Chastity Day ${data.chastityStreakDays}` : `Denial Day ${data.denialDay}`} · {openDirectives} directives open</div>
+            <div className="td-sub" style={{ marginBottom: 0 }}>{morphPronouns(`Phase ${data.currentPhase} · ${data.chastityLocked ? `Chastity Day ${data.chastityStreakDays}` : `Denial Day ${data.denialDay}`} · ${openDirectives} directives open`, data.conditioning.displacementScore)}</div>
           </div>
           <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
             <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', padding: '4px 9px', borderRadius: 10, fontWeight: 600, background: '#1a1226', color: '#c4b5fd', border: '1px solid #2d1a4d', display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -534,10 +541,13 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
                 <div>
                   <div className="td-arlabel">Right now</div>
                   <div className="td-arstate">
-                    {data.arousal === 5 ? "You're at the edge"
-                      : data.arousal >= 3 ? "You're warming"
-                      : data.arousal === 0 ? "Cold. Locked."
-                      : "Simmering."}
+                    {morphPronouns(
+                      data.arousal === 5 ? "You're at the edge"
+                        : data.arousal >= 3 ? "You're warming"
+                        : data.arousal === 0 ? "Cold. Locked."
+                        : "Simmering.",
+                      data.conditioning.displacementScore,
+                    )}
                   </div>
                 </div>
                 <div>

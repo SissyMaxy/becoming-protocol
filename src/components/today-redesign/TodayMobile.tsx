@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import '../../styles/today-redesign.css';
 import { useTodayData } from './useTodayData';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
+import { ConditioningOverlay, morphPronouns } from './ConditioningOverlay';
 
 const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
 const HEATMAP_COLORS = ['#1a1a20', '#2d1a4d', '#4d2a75', '#6a2a9a', '#7c3aed'];
@@ -105,6 +106,12 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
 
   return (
     <div className="tdm-root">
+      <ConditioningOverlay
+        reframings={data.conditioning.reframings}
+        implants={data.conditioning.implants}
+        displacementScore={data.conditioning.displacementScore}
+        enabled={!data.loading}
+      />
       <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleProofFile} />
       <div className="tdm-top">
         <div className="tdm-pulse" />
@@ -128,7 +135,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
 
       <div className="tdm-hero">
         <h1 className="tdm-h1">{weekday}</h1>
-        <div className="tdm-sub">Phase {data.currentPhase} · {data.chastityLocked ? `Chastity day ${data.chastityStreakDays}` : `Denial day ${data.denialDay}`} · {openDirectives} directives open</div>
+        <div className="tdm-sub">{morphPronouns(`Phase ${data.currentPhase} · ${data.chastityLocked ? `Chastity day ${data.chastityStreakDays}` : `Denial day ${data.denialDay}`} · ${openDirectives} directives open`, data.conditioning.displacementScore)}</div>
       </div>
 
       {(tab === 'today' || tab === 'body') && (
@@ -436,10 +443,13 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
                 <div>
                   <div className="tdm-arlbl">Right now</div>
                   <div className="tdm-arstate">
-                    {data.arousal === 5 ? "You're at the edge"
-                      : data.arousal >= 3 ? "You're warming"
-                      : data.arousal === 0 ? "Cold. Locked."
-                      : "Simmering."}
+                    {morphPronouns(
+                      data.arousal === 5 ? "You're at the edge"
+                        : data.arousal >= 3 ? "You're warming"
+                        : data.arousal === 0 ? "Cold. Locked."
+                        : "Simmering.",
+                      data.conditioning.displacementScore,
+                    )}
                   </div>
                 </div>
                 <div><span className="tdm-arnum">{data.arousal}</span><span className="tdm-arscale">/5</span></div>

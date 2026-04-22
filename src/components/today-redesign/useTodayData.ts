@@ -94,6 +94,28 @@ export interface PriorityBanner {
   actionHref?: string;
 }
 
+export interface Reframing {
+  id: string;
+  text: string;
+  angle: string;
+  intensity: number;
+}
+
+export interface MemoryImplant {
+  id: string;
+  category: string;
+  narrative: string;
+  age: string | null;
+  emotionalCore: string | null;
+  timesReferenced: number;
+}
+
+export interface ConditioningPool {
+  reframings: Reframing[];
+  implants: MemoryImplant[];
+  displacementScore: number; // 0.0 – 1.0
+}
+
 export interface DailyActivity {
   directivesCompletedToday: number;
   directivesAssignedToday: number;
@@ -131,6 +153,7 @@ export interface TodayData {
   banners: PriorityBanner[];
   heatmap: HeatmapDay[];
   activity: DailyActivity;
+  conditioning: ConditioningPool;
   loading: boolean;
 }
 
@@ -253,6 +276,7 @@ export function useTodayData() {
       lastHandlerMessageAt: null,
       lastHandlerTimeDesc: 'no contact yet',
     },
+    conditioning: { reframings: [], implants: [], displacementScore: 0 },
     loading: true,
   });
 
@@ -284,6 +308,9 @@ export function useTodayData() {
       heldEscrowRes,
       taskCompletionsRes,
       messagesTodayRes,
+      reframingsRes,
+      implantsRes,
+      displacementRes,
     ] = await Promise.all([
       supabase
         .from('user_state')
@@ -399,6 +426,26 @@ export function useTodayData() {
         .gte('created_at', todayStart)
         .lte('created_at', todayEnd)
         .order('created_at', { ascending: false }),
+      supabase
+        .from('narrative_reframings')
+        .select('id, reframed_text, reframe_angle, intensity')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(20),
+      supabase
+        .from('memory_implants')
+        .select('id, implant_category, narrative, approximate_age, emotional_core, times_referenced')
+        .eq('user_id', user.id)
+        .eq('active', true)
+        .order('created_at', { ascending: false })
+        .limit(30),
+      supabase
+        .from('identity_displacement_log')
+        .select('displacement_score')
+        .eq('user_id', user.id)
+        .order('log_date', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ]);
 
     // Compliance: % of directives in the last 7d that were completed on or
@@ -491,6 +538,22 @@ export function useTodayData() {
       const d = c.completed_at.slice(0, 10);
       dayCounts[d] = (dayCounts[d] || 0) + 1;
     }
+    const reframings: Reframing[] = ((reframingsRes.data || []) as Array<Record<string, unknown>>).map(r => ({
+      id: r.id as string,
+      text: (r.reframed_text as string) || '',
+      angle: (r.reframe_angle as string) || 'unknown',
+      intensity: (r.intensity as number) ?? 5,
+    }));
+    const implants: MemoryImplant[] = ((implantsRes.data || []) as Array<Record<string, unknown>>).map(i => ({
+      id: i.id as string,
+      category: (i.implant_category as string) || '',
+      narrative: (i.narrative as string) || '',
+      age: (i.approximate_age as string) || null,
+      emotionalCore: (i.emotional_core as string) || null,
+      timesReferenced: (i.times_referenced as number) || 0,
+    }));
+    const displacementScore = Math.max(0, Math.min(1, parseFloat(String((displacementRes.data as { displacement_score?: number } | null)?.displacement_score ?? 0)) || 0));
+
     // Daily activity
     const messagesToday = (messagesTodayRes.data || []) as Array<{ role: string; created_at: string }>;
     const handlerMessagesToday = messagesToday.filter(m => m.role === 'assistant').length;
@@ -697,6 +760,7 @@ export function useTodayData() {
         lastHandlerMessageAt,
         lastHandlerTimeDesc,
       },
+      conditioning: { reframings, implants, displacementScore },
       mealsToday,
       aestheticPreset: (t?.aesthetic_preset as string) || 'femboy',
       targets,
