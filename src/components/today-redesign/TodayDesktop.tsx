@@ -41,9 +41,32 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
   const [mealForm, setMealForm] = useState({ foods: '', protein: '', calories: '', permission: false, photo: false });
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [queueDetail, setQueueDetail] = useState<null | { id: string; kind: string; body: string; timeAgo: string }>(null);
+  const [directiveFilter, setDirectiveFilter] = useState<string>('all');
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [composeText, setComposeText] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingUploadDirectiveId = useRef<string | null>(null);
   const { permission, requestPermission } = usePushNotifications();
+
+  const directiveKinds = useMemo(() => {
+    const set = new Set<string>();
+    for (const d of data.directives) set.add(d.kind);
+    return Array.from(set).sort();
+  }, [data.directives]);
+  const filteredDirectives = useMemo(
+    () => directiveFilter === 'all' ? data.directives : data.directives.filter(d => d.kind === directiveFilter),
+    [data.directives, directiveFilter],
+  );
+
+  const sendCompose = () => {
+    const text = composeText.trim();
+    if (!text) return;
+    sessionStorage.setItem('handler_chat_prefill', text);
+    setComposeText('');
+    setComposeOpen(false);
+    window.location.hash = '';
+    onExit?.();
+  };
 
   const handleProofClick = (directiveId: string) => {
     pendingUploadDirectiveId.current = directiveId;
@@ -289,11 +312,37 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
               <svg className="td-iconsm td-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>
               <div className="td-title">Body directives</div>
               <div className="td-chip">{openDirectives} open</div>
-              <div className="td-meta">{data.directives.length ? `Issued ${data.directives[0] ? '' : ''}` : ''}</div>
             </div>
-            {data.directives.length === 0 ? (
-              <div style={{ padding: 16, color: '#6a656e', fontSize: 12.5 }}>I haven't assigned anything yet. Sit with that.</div>
-            ) : data.directives.map(d => (
+            {directiveKinds.length > 1 && (
+              <div style={{ display: 'flex', gap: 6, padding: '10px 16px 4px', flexWrap: 'wrap', borderBottom: '1px solid #15151b' }}>
+                <button
+                  onClick={() => setDirectiveFilter('all')}
+                  style={{
+                    fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 10, fontWeight: 600,
+                    background: directiveFilter === 'all' ? '#1a1226' : '#0a0a0d',
+                    color: directiveFilter === 'all' ? '#c4b5fd' : '#6a656e',
+                    border: '1px solid ' + (directiveFilter === 'all' ? '#2d1a4d' : '#1a1a20'),
+                    cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >All</button>
+                {directiveKinds.map(k => (
+                  <button
+                    key={k}
+                    onClick={() => setDirectiveFilter(k)}
+                    style={{
+                      fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 10, fontWeight: 600,
+                      background: directiveFilter === k ? '#1a1226' : '#0a0a0d',
+                      color: directiveFilter === k ? '#c4b5fd' : '#6a656e',
+                      border: '1px solid ' + (directiveFilter === k ? '#2d1a4d' : '#1a1a20'),
+                      cursor: 'pointer', fontFamily: 'inherit',
+                    }}
+                  >{k}</button>
+                ))}
+              </div>
+            )}
+            {filteredDirectives.length === 0 ? (
+              <div style={{ padding: 16, color: '#6a656e', fontSize: 12.5 }}>{data.directives.length === 0 ? "I haven't assigned anything yet. Sit with that." : `Nothing open under ${directiveFilter}.`}</div>
+            ) : filteredDirectives.map(d => (
               <div className="td-dir" key={d.id}>
                 <div className="td-dirhead">
                   <button className={`td-check ${d.done ? 'on' : ''}`} onClick={() => toggleDirective(d.id, d.done)} aria-label="toggle">
@@ -513,6 +562,49 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
 
         <div className="td-foot">becoming · phase {data.currentPhase} · day {data.denialDay} of 90</div>
       </main>
+
+      <button
+        onClick={() => setComposeOpen(o => !o)}
+        title="Talk to the Handler"
+        style={{
+          position: 'fixed', right: 28, bottom: 28, width: 54, height: 54, borderRadius: 27,
+          background: composeOpen ? '#22222a' : '#7c3aed', color: '#fff', border: 'none', cursor: 'pointer',
+          boxShadow: '0 4px 16px rgba(124, 58, 237, 0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontFamily: 'inherit', zIndex: 90,
+        }}
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          {composeOpen ? <path d="M6 6l12 12M18 6L6 18" /> : <><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></>}
+        </svg>
+      </button>
+      {composeOpen && (
+        <div style={{
+          position: 'fixed', right: 28, bottom: 92, width: 340, background: '#111116', border: '1px solid #1a1a20',
+          borderRadius: 12, padding: 14, zIndex: 91, boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+        }}>
+          <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#c4b5fd', fontWeight: 700, marginBottom: 8 }}>
+            Talk to Handler
+          </div>
+          <textarea
+            autoFocus
+            value={composeText}
+            onChange={e => setComposeText(e.target.value)}
+            placeholder="Say what she needs to hear."
+            rows={4}
+            onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) sendCompose(); }}
+            style={{ width: '100%', background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 6, padding: '8px 10px', fontFamily: 'inherit', fontSize: 13, color: '#e8e6e3', resize: 'none' }}
+          />
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <button className="td-btn primary" onClick={sendCompose} disabled={!composeText.trim()} style={{ flex: 1, justifyContent: 'center', padding: '7px' }}>
+              Send to chat
+            </button>
+            <button className="td-btn" onClick={() => { setComposeOpen(false); setComposeText(''); }}>
+              Cancel
+            </button>
+          </div>
+          <div style={{ fontSize: 10, color: '#6a656e', marginTop: 6 }}>⌘+Enter to send · prefills the Handler input, continues there</div>
+        </div>
+      )}
 
       {queueDetail && (
         <div

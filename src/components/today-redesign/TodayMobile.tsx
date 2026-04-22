@@ -4,7 +4,7 @@
  * hook; each tab filters/scrolls to its section.
  */
 
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import '../../styles/today-redesign.css';
 import { useTodayData } from './useTodayData';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
@@ -32,9 +32,32 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
   const [expandedDirective, setExpandedDirective] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [queueDetail, setQueueDetail] = useState<null | { id: string; kind: string; body: string; timeAgo: string }>(null);
+  const [directiveFilter, setDirectiveFilter] = useState<string>('all');
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [composeText, setComposeText] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingUploadDirectiveId = useRef<string | null>(null);
   const { permission, requestPermission } = usePushNotifications();
+
+  const directiveKinds = useMemo(() => {
+    const set = new Set<string>();
+    for (const d of data.directives) set.add(d.kind);
+    return Array.from(set).sort();
+  }, [data.directives]);
+  const filteredDirectives = useMemo(
+    () => directiveFilter === 'all' ? data.directives : data.directives.filter(d => d.kind === directiveFilter),
+    [data.directives, directiveFilter],
+  );
+
+  const sendCompose = () => {
+    const text = composeText.trim();
+    if (!text) return;
+    sessionStorage.setItem('handler_chat_prefill', text);
+    setComposeText('');
+    setComposeOpen(false);
+    window.location.hash = '';
+    onExit?.();
+  };
 
   const handleProofClick = (directiveId: string) => {
     pendingUploadDirectiveId.current = directiveId;
@@ -211,10 +234,37 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             <span className="t">Body directives</span>
             <span className="chip">{openDirectives} open</span>
           </div>
+          {directiveKinds.length > 1 && (
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 8 }}>
+              <button
+                onClick={() => setDirectiveFilter('all')}
+                style={{
+                  fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 10, fontWeight: 700,
+                  background: directiveFilter === 'all' ? '#1a1226' : '#0a0a0d',
+                  color: directiveFilter === 'all' ? '#c4b5fd' : '#6a656e',
+                  border: '1px solid ' + (directiveFilter === 'all' ? '#2d1a4d' : '#1a1a20'),
+                  cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >All</button>
+              {directiveKinds.map(k => (
+                <button
+                  key={k}
+                  onClick={() => setDirectiveFilter(k)}
+                  style={{
+                    fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 10, fontWeight: 700,
+                    background: directiveFilter === k ? '#1a1226' : '#0a0a0d',
+                    color: directiveFilter === k ? '#c4b5fd' : '#6a656e',
+                    border: '1px solid ' + (directiveFilter === k ? '#2d1a4d' : '#1a1a20'),
+                    cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >{k}</button>
+              ))}
+            </div>
+          )}
           <div className="tdm-card">
-            {data.directives.length === 0 ? (
-              <div style={{ padding: 14, color: '#6a656e', fontSize: 12.5 }}>I haven't assigned anything yet. Sit with that.</div>
-            ) : data.directives.slice(0, 5).map(d => {
+            {filteredDirectives.length === 0 ? (
+              <div style={{ padding: 14, color: '#6a656e', fontSize: 12.5 }}>{data.directives.length === 0 ? "I haven't assigned anything yet. Sit with that." : `Nothing open under ${directiveFilter}.`}</div>
+            ) : filteredDirectives.slice(0, 5).map(d => {
               const expanded = expandedDirective === d.id;
               const bodyText = expanded || d.body.split(/\s+/).length <= 14 ? d.body : truncateWords(d.body, 14);
               return (
@@ -469,6 +519,54 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           <div className="lbl">Me</div>
         </button>
       </div>
+
+      {!composeOpen && (
+        <button
+          onClick={() => setComposeOpen(true)}
+          title="Talk to the Handler"
+          style={{
+            position: 'fixed', right: 16, bottom: 'calc(80px + env(safe-area-inset-bottom))',
+            width: 48, height: 48, borderRadius: 24, background: '#7c3aed', color: '#fff', border: 'none', cursor: 'pointer',
+            boxShadow: '0 4px 16px rgba(124, 58, 237, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontFamily: 'inherit', zIndex: 25,
+          }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+        </button>
+      )}
+      {composeOpen && (
+        <div
+          onClick={() => { setComposeOpen(false); setComposeText(''); }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 100, display: 'flex', alignItems: 'flex-end', padding: 16 }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ background: '#111116', border: '1px solid #1a1a20', borderRadius: 12, padding: 16, width: '100%', color: '#e8e6e3' }}
+          >
+            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#c4b5fd', fontWeight: 700, marginBottom: 8 }}>
+              Talk to Handler
+            </div>
+            <textarea
+              autoFocus
+              value={composeText}
+              onChange={e => setComposeText(e.target.value)}
+              placeholder="Say what she needs to hear."
+              rows={4}
+              style={{ width: '100%', background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 6, padding: '8px 10px', fontFamily: 'inherit', fontSize: 14, color: '#e8e6e3', resize: 'none' }}
+            />
+            <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+              <button className="tdm-btn primary" onClick={sendCompose} disabled={!composeText.trim()} style={{ flex: 1, padding: '8px', justifyContent: 'center', textAlign: 'center' }}>
+                Send to chat
+              </button>
+              <button className="tdm-btn" onClick={() => { setComposeOpen(false); setComposeText(''); }} style={{ padding: '8px 12px' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {queueDetail && (
         <div
