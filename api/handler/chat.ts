@@ -1478,6 +1478,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     console.log(`[Handler][prompt] systemPromptLen=${systemPrompt.length} stateIncluded=${systemPrompt.includes('## Current State') ? 'YES' : 'NO'} stateArousalLine=${(systemPrompt.match(/Arousal: .{0,40}/) || [''])[0]}`);
+    console.log(`[Handler][ctxstate] relevantBlocks=${relevantBlocks.join(',')} stateLen=${(contextResults.state || '').length} statePreview=${JSON.stringify((contextResults.state || '').slice(0, 120))} herStateIdx=${systemPrompt.indexOf('## HER STATE RIGHT NOW')}`);
 
     // 4b. P12.10: Debate engine — append tactical suffix if resistance detected
     let finalSystemPrompt = systemPrompt;
