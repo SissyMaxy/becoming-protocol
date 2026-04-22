@@ -40,6 +40,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
   const [mealTab, setMealTab] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('breakfast');
   const [mealForm, setMealForm] = useState({ foods: '', protein: '', calories: '', permission: false, photo: false });
   const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [queueDetail, setQueueDetail] = useState<null | { id: string; kind: string; body: string; timeAgo: string }>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingUploadDirectiveId = useRef<string | null>(null);
   const { permission, requestPermission } = usePushNotifications();
@@ -136,7 +137,24 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
       </aside>
 
       <main className="td-main">
-        {permission !== 'granted' && permission !== 'unsupported' && (
+        {data.banners.map((banner, i) => {
+          const colors = banner.severity === 'critical'
+            ? { border: '#7a1f22', bg: 'linear-gradient(92deg, #2a0a0c 0%, #1a0608 100%)', text: '#f47272', iconBg: '#3a0f12' }
+            : banner.severity === 'high'
+            ? { border: '#7a5a1f', bg: 'linear-gradient(92deg, #2a1f0a 0%, #1f1608 100%)', text: '#f4c272', iconBg: '#3a2a0f' }
+            : { border: '#2d1a4d', bg: 'linear-gradient(92deg, #1a0f2e 0%, #150a24 100%)', text: '#c4b5fd', iconBg: '#2d1a4d' };
+          return (
+            <div key={i} className="td-banner" style={{ background: colors.bg, borderColor: colors.border }}>
+              <div className="td-bannericon" style={{ background: colors.iconBg, color: colors.text }}>
+                <svg className="td-iconsm" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path d="M12 9v4" /><path d="M12 17h.01" /><circle cx="12" cy="12" r="10" />
+                </svg>
+              </div>
+              <div className="td-bannertxt" style={{ color: colors.text }}>{banner.text}</div>
+            </div>
+          );
+        })}
+        {data.banners.length === 0 && permission !== 'granted' && permission !== 'unsupported' && (
           <div className="td-banner">
             <div className="td-bannericon">
               <svg className="td-iconsm" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -363,12 +381,12 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
               {data.queue.length === 0 ? (
                 <div style={{ padding: 16, color: '#6a656e', fontSize: 12.5 }}>Silence on purpose. I reach when it moves the protocol.</div>
               ) : data.queue.map(m => (
-                <button key={m.id} className={`td-msg ${m.priority ? 'priority' : ''}`} onClick={() => ackQueueMsg(m.id)} style={{ textAlign: 'left', background: 'none', border: 'none', width: '100%', cursor: 'pointer', display: 'block' }}>
+                <button key={m.id} className={`td-msg ${m.priority ? 'priority' : ''}`} onClick={() => setQueueDetail({ id: m.id, kind: m.kind, body: m.body, timeAgo: m.timeAgo })} style={{ textAlign: 'left', background: 'none', border: 'none', width: '100%', cursor: 'pointer', display: 'block' }}>
                   <div className="td-msghead">
                     <span className={`td-msgkind ${m.kindClass}`}>{m.kind}</span>
                     <span className="td-msgtime">{m.timeAgo}</span>
                   </div>
-                  <div className="td-msgbody">{m.body}</div>
+                  <div className="td-msgbody">{m.body.length > 160 ? m.body.slice(0, 160) + '…' : m.body}</div>
                 </button>
               ))}
             </div>
@@ -495,6 +513,45 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
 
         <div className="td-foot">becoming · phase {data.currentPhase} · day {data.denialDay} of 90</div>
       </main>
+
+      {queueDetail && (
+        <div
+          onClick={() => setQueueDetail(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ background: '#111116', border: '1px solid #1a1a20', borderRadius: 12, padding: 20, maxWidth: 520, width: '100%', color: '#e8e6e3' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+              <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#c4b5fd', fontWeight: 700 }}>{queueDetail.kind}</span>
+              <span style={{ fontSize: 10.5, color: '#5a5560', marginLeft: 'auto' }}>{queueDetail.timeAgo}</span>
+            </div>
+            <div style={{ fontSize: 14, lineHeight: 1.55, color: '#e8e6e3', marginBottom: 16 }}>{queueDetail.body}</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                className="td-btn primary"
+                onClick={() => {
+                  sessionStorage.setItem('handler_chat_prefill', `Re: ${queueDetail.body.slice(0, 120)}${queueDetail.body.length > 120 ? '...' : ''}\n\n`);
+                  ackQueueMsg(queueDetail.id);
+                  setQueueDetail(null);
+                  window.location.hash = '';
+                  onExit?.();
+                }}
+              >
+                Reply in chat
+              </button>
+              <button
+                className="td-btn"
+                onClick={() => { ackQueueMsg(queueDetail.id); setQueueDetail(null); }}
+              >
+                Acknowledge
+              </button>
+              <button className="td-btn" onClick={() => setQueueDetail(null)} style={{ marginLeft: 'auto' }}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

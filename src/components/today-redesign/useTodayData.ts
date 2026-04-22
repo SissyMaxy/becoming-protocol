@@ -79,6 +79,14 @@ export interface OrgasmDebtState {
   lastRelease: string | null;
 }
 
+export interface PriorityBanner {
+  kind: 'overdue_dose' | 'hrt_stuck' | 'escrow_deadline' | 'keyholder_pending' | 'compliance_low' | 'enable_push';
+  severity: 'critical' | 'high' | 'info';
+  text: string;
+  actionLabel?: string;
+  actionHref?: string;
+}
+
 export interface TodayData {
   denialDay: number;
   currentPhase: number;
@@ -104,6 +112,7 @@ export interface TodayData {
   keyholderPending: number;
   weightSeries: { date: string; kg: number }[];
   latestProgressPhotoUrl: string | null;
+  banners: PriorityBanner[];
   loading: boolean;
 }
 
@@ -216,6 +225,7 @@ export function useTodayData() {
     keyholderPending: 0,
     weightSeries: [],
     latestProgressPhotoUrl: null,
+    banners: [],
     loading: true,
   });
 
@@ -244,6 +254,7 @@ export function useTodayData() {
       keyholderRes,
       weightSeriesRes,
       latestPhotoRes,
+      heldEscrowRes,
     ] = await Promise.all([
       supabase
         .from('user_state')
@@ -339,6 +350,14 @@ export function useTodayData() {
         .order('completed_at', { ascending: false })
         .limit(1)
         .maybeSingle(),
+      supabase
+        .from('escrow_deposits')
+        .select('amount_cents, trigger_step, deadline_at, payment_status')
+        .eq('user_id', user.id)
+        .eq('payment_status', 'held')
+        .order('deadline_at', { ascending: true })
+        .limit(1)
+        .maybeSingle(),
     ]);
 
     // Compliance: % of directives in the last 7d that were completed on or
@@ -425,6 +444,50 @@ export function useTodayData() {
 
     const latestProgressPhotoUrl = (latestPhotoRes.data as { proof_photo_url?: string } | null)?.proof_photo_url || null;
 
+    // Build priority banners — most urgent first, cap at 3
+    const banners: PriorityBanner[] = [];
+    const overdueDose = nextDoses.find(d => d.isOverdue);
+    if (overdueDose) {
+      const hrs = Math.abs(Math.round(overdueDose.hoursUntil));
+      banners.push({
+        kind: 'overdue_dose',
+        severity: 'critical',
+        text: `${overdueDose.medicationName} dose overdue by ${hrs >= 48 ? Math.round(hrs / 24) + 'd' : hrs + 'h'}. Log it or skip it — the Handler sees both.`,
+      });
+    }
+    const heldEscrow = heldEscrowRes.data as { amount_cents: number; trigger_step: string; deadline_at: string } | null;
+    if (heldEscrow?.deadline_at) {
+      const hoursLeft = (new Date(heldEscrow.deadline_at).getTime() - nowMs) / 3600000;
+      if (hoursLeft > 0 && hoursLeft < 48) {
+        banners.push({
+          kind: 'escrow_deadline',
+          severity: 'critical',
+          text: `$${(heldEscrow.amount_cents / 100).toFixed(0)} escrow forfeits in ${Math.round(hoursLeft)}h if you don't hit ${heldEscrow.trigger_step}.`,
+        });
+      }
+    }
+    if (hrt && hrt.daysStuck >= 7 && hrt.step !== 'adherent' && hrt.step !== 'uncommitted') {
+      banners.push({
+        kind: 'hrt_stuck',
+        severity: 'high',
+        text: `Stuck on ${hrt.stepLabel.toLowerCase()} for ${hrt.daysStuck} days. Move or the bleed continues.`,
+      });
+    }
+    if (keyholderPending > 0) {
+      banners.push({
+        kind: 'keyholder_pending',
+        severity: 'info',
+        text: `${keyholderPending} keyholder ${keyholderPending === 1 ? 'request' : 'requests'} awaiting response.`,
+      });
+    }
+    if (resolved >= 3 && compliancePct < 50) {
+      banners.push({
+        kind: 'compliance_low',
+        severity: 'high',
+        text: `7-day compliance ${compliancePct}% across ${resolved} directives. The math says consequences.`,
+      });
+    }
+
     const m = measurementRes.data as Record<string, number | null> | null;
     const firstM = firstMeasurementRes.data as { weight_kg: number | null } | null;
     const t = targetsRes.data as Record<string, unknown> | null;
@@ -441,6 +504,15 @@ export function useTodayData() {
         dueDate: tu.date,
         photoRequired: Boolean(d.photo_required),
       };
+    }).sort((a, b) => {
+      // Open directives first, then done. Within open, soonest deadline first;
+      // no-deadline items go last. Within done, most-recent completion first
+      // (directives already come sorted by created_at desc).
+      if (a.done !== b.done) return a.done ? 1 : -1;
+      if (a.done) return 0;
+      const aMs = a.dueDate ? a.dueDate.getTime() : Number.POSITIVE_INFINITY;
+      const bMs = b.dueDate ? b.dueDate.getTime() : Number.POSITIVE_INFINITY;
+      return aMs - bMs;
     });
 
     const queue: TodayQueueMsg[] = (queueRes.data || []).map((q: Record<string, unknown>) => {
@@ -544,6 +616,7 @@ export function useTodayData() {
       keyholderPending,
       weightSeries,
       latestProgressPhotoUrl,
+      banners: banners.slice(0, 3),
       mealsToday,
       aestheticPreset: (t?.aesthetic_preset as string) || 'femboy',
       targets,

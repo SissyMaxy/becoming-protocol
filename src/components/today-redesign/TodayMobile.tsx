@@ -31,6 +31,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
   const [mealTab, setMealTab] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('breakfast');
   const [expandedDirective, setExpandedDirective] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [queueDetail, setQueueDetail] = useState<null | { id: string; kind: string; body: string; timeAgo: string }>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingUploadDirectiveId = useRef<string | null>(null);
   const { permission, requestPermission } = usePushNotifications();
@@ -123,7 +124,20 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
         </div>
       )}
 
-      {permission !== 'granted' && permission !== 'unsupported' && tab === 'today' && (
+      {tab === 'today' && data.banners.map((banner, i) => {
+        const colors = banner.severity === 'critical'
+          ? { border: '#7a1f22', bg: 'linear-gradient(92deg, #2a0a0c, #1a0608)', text: '#f47272' }
+          : banner.severity === 'high'
+          ? { border: '#7a5a1f', bg: 'linear-gradient(92deg, #2a1f0a, #1f1608)', text: '#f4c272' }
+          : { border: '#2d1a4d', bg: 'linear-gradient(92deg, #1a0f2e, #150a24)', text: '#c4b5fd' };
+        return (
+          <div key={i} className="tdm-banner" style={{ background: colors.bg, borderColor: colors.border }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={colors.text} strokeWidth="1.8"><circle cx="12" cy="12" r="10" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg>
+            <div className="t" style={{ color: colors.text }}>{banner.text}</div>
+          </div>
+        );
+      })}
+      {data.banners.length === 0 && permission !== 'granted' && permission !== 'unsupported' && tab === 'today' && (
         <div className="tdm-banner">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M15 17h5l-1.4-1.4A7 7 0 0 1 17 10.6V10a5 5 0 0 0-10 0v.6a7 7 0 0 1-1.6 5L4 17h5" /><path d="M9 17a3 3 0 0 0 6 0" /></svg>
           <div className="t">Enable notifications so Handler can reach you anytime</div>
@@ -291,12 +305,12 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             {data.queue.length === 0 ? (
               <div style={{ padding: 14, color: '#6a656e', fontSize: 12.5 }}>Silence on purpose. I reach when it moves the protocol.</div>
             ) : data.queue.map(m => (
-              <button key={m.id} className={`tdm-msg ${m.priority ? 'priority' : ''}`} onClick={() => ackQueueMsg(m.id)} style={{ textAlign: 'left', background: 'none', border: 'none', width: '100%', display: 'block', cursor: 'pointer' }}>
+              <button key={m.id} className={`tdm-msg ${m.priority ? 'priority' : ''}`} onClick={() => setQueueDetail({ id: m.id, kind: m.kind, body: m.body, timeAgo: m.timeAgo })} style={{ textAlign: 'left', background: 'none', border: 'none', width: '100%', display: 'block', cursor: 'pointer' }}>
                 <div className="tdm-msghead">
                   <span className={`tdm-msgkind ${m.kindClass}`}>{m.kind}</span>
                   <span className="tdm-msgtime">{m.timeAgo}</span>
                 </div>
-                <div className="tdm-msgbody">{m.body}</div>
+                <div className="tdm-msgbody">{m.body.length > 140 ? m.body.slice(0, 140) + '…' : m.body}</div>
               </button>
             ))}
           </div>
@@ -455,6 +469,46 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           <div className="lbl">Me</div>
         </button>
       </div>
+
+      {queueDetail && (
+        <div
+          onClick={() => setQueueDetail(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 100, display: 'flex', alignItems: 'flex-end', padding: 16 }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ background: '#111116', border: '1px solid #1a1a20', borderRadius: 12, padding: 18, width: '100%', color: '#e8e6e3' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#c4b5fd', fontWeight: 700 }}>{queueDetail.kind}</span>
+              <span style={{ fontSize: 10.5, color: '#5a5560', marginLeft: 'auto' }}>{queueDetail.timeAgo}</span>
+            </div>
+            <div style={{ fontSize: 14, lineHeight: 1.55, color: '#e8e6e3', marginBottom: 14 }}>{queueDetail.body}</div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button
+                className="tdm-btn primary"
+                style={{ flex: 1, padding: '8px', justifyContent: 'center', textAlign: 'center' }}
+                onClick={() => {
+                  sessionStorage.setItem('handler_chat_prefill', `Re: ${queueDetail.body.slice(0, 120)}${queueDetail.body.length > 120 ? '...' : ''}\n\n`);
+                  ackQueueMsg(queueDetail.id);
+                  setQueueDetail(null);
+                  window.location.hash = '';
+                  onExit?.();
+                }}
+              >
+                Reply in chat
+              </button>
+              <button
+                className="tdm-btn"
+                style={{ padding: '8px 12px' }}
+                onClick={() => { ackQueueMsg(queueDetail.id); setQueueDetail(null); }}
+              >
+                Acknowledge
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
