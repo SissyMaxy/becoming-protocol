@@ -337,8 +337,42 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
                   <div className="tdm-diract">
                     {d.done
                       ? <button className="tdm-btn" onClick={() => toggleDirective(d.id, true)}>Undo</button>
-                      : <button className="tdm-btn primary" onClick={() => toggleDirective(d.id, false)}>Complete</button>}
-                    {d.photoRequired && (
+                      : d.actionHint
+                        ? (
+                          <button
+                            className="tdm-btn primary"
+                            onClick={() => {
+                              if (d.actionHint === 'log_meal') {
+                                setTab('today');
+                                setTimeout(() => document.getElementById('tdm-section-meal')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+                              } else if (d.actionHint === 'log_measurement') {
+                                setTab('body');
+                                setTimeout(() => document.getElementById('tdm-section-target')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+                              } else if (d.actionHint === 'upload_photo') {
+                                handleProofClick(d.id);
+                              } else if (d.actionHint === 'voice_practice') {
+                                sessionStorage.setItem('handler_chat_prefill', 'Start voice practice. Give me the target pitch and phrase.');
+                                window.location.hash = ''; onExit?.();
+                              } else if (d.actionHint === 'journal_entry') {
+                                sessionStorage.setItem('handler_chat_prefill', `Re: ${d.body.slice(0, 100)}\n\n`);
+                                window.location.hash = ''; onExit?.();
+                              } else if (d.actionHint === 'log_dose') {
+                                sessionStorage.setItem('handler_chat_prefill', "Log today's dose.");
+                                window.location.hash = ''; onExit?.();
+                              } else if (d.actionHint === 'log_workout') {
+                                sessionStorage.setItem('handler_chat_prefill', `Workout logged. ${d.body.slice(0, 80)}`);
+                                window.location.hash = ''; onExit?.();
+                              }
+                            }}
+                          >
+                            {d.actionLabel}
+                          </button>
+                        )
+                        : <button className="tdm-btn primary" onClick={() => toggleDirective(d.id, false)}>Complete</button>}
+                    {d.actionHint && !d.done && (
+                      <button className="tdm-btn" onClick={() => toggleDirective(d.id, false)}>Done</button>
+                    )}
+                    {d.photoRequired && d.actionHint !== 'upload_photo' && (
                       <button className="tdm-btn" onClick={() => handleProofClick(d.id)} disabled={uploadingId === d.id}>
                         {uploadingId === d.id ? '…' : 'Proof'}
                       </button>
@@ -466,7 +500,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
       )}
 
       {(tab === 'today' || tab === 'body') && (
-        <div className="tdm-sec">
+        <div className="tdm-sec" id="tdm-section-meal">
           <div className="tdm-sech">
             <span className="t">Meal log</span>
             <span className="chip">{Math.round(data.proteinToday)} / {data.proteinTarget}g</span>
@@ -519,7 +553,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
       )}
 
       {(tab === 'today' || tab === 'body') && (
-        <div className="tdm-sec">
+        <div className="tdm-sec" id="tdm-section-target">
           <div className="tdm-sech">
             <span className="t">Aesthetic target</span>
             <span className="chip">{data.aestheticPreset}{weightDelta ? ` · −${weightDelta}kg` : ''}</span>

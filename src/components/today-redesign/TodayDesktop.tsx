@@ -441,8 +441,42 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
                 <div className="td-diractions">
                   {d.done
                     ? <button className="td-btn" onClick={() => toggleDirective(d.id, true)}>Undo</button>
-                    : <button className="td-btn primary" onClick={() => toggleDirective(d.id, false)}>Mark complete</button>}
-                  {d.photoRequired && (
+                    : d.actionHint
+                      ? (
+                        <button
+                          className="td-btn primary"
+                          onClick={() => {
+                            if (d.actionHint === 'log_meal') {
+                              document.getElementById('td-section-meal')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            } else if (d.actionHint === 'log_measurement') {
+                              document.getElementById('td-section-target')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            } else if (d.actionHint === 'upload_photo') {
+                              handleProofClick(d.id);
+                            } else if (d.actionHint === 'voice_practice') {
+                              sessionStorage.setItem('handler_chat_prefill', 'Start voice practice. Give me the target pitch and phrase.');
+                              window.location.hash = ''; onExit?.();
+                            } else if (d.actionHint === 'journal_entry') {
+                              sessionStorage.setItem('handler_chat_prefill', `Re: ${d.body.slice(0, 100)}\n\n`);
+                              window.location.hash = ''; onExit?.();
+                            } else if (d.actionHint === 'log_dose') {
+                              sessionStorage.setItem('handler_chat_prefill', 'Log today\'s dose.');
+                              window.location.hash = ''; onExit?.();
+                            } else if (d.actionHint === 'log_workout') {
+                              sessionStorage.setItem('handler_chat_prefill', `Workout logged. ${d.body.slice(0, 80)}`);
+                              window.location.hash = ''; onExit?.();
+                            }
+                          }}
+                        >
+                          {d.actionLabel}
+                        </button>
+                      )
+                      : <button className="td-btn primary" onClick={() => toggleDirective(d.id, false)}>Mark complete</button>}
+                  {d.actionHint && !d.done && (
+                    <button className="td-btn" onClick={() => toggleDirective(d.id, false)} title="Mark this directive complete">
+                      Mark done
+                    </button>
+                  )}
+                  {d.photoRequired && d.actionHint !== 'upload_photo' && (
                     <button
                       className="td-btn"
                       onClick={() => handleProofClick(d.id)}
@@ -589,7 +623,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
             </div>
           </div>
 
-          <div className="td-card">
+          <div className="td-card" id="td-section-meal">
             <div className="td-cardh">
               <svg className="td-iconsm td-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 9h18" /></svg>
               <div className="td-title">Meal log</div>
@@ -621,7 +655,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
           </div>
         </div>
 
-        <div className="td-card">
+        <div className="td-card" id="td-section-target">
           <div className="td-cardh">
             <svg className="td-iconsm td-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 7L10 17l-5-5" /></svg>
             <div className="td-title">Aesthetic target · {data.aestheticPreset}</div>

@@ -8,6 +8,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 
+export type DirectiveAction = 'log_meal' | 'log_measurement' | 'upload_photo' | 'voice_practice' | 'journal_entry' | 'log_workout' | 'log_dose' | null;
+
 export interface TodayDirective {
   id: string;
   kind: string;
@@ -17,6 +19,8 @@ export interface TodayDirective {
   due: string;
   dueDate: Date | null;
   photoRequired: boolean;
+  actionHint: DirectiveAction;
+  actionLabel: string | null;
 }
 
 export interface TodayQueueMsg {
@@ -206,6 +210,18 @@ function classifyKind(triggerReason: string, urgency: string): { label: string; 
   if (r.includes('correction') || r.includes('slip') || r.includes('missed')) return { label: 'Correction', klass: 'correction', priority: false };
   if (r.includes('directive') || r.includes('body_change') || r.includes('photo') || r.includes('measurement')) return { label: 'Directive', klass: 'directive', priority: u === 'high' };
   return { label: 'Directive', klass: 'directive', priority: u === 'high' };
+}
+
+function inferAction(body: string, category: string | null, _targetBodyPart: string | null, photoRequired: boolean): { hint: DirectiveAction; label: string | null } {
+  const t = body.toLowerCase();
+  if (/log[_\s]meal|protein.*gram|meal.*log|log every meal|log each meal|via log_meal/.test(t)) return { hint: 'log_meal', label: 'Log meal' };
+  if (/measurement|waist.*hip|hips.*chest|log.*waist|log.*hips|via log_measurement/.test(t)) return { hint: 'log_measurement', label: 'Log measurement' };
+  if (photoRequired || /progress photo|full body front|front \+ side|underwear only|selfie/.test(t)) return { hint: 'upload_photo', label: 'Upload photo' };
+  if (/voice practice|pitch|speak.*pitch|record.*voice/.test(t)) return { hint: 'voice_practice', label: 'Start voice practice' };
+  if (/journal|write.*sentences|write.*response|reflection/.test(t) || category === 'reflection') return { hint: 'journal_entry', label: 'Journal it' };
+  if (/injection|inject|dose|zepbound|hrt dose|log.*dose/.test(t)) return { hint: 'log_dose', label: 'Log dose' };
+  if (/workout|strength|cardio|squat|deadlift|exercise|gym/.test(t) && category !== 'diet') return { hint: 'log_workout', label: 'Log workout' };
+  return { hint: null, label: null };
 }
 
 function prettifyKind(category: string | null): string {
@@ -624,15 +640,20 @@ export function useTodayData() {
 
     const directives: TodayDirective[] = (directivesRes.data || []).map((d: Record<string, unknown>) => {
       const tu = timeUntil(d.deadline_at as string | null);
+      const body = (d.directive as string) || '';
+      const photoRequired = Boolean(d.photo_required);
+      const { hint, label } = inferAction(body, d.category as string | null, d.target_body_part as string | null, photoRequired);
       return {
         id: d.id as string,
         kind: prettifyKind(d.category as string | null),
         target: prettifyBodyPart(d.target_body_part as string | null),
-        body: (d.directive as string) || '',
+        body,
         done: d.status === 'completed',
         due: tu.short,
         dueDate: tu.date,
-        photoRequired: Boolean(d.photo_required),
+        photoRequired,
+        actionHint: hint,
+        actionLabel: label,
       };
     }).sort((a, b) => {
       // Open directives first, then done. Within open, soonest deadline first;
