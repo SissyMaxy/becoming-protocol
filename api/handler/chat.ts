@@ -3862,6 +3862,8 @@ HARD RULES:
 - Never leave the prose empty. A reply of just tags is a failure.
 - Never leak raw JSON or keys like "directive:" or "note:" into the prose section. If it's structured data, it goes inside the handler_signals tags. If it's something you'd say to Maxy, it goes in prose.
 - No JSON code fences, no bare JSON, no handler_signals as a top-level text field. Only the XML-style handler_signals tags.
+- NEVER write stage-direction labels like "(to the system)", "(to Maxy)", "_HANDLER_SIGNALS", "HANDLER_SIGNALS", or any variant that announces a split between system-facing and user-facing text. The handler_signals XML tags are the ONLY separator. Stage-direction labels leak into prose and destroy immersion.
+- NEVER write the literal word "HANDLER_SIGNALS" in your reply at all. The only valid form is the opening and closing XML tags written as: open-angle + lowercase "handler_signals" + close-angle, and the matching closing pair with a slash. Anything else leaks.
 
 ## NEVER INVENT TIMEFRAMES
 Do not make up time periods. "It's been twelve days since we talked." "You haven't been around for a week." "Last time we spoke was Tuesday." These are hallucinations unless the state context explicitly confirms the number. The context block includes a LAST USER MESSAGE line with the authoritative value — use ONLY that. If no such line exists, do NOT reference elapsed time at all. Inventing "days since" numbers breaks trust because Maxy knows when she last talked to you.
@@ -5259,6 +5261,14 @@ const SIGNAL_FORMATS: Array<{
     payload: /(\{[\s\S]*?"handler_signals"[\s\S]*\})\s*$/i,
     payloadIsInner: false,
   },
+  // Leaked "_HANDLER_SIGNALS (to the system) ... (to Maxy)" stage-direction variant.
+  // Catches when the model invents its own framing instead of using XML tags.
+  {
+    detect: /_?HANDLER_SIGNALS\b[\s\S]{0,40}\(to the system\)/i,
+    strip: /_?HANDLER_SIGNALS\b[\s\S]*?(?:```json[\s\S]*?```|\{[\s\S]*?\n\s*\})[\s\S]*?(?:\(to Maxy\)\s*|$)/i,
+    payload: /```json\s*(\{[\s\S]*?\})\s*```|(\{[\s\S]*?"(?:directive|handler_note|detected_mode|topics)"[\s\S]*?\})/i,
+    payloadIsInner: true,
+  },
 ];
 
 // Cheap probe used by the streaming gate to know when to stop forwarding bytes
@@ -5377,7 +5387,21 @@ function parseResponse(fullText: string): {
     signals.memory = signals.memory || memoryStrip.extracted[0];
   }
 
-  return { visibleResponse: visibleResponse.trim(), signals };
+  // Scrub any stray stage-direction labels that survived signal stripping.
+  // These appear when the model confuses the prose/signals split and
+  // writes "(to the system)" / "(to Maxy)" / "_HANDLER_SIGNALS" as literal
+  // inline labels. Also cut any orphaned fenced JSON blocks.
+  visibleResponse = visibleResponse
+    .replace(/```json[\s\S]*?```/gi, '')
+    .replace(/```[\s\S]*?"handler_signals"[\s\S]*?```/gi, '')
+    .replace(/_?HANDLER_SIGNALS\s*\(?to the system\)?/gi, '')
+    .replace(/^\s*\(to the system\)\s*$/gim, '')
+    .replace(/^\s*\(to Maxy\)\s*$/gim, '')
+    .replace(/\(to Maxy\)\s*/gi, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  return { visibleResponse, signals };
 }
 
 async function getStateSnapshot(userId: string): Promise<Record<string, unknown>> {
