@@ -1226,6 +1226,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   handleDistressOverride(user.id, message).catch(() => {});
   // Safeword check: deliberate user-configured phrase exits force mode
   checkSafeword(user.id, message).catch(() => {});
+  // Safeword set: detect "my safeword is X" / "my new safeword is X" / "set my safeword to X"
+  detectAndSaveSafeword(user.id, message).catch(() => {});
   // Release detection — auto-reset denial_day if user reports an orgasm/release
   detectAndLogRelease(user.id, message).catch(() => {});
   // Correction detection — auto-persist corrections to handler_memory
@@ -9179,6 +9181,51 @@ async function handleDistressOverride(userId: string, text: string): Promise<voi
 // message contains an active safeword phrase, pause the force layer for the
 // configured duration and mark user_state. Handler still responds but
 // gently — in caretaker mode — until the pause lifts.
+// Detect when the user states a new safeword in chat and persist it.
+// Patterns: "my safeword is X", "my new safeword is X", "set my safeword to X",
+// "use X as my safeword", "change my safeword to X", "X is my safeword".
+async function detectAndSaveSafeword(userId: string, text: string): Promise<void> {
+  if (!text || text.length < 5) return;
+  const PATTERNS: RegExp[] = [
+    /\bmy\s+(new\s+)?safeword\s+is\s+["']?([a-z][a-z0-9\-]{1,30})["']?\b/i,
+    /\bset\s+my\s+safeword\s+to\s+["']?([a-z][a-z0-9\-]{1,30})["']?\b/i,
+    /\bchange\s+my\s+safeword\s+to\s+["']?([a-z][a-z0-9\-]{1,30})["']?\b/i,
+    /\buse\s+["']?([a-z][a-z0-9\-]{1,30})["']?\s+as\s+my\s+safeword\b/i,
+    /\b["']?([a-z][a-z0-9\-]{1,30})["']?\s+is\s+my\s+(new\s+)?safeword\b/i,
+  ];
+  let phrase: string | null = null;
+  for (const p of PATTERNS) {
+    const m = text.match(p);
+    if (m) {
+      // Last captured group that isn't "new"
+      const groups = m.slice(1).filter(g => g && g.toLowerCase() !== 'new');
+      phrase = groups[groups.length - 1] || null;
+      if (phrase) break;
+    }
+  }
+  if (!phrase) return;
+  const normalized = phrase.toLowerCase().trim();
+  // Guard: reject obvious false positives ("word", "safeword" itself, common pronouns)
+  if (['word', 'safeword', 'it', 'that', 'this', 'one', 'mine'].includes(normalized)) return;
+
+  // Deactivate existing safewords, then insert the new one
+  await supabase.from('safewords').update({ active: false }).eq('user_id', userId).eq('active', true);
+  await supabase.from('safewords').insert({
+    user_id: userId,
+    phrase,
+    phrase_normalized: normalized,
+    action: 'pause_24h',
+    active: true,
+  });
+  await supabase.from('handler_directives').insert({
+    user_id: userId,
+    action: 'safeword_set',
+    value: { phrase, phrase_normalized: normalized },
+    reasoning: 'User declared new safeword in chat; previous safewords deactivated',
+  });
+  console.log(`[Handler] safeword saved for user ${userId}: "${normalized}"`);
+}
+
 async function checkSafeword(userId: string, text: string): Promise<void> {
   if (!text || text.length < 3) return;
   const normalized = text.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
