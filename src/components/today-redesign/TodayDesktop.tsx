@@ -93,6 +93,11 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
     }
   }, [data.currentPhase, data.loading]);
 
+  const scrollToSection = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   const sendCompose = () => {
     const text = composeText.trim();
     if (!text) return;
@@ -172,20 +177,20 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
           <div className="td-brandrole">you</div>
         </div>
         <div className="td-navsec">Today</div>
-        <button className="td-navitem on">Directives<span className="td-dot" /></button>
-        <button className="td-navitem">Protocol</button>
-        <button className="td-navitem">Meal log</button>
+        <button className="td-navitem on" onClick={() => scrollToSection('td-section-directives')}>Directives<span className="td-dot" /></button>
+        <button className="td-navitem" onClick={() => scrollToSection('td-section-protocol')}>Protocol</button>
+        <button className="td-navitem" onClick={() => scrollToSection('td-section-meal')}>Meal log</button>
         <div className="td-navsec">Connection</div>
-        <button className="td-navitem">
+        <button className="td-navitem" onClick={() => scrollToSection('td-section-queue')}>
           Queue
           {data.queue.length > 0 && <span className="td-navbadge">{data.queue.length}</span>}
         </button>
-        <button className="td-navitem">Requests</button>
-        <button className="td-navitem">Reflections</button>
+        <button className="td-navitem" onClick={() => scrollToSection('td-section-hrt')}>Requests</button>
+        <button className="td-navitem" onClick={() => scrollToSection('td-section-future')}>Reflections</button>
         <div className="td-navsec">Measures</div>
-        <button className="td-navitem">Body</button>
-        <button className="td-navitem">Arousal</button>
-        <button className="td-navitem">Medication</button>
+        <button className="td-navitem" onClick={() => scrollToSection('td-section-target')}>Body</button>
+        <button className="td-navitem" onClick={() => scrollToSection('td-section-arousal')}>Arousal</button>
+        <button className="td-navitem" onClick={() => scrollToSection('td-section-hrt')}>Medication</button>
         {onExit && (
           <button onClick={onExit} className="td-navitem" style={{ marginTop: 12, color: '#f47272' }}>
             Back to chat
@@ -322,7 +327,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
 
         {/* HRT funnel + dose countdown + keyholder — top priority row */}
         {(data.hrt || data.nextDoses.length > 0 || data.keyholderPending > 0) && (
-          <div className="td-grid even" style={{ marginBottom: 16 }}>
+          <div className="td-grid even" style={{ marginBottom: 16 }} id="td-section-hrt">
             {data.hrt && (
               <div className="td-card" style={{ gridColumn: data.nextDoses.length === 0 && data.keyholderPending === 0 ? 'span 2' : 'span 1' }}>
                 <div className="td-cardh">
@@ -404,7 +409,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
           </div>
         )}
 
-        <div className="td-grid">
+        <div className="td-grid" id="td-section-directives">
           <div className="td-card">
             <div className="td-cardh">
               <svg className="td-iconsm td-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>
@@ -519,7 +524,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
             ))}
           </div>
 
-          <div className="td-card">
+          <div className="td-card" id="td-section-protocol">
             <div className="td-cardh">
               <svg className="td-iconsm td-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>
               <div className="td-title">Protocol progress</div>
@@ -560,7 +565,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
           </div>
         </div>
 
-        <div className="td-grid even">
+        <div className="td-grid even" id="td-section-queue">
           <div className="td-card">
             <div className="td-cardh">
               <svg className="td-iconsm td-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3h18v12H5l-2 2V3z" /></svg>
@@ -582,7 +587,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
             </div>
           </div>
 
-          <div className="td-card">
+          <div className="td-card" id="td-section-arousal">
             <div className="td-cardh">
               <svg className="td-iconsm td-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2v20M2 12h20" /></svg>
               <div className="td-title">Arousal level</div>
@@ -617,7 +622,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
           </div>
         </div>
 
-        <div className="td-grid even">
+        <div className="td-grid even" id="td-section-future">
           <div className="td-card">
             <div className="td-cardh">
               <svg className="td-iconsm td-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2a4 4 0 0 0-4 4v6a4 4 0 0 0 8 0V6a4 4 0 0 0-4-4z" /><path d="M5 10v2a7 7 0 0 0 14 0v-2" /></svg>
