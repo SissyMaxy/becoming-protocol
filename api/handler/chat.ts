@@ -9085,6 +9085,7 @@ function parseReleaseDateFromText(text: string): string {
   const lower = (text || '').toLowerCase();
   let target = new Date(now);
   let matched = false;
+  let timeSet = false; // specific-branch time takes precedence over generic postprocess
 
   const daysAgoMatch = lower.match(/\b(\d+)\s+days?\s+ago\b/);
   if (daysAgoMatch) {
@@ -9096,6 +9097,7 @@ function parseReleaseDateFromText(text: string): string {
     target.setDate(target.getDate() - 1);
     target.setHours(23, 0, 0, 0);
     matched = true;
+    timeSet = true;
   } else if (/\byesterday\b/.test(lower)) {
     target = new Date(now);
     target.setDate(target.getDate() - 1);
@@ -9104,6 +9106,7 @@ function parseReleaseDateFromText(text: string): string {
     target = new Date(now);
     target.setHours(7, 0, 0, 0);
     matched = true;
+    timeSet = true;
   } else {
     const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     for (let i = 0; i < dayNames.length; i++) {
@@ -9130,13 +9133,13 @@ function parseReleaseDateFromText(text: string): string {
     if (ampm === 'am' && h === 12) h = 0;
     if (h >= 0 && h <= 23) {
       target.setHours(h, m, 0, 0);
+      timeSet = true;
     }
-  } else if (/\bnight\b/.test(lower) && matched) {
-    target.setHours(22, 0, 0, 0);
-  } else if (/\bevening\b/.test(lower) && matched) {
-    target.setHours(19, 0, 0, 0);
-  } else if (/\bmorning\b/.test(lower) && matched) {
-    target.setHours(8, 0, 0, 0);
+  }
+  if (!timeSet && matched) {
+    if (/\bnight\b/.test(lower)) target.setHours(22, 0, 0, 0);
+    else if (/\bevening\b/.test(lower)) target.setHours(19, 0, 0, 0);
+    else if (/\bmorning\b/.test(lower)) target.setHours(8, 0, 0, 0);
   }
 
   return (matched ? target : now).toISOString();
