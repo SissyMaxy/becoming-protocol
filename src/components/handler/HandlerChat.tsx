@@ -409,10 +409,12 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
         <IdentityFadingBar userId={authUser?.id} />
       </div>
 
-      {/* Mobile: stacked panels are hidden — full content lives on /#/today.
-          Desktop: panels show below the identity bar and above messages. */}
+      {/* Directive summary bar — one line, routes to /#/today for full UI.
+          Shows on every viewport. */}
+      <BodyDirectiveChecklist />
+
+      {/* Full Force Feminization Panel — desktop only. On mobile the dashboard lives on /#/today. */}
       <div className="hidden md:block">
-        <BodyDirectiveChecklist />
         <ForceFeminizationPanel />
       </div>
 
