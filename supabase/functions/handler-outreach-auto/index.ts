@@ -20,6 +20,14 @@ serve(async req => {
     const hourUTC = now.getUTCHours()
     const today = now.toISOString().split('T')[0]
 
+    // Auto-sweep: mark any expired undelivered messages as delivered so they
+    // stop showing up as pending forever. Runs once per cron tick.
+    await supa
+      .from('handler_outreach_queue')
+      .update({ delivered_at: now.toISOString() })
+      .is('delivered_at', null)
+      .lt('expires_at', now.toISOString())
+
     // Get users with active state
     const { data: users } = await supa
       .from('user_state')
@@ -867,14 +875,19 @@ GROUNDING RULES:
         message = fallbacks[triggerReason] || `Check in. I'm waiting.`
       }
 
-      // Queue the outreach
+      // Queue the outreach. Expiry scales with urgency so low-urgency
+      // messages don't silently vanish before the user opens the app.
+      // Critical: 12h (still time-sensitive). High: 48h. Normal: 72h.
+      const expiryMs = urgency === 'critical' ? 12 * 3600000
+        : urgency === 'high' ? 48 * 3600000
+        : 72 * 3600000;
       await supa.from('handler_outreach_queue').insert({
         user_id: userId,
         message,
         urgency,
         trigger_reason: triggerReason,
         scheduled_for: now.toISOString(),
-        expires_at: new Date(now.getTime() + 6 * 3600000).toISOString(),
+        expires_at: new Date(now.getTime() + expiryMs).toISOString(),
       })
 
       queued++
