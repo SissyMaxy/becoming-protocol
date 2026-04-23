@@ -36,6 +36,7 @@ import { WitnessManager, CaseFileView, SealedEnvelopesPage, QuitFrictionGate, Es
 import { ForceDashboard } from './components/force/ForceDashboard';
 import { ForceStatusStrip } from './components/force/ForceStatusStrip';
 import { TodayView as TodayRedesignView } from './components/today-redesign';
+import { ConditioningLockdown } from './components/today-redesign/ConditioningLockdown';
 import { GinaKeyHolderPage } from './components/gina/GinaKeyHolderPage';
 import { usePunishmentNotifications } from './hooks/usePunishmentNotifications';
 import { DailyReportCard } from './components/handler/DailyReportCard';
@@ -996,12 +997,15 @@ function AuthenticatedAppInner() {
 
   if (showTodayRedesign) {
     return (
-      <TodayRedesignView
-        onExit={() => {
-          window.location.hash = '';
-          setShowTodayRedesign(false);
-        }}
-      />
+      <>
+        <TodayRedesignView
+          onExit={() => {
+            window.location.hash = '';
+            setShowTodayRedesign(false);
+          }}
+        />
+        <ConditioningLockdown />
+      </>
     );
   }
 
@@ -1047,6 +1051,9 @@ function AuthenticatedAppInner() {
       )}
 
       <FloatingHearts />
+
+      {/* Conditioning lockdown — fullscreen enforcement during configured window */}
+      <ConditioningLockdown />
 
       {/* Whoop OAuth callback toast */}
       {whoopToast && (
