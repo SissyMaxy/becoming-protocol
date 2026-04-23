@@ -58,7 +58,7 @@ interface TodayDesktopProps {
 }
 
 export function TodayDesktop({ onExit }: TodayDesktopProps) {
-  const { data, toggleDirective, setArousal, ackQueueMsg, saveDiaryResponse, logMeal, uploadDirectiveProof } = useTodayData();
+  const { data, toggleDirective, setArousal, ackQueueMsg, saveDiaryResponse, logMeal, uploadDirectiveProof, logDoseTaken, logDoseSkipped } = useTodayData();
   const [mealTab, setMealTab] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('breakfast');
   const [mealForm, setMealForm] = useState({ foods: '', protein: '', calories: '', permission: false, photo: false });
   const [uploadingId, setUploadingId] = useState<string | null>(null);
@@ -360,14 +360,32 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
                     const rounded = Math.abs(Math.round(dose.hoursUntil));
                     const humanTime = rounded >= 48 ? `${Math.round(rounded / 24)}d` : `${rounded}h`;
                     return (
-                      <div key={dose.regimenId} style={{ display: 'flex', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #15151b' }}>
-                        <div>
-                          <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6a656e', fontWeight: 600 }}>{dose.medicationName}</div>
-                          <div style={{ fontSize: 13, color: dose.isOverdue ? '#f47272' : '#e8e6e3', fontWeight: 500 }}>{dose.isOverdue ? `Overdue by ${humanTime}` : `Due in ${humanTime}`}</div>
+                      <div key={dose.regimenId} style={{ padding: '8px 0', borderBottom: '1px solid #15151b' }}>
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <div>
+                            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6a656e', fontWeight: 600 }}>{dose.medicationName}</div>
+                            <div style={{ fontSize: 13, color: dose.isOverdue ? '#f47272' : '#e8e6e3', fontWeight: 500 }}>{dose.isOverdue ? `Overdue by ${humanTime}` : `Due in ${humanTime}`}</div>
+                          </div>
+                          <span className="td-chip" style={{ marginLeft: 'auto', color: dose.isOverdue ? '#f47272' : '#c4b5fd', background: dose.isOverdue ? '#2a0f0f' : '#1a1226' }}>
+                            {dose.isWeekly ? 'weekly' : 'daily'}
+                          </span>
                         </div>
-                        <span className="td-chip" style={{ marginLeft: 'auto', color: dose.isOverdue ? '#f47272' : '#c4b5fd', background: dose.isOverdue ? '#2a0f0f' : '#1a1226' }}>
-                          {dose.isWeekly ? 'weekly' : 'daily'}
-                        </span>
+                        <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                          <button
+                            className="td-btn primary"
+                            onClick={() => logDoseTaken(dose.regimenId, dose.medicationName, null)}
+                            style={{ fontSize: 11 }}
+                          >
+                            Mark taken
+                          </button>
+                          <button
+                            className="td-btn"
+                            onClick={() => logDoseSkipped(dose.regimenId, dose.medicationName, null)}
+                            style={{ fontSize: 11 }}
+                          >
+                            Skipped
+                          </button>
+                        </div>
                       </div>
                     );
                   })}

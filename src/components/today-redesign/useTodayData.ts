@@ -840,6 +840,50 @@ export function useTodayData() {
     setData(d => ({ ...d, diaryPrompts: d.diaryPrompts.map(p => p.id === id ? { ...p, response } : p) }));
   }, []);
 
+  const logDoseTaken = useCallback(async (regimenId: string, medicationName: string, doseAmount: string | null) => {
+    if (!user?.id) return;
+    const takenAt = new Date().toISOString();
+    await supabase.from('hrt_dose_log').insert({
+      user_id: user.id,
+      regimen_id: regimenId,
+      dose_taken_at: takenAt,
+      skipped: false,
+      notes: `Logged via Today. ${medicationName}${doseAmount ? ` ${doseAmount}` : ''}`,
+    });
+    await supabase.from('dose_log').insert({
+      user_id: user.id,
+      regimen_id: regimenId,
+      taken_at: takenAt,
+    });
+    await supabase.from('handler_directives').insert({
+      user_id: user.id,
+      action: 'dose_logged_by_user',
+      target: regimenId,
+      value: { medication: medicationName, dose: doseAmount },
+      reasoning: 'User logged dose taken via Today screen',
+    });
+    await load();
+  }, [user?.id, load]);
+
+  const logDoseSkipped = useCallback(async (regimenId: string, medicationName: string, reason: string | null) => {
+    if (!user?.id) return;
+    await supabase.from('hrt_dose_log').insert({
+      user_id: user.id,
+      regimen_id: regimenId,
+      dose_taken_at: null,
+      skipped: true,
+      notes: reason || `Skipped via Today. ${medicationName}`,
+    });
+    await supabase.from('handler_directives').insert({
+      user_id: user.id,
+      action: 'dose_skipped_by_user',
+      target: regimenId,
+      value: { medication: medicationName, reason },
+      reasoning: 'User reported skipped dose via Today screen',
+    });
+    await load();
+  }, [user?.id, load]);
+
   const uploadDirectiveProof = useCallback(async (directiveId: string, file: File) => {
     if (!user?.id) return;
     const ext = file.name.split('.').pop() || 'jpg';
@@ -873,5 +917,5 @@ export function useTodayData() {
     await load();
   }, [user?.id, load]);
 
-  return { data, reload: load, toggleDirective, setArousal, ackQueueMsg, saveDiaryResponse, logMeal, uploadDirectiveProof };
+  return { data, reload: load, toggleDirective, setArousal, ackQueueMsg, saveDiaryResponse, logMeal, uploadDirectiveProof, logDoseTaken, logDoseSkipped };
 }

@@ -28,7 +28,7 @@ interface TodayMobileProps {
 }
 
 export function TodayMobile({ onExit }: TodayMobileProps) {
-  const { data, toggleDirective, setArousal, ackQueueMsg, logMeal, uploadDirectiveProof } = useTodayData();
+  const { data, toggleDirective, setArousal, ackQueueMsg, logMeal, uploadDirectiveProof, logDoseTaken, logDoseSkipped } = useTodayData();
   const [tab, setTab] = useState<MobileTab>('today');
   const [mealTab, setMealTab] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('breakfast');
   const [expandedDirective, setExpandedDirective] = useState<string | null>(null);
@@ -254,14 +254,32 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
               const rounded = Math.abs(Math.round(dose.hoursUntil));
               const humanTime = rounded >= 48 ? `${Math.round(rounded / 24)}d` : `${rounded}h`;
               return (
-                <div key={dose.regimenId} style={{ display: 'flex', alignItems: 'center', padding: '12px 14px', borderBottom: '1px solid #15151b' }}>
-                  <div>
-                    <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6a656e', fontWeight: 600 }}>{dose.medicationName}</div>
-                    <div style={{ fontSize: 13, color: dose.isOverdue ? '#f47272' : '#e8e6e3', fontWeight: 500 }}>{dose.isOverdue ? `Overdue by ${humanTime}` : `Due in ${humanTime}`}</div>
+                <div key={dose.regimenId} style={{ padding: '12px 14px', borderBottom: '1px solid #15151b' }}>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6a656e', fontWeight: 600 }}>{dose.medicationName}</div>
+                      <div style={{ fontSize: 13, color: dose.isOverdue ? '#f47272' : '#e8e6e3', fontWeight: 500 }}>{dose.isOverdue ? `Overdue by ${humanTime}` : `Due in ${humanTime}`}</div>
+                    </div>
+                    <span className="chip" style={{ marginLeft: 'auto', fontSize: 9.5, color: dose.isOverdue ? '#f47272' : '#c4b5fd', background: dose.isOverdue ? '#2a0f0f' : '#1a1226', padding: '2px 7px', borderRadius: 10, fontWeight: 700, letterSpacing: '0.02em', textTransform: 'uppercase' }}>
+                      {dose.isWeekly ? 'weekly' : 'daily'}
+                    </span>
                   </div>
-                  <span className="chip" style={{ marginLeft: 'auto', fontSize: 9.5, color: dose.isOverdue ? '#f47272' : '#c4b5fd', background: dose.isOverdue ? '#2a0f0f' : '#1a1226', padding: '2px 7px', borderRadius: 10, fontWeight: 700, letterSpacing: '0.02em', textTransform: 'uppercase' }}>
-                    {dose.isWeekly ? 'weekly' : 'daily'}
-                  </span>
+                  <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                    <button
+                      className="tdm-btn primary"
+                      onClick={() => logDoseTaken(dose.regimenId, dose.medicationName, null)}
+                      style={{ flex: 1, justifyContent: 'center', padding: '6px', textAlign: 'center' }}
+                    >
+                      Mark taken
+                    </button>
+                    <button
+                      className="tdm-btn"
+                      onClick={() => logDoseSkipped(dose.regimenId, dose.medicationName, null)}
+                      style={{ padding: '6px 12px' }}
+                    >
+                      Skipped
+                    </button>
+                  </div>
                 </div>
               );
             })}
