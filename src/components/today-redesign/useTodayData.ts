@@ -430,11 +430,23 @@ export function useTodayData() {
         .order('deadline_at', { ascending: true })
         .limit(1)
         .maybeSingle(),
-      supabase
-        .from('task_completions')
-        .select('completed_at')
-        .eq('user_id', user.id)
-        .gte('completed_at', new Date(Date.now() - 30 * 86400000).toISOString()),
+      // Heatmap union: task_bank-backed completions + body_feminization_directives
+      // completions (which can't go into task_completions due to FK constraint).
+      Promise.all([
+        supabase
+          .from('task_completions')
+          .select('completed_at')
+          .eq('user_id', user.id)
+          .gte('completed_at', new Date(Date.now() - 30 * 86400000).toISOString()),
+        supabase
+          .from('body_feminization_directives')
+          .select('completed_at')
+          .eq('user_id', user.id)
+          .eq('status', 'completed')
+          .gte('completed_at', new Date(Date.now() - 30 * 86400000).toISOString()),
+      ]).then(([a, b]) => ({
+        data: [...((a.data || []) as Array<{ completed_at: string }>), ...((b.data || []) as Array<{ completed_at: string }>)],
+      })),
       supabase
         .from('handler_messages')
         .select('role, created_at')
@@ -805,11 +817,21 @@ export function useTodayData() {
       .update({ status: newStatus, completed_at: becomingComplete ? new Date().toISOString() : null })
       .eq('id', id);
     if (becomingComplete) {
-      // Write a task_completion + bump tasks_completed_today so Handler context reflects it
-      await supabase.from('task_completions').insert({ user_id: user.id, task_id: id, completed_at: new Date().toISOString() });
+      // Note: task_completions has a FK on task_id → task_bank(id), which
+      // body_feminization_directives rows don't satisfy. We rely on
+      // body_feminization_directives.completed_at as the source of truth
+      // and bump the cached counter on user_state for Handler context.
       const { data: st } = await supabase.from('user_state').select('tasks_completed_today').eq('user_id', user.id).maybeSingle();
       const prev = (st?.tasks_completed_today as number) ?? 0;
       await supabase.from('user_state').update({ tasks_completed_today: prev + 1, updated_at: new Date().toISOString() }).eq('user_id', user.id);
+      // Audit so the Handler's evidence locker sees the completion
+      await supabase.from('handler_directives').insert({
+        user_id: user.id,
+        action: 'body_directive_completed_by_user',
+        target: id,
+        value: { completed_at: new Date().toISOString() },
+        reasoning: 'User completed body directive via Today',
+      });
     }
     setData(d => ({ ...d, directives: d.directives.map(x => x.id === id ? { ...x, done: !done } : x) }));
   }, [user?.id]);
