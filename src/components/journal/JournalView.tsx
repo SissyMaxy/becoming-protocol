@@ -223,6 +223,7 @@ export function JournalView() {
   const [freeText, setFreeText] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Timeline state
   const [entries, setEntries] = useState<JournalEntryData[]>([]);
@@ -280,21 +281,28 @@ export function JournalView() {
   useEffect(() => { setSaved(false); }, [alignment, euphoria, dysphoria, freeText]);
 
   const handleSave = async () => {
-    if (!user) return;
+    if (!user) {
+      setSaveError('Not signed in — refresh and log back in.');
+      return;
+    }
     setSaving(true);
+    setSaveError(null);
     try {
-      const ok = await saveJournalEntry(user.id, today, {
+      const result = await saveJournalEntry(user.id, today, {
         alignmentScore: alignment,
         euphoriaNote: euphoria || undefined,
         dysphoriaNote: dysphoria || undefined,
         freeText: freeText || undefined,
       });
-      if (ok) {
+      if (result.ok) {
         setSaved(true);
-        loadEntries(); // refresh timeline
+        loadEntries();
+      } else {
+        setSaveError(result.error || 'Save failed — unknown reason. Check the console.');
       }
     } catch (err) {
       console.error('Failed to save:', err);
+      setSaveError(err instanceof Error ? err.message : 'Save threw — see console.');
     } finally {
       setSaving(false);
     }
@@ -400,8 +408,16 @@ export function JournalView() {
             Capture Evidence
           </button>
 
+          {/* Save error surface */}
+          {saveError && (
+            <div className="rounded-lg border border-red-500/40 bg-red-900/20 text-red-200 text-xs p-3">
+              Save failed: {saveError}
+            </div>
+          )}
+
           {/* Save button */}
           <button
+            type="button"
             onClick={handleSave}
             disabled={saving}
             className={`w-full py-3 rounded-lg font-medium flex items-center justify-center gap-2 transition-all ${

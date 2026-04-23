@@ -309,46 +309,60 @@ export async function getJournalEntries(
   });
 }
 
+export interface SaveJournalResult {
+  ok: boolean;
+  error?: string;
+}
+
 export async function saveJournalEntry(
-    userId: string,
-    date: string,
-    data: {
-          alignmentScore?: number;
-          euphoriaNote?: string;
-          dysphoriaNote?: string;
-          freeText?: string;
-    }
-  ): Promise<boolean> {
-    // Build journal JSONB payload — stores structured data in the journal column
-  // which exists on the v1 daily_entries table
+  userId: string,
+  date: string,
+  data: {
+    alignmentScore?: number;
+    euphoriaNote?: string;
+    dysphoriaNote?: string;
+    freeText?: string;
+  },
+): Promise<SaveJournalResult> {
+  // Build journal JSONB payload — structured data for the journal column
   const journalPayload: Record<string, unknown> = {};
-    if (data.alignmentScore !== undefined) journalPayload.alignment_score = data.alignmentScore;
-    if (data.euphoriaNote !== undefined) journalPayload.euphoria_notes = data.euphoriaNote;
-    if (data.dysphoriaNote !== undefined) journalPayload.dysphoria_notes = data.dysphoriaNote;
-    if (data.freeText !== undefined) journalPayload.handler_notes = data.freeText;
+  if (data.alignmentScore !== undefined) journalPayload.alignment_score = data.alignmentScore;
+  if (data.euphoriaNote !== undefined) journalPayload.euphoria_notes = data.euphoriaNote;
+  if (data.dysphoriaNote !== undefined) journalPayload.dysphoria_notes = data.dysphoriaNote;
+  if (data.freeText !== undefined) journalPayload.handler_notes = data.freeText;
+
+  // Also mirror into top-level columns so dashboard analytics that read
+  // alignment_score / handler_notes directly stay consistent.
+  const topLevel: Record<string, unknown> = {};
+  if (data.alignmentScore !== undefined) topLevel.alignment_score = data.alignmentScore;
+  if (data.freeText !== undefined) topLevel.handler_notes = data.freeText;
 
   // First try to update existing row for today
-  const { data: existing } = await supabase
-      .from('daily_entries')
-      .select('id, journal')
-      .eq('user_id', userId)
-      .eq('date', date)
-      .maybeSingle();
+  const { data: existing, error: selectError } = await supabase
+    .from('daily_entries')
+    .select('id, journal')
+    .eq('user_id', userId)
+    .eq('date', date)
+    .maybeSingle();
+
+  if (selectError) {
+    console.error('Failed to read existing journal entry:', selectError);
+    return { ok: false, error: selectError.message };
+  }
 
   if (existing) {
-    // Merge into existing journal JSONB
     const prev = (existing.journal as Record<string, unknown>) || {};
     const merged = { ...prev, ...journalPayload };
     const { error } = await supabase
       .from('daily_entries')
-      .update({ journal: merged })
+      .update({ journal: merged, ...topLevel })
       .eq('id', existing.id);
 
     if (error) {
       console.error('Failed to update journal entry:', error);
-      return false;
+      return { ok: false, error: error.message };
     }
-    return true;
+    return { ok: true };
   }
 
   // No row yet — insert with required v1 columns
@@ -360,13 +374,14 @@ export async function saveJournalEntry(
       intensity: 'normal',
       tasks: [],
       journal: journalPayload,
+      ...topLevel,
     });
 
   if (error) {
     console.error('Failed to save journal entry:', error);
-    return false;
+    return { ok: false, error: error.message };
   }
-  return true;
+  return { ok: true };
 }
 
 // ============================================

@@ -67,9 +67,9 @@ export function JournalPrompt({ userId, currentDomain }: JournalPromptProps) {
   const handleSubmit = async () => {
     if (!text.trim()) return;
     setIsSubmitting(true);
-    const ok = await saveJournalEntry(userId, getTodayDate(), { freeText: text.trim() });
+    const result = await saveJournalEntry(userId, getTodayDate(), { freeText: text.trim() });
     setIsSubmitting(false);
-    if (ok) {
+    if (result.ok) {
       setSavedText(text.trim());
       setText('');
       setIsEditing(false);
