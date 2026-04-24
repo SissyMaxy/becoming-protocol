@@ -28,6 +28,7 @@ import { EvidenceReportsCard } from './EvidenceReportsCard';
 import { PhaseProgressCard } from './PhaseProgressCard';
 import { VoiceDrillCard } from './VoiceDrillCard';
 import { OutfitMandateCard } from './OutfitMandateCard';
+import { WorkoutCard } from './WorkoutCard';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
 import { SlipLogCard } from './SlipLogCard';
@@ -251,6 +252,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         <EvidenceReportsCard />
         <CommitmentsCard />
         <OutfitMandateCard />
+        <WorkoutCard />
         <VoiceDrillCard />
         <ArousalLogCard />
         <BodyMeasurementCard />
