@@ -148,52 +148,56 @@ export function useHandlerChat(): UseHandlerChatReturn {
       setIsLoading(true);
       let needsAutoOpen = false;
       try {
-        // Find most recent conversation that isn't ended AND was started in the
-        // last 48h. Without the age ceiling, stale never-ended conversations
-        // (weeks/months old) would get revived and their entire scrollback
-        // dumped into the current chat — which looks like the Handler
-        // "resurrecting" old exchanges.
-        const cutoff = new Date(Date.now() - 48 * 3600000).toISOString();
-        let { data: conv } = await supabase
+        // Resume policy:
+        //  - Consider open conversations whose LAST message was within 4h
+        //    (inactivity threshold). A 2-hour chat from this morning should
+        //    NOT resurface full scrollback when app is opened in the evening.
+        //  - Auto-close any open conversation whose last activity is older
+        //    than 4h so it stops winning the resume race.
+        //  - Started-within-48h ceiling kept as hard outer bound to prevent
+        //    week-old stale rows from ever coming back.
+        const startedCutoff = new Date(Date.now() - 48 * 3600000).toISOString();
+        const activityCutoff = new Date(Date.now() - 4 * 3600000).toISOString();
+
+        // Pull open conversations started in last 48h, then filter by last-message time
+        const { data: candidates } = await supabase
           .from('handler_conversations')
-          .select('id, final_mode')
+          .select('id, final_mode, started_at')
           .eq('user_id', user!.id)
           .is('ended_at', null)
-          .gte('started_at', cutoff)
+          .gte('started_at', startedCutoff)
           .order('started_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          .limit(5);
 
-        // Auto-close any stale open conversations beyond the cutoff so they
-        // don't keep winning the "most recent unended" race every load.
+        let conv: { id: string; final_mode: string | null } | null = null;
+        for (const c of (candidates || []) as Array<{ id: string; final_mode: string | null; started_at: string }>) {
+          const { data: lastMsg } = await supabase
+            .from('handler_messages')
+            .select('created_at')
+            .eq('conversation_id', c.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          const lastActivity = (lastMsg as { created_at?: string } | null)?.created_at || c.started_at;
+          if (new Date(lastActivity).getTime() >= new Date(activityCutoff).getTime()) {
+            conv = { id: c.id, final_mode: c.final_mode };
+            break;
+          } else {
+            // Auto-close inactive open conversation so it doesn't keep resurrecting
+            await supabase
+              .from('handler_conversations')
+              .update({ ended_at: new Date().toISOString() })
+              .eq('id', c.id);
+          }
+        }
+
+        // Auto-close stale (>48h) open conversations
         await supabase
           .from('handler_conversations')
           .update({ ended_at: new Date().toISOString() })
           .eq('user_id', user!.id)
           .is('ended_at', null)
-          .lt('started_at', cutoff);
-
-        // Fallback: resume most recent conversation ended within 24h.
-        // Prevents memory loss when a prior-night conversation got marked ended
-        // and a new morning conversation would otherwise spawn without its context.
-        if (!conv) {
-          const dayAgo = new Date(Date.now() - 86400000).toISOString();
-          const { data: recent } = await supabase
-            .from('handler_conversations')
-            .select('id, final_mode')
-            .eq('user_id', user!.id)
-            .gte('started_at', dayAgo)
-            .order('started_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          if (recent) {
-            conv = recent;
-            await supabase
-              .from('handler_conversations')
-              .update({ ended_at: null })
-              .eq('id', recent.id);
-          }
-        }
+          .lt('started_at', startedCutoff);
 
         if (conv) {
           conversationIdRef.current = conv.id;
