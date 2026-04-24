@@ -573,7 +573,128 @@ async function complianceCheck(
     }
   }
 
-  return { checked, escalated, deescalated, actions, ambient_queued: ambientQueued, spontaneous_outreach: spontaneous, random_rewards: rewardsGiven, boundary_pushes: boundaryPushes, pattern_exploits: patternExploits, bio_adjustments: bioAdjustments, commitments_enforced: commitmentsEnforced }
+  // ── TIME-SENSITIVE PUSH NOTIFICATIONS ──
+  // Enqueue scheduled_notifications for anything coming due in the next window.
+  let pushesEnqueued = 0
+  for (const state of states) {
+    try {
+      pushesEnqueued += await enqueueTimeSensitiveNotifications(supabase, state.user_id)
+    } catch (err) {
+      console.error(`Notification enqueue failed for ${state.user_id}:`, err)
+    }
+  }
+
+  return { checked, escalated, deescalated, actions, ambient_queued: ambientQueued, spontaneous_outreach: spontaneous, random_rewards: rewardsGiven, boundary_pushes: boundaryPushes, pattern_exploits: patternExploits, bio_adjustments: bioAdjustments, commitments_enforced: commitmentsEnforced, pushes_enqueued: pushesEnqueued }
+}
+
+// ============================================
+// TIME-SENSITIVE NOTIFICATION ENQUEUER
+// ============================================
+// Every compliance_check (5 min), scans commitments/playbook/warmup-queue for
+// anything coming due in the near window and inserts scheduled_notifications
+// rows so send-notifications pushes them via VAPID. Dedupes via per-row
+// notified_at flag so we never double-push a single entry.
+
+async function enqueueTimeSensitiveNotifications(
+  supabase: ReturnType<typeof createClient>,
+  userId: string
+): Promise<number> {
+  const now = Date.now()
+  let enqueued = 0
+
+  // 1. Commitments within 60 minutes of by_when (one-time warning push)
+  const inOneHour = new Date(now + 60 * 60000).toISOString()
+  const { data: soonCommits } = await supabase
+    .from('handler_commitments')
+    .select('id, what, by_when, consequence')
+    .eq('user_id', userId)
+    .eq('status', 'pending')
+    .is('notified_at', null)
+    .lte('by_when', inOneHour)
+    .limit(20)
+
+  for (const c of (soonCommits || []) as Array<Record<string, unknown>>) {
+    const byWhenMs = new Date(c.by_when as string).getTime()
+    const minsLeft = Math.max(0, Math.round((byWhenMs - now) / 60000))
+    const title = minsLeft <= 0 ? 'Commitment overdue' : `${minsLeft}m left on your commitment`
+    const body = `${c.what}. Miss it → ${c.consequence}`
+
+    const { error } = await supabase.from('scheduled_notifications').insert({
+      user_id: userId,
+      notification_type: 'commitment_deadline',
+      scheduled_for: new Date().toISOString(),
+      expires_at: new Date(byWhenMs + 30 * 60000).toISOString(),
+      payload: { title, body, data: { commitment_id: c.id, kind: 'commitment' } },
+      status: 'pending',
+    })
+    if (!error) {
+      await supabase.from('handler_commitments')
+        .update({ notified_at: new Date().toISOString() })
+        .eq('id', c.id)
+      enqueued++
+    }
+  }
+
+  // 2. Playbook moves whose fires_at has arrived (or is within 15 min) and status=queued
+  const inFifteen = new Date(now + 15 * 60000).toISOString()
+  const { data: duePlaybook } = await supabase
+    .from('gina_playbook')
+    .select('id, exact_line, channel, fires_at, expires_at, move_kind, rationale')
+    .eq('user_id', userId)
+    .eq('status', 'queued')
+    .is('notified_at', null)
+    .lte('fires_at', inFifteen)
+    .limit(20)
+
+  for (const p of (duePlaybook || []) as Array<Record<string, unknown>>) {
+    const title = `Gina move — ${String(p.move_kind).replace(/_/g, ' ')}`
+    const body = `${String(p.exact_line).slice(0, 140)}${String(p.exact_line).length > 140 ? '…' : ''}`
+    const { error } = await supabase.from('scheduled_notifications').insert({
+      user_id: userId,
+      notification_type: 'gina_playbook',
+      scheduled_for: new Date().toISOString(),
+      expires_at: p.expires_at as string,
+      payload: { title, body, data: { playbook_id: p.id, kind: 'playbook', channel: p.channel } },
+      status: 'pending',
+    })
+    if (!error) {
+      await supabase.from('gina_playbook')
+        .update({ notified_at: new Date().toISOString() })
+        .eq('id', p.id)
+      enqueued++
+    }
+  }
+
+  // 3. Warmup queue entries due within 15 min
+  const { data: dueWarmups } = await supabase
+    .from('gina_warmup_queue')
+    .select('id, warmup_move, affection_language, fires_at, target_event')
+    .eq('user_id', userId)
+    .eq('status', 'scheduled')
+    .is('notified_at', null)
+    .lte('fires_at', inFifteen)
+    .limit(10)
+
+  for (const w of (dueWarmups || []) as Array<Record<string, unknown>>) {
+    const title = `Gina warmup — ${w.affection_language || 'mixed'}`
+    const body = String(w.warmup_move)
+    const { error } = await supabase.from('scheduled_notifications').insert({
+      user_id: userId,
+      notification_type: 'gina_warmup',
+      scheduled_for: new Date().toISOString(),
+      expires_at: new Date(new Date(w.fires_at as string).getTime() + 6 * 3600000).toISOString(),
+      payload: { title, body, data: { warmup_id: w.id, kind: 'warmup', target_event: w.target_event } },
+      status: 'pending',
+    })
+    if (!error) {
+      await supabase.from('gina_warmup_queue')
+        .update({ notified_at: new Date().toISOString() })
+        .eq('id', w.id)
+      enqueued++
+    }
+  }
+
+  return enqueued
 }
 
 // ============================================
