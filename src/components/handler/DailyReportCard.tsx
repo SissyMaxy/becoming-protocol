@@ -19,9 +19,14 @@ interface DailyReportCardProps {
 
 export function DailyReportCard({ onComplete }: DailyReportCardProps) {
   const { user } = useAuth();
-  const [grades, setGrades] = useState<Record<string, number>>({});
+  // Default every grade to 5 so the slider position matches the stored value.
+  // User then adjusts from there; no more "slider shows 5 but state is empty".
+  const [grades, setGrades] = useState<Record<string, number>>(() =>
+    Object.fromEntries(METRICS.map(m => [m.key, 5])),
+  );
   const [reflection, setReflection] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [hasSubmittedToday, setHasSubmittedToday] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -44,23 +49,37 @@ export function DailyReportCard({ onComplete }: DailyReportCardProps) {
   const hour = new Date().getHours();
   if (hour < 19) return null;
 
-  const allGraded = METRICS.every(m => grades[m.key] != null);
-  const canSubmit = allGraded && reflection.trim().length >= 30;
+  const reflectionLen = reflection.trim().length;
+  const canSubmit = reflectionLen >= 30 && METRICS.every(m => grades[m.key] != null);
+  const disabledReason = reflectionLen < 30
+    ? `Reflection needs ${30 - reflectionLen} more character${30 - reflectionLen === 1 ? '' : 's'}`
+    : null;
 
   const handleSubmit = async () => {
-    if (!user?.id || !canSubmit) return;
+    if (!user?.id) {
+      setSubmitError('Not signed in — refresh and log back in.');
+      return;
+    }
+    if (!canSubmit) return;
     setSubmitting(true);
+    setSubmitError(null);
     try {
       const today = new Date().toISOString().split('T')[0];
-      await supabase.from('daily_report_cards').insert({
+      const { error } = await supabase.from('daily_report_cards').insert({
         user_id: user.id,
         report_date: today,
         ...grades,
         self_reflection: reflection.trim(),
       });
+      if (error) {
+        console.error('Report card submit failed:', error);
+        setSubmitError(error.message);
+        return;
+      }
       onComplete();
     } catch (err) {
-      console.error('Report card submit failed:', err);
+      console.error('Report card submit threw:', err);
+      setSubmitError(err instanceof Error ? err.message : String(err));
     } finally {
       setSubmitting(false);
     }
@@ -80,15 +99,15 @@ export function DailyReportCard({ onComplete }: DailyReportCardProps) {
             <div key={m.key} className="bg-gray-900 rounded-lg p-3">
               <div className="flex justify-between items-baseline mb-1">
                 <span className="text-sm font-medium text-white">{m.label}</span>
-                <span className="text-lg font-bold text-purple-400">{grades[m.key] || '\u2014'}/10</span>
+                <span className="text-lg font-bold text-purple-400">{grades[m.key] ?? 5}/10</span>
               </div>
               <p className="text-xs text-gray-500 mb-2">{m.description}</p>
               <input
                 type="range"
                 min={1}
                 max={10}
-                value={grades[m.key] || 5}
-                onChange={(e) => setGrades(prev => ({ ...prev, [m.key]: parseInt(e.target.value) }))}
+                value={grades[m.key] ?? 5}
+                onChange={(e) => setGrades(prev => ({ ...prev, [m.key]: parseInt(e.target.value, 10) }))}
                 className="w-full"
               />
             </div>
@@ -106,13 +125,24 @@ export function DailyReportCard({ onComplete }: DailyReportCardProps) {
           />
         </div>
 
+        {submitError && (
+          <div className="rounded-lg border border-red-500/40 bg-red-900/20 text-red-200 text-xs p-3">
+            Submit failed: {submitError}
+          </div>
+        )}
+
         <button
+          type="button"
           onClick={handleSubmit}
           disabled={!canSubmit || submitting}
-          className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:bg-gray-800 disabled:text-gray-600 text-white font-medium"
+          className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:bg-gray-800 disabled:text-gray-500 text-white font-medium transition-colors"
         >
           {submitting ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Submit report card'}
         </button>
+
+        {disabledReason && !submitting && (
+          <p className="text-xs text-amber-400 text-center">{disabledReason}</p>
+        )}
 
         <p className="text-xs text-gray-600 text-center">
           Once submitted, this cannot be edited or deleted. Your grades are permanent record.
