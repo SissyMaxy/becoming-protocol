@@ -34,6 +34,9 @@ import { SlipLogCard } from './SlipLogCard';
 import { GinaSessionsCard } from './GinaSessionsCard';
 import { RationalizationPatternCard } from './RationalizationPatternCard';
 import { DeviceScheduleCard } from './DeviceScheduleCard';
+import { IdentityDisplacementCard } from './IdentityDisplacementCard';
+import { MantraStreakCard } from './MantraStreakCard';
+import { HandlerDreamCard } from './HandlerDreamCard';
 
 const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
 const HEATMAP_COLORS = ['#1a1a20', '#2d1a4d', '#4d2a75', '#6a2a9a', '#7c3aed'];
@@ -198,7 +201,10 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
       {tab === 'today' && (
         <div style={{ padding: '0 16px' }}>
           <ProtocolDayCard />
+          <HandlerDreamCard />
           <PhaseProgressCard />
+          <MantraStreakCard />
+          <IdentityDisplacementCard />
           <HandlerKnowCard />
           <HandlerRunningCard />
           <HandlerEvolutionCard />

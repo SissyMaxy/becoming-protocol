@@ -40,6 +40,7 @@ import { runQuoteTweetCycle } from './quote-tweet-engine';
 import { runVoiceLearn } from './voice-learn';
 import { runStaleRevival } from './stale-conversation-revival';
 import { runRedditBackfill } from './backfill-reddit-engagement';
+import { runScheduledAudit } from './audit-alignment';
 import { invalidateVoiceCache } from './voice-system';
 import { runAllMoneyIngest } from './money-ingest';
 import { runAnnounceLive } from './announce-live';
@@ -325,6 +326,22 @@ async function tick() {
     const total = vault + ai;
     if (total > 0) {
       console.log(`[${timestamp}] Posted ${vault} vault + ${ai} AI = ${total} item(s)`);
+    }
+
+    // --- Every 24 ticks (~6h): grade recent content + persist to content_grades ---
+    // Closes the measurement loop started by engagement backfill. Runs alongside
+    // backfill so correlation-ready data lands in both tables in the same window.
+    if (tickCount % 24 === 7) {
+      await withTimeout('Content grading audit', async () => {
+        try {
+          const r = await runScheduledAudit();
+          if (r.graded > 0) {
+            console.log(`[${timestamp}] Audit: graded ${r.graded}, persisted ${r.persisted}, avg ${r.avgOverall}/10`);
+          }
+        } catch (err) {
+          console.error(`[${timestamp}] Audit failed:`, err instanceof Error ? err.message : err);
+        }
+      }, 60000);
     }
 
     // --- Every 4 ticks (~1h): refresh Reddit engagement stats on posted content ---

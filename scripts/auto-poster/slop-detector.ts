@@ -129,6 +129,29 @@ export function patternSlopCheck(reply: string): SlopCheckResult {
     reasons.push(`too short: ${wordCount} words — lacks substance`);
   }
 
+  // Emoji count — Maxy's rule: emojis are for emphasis, max 1 per message.
+  // More than one almost always reads as decoration/saccharine/bot style.
+  const emojis = reply.match(/\p{Extended_Pictographic}/gu) || [];
+  if (emojis.length > 1) {
+    reasons.push(`excess emojis: ${emojis.length} — max 1 per message, emojis are for emphasis only`);
+    hasHardBan = true;
+  }
+
+  // Meta-commentary leakage — model reasoning bleeding into the output.
+  // Catches "something like:", "they seem checked out", etc.
+  if (/\bsomething like\s*:/i.test(reply)) {
+    reasons.push('meta-commentary: "something like:" — model leaked reasoning');
+    hasHardBan = true;
+  }
+  if (/^(they\s+seem|they're\s+clearly|looks\s+like\s+they|seems\s+like\s+they)/i.test(reply.trim())) {
+    reasons.push('meta-commentary: output starts with reasoning about them');
+    hasHardBan = true;
+  }
+  if (/\bhere'?s\s+(?:a|her|what\s+she'?d\s+say)\b/i.test(reply)) {
+    reasons.push('meta-commentary: "here\'s a reply" framing');
+    hasHardBan = true;
+  }
+
   return { pass: reasons.length === 0, reasons, hasHardBan };
 }
 

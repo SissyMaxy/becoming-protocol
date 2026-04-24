@@ -43,12 +43,13 @@ interface Grade {
   flags: string[];
 }
 
-function parseArgs(): { limit: number; type?: string; sinceHours?: number; failOnly: boolean } {
+function parseArgs(): { limit: number; type?: string; sinceHours?: number; failOnly: boolean; persist: boolean } {
   const args = process.argv.slice(2);
   let limit = 50;
   let type: string | undefined;
   let sinceHours: number | undefined;
   let failOnly = false;
+  let persist = false;
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -59,9 +60,59 @@ function parseArgs(): { limit: number; type?: string; sinceHours?: number; failO
       const m = v.match(/^(\d+)([hd])$/);
       if (m) sinceHours = parseInt(m[1], 10) * (m[2] === 'd' ? 24 : 1);
     } else if (a === '--fail-only') failOnly = true;
+    else if (a === '--persist') persist = true;
   }
 
-  return { limit, type, sinceHours, failOnly };
+  return { limit, type, sinceHours, failOnly, persist };
+}
+
+/**
+ * Persist grades to content_grades table (migration 222). Idempotent via
+ * UNIQUE (content_id) — upsert on conflict. Called from the scheduler every
+ * few hours to keep grades fresh as engagement data backfills.
+ */
+export async function persistGrades(userId: string, grades: Grade[]): Promise<number> {
+  if (grades.length === 0) return 0;
+  const rows = grades.map(g => ({
+    user_id: userId,
+    content_id: g.row.id,
+    quality: g.quality,
+    alignment: g.alignment,
+    voice: g.voice,
+    overall: g.overall,
+    flags: g.flags,
+    graded_at: new Date().toISOString(),
+  }));
+  const { error } = await supabase.from('content_grades').upsert(rows, { onConflict: 'content_id' });
+  if (error) {
+    console.error('[audit-alignment] persist failed:', error.message);
+    return 0;
+  }
+  return rows.length;
+}
+
+/**
+ * Scheduled entry point — grade all recent content and persist.
+ * Called by scheduler.ts on a slow cadence.
+ */
+export async function runScheduledAudit(): Promise<{ graded: number; persisted: number; avgOverall: number }> {
+  const userId = process.env.USER_ID || '';
+  if (!userId) return { graded: 0, persisted: 0, avgOverall: 0 };
+
+  const cutoff = new Date(Date.now() - 48 * 3600 * 1000).toISOString();
+  const { data } = await supabase
+    .from('ai_generated_content')
+    .select('id, content_type, platform, content, status, target_account, generation_strategy, posted_at, created_at, generation_context')
+    .eq('user_id', userId)
+    .gte('created_at', cutoff)
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (!data || data.length === 0) return { graded: 0, persisted: 0, avgOverall: 0 };
+
+  const grades = (data as AgcRow[]).map(gradeRow);
+  const persisted = await persistGrades(userId, grades);
+  const avgOverall = grades.reduce((s, g) => s + g.overall, 0) / grades.length;
+  return { graded: grades.length, persisted, avgOverall: Math.round(avgOverall * 10) / 10 };
 }
 
 function gradeQuality(ctx: GenerationContext | null, row: AgcRow): { score: number; flags: string[] } {
@@ -170,7 +221,7 @@ async function main() {
     process.exit(1);
   }
 
-  const { limit, type, sinceHours, failOnly } = parseArgs();
+  const { limit, type, sinceHours, failOnly, persist } = parseArgs();
 
   let query = supabase
     .from('ai_generated_content')
@@ -235,6 +286,10 @@ async function main() {
   console.log(`  avg voice alignment:   ${avgV.toFixed(1)}/10`);
   console.log(`  avg overall:           ${avgO.toFixed(1)}/10`);
   console.log(`  failing (<7 overall):  ${grades.filter(g => g.overall < 7).length}`);
+  if (persist) {
+    const n = await persistGrades(USER_ID, grades);
+    console.log(`  persisted to content_grades: ${n} row(s)`);
+  }
   console.log();
 }
 

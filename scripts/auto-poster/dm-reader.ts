@@ -174,20 +174,62 @@ async function readRedditDMs(): Promise<ConversationThread[]> {
 
     console.log(`[DM/Reddit] Found ${entries.length} inbox entr${entries.length === 1 ? 'y' : 'ies'} (${entries.filter(e => e.isUnread).length} unread)`);
 
+    const myRedditUsername = (process.env.REDDIT_USERNAME || '').toLowerCase();
+
     // Only process unread to keep the pass tight — poll cycle is fast enough that
     // we'll catch every conversation on first read.
     const unread = entries.filter(e => e.isUnread);
     for (const entry of unread.slice(0, 10)) {
       if (entry.author === 'reddit' || entry.author.startsWith('r/')) continue; // system / mod messages
-      const combined = [entry.subject, entry.body].filter(Boolean).join('\n').trim();
-      if (!combined) continue;
-      threads.push({
-        platform: 'reddit',
-        fanIdentifier: entry.author,
-        fanDisplayName: entry.author,
-        messages: [{ from: 'them', text: combined }],
-        conversationUrl: entry.link,
-      });
+      if (!entry.link) continue;
+
+      // Thread walk — visit the /message/messages/<id>/ page and scrape BOTH sides
+      // so we have conversation history. Without this, auto-replies drift because
+      // they don't know what Maxy said previously or what the sub has been asking.
+      try {
+        await page.goto(entry.link, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        await page.waitForTimeout(2000);
+
+        const threadMsgs = await page.evaluate((myUser) => {
+          // old.reddit wraps each message in a .message.entry. The thread page
+          // shows the original message plus any replies, in order.
+          const nodes = Array.from(document.querySelectorAll('.message.entry'));
+          return nodes.map(n => {
+            const author = (n.querySelector('.author') as HTMLElement | null)?.textContent?.trim() || '';
+            const body = (n.querySelector('.md') as HTMLElement | null)?.textContent?.trim() || '';
+            const isSelf = myUser && author.toLowerCase() === myUser;
+            return { author, text: body, fromSelf: !!isSelf };
+          }).filter(m => m.text.length > 0);
+        }, myRedditUsername);
+
+        if (threadMsgs.length === 0) {
+          // Fallback: use the inbox-row snapshot if the thread page couldn't be parsed
+          const combined = [entry.subject, entry.body].filter(Boolean).join('\n').trim();
+          if (combined) {
+            threads.push({
+              platform: 'reddit',
+              fanIdentifier: entry.author,
+              fanDisplayName: entry.author,
+              messages: [{ from: 'them', text: combined }],
+              conversationUrl: entry.link,
+            });
+          }
+          continue;
+        }
+
+        threads.push({
+          platform: 'reddit',
+          fanIdentifier: entry.author,
+          fanDisplayName: entry.author,
+          messages: threadMsgs.map(m => ({
+            from: m.fromSelf ? 'us' as const : 'them' as const,
+            text: m.text,
+          })),
+          conversationUrl: entry.link,
+        });
+      } catch (err) {
+        console.error(`[DM/Reddit] Error walking thread for ${entry.author}:`, err instanceof Error ? err.message : err);
+      }
     }
   } catch (err) {
     console.error('[DM/Reddit] Error:', err instanceof Error ? err.message : err);

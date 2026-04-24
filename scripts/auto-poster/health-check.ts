@@ -46,6 +46,7 @@ const REQUIRED_COLUMNS: Record<string, string[]> = {
   content_briefs: ['id', 'user_id', 'platforms', 'status'],
   user_state: ['user_id', 'handler_mode', 'denial_day'],
   handler_attention: ['id', 'user_id', 'kind', 'severity', 'summary', 'reviewed_at'],
+  content_grades: ['id', 'user_id', 'content_id', 'quality', 'alignment', 'voice', 'overall'],
 };
 
 async function checkColumns() {

@@ -34,6 +34,9 @@ import { SlipLogCard } from './SlipLogCard';
 import { GinaSessionsCard } from './GinaSessionsCard';
 import { RationalizationPatternCard } from './RationalizationPatternCard';
 import { DeviceScheduleCard } from './DeviceScheduleCard';
+import { IdentityDisplacementCard } from './IdentityDisplacementCard';
+import { MantraStreakCard } from './MantraStreakCard';
+import { HandlerDreamCard } from './HandlerDreamCard';
 
 const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
 
@@ -232,7 +235,10 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
 
       <main className="td-main">
         <ProtocolDayCard />
+        <HandlerDreamCard />
         <PhaseProgressCard />
+        <MantraStreakCard />
+        <IdentityDisplacementCard />
         <HandlerKnowCard />
         <HandlerRunningCard />
         <HandlerEvolutionCard />
