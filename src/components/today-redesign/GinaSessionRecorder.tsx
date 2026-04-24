@@ -156,9 +156,9 @@ export function GinaSessionRecorder() {
 
   return (
     <>
-      {/* Floating button */}
+      {/* Floating button — raised above typical bottom input bars (e.g. HandlerChat send) */}
       <div style={{
-        position: 'fixed', right: 20, bottom: 20, zIndex: 500,
+        position: 'fixed', right: 20, bottom: 96, zIndex: 500,
         display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8,
       }}>
         {pendingCount > 0 && status === 'idle' && !showPanel && (
@@ -217,7 +217,7 @@ export function GinaSessionRecorder() {
       {/* Error toast */}
       {errorMsg && (
         <div style={{
-          position: 'fixed', bottom: 90, right: 20, zIndex: 501,
+          position: 'fixed', bottom: 170, right: 20, zIndex: 501,
           background: '#2a0a0c', border: '1px solid #7a1f22', borderRadius: 8,
           padding: '10px 14px', maxWidth: 340, fontSize: 11.5, color: '#f47272',
         }}>
