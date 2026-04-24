@@ -24,6 +24,8 @@ interface Commitment {
   fulfilled_at: string | null;
   missed_at: string | null;
   enforcement_result: { actions?: string[] } | null;
+  locked: boolean;
+  locked_reason: string | null;
 }
 
 export function CommitmentsCard() {
@@ -38,13 +40,13 @@ export function CommitmentsCard() {
     if (!user?.id) return;
     const [pendingRes, missedRes] = await Promise.all([
       supabase.from('handler_commitments')
-        .select('id, what, category, by_when, consequence, status, evidence_required, fulfilled_at, missed_at, enforcement_result')
+        .select('id, what, category, by_when, consequence, status, evidence_required, fulfilled_at, missed_at, enforcement_result, locked, locked_reason')
         .eq('user_id', user.id)
         .eq('status', 'pending')
         .order('by_when', { ascending: true })
         .limit(20),
       supabase.from('handler_commitments')
-        .select('id, what, category, by_when, consequence, status, evidence_required, fulfilled_at, missed_at, enforcement_result')
+        .select('id, what, category, by_when, consequence, status, evidence_required, fulfilled_at, missed_at, enforcement_result, locked, locked_reason')
         .eq('user_id', user.id)
         .eq('status', 'missed')
         .order('missed_at', { ascending: false })
@@ -100,15 +102,25 @@ export function CommitmentsCard() {
 
       {pending.map(c => {
         const countdown = fmtCountdown(c.by_when);
+        const isLocked = c.locked;
         return (
           <div key={c.id} style={{
-            background: '#0a0a0d',
-            border: `1px solid ${countdown.urgent ? '#7a1f22' : '#22222a'}`,
+            background: isLocked ? 'linear-gradient(92deg, #1a0a12 0%, #130810 100%)' : '#0a0a0d',
+            border: `1px solid ${isLocked ? '#7a1f4d' : countdown.urgent ? '#7a1f22' : '#22222a'}`,
             borderRadius: 8, padding: 12, marginBottom: 10,
           }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12.5, color: '#e8e6e3', fontWeight: 600, marginBottom: 3 }}>{c.what}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                  {isLocked && (
+                    <span style={{
+                      fontSize: 9, fontWeight: 700, color: '#f4a7c4',
+                      background: 'rgba(244,167,196,0.15)', padding: '2px 6px', borderRadius: 3,
+                      textTransform: 'uppercase', letterSpacing: '0.05em',
+                    }}>🔒 locked</span>
+                  )}
+                  <div style={{ fontSize: 12.5, color: '#e8e6e3', fontWeight: 600 }}>{c.what}</div>
+                </div>
                 <div style={{ fontSize: 10.5, color: '#8a8690' }}>
                   {c.category && <span style={{ color: '#c4b5fd', marginRight: 8 }}>{c.category}</span>}
                   by {new Date(c.by_when).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
@@ -119,6 +131,11 @@ export function CommitmentsCard() {
                 {c.evidence_required && (
                   <div style={{ fontSize: 10, color: '#f4a7c4', marginTop: 3 }}>
                     requires: {c.evidence_required}
+                  </div>
+                )}
+                {isLocked && c.locked_reason && (
+                  <div style={{ fontSize: 9.5, color: '#f4a7c4', marginTop: 4, fontStyle: 'italic', opacity: 0.9 }}>
+                    locked: {c.locked_reason.slice(0, 140)}{c.locked_reason.length > 140 ? '…' : ''}
                   </div>
                 )}
               </div>
@@ -134,25 +151,36 @@ export function CommitmentsCard() {
             <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
               <input
                 type="text"
-                placeholder="quick note (optional)"
+                placeholder={isLocked ? 'evidence required — ≥20 chars' : 'quick note (optional)'}
                 value={fulfillNote[c.id] || ''}
                 onChange={e => setFulfillNote({ ...fulfillNote, [c.id]: e.target.value })}
                 style={{
-                  flex: 1, background: '#050507', border: '1px solid #22222a', borderRadius: 5,
+                  flex: 1, background: '#050507',
+                  border: `1px solid ${isLocked ? '#7a1f4d' : '#22222a'}`, borderRadius: 5,
                   padding: '6px 9px', fontSize: 11, color: '#e8e6e3', fontFamily: 'inherit',
                 }}
               />
-              <button
-                onClick={() => fulfill(c)}
-                disabled={submittingId === c.id}
-                style={{
-                  padding: '6px 12px', borderRadius: 5, border: 'none',
-                  background: '#6ee7b7', color: '#081f10', fontWeight: 600,
-                  fontSize: 11, cursor: submittingId === c.id ? 'wait' : 'pointer', fontFamily: 'inherit',
-                }}
-              >
-                {submittingId === c.id ? '…' : 'Mark done'}
-              </button>
+              {(() => {
+                const note = fulfillNote[c.id] || '';
+                const canFulfill = !isLocked || note.trim().length >= 20;
+                return (
+                  <button
+                    onClick={() => canFulfill && fulfill(c)}
+                    disabled={submittingId === c.id || !canFulfill}
+                    title={!canFulfill ? 'Locked commitments require ≥20 chars of evidence' : ''}
+                    style={{
+                      padding: '6px 12px', borderRadius: 5, border: 'none',
+                      background: !canFulfill ? '#22222a' : '#6ee7b7',
+                      color: !canFulfill ? '#6a656e' : '#081f10',
+                      fontWeight: 600, fontSize: 11,
+                      cursor: !canFulfill || submittingId === c.id ? 'not-allowed' : 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    {submittingId === c.id ? '…' : 'Mark done'}
+                  </button>
+                );
+              })()}
             </div>
           </div>
         );

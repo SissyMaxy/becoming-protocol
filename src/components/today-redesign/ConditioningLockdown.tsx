@@ -113,12 +113,69 @@ export function ConditioningLockdown() {
   // Load user's windows + safewords
   const loadConfig = useCallback(async () => {
     if (!user?.id) return;
+
+    // FORCED LOCKDOWN CHECK — if there's an unresolved forced_lockdown_triggers
+    // row with blocks_app=true, force the session open as a synthetic window
+    // regardless of scheduled windows.
+    const { data: forced } = await supabase
+      .from('forced_lockdown_triggers')
+      .select('id, trigger_type, fired_at, duration_minutes, reason')
+      .eq('user_id', user.id)
+      .is('resolved_at', null)
+      .eq('blocks_app', true)
+      .order('fired_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
     const [winRes, sfRes] = await Promise.all([
       supabase.from('conditioning_lockdown_windows').select('*').eq('user_id', user.id).eq('active', true),
       supabase.from('safewords').select('*').eq('user_id', user.id),
     ]);
     const wins = (winRes.data || []) as LockdownWindow[];
     const now = new Date();
+
+    // If a forced lockdown is live, synthesize a window from it
+    const f = forced as { id: string; trigger_type: string; fired_at: string; duration_minutes: number; reason: string } | null;
+    if (f) {
+      const firedAt = new Date(f.fired_at);
+      const expiresAt = new Date(firedAt.getTime() + f.duration_minutes * 60000);
+      if (expiresAt.getTime() > Date.now()) {
+        const synthetic: LockdownWindow = {
+          id: `forced:${f.id}`,
+          user_id: user.id,
+          start_hour: firedAt.getHours(),
+          start_minute: firedAt.getMinutes(),
+          end_hour: expiresAt.getHours(),
+          end_minute: expiresAt.getMinutes(),
+          days_of_week: [0, 1, 2, 3, 4, 5, 6],
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York',
+          active: true,
+          duration_minutes: f.duration_minutes,
+          script_text: `FORCED LOCKDOWN — ${f.trigger_type.replace(/_/g, ' ')}. ${f.reason}`,
+          last_fired_at: null,
+        } as unknown as LockdownWindow;
+        if (!activeWindow) {
+          const startMs = Date.now();
+          setStarted(startMs);
+          setActiveWindow(synthetic);
+          setSessionId(f.id);
+        }
+        // Auto-resolve when expiry passes (next cycle)
+        const sf = (sfRes.data || []) as Array<Record<string, unknown>>;
+        const words: string[] = [];
+        for (const row of sf) {
+          const candidate = (row.safeword as string) || (row.word as string) || (row.phrase as string);
+          if (candidate) words.push(String(candidate).toLowerCase());
+        }
+        if (words.length === 0) words.push('plum');
+        setSafewords(words);
+        return;
+      } else {
+        // Expired — resolve and fall through to normal windows
+        await supabase.from('forced_lockdown_triggers').update({ resolved_at: new Date().toISOString() }).eq('id', f.id);
+      }
+    }
+
     // First pick any window that's LIVE (within the scheduled range)
     let active = wins.find(w => isInWindow(w, now)) || null;
     // If nothing live, check catch-up: a window whose start has passed today but
