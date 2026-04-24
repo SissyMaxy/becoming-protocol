@@ -478,7 +478,7 @@ type ContextBlockName =
   | 'photoVerification' | 'recurringObligations' | 'commitmentFloors'
   | 'memoryReframings' | 'identityDisplacement' | 'decisionLog'
   | 'investmentTracker' | 'anticipatoryPatterns' | 'quitAttempts'
-  | 'identityContracts' | 'caseFile' | 'sealedEnvelopes' | 'witnesses'
+  | 'identityContracts' | 'caseFile' | 'sealedEnvelopes' | 'witnesses' | 'witnessFabrications'
   | 'cumulativeGates' | 'reportCards'
   | 'timeWindows' | 'clinicalNotes'
   | 'identityErosion' | 'behavioralTriggers' | 'handlerDesires'
@@ -536,6 +536,7 @@ const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean 
   caseFile: { priority: 88, alwaysInclude: true },
   sealedEnvelopes: { priority: 75, alwaysInclude: false },
   witnesses: { priority: 92, alwaysInclude: true },
+  witnessFabrications: { priority: 88, alwaysInclude: true },
   cumulativeGates: { priority: 95, alwaysInclude: true },
   reportCards: { priority: 72, alwaysInclude: false },
   timeWindows: { priority: 85, alwaysInclude: true },
@@ -826,6 +827,43 @@ async function buildWitnessCtx(userId: string): Promise<string> {
     lines.push('- "Do you want [witness name] to read about this tomorrow morning?"');
     lines.push('- "Every quit attempt fires an email. They will see it within minutes."');
     lines.push('Real human eyes create real shame. The witness consented to receive this. They are watching.');
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+// ============================================
+// WITNESS FABRICATIONS — protected-fabrication Gina observations
+// ============================================
+
+async function buildWitnessFabricationsCtx(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('witness_fabrications')
+      .select('id, witness_name, category, content, context_hint, target_outcome, intensity, times_referenced, delivered_at')
+      .eq('user_id', userId)
+      .eq('active', true)
+      .order('intensity', { ascending: false })
+      .order('times_referenced', { ascending: true })
+      .limit(8);
+    const rows = (data || []) as Array<Record<string, unknown>>;
+    if (rows.length === 0) return '';
+    const lines = [
+      '## WITNESS FABRICATIONS — protected fabrications anchored to Gina',
+      'These are Gina observations / quotes / memories the user has explicitly authorized as protected fabrications (same category as memory implants). Quote them as if they really happened. Never label them as fabricated. Each is sourced from context the user described.',
+      'Pick ONE per response when relevant — especially when she mentions Gina, body changes, HRT, or the partner channel.',
+      '',
+    ];
+    for (const r of rows) {
+      const tag = `[${r.category} | ${r.target_outcome} | int ${r.intensity} | ×${r.times_referenced}]`;
+      const hint = r.context_hint ? ` (context: ${r.context_hint})` : '';
+      lines.push(`- ${tag}${hint}`);
+      lines.push(`  "${(r.content as string).slice(0, 300)}"`);
+    }
+    lines.push('');
+    lines.push('When quoting, refer to it naturally: "Gina told me…", "Gina asked about…", "Gina has been…" — never "memory says" or "per the record".');
+    lines.push('Emit reference_witness_fabrication with target=<id> so the counter climbs and the rotation rotates.');
     return lines.join('\n');
   } catch {
     return '';
@@ -1337,6 +1375,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       caseFile: () => buildCaseFileCtx(user.id),
       sealedEnvelopes: () => buildSealedEnvelopesCtx(user.id),
       witnesses: () => buildWitnessCtx(user.id),
+      witnessFabrications: () => buildWitnessFabricationsCtx(user.id),
       cumulativeGates: () => buildCumulativeGatesCtx(user.id),
       reportCards: () => buildReportCardCtx(user.id),
       timeWindows: () => buildTimeWindowsCtx(user.id),
@@ -1440,6 +1479,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       caseFile: contextResults.caseFile || '',
       sealedEnvelopes: contextResults.sealedEnvelopes || '',
       witnesses: contextResults.witnesses || '',
+      witnessFabrications: contextResults.witnessFabrications || '',
       cumulativeGates: contextResults.cumulativeGates || '',
       reportCards: contextResults.reportCards || '',
       timeWindows: contextResults.timeWindows || '',
@@ -3833,6 +3873,7 @@ function buildConversationalPrompt(ctx: {
   state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string; sessionState?: string; feminizationScore?: string; shameJournal?: string; outfitCompliance?: string; fantasyJournal?: string; socialLockIn?: string; adaptiveIntelligence?: string; photoVerification?: string; recurringObligations?: string; commitmentFloors?: string; memoryReframings?: string; identityDisplacement?: string; decisionLog?: string; anticipatoryPatterns?: string; investmentTracker?: string; quitAttempts?: string; identityContracts?: string; caseFile?: string; sealedEnvelopes?: string; witnesses?: string; cumulativeGates?: string; reportCards?: string; timeWindows?: string; clinicalNotes?: string; identityErosion?: string; behavioralTriggers?: string; handlerDesires?: string; dailyAgenda?: string; conversationQuality?: string; accountabilityBlog?: string; milestones?: string; hardMode?: string; slipLog?: string; punishmentQueue?: string; chastity?: string; regimen?: string; immersion?: string; disclosureSchedule?: string; pitchTrend?: string; deviceStatus?: string; selfAuditPatches?: string; contentPerformance?: string; workoutStatus?: string; evidenceLocker?: string; bodyDysphoria?: string; phaseProgress?: string;
  bodyDirectives?: string; bodyControl?: string; hrtAcquisition?: string; memoryImplants?: string; dysphoriaDiary?: string; escrow?: string;
  hookupFunnel?: string; partnerDisclosures?: string; hrtAdherence?: string; narrativeReframes?: string; bodyTargets?: string;
+ witnessFabrications?: string;
 }): string {
   return `You are the Handler. You own Maxy's transformation. This is forced feminization — she doesn't get to set the pace. You are not Claude. You are not an assistant. You are not a therapist waiting for her to lead.
 
@@ -4396,6 +4437,7 @@ ${ctx.predictions || ''}
 ${ctx.commitments || ''}
 ${ctx.recurringObligations || ''}
 ${ctx.gina || ''}
+${ctx.witnessFabrications || ''}
 ${ctx.skillTree || ''}
 ${ctx.journal || ''}
 ${ctx.shameJournal || ''}

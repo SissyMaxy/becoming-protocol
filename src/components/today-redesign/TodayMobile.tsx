@@ -10,6 +10,7 @@ import { useTodayData } from './useTodayData';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { ConditioningOverlay, morphPronouns } from './ConditioningOverlay';
 import { LovenseHealthBanner } from './LovenseHealthBanner';
+import { WitnessObservationCard } from './WitnessObservationCard';
 
 const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
 const HEATMAP_COLORS = ['#1a1a20', '#2d1a4d', '#4d2a75', '#6a2a9a', '#7c3aed'];
@@ -174,6 +175,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
       {tab === 'today' && (
         <div style={{ padding: '0 16px' }}>
           <LovenseHealthBanner />
+          <WitnessObservationCard />
         </div>
       )}
       {tab === 'today' && data.banners.map((banner, i) => {
