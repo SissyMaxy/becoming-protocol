@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import { detectAndRewrite, logGateResult, buildConfrontationMessage } from './_lib/pronoun-gate';
-import { detectRationalizations, logRationalizations, buildRationalizationConfrontation } from './_lib/rationalization-gate';
+import { detectAndRewrite, logGateResult, buildConfrontationMessage } from './_lib/pronoun-gate.js';
+import { detectRationalizations, logRationalizations, buildRationalizationConfrontation } from './_lib/rationalization-gate.js';
 // NOTE: Cannot import from src/lib/ — those use import.meta.env (Vite-only)
 // weaveTriggers is inlined below instead
 // P12.1: Context prioritizer is inlined for the same reason
