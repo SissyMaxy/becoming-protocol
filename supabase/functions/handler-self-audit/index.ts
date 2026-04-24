@@ -140,7 +140,7 @@ serve(async req => {
       // 5. Generate prompt patches based on findings
       let patchesCreated = 0
 
-      if (voiceDriftCount >= 2) {
+      if (voiceDriftCount >= 1) {
         // Check if we already have a voice-drift patch
         const { data: existing } = await supa
           .from('handler_prompt_patches')
