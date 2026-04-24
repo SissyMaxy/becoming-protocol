@@ -21,6 +21,7 @@ import { BodyMeasurementCard } from './BodyMeasurementCard';
 import { HandlerEvolutionCard } from './HandlerEvolutionCard';
 import { UnifiedCaptureCard } from './UnifiedCaptureCard';
 import { DisclosureDraftsCard } from './DisclosureDraftsCard';
+import { ProtocolDayCard } from './ProtocolDayCard';
 
 const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
 
@@ -218,6 +219,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
       </aside>
 
       <main className="td-main">
+        <ProtocolDayCard />
         <HandlerRunningCard />
         <HandlerEvolutionCard />
         <CommitmentsCard />

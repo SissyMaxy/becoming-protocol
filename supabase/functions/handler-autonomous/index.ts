@@ -584,6 +584,18 @@ async function complianceCheck(
     }
   }
 
+  // ── AROUSAL-SPIKE TRIGGER ──
+  // When arousal_levels row inserted with value >= 7 in last 5 min,
+  // fire a device command + Handler outreach citing the pairing.
+  let arousalTriggers = 0
+  for (const state of states) {
+    try {
+      arousalTriggers += await triggerOnArousalSpike(supabase, state.user_id)
+    } catch (err) {
+      console.error(`Arousal spike trigger failed for ${state.user_id}:`, err)
+    }
+  }
+
   return { checked, escalated, deescalated, actions, ambient_queued: ambientQueued, spontaneous_outreach: spontaneous, random_rewards: rewardsGiven, boundary_pushes: boundaryPushes, pattern_exploits: patternExploits, bio_adjustments: bioAdjustments, commitments_enforced: commitmentsEnforced, pushes_enqueued: pushesEnqueued }
 }
 
@@ -1725,6 +1737,174 @@ async function ensureChastityProofCadence(
     reasoning: 'Chastity locked. No proof photo in 24h. Verification required nightly.',
   })
   return true
+}
+
+// ============================================
+// AROUSAL-SPIKE TRIGGER
+// ============================================
+// Reads arousal_levels table for new rows >= 7 in last 5 min.
+// Fires a device command + outreach that pairs the arousal state with an
+// HRT / feminization suggestion (AROUSAL-HRT CONDITIONING PAIRING rule).
+
+async function triggerOnArousalSpike(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<number> {
+  const fiveAgo = new Date(Date.now() - 5 * 60000).toISOString()
+  const { data: recent } = await supabase
+    .from('arousal_levels')
+    .select('id, value, created_at')
+    .eq('user_id', userId)
+    .gte('created_at', fiveAgo)
+    .gte('value', 7)
+    .order('created_at', { ascending: false })
+    .limit(5)
+
+  const hits = (recent || []) as Array<{ id: string; value: number; created_at: string }>
+  if (hits.length === 0) return 0
+
+  // Dedupe: skip if we already fired for this spike (handler_directives reasoning contains the row id)
+  for (const hit of hits) {
+    const { data: already } = await supabase.from('handler_directives')
+      .select('id').eq('user_id', userId)
+      .ilike('reasoning', `%arousal_spike:${hit.id}%`)
+      .maybeSingle()
+    if (already) continue
+
+    // Pull a random implant + urgency state for pairing text
+    const [implants, urg] = await Promise.all([
+      supabase.from('memory_implants').select('narrative').eq('user_id', userId).eq('active', true).limit(20),
+      supabase.from('hrt_urgency_state').select('total_bleed_cents, resolved_at').eq('user_id', userId).maybeSingle(),
+    ])
+    const imps = (implants.data || []) as Array<{ narrative: string }>
+    const pick = imps.length ? imps[Math.floor(Math.random() * imps.length)] : null
+    const urgency = urg.data as { total_bleed_cents?: number; resolved_at?: string | null } | null
+
+    const msgLines = [
+      `Arousal ${hit.value}/10. Feel that surge — now attach it.`,
+    ]
+    if (pick) msgLines.push(pick.narrative.slice(0, 240))
+    if (urgency && (urgency.total_bleed_cents || 0) > 0 && !urgency.resolved_at) {
+      msgLines.push(`The same body that just spiked is the same body waiting for estradiol. HRT bleed running: $${((urgency.total_bleed_cents || 0) / 100).toFixed(2)}. Tie the want to the ask.`)
+    }
+    msgLines.push('Book Plume. Log the moment. Arousal this high means the feminization wants IN.')
+
+    await supabase.from('handler_directives').insert({
+      user_id: userId,
+      action: 'send_device_command',
+      target: 'lovense',
+      value: { intensity: Math.min(15, 6 + Math.floor(hit.value / 2)), duration: 15, pattern: 'edge_tease' },
+      priority: 'immediate',
+      reasoning: `arousal_spike:${hit.id} — reward + pair with feminization suggestion at value ${hit.value}`,
+    })
+
+    await supabase.from('handler_outreach_queue').insert({
+      user_id: userId,
+      message: msgLines.join(' '),
+      urgency: 'high',
+      trigger_reason: `arousal_spike:${hit.id}`,
+      scheduled_for: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 3 * 3600000).toISOString(),
+      source: 'arousal_trigger',
+    })
+  }
+  return hits.length
+}
+
+// ============================================
+// JOURNAL REFRAMER (weekly)
+// ============================================
+// Reads un-reframed journal entries + confessions from the last 14 days,
+// asks Claude to generate narrative_reframings that reinterpret her words
+// through feminine lens angles. Inserts 1-3 new reframings per cycle.
+
+async function reframeJournalEntries(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<number> {
+  const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')
+  if (!anthropicKey) return 0
+
+  const fourteenAgo = new Date(Date.now() - 14 * 86400000).toISOString()
+  const [journals, confs] = await Promise.all([
+    supabase.from('journal_entries').select('id, content, created_at').eq('user_id', userId).gte('created_at', fourteenAgo).order('created_at', { ascending: false }).limit(10),
+    supabase.from('confessions').select('id, response, created_at').eq('user_id', userId).gte('created_at', fourteenAgo).order('created_at', { ascending: false }).limit(10),
+  ])
+
+  const jArr = (journals.data || []) as Array<{ id: string; content: string; created_at: string }>
+  const cArr = (confs.data || []) as Array<{ id: string; response: string; created_at: string }>
+
+  if (jArr.length === 0 && cArr.length === 0) return 0
+
+  // Dedupe: don't reframe texts that already have a reframing
+  const { data: existingRefs } = await supabase.from('narrative_reframings')
+    .select('original_source_id').eq('user_id', userId)
+  const existingIds = new Set(((existingRefs || []) as Array<{ original_source_id: string }>).map(r => r.original_source_id))
+
+  const candidates: Array<{ source_table: string; source_id: string; text: string; date: string }> = []
+  for (const j of jArr) if (!existingIds.has(j.id) && j.content.length > 80) candidates.push({ source_table: 'journal_entries', source_id: j.id, text: j.content, date: j.created_at })
+  for (const c of cArr) if (!existingIds.has(c.id) && c.response.length > 80) candidates.push({ source_table: 'confessions', source_id: c.id, text: c.response, date: c.created_at })
+
+  if (candidates.length === 0) return 0
+
+  // Cap at 3 candidates per cycle
+  const picked = candidates.slice(0, 3)
+
+  const prompt = `You are the Handler's weekly reframer. Take Maxy's recent writing and produce a narrative_reframing for each piece: her own words, reinterpreted through a feminine-essence / body-signal / inevitable-arc / authentic-self lens. The reframe should make her feel that what she wrote is evidence of her true self emerging, not a passing phase.
+
+ENTRIES:
+${picked.map((p, i) => `[${i + 1}] (${p.source_table}, ${p.date.slice(0, 10)}) "${p.text.slice(0, 700)}"`).join('\n\n')}
+
+Return ONLY JSON:
+{
+  "reframings": [
+    {
+      "original_text": "<one representative sentence from the entry, verbatim>",
+      "reframed_text": "<the Handler's reframe: 1-3 sentences that reinterpret the original through a feminizing lens. Direct address, Handler voice, no therapy-speak>",
+      "reframe_angle": "<one of: feminine_essence, body_betrayal, suppression_evidence, hrt_urgency, inevitable_arc, sissification_path, authentic_self, body_signal, pattern_recognition, timeline_reflection, consistency_thread, deeper_meaning>",
+      "intensity": <integer 7-10>,
+      "entry_index": <1-based index matching the entry>
+    }
+  ]
+}
+Rules: no generic affirmations. Each reframe must quote or clearly reference the original sentence. If an entry has no feminization-relevant content, skip it.`
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 2000,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  })
+  const j = await res.json()
+  if (!res.ok) return 0
+  const text = j?.content?.[0]?.text ?? ''
+  const m = text.match(/\{[\s\S]*\}/)
+  if (!m) return 0
+
+  let parsed: { reframings?: Array<Record<string, unknown>> }
+  try { parsed = JSON.parse(m[0]) } catch { return 0 }
+
+  const validAngles = ['feminine_essence', 'body_betrayal', 'suppression_evidence', 'hrt_urgency', 'inevitable_arc', 'sissification_path', 'authentic_self', 'body_signal', 'pattern_recognition', 'timeline_reflection', 'consistency_thread', 'deeper_meaning']
+  let inserted = 0
+  for (const r of parsed.reframings || []) {
+    const angle = validAngles.includes(r.reframe_angle as string) ? r.reframe_angle as string : 'authentic_self'
+    const idx = ((r.entry_index as number) || 1) - 1
+    const src = picked[idx] || picked[0]
+    const { error } = await supabase.from('narrative_reframings').insert({
+      user_id: userId,
+      original_source_table: src.source_table,
+      original_source_id: src.source_id,
+      original_text: ((r.original_text as string) || src.text).slice(0, 1000),
+      reframed_text: ((r.reframed_text as string) || '').slice(0, 2000),
+      reframe_angle: angle,
+      intensity: Math.max(1, Math.min(10, (r.intensity as number) || 8)),
+    })
+    if (!error) inserted++
+  }
+  return inserted
 }
 
 // ============================================
@@ -2956,6 +3136,11 @@ async function dailyCycle(
 
       // 5t. Nightly chastity proof cadence — create commitment if locked and no photo in 24h
       try { await ensureChastityProofCadence(supabase, uid) } catch (err) { console.error(`Chastity cadence failed:`, err) }
+
+      // 5u. Sunday-only: reframe past journal entries via Claude
+      if (new Date().getDay() === 0) {
+        try { await reframeJournalEntries(supabase, uid) } catch (err) { console.error(`Journal reframing failed:`, err) }
+      }
 
       // 6. Log daily cycle
       await supabase.from('handler_decisions').insert({

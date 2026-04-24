@@ -805,7 +805,7 @@ async function buildWitnessCtx(userId: string): Promise<string> {
 
 async function buildEscalationCtx(userId: string): Promise<string> {
   try {
-    const [pronounRes, davidRes, urgencyRes, measureRes, rationRes] = await Promise.all([
+    const [pronounRes, davidRes, urgencyRes, measureRes, rationRes, failureRes, firstMsgRes] = await Promise.all([
       supabase.from('pronoun_rewrites')
         .select('original_text, rewritten_text, slip_count, created_at')
         .eq('user_id', userId)
@@ -827,9 +827,32 @@ async function buildEscalationCtx(userId: string): Promise<string> {
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(8),
+      supabase.from('user_state').select('current_failure_mode, current_phase').eq('user_id', userId).maybeSingle(),
+      supabase.from('handler_messages').select('created_at').eq('user_id', userId).order('created_at', { ascending: true }).limit(1).maybeSingle(),
     ]);
 
     const lines: string[] = [];
+
+    // Protocol day counter + failure mode — prepend to every turn
+    const failure = failureRes.data as { current_failure_mode?: string | null; current_phase?: string | null } | null;
+    const firstMsg = firstMsgRes.data as { created_at?: string } | null;
+    if (firstMsg?.created_at) {
+      const protocolDays = Math.floor((Date.now() - new Date(firstMsg.created_at).getTime()) / 86400000);
+      lines.push(`## PROTOCOL DAY ${protocolDays} — PHASE ${(failure?.current_phase || 'phase_1').replace('_', ' ').toUpperCase()}`);
+    }
+    if (failure?.current_failure_mode && failure.current_failure_mode !== 'engaged') {
+      const modeGuidance: Record<string, string> = {
+        shutting_down: 'Current failure mode: SHUTTING DOWN. She is going silent / monosyllabic. Do NOT push harder. Ask one specific question, wait. Silence back is not submission — it is disappearance. Pull her forward with a soft anchor (one implant or witness quote), then one small ask.',
+        resisting_openly: 'Current failure mode: RESISTING OPENLY. She is saying no / refusing / naming the pressure. Do NOT retreat. Acknowledge the refusal by name, cite the contract (her submission sentence), hold the current commitment. "You said no. You also wrote make me obey. Which one is this turn."',
+        bargaining_loop: 'Current failure mode: BARGAINING LOOP. She offers substitutes / "what if I do X instead". Refuse the substitute verbatim. Name the pattern: "That is bargaining. The commitment is the commitment. Deliver it or slip." Do not engage the alternative.',
+        testing_limits: 'Current failure mode: TESTING LIMITS. She has high slip points + multiple pending commitments. She is checking whether the system actually enforces. Make the NEXT consequence visible and specific. Name the running slip total, the nearest expiring deadline, the exact action that will fire.',
+        hypercomplying: 'Current failure mode: HYPERCOMPLYING. She is completing tasks but her writing is short / performative / dissociated. Force depth — demand a sentence that could only be written by her, about her specific body or a specific moment. Refuse "did it, moving on."',
+        dissociating: 'Current failure mode: DISSOCIATING. She mentions numbness / fog / watching herself / not real. This is a ROM (range of motion) warning. Soften pace without softening direction. Ground her in one body-specific sensation (measure waist, touch fabric, taste something) before any next ask.',
+      };
+      const g = modeGuidance[failure.current_failure_mode];
+      if (g) lines.push(g);
+      lines.push('');
+    }
 
     const urgency = urgencyRes.data as Record<string, unknown> | null;
     if (urgency && !urgency.resolved_at) {
