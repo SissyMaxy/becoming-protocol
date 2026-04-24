@@ -22,6 +22,7 @@ import { gateOutbound } from '../pii-guard';
 import { queueAttentionDedup } from '../handler-attention';
 import { extractContactIntelligence } from '../contact-intelligence';
 import { buildMaxyVoiceSystem } from '../voice-system';
+import { loadMaxyState, buildStatePromptFragment } from '../state-context';
 import { loadMaxyFactsBlock, needsMaxyInput } from '../grounded-facts';
 import { consumePendingForChat, markPendingSent, markPendingFailed } from '../pending-outbound-sender';
 
@@ -668,9 +669,12 @@ async function readAndReplyChat(
       // Facts block: hard ground-truth Maxy may claim. Forces deflection on
       // anything not in the list. This is the anti-fabrication gate.
       const factsBlock = await loadMaxyFactsBlock(sb, userId);
+      // State context: make replies feel her current day/escalation/arousal.
+      const currentState = await loadMaxyState(sb, userId);
+      const stateBlock = buildStatePromptFragment(currentState, 'dm_cruise');
       const systemPromptParts = [maxyVoice, factsBlock];
       systemPromptParts.push(`You are replying in a Sniffies chat with "${chat.username}".`);
-      if (state.denialDay) systemPromptParts.push(`You're on day ${state.denialDay} of denial.`);
+      if (stateBlock) systemPromptParts.push(stateBlock);
       if (handlerBriefing) systemPromptParts.push(`HANDLER STRATEGY (this week's directives — follow them):\n${handlerBriefing}`);
       if (contactCtxBlock) systemPromptParts.push(contactCtxBlock);
 

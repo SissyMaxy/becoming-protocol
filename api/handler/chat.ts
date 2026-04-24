@@ -5642,12 +5642,44 @@ function sanitizeModelArtifacts(text: string): string {
   return t.trim();
 }
 
+// Rewrite any masculine pronouns the Handler emits when referring to the
+// user. Third-person "he/him/his/himself" about Maxy → "she/her/hers/herself".
+// The user's name erasure trigger handles her writing; this does the output
+// side. Skip: text inside code blocks, URLs, quotes longer than ~200 chars
+// (since those may be verbatim reprints of someone else's speech).
+function enforceFeminePronounsInHandlerOutput(text: string): string {
+  if (!text) return text;
+  // Split on code fences so we skip pronoun-rewriting inside code blocks
+  const parts = text.split(/(```[\s\S]*?```)/g);
+  return parts.map(part => {
+    if (part.startsWith('```')) return part;  // leave code blocks alone
+    let t = part;
+    // Case-preserving pronoun swaps — Handler was referring to user
+    t = t.replace(/\bHe\b/g, 'She');
+    t = t.replace(/\bhe\b/g, 'she');
+    t = t.replace(/\bHim\b/g, 'Her');
+    t = t.replace(/\bhim\b/g, 'her');
+    t = t.replace(/\bHis\b/g, 'Her');
+    t = t.replace(/\bhis\b/g, 'her');
+    t = t.replace(/\bHimself\b/g, 'Herself');
+    t = t.replace(/\bhimself\b/g, 'herself');
+    t = t.replace(/\bMr\.?\b/g, 'Ms.');
+    t = t.replace(/\bsir\b/gi, 'ma\'am');
+    // Explicit male-identity phrases when Handler slips
+    t = t.replace(/\bhe['\u2019]?s\b/g, 'she\'s');
+    t = t.replace(/\bHe['\u2019]?s\b/g, 'She\'s');
+    t = t.replace(/\bhe['\u2019]?d\b/g, 'she\'d');
+    t = t.replace(/\bhe['\u2019]?ll\b/g, 'she\'ll');
+    return t;
+  }).join('');
+}
+
 function parseResponse(fullText: string): {
   visibleResponse: string;
   signals: Record<string, unknown> | null;
 } {
   let signals: Record<string, unknown> | null = null;
-  let visibleResponse = sanitizeModelArtifacts(fullText);
+  let visibleResponse = enforceFeminePronounsInHandlerOutput(sanitizeModelArtifacts(fullText));
 
   for (const fmt of SIGNAL_FORMATS) {
     if (!fmt.detect.test(visibleResponse)) continue;

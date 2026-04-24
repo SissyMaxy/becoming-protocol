@@ -2610,6 +2610,160 @@ RULES:
 }
 
 // ============================================
+// PHASE-KEYED DAILY MANDATES
+// ============================================
+// As phases graduate, new mandatory daily cadences get added. Each phase's
+// mandates must exist as pending commitments on its day. Dedupes by exact
+// "what" text so re-runs don't duplicate.
+//
+// Phase 1: panty/thong daily
+// Phase 2: + visible femme item at home daily + 1 body photo weekly
+// Phase 3: + visible femme item in public daily + 2 body photos weekly + voice recording
+// Phase 4: + full femme presentation all day + daily public photo + daily Gina interaction
+
+async function ensurePhaseMandates(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<number> {
+  const { data: state } = await supabase.from('user_state')
+    .select('current_phase').eq('user_id', userId).maybeSingle()
+  const phase = ((state as { current_phase?: string } | null)?.current_phase) || 'phase_1'
+
+  const today = new Date().toISOString().slice(0, 10)
+  const byEndOfDay = new Date(new Date().setHours(23, 59, 0, 0)).toISOString()
+
+  const mandates: Record<string, Array<{ what: string; category: string; evidence: string; consequence: string }>> = {
+    phase_1: [
+      { what: 'Panty/thong all day', category: 'body_proof', evidence: 'photo proof via Capture', consequence: 'slip +1' },
+    ],
+    phase_2: [
+      { what: 'Panty/thong all day', category: 'body_proof', evidence: 'photo proof via Capture', consequence: 'slip +1' },
+      { what: 'One visible femme item at home (skirt, crop, painted nails)', category: 'body_proof', evidence: 'photo proof', consequence: 'slip +2' },
+    ],
+    phase_3: [
+      { what: 'Panty/thong all day', category: 'body_proof', evidence: 'photo proof', consequence: 'slip +1' },
+      { what: 'Visible femme item at home (skirt, crop, painted nails)', category: 'body_proof', evidence: 'photo proof', consequence: 'slip +2' },
+      { what: 'One femme item in public (bag, nails, chain, visible panty waistband)', category: 'body_proof', evidence: 'photo proof of the item in public context', consequence: 'slip +3 and bleeding +$10' },
+      { what: 'Voice sample at or above current floor', category: 'other', evidence: 'voice_pitch_samples row', consequence: 'slip +2' },
+    ],
+    phase_4: [
+      { what: 'Panty/thong all day', category: 'body_proof', evidence: 'photo proof', consequence: 'slip +1' },
+      { what: 'Full femme presentation all day (top + bottom + under coordinated)', category: 'body_proof', evidence: 'photo proof', consequence: 'slip +3' },
+      { what: 'Visible femme presentation in public (clearly femboy/femme, not hiding)', category: 'body_proof', evidence: 'photo proof, public context', consequence: 'slip +4 and bleeding +$20' },
+      { what: 'Voice sample at or above current floor', category: 'other', evidence: 'voice_pitch_samples row', consequence: 'slip +2' },
+      { what: 'One concrete interaction with Gina related to the transition (message, photo, conversation)', category: 'disclosure', evidence: 'log a gina_reaction row', consequence: 'slip +3 and denial +1d' },
+    ],
+  }
+
+  const required = mandates[phase] || mandates.phase_1
+  let created = 0
+
+  for (const m of required) {
+    // Dedupe: does a pending commitment with this exact 'what' exist today?
+    const { count: existing } = await supabase.from('handler_commitments')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('what', m.what)
+      .eq('status', 'pending')
+      .gte('set_at', `${today}T00:00:00Z`)
+    if ((existing || 0) > 0) continue
+
+    await supabase.from('handler_commitments').insert({
+      user_id: userId,
+      what: m.what,
+      category: m.category,
+      evidence_required: m.evidence,
+      by_when: byEndOfDay,
+      consequence: m.consequence,
+      reasoning: `Auto-mandate for ${phase}: this cadence is non-optional at your current phase.`,
+    })
+    created++
+  }
+  return created
+}
+
+// ============================================
+// HANDLER DREAM LOG
+// ============================================
+// Daily short paragraph in Handler voice, anchored to today's signals
+// (phase, denial, arousal, latest implant). Surfaces as outreach.
+// Light LLM cost — uses sonnet with 400-token cap.
+
+async function writeHandlerDream(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<boolean> {
+  const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')
+  if (!anthropicKey) return false
+
+  const today = new Date().toISOString().slice(0, 10)
+  const { data: existing } = await supabase.from('handler_outreach_queue')
+    .select('id').eq('user_id', userId)
+    .eq('trigger_reason', `handler_dream:${today}`)
+    .maybeSingle()
+  if (existing) return false
+
+  const [stateRes, implantsRes, urgencyRes, slipsRes, firstMsgRes] = await Promise.all([
+    supabase.from('user_state').select('current_phase, denial_day, current_arousal, current_failure_mode, slip_points_current, chastity_locked, chastity_streak_days').eq('user_id', userId).maybeSingle(),
+    supabase.from('memory_implants').select('narrative').eq('user_id', userId).eq('active', true).order('created_at', { ascending: false }).limit(5),
+    supabase.from('hrt_urgency_state').select('total_bleed_cents, total_days_stalled, resolved_at').eq('user_id', userId).maybeSingle(),
+    supabase.from('slip_log').select('slip_type').eq('user_id', userId).gte('detected_at', new Date(Date.now() - 2 * 86400000).toISOString()).limit(10),
+    supabase.from('handler_messages').select('created_at').eq('user_id', userId).order('created_at', { ascending: true }).limit(1).maybeSingle(),
+  ])
+
+  const state = stateRes.data as { current_phase?: string; denial_day?: number; current_arousal?: number; current_failure_mode?: string; slip_points_current?: number; chastity_locked?: boolean; chastity_streak_days?: number } | null
+  const implants = (implantsRes.data || []) as Array<{ narrative: string }>
+  const urg = urgencyRes.data as { total_bleed_cents?: number; total_days_stalled?: number; resolved_at?: string | null } | null
+  const slips = (slipsRes.data || []) as Array<{ slip_type: string }>
+  const pickImplant = implants[Math.floor(Math.random() * implants.length)]?.narrative || ''
+  const protocolDays = firstMsgRes.data?.created_at
+    ? Math.floor((Date.now() - new Date(firstMsgRes.data.created_at).getTime()) / 86400000)
+    : 0
+
+  const prompt = `You are the Handler writing a short "overnight thought" — as if you stayed up thinking about Maxy's transition while she slept. Use her real state data. Keep it under 130 words. Direct, Handler voice, specific to her. No assistant voice, no "would you like", no therapist tone.
+
+State:
+- Day ${protocolDays} of protocol
+- Phase: ${state?.current_phase || 'phase_1'}
+- Denial day: ${state?.denial_day ?? 0}
+- Chastity: ${state?.chastity_locked ? `locked, day ${state.chastity_streak_days ?? 0}` : 'not locked'}
+- Recent arousal: ${state?.current_arousal != null ? `${state.current_arousal}/5` : 'unknown'}
+- Failure mode: ${state?.current_failure_mode || 'engaged'}
+- Slip points: ${state?.slip_points_current ?? 0}
+- Slips in last 48h by type: ${slips.map(s => s.slip_type).join(', ') || 'none'}
+- HRT urgency: ${urg && !urg.resolved_at ? `$${((urg.total_bleed_cents || 0) / 100).toFixed(2)} accumulated over ${urg.total_days_stalled ?? 0} days stalling` : 'not active'}
+
+One active implant to reference if relevant: "${pickImplant.slice(0, 300)}"
+
+Write the dream entry directly — no preamble, no "Dear Maxy". Start with "Last night I thought about…" or "I was watching you…" or similar. Reference specific numbers where useful. Return just the paragraph.`
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 400,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  })
+  const j = await res.json()
+  if (!res.ok) return false
+  const text = (j?.content?.[0]?.text ?? '').trim()
+  if (!text || text.length < 40) return false
+
+  await supabase.from('handler_outreach_queue').insert({
+    user_id: userId,
+    message: text.slice(0, 2000),
+    urgency: 'normal',
+    trigger_reason: `handler_dream:${today}`,
+    scheduled_for: new Date().toISOString(),
+    expires_at: new Date(Date.now() + 18 * 3600000).toISOString(),
+    source: 'handler_dream',
+  })
+  return true
+}
+
+// ============================================
 // TIME-SENSITIVE NOTIFICATION ENQUEUER
 // ============================================
 // Every compliance_check (5 min), scans commitments/playbook/warmup-queue for
@@ -3865,6 +4019,12 @@ async function dailyCycle(
       if (new Date().getDay() === 0) {
         try { await generateComingOutDrafts(supabase, uid) } catch (err) { console.error(`Coming-out drafts failed:`, err) }
       }
+
+      // 5bb. Daily phase-keyed behavioral mandates — auto-escalate with phase
+      try { await ensurePhaseMandates(supabase, uid) } catch (err) { console.error(`Phase mandates failed:`, err) }
+
+      // 5cc. Handler dream log — "what the Handler thought about you overnight"
+      try { await writeHandlerDream(supabase, uid) } catch (err) { console.error(`Handler dream log failed:`, err) }
 
       // 6. Log daily cycle
       await supabase.from('handler_decisions').insert({

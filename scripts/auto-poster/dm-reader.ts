@@ -22,6 +22,7 @@ import { resolveContact, recordEvent, getContactContext, recomputeTier, flagCont
 import { gateOutbound } from './pii-guard';
 import { queueAttentionDedup } from './handler-attention';
 import { getOpenTributeFor } from './tributes';
+import { loadMaxyState, buildStatePromptFragment } from './state-context';
 
 interface IncomingDM {
   platform: string;
@@ -752,10 +753,23 @@ async function generateDMResponse(
       : '\nThis is the first message from this person.';
 
     const voiceBlock = await getVoiceBlock();
+
+    // State context — DMs are where mommy-dom plays out. Her day/escalation
+    // should leak through the voice (possessive when deep in denial, patient
+    // when fresh, meaner under hard mode).
+    const userId = process.env.USER_ID || '';
+    let stateBlock = '';
+    if (userId) {
+      try {
+        const state = await loadMaxyState(supabase, userId);
+        stateBlock = buildStatePromptFragment(state, 'dm_mommy');
+      } catch { /* non-fatal */ }
+    }
+
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 200,
-      system: MAXY_DM_PROMPT + voiceBlock + (contactCtx ? `\n\n${contactCtx}` : ''),
+      system: MAXY_DM_PROMPT + voiceBlock + (stateBlock ? `\n\n${stateBlock}` : '') + (contactCtx ? `\n\n${contactCtx}` : ''),
       messages: [{
         role: 'user',
         content: `Reply as Maxy to ${msg.fanDisplayName} on ${msg.platform} DMs.${historyContext}\n\nTheir latest message: "${msg.messageText}"\n\nReply in Maxy's voice. Match the example messages in your instructions. If LEARNED VOICE examples exist, match those even more closely. NO asterisks. NO roleplay narration. NO "sweetie" energy. Be Maxy.`,

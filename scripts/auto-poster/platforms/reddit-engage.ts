@@ -14,6 +14,7 @@ import { chromium, type BrowserContext, type Page } from 'playwright';
 import Anthropic from '@anthropic-ai/sdk';
 import { supabase, PLATFORMS } from '../config';
 import { buildMaxyVoiceSystem } from '../voice-system';
+import { loadMaxyState, buildStatePromptFragment } from '../state-context';
 // rotateFansly intentionally NOT wired into comments — Reddit shadowbans
 // accounts that drop links in comment replies. Link rotation happens only
 // in original posts (platforms/reddit-original-posts.ts).
@@ -364,12 +365,17 @@ export async function generateRedditComment(
   const maxyVoice = (sb && userId)
     ? await buildMaxyVoiceSystem(sb, userId, flavor)
     : getMaxyVoice(subreddit);
+  const stateBlock = (sb && userId)
+    ? buildStatePromptFragment(await loadMaxyState(sb, userId), 'public')
+    : '';
 
   try {
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 300,
       system: `${maxyVoice}
+
+${stateBlock}
 
 You are commenting on a Reddit post in r/${subreddit}.
 
