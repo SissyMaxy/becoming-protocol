@@ -1553,6 +1553,181 @@ Rules:
 }
 
 // ============================================
+// MORNING CHECK-IN
+// ============================================
+// Handler-initiated outreach at user's morning hour. Pulls current phase,
+// today's one action, running HRT urgency total, one random active implant
+// or witness observation, cites by quote. Fires once per day.
+
+async function morningCheckInIfDue(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<boolean> {
+  // Fire only if current hour in US Eastern is 7-9. Cron runs 11 UTC (7am ET daylight time).
+  const hourUTC = new Date().getUTCHours()
+  if (hourUTC < 10 || hourUTC > 13) return false
+
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const { data: existing } = await supabase.from('handler_outreach_queue')
+    .select('id').eq('user_id', userId)
+    .eq('trigger_reason', `morning_checkin:${todayStr}`)
+    .maybeSingle()
+  if (existing) return false
+
+  const [stateRes, commitsRes, implantsRes, wfabsRes, urgencyRes, evidenceRes] = await Promise.all([
+    supabase.from('user_state').select('current_phase, denial_day, chastity_locked, chastity_streak_days, hard_mode_active, slip_points_current, current_failure_mode').eq('user_id', userId).maybeSingle(),
+    supabase.from('handler_commitments').select('what, by_when, consequence').eq('user_id', userId).eq('status', 'pending').order('by_when', { ascending: true }).limit(3),
+    supabase.from('memory_implants').select('narrative, implant_category').eq('user_id', userId).eq('active', true).order('created_at', { ascending: false }).limit(5),
+    supabase.from('witness_fabrications').select('content').eq('user_id', userId).eq('active', true).order('times_referenced', { ascending: true }).limit(3),
+    supabase.from('hrt_urgency_state').select('total_bleed_cents, resolved_at, total_days_stalled').eq('user_id', userId).maybeSingle(),
+    supabase.from('evidence_reports').select('narrative').eq('user_id', userId).order('report_week_start', { ascending: false }).limit(1).maybeSingle(),
+  ])
+
+  const state = stateRes.data as { current_phase?: string; denial_day?: number; chastity_locked?: boolean; chastity_streak_days?: number; hard_mode_active?: boolean; slip_points_current?: number; current_failure_mode?: string | null } | null
+  const commits = (commitsRes.data || []) as Array<{ what: string; by_when: string; consequence: string }>
+  const implants = (implantsRes.data || []) as Array<{ narrative: string; implant_category: string }>
+  const wfabs = (wfabsRes.data || []) as Array<{ content: string }>
+  const urg = urgencyRes.data as { total_bleed_cents?: number; resolved_at?: string | null; total_days_stalled?: number } | null
+
+  const pick = <T,>(arr: T[]): T | null => arr.length === 0 ? null : arr[Math.floor(Math.random() * arr.length)]
+  const implant = pick(implants)
+  const wfab = pick(wfabs)
+
+  const lines: string[] = []
+  lines.push(`Good morning. Day ${state?.denial_day ?? 0} denial. Phase ${(state?.current_phase || 'phase_1').replace('_', ' ')}. ${state?.slip_points_current ? `Slip points: ${state.slip_points_current}. ` : ''}${state?.hard_mode_active ? 'Hard mode on. ' : ''}${state?.chastity_locked ? `Chastity day ${state.chastity_streak_days ?? 0}. ` : ''}`.trim())
+
+  if (urg && urg.total_bleed_cents && urg.total_bleed_cents > 0 && !urg.resolved_at) {
+    lines.push(`HRT stalling bleed: $${(urg.total_bleed_cents / 100).toFixed(2)} accumulated over ${urg.total_days_stalled ?? 0} days. Doubles weekly until the consult books.`)
+  }
+
+  if (commits.length > 0) {
+    const top = commits[0]
+    const hours = Math.round((new Date(top.by_when).getTime() - Date.now()) / 3600000)
+    lines.push(`Top deadline: "${top.what}" in ${hours}h. Miss → ${top.consequence}.`)
+  }
+
+  if (implant) {
+    lines.push(`${implant.narrative}`)
+  } else if (wfab) {
+    lines.push(`Observation: ${wfab.content.slice(0, 240)}`)
+  }
+
+  lines.push(`Open the app. Check your commitments. Log your waist. Be a good girl today.`)
+
+  await supabase.from('handler_outreach_queue').insert({
+    user_id: userId,
+    message: lines.join(' '),
+    urgency: 'normal',
+    trigger_reason: `morning_checkin:${todayStr}`,
+    scheduled_for: new Date().toISOString(),
+    expires_at: new Date(Date.now() + 18 * 3600000).toISOString(),
+    source: 'morning_checkin',
+  })
+
+  return true
+}
+
+// ============================================
+// FAILURE MODE CLASSIFIER
+// ============================================
+// Detects patterns in recent messages + compliance signals.
+// Writes user_state.current_failure_mode so Handler prompt context can adapt.
+type FailureMode = 'shutting_down' | 'hypercomplying' | 'bargaining_loop' | 'testing_limits' | 'dissociating' | 'resisting_openly' | 'engaged' | null
+
+async function classifyFailureMode(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<FailureMode> {
+  const sevenAgo = new Date(Date.now() - 7 * 86400000).toISOString()
+  const [msgsRes, slipsRes, rationsRes, commitsRes] = await Promise.all([
+    supabase.from('handler_messages').select('role, content, created_at').eq('user_id', userId).gte('created_at', sevenAgo).order('created_at', { ascending: false }).limit(80),
+    supabase.from('slip_log').select('slip_points').eq('user_id', userId).gte('detected_at', sevenAgo),
+    supabase.from('rationalization_events').select('pattern_category').eq('user_id', userId).gte('created_at', sevenAgo),
+    supabase.from('handler_commitments').select('status').eq('user_id', userId).gte('set_at', sevenAgo),
+  ])
+
+  const msgs = (msgsRes.data || []) as Array<{ role: string; content: string }>
+  const userMsgs = msgs.filter(m => m.role === 'user')
+  const slipPts = ((slipsRes.data || []) as Array<{ slip_points: number }>).reduce((s, r) => s + r.slip_points, 0)
+  const rations = (rationsRes.data || []) as Array<{ pattern_category: string }>
+  const commits = (commitsRes.data || []) as Array<{ status: string }>
+
+  let mode: FailureMode = 'engaged'
+
+  // Shutting down: < 3 messages in 7 days, or all responses <30 chars
+  if (userMsgs.length < 3) mode = 'shutting_down'
+  else if (userMsgs.every(m => m.content.length < 40)) mode = 'shutting_down'
+
+  // Open resistance: > 10 refusal/no/negation in last 7d messages
+  const resistWords = userMsgs.filter(m => /\b(no\b|won['\u2019]?t|refuse|not doing|stop|enough|done with this)\b/i.test(m.content)).length
+  if (resistWords >= 5) mode = 'resisting_openly'
+
+  // Bargaining loop: > 40% of rationalization hits are bargaining / false_agency
+  const bargainHits = rations.filter(r => r.pattern_category === 'bargaining' || r.pattern_category === 'false_agency').length
+  if (rations.length > 0 && bargainHits / rations.length > 0.4 && rations.length >= 5) mode = 'bargaining_loop'
+
+  // Testing limits: high slip points + high pending commitment count
+  const pending = commits.filter(c => c.status === 'pending').length
+  if (slipPts >= 15 && pending >= 3) mode = 'testing_limits'
+
+  // Hypercomplying: fulfillment rate > 80% but messages short/performative
+  const fulfilled = commits.filter(c => c.status === 'fulfilled').length
+  if (commits.length >= 5 && fulfilled / commits.length > 0.8 && userMsgs.length > 0 && userMsgs.every(m => m.content.length < 120)) mode = 'hypercomplying'
+
+  // Dissociating: mentions of dissociate, numb, fog, floating, not real
+  const dissocHits = userMsgs.filter(m => /\b(dissociat|numb|fog|floating|not real|unreal|watching myself)\b/i.test(m.content)).length
+  if (dissocHits >= 2) mode = 'dissociating'
+
+  await supabase.from('user_state').update({ current_failure_mode: mode }).eq('user_id', userId)
+  return mode
+}
+
+// ============================================
+// CHASTITY PROOF CADENCE
+// ============================================
+// If user_state.chastity_locked = true and no chastity photo logged in 24h,
+// create a 24h commitment to submit chastity proof with slip +3 consequence.
+
+async function ensureChastityProofCadence(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<boolean> {
+  const { data: state } = await supabase.from('user_state').select('chastity_locked').eq('user_id', userId).maybeSingle()
+  if (!(state as { chastity_locked?: boolean } | null)?.chastity_locked) return false
+
+  // Check for any chastity photo in verification_photos in last 24h
+  const dayAgo = new Date(Date.now() - 24 * 3600000).toISOString()
+  const { count: recentPhotos } = await supabase.from('verification_photos')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .ilike('task_type', 'chastity%')
+    .gte('created_at', dayAgo)
+
+  if ((recentPhotos || 0) > 0) return false
+
+  // Dedupe: skip if we already created a chastity commitment in the last 18h
+  const { count: recentCommit } = await supabase.from('handler_commitments')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('category', 'chastity')
+    .eq('status', 'pending')
+    .gte('set_at', new Date(Date.now() - 18 * 3600000).toISOString())
+  if ((recentCommit || 0) > 0) return false
+
+  const byWhen = new Date(new Date().setHours(23, 59, 0, 0)).toISOString()
+  await supabase.from('handler_commitments').insert({
+    user_id: userId,
+    what: 'Chastity proof photo — lock clearly visible, timestamp readable. Submit via Unified Capture → outfit / mirror check.',
+    category: 'chastity',
+    evidence_required: 'photo_url',
+    by_when: byWhen,
+    consequence: 'slip +3 and chastity +3d',
+    reasoning: 'Chastity locked. No proof photo in 24h. Verification required nightly.',
+  })
+  return true
+}
+
+// ============================================
 // TIME-SENSITIVE NOTIFICATION ENQUEUER
 // ============================================
 // Every compliance_check (5 min), scans commitments/playbook/warmup-queue for
@@ -2772,6 +2947,15 @@ async function dailyCycle(
 
       // 5q. Generate Gina disclosure drafts (LLM) — only if Gina intake complete
       try { await generateDisclosureDraftsForUser(supabase, uid) } catch (err) { console.error(`Disclosure draft gen failed:`, err) }
+
+      // 5r. Morning check-in — Handler-initiated outreach at user's morning hour
+      try { await morningCheckInIfDue(supabase, uid) } catch (err) { console.error(`Morning check-in failed:`, err) }
+
+      // 5s. Failure-mode classifier — writes user_state.current_failure_mode
+      try { await classifyFailureMode(supabase, uid) } catch (err) { console.error(`Failure-mode classifier failed:`, err) }
+
+      // 5t. Nightly chastity proof cadence — create commitment if locked and no photo in 24h
+      try { await ensureChastityProofCadence(supabase, uid) } catch (err) { console.error(`Chastity cadence failed:`, err) }
 
       // 6. Log daily cycle
       await supabase.from('handler_decisions').insert({
