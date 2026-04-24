@@ -28,6 +28,7 @@ import { EvidenceReportsCard } from './EvidenceReportsCard';
 import { PhaseProgressCard } from './PhaseProgressCard';
 import { VoiceDrillCard } from './VoiceDrillCard';
 import { OutfitMandateCard } from './OutfitMandateCard';
+import { ArousalLogCard } from './ArousalLogCard';
 
 const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
 
@@ -234,6 +235,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         <CommitmentsCard />
         <OutfitMandateCard />
         <VoiceDrillCard />
+        <ArousalLogCard />
         <BodyMeasurementCard />
         <LovenseHealthBanner />
         <GinaCaptureCard />
