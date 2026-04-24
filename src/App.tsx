@@ -38,6 +38,7 @@ import { ForceStatusStrip } from './components/force/ForceStatusStrip';
 import { TodayView as TodayRedesignView } from './components/today-redesign';
 import { ConditioningLockdown } from './components/today-redesign/ConditioningLockdown';
 import { CompulsoryConfessionGate } from './components/today-redesign/CompulsoryConfessionGate';
+import { HrtDailyGate } from './components/today-redesign/HrtDailyGate';
 import { GinaKeyHolderPage } from './components/gina/GinaKeyHolderPage';
 import { usePunishmentNotifications } from './hooks/usePunishmentNotifications';
 import { DailyReportCard } from './components/handler/DailyReportCard';
@@ -1006,6 +1007,7 @@ function AuthenticatedAppInner() {
           }}
         />
         <CompulsoryConfessionGate />
+        <HrtDailyGate />
         <ConditioningLockdown />
       </>
     );
@@ -1056,6 +1058,9 @@ function AuthenticatedAppInner() {
 
       {/* Compulsory confession gate — daily lockdown until she writes ≥min_chars */}
       <CompulsoryConfessionGate />
+
+      {/* HRT daily gate — forces funnel advancement or written obstacle */}
+      <HrtDailyGate />
 
       {/* Conditioning lockdown — fullscreen enforcement during configured window */}
       <ConditioningLockdown />
