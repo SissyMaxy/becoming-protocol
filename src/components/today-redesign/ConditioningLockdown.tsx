@@ -61,6 +61,20 @@ function isInWindow(w: LockdownWindow, now: Date): boolean {
   return currentMins >= startMins && currentMins < endMins;
 }
 
+interface Segment {
+  id: string;
+  kind: 'implant' | 'reframe' | 'witness' | 'fallback';
+  label: string;
+  text: string;
+  sourceTable: string | null;
+}
+
+const FALLBACK_SEGMENTS: Segment[] = [
+  { id: 'fb-1', kind: 'fallback', label: 'breathe', text: 'Breathe. In for four, hold for four, out for six. You chose this window. You built this system. Let it hold you.', sourceTable: null },
+  { id: 'fb-2', kind: 'fallback', label: 'body', text: 'Feel where your body is soft and where it is tight. Let the softness lead. Let the tight parts know they are on their way out.', sourceTable: null },
+  { id: 'fb-3', kind: 'fallback', label: 'intention', text: 'This 30 minutes is rehearsal for the body you are becoming. Every minute you sit here is a minute the old self loses grip.', sourceTable: null },
+];
+
 export function ConditioningLockdown() {
   const { user } = useAuth();
   const [activeWindow, setActiveWindow] = useState<LockdownWindow | null>(null);
@@ -69,7 +83,11 @@ export function ConditioningLockdown() {
   const [safewordInput, setSafewordInput] = useState('');
   const [safewords, setSafewords] = useState<string[]>([]);
   const [started, setStarted] = useState<number | null>(null);
+  const [segments, setSegments] = useState<Segment[]>([]);
+  const [segmentIdx, setSegmentIdx] = useState(0);
   const loopTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const rotateTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const referencedIds = useRef<Set<string>>(new Set());
 
   // Load user's windows + safewords
   const loadConfig = useCallback(async () => {
@@ -191,6 +209,54 @@ export function ConditioningLockdown() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
+  // When session opens, pull content segments from all three libraries
+  useEffect(() => {
+    if (!activeWindow || !user?.id) { setSegments([]); setSegmentIdx(0); return; }
+    let cancelled = false;
+    (async () => {
+      const [impR, refR, witR] = await Promise.all([
+        supabase.from('memory_implants').select('id, narrative, implant_category, times_referenced').eq('user_id', user.id).eq('active', true).order('times_referenced', { ascending: true }).limit(12),
+        supabase.from('narrative_reframings').select('id, reframed_text, reframe_angle, times_referenced').eq('user_id', user.id).order('intensity', { ascending: false }).order('times_referenced', { ascending: true }).limit(10),
+        supabase.from('witness_fabrications').select('id, content, category, intensity, times_referenced').eq('user_id', user.id).eq('active', true).order('times_referenced', { ascending: true }).limit(8),
+      ]);
+      if (cancelled) return;
+      const mix: Segment[] = [];
+      for (const r of (impR.data || []) as Array<Record<string, unknown>>) {
+        mix.push({ id: r.id as string, kind: 'implant', label: String(r.implant_category || 'memory').replace(/_/g, ' '), text: String(r.narrative || ''), sourceTable: 'memory_implants' });
+      }
+      for (const r of (refR.data || []) as Array<Record<string, unknown>>) {
+        mix.push({ id: r.id as string, kind: 'reframe', label: String(r.reframe_angle || 'reframe').replace(/_/g, ' '), text: String(r.reframed_text || ''), sourceTable: 'narrative_reframings' });
+      }
+      for (const r of (witR.data || []) as Array<Record<string, unknown>>) {
+        mix.push({ id: r.id as string, kind: 'witness', label: `Gina · ${String(r.category || 'observation').replace(/_/g, ' ')}`, text: String(r.content || ''), sourceTable: 'witness_fabrications' });
+      }
+      // Shuffle deterministically per session then interleave so user doesn't get 6 implants in a row
+      mix.sort(() => Math.random() - 0.5);
+      const final = mix.length > 0 ? mix : FALLBACK_SEGMENTS;
+      setSegments(final);
+      setSegmentIdx(0);
+    })();
+    return () => { cancelled = true; };
+  }, [activeWindow, user?.id]);
+
+  // Rotate segments every 90s + increment times_referenced on first view
+  useEffect(() => {
+    if (!activeWindow || segments.length === 0) return;
+    const seg = segments[segmentIdx];
+    if (seg && seg.sourceTable && !referencedIds.current.has(seg.id)) {
+      referencedIds.current.add(seg.id);
+      // Read-then-write increment
+      supabase.from(seg.sourceTable).select('times_referenced').eq('id', seg.id).maybeSingle().then(({ data }) => {
+        const prev = ((data as Record<string, unknown> | null)?.times_referenced as number) ?? 0;
+        supabase.from(seg.sourceTable!).update({ times_referenced: prev + 1 }).eq('id', seg.id).then(() => {}, () => {});
+      }, () => {});
+    }
+    rotateTimerRef.current = setInterval(() => {
+      setSegmentIdx(i => (i + 1) % segments.length);
+    }, 90_000);
+    return () => { if (rotateTimerRef.current) clearInterval(rotateTimerRef.current); };
+  }, [activeWindow, segments, segmentIdx]);
+
   const tryExitBySafeword = () => {
     const typed = safewordInput.trim().toLowerCase();
     if (!typed) return;
@@ -229,13 +295,37 @@ export function ConditioningLockdown() {
         <audio src={activeWindow.audio_url} autoPlay loop controls={false} style={{ display: 'none' }} />
       )}
 
-      {activeWindow.script_text && (
+      {segments.length > 0 ? (
+        <div style={{ maxWidth: 560, width: '100%', marginBottom: 24 }}>
+          <div style={{ fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#c4b5fd', fontWeight: 700, marginBottom: 10, textAlign: 'center', opacity: 0.7 }}>
+            {segments[segmentIdx]?.kind === 'witness' ? '◆' : segments[segmentIdx]?.kind === 'reframe' ? '❖' : segments[segmentIdx]?.kind === 'implant' ? '●' : '·'} {segments[segmentIdx]?.label}
+          </div>
+          <div
+            key={segments[segmentIdx]?.id}
+            style={{
+              fontSize: 17, lineHeight: 1.75, textAlign: 'center', color: '#e8dcff',
+              fontStyle: segments[segmentIdx]?.kind === 'witness' ? 'normal' : 'italic',
+              animation: 'td-seg-fade 1.2s ease-out',
+            }}
+          >
+            {segments[segmentIdx]?.text}
+          </div>
+          <style>{`@keyframes td-seg-fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }`}</style>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 18, fontSize: 10, color: '#6a5a7e' }}>
+            <span>{segmentIdx + 1} / {segments.length}</span>
+            <button
+              onClick={() => setSegmentIdx(i => (i + 1) % segments.length)}
+              style={{ background: 'none', border: '1px solid rgba(196,181,253,0.2)', color: '#c4b5fd', borderRadius: 4, padding: '3px 10px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.05em', textTransform: 'uppercase' }}
+            >
+              next
+            </button>
+          </div>
+        </div>
+      ) : activeWindow.script_text ? (
         <div style={{ maxWidth: 520, fontSize: 16, lineHeight: 1.7, textAlign: 'center', color: '#e8dcff', marginBottom: 24, fontStyle: 'italic' }}>
           {activeWindow.script_text}
         </div>
-      )}
-
-      {!activeWindow.script_text && !activeWindow.audio_url && (
+      ) : (
         <div style={{ maxWidth: 520, fontSize: 15, lineHeight: 1.6, textAlign: 'center', color: '#c4b5fd', marginBottom: 24 }}>
           The Handler holds you here. Breathe. Sit with it. You chose this window. Use it.
         </div>
