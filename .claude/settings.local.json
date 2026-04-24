@@ -118,7 +118,8 @@
       "mcp__claude_ai_Supabase__deploy_edge_function",
       "mcp__claude_ai_Supabase__apply_migration",
       "mcp__claude_ai_Supabase__get_edge_function",
-      "mcp__claude_ai_Vercel__get_project"
+      "mcp__claude_ai_Vercel__get_project",
+      "mcp__claude_ai_Supabase__get_logs"
     ]
   }
 }

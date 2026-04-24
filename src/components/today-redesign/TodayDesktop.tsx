@@ -18,6 +18,7 @@ import { GinaWindowIndicator } from './GinaWindowIndicator';
 import { CommitmentsCard } from './CommitmentsCard';
 import { GinaPlaybookCard } from './GinaPlaybookCard';
 import { BodyMeasurementCard } from './BodyMeasurementCard';
+import { HandlerEvolutionCard } from './HandlerEvolutionCard';
 
 const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
 
@@ -216,6 +217,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
 
       <main className="td-main">
         <HandlerRunningCard />
+        <HandlerEvolutionCard />
         <CommitmentsCard />
         <BodyMeasurementCard />
         <LovenseHealthBanner />

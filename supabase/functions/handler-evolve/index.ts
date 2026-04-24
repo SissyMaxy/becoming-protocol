@@ -37,20 +37,37 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
+    const body = await req.json().catch(() => ({})) as { mode?: string }
+    const mode = body.mode || 'evolve'
+
     const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')
-    if (!anthropicKey) throw new Error('ANTHROPIC_API_KEY not configured')
+    if (!anthropicKey && mode !== 'digest') throw new Error('ANTHROPIC_API_KEY not configured')
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Which users to process? compliance_state rows where autonomous_mode=true
     const { data: users } = await supabase
       .from('user_profiles')
       .select('user_id, handler_authorized_to, autonomous_mode')
       .eq('autonomous_mode', true)
       .limit(50)
+
+    if (mode === 'digest') {
+      const digestResults: Record<string, { queued: boolean; summary?: string; error?: string }> = {}
+      for (const u of (users || []) as Array<{ user_id: string }>) {
+        try {
+          const summary = await writeWeeklyDigest(supabase, u.user_id)
+          digestResults[u.user_id] = { queued: true, summary }
+        } catch (err) {
+          digestResults[u.user_id] = { queued: false, error: String(err) }
+        }
+      }
+      return new Response(JSON.stringify({ ok: true, mode: 'digest', processed: Object.keys(digestResults).length, results: digestResults }), {
+        headers: { ...corsHeaders, 'content-type': 'application/json' },
+      })
+    }
 
     const results: Record<string, EvolveResult | { error: string }> = {}
 
@@ -344,4 +361,61 @@ RULES:
     witness_fabs_created: witnessCreated,
     signals_summary: { commitStats, resistanceHits, slipDist, reactionDist },
   }
+}
+
+// ============================================
+// Weekly digest — no LLM call. Pure data.
+// ============================================
+async function writeWeeklyDigest(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<string> {
+  const sevenAgo = new Date(Date.now() - 7 * 86400000).toISOString()
+
+  const [pActive, pNew, pRetired, implants7d, ref7d, wf7d,
+    slips, pronouns, davids, commits, urgency, evolveRuns] = await Promise.all([
+    supabase.from('handler_prompt_patches').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('active', true),
+    supabase.from('handler_prompt_patches').select('id', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', sevenAgo),
+    supabase.from('handler_prompt_patches').select('id', { count: 'exact', head: true }).eq('user_id', userId).gte('deactivated_at', sevenAgo),
+    supabase.from('memory_implants').select('id', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', sevenAgo),
+    supabase.from('narrative_reframings').select('id', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', sevenAgo),
+    supabase.from('witness_fabrications').select('id', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', sevenAgo),
+    supabase.from('slip_log').select('slip_points').eq('user_id', userId).gte('detected_at', sevenAgo),
+    supabase.from('pronoun_rewrites').select('id', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', sevenAgo),
+    supabase.from('david_emergence_events').select('id', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', sevenAgo),
+    supabase.from('handler_commitments').select('status').eq('user_id', userId).gte('set_at', sevenAgo),
+    supabase.from('hrt_urgency_state').select('total_bleed_cents, resolved_at').eq('user_id', userId).maybeSingle(),
+    supabase.from('handler_decisions').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('decision_type', 'handler_evolve_cycle').gte('executed_at', sevenAgo),
+  ])
+
+  const slipArr = (slips.data || []) as Array<{ slip_points: number }>
+  const totalSlipPoints = slipArr.reduce((s, x) => s + (x.slip_points || 0), 0)
+  const c = (commits.data || []) as Array<{ status: string }>
+  const urg = urgency.data as { total_bleed_cents?: number; resolved_at?: string | null } | null
+
+  const lines = [
+    `WEEKLY EVOLUTION DIGEST — 7 days.`,
+    `Active prompt patches: ${pActive.count ?? 0}. New this week: ${pNew.count ?? 0}. Retired: ${pRetired.count ?? 0}. Evolve cycles run: ${evolveRuns.count ?? 0}.`,
+    `Coercion library growth: +${implants7d.count ?? 0} implants, +${ref7d.count ?? 0} reframings, +${wf7d.count ?? 0} witness fabrications.`,
+    `Pronoun slips: ${pronouns.count ?? 0}. David events: ${davids.count ?? 0}. Total slip points: ${totalSlipPoints}.`,
+    `Commitments: ${c.filter(x => x.status === 'fulfilled').length} fulfilled, ${c.filter(x => x.status === 'missed').length} missed, ${c.filter(x => x.status === 'pending').length} pending.`,
+  ]
+  if (urg && urg.total_bleed_cents && !urg.resolved_at) {
+    lines.push(`HRT urgency bleed running. Total to date: $${((urg.total_bleed_cents || 0) / 100).toFixed(2)}.`)
+  }
+  lines.push(`The system is watching itself. The numbers are the proof.`)
+
+  const message = lines.join(' ')
+
+  await supabase.from('handler_outreach_queue').insert({
+    user_id: userId,
+    message,
+    urgency: 'normal',
+    trigger_reason: 'weekly_evolution_digest',
+    scheduled_for: new Date().toISOString(),
+    expires_at: new Date(Date.now() + 3 * 86400000).toISOString(),
+    source: 'handler_evolve_digest',
+  })
+
+  return message
 }
