@@ -61,6 +61,27 @@ function isInWindow(w: LockdownWindow, now: Date): boolean {
   return currentMins >= startMins && currentMins < endMins;
 }
 
+// Catch-up: window was scheduled today (day-of-week match, current time past
+// the start), but no session logged yet today. Keep the lockdown available
+// until end of day in user's tz.
+function isInCatchUpWindow(w: LockdownWindow, now: Date): boolean {
+  if (!w.active) return false;
+  const dow = dayOfWeekInTz(now, w.timezone);
+  if (!w.days_of_week.includes(dow)) return false;
+  const currentMins = minutesSinceMidnightInTz(now, w.timezone);
+  const startMins = w.start_hour * 60 + w.start_minute;
+  // After start_hour, before end of day
+  return currentMins >= startMins && currentMins < 24 * 60;
+}
+
+function dateKeyInTz(date: Date, tz: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date);
+  const y = parts.find(p => p.type === 'year')?.value || '';
+  const mo = parts.find(p => p.type === 'month')?.value || '';
+  const d = parts.find(p => p.type === 'day')?.value || '';
+  return `${y}-${mo}-${d}`;
+}
+
 interface Segment {
   id: string;
   kind: 'implant' | 'reframe' | 'witness' | 'fallback';
@@ -98,7 +119,27 @@ export function ConditioningLockdown() {
     ]);
     const wins = (winRes.data || []) as LockdownWindow[];
     const now = new Date();
-    const active = wins.find(w => isInWindow(w, now)) || null;
+    // First pick any window that's LIVE (within the scheduled range)
+    let active = wins.find(w => isInWindow(w, now)) || null;
+    // If nothing live, check catch-up: a window whose start has passed today but
+    // we have no completed/safeworded session yet today for this user.
+    if (!active) {
+      for (const w of wins) {
+        if (!isInCatchUpWindow(w, now)) continue;
+        const dayStartUTC = new Date(dateKeyInTz(now, w.timezone) + 'T00:00:00Z').toISOString();
+        const { data: todaySessions } = await supabase
+          .from('conditioning_lockdown_sessions')
+          .select('id, ended_reason')
+          .eq('user_id', user.id)
+          .eq('window_id', w.id)
+          .gte('started_at', dayStartUTC)
+          .in('ended_reason', ['completed', 'safeword']);
+        if (!todaySessions || todaySessions.length === 0) {
+          active = w;
+          break;
+        }
+      }
+    }
     if (active && !activeWindow) {
       // Window just opened — start a session
       const startMs = Date.now();
@@ -176,8 +217,8 @@ export function ConditioningLockdown() {
         if (remaining === 0) {
           endSession('completed');
         }
-        // Also check we're still in the window (handle DST etc.)
-        if (!isInWindow(activeWindow, new Date())) {
+        // Also check we're still in the window OR catch-up mode (handle DST etc.)
+        if (!isInWindow(activeWindow, new Date()) && !isInCatchUpWindow(activeWindow, new Date())) {
           endSession('completed');
         }
       } else {
