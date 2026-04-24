@@ -37,6 +37,7 @@ import { DeviceScheduleCard } from './DeviceScheduleCard';
 import { IdentityDisplacementCard } from './IdentityDisplacementCard';
 import { MantraStreakCard } from './MantraStreakCard';
 import { HandlerDreamCard } from './HandlerDreamCard';
+import { DailyBriefingCard } from './DailyBriefingCard';
 
 const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
 
@@ -235,6 +236,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
 
       <main className="td-main">
         <ProtocolDayCard />
+        <DailyBriefingCard />
         <HandlerDreamCard />
         <PhaseProgressCard />
         <MantraStreakCard />

@@ -37,6 +37,7 @@ import { DeviceScheduleCard } from './DeviceScheduleCard';
 import { IdentityDisplacementCard } from './IdentityDisplacementCard';
 import { MantraStreakCard } from './MantraStreakCard';
 import { HandlerDreamCard } from './HandlerDreamCard';
+import { DailyBriefingCard } from './DailyBriefingCard';
 
 const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
 const HEATMAP_COLORS = ['#1a1a20', '#2d1a4d', '#4d2a75', '#6a2a9a', '#7c3aed'];
@@ -201,6 +202,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
       {tab === 'today' && (
         <div style={{ padding: '0 16px' }}>
           <ProtocolDayCard />
+          <DailyBriefingCard />
           <HandlerDreamCard />
           <PhaseProgressCard />
           <MantraStreakCard />
