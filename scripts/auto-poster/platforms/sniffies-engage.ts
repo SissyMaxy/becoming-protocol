@@ -53,6 +53,52 @@ Examples of good openers:
 
 Output ONLY the message text.`;
 
+/**
+ * Strip meta-commentary from model outputs. Haiku occasionally leaks its
+ * reasoning before the actual reply — e.g.:
+ *   "they seem checked out, maybe respond with something light. something like:
+ *
+ *    nah just vibing. what're you into?"
+ *
+ * We want only the last line here. This runs as a belt-and-braces gate after
+ * the prompt-level instruction to prevent meta-commentary.
+ */
+function stripMetaCommentary(text: string): string {
+  let t = text.trim();
+
+  // If there's an explicit "something like:" marker (with or without colon),
+  // take everything after it.
+  const markers = [
+    /something like\s*:\s*\n?/i,
+    /here'?s (?:a |her |what she'?d say):?\s*\n?/i,
+    /the reply\s*:\s*\n?/i,
+    /her message\s*:\s*\n?/i,
+  ];
+  for (const m of markers) {
+    const idx = t.search(m);
+    if (idx >= 0) {
+      const after = t.slice(idx).replace(m, '').trim();
+      if (after.length >= 2) t = after;
+    }
+  }
+
+  // If the output has multiple paragraphs and the first paragraph looks like
+  // meta-reasoning (starts with "they", "looks like", "maybe", etc.), keep only
+  // the last non-empty paragraph as the reply.
+  const paras = t.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+  if (paras.length >= 2) {
+    const metaOpeners = /^(they\b|looks like|maybe|seems like|it sounds|i'd|honestly i|you could|the best)/i;
+    if (metaOpeners.test(paras[0])) {
+      t = paras[paras.length - 1];
+    }
+  }
+
+  // Strip wrapping quotes if present — model sometimes wraps the reply in "..."
+  t = t.replace(/^["'`](.+)["'`]$/s, '$1').trim();
+
+  return t;
+}
+
 interface SniffiesChat {
   username: string;
   lastMessage: string;
@@ -388,6 +434,10 @@ async function readAndReplyChat(
         if (/^typing\\.?\\.?\\.?$/i.test(text)) continue;
         if (/^(read|delivered|sent)$/i.test(text)) continue;
         if (/^you sent a reaction\\.?$/i.test(text)) continue;
+        // Sniffies free-chat expiration chrome: "Expiring", "Expires in 5 hours", etc.
+        if (/^expiring$/i.test(text)) continue;
+        if (/^expires?\\s+in\\s+/i.test(text)) continue;
+        if (/^(new match|active now|online|offline|away)$/i.test(text)) continue;
 
         // Photo markers — keep as scene context so the Handler knows photos came in.
         // fromSelf determined by wording, not bubble position (system labels are centered).
@@ -627,16 +677,20 @@ async function readAndReplyChat(
       const response = await client.messages.create({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 150,
-        system: systemPromptParts.join('\n\n'),
+        system: systemPromptParts.join('\n\n') + `\n\nCRITICAL OUTPUT FORMAT: Respond with Maxy's message text ONLY. No explanation of your reasoning, no "something like:", no preamble, no meta-commentary, no quotes around the message, no "Here's a reply:". Just the text she would type, ready to paste into the chat input. If you explain what to say instead of saying it, the output is wrong.`,
         messages: [{
           role: 'user',
-          content: `Chat with ${chat.username}:\n${context}\n\nWrite Maxy's reply. Output ONLY the message.`,
+          content: `Chat with ${chat.username}:\n${context}\n\nMaxy's next message. Plain text only, no framing.`,
         }],
       });
 
       const extracted = extractSafeText(response, 3, `Sniffies @${chat.username}`);
       if (!extracted) return { success: false };
-      reply = extracted;
+      reply = stripMetaCommentary(extracted);
+      if (!reply || reply.length < 2) {
+        console.log(`  [meta-strip] reply was entirely meta-commentary, skipping`);
+        return { success: false };
+      }
     }
 
     // PII guardrail — hardest gate on Sniffies since it's a cruising app.

@@ -121,6 +121,17 @@ export function BodyMeasurementCard() {
         </span>
       </div>
 
+      {history.length >= 2 && (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 9, color: '#6a656e', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>trend · last {history.length} entries</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+            <Sparkline label="weight" values={history.map(h => h.weight_kg).filter((v): v is number => v != null).reverse()} directionColor="#c4b5fd" />
+            <Sparkline label="waist" values={history.map(h => h.waist_cm).filter((v): v is number => v != null).reverse()} directionColor="#6ee7b7" invert />
+            <Sparkline label="hips" values={history.map(h => h.hips_cm).filter((v): v is number => v != null).reverse()} directionColor="#f4a7c4" />
+          </div>
+        </div>
+      )}
+
       {latest && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 10 }}>
           <MetricPill label="weight" value={latest.weight_kg != null ? `${latest.weight_kg}kg` : '—'} delta={delta('weight_kg')} />
@@ -192,6 +203,48 @@ function MetricPill({ label, value, delta, target }: { label: string; value: str
       <div style={{ fontSize: 13.5, color: '#e8e6e3', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
       {delta && <div style={{ fontSize: 9.5, color: deltaColor, fontVariantNumeric: 'tabular-nums' }}>{delta}</div>}
       {target && <div style={{ fontSize: 9, color: '#8a8690', marginTop: 1 }}>{target}</div>}
+    </div>
+  );
+}
+
+function Sparkline({ label, values, directionColor, invert }: { label: string; values: number[]; directionColor: string; invert?: boolean }) {
+  if (values.length < 2) {
+    return (
+      <div style={{ background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 5, padding: '5px 7px' }}>
+        <div style={{ fontSize: 9, color: '#6a656e', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
+        <div style={{ fontSize: 10, color: '#5a555e', fontStyle: 'italic' }}>—</div>
+      </div>
+    );
+  }
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const width = 80;
+  const height = 24;
+  const points = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * width;
+    const y = height - ((v - min) / range) * height;
+    return `${x},${y.toFixed(1)}`;
+  }).join(' ');
+
+  const first = values[0];
+  const last = values[values.length - 1];
+  const delta = last - first;
+  // "Good" direction depends on metric: weight/waist shrinking = green, hips growing = green
+  const goodDirection = invert ? delta < 0 : delta > 0;
+  const sparkColor = Math.abs(delta) < 0.1 ? '#8a8690' : goodDirection ? directionColor : '#f47272';
+
+  return (
+    <div style={{ background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 5, padding: '5px 7px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 2 }}>
+        <span style={{ fontSize: 9, color: '#6a656e', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</span>
+        <span style={{ fontSize: 9.5, color: sparkColor, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+          {delta > 0 ? '+' : ''}{delta.toFixed(1)}
+        </span>
+      </div>
+      <svg width={width} height={height} style={{ display: 'block' }}>
+        <polyline points={points} fill="none" stroke={sparkColor} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+      </svg>
     </div>
   );
 }

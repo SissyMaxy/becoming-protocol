@@ -26,6 +26,8 @@ import { HandlerKnowCard } from './HandlerKnowCard';
 import { ComingOutVaultCard } from './ComingOutVaultCard';
 import { EvidenceReportsCard } from './EvidenceReportsCard';
 import { PhaseProgressCard } from './PhaseProgressCard';
+import { VoiceDrillCard } from './VoiceDrillCard';
+import { OutfitMandateCard } from './OutfitMandateCard';
 
 const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
 
@@ -230,6 +232,8 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         <HandlerEvolutionCard />
         <EvidenceReportsCard />
         <CommitmentsCard />
+        <OutfitMandateCard />
+        <VoiceDrillCard />
         <BodyMeasurementCard />
         <LovenseHealthBanner />
         <GinaCaptureCard />
