@@ -15,49 +15,6 @@ const supabase = createClient(
 // Handler mirrors how she actually talks, not the static persona.
 // ============================================
 
-function scoreVoiceSignal(text: string, source: string): number {
-  const trimmed = text.trim();
-  const len = trimmed.length;
-  if (!len) return 0;
-  if (/^[\/\\!]/.test(trimmed)) return 0; // slash/bang commands
-  if (/^(y|yes|n|no|ok|okay|k|kk|sure|thx|thanks)[.!?]*$/i.test(trimmed)) return 0;
-
-  let score = 0;
-  if (len > 20) score += 1;
-  if (len > 80) score += 2;
-  if (len > 200) score += 2;
-  if (/[!?]{1,}/.test(trimmed)) score += 1;
-  if (/\b(i|i'm|im|my|me|mine)\b/i.test(trimmed)) score += 1; // first-person
-  if (/\b(fuck|shit|god|holy|christ)\b/i.test(trimmed)) score += 1; // emotional register
-  if (source === 'ai_edit_correction') score += 10;
-  if (source === 'manual_sample') score += 5;
-  return score;
-}
-
-async function ingestVoiceSample(
-  userId: string,
-  text: string,
-  source: 'handler_dm' | 'platform_dm' | 'ai_edit_correction' | 'manual_sample' | 'journal',
-  context: Record<string, unknown> = {},
-): Promise<void> {
-  try {
-    const trimmed = (text || '').trim();
-    if (!trimmed || trimmed.length < 4) return;
-    const score = scoreVoiceSignal(trimmed, source);
-    if (score === 0) return;
-    await supabase.from('user_voice_corpus').insert({
-      user_id: userId,
-      text: trimmed.slice(0, 2000),
-      source,
-      source_context: context,
-      length: trimmed.length,
-      signal_score: score,
-    });
-  } catch (e) {
-    console.error('[VoiceCorpus] ingest failed:', e);
-  }
-}
-
 type CachedExemplars = { block: string; at: number };
 const voiceExemplarCache = new Map<string, CachedExemplars>();
 const VOICE_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -5386,59 +5343,8 @@ async function retryWithOpenRouter(systemPrompt: string, messages: Array<{ role:
   }
 }
 
-// Anthropic tool definition for signal emission. When passed on Claude calls
-// with tool_choice: { type: "any" }, Claude emits handler_signals through a
-// tool_use content block that never appears in the visible text stream — so
-// the JSON cannot leak into chat. OpenRouter/Hermes doesn't speak this format,
-// so the regex-based parseResponse fallback below still handles that path.
-const HANDLER_SIGNALS_TOOL = {
-  name: 'emit_handler_signals',
-  description:
-    'Emit hidden control signals alongside your visible reply. Never shown to Maxy. Call this once per turn with your mode detection, mood, and any directives (device commands, task prescriptions, voice requests, etc.). The visible reply goes in the regular assistant text; signals live here.',
-  input_schema: {
-    type: 'object',
-    additionalProperties: true,
-    properties: {
-      detected_mode: { type: 'string' },
-      mood: { type: 'string' },
-      focus: { type: 'string' },
-      next_contact: { type: 'string' },
-      resistance_detected: { type: 'boolean' },
-      resistance_level: { type: 'number' },
-      vulnerability_window: { type: 'boolean' },
-      commitment_opportunity: { type: 'boolean' },
-      conversation_should_continue: { type: 'boolean' },
-      start_conditioning_session: { type: 'boolean' },
-      conditioning_target: { type: 'string' },
-      topics: { type: 'array', items: { type: 'string' } },
-      handler_note: {
-        type: 'object',
-        additionalProperties: true,
-        properties: {
-          type: { type: 'string' },
-          content: { type: 'string' },
-          priority: { type: 'number' },
-        },
-      },
-      directive: { type: 'object', additionalProperties: true },
-      directives: {
-        type: 'array',
-        items: { type: 'object', additionalProperties: true },
-      },
-      commitments: {
-        type: 'array',
-        description: 'Concrete deadlines you set in your visible reply. Each entry: { what, by_when (ISO or relative like "sunday 23:59"), consequence, category?, evidence_required? }. Emit one per deadline. If you set a deadline verbally but do not emit it here, it does not exist and will not be enforced.',
-        items: { type: 'object', additionalProperties: true },
-      },
-    },
-  },
-} as const;
-
-// 'auto' lets Claude choose tool_use vs text — it still uses the tool when
-// signals are needed (system prompt forces it), but it never skips the prose
-// reply to satisfy a forced tool call. Using 'any' was producing empty chat
-// responses because Claude would return tool_use only.
-const HANDLER_TOOL_CHOICE = { type: 'auto' as const };
+// HANDLER_SIGNALS_TOOL + HANDLER_TOOL_CHOICE removed — handler_signals are
+// extracted via regex parseResponse() below, not via Anthropic tool_use.
 
 function buildFallbackFromSignals(signals: Record<string, unknown> | null): string {
   if (!signals) return 'Continue.';
@@ -8327,7 +8233,7 @@ async function buildSelfAuditPatchesCtx(userId: string): Promise<string> {
     void supabase
       .from('handler_prompt_patches')
       .update({
-        applied_count: supabase.rpc ? 1 : 1,
+        applied_count: 1,
         last_applied_at: new Date().toISOString(),
       })
       .in('id', ids)
@@ -8513,8 +8419,6 @@ async function buildPitchTrendCtx(userId: string): Promise<string> {
     const older = all.slice(Math.min(20, all.length));
     const olderAvg = older.length > 0 ? older.reduce((s, n) => s + n, 0) / older.length : recentAvg;
     const trend = recentAvg - olderAvg;
-    const masculineSlips = all.filter(n => n < 140).length;
-    const masculinePct = Math.round((masculineSlips / all.length) * 100);
 
     const lines = ['## VOICE PITCH (longitudinal tracking — NOT target-based)'];
     lines.push(`Last 14 days: ${all.length} samples, avg ${Math.round(avg)}Hz, recent ${Math.round(recentAvg)}Hz`);
@@ -9288,8 +9192,7 @@ async function detectAndSaveCorrection(userId: string, text: string): Promise<vo
   if (!text || text.length < 10) return;
   if (!CORRECTION_PATTERNS.some(p => p.test(text))) return;
 
-  // Don't double-save if this exact text was already saved recently
-  const textHash = text.slice(0, 100).toLowerCase().trim();
+  // Throttle: skip if we've already saved 3+ corrections this hour
   const { data: recent } = await supabase
     .from('handler_memory')
     .select('id')
@@ -11339,7 +11242,6 @@ async function handleForceFeminizationDirective(
                 .limit(5),
               supabase.from('body_targets').select('aesthetic_preset').eq('user_id', userId).maybeSingle(),
             ]);
-            const confessions = ((topConf || []) as Array<Record<string, unknown>>).map(c => `- ${(c.response as string).slice(0, 200)}`).join('\n');
             const dysphoria = ((topDysph || []) as Array<Record<string, unknown>>).map(d => `- ${d.body_part}: "${((d.feeling as string) || '').slice(0, 120)}" (sev ${d.severity}/10)`).join('\n');
             const preset = (bt?.aesthetic_preset as string) || 'feminine';
 
