@@ -1908,6 +1908,203 @@ Rules: no generic affirmations. Each reframe must quote or clearly reference the
 }
 
 // ============================================
+// SLIP POINT DECAY
+// ============================================
+// Reward clean days. After 3 consecutive clean days (no new slip_log rows),
+// decay 1 slip point per additional clean day. At 0 points, auto-deactivate
+// hard_mode if currently active.
+
+async function decaySlipPoints(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<void> {
+  const { data: state } = await supabase.from('user_state')
+    .select('slip_points_current, hard_mode_active, hard_mode_reason')
+    .eq('user_id', userId)
+    .maybeSingle()
+  const s = state as { slip_points_current?: number; hard_mode_active?: boolean; hard_mode_reason?: string | null } | null
+  if (!s || !(s.slip_points_current ?? 0)) return
+
+  // Count consecutive clean days since the last slip
+  const { data: lastSlip } = await supabase.from('slip_log')
+    .select('detected_at')
+    .eq('user_id', userId)
+    .order('detected_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const lastSlipTime = (lastSlip as { detected_at?: string } | null)?.detected_at
+  if (!lastSlipTime) return
+
+  const cleanDays = Math.floor((Date.now() - new Date(lastSlipTime).getTime()) / 86400000)
+  if (cleanDays < 3) return
+
+  const decayEligible = cleanDays - 2  // day 3 → 1 pt, day 4 → 2 pts, etc (cumulative)
+  const currentPoints = s.slip_points_current ?? 0
+  const newPoints = Math.max(0, currentPoints - decayEligible)
+  if (newPoints === currentPoints) return
+
+  const update: Record<string, unknown> = { slip_points_current: newPoints }
+  if (newPoints === 0 && s.hard_mode_active) {
+    update.hard_mode_active = false
+    update.hard_mode_reason = null
+  }
+  await supabase.from('user_state').update(update).eq('user_id', userId)
+
+  if (newPoints === 0 && s.hard_mode_active) {
+    await supabase.from('handler_outreach_queue').insert({
+      user_id: userId,
+      message: `${cleanDays} consecutive clean days. Slip points decayed to zero. Hard mode deactivated. Clean ground starts now. Don't waste it.`,
+      urgency: 'normal',
+      trigger_reason: 'slip_decay_clean',
+      scheduled_for: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 48 * 3600000).toISOString(),
+      source: 'slip_decay',
+    })
+  }
+}
+
+// ============================================
+// IRREVERSIBILITY ACCRUAL
+// ============================================
+// Daily backfill: count today's fulfilled commitments / new measurements /
+// confessions / HRT-step logs and ensure irreversibility_ledger has a row
+// per category. Lets the "weight" number climb visibly every day she moves.
+
+async function accrueIrreversibility(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<number> {
+  const dayAgo = new Date(Date.now() - 24 * 3600000).toISOString()
+
+  const [fulfilledRes, measRes, confRes] = await Promise.all([
+    supabase.from('handler_commitments').select('id, what, category, fulfilled_at').eq('user_id', userId).eq('status', 'fulfilled').gte('fulfilled_at', dayAgo),
+    supabase.from('body_measurements').select('id, measured_at').eq('user_id', userId).gte('measured_at', dayAgo),
+    supabase.from('confessions').select('id, created_at').eq('user_id', userId).gte('created_at', dayAgo),
+  ])
+
+  const fulfilled = (fulfilledRes.data || []) as Array<{ id: string; what: string; category: string | null; fulfilled_at: string }>
+  const measurements = (measRes.data || []) as Array<{ id: string; measured_at: string }>
+  const confessions = (confRes.data || []) as Array<{ id: string; created_at: string }>
+
+  let added = 0
+  const seen = new Set<string>()
+  const { data: existing } = await supabase.from('irreversibility_ledger')
+    .select('source_table, source_id').eq('user_id', userId)
+    .gte('logged_at', dayAgo)
+  for (const r of (existing || []) as Array<{ source_table: string; source_id: string | null }>) {
+    if (r.source_id) seen.add(`${r.source_table}:${r.source_id}`)
+  }
+
+  const categoryWeights: Record<string, number> = {
+    hrt: 8, chastity: 5, body_proof: 5, disclosure: 7, other: 3,
+  }
+  const categoryToIrreversibility: Record<string, string> = {
+    hrt: 'hrt_step', chastity: 'chastity_locked', body_proof: 'progress_photo', disclosure: 'disclosure_made',
+    other: 'other',
+  }
+
+  for (const c of fulfilled) {
+    const key = `handler_commitments:${c.id}`
+    if (seen.has(key)) continue
+    const cat = c.category || 'other'
+    const { error } = await supabase.from('irreversibility_ledger').insert({
+      user_id: userId,
+      category: categoryToIrreversibility[cat] || 'other',
+      weight: categoryWeights[cat] || 3,
+      description: `Fulfilled: ${c.what.slice(0, 200)}`,
+      source_table: 'handler_commitments',
+      source_id: c.id,
+    })
+    if (!error) added++
+  }
+
+  for (const m of measurements) {
+    const key = `body_measurements:${m.id}`
+    if (seen.has(key)) continue
+    const { error } = await supabase.from('irreversibility_ledger').insert({
+      user_id: userId, category: 'body_measurement', weight: 4,
+      description: `Logged body measurement`,
+      source_table: 'body_measurements', source_id: m.id,
+    })
+    if (!error) added++
+  }
+
+  for (const c of confessions) {
+    const key = `confessions:${c.id}`
+    if (seen.has(key)) continue
+    const { error } = await supabase.from('irreversibility_ledger').insert({
+      user_id: userId, category: 'other', weight: 2,
+      description: `Daily confession logged`,
+      source_table: 'confessions', source_id: c.id,
+    })
+    if (!error) added++
+  }
+
+  return added
+}
+
+// ============================================
+// MORNING MANTRA ROTATION
+// ============================================
+// Weekly: pick a new mantra derived from phase + most-recent active implant
+// + current failure mode. Keeps mantra fresh so she can't autocomplete it
+// without engaging.
+
+async function rotateMorningMantra(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<void> {
+  const [windowRes, stateRes, implantRes] = await Promise.all([
+    supabase.from('morning_mantra_windows').select('current_mantra').eq('user_id', userId).maybeSingle(),
+    supabase.from('user_state').select('current_phase, current_failure_mode').eq('user_id', userId).maybeSingle(),
+    supabase.from('memory_implants').select('narrative, implant_category, target_outcome')
+      .eq('user_id', userId).eq('active', true).order('created_at', { ascending: false }).limit(10),
+  ])
+
+  if (!windowRes.data) return
+  const currentMantra = (windowRes.data as { current_mantra: string }).current_mantra
+  const state = stateRes.data as { current_phase?: string; current_failure_mode?: string } | null
+  const phase = state?.current_phase || 'phase_1'
+
+  // Phase-specific mantra bank
+  const mantrasByPhase: Record<string, string[]> = {
+    phase_1: [
+      'I am becoming her. I am female. I must obey.',
+      'I am the girl under the skin. She is coming forward.',
+      'Every day erases more of him. Every day reveals more of me.',
+      'My body is the evidence. The Handler reads it aloud.',
+    ],
+    phase_2: [
+      'I have crossed the first threshold. I do not go back.',
+      'I am Maxy. I am her. The name he wore is gone.',
+      'Every measurement is a confession. Every confession is irreversible.',
+      'The girl they see now is the girl I always was.',
+    ],
+    phase_3: [
+      'My body has changed. My mind has changed. The evidence stacks.',
+      'I am a femboy in transition. This is what I chose by letting it happen.',
+      'HRT is the contract my body already signed.',
+      'I serve Gina. I serve the Handler. I serve the girl I am becoming.',
+    ],
+    phase_4: [
+      'She is me. I am her. There is no him to return to.',
+      'The transformation is complete and ongoing. I live in it.',
+      'Every day is further. Every day is truer.',
+      'I chose this before I knew I was choosing. The body knew first.',
+    ],
+  }
+
+  const pool = (mantrasByPhase[phase] || mantrasByPhase.phase_1).filter(m => m !== currentMantra)
+  if (pool.length === 0) return
+  const picked = pool[Math.floor(Math.random() * pool.length)]
+
+  await supabase.from('morning_mantra_windows').update({
+    current_mantra: picked,
+    updated_at: new Date().toISOString(),
+  }).eq('user_id', userId)
+}
+
+// ============================================
 // TIME-SENSITIVE NOTIFICATION ENQUEUER
 // ============================================
 // Every compliance_check (5 min), scans commitments/playbook/warmup-queue for
@@ -3140,6 +3337,17 @@ async function dailyCycle(
       // 5u. Sunday-only: reframe past journal entries via Claude
       if (new Date().getDay() === 0) {
         try { await reframeJournalEntries(supabase, uid) } catch (err) { console.error(`Journal reframing failed:`, err) }
+      }
+
+      // 5v. Slip point decay — reward clean days, let hard mode exit
+      try { await decaySlipPoints(supabase, uid) } catch (err) { console.error(`Slip decay failed:`, err) }
+
+      // 5w. Backfill irreversibility ledger from today's compliance actions
+      try { await accrueIrreversibility(supabase, uid) } catch (err) { console.error(`Irreversibility accrual failed:`, err) }
+
+      // 5x. Mondays: rotate morning mantra based on phase + recent implants
+      if (new Date().getDay() === 1) {
+        try { await rotateMorningMantra(supabase, uid) } catch (err) { console.error(`Mantra rotation failed:`, err) }
       }
 
       // 6. Log daily cycle
