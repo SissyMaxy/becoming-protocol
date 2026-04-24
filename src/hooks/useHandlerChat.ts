@@ -148,15 +148,30 @@ export function useHandlerChat(): UseHandlerChatReturn {
       setIsLoading(true);
       let needsAutoOpen = false;
       try {
-        // Find most recent conversation that isn't ended (any date)
+        // Find most recent conversation that isn't ended AND was started in the
+        // last 48h. Without the age ceiling, stale never-ended conversations
+        // (weeks/months old) would get revived and their entire scrollback
+        // dumped into the current chat — which looks like the Handler
+        // "resurrecting" old exchanges.
+        const cutoff = new Date(Date.now() - 48 * 3600000).toISOString();
         let { data: conv } = await supabase
           .from('handler_conversations')
           .select('id, final_mode')
           .eq('user_id', user!.id)
           .is('ended_at', null)
+          .gte('started_at', cutoff)
           .order('started_at', { ascending: false })
           .limit(1)
           .maybeSingle();
+
+        // Auto-close any stale open conversations beyond the cutoff so they
+        // don't keep winning the "most recent unended" race every load.
+        await supabase
+          .from('handler_conversations')
+          .update({ ended_at: new Date().toISOString() })
+          .eq('user_id', user!.id)
+          .is('ended_at', null)
+          .lt('started_at', cutoff);
 
         // Fallback: resume most recent conversation ended within 24h.
         // Prevents memory loss when a prior-night conversation got marked ended

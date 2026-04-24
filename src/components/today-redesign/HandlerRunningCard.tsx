@@ -51,7 +51,6 @@ export function HandlerRunningCard() {
       const irreversibilityWeight = ((ledger.data || []) as Array<{ weight: number }>).reduce((s, r) => s + (r.weight || 0), 0);
 
       // Next coercion event — whichever fires soonest
-      const now = new Date();
       const events: string[] = [];
       if (ccw.data) {
         const h = ccw.data.start_hour as number;
