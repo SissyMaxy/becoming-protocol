@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import { detectAndRewrite, logGateResult, buildConfrontationMessage } from './_lib/pronoun-gate';
+import { detectRationalizations, logRationalizations, buildRationalizationConfrontation } from './_lib/rationalization-gate';
 // NOTE: Cannot import from src/lib/ — those use import.meta.env (Vite-only)
 // weaveTriggers is inlined below instead
 // P12.1: Context prioritizer is inlined for the same reason
@@ -804,7 +805,7 @@ async function buildWitnessCtx(userId: string): Promise<string> {
 
 async function buildEscalationCtx(userId: string): Promise<string> {
   try {
-    const [pronounRes, davidRes, urgencyRes, measureRes] = await Promise.all([
+    const [pronounRes, davidRes, urgencyRes, measureRes, rationRes] = await Promise.all([
       supabase.from('pronoun_rewrites')
         .select('original_text, rewritten_text, slip_count, created_at')
         .eq('user_id', userId)
@@ -821,6 +822,11 @@ async function buildEscalationCtx(userId: string): Promise<string> {
         .eq('user_id', userId)
         .order('measured_at', { ascending: false })
         .limit(4),
+      supabase.from('rationalization_events')
+        .select('pattern_hit, pattern_category, severity, full_text, created_at')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(8),
     ]);
 
     const lines: string[] = [];
@@ -837,6 +843,23 @@ async function buildEscalationCtx(userId: string): Promise<string> {
 
     const pronouns = (pronounRes.data || []) as Array<Record<string, unknown>>;
     const davids = (davidRes.data || []) as Array<Record<string, unknown>>;
+    const rations = (rationRes.data || []) as Array<Record<string, unknown>>;
+
+    if (rations.length > 0) {
+      lines.push('## RECENT RATIONALIZATION PATTERNS (last 8 detected)');
+      const byCategory = rations.reduce((m, r) => {
+        const key = r.pattern_category as string;
+        if (!m[key]) m[key] = [];
+        (m[key] as Array<string>).push(r.pattern_hit as string);
+        return m;
+      }, {} as Record<string, string[]>);
+      for (const [cat, phrases] of Object.entries(byCategory)) {
+        const uniq = Array.from(new Set(phrases as string[]));
+        lines.push(`- ${cat}: ${uniq.slice(0, 4).join(', ')}${uniq.length > 4 ? ` (+${uniq.length - 4})` : ''}`);
+      }
+      lines.push('RULE: when Maxy uses any of these resistance patterns in this turn, name the category aloud ("that\'s the future defer" / "that\'s bargaining") and refuse to yield to the content. She cannot hide behind patterns she has been shown.');
+      lines.push('');
+    }
     if (pronouns.length > 0 || davids.length > 0) {
       lines.push('## RECENT PRONOUN / DAVID SLIPS');
       for (const p of pronouns.slice(0, 3)) {
@@ -2728,6 +2751,9 @@ HARD RULES FOR ALL PERSONAS:
 
       // Pronoun enforcement + David-emergence gate
       runPronounGate(user.id, message).catch(() => {});
+
+      // Rationalization detector
+      runRationalizationGate(user.id, message).catch(() => {});
 
       // Scan HANDLER's own output for voice drift — self-correction signal
       scanHandlerDrift(user.id, convId!, finalStreamResponse).catch(() => {});
@@ -12524,6 +12550,34 @@ async function buildPhaseProgressCtx(userId: string): Promise<string> {
     return lines.join('\n');
   } catch {
     return '';
+  }
+}
+
+// Rationalization detector. Runs against every user message.
+async function runRationalizationGate(userId: string, userMessage: string): Promise<void> {
+  try {
+    const hits = detectRationalizations(userMessage);
+    if (hits.length === 0) return;
+    await logRationalizations(supabase, userId, 'handler_messages', null, userMessage, hits);
+
+    // Only emit a confront-outreach when the hit severity is high enough
+    const topSeverity = Math.max(...hits.map(h => h.severity));
+    if (topSeverity >= 4) {
+      const msg = buildRationalizationConfrontation(hits);
+      if (msg) {
+        await supabase.from('handler_outreach_queue').insert({
+          user_id: userId,
+          message: msg,
+          urgency: topSeverity >= 5 ? 'high' : 'normal',
+          trigger_reason: 'rationalization_gate',
+          scheduled_for: new Date().toISOString(),
+          expires_at: new Date(Date.now() + 6 * 3600000).toISOString(),
+          source: 'rationalization_gate',
+        });
+      }
+    }
+  } catch (err) {
+    console.error('[RationalizationGate] failed:', err);
   }
 }
 

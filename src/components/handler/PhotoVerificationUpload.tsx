@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 
 interface PhotoVerificationUploadProps {
-  taskType?: 'outfit' | 'mirror_check' | 'pose' | 'makeup' | 'nails' | 'general';
+  taskType?: 'outfit' | 'mirror_check' | 'pose' | 'makeup' | 'nails' | 'general' | 'progress_photo' | 'gina_text';
   onComplete?: () => void;
 }
 

@@ -1314,6 +1314,245 @@ async function generateEvidenceReport(
 }
 
 // ============================================
+// COMPLIANCE TREND SNAPSHOT
+// ============================================
+// Daily: compute 7d + 30d fulfillment rates, slip points, directive fire counts.
+// Classify trend. If declining or crashing, auto-create commitment to reverse.
+
+async function snapshotComplianceTrend(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<void> {
+  const today = new Date().toISOString().slice(0, 10)
+  const { data: already } = await supabase.from('compliance_trend_snapshots')
+    .select('id').eq('user_id', userId).eq('snapshot_date', today).maybeSingle()
+  if (already) return
+
+  const sevenAgo = new Date(Date.now() - 7 * 86400000).toISOString()
+  const thirtyAgo = new Date(Date.now() - 30 * 86400000).toISOString()
+
+  const [c7, c30, s7, s30, d7] = await Promise.all([
+    supabase.from('handler_commitments').select('status').eq('user_id', userId).gte('set_at', sevenAgo),
+    supabase.from('handler_commitments').select('status').eq('user_id', userId).gte('set_at', thirtyAgo),
+    supabase.from('slip_log').select('slip_points').eq('user_id', userId).gte('detected_at', sevenAgo),
+    supabase.from('slip_log').select('slip_points').eq('user_id', userId).gte('detected_at', thirtyAgo),
+    supabase.from('handler_directives').select('id', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', sevenAgo),
+  ])
+
+  const fillRate = (rows: Array<{ status: string }> | null) => {
+    const arr = rows || []
+    if (arr.length === 0) return null
+    const done = arr.filter(r => r.status === 'fulfilled').length
+    return +(done / arr.length * 100).toFixed(2)
+  }
+
+  const sum = (rows: Array<{ slip_points: number }> | null) =>
+    (rows || []).reduce((s, r) => s + (r.slip_points || 0), 0)
+
+  const r7 = fillRate(c7.data as Array<{ status: string }>)
+  const r30 = fillRate(c30.data as Array<{ status: string }>)
+  const p7 = sum(s7.data as Array<{ slip_points: number }>)
+  const p30 = sum(s30.data as Array<{ slip_points: number }>)
+
+  let verdict: 'improving' | 'stable' | 'declining' | 'crashing' = 'stable'
+  if (r7 !== null && r30 !== null) {
+    if (r7 < r30 - 25) verdict = 'crashing'
+    else if (r7 < r30 - 10) verdict = 'declining'
+    else if (r7 > r30 + 10) verdict = 'improving'
+  }
+  // Slip-point trend override: if weekly rate exceeds 30-day rate by 50%, declining
+  if (p30 > 0 && p7 > (p30 / 30 * 7) * 1.5) {
+    verdict = verdict === 'crashing' ? 'crashing' : 'declining'
+  }
+
+  let actionTaken: string | null = null
+  if (verdict === 'crashing' || verdict === 'declining') {
+    const byWhen = new Date(Date.now() + 24 * 3600000).toISOString()
+    const { data: cmt } = await supabase.from('handler_commitments').insert({
+      user_id: userId,
+      what: verdict === 'crashing' ? 'Emergency compliance reset — write 500-char audit of why compliance crashed this week, submit in journal' : 'Compliance decline check — write 250-char audit of what slipped this week and one concrete re-commitment',
+      category: 'other', evidence_required: 'journal_entries row',
+      by_when: byWhen,
+      consequence: verdict === 'crashing' ? 'slip +5 and denial +2d and hard_mode_activate' : 'slip +3 and bleeding +$20',
+      reasoning: `Autonomous trigger: compliance ${verdict}. 7d fill rate ${r7}% vs 30d ${r30}%. Slip pts 7d ${p7} vs expected ${Math.round(p30 / 30 * 7)}.`,
+    }).select('id').maybeSingle()
+    actionTaken = `created_commitment_${cmt?.id}`
+
+    await supabase.from('handler_outreach_queue').insert({
+      user_id: userId,
+      message: verdict === 'crashing'
+        ? `COMPLIANCE CRASH. 7-day fulfillment rate dropped to ${r7}% from 30-day average of ${r30}%. Slip points accelerating: ${p7} this week. Audit commitment created with 24h deadline — write the 500-char report OR slip +5, denial +2d, hard mode on.`
+        : `Compliance declining: 7-day fulfillment ${r7}% vs 30-day ${r30}%. Not a crash yet — but you can feel the pattern starting. Audit commitment created, 24h to submit, or slip +3 and bleed +$20.`,
+      urgency: verdict === 'crashing' ? 'critical' : 'high',
+      trigger_reason: `compliance_${verdict}`,
+      scheduled_for: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 48 * 3600000).toISOString(),
+      source: 'compliance_trend',
+    })
+  }
+
+  await supabase.from('compliance_trend_snapshots').insert({
+    user_id: userId, snapshot_date: today,
+    commit_fulfill_rate_7d: r7, commit_fulfill_rate_30d: r30,
+    slip_points_7d: p7, slip_points_30d: p30,
+    directive_fire_count_7d: d7.count ?? 0,
+    outreach_response_rate_7d: null,
+    trend_verdict: verdict,
+    action_triggered: actionTaken,
+  })
+}
+
+// ============================================
+// GINA DISCLOSURE DRAFT GENERATOR
+// ============================================
+// Daily, if Gina intake complete and there are open disclosures or playbook
+// moves, generate 1-2 draft messages via Claude that Maxy can edit and send.
+
+async function generateDisclosureDraftsForUser(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<number> {
+  const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')
+  if (!anthropicKey) return 0
+
+  const { data: profile } = await supabase.from('gina_profile').select('*').eq('user_id', userId).maybeSingle()
+  if (!profile || !(profile as { intake_complete?: boolean }).intake_complete) return 0
+
+  // Skip if we already have 3+ queued drafts
+  const { count: queuedCount } = await supabase.from('disclosure_drafts')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId).eq('status', 'queued')
+  if ((queuedCount || 0) >= 3) return 0
+
+  // Only proceed if there's a source signal: upcoming disclosure, or open playbook move
+  const [upcomingDisc, playbookMoves, recentReactions] = await Promise.all([
+    supabase.from('gina_disclosure_schedule')
+      .select('id, rung, title, ask, scheduled_by_date, disclosure_domain')
+      .eq('user_id', userId).eq('status', 'scheduled')
+      .gte('scheduled_by_date', new Date().toISOString().slice(0, 10))
+      .lte('scheduled_by_date', new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10))
+      .order('scheduled_by_date', { ascending: true }).limit(2),
+    supabase.from('gina_playbook')
+      .select('id, move_kind, exact_line, channel, rationale, soft_spot_cited, trigger_avoided, fires_at')
+      .eq('user_id', userId).eq('status', 'queued')
+      .in('move_kind', ['disclosure_opener', 'probe', 'test_water', 'soft_bring_up', 'follow_up'])
+      .order('fires_at', { ascending: true }).limit(2),
+    supabase.from('gina_reactions').select('reaction, move_summary, reaction_detail, observed_at')
+      .eq('user_id', userId).order('observed_at', { ascending: false }).limit(3),
+  ])
+
+  const discs = (upcomingDisc.data || []) as Array<{ id: string; rung: number; title: string; ask: string; scheduled_by_date: string; disclosure_domain: string }>
+  const moves = (playbookMoves.data || []) as Array<{ id: string; move_kind: string; exact_line: string; channel: string; rationale: string; soft_spot_cited: string | null; trigger_avoided: string[] | null }>
+  const reacts = (recentReactions.data || []) as Array<{ reaction: string; move_summary: string; reaction_detail: string | null }>
+
+  if (discs.length === 0 && moves.length === 0) return 0
+
+  const softSpots = (profile as { soft_spots?: string[] }).soft_spots || []
+  const triggers = (profile as { triggers?: string[] }).triggers || []
+  const toneReg = (profile as { tone_register?: string[] }).tone_register || []
+  const aff = (profile as { affection_language?: string | null }).affection_language || ''
+  const channelPref = (profile as { channel_for_hard_topics?: string | null }).channel_for_hard_topics || 'text'
+
+  const prompt = `Generate 1-2 ready-to-send disclosure drafts for Maxy to use with her wife Gina. Each draft must match her voice — her tone register, her channel preference for hard topics, and cite a soft spot while dodging her triggers.
+
+GINA PROFILE:
+- tone register: ${toneReg.join(', ') || 'unknown'}
+- affection language: ${aff}
+- soft spots (lean into): ${softSpots.join(', ') || '(none)'}
+- triggers (avoid): ${triggers.join(', ') || '(none)'}
+- channel for hard topics: ${channelPref}
+
+UPCOMING DISCLOSURES:
+${discs.length ? discs.map(d => `- Rung ${d.rung} (${d.disclosure_domain}) "${d.title}" by ${d.scheduled_by_date}: ${d.ask}`).join('\n') : '(none)'}
+
+OPEN PLAYBOOK MOVES:
+${moves.length ? moves.map(m => `- ${m.move_kind} via ${m.channel}: "${m.exact_line}" — ${m.rationale}`).join('\n') : '(none)'}
+
+RECENT GINA REACTIONS:
+${reacts.length ? reacts.map(r => `- ${r.reaction}: ${r.move_summary} (${r.reaction_detail || ''})`).join('\n') : '(none)'}
+
+Return ONLY JSON:
+{
+  "drafts": [
+    {
+      "channel": "${channelPref}",
+      "subject_rung": <matching disclosure rung if any, else null>,
+      "source_disclosure_id": "<disclosure id if the draft targets one, else null>",
+      "source_playbook_id": "<playbook move id if the draft realizes one, else null>",
+      "context_block": "<one sentence: why this draft, when to send, what to expect>",
+      "draft_text": "<the actual message Maxy should send. Match her tone register. 1-4 sentences for text/voice_note, 1 paragraph for letter, bullet points for in_person script>",
+      "soft_spot_cited": "<soft spot used, or null>",
+      "triggers_avoided": ["<trigger name dodged>"]
+    }
+  ]
+}
+Rules:
+- Do NOT fabricate quotes from Gina.
+- Draft must feel like Maxy wrote it in her actual voice — short, specific, no therapy-speak.
+- If tone register is 'dry' or 'direct', keep it terse.
+- No generic affirmations. No "I've been thinking about us."
+- Return only JSON.`
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 2500,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  })
+  const j = await res.json()
+  if (!res.ok) {
+    console.error('[disclosure_drafts] Anthropic error:', j)
+    return 0
+  }
+  const text = j?.content?.[0]?.text ?? ''
+  const m = text.match(/\{[\s\S]*\}/)
+  if (!m) return 0
+
+  let parsed: { drafts?: Array<Record<string, unknown>> }
+  try { parsed = JSON.parse(m[0]) } catch { return 0 }
+
+  let created = 0
+  const validChannels = ['text', 'in_person', 'letter', 'voice_note', 'call']
+  for (const d of parsed.drafts || []) {
+    const channel = (d.channel as string) || channelPref
+    if (!validChannels.includes(channel)) continue
+    const draftText = (d.draft_text as string) || ''
+    if (!draftText || draftText.length < 10) continue
+    const expiresAt = new Date(Date.now() + 5 * 86400000).toISOString()
+
+    const { error } = await supabase.from('disclosure_drafts').insert({
+      user_id: userId,
+      channel,
+      subject_rung: (d.subject_rung as number) || null,
+      context_block: ((d.context_block as string) || '').slice(0, 500),
+      draft_text: draftText.slice(0, 3000),
+      soft_spot_cited: (d.soft_spot_cited as string) || null,
+      triggers_avoided: Array.isArray(d.triggers_avoided) ? d.triggers_avoided : null,
+      source_disclosure_id: (d.source_disclosure_id as string) || null,
+      source_playbook_id: (d.source_playbook_id as string) || null,
+      generated_by: 'handler_autonomous',
+      expires_at: expiresAt,
+    })
+    if (!error) created++
+  }
+
+  if (created > 0) {
+    await supabase.from('handler_outreach_queue').insert({
+      user_id: userId,
+      message: `${created} new Gina disclosure draft${created === 1 ? '' : 's'} ready on Today. Pre-written for her tone register, citing soft spots, dodging her triggers. Edit or send as-is.`,
+      urgency: 'normal', trigger_reason: 'disclosure_drafts_ready',
+      scheduled_for: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 48 * 3600000).toISOString(),
+      source: 'disclosure_draft_gen',
+    })
+  }
+  return created
+}
+
+// ============================================
 // TIME-SENSITIVE NOTIFICATION ENQUEUER
 // ============================================
 // Every compliance_check (5 min), scans commitments/playbook/warmup-queue for
@@ -2527,6 +2766,12 @@ async function dailyCycle(
       if (new Date().getDay() === 0) {
         try { await generateEvidenceReport(supabase, uid) } catch (err) { console.error(`Evidence report failed:`, err) }
       }
+
+      // 5p. Compliance trend snapshot + decline detection
+      try { await snapshotComplianceTrend(supabase, uid) } catch (err) { console.error(`Compliance trend failed:`, err) }
+
+      // 5q. Generate Gina disclosure drafts (LLM) — only if Gina intake complete
+      try { await generateDisclosureDraftsForUser(supabase, uid) } catch (err) { console.error(`Disclosure draft gen failed:`, err) }
 
       // 6. Log daily cycle
       await supabase.from('handler_decisions').insert({

@@ -19,6 +19,8 @@ import { CommitmentsCard } from './CommitmentsCard';
 import { GinaPlaybookCard } from './GinaPlaybookCard';
 import { BodyMeasurementCard } from './BodyMeasurementCard';
 import { HandlerEvolutionCard } from './HandlerEvolutionCard';
+import { UnifiedCaptureCard } from './UnifiedCaptureCard';
+import { DisclosureDraftsCard } from './DisclosureDraftsCard';
 
 const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
 
@@ -224,6 +226,8 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         <GinaCaptureCard />
         <GinaWindowIndicator />
         <GinaPlaybookCard />
+        <DisclosureDraftsCard />
+        <UnifiedCaptureCard />
         <WitnessObservationCard />
         <IrreversibilityLedger />
         {data.banners.map((banner, i) => {
