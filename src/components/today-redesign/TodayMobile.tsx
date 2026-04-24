@@ -13,6 +13,7 @@ import { LovenseHealthBanner } from './LovenseHealthBanner';
 import { WitnessObservationCard } from './WitnessObservationCard';
 import { IrreversibilityLedger } from './IrreversibilityLedger';
 import { HandlerRunningCard } from './HandlerRunningCard';
+import { GinaCaptureCard } from './GinaCaptureCard';
 
 const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
 const HEATMAP_COLORS = ['#1a1a20', '#2d1a4d', '#4d2a75', '#6a2a9a', '#7c3aed'];
@@ -178,6 +179,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
         <div style={{ padding: '0 16px' }}>
           <HandlerRunningCard />
           <LovenseHealthBanner />
+          <GinaCaptureCard />
           <WitnessObservationCard />
           <IrreversibilityLedger />
         </div>

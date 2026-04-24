@@ -13,6 +13,7 @@ import { LovenseHealthBanner } from './LovenseHealthBanner';
 import { WitnessObservationCard } from './WitnessObservationCard';
 import { IrreversibilityLedger } from './IrreversibilityLedger';
 import { HandlerRunningCard } from './HandlerRunningCard';
+import { GinaCaptureCard } from './GinaCaptureCard';
 
 const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
 
@@ -212,6 +213,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
       <main className="td-main">
         <HandlerRunningCard />
         <LovenseHealthBanner />
+        <GinaCaptureCard />
         <WitnessObservationCard />
         <IrreversibilityLedger />
         {data.banners.map((banner, i) => {
