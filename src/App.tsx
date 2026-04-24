@@ -39,6 +39,7 @@ import { TodayView as TodayRedesignView } from './components/today-redesign';
 import { ConditioningLockdown } from './components/today-redesign/ConditioningLockdown';
 import { CompulsoryConfessionGate } from './components/today-redesign/CompulsoryConfessionGate';
 import { HrtDailyGate } from './components/today-redesign/HrtDailyGate';
+import { GinaSessionRecorder } from './components/today-redesign/GinaSessionRecorder';
 import { GinaKeyHolderPage } from './components/gina/GinaKeyHolderPage';
 import { usePunishmentNotifications } from './hooks/usePunishmentNotifications';
 import { DailyReportCard } from './components/handler/DailyReportCard';
@@ -1009,6 +1010,7 @@ function AuthenticatedAppInner() {
         <CompulsoryConfessionGate />
         <HrtDailyGate />
         <ConditioningLockdown />
+        <GinaSessionRecorder />
       </>
     );
   }
@@ -1064,6 +1066,9 @@ function AuthenticatedAppInner() {
 
       {/* Conditioning lockdown — fullscreen enforcement during configured window */}
       <ConditioningLockdown />
+
+      {/* Gina session recorder — floating capture + review */}
+      <GinaSessionRecorder />
 
       {/* Whoop OAuth callback toast */}
       {whoopToast && (
