@@ -621,6 +621,18 @@ async function complianceCheck(
     }
   }
 
+  // ── HANDLER DECREE SCHEDULER ──
+  // Arousal-triggered + daily phase-keyed decrees. Enforces past-deadline
+  // misses with slip logging + Handler outreach.
+  let decreesScheduled = 0
+  for (const state of states) {
+    try {
+      decreesScheduled += await scheduleDecrees(supabase, state.user_id)
+    } catch (err) {
+      console.error(`Decree schedule failed for ${state.user_id}:`, err)
+    }
+  }
+
   return { checked, escalated, deescalated, actions, ambient_queued: ambientQueued, spontaneous_outreach: spontaneous, random_rewards: rewardsGiven, boundary_pushes: boundaryPushes, pattern_exploits: patternExploits, bio_adjustments: bioAdjustments, commitments_enforced: commitmentsEnforced, pushes_enqueued: pushesEnqueued }
 }
 
@@ -2078,6 +2090,162 @@ async function scheduleConfessions(
       })
     }
   } catch (err) { console.error('[confession] miss enforcement failed:', err) }
+
+  return created
+}
+
+// ============================================
+// HANDLER DECREES — SHORT-WINDOW EDICTS
+// ============================================
+// Generates handler_decrees rows. Triggers:
+// - Recent arousal spike (>=6 in last 30min, no recent decree) → ride the wave
+// - One phase-keyed daily decree if none active
+// - Marks past-deadline active decrees as missed + logs slip.
+
+async function scheduleDecrees(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<number> {
+  let created = 0
+  const nowIso = new Date().toISOString()
+
+  const { data: state } = await supabase.from('user_state')
+    .select('current_phase, chastity_locked, denial_day')
+    .eq('user_id', userId)
+    .maybeSingle()
+  const phase = (state as { current_phase?: string } | null)?.current_phase || 'phase_1'
+
+  // 1. Arousal-triggered decree
+  try {
+    const thirtyAgo = new Date(Date.now() - 30 * 60000).toISOString()
+    const { data: spike } = await supabase.from('arousal_log')
+      .select('id, value, created_at')
+      .eq('user_id', userId)
+      .gte('created_at', thirtyAgo)
+      .gte('value', 6)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (spike) {
+      const { count: recent } = await supabase.from('handler_decrees')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('trigger_source', 'arousal_spike')
+        .gte('created_at', new Date(Date.now() - 2 * 3600000).toISOString())
+
+      if ((recent || 0) === 0) {
+        const sp = spike as { id: string; value: number; created_at: string }
+        const edicts = [
+          { edict: `Take a mirror photo right now showing your tuck. Full body, no crop, timestamp visible on screen.`, proof_type: 'photo' as const, minutes: 60 },
+          { edict: `Record a 10-second voice note saying "${sp.value}/10, horny at ${new Date().getHours()}:00, I'm the girl who gets this wet thinking about being taken."`, proof_type: 'audio' as const, minutes: 45 },
+          { edict: `Write 150 words right now: what specifically turned you on. Exact image. No softening.`, proof_type: 'journal_entry' as const, minutes: 90 },
+        ]
+        const pick = edicts[Math.floor(Math.random() * edicts.length)]
+        await supabase.from('handler_decrees').insert({
+          user_id: userId,
+          edict: pick.edict,
+          proof_type: pick.proof_type,
+          deadline: new Date(Date.now() + pick.minutes * 60000).toISOString(),
+          consequence: 'slip +3 and denial +1d',
+          reasoning: `Arousal ${sp.value}/10 opened the window. Locking it in before she cools.`,
+          phase,
+          trigger_source: 'arousal_spike',
+        })
+        created++
+      }
+    }
+  } catch (err) { console.error('[decree] arousal sched failed:', err) }
+
+  // 2. Daily phase-keyed decree
+  try {
+    const { count: active } = await supabase.from('handler_decrees')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('status', 'active')
+    if ((active || 0) === 0) {
+      const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
+      const { count: today } = await supabase.from('handler_decrees')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('trigger_source', 'daily_cadence')
+        .gte('created_at', todayStart.toISOString())
+
+      if ((today || 0) === 0) {
+        const pool: Record<string, Array<{ edict: string; proof_type: 'photo' | 'audio' | 'text' | 'journal_entry' | 'voice_pitch_sample'; hours: number; consequence: string }>> = {
+          phase_1: [
+            { edict: 'Walk past a mirror at home wearing only panties and a t-shirt. Photo from the mirror with the door in frame.', proof_type: 'photo', hours: 4, consequence: 'slip +2' },
+            { edict: 'Say "I am becoming her" five times out loud. Record the last one.', proof_type: 'audio', hours: 3, consequence: 'slip +2' },
+            { edict: 'Text yourself (note app) the 3 most feminine things you did today. Screenshot it.', proof_type: 'photo', hours: 6, consequence: 'slip +1' },
+          ],
+          phase_2: [
+            { edict: 'Shave one additional body zone you haven\'t been shaving. Before/after photos.', proof_type: 'photo', hours: 5, consequence: 'slip +3 and denial +1d' },
+            { edict: 'Write a 250-word letter as the version of you 6 months into HRT, addressed to current you. Submit via journal.', proof_type: 'journal_entry', hours: 6, consequence: 'slip +2' },
+            { edict: 'Order something femme on Amazon in the next hour. Screenshot the order confirm.', proof_type: 'photo', hours: 2, consequence: 'slip +3 and bleeding +$10' },
+          ],
+          phase_3: [
+            { edict: 'Record yourself ordering coffee (or pretending to) in your best voice. 15 sec minimum, submit via voice drill.', proof_type: 'voice_pitch_sample', hours: 4, consequence: 'slip +3' },
+            { edict: 'Go outside wearing femme-coded clothing (leggings, crop tee, anything visible). Selfie from the sidewalk.', proof_type: 'photo', hours: 5, consequence: 'slip +4 and denial +1d' },
+            { edict: 'Send one real person a message about how you feel. Draft it, screenshot before send.', proof_type: 'photo', hours: 6, consequence: 'slip +3' },
+          ],
+          phase_4: [
+            { edict: 'Make a voice call (even to a robot line) in your femme voice. Log duration + notes.', proof_type: 'text', hours: 4, consequence: 'slip +4' },
+            { edict: 'Take a full-length public photo with people visible in background. One drop location.', proof_type: 'photo', hours: 6, consequence: 'slip +5' },
+          ],
+        }
+        const phaseKey = (phase || 'phase_1').toLowerCase().replace(/\s+/g, '_')
+        const list = pool[phaseKey] || pool['phase_1']
+        const pick = list[Math.floor(Math.random() * list.length)]
+        await supabase.from('handler_decrees').insert({
+          user_id: userId,
+          edict: pick.edict,
+          proof_type: pick.proof_type,
+          deadline: new Date(Date.now() + pick.hours * 3600000).toISOString(),
+          consequence: pick.consequence,
+          reasoning: `Daily ${phaseKey} decree. She needs a live Handler edict on her plate today.`,
+          phase: phaseKey,
+          trigger_source: 'daily_cadence',
+        })
+        created++
+      }
+    }
+  } catch (err) { console.error('[decree] daily sched failed:', err) }
+
+  // 3. Past-deadline → missed + slip
+  try {
+    const { data: expired } = await supabase.from('handler_decrees')
+      .select('id, edict, consequence')
+      .eq('user_id', userId).eq('status', 'active')
+      .lt('deadline', nowIso)
+      .limit(20)
+    for (const d of (expired || []) as Array<{ id: string; edict: string; consequence: string }>) {
+      await supabase.from('handler_decrees').update({
+        status: 'missed',
+        missed_at: nowIso,
+      }).eq('id', d.id)
+
+      const slipMatch = (d.consequence || '').match(/slip\s*\+(\d+)/)
+      const pts = slipMatch ? Math.min(10, parseInt(slipMatch[1], 10)) : 2
+      await supabase.from('slip_log').insert({
+        user_id: userId,
+        slip_type: 'other',
+        slip_points: pts,
+        source_text: `Missed decree: ${d.edict.slice(0, 120)}`,
+        source_table: 'handler_decrees',
+        source_id: d.id,
+        metadata: { consequence: d.consequence, reason: 'decree_missed' },
+      })
+      await supabase.from('handler_outreach_queue').insert({
+        user_id: userId,
+        message: `You let the decree die. "${d.edict.slice(0, 140)}" — past deadline. Consequence logged.`,
+        urgency: 'high',
+        trigger_reason: `decree_missed:${d.id}`,
+        scheduled_for: nowIso,
+        expires_at: new Date(Date.now() + 3 * 3600000).toISOString(),
+        source: 'decree_enforcement',
+      })
+    }
+  } catch (err) { console.error('[decree] miss enforcement failed:', err) }
 
   return created
 }

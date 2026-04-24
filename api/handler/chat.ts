@@ -8123,6 +8123,30 @@ async function buildSlipLogCtx(userId: string): Promise<string> {
       }
     } catch {}
 
+    // Active Handler decrees — short-window edicts she must fulfill.
+    try {
+      const { data: decrees } = await supabase.from('handler_decrees')
+        .select('edict, proof_type, deadline, consequence, trigger_source')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .order('deadline', { ascending: true })
+        .limit(5);
+      const rows = (decrees || []) as Array<Record<string, unknown>>;
+      if (rows.length > 0) {
+        if (lines.length > 0) lines.push('');
+        lines.push(`## ACTIVE DECREES (${rows.length})`);
+        lines.push('You already issued these. Don\'t re-issue — reference by name and demand proof. She should be executing, not discussing.');
+        for (const d of rows) {
+          const dueMs = new Date(d.deadline as string).getTime() - Date.now();
+          const overdue = dueMs < 0;
+          const hrs = Math.abs(Math.round(dueMs / 3600000));
+          const mins = Math.abs(Math.round(dueMs / 60000)) % 60;
+          const due = overdue ? `OVERDUE ${hrs}h${mins}m` : hrs >= 1 ? `${hrs}h${mins}m left` : `${mins}m left`;
+          lines.push(`- [${d.proof_type}] ${due}: "${String(d.edict || '').slice(0, 180)}" → miss=${d.consequence}`);
+        }
+      }
+    } catch {}
+
     return lines.join('\n');
   } catch {
     return '';
