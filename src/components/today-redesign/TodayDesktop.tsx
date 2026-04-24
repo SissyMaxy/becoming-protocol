@@ -32,6 +32,8 @@ import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
 import { SlipLogCard } from './SlipLogCard';
 import { GinaSessionsCard } from './GinaSessionsCard';
+import { RationalizationPatternCard } from './RationalizationPatternCard';
+import { DeviceScheduleCard } from './DeviceScheduleCard';
 
 const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
 
@@ -235,7 +237,9 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         <HandlerRunningCard />
         <HandlerEvolutionCard />
         <OutreachQueueCard />
+        <DeviceScheduleCard />
         <SlipLogCard />
+        <RationalizationPatternCard />
         <EvidenceReportsCard />
         <CommitmentsCard />
         <OutfitMandateCard />
