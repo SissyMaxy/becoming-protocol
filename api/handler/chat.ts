@@ -9164,12 +9164,17 @@ function parseReleaseDateFromText(text: string): string {
     }
   }
 
-  // Layer on time-of-day if present (e.g. "9pm", "21:00", "around 11")
-  const timeMatch = lower.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/);
+  // Layer on time-of-day if present (e.g. "9pm", "21:00").
+  // Require either am/pm OR an explicit colon so we don't capture bare
+  // numbers like the "3" in "3 days ago".
+  const timeMatch = lower.match(/\b(\d{1,2})(?::(\d{2}))\b|\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/);
   if (matched && timeMatch) {
-    let h = parseInt(timeMatch[1], 10);
-    const m = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
-    const ampm = timeMatch[3];
+    // Two alternatives in the regex — pick the matching group pair
+    const hStr = timeMatch[1] || timeMatch[3];
+    const mStr = timeMatch[2] || timeMatch[4];
+    const ampm = timeMatch[5];
+    let h = parseInt(hStr || '0', 10);
+    const m = mStr ? parseInt(mStr, 10) : 0;
     if (ampm === 'pm' && h < 12) h += 12;
     if (ampm === 'am' && h === 12) h = 0;
     if (h >= 0 && h <= 23) {

@@ -38,11 +38,13 @@ function parseReleaseDateFromText(text) {
       }
     }
   }
-  const timeMatch = lower.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/);
+  const timeMatch = lower.match(/\b(\d{1,2})(?::(\d{2}))\b|\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/);
   if (matched && timeMatch) {
-    let h = parseInt(timeMatch[1], 10);
-    const mn = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
-    const ampm = timeMatch[3];
+    const hStr = timeMatch[1] || timeMatch[3];
+    const mStr = timeMatch[2] || timeMatch[4];
+    const ampm = timeMatch[5];
+    let h = parseInt(hStr || '0', 10);
+    const mn = mStr ? parseInt(mStr, 10) : 0;
     if (ampm === 'pm' && h < 12) h += 12;
     if (ampm === 'am' && h === 12) h = 0;
     if (h >= 0 && h <= 23) { target.setHours(h, mn, 0, 0); timeSet = true; }
