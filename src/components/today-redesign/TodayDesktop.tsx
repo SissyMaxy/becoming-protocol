@@ -12,6 +12,7 @@ import { ConditioningOverlay, morphPronouns } from './ConditioningOverlay';
 import { LovenseHealthBanner } from './LovenseHealthBanner';
 import { WitnessObservationCard } from './WitnessObservationCard';
 import { IrreversibilityLedger } from './IrreversibilityLedger';
+import { HandlerRunningCard } from './HandlerRunningCard';
 
 const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
 
@@ -209,6 +210,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
       </aside>
 
       <main className="td-main">
+        <HandlerRunningCard />
         <LovenseHealthBanner />
         <WitnessObservationCard />
         <IrreversibilityLedger />

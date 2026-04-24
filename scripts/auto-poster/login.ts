@@ -36,7 +36,16 @@ async function loginToPlatform(name: string, config: { url: string; profileDir: 
 }
 
 async function main() {
-  const platforms = Object.entries(PLATFORMS).filter(([, cfg]) => cfg.enabled);
+  const arg = (process.argv[2] || '').toLowerCase();
+  const all = Object.entries(PLATFORMS);
+  const platforms = arg
+    ? all.filter(([name]) => name === arg)
+    : all.filter(([, cfg]) => cfg.enabled);
+
+  if (arg && platforms.length === 0) {
+    console.log(`Unknown platform "${arg}". Valid: ${all.map(([n]) => n).join(', ')}`);
+    return;
+  }
 
   if (platforms.length === 0) {
     console.log('No platforms enabled. Edit .env to enable platforms.');

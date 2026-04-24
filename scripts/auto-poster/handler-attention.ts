@@ -19,6 +19,8 @@ export type AttentionKind =
   | 'tribute_paid'
   | 'tribute_overdue'
   | 'live_announce_triggered'
+  | 'unanswered_inbound'
+  | 'stale_outbound'
   | 'custom';
 
 export type AttentionSeverity = 'low' | 'medium' | 'high';

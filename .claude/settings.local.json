@@ -116,7 +116,9 @@
       "mcp__claude_ai_Vercel__get_runtime_logs",
       "mcp__claude_ai_Vercel__get_deployment_build_logs",
       "mcp__claude_ai_Supabase__deploy_edge_function",
-      "mcp__claude_ai_Supabase__apply_migration"
+      "mcp__claude_ai_Supabase__apply_migration",
+      "mcp__claude_ai_Supabase__get_edge_function",
+      "mcp__claude_ai_Vercel__get_project"
     ]
   }
 }

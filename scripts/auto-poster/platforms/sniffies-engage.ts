@@ -277,21 +277,58 @@ async function readAndReplyChat(
   userId: string,
 ): Promise<{ success: boolean; reply?: string }> {
   try {
-    // Find and click the chat item — try exact match first, then partial
+    // Find and click the chat item. Strategy order matters:
+    //   1. Position-based click via page.evaluate — finds the Nth chat entry in the list.
+    //      Reliable because the scraper enumerated chats in list order already.
+    //   2. Text-based selectors scoped to elements containing a timestamp (chat list items
+    //      have timestamps; message bubbles don't) — avoids matching message content.
+    //   3. Plain text selectors — last resort, fragile.
     let clicked = false;
-    for (const selector of [
-      `text="${chat.username}"`,
-      `text="${chat.username}" >> nth=0`,
-      `text=/${chat.username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/i`,
-    ]) {
-      try {
-        const el = page.locator(selector).first();
-        if (await el.isVisible({ timeout: 2000 }).catch(() => false)) {
-          await el.click({ force: true });
-          clicked = true;
-          break;
+
+    // Strategy 1: position-based click inside the browser
+    try {
+      const clickedByIndex = await page.evaluate((idx) => {
+        const timeRegex = /(\d+\s+(seconds?|minutes?|hours?|days?)\s+ago|a few seconds ago|just now)/i;
+        const seen = new Set<Element>();
+        const entries: HTMLElement[] = [];
+        const els = document.querySelectorAll('div, li, a, section');
+        for (const el of els) {
+          const text = (el as HTMLElement).innerText || '';
+          if (!timeRegex.test(text)) continue;
+          // Walk up to a reasonable chat-entry ancestor (100-800px wide, contains timestamp).
+          let node: HTMLElement | null = el as HTMLElement;
+          for (let hops = 0; hops < 6 && node && node.parentElement; hops++) {
+            const r = node.getBoundingClientRect();
+            if (r.width >= 100 && r.width <= 800 && r.height >= 40 && r.height <= 200) break;
+            node = node.parentElement;
+          }
+          if (!node || seen.has(node)) continue;
+          seen.add(node);
+          entries.push(node);
         }
-      } catch { continue; }
+        if (idx >= entries.length) return false;
+        entries[idx].click();
+        return true;
+      }, chat.index);
+      if (clickedByIndex) clicked = true;
+    } catch { /* fall through */ }
+
+    // Strategy 2: scoped text selector — element containing username AND a timestamp sibling
+    if (!clicked) {
+      for (const selector of [
+        `text="${chat.username}"`,
+        `text="${chat.username}" >> nth=0`,
+        `text=/${chat.username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/i`,
+      ]) {
+        try {
+          const el = page.locator(selector).first();
+          if (await el.isVisible({ timeout: 2000 }).catch(() => false)) {
+            await el.click({ force: true });
+            clicked = true;
+            break;
+          }
+        } catch { continue; }
+      }
     }
 
     if (!clicked) {
@@ -343,14 +380,37 @@ async function readAndReplyChat(
         var child = children[j];
         var text = (child.innerText || '').trim();
         if (!text || text.length < 2 || text.length > 500) continue;
+        // Timestamps + distances — alone or concatenated (Sniffies UI combines them)
         if (/^\\d+\\s+(seconds?|minutes?|hours?|days?)\\s+ago$/i.test(text)) continue;
-        if (/^(Recents|Screened|Unread|NEW|from|Send|Type|Block|Report|Sniffies)$/i.test(text)) continue;
-        // Skip Sniffies system labels: distance, photo notices, typing, read receipts
         if (/^\\d+(\\.\\d+)?\\s*(mi|miles?|ft|feet|km|m)$/i.test(text)) continue;
-        if (/^you sent \\d+ photos?$/i.test(text)) continue;
-        if (/^sent \\d+ photos?$/i.test(text)) continue;
+        if (/^\\d+\\s+(seconds?|minutes?|hours?|days?)\\s+ago\\s*\\d+(\\.\\d+)?\\s*(mi|miles?|ft|feet|km|m)$/i.test(text)) continue;
+        if (/^(Recents|Screened|Unread|NEW|from|Send|Type|Block|Report|Sniffies|Anonymous Cruiser)$/i.test(text)) continue;
         if (/^typing\\.?\\.?\\.?$/i.test(text)) continue;
         if (/^(read|delivered|sent)$/i.test(text)) continue;
+        if (/^you sent a reaction\\.?$/i.test(text)) continue;
+
+        // Photo markers — keep as scene context so the Handler knows photos came in.
+        // fromSelf determined by wording, not bubble position (system labels are centered).
+        var sentPhotoMatch = text.match(/^you sent (\\d+) photos?$/i);
+        if (sentPhotoMatch) {
+          var sentMarker = '[sent ' + sentPhotoMatch[1] + ' photo' + (sentPhotoMatch[1] === '1' ? '' : 's') + ']';
+          if (!seen.has(sentMarker)) { seen.add(sentMarker); msgs.push({ text: sentMarker, fromSelf: true }); }
+          continue;
+        }
+        var recvPhotoMatch = text.match(/^you received (\\d+) photos?$/i);
+        if (recvPhotoMatch) {
+          var recvMarker = '[received ' + recvPhotoMatch[1] + ' photo' + (recvPhotoMatch[1] === '1' ? '' : 's') + ']';
+          if (!seen.has(recvMarker)) { seen.add(recvMarker); msgs.push({ text: recvMarker, fromSelf: false }); }
+          continue;
+        }
+        // Bare "sent N photos" / "received N photos" variants
+        var bareSentMatch = text.match(/^sent (\\d+) photos?$/i);
+        if (bareSentMatch) {
+          var bareSentMarker = '[sent ' + bareSentMatch[1] + ' photo' + (bareSentMatch[1] === '1' ? '' : 's') + ']';
+          if (!seen.has(bareSentMarker)) { seen.add(bareSentMarker); msgs.push({ text: bareSentMarker, fromSelf: true }); }
+          continue;
+        }
+
         if (seen.has(text)) continue;
 
         var childDivs = child.querySelectorAll('div, p, span');
@@ -362,7 +422,7 @@ async function readAndReplyChat(
 
         // Author detection via bubble position. Walk up to find the bubble
         // container that has meaningful width, then check its center vs areaMid.
-        var bubble: any = child;
+        var bubble = child;
         for (var u = 0; u < 6 && bubble && bubble.parentElement; u++) {
           var r = bubble.getBoundingClientRect();
           if (r.width > 30 && r.width < areaRect.width * 0.9) break;
@@ -400,7 +460,42 @@ async function readAndReplyChat(
       if (recentOutbounds.has(m.text.trim())) m.fromSelf = true;
     }
 
+    // Sanity check: the DOM bubble-position heuristic is unreliable under some
+    // Sniffies layouts (single-column mobile-like views, floating panels). If
+    // the scraper flagged >70% of messages as self, treat the heuristic as broken
+    // and reset all non-cache-matched messages to `from them`. Losing manual-reply
+    // detection is the lesser evil vs. every chat being skipped as self-reply.
+    if (messages.length >= 3) {
+      const selfCount = messages.filter(m => m.fromSelf).length;
+      if (selfCount / messages.length > 0.7) {
+        console.log(`  [debug] DOM heuristic flagged ${selfCount}/${messages.length} as self — distrusting, falling back to outbound-cache only`);
+        for (const m of messages) {
+          m.fromSelf = recentOutbounds.has(m.text.trim());
+        }
+      }
+    }
+
     const lastMsg = messages[messages.length - 1];
+
+    // Authoritative override: the chat-list preview is definitionally the newest
+    // message in the conversation. For anonymous Sniffies chats there's no
+    // username, so the preview text lives in chat.username; otherwise in
+    // chat.lastMessage. Use whichever is populated.
+    const effectivePreview = (chat.lastMessage && chat.lastMessage.trim()) || (chat.username || '').trim();
+    if (lastMsg && effectivePreview) {
+      const previewTrim = effectivePreview.replace(/[…\.]+$/, '').trim();
+      const tailTrim = lastMsg.text.trim();
+      const matchesPreview = previewTrim.length > 0 && (
+        previewTrim === tailTrim ||
+        (previewTrim.length >= 10 && tailTrim.startsWith(previewTrim)) ||
+        (tailTrim.length >= 10 && previewTrim.startsWith(tailTrim))
+      );
+      if (matchesPreview && !recentOutbounds.has(tailTrim) && lastMsg.fromSelf) {
+        console.log(`  [debug] Tail matches chat preview and isn't ours → overriding fromSelf to false`);
+        lastMsg.fromSelf = false;
+      }
+    }
+
     console.log(`  [debug] Read ${messages.length} messages in chat with ${chat.username}`);
     if (lastMsg) {
       console.log(`  [debug]   last (${lastMsg.fromSelf ? 'me' : 'them'}): "${lastMsg.text.substring(0, 60)}"`);
@@ -996,16 +1091,21 @@ export async function runSniffiesEngagement(
       const stillHasBudget = await checkBudget(sb, userId, 'sniffies', 'chat');
       if (!stillHasBudget) break;
 
-      // Between iterations, return to the chat list so we can locate the next chat item.
-      // After a reply we're inside a single conversation view, where the other chat
-      // items aren't in the DOM. Re-open the chat panel and give it a moment to render.
+      // Between iterations, fully reload the chat list. Just opening the panel
+      // isn't enough — the conversation view overlays the list, so text-based
+      // click selectors match message bubbles instead of list entries. A full
+      // reload forces the SPA to drop the previous chat view entirely.
       if (idx > 0) {
+        try {
+          await page.goto('https://sniffies.com/', { waitUntil: 'domcontentloaded', timeout: 15000 });
+          await page.waitForTimeout(2500);
+        } catch {}
         const reopened = await openChatPanel(page);
         if (!reopened) {
           console.log(`[Sniffies] Could not return to chat panel — stopping reply loop`);
           break;
         }
-        await page.waitForTimeout(1500);
+        await page.waitForTimeout(2000);
       }
 
       console.log(`[Sniffies] Replying to ${chat.username}${chat.isUnread ? ' (unread)' : ''}...`);

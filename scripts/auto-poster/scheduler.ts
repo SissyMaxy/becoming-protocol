@@ -38,6 +38,7 @@ import { runStrategicFollowCycle } from './strategic-follow-engine';
 import { runUnfollowStalesCycle } from './unfollow-stales';
 import { runQuoteTweetCycle } from './quote-tweet-engine';
 import { runVoiceLearn } from './voice-learn';
+import { runStaleRevival } from './stale-conversation-revival';
 import { invalidateVoiceCache } from './voice-system';
 import { runAllMoneyIngest } from './money-ingest';
 import { runAnnounceLive } from './announce-live';
@@ -323,6 +324,23 @@ async function tick() {
     const total = vault + ai;
     if (total > 0) {
       console.log(`[${timestamp}] Posted ${vault} vault + ${ai} AI = ${total} item(s)`);
+    }
+
+    // --- Tick 8 then every 96 ticks (~24h): scan for stale conversations ---
+    // Surfaces DMs Maxy let die (unanswered inbounds >48h, our-last-msg ghosts >7d)
+    // to the handler_attention queue. Runs early on first boot so she sees the
+    // backlog, then daily.
+    if (tickCount === 8 || (tickCount > 8 && tickCount % 96 === 8)) {
+      await withTimeout('Stale conversation revival', async () => {
+        try {
+          const r = await runStaleRevival();
+          if (r.queued > 0) {
+            console.log(`[${timestamp}] Stale revival: ${r.queued} queued to handler attention`);
+          }
+        } catch (err) {
+          console.error(`[${timestamp}] Stale revival failed:`, err instanceof Error ? err.message : err);
+        }
+      }, 60000);
     }
 
     // --- Every 16th tick (~4h): scrape Twitter DMs for new voice samples ---

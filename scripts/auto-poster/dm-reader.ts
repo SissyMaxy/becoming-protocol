@@ -120,6 +120,182 @@ async function readFanslyDMs(): Promise<IncomingDM[]> {
   return messages;
 }
 
+// ── Reddit DM Reader ─────────────────────────────────────────────────
+// Uses old.reddit.com which is more scraper-friendly and less CF-gated than new reddit.
+// Stealth config mirrors reddit-engage.ts (headless:false + off-screen) because
+// Cloudflare blocks headless chromium on the Reddit path.
+
+async function readRedditDMs(): Promise<ConversationThread[]> {
+  const config = PLATFORMS.reddit;
+  if (!config.enabled) return [];
+
+  let context: BrowserContext | null = null;
+  const threads: ConversationThread[] = [];
+
+  try {
+    context = await chromium.launchPersistentContext(config.profileDir, {
+      headless: false,
+      viewport: { width: 1280, height: 800 },
+      args: [
+        '--disable-blink-features=AutomationControlled',
+        '--window-position=-2400,-2400',
+      ],
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    });
+
+    const page = context.pages()[0] || await context.newPage();
+    await page.goto('https://old.reddit.com/message/inbox/', { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(3000);
+
+    // Login check — old.reddit shows a login form if we're not authed.
+    const loginForm = await page.locator('form#login-form, input[name="user"]').count();
+    if (loginForm > 0) {
+      console.error('[DM/Reddit] Not logged in. Run: npx tsx login.ts reddit');
+      return [];
+    }
+
+    // Enumerate inbox rows. old.reddit uses .message.entry for each conversation.
+    // Unread messages have class "new" on the entry. We read last 15 new + some fresh.
+    const entries = await page.evaluate(() => {
+      const rows = Array.from(document.querySelectorAll('.message.entry'));
+      return rows.slice(0, 20).map(row => {
+        const isUnread = row.classList.contains('new');
+        const authorEl = row.querySelector('.author');
+        const author = authorEl?.textContent?.trim() || 'unknown';
+        const subjectEl = row.querySelector('a.title, p.subject');
+        const subject = subjectEl?.textContent?.trim() || '';
+        const bodyEl = row.querySelector('.md');
+        const body = bodyEl?.textContent?.trim() || '';
+        const link = (row.querySelector('a.title') as HTMLAnchorElement | null)?.href || '';
+        return { isUnread, author, subject, body, link };
+      });
+    });
+
+    console.log(`[DM/Reddit] Found ${entries.length} inbox entr${entries.length === 1 ? 'y' : 'ies'} (${entries.filter(e => e.isUnread).length} unread)`);
+
+    // Only process unread to keep the pass tight — poll cycle is fast enough that
+    // we'll catch every conversation on first read.
+    const unread = entries.filter(e => e.isUnread);
+    for (const entry of unread.slice(0, 10)) {
+      if (entry.author === 'reddit' || entry.author.startsWith('r/')) continue; // system / mod messages
+      const combined = [entry.subject, entry.body].filter(Boolean).join('\n').trim();
+      if (!combined) continue;
+      threads.push({
+        platform: 'reddit',
+        fanIdentifier: entry.author,
+        fanDisplayName: entry.author,
+        messages: [{ from: 'them', text: combined }],
+        conversationUrl: entry.link,
+      });
+    }
+  } catch (err) {
+    console.error('[DM/Reddit] Error:', err instanceof Error ? err.message : err);
+  } finally {
+    if (context) await context.close();
+  }
+
+  return threads;
+}
+
+// ── FetLife DM Reader ────────────────────────────────────────────────
+// FetLife conversations live at /conversations. Chromium persistent context
+// is fine here — FetLife doesn't gate on headless detection.
+
+async function readFetLifeDMs(): Promise<ConversationThread[]> {
+  const config = PLATFORMS.fetlife;
+  if (!config.enabled) return [];
+
+  let context: BrowserContext | null = null;
+  const threads: ConversationThread[] = [];
+
+  try {
+    context = await chromium.launchPersistentContext(config.profileDir, {
+      headless: true,
+      viewport: { width: 1280, height: 800 },
+      args: ['--disable-blink-features=AutomationControlled'],
+    });
+
+    const page = context.pages()[0] || await context.newPage();
+    await page.goto('https://fetlife.com/conversations', { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(3000);
+
+    const url = page.url();
+    if (url.includes('/login') || url.includes('/users/sign_in')) {
+      console.error('[DM/FetLife] Not logged in. Run: npx tsx login.ts fetlife');
+      return [];
+    }
+
+    // Enumerate conversation rows. FetLife wraps each conversation in an anchor
+    // linking to /conversations/<id>. Unread ones carry a visual badge.
+    const rows = await page.evaluate(() => {
+      const items = Array.from(document.querySelectorAll('a[href^="/conversations/"]'));
+      const seen = new Set<string>();
+      const out: Array<{ href: string; name: string; preview: string; unread: boolean }> = [];
+      for (const a of items) {
+        const href = (a as HTMLAnchorElement).href;
+        if (!href || seen.has(href)) continue;
+        seen.add(href);
+        const name = a.querySelector('h3, .font-bold, [class*="name"]')?.textContent?.trim() || '';
+        const preview = a.querySelector('p, [class*="preview"], [class*="excerpt"]')?.textContent?.trim() || '';
+        // Unread indicator varies; look for common badge classes or a bold font weight.
+        const unread = !!a.querySelector('[class*="unread"], [class*="badge"], .font-bold');
+        out.push({ href, name, preview, unread });
+      }
+      return out.slice(0, 20);
+    });
+
+    const unread = rows.filter(r => r.unread);
+    console.log(`[DM/FetLife] Found ${rows.length} conversation(s) (${unread.length} unread)`);
+
+    for (const row of unread.slice(0, 10)) {
+      try {
+        await page.goto(row.href, { waitUntil: 'domcontentloaded' });
+        await page.waitForTimeout(2000);
+
+        // Scrape message bubbles. FetLife uses a list of messages with author attribution
+        // either via class or via relative alignment. Look for the thread container.
+        const msgs = await page.evaluate(() => {
+          const bubbles = Array.from(document.querySelectorAll('[class*="message"], [class*="bubble"], article'));
+          const out: Array<{ from: 'them' | 'us'; text: string }> = [];
+          for (const b of bubbles) {
+            const text = (b.textContent || '').trim();
+            if (!text || text.length < 2 || text.length > 2000) continue;
+            // Self markers: classes often contain "sent", "own", "self", "right"
+            const cls = (b.className || '').toLowerCase();
+            const isSelf = /\b(sent|own|self|outbound|right)\b/.test(cls);
+            out.push({ from: isSelf ? 'us' : 'them', text });
+          }
+          // Deduplicate adjacent identical entries (FetLife nests elements redundantly)
+          const dedup: typeof out = [];
+          for (const m of out) {
+            const last = dedup[dedup.length - 1];
+            if (!last || last.text !== m.text || last.from !== m.from) dedup.push(m);
+          }
+          return dedup.slice(-10);
+        });
+
+        if (msgs.length === 0) continue;
+
+        threads.push({
+          platform: 'fetlife',
+          fanIdentifier: row.name || row.href.split('/').pop() || 'unknown',
+          fanDisplayName: row.name || 'unknown',
+          messages: msgs,
+          conversationUrl: row.href,
+        });
+      } catch (err) {
+        console.error(`[DM/FetLife] Error reading ${row.name}:`, err instanceof Error ? err.message : err);
+      }
+    }
+  } catch (err) {
+    console.error('[DM/FetLife] Error:', err instanceof Error ? err.message : err);
+  } finally {
+    if (context) await context.close();
+  }
+
+  return threads;
+}
+
 // ── OnlyFans DM Reader ───────────────────────────────────────────────
 
 async function readOnlyFansDMs(): Promise<IncomingDM[]> {
@@ -606,6 +782,15 @@ async function storeThreadsAndRespond(threads: ConversationThread[], anthropic: 
   let stored = 0;
 
   for (const thread of threads) {
+    // Skip-if-self-last: if the most recent message in the thread was sent by us
+    // (either the bot or Maxy manually), don't generate a reply on top of it.
+    // Protects manual replies ("haha", "maybe later", etc.) from being clobbered.
+    const tailMsg = thread.messages[thread.messages.length - 1];
+    if (tailMsg && tailMsg.from === 'us') {
+      console.log(`[DM] Skipping ${thread.platform}/${thread.fanIdentifier} — last message was from us ("${tailMsg.text.slice(0, 50)}")`);
+      continue;
+    }
+
     // Bot/scammer filter — only check the FIRST message
     if (thread.platform === 'twitter') {
       const firstTheirMsg = thread.messages.find(m => m.from === 'them');
@@ -837,7 +1022,21 @@ export async function readAllDMs(anthropic?: Anthropic): Promise<{ total: number
     totalStored += await storeThreadsAndRespond(twitterThreads, anthropic || null);
   }
 
-  const total = allMessages.length + byPlatform.twitter;
+  // Reddit — full conversation threads (inbox DMs + chat messages)
+  const redditThreads = await readRedditDMs();
+  byPlatform.reddit = redditThreads.reduce((sum, t) => sum + t.messages.length, 0);
+  if (redditThreads.length > 0) {
+    totalStored += await storeThreadsAndRespond(redditThreads, anthropic || null);
+  }
+
+  // FetLife — full conversation threads
+  const fetlifeThreads = await readFetLifeDMs();
+  byPlatform.fetlife = fetlifeThreads.reduce((sum, t) => sum + t.messages.length, 0);
+  if (fetlifeThreads.length > 0) {
+    totalStored += await storeThreadsAndRespond(fetlifeThreads, anthropic || null);
+  }
+
+  const total = allMessages.length + byPlatform.twitter + byPlatform.reddit + byPlatform.fetlife;
   console.log(`[DM] Read ${total} message(s) across ${Object.keys(byPlatform).length} platform(s)`);
 
   return { total, stored: totalStored, byPlatform };

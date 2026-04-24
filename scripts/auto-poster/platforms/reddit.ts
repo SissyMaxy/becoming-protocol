@@ -25,9 +25,13 @@ export async function postToReddit(
 
   try {
     context = await chromium.launchPersistentContext(config.profileDir, {
-      headless: true,
+      headless: false,
       viewport: { width: 1280, height: 800 },
-      args: ['--disable-blink-features=AutomationControlled'],
+      args: [
+        '--disable-blink-features=AutomationControlled',
+        '--window-position=-2400,-2400',
+      ],
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     });
 
     const page = context.pages()[0] || await context.newPage();
