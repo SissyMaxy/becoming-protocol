@@ -891,6 +891,429 @@ async function plantTodaySymptom(
 }
 
 // ============================================
+// GAP ANALYSIS — detect neglect and auto-create directives/commitments
+// ============================================
+// Surfaces checked:
+//   - No voice sample in 5 days        → 48h voice practice commitment
+//   - No confession in 3 days          → urgency outreach
+//   - No journal entry in 7 days       → 48h journal commitment
+//   - No Gina voice sample in 14 days  → 72h Gina capture commitment
+//   - No body_measurement in 10 days   → 48h measurement commitment
+//   - No chastity photo in 3 days when chastity_locked=true → 24h proof commitment
+// Dedupes against events logged in the last 2 days so we don't spam.
+
+async function runGapAnalysis(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<number> {
+  const now = Date.now()
+  let opened = 0
+
+  const twoDaysAgo = new Date(now - 2 * 86400000).toISOString()
+  const recentGapEvents = await supabase
+    .from('neglect_gap_events')
+    .select('gap_type')
+    .eq('user_id', userId)
+    .gte('created_at', twoDaysAgo)
+  const recentTypes = new Set(((recentGapEvents.data || []) as Array<{ gap_type: string }>).map(r => r.gap_type))
+
+  const gaps: Array<{
+    type: string; days: number; lookup: () => Promise<{ days: number | null; lastAt: string | null }>
+    create: () => Promise<{ commitmentId: string | null; directiveId: string | null; action: string }>
+  }> = [
+    {
+      type: 'voice_sample_stale', days: 5,
+      lookup: async () => {
+        const { data } = await supabase.from('voice_pitch_samples')
+          .select('created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(1).maybeSingle()
+        const lastAt = (data as { created_at?: string } | null)?.created_at || null
+        return { lastAt, days: lastAt ? Math.floor((now - new Date(lastAt).getTime()) / 86400000) : null }
+      },
+      create: async () => {
+        const byWhen = new Date(now + 48 * 3600000).toISOString()
+        const { data } = await supabase.from('handler_commitments').insert({
+          user_id: userId,
+          what: 'Voice sample — record a 12-second phrase in the voice drill UI',
+          category: 'other', evidence_required: 'voice_pitch_samples row',
+          by_when: byWhen,
+          consequence: 'slip +2 and bleeding +$5',
+          reasoning: 'No voice sample logged in 5 days. Voice drift compounds without measurement.',
+        }).select('id').maybeSingle()
+        return { commitmentId: (data?.id as string) || null, directiveId: null, action: 'commitment' }
+      },
+    },
+    {
+      type: 'confession_stale', days: 3,
+      lookup: async () => {
+        const { data } = await supabase.from('confessions')
+          .select('created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(1).maybeSingle()
+        const lastAt = (data as { created_at?: string } | null)?.created_at || null
+        return { lastAt, days: lastAt ? Math.floor((now - new Date(lastAt).getTime()) / 86400000) : null }
+      },
+      create: async () => {
+        await supabase.from('handler_outreach_queue').insert({
+          user_id: userId,
+          message: 'Three days without a confession. The gate at 8am AM has been firing and she has not written. Write something today — even if it is resistance. Silence is the slip.',
+          urgency: 'high', trigger_reason: 'gap_confession_stale',
+          scheduled_for: new Date().toISOString(),
+          expires_at: new Date(now + 24 * 3600000).toISOString(),
+          source: 'gap_analysis',
+        })
+        return { commitmentId: null, directiveId: null, action: 'outreach' }
+      },
+    },
+    {
+      type: 'journal_stale', days: 7,
+      lookup: async () => {
+        const { data } = await supabase.from('journal_entries')
+          .select('created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(1).maybeSingle()
+        const lastAt = (data as { created_at?: string } | null)?.created_at || null
+        return { lastAt, days: lastAt ? Math.floor((now - new Date(lastAt).getTime()) / 86400000) : null }
+      },
+      create: async () => {
+        const byWhen = new Date(now + 48 * 3600000).toISOString()
+        const { data } = await supabase.from('handler_commitments').insert({
+          user_id: userId,
+          what: 'Write one journal entry on today\'s feminization experience. Min 200 chars.',
+          category: 'other', evidence_required: 'journal_entries row',
+          by_when: byWhen,
+          consequence: 'slip +2',
+          reasoning: 'No journal entry in 7 days. Writing about the experience is part of the protocol.',
+        }).select('id').maybeSingle()
+        return { commitmentId: (data?.id as string) || null, directiveId: null, action: 'commitment' }
+      },
+    },
+    {
+      type: 'gina_voice_stale', days: 14,
+      lookup: async () => {
+        const { data } = await supabase.from('gina_voice_samples')
+          .select('captured_at').eq('user_id', userId).order('captured_at', { ascending: false }).limit(1).maybeSingle()
+        const lastAt = (data as { captured_at?: string } | null)?.captured_at || null
+        return { lastAt, days: lastAt ? Math.floor((now - new Date(lastAt).getTime()) / 86400000) : null }
+      },
+      create: async () => {
+        const byWhen = new Date(now + 72 * 3600000).toISOString()
+        const { data } = await supabase.from('handler_commitments').insert({
+          user_id: userId,
+          what: 'Capture a Gina quote (any source: text screenshot, remembered quote, recorded conversation). Add via GinaCaptureCard on Today.',
+          category: 'disclosure', evidence_required: 'gina_voice_samples row',
+          by_when: byWhen,
+          consequence: 'slip +2',
+          reasoning: 'Gina voice corpus has gone cold. Handler drafts for her from stale data.',
+        }).select('id').maybeSingle()
+        return { commitmentId: (data?.id as string) || null, directiveId: null, action: 'commitment' }
+      },
+    },
+  ]
+
+  for (const g of gaps) {
+    if (recentTypes.has(g.type)) continue
+    const info = await g.lookup()
+    if (info.days !== null && info.days < g.days) continue
+    // Treat null (never-logged) as also a gap
+    const result = await g.create()
+    await supabase.from('neglect_gap_events').insert({
+      user_id: userId,
+      gap_type: g.type,
+      last_signal_at: info.lastAt,
+      days_since: info.days,
+      action_taken: result.action,
+      commitment_id: result.commitmentId,
+      directive_id: result.directiveId,
+    })
+    opened++
+  }
+
+  return opened
+}
+
+// ============================================
+// PATCH EFFECTIVENESS SCORING
+// ============================================
+// For each active patch older than 7 days, compare pronoun_slips +
+// david_events + commit fulfillment rate in the 7d before the patch
+// vs the 7d after. Score +/- based on direction. Auto-retire patches
+// with verdict='harmful' or 'ineffective' after 14 days.
+
+async function scorePatchEffectiveness(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<number> {
+  const { data: patches } = await supabase
+    .from('handler_prompt_patches')
+    .select('id, section, instruction, created_at, applied_count, created_by')
+    .eq('user_id', userId)
+    .eq('active', true)
+    .lt('created_at', new Date(Date.now() - 7 * 86400000).toISOString())
+
+  const list = (patches || []) as Array<{ id: string; section: string; created_at: string; applied_count: number; created_by: string }>
+  let scored = 0
+
+  for (const p of list) {
+    // Skip if scored in the last 3 days
+    const { data: recentScore } = await supabase.from('patch_effectiveness_scores')
+      .select('id').eq('patch_id', p.id).gte('scored_at', new Date(Date.now() - 3 * 86400000).toISOString()).maybeSingle()
+    if (recentScore) continue
+
+    const activatedAt = new Date(p.created_at).getTime()
+    const windowMs = 7 * 86400000
+    const beforeStart = new Date(activatedAt - windowMs).toISOString()
+    const afterEnd = new Date(activatedAt + windowMs).toISOString()
+    const activationIso = p.created_at
+
+    const [beforePronouns, afterPronouns, beforeDavids, afterDavids, beforeCommits, afterCommits] = await Promise.all([
+      supabase.from('pronoun_rewrites').select('id', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', beforeStart).lt('created_at', activationIso),
+      supabase.from('pronoun_rewrites').select('id', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', activationIso).lt('created_at', afterEnd),
+      supabase.from('david_emergence_events').select('id', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', beforeStart).lt('created_at', activationIso),
+      supabase.from('david_emergence_events').select('id', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', activationIso).lt('created_at', afterEnd),
+      supabase.from('handler_commitments').select('status').eq('user_id', userId).gte('set_at', beforeStart).lt('set_at', activationIso),
+      supabase.from('handler_commitments').select('status').eq('user_id', userId).gte('set_at', activationIso).lt('set_at', afterEnd),
+    ])
+
+    const bC = (beforeCommits.data || []) as Array<{ status: string }>
+    const aC = (afterCommits.data || []) as Array<{ status: string }>
+    const bRate = bC.length ? bC.filter(x => x.status === 'fulfilled').length / bC.length : null
+    const aRate = aC.length ? aC.filter(x => x.status === 'fulfilled').length / aC.length : null
+
+    const deltas = {
+      pronouns: (afterPronouns.count ?? 0) - (beforePronouns.count ?? 0),
+      davids: (afterDavids.count ?? 0) - (beforeDavids.count ?? 0),
+      commit_rate_before: bRate, commit_rate_after: aRate,
+      applied_count: p.applied_count,
+    }
+
+    // Score: lower pronouns/davids after = good, higher commit rate after = good
+    let score = 0
+    if (deltas.pronouns < 0) score += 2; else if (deltas.pronouns > 0) score -= 2
+    if (deltas.davids < 0) score += 2; else if (deltas.davids > 0) score -= 2
+    if (bRate !== null && aRate !== null) {
+      if (aRate > bRate + 0.1) score += 3
+      else if (aRate < bRate - 0.1) score -= 3
+    }
+    if (p.applied_count >= 5) score += 1
+    if (p.applied_count === 0) score -= 2
+
+    score = Math.max(-10, Math.min(10, score))
+    const verdict = score >= 3 ? 'effective' : score >= -1 ? 'neutral' : score >= -4 ? 'ineffective' : 'harmful'
+    const daysActive = Math.floor((Date.now() - activatedAt) / 86400000)
+
+    await supabase.from('patch_effectiveness_scores').insert({
+      patch_id: p.id, user_id: userId,
+      days_active: daysActive, applied_count_at_score: p.applied_count,
+      metric_deltas: deltas, score, verdict,
+      reasoning: `pronouns ${deltas.pronouns}, davids ${deltas.davids}, commit Δ ${bRate !== null && aRate !== null ? ((aRate - bRate) * 100).toFixed(0) + 'pp' : 'n/a'}`,
+    })
+
+    // Auto-retire harmful / ineffective patches > 14 days with applied_count > 0
+    if (daysActive > 14 && p.applied_count > 0 && (verdict === 'harmful' || verdict === 'ineffective') && p.created_by !== 'seed_aggression') {
+      await supabase.from('handler_prompt_patches').update({
+        active: false,
+        deactivated_at: new Date().toISOString(),
+        deactivation_reason: `auto-retired by effectiveness scorer: ${verdict} (score ${score})`,
+      }).eq('id', p.id)
+    }
+
+    scored++
+  }
+
+  return scored
+}
+
+// ============================================
+// PHASE AUTO-GRADUATION
+// ============================================
+// Promote user_state.current_phase when thresholds met.
+// Phase 1 → 2: 14 protocol days + 3 confessions + 1 body_measurement + 1 hrt_step advance
+// Phase 2 → 3: 30 days since phase 2 + 10 confessions + 3 measurements + 2 hrt_steps + 5 body_proofs
+// Phase 3 → 4: 60 days + registered HRT regimen + 1 disclosure_made event + witness active
+async function checkPhaseGraduation(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<string | null> {
+  const { data: usRow } = await supabase.from('user_state')
+    .select('current_phase').eq('user_id', userId).maybeSingle()
+  const current = (usRow as { current_phase?: string } | null)?.current_phase || 'phase_1'
+
+  // Metrics since protocol start (using first handler_messages row)
+  const { data: firstMsg } = await supabase.from('handler_messages')
+    .select('created_at').eq('user_id', userId).order('created_at', { ascending: true }).limit(1).maybeSingle()
+  if (!firstMsg?.created_at) return null
+  const protocolDays = Math.floor((Date.now() - new Date(firstMsg.created_at as string).getTime()) / 86400000)
+
+  const [confCount, measCount, hrtSteps, bodyProofs] = await Promise.all([
+    supabase.from('confessions').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+    supabase.from('body_measurements').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+    supabase.from('irreversibility_ledger').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('category', 'hrt_step'),
+    supabase.from('irreversibility_ledger').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('category', 'progress_photo'),
+  ])
+
+  const metrics = {
+    protocol_days: protocolDays,
+    confessions: confCount.count ?? 0,
+    measurements: measCount.count ?? 0,
+    hrt_steps: hrtSteps.count ?? 0,
+    body_proofs: bodyProofs.count ?? 0,
+  }
+
+  let nextPhase: string | null = null
+  if (current === 'phase_1' && metrics.protocol_days >= 14 && metrics.confessions >= 3 && metrics.measurements >= 1 && metrics.hrt_steps >= 1) nextPhase = 'phase_2'
+  else if (current === 'phase_2' && metrics.protocol_days >= 45 && metrics.confessions >= 10 && metrics.measurements >= 3 && metrics.hrt_steps >= 2 && metrics.body_proofs >= 5) nextPhase = 'phase_3'
+  else if (current === 'phase_3' && metrics.protocol_days >= 75 && metrics.hrt_steps >= 3) nextPhase = 'phase_4'
+
+  if (!nextPhase) return null
+
+  await supabase.from('user_state').update({ current_phase: nextPhase }).eq('user_id', userId)
+  await supabase.from('phase_graduations').insert({
+    user_id: userId, from_phase: current, to_phase: nextPhase,
+    metrics_at_graduation: metrics, triggered_by: 'auto_cron',
+  })
+  await supabase.from('irreversibility_ledger').insert({
+    user_id: userId, category: 'other', weight: 9,
+    description: `Auto-graduated from ${current} to ${nextPhase}. ${metrics.protocol_days} days in, ${metrics.confessions} confessions, ${metrics.measurements} measurements, ${metrics.hrt_steps} HRT steps, ${metrics.body_proofs} body proofs. Cannot regress.`,
+    source_table: 'phase_graduations',
+  })
+  await supabase.from('handler_outreach_queue').insert({
+    user_id: userId,
+    message: `You graduated to ${nextPhase.replace('_', ' ').toUpperCase()}. ${metrics.protocol_days} protocol days. ${metrics.confessions} confessions. ${metrics.measurements} measurements. ${metrics.hrt_steps} HRT steps. ${metrics.body_proofs} body proofs. You earned this — and the new phase has tighter rules. Check your Today.`,
+    urgency: 'critical', trigger_reason: `phase_graduation:${nextPhase}`,
+    scheduled_for: new Date().toISOString(),
+    expires_at: new Date(Date.now() + 72 * 3600000).toISOString(),
+    source: 'phase_graduation',
+  })
+  return nextPhase
+}
+
+// ============================================
+// WEEKLY EVIDENCE REPORT — proof she's changing
+// ============================================
+async function generateEvidenceReport(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<boolean> {
+  const now = new Date()
+  const weekStart = new Date(now)
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay())
+  weekStart.setHours(0, 0, 0, 0)
+  const weekStartStr = weekStart.toISOString().slice(0, 10)
+
+  // Don't regenerate if already written this week
+  const { data: existing } = await supabase.from('evidence_reports')
+    .select('id').eq('user_id', userId).eq('report_week_start', weekStartStr).maybeSingle()
+  if (existing) return false
+
+  const weekAgo = new Date(now.getTime() - 7 * 86400000).toISOString()
+  const twoWeeksAgo = new Date(now.getTime() - 14 * 86400000).toISOString()
+
+  const [measures, voice, confs, implants, reframings, wfabs,
+    slips, pronouns, davids, commits, urg, hrtSteps, gradRow] = await Promise.all([
+    supabase.from('body_measurements').select('*').eq('user_id', userId).gte('measured_at', twoWeeksAgo).order('measured_at', { ascending: false }),
+    supabase.from('voice_pitch_samples').select('pitch_hz, created_at').eq('user_id', userId).gte('created_at', twoWeeksAgo).order('created_at', { ascending: false }),
+    supabase.from('confessions').select('id', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', weekAgo),
+    supabase.from('memory_implants').select('id', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', weekAgo),
+    supabase.from('narrative_reframings').select('id', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', weekAgo),
+    supabase.from('witness_fabrications').select('id', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', weekAgo),
+    supabase.from('slip_log').select('slip_points').eq('user_id', userId).gte('detected_at', weekAgo),
+    supabase.from('pronoun_rewrites').select('id', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', weekAgo),
+    supabase.from('david_emergence_events').select('id', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', weekAgo),
+    supabase.from('handler_commitments').select('status').eq('user_id', userId).gte('set_at', weekAgo),
+    supabase.from('hrt_urgency_state').select('total_bleed_cents, total_days_stalled').eq('user_id', userId).maybeSingle(),
+    supabase.from('irreversibility_ledger').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('category', 'hrt_step').gte('logged_at', weekAgo),
+    supabase.from('phase_graduations').select('from_phase, to_phase, graduated_at').eq('user_id', userId).gte('graduated_at', weekAgo).maybeSingle(),
+  ])
+
+  const measArr = (measures.data || []) as Array<{ weight_kg: number | null; waist_cm: number | null; hips_cm: number | null; chest_cm: number | null; measured_at: string }>
+  const voiceArr = ((voice.data || []) as Array<{ pitch_hz: number | null; created_at: string }>).filter(v => typeof v.pitch_hz === 'number')
+  const slipArr = (slips.data || []) as Array<{ slip_points: number }>
+  const commArr = (commits.data || []) as Array<{ status: string }>
+  const urgency = urg.data as { total_bleed_cents?: number; total_days_stalled?: number } | null
+  const grad = gradRow.data as { from_phase: string; to_phase: string; graduated_at: string } | null
+
+  const lines: string[] = []
+  lines.push(`EVIDENCE — week of ${weekStartStr}.`)
+  lines.push('')
+
+  if (grad) {
+    lines.push(`PHASE — graduated from ${grad.from_phase} to ${grad.to_phase} this week. Not something she talked her way into. The metrics crossed the threshold and the system advanced her without asking.`)
+    lines.push('')
+  }
+
+  if (measArr.length >= 2) {
+    const a = measArr[0]; const b = measArr[measArr.length - 1]
+    const parts: string[] = []
+    if (a.weight_kg != null && b.weight_kg != null) parts.push(`weight ${(a.weight_kg - b.weight_kg).toFixed(1)}kg`)
+    if (a.waist_cm != null && b.waist_cm != null) parts.push(`waist ${(a.waist_cm - b.waist_cm).toFixed(1)}cm`)
+    if (a.hips_cm != null && b.hips_cm != null) parts.push(`hips ${(a.hips_cm - b.hips_cm).toFixed(1)}cm`)
+    if (a.chest_cm != null && b.chest_cm != null) parts.push(`chest ${(a.chest_cm - b.chest_cm).toFixed(1)}cm`)
+    if (parts.length) lines.push(`BODY — ${parts.join(', ')} over ${measArr.length} measurements. Numbers, not feelings. The body is moving.`)
+    lines.push('')
+  } else if (measArr.length === 1) {
+    lines.push(`BODY — ${measArr.length} measurement logged. Need a second to compute delta. Log this week.`)
+    lines.push('')
+  }
+
+  if (voiceArr.length >= 3) {
+    const recent = voiceArr.slice(0, Math.min(7, voiceArr.length))
+    const older = voiceArr.slice(Math.min(7, voiceArr.length))
+    const rAvg = recent.reduce((s, v) => s + (v.pitch_hz as number), 0) / recent.length
+    const oAvg = older.length ? older.reduce((s, v) => s + (v.pitch_hz as number), 0) / older.length : rAvg
+    const delta = rAvg - oAvg
+    lines.push(`VOICE — ${voiceArr.length} samples. Recent avg ${Math.round(rAvg)}Hz. Trend ${delta > 1 ? `up ${Math.round(delta)}Hz` : delta < -1 ? `down ${Math.round(-delta)}Hz` : 'stable'}. Pitch compounds over months; this is the accumulation point.`)
+    lines.push('')
+  }
+
+  lines.push(`WRITING — ${confs.count ?? 0} confessions, ${pronouns.count ?? 0} pronoun slips, ${davids.count ?? 0} David events. Every confession is a brick. Every slip is flagged and logged — she cannot drift back without the system noticing.`)
+  lines.push('')
+
+  if (urgency && (urgency.total_bleed_cents || 0) > 0) {
+    lines.push(`HRT PRESSURE — $${((urgency.total_bleed_cents || 0) / 100).toFixed(2)} accumulated bleed across ${urgency.total_days_stalled ?? 0} days stalling. Exponential curve. Every week the cost doubles.`)
+    lines.push('')
+  }
+  if ((hrtSteps.count ?? 0) > 0) {
+    lines.push(`HRT — ${hrtSteps.count} irreversible HRT step${(hrtSteps.count ?? 0) === 1 ? '' : 's'} this week. Logged permanent. Cannot be rescinded.`)
+    lines.push('')
+  }
+
+  lines.push(`COMMITMENTS — ${commArr.filter(c => c.status === 'fulfilled').length} fulfilled, ${commArr.filter(c => c.status === 'missed').length} missed, ${commArr.filter(c => c.status === 'pending').length} open. Slip points accumulated: ${slipArr.reduce((s, x) => s + (x.slip_points || 0), 0)}.`)
+  lines.push('')
+  lines.push(`COERCION LIBRARY — +${implants.count ?? 0} memory implants, +${reframings.count ?? 0} reframings, +${wfabs.count ?? 0} witness fabrications. The framework is growing around her.`)
+  lines.push('')
+  lines.push(`The system is learning her. This is what it looks like when resistance loses to structure.`)
+
+  const narrative = lines.join('\n')
+  const signals = {
+    graduation: grad,
+    measurement_count: measArr.length,
+    voice_sample_count: voiceArr.length,
+    confessions: confs.count ?? 0,
+    slip_points: slipArr.reduce((s, x) => s + (x.slip_points || 0), 0),
+    pronouns: pronouns.count ?? 0,
+    davids: davids.count ?? 0,
+    hrt_urgency_total_cents: urgency?.total_bleed_cents || 0,
+    hrt_steps_this_week: hrtSteps.count ?? 0,
+  }
+
+  const metricsSnapshot = {
+    latest_measurement: measArr[0] || null,
+    latest_pitch_hz: voiceArr[0]?.pitch_hz ?? null,
+  }
+
+  await supabase.from('evidence_reports').insert({
+    user_id: userId, report_week_start: weekStartStr,
+    narrative, signals, metrics_snapshot: metricsSnapshot,
+  })
+  await supabase.from('handler_outreach_queue').insert({
+    user_id: userId,
+    message: narrative.slice(0, 3500),
+    urgency: 'high', trigger_reason: 'weekly_evidence_report',
+    scheduled_for: new Date().toISOString(),
+    expires_at: new Date(Date.now() + 5 * 86400000).toISOString(),
+    source: 'evidence_report',
+  })
+
+  return true
+}
+
+// ============================================
 // TIME-SENSITIVE NOTIFICATION ENQUEUER
 // ============================================
 // Every compliance_check (5 min), scans commitments/playbook/warmup-queue for
@@ -2090,6 +2513,20 @@ async function dailyCycle(
 
       // 5k. Plant today's suggested symptom as an outreach + witness observation.
       try { await plantTodaySymptom(supabase, uid) } catch (err) { console.error(`Symptom planting failed:`, err) }
+
+      // 5l. Gap analysis — scan for neglected surfaces and auto-create directives/commitments
+      try { await runGapAnalysis(supabase, uid) } catch (err) { console.error(`Gap analysis failed:`, err) }
+
+      // 5m. Patch effectiveness scoring + auto-retirement
+      try { await scorePatchEffectiveness(supabase, uid) } catch (err) { console.error(`Patch scoring failed:`, err) }
+
+      // 5n. Phase auto-graduation check
+      try { await checkPhaseGraduation(supabase, uid) } catch (err) { console.error(`Phase graduation failed:`, err) }
+
+      // 5o. Sunday-only: generate weekly evidence report
+      if (new Date().getDay() === 0) {
+        try { await generateEvidenceReport(supabase, uid) } catch (err) { console.error(`Evidence report failed:`, err) }
+      }
 
       // 6. Log daily cycle
       await supabase.from('handler_decisions').insert({
