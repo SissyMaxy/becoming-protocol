@@ -5618,12 +5618,36 @@ function stripBareJsonKey(text: string, keyPattern: RegExp): { text: string; ext
   return { text: result.trim(), extracted };
 }
 
+// Strip Llama / Hermes / chat-template special tokens and common junk
+// suffixes that leak when OpenRouter fallback responds. These are pure
+// tokenizer artifacts that should never reach the user.
+function sanitizeModelArtifacts(text: string): string {
+  let t = text;
+  // Llama 3 / 3.1 special tokens
+  t = t.replace(/<\|reserved_special_token_\d+\|>/g, '');
+  t = t.replace(/<\|begin_of_text\|>/g, '');
+  t = t.replace(/<\|end_of_text\|>/g, '');
+  t = t.replace(/<\|eot_id\|>/g, '');
+  t = t.replace(/<\|start_header_id\|>.*?<\|end_header_id\|>/g, '');
+  // ChatML artifacts (Mixtral / Dolphin)
+  t = t.replace(/<\|im_start\|>(?:\w+)?/g, '');
+  t = t.replace(/<\|im_end\|>/g, '');
+  // Python/code identifier trail-ons ("identity..timedelta", "she's..lambda")
+  t = t.replace(/\.\.(?:timedelta|datetime|lambda|def|return|yield|async|await|self|None|True|False|import|from|class)(?:[a-zA-Z_]\w*)?/g, '');
+  // Stray stop sequences the model sometimes emits as literal text
+  t = t.replace(/<\|end\|>/g, '');
+  t = t.replace(/\[END\]\s*$/gi, '');
+  // Collapse double spaces / orphan triple newlines from the strips
+  t = t.replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n');
+  return t.trim();
+}
+
 function parseResponse(fullText: string): {
   visibleResponse: string;
   signals: Record<string, unknown> | null;
 } {
   let signals: Record<string, unknown> | null = null;
-  let visibleResponse = fullText;
+  let visibleResponse = sanitizeModelArtifacts(fullText);
 
   for (const fmt of SIGNAL_FORMATS) {
     if (!fmt.detect.test(visibleResponse)) continue;

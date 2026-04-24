@@ -24,6 +24,8 @@ import { DisclosureDraftsCard } from './DisclosureDraftsCard';
 import { ProtocolDayCard } from './ProtocolDayCard';
 import { HandlerKnowCard } from './HandlerKnowCard';
 import { ComingOutVaultCard } from './ComingOutVaultCard';
+import { EvidenceReportsCard } from './EvidenceReportsCard';
+import { PhaseProgressCard } from './PhaseProgressCard';
 
 const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
 
@@ -222,9 +224,11 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
 
       <main className="td-main">
         <ProtocolDayCard />
+        <PhaseProgressCard />
         <HandlerKnowCard />
         <HandlerRunningCard />
         <HandlerEvolutionCard />
+        <EvidenceReportsCard />
         <CommitmentsCard />
         <BodyMeasurementCard />
         <LovenseHealthBanner />
