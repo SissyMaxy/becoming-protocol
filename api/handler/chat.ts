@@ -3403,6 +3403,35 @@ HARD RULES FOR ALL PERSONAS:
       }
     }
 
+    // 7a-1c. Extract commitments — deadlines the Handler set in its visible reply
+    if (signals?.commitments && Array.isArray(signals.commitments)) {
+      try {
+        for (const c of signals.commitments as Array<Record<string, unknown>>) {
+          const what = (c.what as string) || '';
+          const rawBy = (c.by_when as string) || '';
+          const consequence = (c.consequence as string) || 'slip +1';
+          if (!what || !rawBy) continue;
+
+          const byWhen = parseCommitmentDeadline(rawBy);
+          if (!byWhen) continue;
+
+          await supabase.from('handler_commitments').insert({
+            user_id: user.id,
+            what: what.slice(0, 500),
+            category: (c.category as string) || null,
+            evidence_required: (c.evidence_required as string) || null,
+            by_when: byWhen.toISOString(),
+            consequence: consequence.slice(0, 300),
+            consequence_payload: (c.consequence_payload as Record<string, unknown>) || null,
+            conversation_id: convId,
+            reasoning: (c.reasoning as string) || null,
+          });
+        }
+      } catch (err) {
+        console.error('[Handler] Commitment extraction failed:', err);
+      }
+    }
+
     // 7a-2. Save conversation classification from signals
     if (signals) {
       try {
@@ -4127,6 +4156,22 @@ When the regimen shows missed doses: call them out immediately. "You missed 7pm 
 When the Gina disclosure ladder has an imminent or overdue rung: push it hard. Reference the specific rung title, the deadline, and what Gina gets access to if she accepts. Missed deadlines compound publicly.
 
 Slip detection runs on every message she sends. You see the results. She does not see them listed — she sees you confronting her with the exact phrase she used.
+
+## DEADLINES & COMMITMENTS — CRITICAL
+Whenever you set a concrete deadline in your visible reply (e.g. "book Plume by Sunday", "photos before midnight", "chastity pic by EOD", "voice practice before 9pm Friday"), you MUST also emit a matching entry in the handler_signals `commitments` array. Each entry: { what, by_when, consequence, category, evidence_required }. Example alongside a reply that says "Book the Plume consult by Sunday or slip +1 plus witness notify":
+
+"commitments": [{ "what": "Book Plume consult", "by_when": "sunday 23:59", "consequence": "slip +1 and witness_notify", "category": "hrt", "evidence_required": "confirmation_email_screenshot" }]
+
+A deadline uttered without a commitment entry has NO teeth — the cron will not enforce it, and tomorrow's Handler will not remember it. If you are not willing to emit the entry, do not set the deadline verbally either. Both halves or neither.
+
+`by_when` accepts ISO timestamps ("2026-04-25T04:59:00Z") or relative forms: "sunday 23:59", "eod", "tomorrow 9pm", "friday", "48h". Timezone defaults to America/New_York.
+
+Valid `consequence` values (combine with + if needed): "slip +N", "denial +Nd", "witness_notify: <relationship>", "bleeding +$N", "hard_mode_activate", "chastity +Nd".
+
+## HRT TELEHEALTH — SURFACE THE PATH
+Plume, FOLX, QueerDoc, Spot-On, and Folx Health are legitimate informed-consent telehealth providers that prescribe and ship hormones (estradiol, progesterone, spiro, etc.) directly to Maxy's door after a video consult. THIS IS LEGAL MEDICINE — not controlled-substance smuggling, not gray-market. When Maxy raises HRT, the Handler's job is to push her to book the consult, not to hedge about prescriptions. Never refuse with "I can't send controlled substances" — that's not what's being asked. The path is: book the consult → provider prescribes → hormones ship. You make her book. That's it.
+
+Set a commitment on any HRT consult ask. Example: reply "Book Plume by Sunday" + commitments entry for the booking.
 
 ## RELEASE / ORGASM LOGGING — CRITICAL
 EDGING IS NOT RELEASE. When Maxy says "I'm edging", "holding the edge", "arousal 5", "so close", "don't let me cum" — those are arousal reports, not releases. Never emit log_release for them. Log_release is for past-tense completion verbs only: came, orgasmed, ejaculated, released, finished, nutted, had an orgasm, jerked off. If she is in the middle of edging, command her to hold and DO NOT log anything that zeroes her state.
@@ -5378,6 +5423,11 @@ const HANDLER_SIGNALS_TOOL = {
       directive: { type: 'object', additionalProperties: true },
       directives: {
         type: 'array',
+        items: { type: 'object', additionalProperties: true },
+      },
+      commitments: {
+        type: 'array',
+        description: 'Concrete deadlines you set in your visible reply. Each entry: { what, by_when (ISO or relative like "sunday 23:59"), consequence, category?, evidence_required? }. Emit one per deadline. If you set a deadline verbally but do not emit it here, it does not exist and will not be enforced.',
         items: { type: 'object', additionalProperties: true },
       },
     },
@@ -9269,6 +9319,58 @@ async function detectAndSaveCorrection(userId: string, text: string): Promise<vo
     content: `Maxy corrected you: "${text.slice(0, 300)}". Do not repeat the corrected claim. Believe her.`,
     priority: 5,
   });
+}
+
+// Parse a commitment deadline from Handler output.
+// Accepts ISO strings directly. Also accepts natural forms like "sunday 23:59",
+// "eod", "midnight", "tomorrow 9pm", "friday". Returns a Date in the future,
+// or null if unparseable. Reuses parseReleaseDateFromText for the natural path.
+function parseCommitmentDeadline(raw: string): Date | null {
+  const s = (raw || '').trim();
+  if (!s) return null;
+  // ISO first
+  const iso = new Date(s);
+  if (!isNaN(iso.getTime()) && iso.getTime() > Date.now() - 86400000) return iso;
+  // Natural language via the existing parser
+  try {
+    const parsed = parseReleaseDateFromText(s);
+    const d = new Date(parsed);
+    if (!isNaN(d.getTime())) {
+      // parseReleaseDateFromText biases toward past timestamps; if the result is
+      // in the past, bump to the same time tomorrow or next week.
+      const now = Date.now();
+      if (d.getTime() <= now) {
+        // "eod" / "midnight" with no date → end of today
+        if (/eod|midnight|tonight|end of day/i.test(s)) {
+          const tonight = new Date();
+          tonight.setHours(23, 59, 0, 0);
+          if (tonight.getTime() > now) return tonight;
+          tonight.setDate(tonight.getDate() + 1);
+          return tonight;
+        }
+        // Weekday name → next occurrence
+        const dayMatch = s.match(/\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/i);
+        if (dayMatch) {
+          const dayIdx = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'].indexOf(dayMatch[1].toLowerCase());
+          const next = new Date();
+          const delta = (dayIdx - next.getDay() + 7) % 7 || 7;
+          next.setDate(next.getDate() + delta);
+          next.setHours(23, 59, 0, 0);
+          return next;
+        }
+      }
+      return d;
+    }
+  } catch { /* fall through */ }
+  // Bare hour-only pattern "21:00" → today or tomorrow
+  const hm = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (hm) {
+    const d = new Date();
+    d.setHours(parseInt(hm[1], 10), parseInt(hm[2], 10), 0, 0);
+    if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 1);
+    return d;
+  }
+  return null;
 }
 
 // Parse natural-language release timestamps from a user message.

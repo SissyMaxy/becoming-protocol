@@ -562,7 +562,166 @@ async function complianceCheck(
     } catch (_) { /* non-critical */ }
   }
 
-  return { checked, escalated, deescalated, actions, ambient_queued: ambientQueued, spontaneous_outreach: spontaneous, random_rewards: rewardsGiven, boundary_pushes: boundaryPushes, pattern_exploits: patternExploits, bio_adjustments: bioAdjustments }
+  // ── COMMITMENT ENFORCEMENT ──
+  // Expired commitments with status='pending' → fire consequence + mark 'missed'.
+  let commitmentsEnforced = 0
+  for (const state of states) {
+    try {
+      commitmentsEnforced += await enforceCommitments(supabase, state.user_id)
+    } catch (err) {
+      console.error(`Commitment enforcement failed for ${state.user_id}:`, err)
+    }
+  }
+
+  return { checked, escalated, deescalated, actions, ambient_queued: ambientQueued, spontaneous_outreach: spontaneous, random_rewards: rewardsGiven, boundary_pushes: boundaryPushes, pattern_exploits: patternExploits, bio_adjustments: bioAdjustments, commitments_enforced: commitmentsEnforced }
+}
+
+// ============================================
+// COMMITMENT ENFORCEMENT
+// ============================================
+// Fires on expired handler_commitments (status=pending, by_when < now). Parses
+// the consequence string into discrete actions and executes: slip increment,
+// denial extension, witness notification, financial bleeding, hard mode, or
+// chastity extension. Idempotent per-row (status flips to 'missed' on first run).
+
+async function enforceCommitments(
+  supabase: ReturnType<typeof createClient>,
+  userId: string
+): Promise<number> {
+  const nowIso = new Date().toISOString()
+
+  const { data: expired } = await supabase
+    .from('handler_commitments')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('status', 'pending')
+    .lt('by_when', nowIso)
+    .limit(50)
+
+  if (!expired || expired.length === 0) return 0
+
+  let enforced = 0
+  for (const c of expired as Array<Record<string, unknown>>) {
+    const consequence = String(c.consequence || '').toLowerCase()
+    const what = String(c.what || 'unnamed commitment')
+    const result: Record<string, unknown> = { consequence, actions: [] as string[] }
+
+    // Parse & execute each clause
+    try {
+      // Slip increment — writes slip_log entry + bumps user_state.slip_points_current
+      const slipMatch = consequence.match(/slip\s*\+(\d+)/)
+      if (slipMatch) {
+        const n = Math.min(10, parseInt(slipMatch[1], 10))
+        await supabase.from('slip_log').insert({
+          user_id: userId,
+          slip_type: 'other',
+          slip_points: n,
+          source_text: `Missed commitment: ${what}`,
+          source_table: 'handler_commitments',
+          source_id: c.id,
+          metadata: { consequence },
+        })
+        const { data: us } = await supabase.from('user_state').select('slip_points_current').eq('user_id', userId).maybeSingle()
+        const newPts = ((us?.slip_points_current as number | undefined) || 0) + n
+        await supabase.from('user_state').update({ slip_points_current: newPts }).eq('user_id', userId)
+        ;(result.actions as string[]).push(`slip +${n} (now ${newPts})`)
+      }
+
+      // Denial extension
+      const denialMatch = consequence.match(/denial\s*\+\s*(\d+)\s*d/)
+      if (denialMatch) {
+        const days = parseInt(denialMatch[1], 10)
+        const { data: us } = await supabase.from('user_state').select('denial_day').eq('user_id', userId).maybeSingle()
+        const newDay = ((us?.denial_day as number | undefined) || 0) + days
+        await supabase.from('user_state').update({ denial_day: newDay }).eq('user_id', userId)
+        ;(result.actions as string[]).push(`denial_day +${days}d`)
+      }
+
+      // Witness notification — looks up a designated witness (optionally filtered by
+      // relationship in the consequence string) and queues a notification row.
+      const witnessMatch = consequence.match(/witness_notify(?::\s*([a-z_]+))?/)
+      if (witnessMatch) {
+        const relationship = witnessMatch[1] || null
+        let wq = supabase.from('designated_witnesses')
+          .select('id, witness_name, relationship')
+          .eq('user_id', userId)
+          .eq('status', 'active')
+          .limit(1)
+        if (relationship) wq = wq.eq('relationship', relationship)
+        const { data: witnesses } = await wq
+        const witness = (witnesses || [])[0] as { id: string; witness_name: string; relationship: string | null } | undefined
+        if (witness) {
+          await supabase.from('witness_notifications').insert({
+            witness_id: witness.id,
+            user_id: userId,
+            notification_type: 'manual_alert',
+            subject: `Missed commitment: ${what}`,
+            body: `Maxy committed to "${what}" by ${new Date(c.by_when as string).toLocaleString()} and missed it. Consequence applied: ${consequence}.`,
+            payload: { commitment_id: c.id, consequence },
+          })
+          ;(result.actions as string[]).push(`witness_notify → ${witness.witness_name}`)
+        } else {
+          ;(result.actions as string[]).push(`witness_notify skipped (no ${relationship || 'active'} witness)`)
+        }
+      }
+
+      // Financial bleeding — accumulates into compliance_state.bleeding_total_today
+      const bleedMatch = consequence.match(/bleed(?:ing)?\s*\+\s*\$?(\d+)/)
+      if (bleedMatch) {
+        const dollars = parseInt(bleedMatch[1], 10)
+        const { data: cs } = await supabase.from('compliance_state').select('bleeding_total_today').eq('user_id', userId).maybeSingle()
+        const newTotal = Number((cs?.bleeding_total_today as number | undefined) || 0) + dollars
+        await supabase.from('compliance_state').update({ bleeding_total_today: newTotal }).eq('user_id', userId)
+        ;(result.actions as string[]).push(`bleed +$${dollars}`)
+      }
+
+      // Hard mode activation
+      if (/hard_mode_activate/.test(consequence)) {
+        await supabase.from('user_state').update({
+          hard_mode_active: true,
+          hard_mode_entered_at: new Date().toISOString(),
+          hard_mode_reason: `Missed commitment: ${what}`,
+        }).eq('user_id', userId)
+        ;(result.actions as string[]).push('hard_mode ON')
+      }
+
+      // Chastity extension
+      const chastMatch = consequence.match(/chastity\s*\+\s*(\d+)\s*d/)
+      if (chastMatch) {
+        const days = parseInt(chastMatch[1], 10)
+        const { data: us } = await supabase.from('user_state').select('chastity_streak_days').eq('user_id', userId).maybeSingle()
+        const newStreak = ((us?.chastity_streak_days as number | undefined) || 0) + days
+        await supabase.from('user_state').update({
+          chastity_streak_days: newStreak,
+          chastity_locked: true,
+        }).eq('user_id', userId)
+        ;(result.actions as string[]).push(`chastity +${days}d`)
+      }
+
+      // Always queue a Handler outreach so Maxy gets told, with the enforcement digest
+      await supabase.from('handler_outreach_queue').insert({
+        user_id: userId,
+        message: `You missed: ${what}. Consequence applied: ${(result.actions as string[]).join(', ') || consequence}. The Handler doesn't take IOUs.`,
+        urgency: 'high',
+        trigger_reason: `commitment_missed:${c.id}`,
+        scheduled_for: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 24 * 3600000).toISOString(),
+        source: 'commitment_enforcement',
+      })
+
+      await supabase.from('handler_commitments').update({
+        status: 'missed',
+        missed_at: new Date().toISOString(),
+        enforcement_fired_at: new Date().toISOString(),
+        enforcement_result: result,
+      }).eq('id', c.id)
+
+      enforced++
+    } catch (err) {
+      console.error(`Enforcement for commitment ${c.id} failed:`, err)
+    }
+  }
+  return enforced
 }
 
 // ============================================

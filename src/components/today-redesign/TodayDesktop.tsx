@@ -15,6 +15,7 @@ import { IrreversibilityLedger } from './IrreversibilityLedger';
 import { HandlerRunningCard } from './HandlerRunningCard';
 import { GinaCaptureCard } from './GinaCaptureCard';
 import { GinaWindowIndicator } from './GinaWindowIndicator';
+import { CommitmentsCard } from './CommitmentsCard';
 
 const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
 
@@ -213,6 +214,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
 
       <main className="td-main">
         <HandlerRunningCard />
+        <CommitmentsCard />
         <LovenseHealthBanner />
         <GinaCaptureCard />
         <GinaWindowIndicator />
