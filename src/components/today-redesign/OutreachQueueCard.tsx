@@ -1,0 +1,131 @@
+/**
+ * OutreachQueueCard — shows the Handler's queued + recently-delivered
+ * outreach. Makes visible what's coming so she can't claim surprise when
+ * it hits.
+ */
+
+import { useCallback, useEffect, useState } from 'react';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../context/AuthContext';
+
+interface Outreach {
+  id: string;
+  message: string;
+  urgency: string;
+  trigger_reason: string;
+  scheduled_for: string;
+  sent_at: string | null;
+  expires_at: string;
+  source: string;
+}
+
+export function OutreachQueueCard() {
+  const { user } = useAuth();
+  const [pending, setPending] = useState<Outreach[]>([]);
+  const [recent, setRecent] = useState<Outreach[]>([]);
+
+  const load = useCallback(async () => {
+    if (!user?.id) return;
+    const [pRes, rRes] = await Promise.all([
+      supabase.from('handler_outreach_queue')
+        .select('id, message, urgency, trigger_reason, scheduled_for, sent_at, expires_at, source')
+        .eq('user_id', user.id)
+        .is('sent_at', null)
+        .gte('expires_at', new Date().toISOString())
+        .order('scheduled_for', { ascending: true })
+        .limit(8),
+      supabase.from('handler_outreach_queue')
+        .select('id, message, urgency, trigger_reason, scheduled_for, sent_at, expires_at, source')
+        .eq('user_id', user.id)
+        .not('sent_at', 'is', null)
+        .order('sent_at', { ascending: false })
+        .limit(3),
+    ]);
+    setPending((pRes.data || []) as Outreach[]);
+    setRecent((rRes.data || []) as Outreach[]);
+  }, [user?.id]);
+
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { const t = setInterval(load, 60000); return () => clearInterval(t); }, [load]);
+
+  if (pending.length === 0 && recent.length === 0) return null;
+
+  const urgencyColor = (u: string) =>
+    u === 'critical' ? '#f47272' : u === 'high' ? '#f4c272' : u === 'normal' ? '#c4b5fd' : '#8a8690';
+
+  return (
+    <div style={{ background: '#111116', border: '1px solid #2d1a4d', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" strokeWidth="1.8">
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+        </svg>
+        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#c4b5fd', fontWeight: 700 }}>
+          Handler queue
+        </span>
+        <span style={{ fontSize: 10.5, color: '#8a8690', marginLeft: 'auto' }}>
+          {pending.length} pending · {recent.length} recent
+        </span>
+      </div>
+
+      {pending.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 9.5, color: '#6a656e', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>
+            queued — will deliver
+          </div>
+          {pending.map(o => {
+            const fires = new Date(o.scheduled_for).getTime();
+            const mins = Math.round((fires - Date.now()) / 60000);
+            return (
+              <div key={o.id} style={{
+                background: '#0a0a0d', border: `1px solid ${urgencyColor(o.urgency)}33`,
+                borderLeft: `3px solid ${urgencyColor(o.urgency)}`,
+                borderRadius: 5, padding: '7px 9px', marginBottom: 5,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: urgencyColor(o.urgency), textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {o.urgency}
+                  </span>
+                  <span style={{ fontSize: 9.5, color: '#8a8690' }}>{o.source.replace(/_/g, ' ')}</span>
+                  <span style={{ fontSize: 9.5, color: '#8a8690', marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>
+                    {mins <= 0 ? 'now' : mins < 60 ? `in ${mins}m` : `in ${Math.floor(mins / 60)}h`}
+                  </span>
+                </div>
+                <div style={{ fontSize: 11, color: '#c8c4cc', lineHeight: 1.4 }}>
+                  {o.message.slice(0, 240)}{o.message.length > 240 ? '…' : ''}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {recent.length > 0 && (
+        <div>
+          <div style={{ fontSize: 9.5, color: '#6a656e', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>
+            recently delivered
+          </div>
+          {recent.map(o => {
+            const sent = new Date(o.sent_at!).getTime();
+            const ago = Math.round((Date.now() - sent) / 60000);
+            return (
+              <div key={o.id} style={{
+                background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 5,
+                padding: '6px 9px', marginBottom: 4, opacity: 0.75,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                  <span style={{ fontSize: 9.5, color: '#8a8690' }}>{o.source.replace(/_/g, ' ')}</span>
+                  <span style={{ fontSize: 9, color: '#6a656e', marginLeft: 'auto' }}>
+                    {ago < 60 ? `${ago}m ago` : `${Math.floor(ago / 60)}h ago`}
+                  </span>
+                </div>
+                <div style={{ fontSize: 10.5, color: '#8a8690', lineHeight: 1.35 }}>
+                  {o.message.slice(0, 180)}{o.message.length > 180 ? '…' : ''}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

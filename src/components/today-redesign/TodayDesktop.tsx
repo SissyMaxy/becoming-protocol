@@ -29,6 +29,9 @@ import { PhaseProgressCard } from './PhaseProgressCard';
 import { VoiceDrillCard } from './VoiceDrillCard';
 import { OutfitMandateCard } from './OutfitMandateCard';
 import { ArousalLogCard } from './ArousalLogCard';
+import { OutreachQueueCard } from './OutreachQueueCard';
+import { SlipLogCard } from './SlipLogCard';
+import { GinaSessionsCard } from './GinaSessionsCard';
 
 const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
 
@@ -231,6 +234,8 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         <HandlerKnowCard />
         <HandlerRunningCard />
         <HandlerEvolutionCard />
+        <OutreachQueueCard />
+        <SlipLogCard />
         <EvidenceReportsCard />
         <CommitmentsCard />
         <OutfitMandateCard />
@@ -243,6 +248,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         <GinaPlaybookCard />
         <DisclosureDraftsCard />
         <ComingOutVaultCard />
+        <GinaSessionsCard />
         <UnifiedCaptureCard />
         <WitnessObservationCard />
         <IrreversibilityLedger />

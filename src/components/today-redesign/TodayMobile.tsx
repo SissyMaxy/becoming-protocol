@@ -29,6 +29,9 @@ import { PhaseProgressCard } from './PhaseProgressCard';
 import { VoiceDrillCard } from './VoiceDrillCard';
 import { OutfitMandateCard } from './OutfitMandateCard';
 import { ArousalLogCard } from './ArousalLogCard';
+import { OutreachQueueCard } from './OutreachQueueCard';
+import { SlipLogCard } from './SlipLogCard';
+import { GinaSessionsCard } from './GinaSessionsCard';
 
 const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
 const HEATMAP_COLORS = ['#1a1a20', '#2d1a4d', '#4d2a75', '#6a2a9a', '#7c3aed'];
@@ -197,6 +200,8 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           <HandlerKnowCard />
           <HandlerRunningCard />
           <HandlerEvolutionCard />
+          <OutreachQueueCard />
+          <SlipLogCard />
           <EvidenceReportsCard />
           <CommitmentsCard />
           <OutfitMandateCard />
@@ -209,6 +214,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           <GinaPlaybookCard />
           <DisclosureDraftsCard />
           <ComingOutVaultCard />
+          <GinaSessionsCard />
           <UnifiedCaptureCard />
           <WitnessObservationCard />
           <IrreversibilityLedger />
