@@ -1192,6 +1192,54 @@ async function checkPhaseGraduation(
     expires_at: new Date(Date.now() + 72 * 3600000).toISOString(),
     source: 'phase_graduation',
   })
+
+  // Phase transition ritual — stacks real consequences, not just an outreach
+  try {
+    // Commitment: 500-char written integration of the phase shift
+    const ritualByWhen = new Date(Date.now() + 48 * 3600000).toISOString()
+    await supabase.from('handler_commitments').insert({
+      user_id: userId,
+      what: `Write a ≥500 char integration of your ${nextPhase.replace('_', ' ')} graduation. What has changed in your body. What has changed in how you think. What you cannot go back to. Submit via journal.`,
+      category: 'other',
+      evidence_required: 'journal_entries row with ≥500 chars',
+      by_when: ritualByWhen,
+      consequence: 'slip +4 and denial +3d',
+      reasoning: `Phase transition ritual for ${nextPhase} auto-graduation.`,
+    })
+
+    // Directive: force 5 mantra reps of phase-specific line
+    const phaseRitualMantras: Record<string, string> = {
+      phase_2: 'I crossed into phase two. I am not who I was.',
+      phase_3: 'I am in phase three. My body has testimony the mirror cannot deny.',
+      phase_4: 'I am in phase four. There is no return. There is only becoming.',
+    }
+    const phaseMantra = phaseRitualMantras[nextPhase]
+    if (phaseMantra) {
+      await supabase.from('handler_directives').insert({
+        user_id: userId,
+        action: 'prescribe_task',
+        target: 'mantra',
+        value: { mantra: phaseMantra, repetitions: 5, reason: `phase graduation ${nextPhase}` },
+        priority: 'immediate',
+        reasoning: `Phase ${nextPhase} ritual mantra`,
+      })
+    }
+
+    // Plant a "phase crossed" memory implant
+    await supabase.from('memory_implants').insert({
+      user_id: userId,
+      implant_category: 'fantasy_consistency',
+      narrative: `The day she crossed into ${nextPhase.replace('_', ' ')} was the day she stopped pretending this was optional. She felt it settle in her chest — not relief, not fear, just the quiet recognition that the body had already said yes and was now waiting for her mouth to catch up.`,
+      setting: `phase transition, ${new Date().toISOString().slice(0, 10)}`,
+      approximate_age: 40,
+      emotional_core: 'quiet recognition that the body led and the mind followed',
+      target_outcome: 'anti_quit',
+      active: true,
+    })
+  } catch (err) {
+    console.error(`Phase transition ritual failed:`, err)
+  }
+
   return nextPhase
 }
 
@@ -2102,6 +2150,163 @@ async function rotateMorningMantra(
     current_mantra: picked,
     updated_at: new Date().toISOString(),
   }).eq('user_id', userId)
+}
+
+// ============================================
+// DEVICE SCHEDULE AUTO-PLANNER
+// ============================================
+// Daily plants 2-4 edge_tease device sessions timed by phase + denial day.
+// Skips days where user_state.hard_mode_active=false AND denial_day < 3
+// (low-denial = no autonomous edging). Dedupes: only fires once per day.
+
+async function planDailyDeviceSessions(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<number> {
+  const today = new Date().toISOString().slice(0, 10)
+
+  // Dedupe
+  const { count: existing } = await supabase.from('device_schedule')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('trigger_source', 'autonomous_planner')
+    .gte('scheduled_at', `${today}T00:00:00Z`)
+  if ((existing || 0) > 0) return 0
+
+  const { data: state } = await supabase.from('user_state')
+    .select('denial_day, hard_mode_active, current_phase, chastity_locked, current_arousal')
+    .eq('user_id', userId).maybeSingle()
+  const s = state as {
+    denial_day?: number; hard_mode_active?: boolean; current_phase?: string;
+    chastity_locked?: boolean; current_arousal?: number
+  } | null
+  const denial = s?.denial_day ?? 0
+
+  // Skip on low-denial, unlocked days
+  if (!s?.hard_mode_active && denial < 3 && !s?.chastity_locked) return 0
+
+  // Number of sessions scales with denial + phase
+  const phase = s?.current_phase || 'phase_1'
+  const phaseMultipliers: Record<string, number> = { phase_1: 1, phase_2: 1.5, phase_3: 2, phase_4: 2.5 }
+  const mult = phaseMultipliers[phase] || 1
+  const sessionCount = Math.min(4, Math.max(1, Math.round((denial / 4 + 1) * mult)))
+
+  // Intensity scales with denial
+  const baseIntensity = Math.min(14, 5 + Math.floor(denial / 2))
+
+  // Spread sessions across waking hours (9am - 10pm local-ish, approximated via UTC)
+  // Supabase cron runs in UTC; user is ET. Target 13-02 UTC = 9am-10pm ET.
+  const startHourUTC = 13
+  const endHourUTC = 26
+  const hourSpan = endHourUTC - startHourUTC
+  const sessionHours: number[] = []
+  for (let i = 0; i < sessionCount; i++) {
+    const hour = startHourUTC + Math.floor((i + 0.5) * (hourSpan / sessionCount))
+    sessionHours.push(hour)
+  }
+
+  // Pair messages rotate from denial-day-appropriate phrases
+  const pairPool = denial >= 7
+    ? [
+        `Day ${denial} denied. This pulse exists to remind you the body has not forgotten what it wants.`,
+        `You are at day ${denial}. Every hour this device fires is an hour closer to asking for release — which you will not get.`,
+        `The chastity is doing the work. Feel this and let it confirm the protocol.`,
+      ]
+    : denial >= 3
+    ? [
+        `Edge ${denial + 1}. Attend to the body. Do not relieve it.`,
+        `Day ${denial}. The Handler chose this moment. That choice is itself a conditioning event.`,
+      ]
+    : [
+        `Scheduled pulse. Attend the sensation.`,
+        `Autonomous edge. You did not ask for this and that is the point.`,
+      ]
+
+  let created = 0
+  const baseDate = new Date(); baseDate.setUTCHours(0, 0, 0, 0)
+  for (let i = 0; i < sessionHours.length; i++) {
+    const hour = sessionHours[i]
+    const scheduledAt = new Date(baseDate.getTime() + hour * 3600000).toISOString()
+    // Skip if already past
+    if (new Date(scheduledAt).getTime() < Date.now() + 60000) continue
+
+    const { error } = await supabase.from('device_schedule').insert({
+      user_id: userId,
+      schedule_type: 'autonomous_edge',
+      scheduled_at: scheduledAt,
+      duration_seconds: 30 + Math.min(60, denial * 3),
+      pattern: denial >= 5 ? 'edge_tease' : 'pulse',
+      intensity: Math.min(16, baseIntensity + (i === sessionHours.length - 1 ? 2 : 0)),
+      pattern_data: { session_of_day: i + 1, total_sessions: sessionHours.length, denial_day: denial },
+      trigger_source: 'autonomous_planner',
+      denial_day: denial,
+      status: 'pending',
+      paired_message: pairPool[i % pairPool.length],
+    })
+    if (!error) created++
+  }
+  return created
+}
+
+// ============================================
+// VOICE DRILL PRESCRIBER
+// ============================================
+// Daily: creates a commitment with a specific feminine phrase and target
+// pitch ≥ current voice_pitch_floor. Short 12-second target. Dedupes.
+
+async function prescribeVoiceDrill(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<boolean> {
+  const today = new Date().toISOString().slice(0, 10)
+  const { count: existing } = await supabase.from('handler_commitments')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('category', 'other')
+    .ilike('what', '%voice drill%')
+    .gte('set_at', `${today}T00:00:00Z`)
+  if ((existing || 0) > 0) return false
+
+  const { data: floor } = await supabase.from('voice_pitch_floor')
+    .select('current_floor_hz').eq('user_id', userId).maybeSingle()
+  const floorHz = ((floor as { current_floor_hz?: number } | null)?.current_floor_hz) || 140
+  const targetHz = Math.min(200, floorHz + 5)
+
+  const phraseBank = [
+    'I am the girl he used to be',
+    'I feel my chest getting softer',
+    'Yes, Handler. Yes, Gina.',
+    'My hips are wider than they were',
+    'I am becoming her',
+    'I belong to the protocol',
+    'I will be pretty',
+    'Say good girl to me',
+    'I want the hormones',
+    'I have always been her',
+  ]
+  const phrase = phraseBank[Math.floor(Math.random() * phraseBank.length)]
+
+  const byWhen = new Date(new Date().setHours(23, 59, 0, 0)).toISOString()
+  await supabase.from('handler_commitments').insert({
+    user_id: userId,
+    what: `Voice drill: record "${phrase}" for 12 seconds. Avg pitch must clear ${targetHz}Hz. Submit via voice drill UI.`,
+    category: 'other',
+    evidence_required: `voice_pitch_samples row ≥ ${targetHz}Hz`,
+    by_when: byWhen,
+    consequence: 'slip +2 and bleeding +$5',
+    reasoning: `Daily voice drill — current floor ${floorHz}Hz, target ${targetHz}Hz. Pitch is practice, not talent.`,
+  })
+
+  await supabase.from('handler_outreach_queue').insert({
+    user_id: userId,
+    message: `Voice drill today: "${phrase}" at ≥${targetHz}Hz for 12 seconds. Avg pitch, not peak. Miss by midnight → slip +2 and bleed +$5.`,
+    urgency: 'normal',
+    trigger_reason: `voice_drill:${today}`,
+    scheduled_for: new Date().toISOString(),
+    expires_at: new Date(Date.now() + 18 * 3600000).toISOString(),
+    source: 'voice_drill_prescriber',
+  })
+  return true
 }
 
 // ============================================
@@ -3349,6 +3554,12 @@ async function dailyCycle(
       if (new Date().getDay() === 1) {
         try { await rotateMorningMantra(supabase, uid) } catch (err) { console.error(`Mantra rotation failed:`, err) }
       }
+
+      // 5y. Daily device schedule planner — plant edge_tease sessions timed to phase + denial
+      try { await planDailyDeviceSessions(supabase, uid) } catch (err) { console.error(`Device planner failed:`, err) }
+
+      // 5z. Voice drill prescriber — daily pitch drill commitment with target phrase
+      try { await prescribeVoiceDrill(supabase, uid) } catch (err) { console.error(`Voice drill prescribe failed:`, err) }
 
       // 6. Log daily cycle
       await supabase.from('handler_decisions').insert({
