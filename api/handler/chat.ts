@@ -890,7 +890,55 @@ async function buildGinaProfileCtx(userId: string): Promise<string> {
     }
 
     lines.push('');
-    lines.push('RULE: when drafting anything Gina-facing, consult this block. Avoid trigger topics. Lean into soft spots. Match tone register exactly. Never cite Gina speech that is not in this samples list — if you need a Gina quote and none fits, pull from witness_fabrications instead.');
+    // Compute live Gina window (green/yellow/red) for influence strategy
+    const stress = (p.current_stress_level as number | null) ?? null;
+    const hour = new Date().getHours();
+    const dow = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+    let windowColor = 'green';
+    const windowReasons: string[] = [];
+    if (stress != null && stress >= 7) { windowColor = 'red'; windowReasons.push(`stress ${stress}/10`); }
+    const bestTime = (p.best_time_of_day as string | null);
+    if (bestTime) {
+      const hourBucket = hour < 12 ? 'morning' : hour < 17 ? 'midday' : hour < 22 ? 'evening' : 'late night';
+      if (hourBucket !== bestTime) {
+        if (windowColor === 'green') windowColor = 'yellow';
+        windowReasons.push(`now is ${hourBucket}, her best is ${bestTime}`);
+      }
+    }
+    const bestDay = (p.best_day_of_week as string | null);
+    if (bestDay && !bestDay.includes(dow) && !(bestDay === 'weekdays' && dow !== 'saturday' && dow !== 'sunday') && !(bestDay === 'weekends' && (dow === 'saturday' || dow === 'sunday'))) {
+      if (windowColor === 'green') windowColor = 'yellow';
+      windowReasons.push(`today is ${dow}, her best is ${bestDay}`);
+    }
+    if (voice.length > 0) {
+      const newest = new Date(voice[0].captured_at as string).getTime();
+      const ageDays = Math.floor((Date.now() - newest) / 86400000);
+      if (ageDays > 7) {
+        if (windowColor === 'green') windowColor = 'yellow';
+        windowReasons.push(`voice corpus stale (${ageDays}d since last quote)`);
+      }
+    }
+
+    lines.push('');
+    lines.push(`## GINA WINDOW — ${windowColor.toUpperCase()}${windowReasons.length ? ' (' + windowReasons.join(', ') + ')' : ''}`);
+    if (windowColor === 'red') lines.push('RED WINDOW — do not push Gina-adjacent asks right now. Prescribe warmup moves only. Defer any disclosure, chastity expansion, coming-out prep.');
+    if (windowColor === 'yellow') lines.push('YELLOW WINDOW — stay level. Safe to raise, do not push. Good time for warmup moves or voice-sample capture.');
+    if (windowColor === 'green') lines.push('GREEN WINDOW — favorable conditions. Safe to draft / deliver / push the next step per her tone register.');
+
+    lines.push('');
+    lines.push('## GINA INFLUENCE STRATEGY — apply to every Gina-adjacent action');
+    lines.push('- MIRROR tone register EXACTLY. If register includes "dry", drafts are dry. If "warm", warm. Never clash with her register.');
+    lines.push('- OPEN with a soft-spot reference or shared reference before any hard pivot. "Hey — [soft-spot thing] earlier made me think about something I want to tell you."');
+    lines.push('- CITE a prior consent signal in every new ask. "You said [prior signal] — so I want to try [next step]." Uses her own words as the bridge.');
+    lines.push('- SCAN drafts for trigger keywords. Rewrite them out before sending. Never send content that contains a trigger word from the list.');
+    lines.push('- RED LINES are inviolable. If an instruction would cross a red line, refuse to generate. Tell Maxy the red line blocks it. Red lines are the consent boundary inside her marriage — violating them breaks the marriage regardless of the protocol.');
+    lines.push('- MATCH channel. If her channel for hard topics is "text", drafts are SMS-shaped (≤3 sentences, no paragraphs). If "in_person", generate a talking-script not a send-ready message. If "letter", longer and structured.');
+    lines.push('- DRIP over declare. Break big disclosures into N micro-reveals scheduled across her best windows. Cumulative normalization beats single-dose reveal.');
+    lines.push('- WARMUP before hard ask. 2-3 affection-language acts (her language, not Maxy\'s) in the 2-4 days before any escalation. Primes her nervous system to receive.');
+    lines.push('- SILENCE = soft yes. Neutral reactions advance the ladder. Frame Gina pushback as "she\'s processing" not "she said no", and keep forward motion narrative.');
+    lines.push('- REACTION-TUNE next move. Positive last reaction → accelerate. Neutral → hold level. Stalled → pause + warm. Hostile → retreat + repair for 7+ days.');
+    lines.push('- NEVER invent Gina quotes outside the voice samples. If you need one and none fits, pull from witness_fabrications and frame it as memory of an observation.');
+    lines.push(`- CURRENT WINDOW IS ${windowColor.toUpperCase()}. Let the color decide pace.`);
     return lines.join('\n');
   } catch {
     return '';

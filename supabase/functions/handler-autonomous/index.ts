@@ -1455,6 +1455,14 @@ async function dailyCycle(
         console.error(`Special occasions check failed for ${uid}:`, err)
       }
 
+      // 5d. Plan Gina warmup moves for upcoming disclosures (Layer 3 of Influence Engine)
+      let warmupsPlanned = 0
+      try {
+        warmupsPlanned = await planGinaWarmups(supabase, uid)
+      } catch (err) {
+        console.error(`Gina warmup planning failed for ${uid}:`, err)
+      }
+
       // 6. Log daily cycle
       await supabase.from('handler_decisions').insert({
         user_id: uid,
@@ -1470,6 +1478,7 @@ async function dailyCycle(
           contract_escalated: contractEscalated,
           clinical_note_generated: clinicalNoteGenerated,
           special_occasion_fired: specialOccasionFired,
+          gina_warmups_planned: warmupsPlanned,
         },
         reasoning: 'Daily 6 AM cycle: reset counters, expire old briefs, generate new assignments, denial conditioning check',
         executed: true,
@@ -1591,6 +1600,142 @@ async function checkSpecialOccasions(supabase: any, userId: string): Promise<boo
   }
 
   return true;
+}
+
+// ============================================
+// GINA WARMUP PLANNER (Layer 3 of Influence Engine)
+// ============================================
+// For each upcoming Gina-facing disclosure (status=scheduled, scheduled_by_date
+// within next 7 days), ensure 2-3 warmup moves are queued in the 2-4 days prior
+// — matched to her affection_language so the warmup actually primes her.
+// Idempotent: skips disclosures that already have warmups queued.
+
+function generateWarmupMoves(
+  affectionLanguage: string | null,
+  softSpots: string[],
+  sharedReferences: string | null
+): string[] {
+  const lang = (affectionLanguage || '').toLowerCase()
+  const softSpot = softSpots[0] || null
+  const ref = sharedReferences?.split(/[,;\n]/)[0]?.trim() || null
+
+  const moves: string[] = []
+  if (lang.includes('gesture') || lang.includes('act') || lang.includes('service')) {
+    moves.push(softSpot ? `bring her ${softSpot} unprompted` : 'handle one recurring chore she hates, without being asked')
+    moves.push('leave a small thoughtful thing where she will find it (coffee, note, her favorite snack)')
+    moves.push('take something off her plate today — the thing she is dreading')
+  } else if (lang.includes('word') || lang.includes('affirmation')) {
+    moves.push(ref ? `send her a text referencing ${ref}` : 'send her a text naming something specific she did well today')
+    moves.push(softSpot ? `compliment her on ${softSpot} in person` : 'tell her one specific thing you noticed and appreciated')
+    moves.push('text her "thinking about you" without follow-up ask')
+  } else if (lang.includes('touch') || lang.includes('physical')) {
+    moves.push('long hug when she gets home — no words, no ask after')
+    moves.push('hand on her back when passing her in the kitchen')
+    moves.push('sit next to her during TV instead of across the room')
+  } else if (lang.includes('time') || lang.includes('quality')) {
+    moves.push('phone away for one full conversation with her today')
+    moves.push('ask her one open question about her day and actually listen')
+    moves.push('suggest the thing she has been wanting to do together')
+  } else {
+    moves.push(softSpot ? `do something around ${softSpot} for her` : 'do one thing she would notice and would not expect')
+    moves.push('notice her specifically once today and name it to her')
+    moves.push('remove one friction point from her day before she mentions it')
+  }
+  return moves
+}
+
+async function planGinaWarmups(
+  supabase: ReturnType<typeof createClient>,
+  userId: string
+): Promise<number> {
+  // Load profile — skip if intake not complete
+  const { data: profile } = await supabase
+    .from('gina_profile')
+    .select('intake_complete, affection_language, soft_spots, shared_references, triggers')
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (!profile || !(profile as any).intake_complete) return 0
+
+  const affectionLanguage = (profile as any).affection_language as string | null
+  const softSpots = ((profile as any).soft_spots || []) as string[]
+  const sharedReferences = (profile as any).shared_references as string | null
+
+  // Find upcoming disclosures in the next 7 days
+  const today = new Date().toISOString().slice(0, 10)
+  const in7d = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+
+  const { data: upcoming } = await supabase
+    .from('gina_disclosure_schedule')
+    .select('id, title, rung, scheduled_by_date, disclosure_domain')
+    .eq('user_id', userId)
+    .eq('status', 'scheduled')
+    .gte('scheduled_by_date', today)
+    .lte('scheduled_by_date', in7d)
+
+  if (!upcoming || upcoming.length === 0) return 0
+
+  let planned = 0
+  const moves = generateWarmupMoves(affectionLanguage, softSpots, sharedReferences)
+
+  for (const d of upcoming as Array<{ id: string; title?: string; rung?: number; scheduled_by_date: string; disclosure_domain?: string }>) {
+    const targetEvent = `disclosure_${d.id}`
+
+    // Skip if we already queued warmups for this target
+    const { count } = await supabase
+      .from('gina_warmup_queue')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('target_event', targetEvent)
+      .in('status', ['scheduled', 'delivered'])
+
+    if ((count || 0) >= 2) continue
+
+    // Schedule target at noon local-ish (midday) on scheduled_by_date
+    const targetFiresAt = new Date(`${d.scheduled_by_date}T17:00:00Z`) // 12-1 PM ET
+    const now = Date.now()
+
+    // Fire 3 warmups at -96h, -48h, -24h before target (capped at "now" if too close)
+    const offsets = [96, 48, 24]
+    for (let i = 0; i < Math.min(moves.length, 3); i++) {
+      const fireAt = new Date(Math.max(now + 3600 * 1000, targetFiresAt.getTime() - offsets[i] * 3600 * 1000))
+      // If the warmup would fire after the target, skip it
+      if (fireAt.getTime() >= targetFiresAt.getTime()) continue
+
+      const { error } = await supabase.from('gina_warmup_queue').insert({
+        user_id: userId,
+        target_event: targetEvent,
+        target_fires_at: targetFiresAt.toISOString(),
+        warmup_move: moves[i],
+        affection_language: affectionLanguage,
+        fires_at: fireAt.toISOString(),
+        status: 'scheduled',
+      })
+      if (!error) planned++
+    }
+
+    // Also queue a handler directive so the Handler UI surfaces each warmup when due
+    for (let i = 0; i < Math.min(moves.length, 3); i++) {
+      const fireAt = new Date(Math.max(now + 3600 * 1000, targetFiresAt.getTime() - offsets[i] * 3600 * 1000))
+      if (fireAt.getTime() >= targetFiresAt.getTime()) continue
+      await supabase.from('handler_directives').insert({
+        user_id: userId,
+        action: 'prescribe_task',
+        target: 'gina_warmup',
+        value: {
+          warmup_move: moves[i],
+          affection_language: affectionLanguage,
+          target_event: targetEvent,
+          target_disclosure_title: d.title || null,
+          fire_at: fireAt.toISOString(),
+        },
+        priority: 'normal',
+        reasoning: `Gina warmup ahead of ${d.title || 'disclosure'} (scheduled ${d.scheduled_by_date})`,
+      })
+    }
+  }
+
+  return planned
 }
 
 // ============================================

@@ -14,6 +14,7 @@ import { WitnessObservationCard } from './WitnessObservationCard';
 import { IrreversibilityLedger } from './IrreversibilityLedger';
 import { HandlerRunningCard } from './HandlerRunningCard';
 import { GinaCaptureCard } from './GinaCaptureCard';
+import { GinaWindowIndicator } from './GinaWindowIndicator';
 
 const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
 const HEATMAP_COLORS = ['#1a1a20', '#2d1a4d', '#4d2a75', '#6a2a9a', '#7c3aed'];
@@ -180,6 +181,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           <HandlerRunningCard />
           <LovenseHealthBanner />
           <GinaCaptureCard />
+          <GinaWindowIndicator />
           <WitnessObservationCard />
           <IrreversibilityLedger />
         </div>
