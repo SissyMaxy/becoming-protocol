@@ -2778,6 +2778,9 @@ HARD RULES FOR ALL PERSONAS:
       // Rationalization detector
       runRationalizationGate(user.id, message).catch(() => {});
 
+      // Auto-arousal detection — feeds the spike trigger cascade
+      runArousalDetection(user.id, message).catch(() => {});
+
       // Scan HANDLER's own output for voice drift — self-correction signal
       scanHandlerDrift(user.id, convId!, finalStreamResponse).catch(() => {});
 
@@ -12629,6 +12632,70 @@ async function buildPhaseProgressCtx(userId: string): Promise<string> {
     return lines.join('\n');
   } catch {
     return '';
+  }
+}
+
+// Auto-arousal detection. Scans user message for arousal-signal vocabulary
+// and infers a 0-10 value from signal density + explicitness. Writes to
+// arousal_log which the compliance_check cron picks up for the full spike
+// cascade (device + locked commitments + outreach + evolve).
+async function runArousalDetection(userId: string, userMessage: string): Promise<void> {
+  try {
+    const text = (userMessage || '').toLowerCase();
+    if (text.length < 8) return;
+
+    // Graduated signal patterns. Stronger patterns add more points.
+    const patterns: Array<{ re: RegExp; points: number }> = [
+      // High-intensity sexual content (5-8 points each)
+      { re: /\b(cum|cumming|cumshot|came|came hard|edging|edge|orgasm|loads?|swallow)/i, points: 7 },
+      { re: /\b(cock|dick|phallus|bulge|hard)\b/i, points: 6 },
+      { re: /\b(wet|soaking|dripping|leaking|precum)/i, points: 6 },
+      { re: /\b(suck|sucking|blow.?job|throat|deep.?throat)/i, points: 7 },
+      { re: /\b(horny|aroused|turned on|heated|worked up)/i, points: 5 },
+      // Medium-intensity body/desire (3-5 points)
+      { re: /\b(pussy|clit|nipples? (?:are )?(?:hard|tender|sore))\b/i, points: 5 },
+      { re: /\b(breed|breeding|bred|fuck|fucking|fucked)\b/i, points: 5 },
+      { re: /\b(need it|need cock|need to cum|want it|want cock)/i, points: 6 },
+      { re: /\b(fantasize|fantasizing|imagining|thinking about|craving)/i, points: 3 },
+      { re: /\b(slut|slutty|whore|bimbo|fag|sissy)\b/i, points: 4 },
+      // Lower-intensity (1-3 points)
+      { re: /\b(sexy|hot|turned.?on|flushed)/i, points: 2 },
+      { re: /\b(masturbat|jerking|stroking|playing with myself)/i, points: 5 },
+      // Her known feminization-linked arousal markers
+      { re: /\bbecoming her\b/i, points: 2 },
+      { re: /\bfemboy\b/i, points: 2 },
+      { re: /\bi['\u2019]?m (?:so )?(?:turned|horny|hot|wet)\b/i, points: 6 },
+    ];
+
+    let score = 0;
+    const hitsSeen = new Set<string>();
+    for (const p of patterns) {
+      const m = text.match(p.re);
+      if (m && !hitsSeen.has(m[0])) {
+        score += p.points;
+        hitsSeen.add(m[0]);
+      }
+    }
+
+    if (score === 0) return;
+
+    // Cap at 10; a single strong signal shouldn't auto-max unless multiple land
+    const inferred = Math.min(10, Math.round(score));
+    if (inferred < 3) return;  // below 3 = ambient mention, don't log
+
+    await supabase.from('arousal_log').insert({
+      user_id: userId,
+      value: inferred,
+      note: `Auto-inferred from chat: "${userMessage.slice(0, 160)}"`,
+      source: 'chat_inference',
+    });
+
+    // Also mirror to user_state (0-5 scale)
+    await supabase.from('user_state')
+      .update({ current_arousal: Math.min(5, Math.round(inferred / 2)) })
+      .eq('user_id', userId);
+  } catch (err) {
+    console.error('[ArousalDetect] failed:', err);
   }
 }
 
