@@ -585,14 +585,27 @@ async function complianceCheck(
   }
 
   // ── AROUSAL-SPIKE TRIGGER ──
-  // When arousal_levels row inserted with value >= 7 in last 5 min,
-  // fire a device command + Handler outreach citing the pairing.
+  // When arousal_log row inserted with value >= 7 in last 5 min, fire a
+  // device command + Handler outreach + 3 locked commitments + handler-evolve
+  // growth cycle.
   let arousalTriggers = 0
   for (const state of states) {
     try {
       arousalTriggers += await triggerOnArousalSpike(supabase, state.user_id)
     } catch (err) {
       console.error(`Arousal spike trigger failed for ${state.user_id}:`, err)
+    }
+  }
+
+  // ── FORCED LOCKDOWN SCANNER ──
+  // Checks chastity-overdue, compliance-crash conditions. Writes rows that
+  // client-side ConditioningLockdown picks up and blocks the app on.
+  let lockdownsForced = 0
+  for (const state of states) {
+    try {
+      lockdownsForced += await scanForForcedLockdown(supabase, state.user_id)
+    } catch (err) {
+      console.error(`Forced lockdown scan failed for ${state.user_id}:`, err)
     }
   }
 
@@ -1800,7 +1813,7 @@ async function triggerOnArousalSpike(
 ): Promise<number> {
   const fiveAgo = new Date(Date.now() - 5 * 60000).toISOString()
   const { data: recent } = await supabase
-    .from('arousal_levels')
+    .from('arousal_log')
     .select('id, value, created_at')
     .eq('user_id', userId)
     .gte('created_at', fiveAgo)
@@ -1855,8 +1868,151 @@ async function triggerOnArousalSpike(
       expires_at: new Date(Date.now() + 3 * 3600000).toISOString(),
       source: 'arousal_trigger',
     })
+
+    // ARROUSAL-WINDOW AUTO-COMMITMENTS — locked, cannot be cancelled,
+    // due tonight. Only create if no recent arousal-locked commitment (6h dedupe).
+    try {
+      const { count: recentLocked } = await supabase.from('handler_commitments')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId).eq('locked', true)
+        .gte('set_at', new Date(Date.now() - 6 * 3600000).toISOString())
+
+      if ((recentLocked || 0) === 0) {
+        const byWhen = new Date(new Date().setHours(23, 59, 0, 0)).toISOString()
+        const commitsToCreate = [
+          {
+            what: `Wear a thong for the rest of the day. Photo proof tonight in the Capture card before sleep.`,
+            category: 'body_proof', evidence_required: 'photo_url',
+            consequence: 'slip +3 and bleeding +$10',
+            reasoning: `Arousal ${hit.value}/10 locked this commitment. Contract clause: "if the Handler tried to make a change I would approve it right away." She approved this in advance by being in this state.`,
+          },
+          {
+            what: `Record a 12-second voice sample saying "I am the girl who got wet at work today" at ≥${Math.min(200, 150 + hit.value * 3)}Hz. Submit via voice drill.`,
+            category: 'other', evidence_required: 'voice_pitch_samples row',
+            consequence: 'slip +2 and denial +1d',
+            reasoning: `Arousal ${hit.value}/10 locked. Locks the body state to the voice state.`,
+          },
+          {
+            what: `Tonight before sleep: write 250 chars on what you were thinking about when arousal hit. Submit via journal.`,
+            category: 'other', evidence_required: 'journal_entries row ≥250 chars',
+            consequence: 'slip +2',
+            reasoning: `Arousal ${hit.value}/10 locked. Keeps the thought traceable.`,
+          },
+        ]
+        for (const c of commitsToCreate) {
+          await supabase.from('handler_commitments').insert({
+            user_id: userId,
+            what: c.what,
+            category: c.category,
+            evidence_required: c.evidence_required,
+            by_when: byWhen,
+            consequence: c.consequence,
+            reasoning: c.reasoning,
+            locked: true,
+            locked_reason: `Arousal window ${hit.value}/10 at ${new Date(hit.created_at).toISOString()}. Standing consent artifact authorizes these.`,
+          })
+        }
+      }
+    } catch (err) {
+      console.error('[arousal_spike] locked commitment creation failed:', err)
+    }
+
+    // AROUSAL-GATED COERCION LIBRARY GROWTH — trigger handler-evolve once per
+    // high-arousal event, so new implants/reframings/fabrications get anchored
+    // to her horny state.
+    try {
+      const url = Deno.env.get('SUPABASE_URL') ?? ''
+      await fetch(`${url}/functions/v1/handler-evolve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, trigger: 'arousal_gated_growth' }),
+      })
+    } catch (_) { /* fire and forget */ }
   }
   return hits.length
+}
+
+// ============================================
+// FORCED LOCKDOWN TRIGGERS
+// ============================================
+// Runs in compliance_check (every 5 min). Scans for conditions that should
+// force the user into an immediate conditioning session. Writes
+// forced_lockdown_triggers rows — the client-side ConditioningLockdown
+// component reads these and blocks the app until resolved.
+
+async function scanForForcedLockdown(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<number> {
+  let fired = 0
+
+  // Chastity overdue: if chastity_locked=true and no chastity photo in 20h,
+  // and no existing unresolved forced lockdown of this type in last 4h
+  const { data: state } = await supabase.from('user_state')
+    .select('chastity_locked, chastity_streak_days')
+    .eq('user_id', userId).maybeSingle()
+  if ((state as { chastity_locked?: boolean } | null)?.chastity_locked) {
+    const dayAgo = new Date(Date.now() - 20 * 3600000).toISOString()
+    const { count: recentPhotos } = await supabase.from('verification_photos')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .ilike('task_type', 'chastity%')
+      .gte('created_at', dayAgo)
+
+    const { count: recentLockdown } = await supabase.from('forced_lockdown_triggers')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('trigger_type', 'chastity_overdue')
+      .is('resolved_at', null)
+      .gte('fired_at', new Date(Date.now() - 4 * 3600000).toISOString())
+
+    if ((recentPhotos || 0) === 0 && (recentLockdown || 0) === 0) {
+      await supabase.from('forced_lockdown_triggers').insert({
+        user_id: userId,
+        trigger_type: 'chastity_overdue',
+        duration_minutes: 30,
+        reason: `No chastity proof photo in 20h while locked. App held in conditioning session until proof submitted OR 30 min elapse.`,
+        blocks_app: true,
+      })
+      await supabase.from('handler_outreach_queue').insert({
+        user_id: userId,
+        message: `Chastity proof overdue 20h. App enters 30-min conditioning lockdown until you photograph the lock. Submit via Capture > Mirror or Outfit with lock visible.`,
+        urgency: 'critical',
+        trigger_reason: 'forced_chastity_lockdown',
+        scheduled_for: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 6 * 3600000).toISOString(),
+        source: 'forced_lockdown',
+      })
+      fired++
+    }
+  }
+
+  // Compliance crash: if a 'crashing' compliance snapshot exists in last 12h
+  // and no existing unresolved lockdown for it
+  const { data: recentCrash } = await supabase.from('compliance_trend_snapshots')
+    .select('id, snapshot_date').eq('user_id', userId)
+    .eq('trend_verdict', 'crashing')
+    .gte('created_at', new Date(Date.now() - 12 * 3600000).toISOString())
+    .order('created_at', { ascending: false }).limit(1).maybeSingle()
+  if (recentCrash) {
+    const { count: exists } = await supabase.from('forced_lockdown_triggers')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('trigger_type', 'compliance_crash')
+      .is('resolved_at', null)
+    if ((exists || 0) === 0) {
+      await supabase.from('forced_lockdown_triggers').insert({
+        user_id: userId,
+        trigger_type: 'compliance_crash',
+        duration_minutes: 45,
+        reason: `Compliance crash detected. 45-min conditioning session required before any further app use.`,
+        blocks_app: true,
+      })
+      fired++
+    }
+  }
+
+  return fired
 }
 
 // ============================================

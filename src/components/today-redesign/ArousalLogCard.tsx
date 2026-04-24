@@ -1,5 +1,5 @@
 /**
- * ArousalLogCard — quick 0-10 arousal tap. Feeds arousal_levels table
+ * ArousalLogCard — quick 0-10 arousal tap. Feeds arousal_log table
  * so the autonomous arousal-spike trigger has data to fire on. Also
  * logged in user_state.current_arousal for Handler context reads.
  *
@@ -22,7 +22,7 @@ export function ArousalLogCard() {
   const load = useCallback(async () => {
     if (!user?.id) return;
     const [rRes, usRes] = await Promise.all([
-      supabase.from('arousal_levels')
+      supabase.from('arousal_log')
         .select('value, created_at')
         .eq('user_id', user.id)
         .gte('created_at', new Date(Date.now() - 24 * 3600000).toISOString())
@@ -39,8 +39,9 @@ export function ArousalLogCard() {
   const submit = async (value: number) => {
     if (!user?.id) return;
     setSubmitting(true);
-    await supabase.from('arousal_levels').insert({ user_id: user.id, value });
-    await supabase.from('user_state').update({ current_arousal: value }).eq('user_id', user.id);
+    await supabase.from('arousal_log').insert({ user_id: user.id, value });
+    // user_state.current_arousal is 0-5; arousal_log is 0-10 — compress for state column
+    await supabase.from('user_state').update({ current_arousal: Math.min(5, Math.round(value / 2)) }).eq('user_id', user.id);
     setSubmitting(false);
     load();
   };
