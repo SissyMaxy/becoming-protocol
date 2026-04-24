@@ -21,6 +21,7 @@
     "contacts": "npx tsx contacts.ts",
     "attention": "npx tsx attention.ts",
     "stale": "npx tsx stale-conversation-revival.ts",
+    "backfill": "npx tsx backfill-reddit-engagement.ts",
     "money-ingest": "npx tsx money-ingest.ts",
     "announce-live": "npx tsx announce-live.ts",
     "tributes": "npx tsx tributes.ts",

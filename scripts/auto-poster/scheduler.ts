@@ -39,6 +39,7 @@ import { runUnfollowStalesCycle } from './unfollow-stales';
 import { runQuoteTweetCycle } from './quote-tweet-engine';
 import { runVoiceLearn } from './voice-learn';
 import { runStaleRevival } from './stale-conversation-revival';
+import { runRedditBackfill } from './backfill-reddit-engagement';
 import { invalidateVoiceCache } from './voice-system';
 import { runAllMoneyIngest } from './money-ingest';
 import { runAnnounceLive } from './announce-live';
@@ -324,6 +325,22 @@ async function tick() {
     const total = vault + ai;
     if (total > 0) {
       console.log(`[${timestamp}] Posted ${vault} vault + ${ai} AI = ${total} item(s)`);
+    }
+
+    // --- Every 4 ticks (~1h): refresh Reddit engagement stats on posted content ---
+    // Walks posts/comments from the last 14d and pulls current score + reply count
+    // from Reddit's public JSON API. Stops 0% engagement-backfill being the norm.
+    if (tickCount % 4 === 3 && PLATFORMS.reddit.enabled) {
+      await withTimeout('Reddit engagement backfill', async () => {
+        try {
+          const r = await runRedditBackfill();
+          if (r.updated > 0) {
+            console.log(`[${timestamp}] Reddit backfill: ${r.updated} updated, ${r.skipped} skipped`);
+          }
+        } catch (err) {
+          console.error(`[${timestamp}] Reddit backfill failed:`, err instanceof Error ? err.message : err);
+        }
+      }, 120000);
     }
 
     // --- Tick 8 then every 96 ticks (~24h): scan for stale conversations ---

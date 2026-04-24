@@ -5,7 +5,11 @@
       "mcp__claude_ai_Supabase__apply_migration",
       "mcp__claude_ai_Supabase__list_migrations",
       "mcp__claude_ai_Vercel__list_deployments",
-      "mcp__claude_ai_Supabase__execute_sql"
+      "mcp__claude_ai_Supabase__execute_sql",
+      "WebSearch",
+      "WebFetch(domain:sydmixup.blogspot.com)",
+      "WebFetch(domain:www.tumblr.com)",
+      "WebFetch(domain:old.reddit.com)"
     ]
   }
 }

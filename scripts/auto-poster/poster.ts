@@ -125,6 +125,7 @@ export async function processDuePosts(): Promise<number> {
     } else {
       await supabase.from('ai_generated_content').update({
         status: 'failed',
+        failure_reason: (result.error || 'unknown').slice(0, 500),
       }).eq('id', post.id);
       console.error(`  ✗ Failed: ${result.error}`);
     }

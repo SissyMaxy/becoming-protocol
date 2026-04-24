@@ -38,6 +38,8 @@ const REQUIRED_COLUMNS: Record<string, string[]> = {
   ai_generated_content: [
     'id', 'user_id', 'platform', 'content', 'status', 'scheduled_at',
     'generation_context', 'vault_item_id', 'target_account', 'target_subreddit',
+    'platform_url', 'failure_reason', 'engagement_last_updated',
+    'engagement_likes', 'engagement_comments',
   ],
   user_voice_corpus: ['id', 'user_id', 'text', 'source', 'signal_score', 'created_at'],
   handler_messages: ['id', 'user_id', 'conversation_id', 'role', 'content'],

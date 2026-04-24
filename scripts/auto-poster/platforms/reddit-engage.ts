@@ -818,6 +818,16 @@ export async function runRedditComments(
       posted++;
       await incrementBudget(sb, userId, 'reddit', 'comment');
 
+      // Capture comment permalink for engagement backfill. Reddit navigates to
+      // the comment's thread after submission; the URL includes the comment id
+      // as the last path segment (e.g. /r/sub/comments/<post_id>/_/<comment_id>/).
+      let commentUrl: string | null = null;
+      try {
+        await page.waitForTimeout(1500);
+        const currentUrl = page.url();
+        if (currentUrl.includes('/comments/')) commentUrl = currentUrl;
+      } catch { /* non-fatal */ }
+
       // Log as ai_generated_content
       await sb.from('ai_generated_content').insert({
         user_id: userId,
@@ -826,8 +836,10 @@ export async function runRedditComments(
         content: comment,
         generation_strategy: 'reddit_contextual_comment',
         target_account: `r/${subreddit}`,
+        target_subreddit: subreddit,
         status: 'posted',
         posted_at: new Date().toISOString(),
+        platform_url: commentUrl,
       });
 
       if (contactId) {
