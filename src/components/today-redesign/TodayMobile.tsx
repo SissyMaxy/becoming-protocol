@@ -9,6 +9,7 @@ import '../../styles/today-redesign.css';
 import { useTodayData } from './useTodayData';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { ConditioningOverlay, morphPronouns } from './ConditioningOverlay';
+import { LovenseHealthBanner } from './LovenseHealthBanner';
 
 const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
 const HEATMAP_COLORS = ['#1a1a20', '#2d1a4d', '#4d2a75', '#6a2a9a', '#7c3aed'];
@@ -170,6 +171,11 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
         </div>
       )}
 
+      {tab === 'today' && (
+        <div style={{ padding: '0 16px' }}>
+          <LovenseHealthBanner />
+        </div>
+      )}
       {tab === 'today' && data.banners.map((banner, i) => {
         const colors = banner.severity === 'critical'
           ? { border: '#7a1f22', bg: 'linear-gradient(92deg, #2a0a0c, #1a0608)', text: '#f47272' }
