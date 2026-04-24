@@ -928,13 +928,38 @@ export function useTodayData() {
 
   const logMeal = useCallback(async (args: { mealType: string; foods: string; protein: number; calories: number }) => {
     if (!user?.id) return;
+    let protein = args.protein;
+    let calories = args.calories;
+    let estimatedNote: string | null = null;
+    // Auto-estimate when user didn't fill macros but did describe the food.
+    // Hits /api/nutrition/estimate which calls Claude Haiku for a rough macro
+    // extraction (protein ±few g, calories rounded to 10). Skips silently on
+    // error — the insert still lands with 0s rather than blocking.
+    if ((protein === 0 || calories === 0) && args.foods && args.foods.trim().length >= 3) {
+      try {
+        const r = await fetch('/api/nutrition/estimate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ foods: args.foods }),
+        });
+        if (r.ok) {
+          const data = await r.json();
+          if (protein === 0 && typeof data.protein_g === 'number') protein = data.protein_g;
+          if (calories === 0 && typeof data.calories === 'number') calories = data.calories;
+          estimatedNote = typeof data.reasoning === 'string' ? data.reasoning : null;
+        }
+      } catch {
+        // non-fatal — fall through to the insert with whatever user provided
+      }
+    }
     await supabase.from('diet_log').insert({
       user_id: user.id,
       meal_type: args.mealType,
       foods: args.foods,
-      protein_g: args.protein,
-      calories: args.calories,
+      protein_g: protein,
+      calories,
       feminization_aligned: true,
+      notes: estimatedNote ? `Macros estimated: ${estimatedNote}` : null,
     });
     await load();
   }, [user?.id, load]);
