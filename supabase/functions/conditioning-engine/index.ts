@@ -1204,6 +1204,80 @@ async function handleGenerateWeeklyReflection(supabase: ReturnType<typeof create
   return jsonResponse({ action: 'generate_weekly_reflection', results })
 }
 
+// =========================================================================
+// process_device_schedule — fires every 5 min via jobid 102
+// =========================================================================
+// Finds rows in device_schedule where fired=FALSE and scheduled_at has passed,
+// queues a corresponding handler_directives row (send_device_command), queues
+// the paired_message (if any) to handler_outreach_queue, then marks fired.
+async function handleProcessDeviceSchedule(supabase: ReturnType<typeof createClient>) {
+  const nowIso = new Date().toISOString()
+
+  const { data: due, error: dueErr } = await supabase
+    .from('device_schedule')
+    .select('id, user_id, intensity, duration_seconds, pattern, paired_message, scheduled_at')
+    .eq('fired', false)
+    .lte('scheduled_at', nowIso)
+    .limit(50)
+
+  if (dueErr) {
+    console.error('[device_schedule] query failed:', dueErr)
+    return jsonResponse({ error: 'Failed to query device_schedule', detail: dueErr.message }, 500)
+  }
+
+  if (!due || due.length === 0) {
+    return jsonResponse({ action: 'process_device_schedule', fired: 0 })
+  }
+
+  let fired = 0
+  let failed = 0
+  for (const row of due as Array<{
+    id: string; user_id: string; intensity: number;
+    duration_seconds: number; pattern: string | null;
+    paired_message: string | null; scheduled_at: string;
+  }>) {
+    try {
+      // Queue the device command as a handler_directive (device-control consumes these)
+      await supabase.from('handler_directives').insert({
+        user_id: row.user_id,
+        action: 'send_device_command',
+        target: 'lovense',
+        value: {
+          intensity: row.intensity,
+          duration: row.duration_seconds,
+          pattern: row.pattern || 'pulse',
+        },
+        priority: 'normal',
+        reasoning: `Scheduled device event ${row.id} (scheduled_at ${row.scheduled_at})`,
+      })
+
+      // Paired message (if any) goes to the Handler outreach queue
+      if (row.paired_message && row.paired_message.trim().length > 0) {
+        await supabase.from('handler_outreach_queue').insert({
+          user_id: row.user_id,
+          message: row.paired_message,
+          urgency: 'normal',
+          trigger_reason: `device_schedule:${row.id}`,
+          scheduled_for: nowIso,
+          expires_at: new Date(Date.now() + 6 * 3600000).toISOString(),
+          source: 'device_schedule',
+        })
+      }
+
+      await supabase.from('device_schedule')
+        .update({ fired: true, fired_at: nowIso })
+        .eq('id', row.id)
+
+      fired++
+    } catch (err) {
+      console.error(`[device_schedule] row ${row.id} failed:`, err)
+      failed++
+    }
+  }
+
+  return jsonResponse({ action: 'process_device_schedule', fired, failed })
+}
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
