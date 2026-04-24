@@ -1067,9 +1067,6 @@ function AuthenticatedAppInner() {
       {/* Conditioning lockdown — fullscreen enforcement during configured window */}
       <ConditioningLockdown />
 
-      {/* Gina session recorder — floating capture + review */}
-      <GinaSessionRecorder />
-
       {/* Whoop OAuth callback toast */}
       {whoopToast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[80] animate-slide-down">
