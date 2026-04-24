@@ -37,6 +37,7 @@ import { ForceDashboard } from './components/force/ForceDashboard';
 import { ForceStatusStrip } from './components/force/ForceStatusStrip';
 import { TodayView as TodayRedesignView } from './components/today-redesign';
 import { ConditioningLockdown } from './components/today-redesign/ConditioningLockdown';
+import { CompulsoryConfessionGate } from './components/today-redesign/CompulsoryConfessionGate';
 import { GinaKeyHolderPage } from './components/gina/GinaKeyHolderPage';
 import { usePunishmentNotifications } from './hooks/usePunishmentNotifications';
 import { DailyReportCard } from './components/handler/DailyReportCard';
@@ -1004,6 +1005,7 @@ function AuthenticatedAppInner() {
             setShowTodayRedesign(false);
           }}
         />
+        <CompulsoryConfessionGate />
         <ConditioningLockdown />
       </>
     );
@@ -1051,6 +1053,9 @@ function AuthenticatedAppInner() {
       )}
 
       <FloatingHearts />
+
+      {/* Compulsory confession gate — daily lockdown until she writes ≥min_chars */}
+      <CompulsoryConfessionGate />
 
       {/* Conditioning lockdown — fullscreen enforcement during configured window */}
       <ConditioningLockdown />
