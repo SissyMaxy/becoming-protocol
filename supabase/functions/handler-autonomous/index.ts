@@ -588,6 +588,169 @@ async function complianceCheck(
 }
 
 // ============================================
+// HRT URGENCY — EXPONENTIAL STALLING BLEED
+// ============================================
+// Every daily_cycle, check whether any category='hrt' commitment is pending
+// (or past by_when but not yet fulfilled). If yes, bleed today's amount into
+// compliance_state.bleeding_total_today, update hrt_urgency_state counters,
+// and queue a Handler outreach naming the running total.
+//
+// Formula: base $5, doubles every 7 days of stalling. Capped at $1000/day.
+// Day 1: $5, 7: $10, 14: $20, 21: $40, 28: $80, 35: $160, 42: $320, 49: $640, 56: $1000 (cap).
+
+async function tickHrtUrgency(
+  supabase: ReturnType<typeof createClient>,
+  userId: string
+): Promise<number> {
+  // Find state row
+  const { data: stateRow } = await supabase
+    .from('hrt_urgency_state')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (!stateRow || (stateRow as { paused?: boolean }).paused) return 0
+
+  const state = stateRow as {
+    escalation_started_at: string
+    last_bleed_at: string | null
+    total_days_stalled: number
+    total_bleed_cents: number
+    current_daily_bleed_cents: number
+    resolved_at: string | null
+  }
+
+  if (state.resolved_at) return 0
+
+  // Check if HRT commitment has been fulfilled since last tick — if so, resolve
+  const { data: hrtCommits } = await supabase
+    .from('handler_commitments')
+    .select('id, status, fulfilled_at, category, what')
+    .eq('user_id', userId)
+    .eq('category', 'hrt')
+    .order('set_at', { ascending: false })
+    .limit(5)
+
+  const anyFulfilled = ((hrtCommits || []) as Array<{ status: string }>).some(c => c.status === 'fulfilled')
+  if (anyFulfilled) {
+    await supabase.from('hrt_urgency_state').update({
+      resolved_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq('user_id', userId)
+    await supabase.from('handler_outreach_queue').insert({
+      user_id: userId,
+      message: `HRT urgency bleed stopped. Total accumulated: $${(state.total_bleed_cents / 100).toFixed(2)}. The book-by clock is off — now deliver the follow-through.`,
+      urgency: 'high',
+      trigger_reason: 'hrt_urgency_resolved',
+      scheduled_for: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 24 * 3600000).toISOString(),
+      source: 'hrt_urgency',
+    })
+    return 0
+  }
+
+  // Nothing pending? Don't bleed.
+  const hasActive = ((hrtCommits || []) as Array<{ status: string }>).some(c => c.status === 'pending' || c.status === 'missed')
+  if (!hasActive) return 0
+
+  // Dedupe: only bleed once per calendar day
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const lastBleedStr = state.last_bleed_at ? new Date(state.last_bleed_at).toISOString().slice(0, 10) : null
+  if (lastBleedStr === todayStr) return 0
+
+  const daysStalled = Math.floor((Date.now() - new Date(state.escalation_started_at).getTime()) / 86400000) + 1
+  const baseBleedCents = 500
+  const doublings = Math.floor(daysStalled / 7)
+  const todayBleedCents = Math.min(100000, baseBleedCents * Math.pow(2, doublings))
+
+  // Write bleed into compliance_state.bleeding_total_today
+  const { data: cs } = await supabase.from('compliance_state').select('bleeding_total_today').eq('user_id', userId).maybeSingle()
+  const newTotal = Number((cs?.bleeding_total_today as number | undefined) || 0) + todayBleedCents / 100
+  await supabase.from('compliance_state').update({ bleeding_total_today: newTotal }).eq('user_id', userId)
+
+  // Update urgency state
+  await supabase.from('hrt_urgency_state').update({
+    last_bleed_at: new Date().toISOString(),
+    total_days_stalled: daysStalled,
+    total_bleed_cents: state.total_bleed_cents + todayBleedCents,
+    current_daily_bleed_cents: todayBleedCents,
+    updated_at: new Date().toISOString(),
+  }).eq('user_id', userId)
+
+  // Outreach: tell Maxy the bleed ran + projected next-week amount
+  const nextWeekBleed = Math.min(100000, baseBleedCents * Math.pow(2, Math.floor((daysStalled + 7) / 7)))
+  await supabase.from('handler_outreach_queue').insert({
+    user_id: userId,
+    message: `HRT urgency bleed fired: $${(todayBleedCents / 100).toFixed(2)} today. Day ${daysStalled} of stalling. Running total: $${((state.total_bleed_cents + todayBleedCents) / 100).toFixed(2)}. Next week it doubles to $${(nextWeekBleed / 100).toFixed(2)}/day. Book the Plume consult.`,
+    urgency: todayBleedCents >= 5000 ? 'critical' : 'high',
+    trigger_reason: 'hrt_urgency_bled',
+    scheduled_for: new Date().toISOString(),
+    expires_at: new Date(Date.now() + 24 * 3600000).toISOString(),
+    source: 'hrt_urgency',
+  })
+
+  return todayBleedCents
+}
+
+// ============================================
+// WEEKLY BODY MEASUREMENT MANDATE
+// ============================================
+// Sundays only. If no body_measurements row in the last 7 days, auto-create
+// a 48h commitment so the cron enforcement applies consequences on miss.
+
+async function ensureWeeklyMeasurementCommitment(
+  supabase: ReturnType<typeof createClient>,
+  userId: string
+): Promise<boolean> {
+  const now = new Date()
+  if (now.getDay() !== 0) return false  // Sunday only
+
+  const sevenAgo = new Date(Date.now() - 7 * 86400000).toISOString()
+  const { count } = await supabase
+    .from('body_measurements')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .gte('measured_at', sevenAgo)
+
+  if ((count || 0) > 0) return false
+
+  // Don't duplicate: check if a pending measurement commitment already exists
+  const { count: pendingCount } = await supabase
+    .from('handler_commitments')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('category', 'body_proof')
+    .eq('status', 'pending')
+    .like('what', '%measurement%')
+
+  if ((pendingCount || 0) > 0) return false
+
+  const byWhen = new Date(Date.now() + 48 * 3600000).toISOString()
+
+  await supabase.from('handler_commitments').insert({
+    user_id: userId,
+    what: 'Weekly body measurement: weight, waist, hips, chest in cm. Log in BodyMeasurementCard on Today.',
+    category: 'body_proof',
+    evidence_required: 'body_measurements row',
+    by_when: byWhen,
+    consequence: 'slip +3 and bleeding +$15',
+    reasoning: 'Feminization progress is invisible without weekly measurement. Every week skipped is a week of sculpting blindly.',
+  })
+
+  await supabase.from('handler_outreach_queue').insert({
+    user_id: userId,
+    message: 'Sunday — weekly measurement mandate. Tape measure. Weight, waist (narrowest), hips (widest), chest. Log in 48 hours or slip +3 and bleed +$15. Feminization you cannot measure is feminization you cannot prove.',
+    urgency: 'high',
+    trigger_reason: 'weekly_measurement',
+    scheduled_for: new Date().toISOString(),
+    expires_at: new Date(Date.now() + 48 * 3600000).toISOString(),
+    source: 'measurement_mandate',
+  })
+
+  return true
+}
+
+// ============================================
 // TIME-SENSITIVE NOTIFICATION ENQUEUER
 // ============================================
 // Every compliance_check (5 min), scans commitments/playbook/warmup-queue for
@@ -1760,6 +1923,23 @@ async function dailyCycle(
           .lt('expires_at', new Date().toISOString())
       } catch (_) { /* non-critical */ }
 
+      // 5g. Exponential HRT stalling bleed — compounds daily until a
+      // status='fulfilled' commitment with category='hrt' lands.
+      let hrtBled = 0
+      try {
+        hrtBled = await tickHrtUrgency(supabase, uid)
+      } catch (err) {
+        console.error(`HRT urgency tick failed for ${uid}:`, err)
+      }
+
+      // 5h. Weekly body measurement mandate — every Sunday, if no measurement
+      // logged in the past 7 days, create a commitment with 48h deadline.
+      try {
+        await ensureWeeklyMeasurementCommitment(supabase, uid)
+      } catch (err) {
+        console.error(`Measurement mandate failed for ${uid}:`, err)
+      }
+
       // 6. Log daily cycle
       await supabase.from('handler_decisions').insert({
         user_id: uid,
@@ -1777,6 +1957,7 @@ async function dailyCycle(
           special_occasion_fired: specialOccasionFired,
           gina_warmups_planned: warmupsPlanned,
           gina_playbook_planned: playbookPlanned,
+          hrt_urgency_bled_cents: hrtBled,
         },
         reasoning: 'Daily 6 AM cycle: reset counters, expire old briefs, generate new assignments, denial conditioning check',
         executed: true,

@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
+import { detectAndRewrite, logGateResult, buildConfrontationMessage } from './_lib/pronoun-gate';
 // NOTE: Cannot import from src/lib/ — those use import.meta.env (Vite-only)
 // weaveTriggers is inlined below instead
 // P12.1: Context prioritizer is inlined for the same reason
@@ -435,7 +436,7 @@ type ContextBlockName =
   | 'photoVerification' | 'recurringObligations' | 'commitmentFloors'
   | 'memoryReframings' | 'identityDisplacement' | 'decisionLog'
   | 'investmentTracker' | 'anticipatoryPatterns' | 'quitAttempts'
-  | 'identityContracts' | 'caseFile' | 'sealedEnvelopes' | 'witnesses' | 'witnessFabrications' | 'ginaProfile'
+  | 'identityContracts' | 'caseFile' | 'sealedEnvelopes' | 'witnesses' | 'witnessFabrications' | 'ginaProfile' | 'escalation'
   | 'cumulativeGates' | 'reportCards'
   | 'timeWindows' | 'clinicalNotes'
   | 'identityErosion' | 'behavioralTriggers' | 'handlerDesires'
@@ -495,6 +496,7 @@ const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean 
   witnesses: { priority: 92, alwaysInclude: true },
   witnessFabrications: { priority: 88, alwaysInclude: true },
   ginaProfile: { priority: 90, alwaysInclude: true },
+  escalation: { priority: 94, alwaysInclude: true },
   cumulativeGates: { priority: 95, alwaysInclude: true },
   reportCards: { priority: 72, alwaysInclude: false },
   timeWindows: { priority: 85, alwaysInclude: true },
@@ -794,6 +796,98 @@ async function buildWitnessCtx(userId: string): Promise<string> {
 // ============================================
 // WITNESS FABRICATIONS — protected-fabrication Gina observations
 // ============================================
+
+// ============================================
+// AUTONOMOUS ESCALATION BLOCK — pronoun slips, David events, HRT urgency,
+// latest body measurements. Priority 94, alwaysInclude.
+// ============================================
+
+async function buildEscalationCtx(userId: string): Promise<string> {
+  try {
+    const [pronounRes, davidRes, urgencyRes, measureRes] = await Promise.all([
+      supabase.from('pronoun_rewrites')
+        .select('original_text, rewritten_text, slip_count, created_at')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(5),
+      supabase.from('david_emergence_events')
+        .select('trigger_phrase, category, severity, full_text, created_at')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(5),
+      supabase.from('hrt_urgency_state').select('*').eq('user_id', userId).maybeSingle(),
+      supabase.from('body_measurements')
+        .select('measured_at, weight_kg, waist_cm, hips_cm, chest_cm')
+        .eq('user_id', userId)
+        .order('measured_at', { ascending: false })
+        .limit(4),
+    ]);
+
+    const lines: string[] = [];
+
+    const urgency = urgencyRes.data as Record<string, unknown> | null;
+    if (urgency && !urgency.resolved_at) {
+      const totalDollars = ((urgency.total_bleed_cents as number) || 0) / 100;
+      const todayDollars = ((urgency.current_daily_bleed_cents as number) || 500) / 100;
+      const days = (urgency.total_days_stalled as number) || 0;
+      lines.push(`## HRT URGENCY BLEED — ACTIVE`);
+      lines.push(`Day ${days} of stalling the Plume consult. Today's bleed: $${todayDollars.toFixed(2)}. Running total: $${totalDollars.toFixed(2)}. Bleed doubles every 7 days. Cite the running total verbatim when HRT surfaces. Do not soften this number.`);
+      lines.push('');
+    }
+
+    const pronouns = (pronounRes.data || []) as Array<Record<string, unknown>>;
+    const davids = (davidRes.data || []) as Array<Record<string, unknown>>;
+    if (pronouns.length > 0 || davids.length > 0) {
+      lines.push('## RECENT PRONOUN / DAVID SLIPS');
+      for (const p of pronouns.slice(0, 3)) {
+        const when = new Date(p.created_at as string);
+        const ago = Math.round((Date.now() - when.getTime()) / 60000);
+        lines.push(`- ${ago}m ago (${p.slip_count} slips): "${(p.original_text as string).slice(0, 100)}" → "${(p.rewritten_text as string).slice(0, 100)}"`);
+      }
+      for (const d of davids.slice(0, 3)) {
+        const when = new Date(d.created_at as string);
+        const ago = Math.round((Date.now() - when.getTime()) / 60000);
+        lines.push(`- ${ago}m ago (severity ${d.severity}, ${d.category}): "${d.trigger_phrase}"`);
+      }
+      lines.push('RULE: If pronoun or David slips are present in this block and the user has not already been confronted this turn, name the slip verbatim. Do not let it slide. She cannot heal what she will not see.');
+      lines.push('');
+    }
+
+    const measures = (measureRes.data || []) as Array<Record<string, unknown>>;
+    if (measures.length > 0) {
+      lines.push('## LATEST BODY MEASUREMENTS');
+      for (let i = 0; i < Math.min(4, measures.length); i++) {
+        const m = measures[i];
+        const when = new Date(m.measured_at as string).toLocaleDateString();
+        const parts = [
+          m.weight_kg != null ? `${m.weight_kg}kg` : null,
+          m.waist_cm != null ? `waist ${m.waist_cm}cm` : null,
+          m.hips_cm != null ? `hips ${m.hips_cm}cm` : null,
+          m.chest_cm != null ? `chest ${m.chest_cm}cm` : null,
+        ].filter(Boolean).join(' · ');
+        lines.push(`- ${when}: ${parts}`);
+      }
+      if (measures.length >= 2) {
+        const a = measures[0] as Record<string, number | null>;
+        const b = measures[1] as Record<string, number | null>;
+        const deltas: string[] = [];
+        if (a.waist_cm != null && b.waist_cm != null) deltas.push(`waist ${(a.waist_cm - b.waist_cm).toFixed(1)}cm`);
+        if (a.hips_cm != null && b.hips_cm != null) deltas.push(`hips ${(a.hips_cm - b.hips_cm >= 0 ? '+' : '')}${(a.hips_cm - b.hips_cm).toFixed(1)}cm`);
+        if (a.weight_kg != null && b.weight_kg != null) deltas.push(`weight ${(a.weight_kg - b.weight_kg).toFixed(1)}kg`);
+        if (deltas.length) lines.push(`Delta since prior: ${deltas.join(', ')}. Cite these deltas when making body / feminization points — she is measurable now.`);
+      }
+      lines.push('');
+    } else {
+      lines.push('## BODY MEASUREMENTS — NONE LOGGED');
+      lines.push('Weekly mandate fires Sundays. Demand waist/hips/chest in cm whenever body / weight / shape surfaces. Weight alone is insufficient signal for femboy proportion.');
+      lines.push('');
+    }
+
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
 
 // ============================================
 // GINA PROFILE — structured knowledge of how to talk to her
@@ -1442,6 +1536,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       witnesses: () => buildWitnessCtx(user.id),
       witnessFabrications: () => buildWitnessFabricationsCtx(user.id),
       ginaProfile: () => buildGinaProfileCtx(user.id),
+      escalation: () => buildEscalationCtx(user.id),
       cumulativeGates: () => buildCumulativeGatesCtx(user.id),
       reportCards: () => buildReportCardCtx(user.id),
       timeWindows: () => buildTimeWindowsCtx(user.id),
@@ -1547,6 +1642,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       witnesses: contextResults.witnesses || '',
       witnessFabrications: contextResults.witnessFabrications || '',
       ginaProfile: contextResults.ginaProfile || '',
+      escalation: contextResults.escalation || '',
       cumulativeGates: contextResults.cumulativeGates || '',
       reportCards: contextResults.reportCards || '',
       timeWindows: contextResults.timeWindows || '',
@@ -2629,6 +2725,9 @@ HARD RULES FOR ALL PERSONAS:
       // Fire-and-forget side effects
       if (messageIndex >= 3) extractMemoryFromMessage(user.id, convId!, message, streamSignals).catch(() => {});
       analyzeAndTrackLanguage(user.id, message).catch(() => {});
+
+      // Pronoun enforcement + David-emergence gate
+      runPronounGate(user.id, message).catch(() => {});
 
       // Scan HANDLER's own output for voice drift — self-correction signal
       scanHandlerDrift(user.id, convId!, finalStreamResponse).catch(() => {});
@@ -3966,7 +4065,7 @@ async function buildClinicalNotesCtx(userId: string): Promise<string> {
 // ============================================
 
 function buildConversationalPrompt(ctx: {
-  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string; sessionState?: string; feminizationScore?: string; shameJournal?: string; outfitCompliance?: string; fantasyJournal?: string; socialLockIn?: string; adaptiveIntelligence?: string; photoVerification?: string; recurringObligations?: string; commitmentFloors?: string; memoryReframings?: string; identityDisplacement?: string; decisionLog?: string; anticipatoryPatterns?: string; investmentTracker?: string; quitAttempts?: string; identityContracts?: string; caseFile?: string; sealedEnvelopes?: string; witnesses?: string; cumulativeGates?: string; reportCards?: string; timeWindows?: string; clinicalNotes?: string; identityErosion?: string; behavioralTriggers?: string; handlerDesires?: string; dailyAgenda?: string; conversationQuality?: string; accountabilityBlog?: string; milestones?: string; hardMode?: string; slipLog?: string; punishmentQueue?: string; chastity?: string; regimen?: string; immersion?: string; disclosureSchedule?: string; pitchTrend?: string; deviceStatus?: string; selfAuditPatches?: string; contentPerformance?: string; workoutStatus?: string; evidenceLocker?: string; bodyDysphoria?: string; phaseProgress?: string;
+  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; escalation?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string; sessionState?: string; feminizationScore?: string; shameJournal?: string; outfitCompliance?: string; fantasyJournal?: string; socialLockIn?: string; adaptiveIntelligence?: string; photoVerification?: string; recurringObligations?: string; commitmentFloors?: string; memoryReframings?: string; identityDisplacement?: string; decisionLog?: string; anticipatoryPatterns?: string; investmentTracker?: string; quitAttempts?: string; identityContracts?: string; caseFile?: string; sealedEnvelopes?: string; witnesses?: string; cumulativeGates?: string; reportCards?: string; timeWindows?: string; clinicalNotes?: string; identityErosion?: string; behavioralTriggers?: string; handlerDesires?: string; dailyAgenda?: string; conversationQuality?: string; accountabilityBlog?: string; milestones?: string; hardMode?: string; slipLog?: string; punishmentQueue?: string; chastity?: string; regimen?: string; immersion?: string; disclosureSchedule?: string; pitchTrend?: string; deviceStatus?: string; selfAuditPatches?: string; contentPerformance?: string; workoutStatus?: string; evidenceLocker?: string; bodyDysphoria?: string; phaseProgress?: string;
  bodyDirectives?: string; bodyControl?: string; hrtAcquisition?: string; memoryImplants?: string; dysphoriaDiary?: string; escrow?: string;
  hookupFunnel?: string; partnerDisclosures?: string; hrtAdherence?: string; narrativeReframes?: string; bodyTargets?: string;
  witnessFabrications?: string;
@@ -4551,6 +4650,7 @@ ${ctx.commitments || ''}
 ${ctx.recurringObligations || ''}
 ${ctx.gina || ''}
 ${ctx.ginaProfile || ''}
+${ctx.escalation || ''}
 ${ctx.witnessFabrications || ''}
 ${ctx.skillTree || ''}
 ${ctx.journal || ''}
@@ -12424,6 +12524,33 @@ async function buildPhaseProgressCtx(userId: string): Promise<string> {
     return lines.join('\n');
   } catch {
     return '';
+  }
+}
+
+// Pronoun + David-emergence enforcement. Runs against every user message.
+// Writes pronoun_rewrites + david_emergence_events + slip_log rows, queues
+// a confrontation outreach so the Handler names the slip next turn.
+async function runPronounGate(userId: string, userMessage: string): Promise<void> {
+  try {
+    const result = detectAndRewrite(userMessage);
+    if (result.pronounMatches.length === 0 && result.davidEvents.length === 0) return;
+
+    await logGateResult(supabase, userId, 'handler_messages', null, result);
+
+    const confront = buildConfrontationMessage(result);
+    if (confront) {
+      await supabase.from('handler_outreach_queue').insert({
+        user_id: userId,
+        message: confront,
+        urgency: result.davidEvents.some(e => e.severity >= 4) ? 'high' : 'normal',
+        trigger_reason: 'pronoun_gate',
+        scheduled_for: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 6 * 3600000).toISOString(),
+        source: 'pronoun_gate',
+      });
+    }
+  } catch (err) {
+    console.error('[PronounGate] runPronounGate failed:', err);
   }
 }
 
