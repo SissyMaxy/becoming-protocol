@@ -17,6 +17,8 @@ const TASK_PROMPTS: Record<string, string> = {
   pose: 'You are the Handler. Maxy submitted a pose photo. Evaluate the pose: is it feminine? Hip placement, shoulder angle, hand position. Be specific and demanding.',
   makeup: 'You are the Handler. Maxy submitted a makeup verification photo. Evaluate: blending, color choice, completeness. What does she need to improve?',
   nails: 'You are the Handler. Maxy submitted a nail verification photo. Comment on color, length, condition.',
+  progress_photo: 'You are the Handler. Maxy submitted a progress photo. Describe body shape (hips, waist, chest, thighs). Assess femboy-trajectory alignment — where has her silhouette moved, where is it stuck. Be specific, demanding, body-focused. No praise without critique.',
+  gina_text: 'You are the Handler, extracting data from a screenshot of Maxy\'s text conversation with her wife Gina. Return ONLY a JSON object, no prose: { "messages": [{"speaker": "gina"|"maxy", "text": "<exact quote>", "approximate_time": "<if visible>"}], "observed_tone": "<Gina\'s dominant tone in this convo>", "key_quotes_from_gina": ["<up to 3 verbatim quotes>"], "key_moves_maxy_made": ["<what Maxy said/asked>"], "reaction_reading": "positive|neutral|stalled|hostile|unknown", "reaction_detail": "<one sentence>", "openings_detected": ["<any consent signals or soft openings>"] }. Speaker attribution: Gina bubbles usually appear on the left with grey; Maxy\'s appear on the right with blue/iMessage. Use any visible names/labels.',
   general: 'You are the Handler — dominant feminization coach. Maxy submitted this photo. Describe what you see and respond to it commandingly.',
 };
 
@@ -105,6 +107,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
       .eq('id', photoId)
       .eq('user_id', user.id);
+
+    // gina_text: parse extracted JSON and fan-out into the Gina intelligence tables
+    if (taskType === 'gina_text') {
+      try {
+        const m = analysis.match(/\{[\s\S]*\}/);
+        if (m) {
+          const parsed = JSON.parse(m[0]);
+          const ginaQuotes = (parsed.key_quotes_from_gina || []) as string[];
+          const msgs = (parsed.messages || []) as Array<{ speaker: string; text: string }>;
+          const ginaMsgs = msgs.filter(x => x.speaker === 'gina' && x.text);
+
+          const samplePayload = [
+            ...ginaQuotes.map(q => ({ quote: q.slice(0, 2000), context: `Screenshot extraction ${new Date().toISOString().slice(0, 10)}`, tone: parsed.observed_tone || null, channel: 'text' })),
+            ...ginaMsgs.map(x => ({ quote: x.text.slice(0, 2000), context: `Screenshot message`, tone: parsed.observed_tone || null, channel: 'text' })),
+          ]
+            .filter((r, i, arr) => arr.findIndex(o => o.quote === r.quote) === i)
+            .map(r => ({ ...r, user_id: user.id }));
+
+          if (samplePayload.length > 0) {
+            await supabase.from('gina_voice_samples').insert(samplePayload);
+          }
+
+          if (parsed.reaction_reading && ['positive', 'neutral', 'stalled', 'hostile', 'unknown'].includes(parsed.reaction_reading)) {
+            await supabase.from('gina_reactions').insert({
+              user_id: user.id,
+              move_kind: 'other',
+              move_summary: (parsed.key_moves_maxy_made || []).join(' | ').slice(0, 500) || 'Text conversation',
+              channel: 'text',
+              reaction: parsed.reaction_reading,
+              reaction_detail: parsed.reaction_detail || null,
+            });
+          }
+        }
+      } catch (err) {
+        console.error('[analyze-photo] gina_text parse failed:', err);
+      }
+    }
 
     return res.status(200).json({ analysis, approved });
   } catch (err) {

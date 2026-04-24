@@ -40,6 +40,7 @@ import { ConditioningLockdown } from './components/today-redesign/ConditioningLo
 import { CompulsoryConfessionGate } from './components/today-redesign/CompulsoryConfessionGate';
 import { HrtDailyGate } from './components/today-redesign/HrtDailyGate';
 import { GinaSessionRecorder } from './components/today-redesign/GinaSessionRecorder';
+import { MorningMantraGate } from './components/today-redesign/MorningMantraGate';
 import { GinaKeyHolderPage } from './components/gina/GinaKeyHolderPage';
 import { usePunishmentNotifications } from './hooks/usePunishmentNotifications';
 import { DailyReportCard } from './components/handler/DailyReportCard';
@@ -1011,6 +1012,7 @@ function AuthenticatedAppInner() {
         <HrtDailyGate />
         <ConditioningLockdown />
         <GinaSessionRecorder />
+        <MorningMantraGate />
       </>
     );
   }
@@ -1066,6 +1068,9 @@ function AuthenticatedAppInner() {
 
       {/* Conditioning lockdown — fullscreen enforcement during configured window */}
       <ConditioningLockdown />
+
+      {/* Morning mantra gate — compulsory typing before app release */}
+      <MorningMantraGate />
 
       {/* Whoop OAuth callback toast */}
       {whoopToast && (

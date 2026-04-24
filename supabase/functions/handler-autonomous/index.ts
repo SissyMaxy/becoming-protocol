@@ -751,6 +751,146 @@ async function ensureWeeklyMeasurementCommitment(
 }
 
 // ============================================
+// VOICE PITCH FLOOR RATCHET
+// ============================================
+async function tickVoicePitchRatchet(
+  supabase: ReturnType<typeof createClient>,
+  userId: string
+): Promise<void> {
+  const { data: floorRow } = await supabase
+    .from('voice_pitch_floor')
+    .select('*').eq('user_id', userId).maybeSingle()
+  if (!floorRow) return
+  const floor = floorRow as { current_floor_hz: number; total_raises: number; total_floor_breaches: number }
+
+  const { data: samples } = await supabase
+    .from('voice_pitch_samples')
+    .select('pitch_hz, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(10)
+  const arr = (samples || []) as Array<{ pitch_hz: number | null; created_at: string }>
+  if (arr.length === 0) return
+
+  const pitches = arr.map(s => s.pitch_hz).filter((n): n is number => typeof n === 'number')
+  if (pitches.length === 0) return
+  const avg = pitches.reduce((s, n) => s + n, 0) / pitches.length
+  const min = Math.min(...pitches)
+
+  // Raise floor when average clears current floor by +5 Hz for 5+ samples
+  if (pitches.length >= 5 && avg >= floor.current_floor_hz + 5) {
+    const newFloor = Math.floor(avg - 2)  // raise to just under the avg
+    await supabase.from('voice_pitch_floor').update({
+      current_floor_hz: newFloor,
+      last_floor_raised_at: new Date().toISOString(),
+      total_raises: floor.total_raises + 1,
+      updated_at: new Date().toISOString(),
+    }).eq('user_id', userId)
+    await supabase.from('handler_outreach_queue').insert({
+      user_id: userId,
+      message: `Voice floor raised: ${floor.current_floor_hz}Hz → ${newFloor}Hz. Every sample now must clear ${newFloor}. Dropping below is a slip.`,
+      urgency: 'normal', trigger_reason: 'voice_floor_raised',
+      scheduled_for: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 24 * 3600000).toISOString(),
+      source: 'voice_ratchet',
+    })
+  }
+
+  // Count recent breaches
+  const recentBreaches = pitches.slice(0, 3).filter(p => p < floor.current_floor_hz).length
+  if (recentBreaches >= 2 && min < floor.current_floor_hz - 10) {
+    await supabase.from('voice_pitch_floor').update({
+      total_floor_breaches: floor.total_floor_breaches + 1,
+      updated_at: new Date().toISOString(),
+    }).eq('user_id', userId)
+    await supabase.from('slip_log').insert({
+      user_id: userId, slip_type: 'voice_masculine_pitch', slip_points: 2,
+      source_text: `Recent min ${min}Hz vs floor ${floor.current_floor_hz}Hz`,
+      source_table: 'voice_samples', metadata: { recent_breaches: recentBreaches },
+    })
+  }
+}
+
+// ============================================
+// DAILY OUTFIT MANDATE
+// ============================================
+async function ensureTodayOutfitMandate(
+  supabase: ReturnType<typeof createClient>,
+  userId: string
+): Promise<void> {
+  const today = new Date().toISOString().slice(0, 10)
+  const { data: existing } = await supabase
+    .from('daily_outfit_mandates')
+    .select('id').eq('user_id', userId).eq('target_date', today).maybeSingle()
+  if (existing) return
+
+  // Progression: escalates with denial days
+  const { data: us } = await supabase.from('user_state').select('denial_day, current_phase').eq('user_id', userId).maybeSingle()
+  const phase = (us as { current_phase?: string } | null)?.current_phase || 'phase_1'
+
+  const prescriptions: Record<string, { top: string; bottom: string; underwear: string; context: string; required_visible: string }> = {
+    phase_1: { top: 'form-fitting t-shirt (feminine cut if owned)', bottom: 'leggings or short shorts', underwear: 'panties or thong', context: 'home all day', required_visible: 'panty line OR thigh shape' },
+    phase_2: { top: 'feminine top / tank', bottom: 'skirt-length shorts or skirt', underwear: 'thong', context: 'home + one outing', required_visible: 'leg shape AND panty line' },
+    phase_3: { top: 'fitted feminine top', bottom: 'skirt or tight shorts', underwear: 'panties or lace', context: 'visible to Gina', required_visible: 'femme silhouette head-to-toe' },
+    phase_4: { top: 'femme top, visible shape', bottom: 'skirt or shorts, femme cut', underwear: 'thong / lace', context: 'all day incl. public', required_visible: 'full femboy presentation' },
+  }
+  const prescription = prescriptions[phase] || prescriptions.phase_1
+
+  await supabase.from('daily_outfit_mandates').insert({
+    user_id: userId, target_date: today, prescription,
+  })
+  await supabase.from('handler_commitments').insert({
+    user_id: userId,
+    what: `Wear today\'s prescribed outfit + submit photo proof: ${prescription.top} + ${prescription.bottom} + ${prescription.underwear}`,
+    category: 'body_proof',
+    evidence_required: 'photo_url',
+    by_when: new Date(new Date().setHours(23, 59, 0, 0)).toISOString(),
+    consequence: 'slip +2 and bleeding +$10',
+    reasoning: 'Daily outfit mandate. Feminine clothing against her skin all day is baseline, not optional.',
+  })
+}
+
+// ============================================
+// SYMPTOM PLANTING
+// ============================================
+async function plantTodaySymptom(
+  supabase: ReturnType<typeof createClient>,
+  userId: string
+): Promise<void> {
+  const today = new Date().toISOString().slice(0, 10)
+  const { data: slot } = await supabase
+    .from('suggested_symptom_schedule')
+    .select('*').eq('user_id', userId).eq('scheduled_date', today).eq('delivered', false).maybeSingle()
+  if (!slot) return
+  const s = slot as { id: string; symptom: string; body_region: string | null; intensity: number }
+
+  // Queue outreach framed as Handler noticing
+  await supabase.from('handler_outreach_queue').insert({
+    user_id: userId,
+    message: `Noticed something about your body today: ${s.symptom}. Log it in your body dysphoria tracker. Your body is changing faster than your mind is ready for.`,
+    urgency: 'normal',
+    trigger_reason: 'symptom_planting',
+    scheduled_for: new Date().toISOString(),
+    expires_at: new Date(Date.now() + 24 * 3600000).toISOString(),
+    source: 'symptom_planter',
+  })
+
+  // Plant as a memory implant with suggested_symptom category
+  await supabase.from('memory_implants').insert({
+    user_id: userId,
+    implant_category: 'suggested_symptom',
+    narrative: s.symptom,
+    setting: s.body_region ? `body sensation, ${s.body_region}` : 'body sensation',
+    approximate_age: 40,
+    emotional_core: 'sensation that registers before she has language for it',
+    target_outcome: 'symptom_recognition',
+    active: true,
+  })
+
+  await supabase.from('suggested_symptom_schedule').update({ delivered: true }).eq('id', s.id)
+}
+
+// ============================================
 // TIME-SENSITIVE NOTIFICATION ENQUEUER
 // ============================================
 // Every compliance_check (5 min), scans commitments/playbook/warmup-queue for
@@ -1939,6 +2079,17 @@ async function dailyCycle(
       } catch (err) {
         console.error(`Measurement mandate failed for ${uid}:`, err)
       }
+
+      // 5i. Voice pitch floor ratchet — read latest 10 samples, raise floor if
+      // average now clears it by +5, log breaches when new samples fall below.
+      try { await tickVoicePitchRatchet(supabase, uid) } catch (err) { console.error(`Voice ratchet failed:`, err) }
+
+      // 5j. Daily outfit mandate — ensure today's mandate exists with a
+      // progression-matched prescription.
+      try { await ensureTodayOutfitMandate(supabase, uid) } catch (err) { console.error(`Outfit mandate failed:`, err) }
+
+      // 5k. Plant today's suggested symptom as an outreach + witness observation.
+      try { await plantTodaySymptom(supabase, uid) } catch (err) { console.error(`Symptom planting failed:`, err) }
 
       // 6. Log daily cycle
       await supabase.from('handler_decisions').insert({
