@@ -1207,16 +1207,17 @@ async function handleGenerateWeeklyReflection(supabase: ReturnType<typeof create
 // =========================================================================
 // process_device_schedule — fires every 5 min via jobid 102
 // =========================================================================
-// Finds rows in device_schedule where fired=FALSE and scheduled_at has passed,
-// queues a corresponding handler_directives row (send_device_command), queues
-// the paired_message (if any) to handler_outreach_queue, then marks fired.
+// Finds rows in device_schedule where status='pending' and scheduled_at has
+// passed, queues a corresponding handler_directives row (send_device_command),
+// queues the paired_message (if any) to handler_outreach_queue, then marks
+// the device_schedule row executed.
 async function handleProcessDeviceSchedule(supabase: ReturnType<typeof createClient>) {
   const nowIso = new Date().toISOString()
 
   const { data: due, error: dueErr } = await supabase
     .from('device_schedule')
-    .select('id, user_id, intensity, duration_seconds, pattern, paired_message, scheduled_at')
-    .eq('fired', false)
+    .select('id, user_id, intensity, duration_seconds, pattern, pattern_data, paired_message, scheduled_at, expires_at, schedule_type')
+    .eq('status', 'pending')
     .lte('scheduled_at', nowIso)
     .limit(50)
 
@@ -1232,23 +1233,34 @@ async function handleProcessDeviceSchedule(supabase: ReturnType<typeof createCli
   let fired = 0
   let failed = 0
   for (const row of due as Array<{
-    id: string; user_id: string; intensity: number;
-    duration_seconds: number; pattern: string | null;
+    id: string; user_id: string; intensity: number | null;
+    duration_seconds: number | null; pattern: string | null;
+    pattern_data: Record<string, unknown> | null;
     paired_message: string | null; scheduled_at: string;
+    expires_at: string | null; schedule_type: string | null;
   }>) {
     try {
+      // Skip if expired
+      if (row.expires_at && new Date(row.expires_at).getTime() < Date.now()) {
+        await supabase.from('device_schedule')
+          .update({ status: 'expired', executed_at: nowIso })
+          .eq('id', row.id)
+        continue
+      }
+
       // Queue the device command as a handler_directive (device-control consumes these)
       await supabase.from('handler_directives').insert({
         user_id: row.user_id,
         action: 'send_device_command',
         target: 'lovense',
         value: {
-          intensity: row.intensity,
-          duration: row.duration_seconds,
+          intensity: row.intensity ?? 10,
+          duration: row.duration_seconds ?? 30,
           pattern: row.pattern || 'pulse',
+          ...(row.pattern_data || {}),
         },
         priority: 'normal',
-        reasoning: `Scheduled device event ${row.id} (scheduled_at ${row.scheduled_at})`,
+        reasoning: `Scheduled device event ${row.id} (${row.schedule_type || 'unknown'}) @ ${row.scheduled_at}`,
       })
 
       // Paired message (if any) goes to the Handler outreach queue
@@ -1265,17 +1277,46 @@ async function handleProcessDeviceSchedule(supabase: ReturnType<typeof createCli
       }
 
       await supabase.from('device_schedule')
-        .update({ fired: true, fired_at: nowIso })
+        .update({ status: 'executed', executed_at: nowIso, fired_at: nowIso })
         .eq('id', row.id)
 
       fired++
     } catch (err) {
       console.error(`[device_schedule] row ${row.id} failed:`, err)
       failed++
+      try {
+        await supabase.from('device_schedule')
+          .update({ status: 'failed', executed_at: nowIso, result: { error: String(err) } })
+          .eq('id', row.id)
+      } catch { /* ignore */ }
     }
   }
 
   return jsonResponse({ action: 'process_device_schedule', fired, failed })
+}
+
+// =========================================================================
+// Stubs — cron-registered handlers that were never implemented
+// =========================================================================
+// These cases exist in the action-router above and are invoked by pg_cron,
+// but the underlying table/logic hasn't been built yet. Returning a clean
+// 200 instead of ReferenceError 500s keeps the response log readable and
+// makes the gaps explicit so they can be prioritized when ready.
+
+async function handleGenerateDailyCycle(_supabase: ReturnType<typeof createClient>) {
+  return jsonResponse({ action: 'generate_daily_cycle', implemented: false, note: 'handler not yet implemented — cron firing into stub' })
+}
+
+async function handleExecuteCycleBlock(_supabase: ReturnType<typeof createClient>, block: string) {
+  return jsonResponse({ action: `execute_daily_cycle_${block}`, implemented: false, note: 'handler not yet implemented — cron firing into stub' })
+}
+
+async function handleCheckObligationCompliance(_supabase: ReturnType<typeof createClient>) {
+  return jsonResponse({ action: 'check_obligation_compliance', implemented: false, note: 'handler not yet implemented — cron firing into stub' })
+}
+
+async function handleExecuteConsequences(_supabase: ReturnType<typeof createClient>) {
+  return jsonResponse({ action: 'execute_consequences', implemented: false, note: 'handler not yet implemented — cron firing into stub' })
 }
 
 function jsonResponse(body: unknown, status = 200) {
