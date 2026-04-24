@@ -2310,6 +2310,150 @@ async function prescribeVoiceDrill(
 }
 
 // ============================================
+// COMING-OUT LETTER DRAFT GENERATOR
+// ============================================
+// Weekly: looks at designated_witnesses + gina_disclosure_schedule to find
+// known audiences. For each who doesn't already have a current draft,
+// generates one via Claude matched to the relationship + phase + risk.
+
+async function generateComingOutDrafts(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<number> {
+  const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')
+  if (!anthropicKey) return 0
+
+  // Cap: don't generate more than 5 active drafts across all recipients
+  const { count: active } = await supabase.from('coming_out_letters')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .in('status', ['drafted', 'edited', 'ready'])
+  if ((active || 0) >= 5) return 0
+
+  const [witnessRes, stateRes, profileRes] = await Promise.all([
+    supabase.from('designated_witnesses')
+      .select('id, witness_name, relationship, status')
+      .eq('user_id', userId).eq('status', 'active').limit(20),
+    supabase.from('user_state').select('current_phase, denial_day').eq('user_id', userId).maybeSingle(),
+    supabase.from('user_profiles').select('handler_authorized_to').eq('user_id', userId).maybeSingle(),
+  ])
+
+  const witnesses = (witnessRes.data || []) as Array<{ id: string; witness_name: string; relationship: string }>
+  const state = stateRes.data as { current_phase?: string; denial_day?: number } | null
+
+  // Built-in default recipients Maxy will likely need even without designated witnesses
+  const defaultRecipients: Array<{ name: string; relationship: string; channel: string; risk: number }> = [
+    { name: 'mom', relationship: 'parent', channel: 'letter', risk: 8 },
+    { name: 'sister', relationship: 'sibling', channel: 'text', risk: 5 },
+    { name: 'best friend', relationship: 'close_friend', channel: 'in_person', risk: 4 },
+    { name: 'work supervisor', relationship: 'work', channel: 'email', risk: 7 },
+    { name: 'primary care doctor', relationship: 'medical', channel: 'in_person', risk: 3 },
+  ]
+
+  const allRecipients = [
+    ...witnesses.map(w => ({ name: w.witness_name, relationship: w.relationship, channel: 'text', risk: 5 })),
+    ...defaultRecipients,
+  ]
+
+  // Skip recipients who already have a drafted/edited/ready letter
+  const { data: existing } = await supabase.from('coming_out_letters')
+    .select('recipient_name')
+    .eq('user_id', userId)
+    .in('status', ['drafted', 'edited', 'ready'])
+  const existingNames = new Set(((existing || []) as Array<{ recipient_name: string }>).map(e => e.recipient_name.toLowerCase()))
+
+  // Pick the two most relationship-urgent recipients not yet drafted
+  const todo = allRecipients.filter(r => !existingNames.has(r.name.toLowerCase())).slice(0, 2)
+  if (todo.length === 0) return 0
+
+  const phase = state?.current_phase || 'phase_1'
+
+  const prompt = `Generate coming-out letter drafts for Maxy (40yo, pre-HRT, forced feminization, femboy aesthetic target). Currently in ${phase}. Each draft should be ready-to-send text matched to the recipient type.
+
+RECIPIENTS TO DRAFT FOR:
+${todo.map((r, i) => `[${i + 1}] ${r.name} — ${r.relationship}, preferred channel: ${r.channel}, risk level ${r.risk}/10`).join('\n')}
+
+Return ONLY JSON:
+{
+  "letters": [
+    {
+      "recipient_index": <1-based>,
+      "tone": "<one of: direct, warm, factual, apologetic, defiant, vulnerable, formal>",
+      "body": "<the actual letter/message Maxy should send. Match the channel — 1-4 sentences for text, 2-3 paragraphs for email/letter, bullet-point talking points for in_person>",
+      "disclosure_scope": ["<what's being disclosed: feminization_intent, HRT_plan, pronoun_preference, name_change, body_transition, wife_knows, etc.>"]
+    }
+  ]
+}
+
+RULES:
+- Direct, her voice (not therapist-speak, not AI-ish).
+- High-risk recipients (parent, boss): preserve her agency, name specific asks.
+- Low-risk recipients (close friend, doctor): warmer, more specific details.
+- Never fabricate facts (don't say "I've been on HRT for 6 months" if she hasn't).
+- For medical recipient: focus on service needs (prescription, referral).
+- No generic "I have something to tell you" openers — get to it.
+- Return only the JSON.`
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 3000,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  })
+  const j = await res.json()
+  if (!res.ok) {
+    console.error('[coming_out_drafts] Anthropic error:', j)
+    return 0
+  }
+  const text = j?.content?.[0]?.text ?? ''
+  const m = text.match(/\{[\s\S]*\}/)
+  if (!m) return 0
+  let parsed: { letters?: Array<Record<string, unknown>> }
+  try { parsed = JSON.parse(m[0]) } catch { return 0 }
+
+  const validTones = ['direct', 'warm', 'factual', 'apologetic', 'defiant', 'vulnerable', 'formal']
+  const validChannels = ['text', 'email', 'letter', 'in_person', 'call', 'video']
+  let inserted = 0
+  for (const l of parsed.letters || []) {
+    const idx = ((l.recipient_index as number) || 1) - 1
+    const recipient = todo[idx]
+    if (!recipient) continue
+    const body = (l.body as string) || ''
+    if (!body || body.length < 40) continue
+
+    const { error } = await supabase.from('coming_out_letters').insert({
+      user_id: userId,
+      recipient_name: recipient.name,
+      recipient_relationship: recipient.relationship,
+      channel: validChannels.includes(recipient.channel) ? recipient.channel : 'text',
+      tone: validTones.includes(l.tone as string) ? l.tone as string : 'direct',
+      body: body.slice(0, 5000),
+      disclosure_scope: Array.isArray(l.disclosure_scope) ? l.disclosure_scope : [],
+      risk_level: recipient.risk,
+      generated_by: 'handler_autonomous',
+    })
+    if (!error) inserted++
+  }
+
+  if (inserted > 0) {
+    await supabase.from('handler_outreach_queue').insert({
+      user_id: userId,
+      message: `${inserted} coming-out letter draft${inserted === 1 ? '' : 's'} in the vault on Today. Pre-written for specific witnesses. You do not have to send them. You do have to read them.`,
+      urgency: 'normal',
+      trigger_reason: 'coming_out_drafts_ready',
+      scheduled_for: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 5 * 86400000).toISOString(),
+      source: 'coming_out_vault',
+    })
+  }
+
+  return inserted
+}
+
+// ============================================
 // TIME-SENSITIVE NOTIFICATION ENQUEUER
 // ============================================
 // Every compliance_check (5 min), scans commitments/playbook/warmup-queue for
@@ -3560,6 +3704,11 @@ async function dailyCycle(
 
       // 5z. Voice drill prescriber — daily pitch drill commitment with target phrase
       try { await prescribeVoiceDrill(supabase, uid) } catch (err) { console.error(`Voice drill prescribe failed:`, err) }
+
+      // 5aa. Sundays: generate coming-out letter drafts for upcoming witnesses
+      if (new Date().getDay() === 0) {
+        try { await generateComingOutDrafts(supabase, uid) } catch (err) { console.error(`Coming-out drafts failed:`, err) }
+      }
 
       // 6. Log daily cycle
       await supabase.from('handler_decisions').insert({

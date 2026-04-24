@@ -22,6 +22,8 @@ import { HandlerEvolutionCard } from './HandlerEvolutionCard';
 import { UnifiedCaptureCard } from './UnifiedCaptureCard';
 import { DisclosureDraftsCard } from './DisclosureDraftsCard';
 import { ProtocolDayCard } from './ProtocolDayCard';
+import { HandlerKnowCard } from './HandlerKnowCard';
+import { ComingOutVaultCard } from './ComingOutVaultCard';
 
 const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
 
@@ -220,6 +222,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
 
       <main className="td-main">
         <ProtocolDayCard />
+        <HandlerKnowCard />
         <HandlerRunningCard />
         <HandlerEvolutionCard />
         <CommitmentsCard />
@@ -229,6 +232,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         <GinaWindowIndicator />
         <GinaPlaybookCard />
         <DisclosureDraftsCard />
+        <ComingOutVaultCard />
         <UnifiedCaptureCard />
         <WitnessObservationCard />
         <IrreversibilityLedger />

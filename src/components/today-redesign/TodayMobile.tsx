@@ -22,6 +22,8 @@ import { HandlerEvolutionCard } from './HandlerEvolutionCard';
 import { UnifiedCaptureCard } from './UnifiedCaptureCard';
 import { DisclosureDraftsCard } from './DisclosureDraftsCard';
 import { ProtocolDayCard } from './ProtocolDayCard';
+import { HandlerKnowCard } from './HandlerKnowCard';
+import { ComingOutVaultCard } from './ComingOutVaultCard';
 
 const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
 const HEATMAP_COLORS = ['#1a1a20', '#2d1a4d', '#4d2a75', '#6a2a9a', '#7c3aed'];
@@ -186,6 +188,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
       {tab === 'today' && (
         <div style={{ padding: '0 16px' }}>
           <ProtocolDayCard />
+          <HandlerKnowCard />
           <HandlerRunningCard />
           <HandlerEvolutionCard />
           <CommitmentsCard />
@@ -195,6 +198,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           <GinaWindowIndicator />
           <GinaPlaybookCard />
           <DisclosureDraftsCard />
+          <ComingOutVaultCard />
           <UnifiedCaptureCard />
           <WitnessObservationCard />
           <IrreversibilityLedger />
