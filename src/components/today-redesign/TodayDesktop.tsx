@@ -16,6 +16,7 @@ import { HandlerRunningCard } from './HandlerRunningCard';
 import { GinaCaptureCard } from './GinaCaptureCard';
 import { GinaWindowIndicator } from './GinaWindowIndicator';
 import { CommitmentsCard } from './CommitmentsCard';
+import { GinaPlaybookCard } from './GinaPlaybookCard';
 
 const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
 
@@ -218,6 +219,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         <LovenseHealthBanner />
         <GinaCaptureCard />
         <GinaWindowIndicator />
+        <GinaPlaybookCard />
         <WitnessObservationCard />
         <IrreversibilityLedger />
         {data.banners.map((banner, i) => {

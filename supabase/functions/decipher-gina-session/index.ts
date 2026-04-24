@@ -201,6 +201,19 @@ Rules:
       })
       .eq('id', session_id)
 
+    // Kick the playbook planner so the Handler reacts to what she just said
+    try {
+      const url = Deno.env.get('SUPABASE_URL') ?? ''
+      const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      await fetch(`${url}/functions/v1/gina-playbook-planner`, {
+        method: 'POST',
+        headers: { 'authorization': `Bearer ${key}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, trigger: `session_processed:${session_id}` }),
+      })
+    } catch (err) {
+      console.error('playbook planner kick failed:', err)
+    }
+
     return new Response(JSON.stringify({
       ok: true,
       session_id,

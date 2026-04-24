@@ -1622,6 +1622,23 @@ async function dailyCycle(
         console.error(`Gina warmup planning failed for ${uid}:`, err)
       }
 
+      // 5e. Gina Playbook — proactive conversational moves for next 48h
+      let playbookPlanned = 0
+      try {
+        playbookPlanned = await invokePlaybookPlanner(uid, 'daily_cycle')
+      } catch (err) {
+        console.error(`Gina playbook planning failed for ${uid}:`, err)
+      }
+
+      // 5f. Expire stale queued playbook moves (past their expires_at)
+      try {
+        await supabase.from('gina_playbook')
+          .update({ status: 'expired', updated_at: new Date().toISOString() })
+          .eq('user_id', uid)
+          .eq('status', 'queued')
+          .lt('expires_at', new Date().toISOString())
+      } catch (_) { /* non-critical */ }
+
       // 6. Log daily cycle
       await supabase.from('handler_decisions').insert({
         user_id: uid,
@@ -1638,6 +1655,7 @@ async function dailyCycle(
           clinical_note_generated: clinicalNoteGenerated,
           special_occasion_fired: specialOccasionFired,
           gina_warmups_planned: warmupsPlanned,
+          gina_playbook_planned: playbookPlanned,
         },
         reasoning: 'Daily 6 AM cycle: reset counters, expire old briefs, generate new assignments, denial conditioning check',
         executed: true,
@@ -1759,6 +1777,33 @@ async function checkSpecialOccasions(supabase: any, userId: string): Promise<boo
   }
 
   return true;
+}
+
+// ============================================
+// GINA PLAYBOOK PLANNER (invoker)
+// ============================================
+// Calls the sibling edge function `gina-playbook-planner` with service-role
+// auth. Returns the number of moves actually inserted (0 on any failure).
+
+async function invokePlaybookPlanner(userId: string, trigger: string): Promise<number> {
+  const url = Deno.env.get('SUPABASE_URL') ?? ''
+  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  if (!url || !key) return 0
+  try {
+    const res = await fetch(`${url}/functions/v1/gina-playbook-planner`, {
+      method: 'POST',
+      headers: {
+        'authorization': `Bearer ${key}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ user_id: userId, trigger }),
+    })
+    const body = await res.json().catch(() => ({})) as { planned?: number; ok?: boolean }
+    return body.ok ? (body.planned || 0) : 0
+  } catch (err) {
+    console.error('invokePlaybookPlanner failed:', err)
+    return 0
+  }
 }
 
 // ============================================
