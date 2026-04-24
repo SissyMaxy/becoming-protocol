@@ -11228,13 +11228,7 @@ async function handleForceFeminizationDirective(
         if (toStep === 'committed' && fromStep !== 'committed') {
           try {
             // Build a quick prompt-bank based on her real logs
-            const [{ data: topConf }, { data: topDysph }, { data: bt }] = await Promise.all([
-              supabase.from('confessions')
-                .select('response, sentiment')
-                .eq('user_id', userId)
-                .eq('is_key_admission', true)
-                .order('created_at', { ascending: false })
-                .limit(5),
+            const [{ data: topDysph }, { data: bt }] = await Promise.all([
               supabase.from('body_dysphoria_logs')
                 .select('body_part, feeling, severity')
                 .eq('user_id', userId)
