@@ -609,6 +609,18 @@ async function complianceCheck(
     }
   }
 
+  // ── CONFESSION QUEUE SCHEDULER ──
+  // Generates confession_queue rows from slips, arousal spikes, and a
+  // rotating daily confession. Marks missed past-deadline rows and logs slips.
+  let confessionsScheduled = 0
+  for (const state of states) {
+    try {
+      confessionsScheduled += await scheduleConfessions(supabase, state.user_id)
+    } catch (err) {
+      console.error(`Confession schedule failed for ${state.user_id}:`, err)
+    }
+  }
+
   return { checked, escalated, deescalated, actions, ambient_queued: ambientQueued, spontaneous_outreach: spontaneous, random_rewards: rewardsGiven, boundary_pushes: boundaryPushes, pattern_exploits: patternExploits, bio_adjustments: bioAdjustments, commitments_enforced: commitmentsEnforced, pushes_enqueued: pushesEnqueued }
 }
 
@@ -1930,6 +1942,144 @@ async function triggerOnArousalSpike(
     } catch (_) { /* fire and forget */ }
   }
   return hits.length
+}
+
+// ============================================
+// CONFESSION QUEUE SCHEDULER
+// ============================================
+// Generates confession_queue rows from: unowned slips (last 24h, no prior
+// confession referencing them), high arousal spikes (value>=7, last 24h),
+// and a scheduled daily confession (one per user per day). Each confession
+// has a deadline; compliance_check later marks missed ones and can enqueue
+// penalties via separate enforcement path.
+
+async function scheduleConfessions(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<number> {
+  let created = 0
+  const nowIso = new Date().toISOString()
+  const dayAgoIso = new Date(Date.now() - 24 * 3600000).toISOString()
+
+  // 1. Recent slips without confession yet
+  try {
+    const { data: slips } = await supabase.from('slip_log')
+      .select('id, slip_type, source_text, detected_at, slip_points')
+      .eq('user_id', userId)
+      .gte('detected_at', dayAgoIso)
+      .gte('slip_points', 2)
+      .order('detected_at', { ascending: false })
+      .limit(5)
+
+    for (const s of (slips || []) as Array<{ id: string; slip_type: string; source_text: string | null; detected_at: string; slip_points: number }>) {
+      const { data: exists } = await supabase.from('confession_queue')
+        .select('id').eq('user_id', userId)
+        .eq('triggered_by_table', 'slip_log').eq('triggered_by_id', s.id)
+        .maybeSingle()
+      if (exists) continue
+
+      const snippet = (s.source_text || '').slice(0, 100)
+      await supabase.from('confession_queue').insert({
+        user_id: userId,
+        category: 'slip',
+        prompt: `You slipped (${s.slip_type}, ${s.slip_points}pt). Say what you did, why you thought you could get away with it, and what you'll do tonight to prove you heard me.`,
+        context_note: snippet ? `Trigger: "${snippet}${snippet.length >= 100 ? '…' : ''}"` : null,
+        triggered_by_table: 'slip_log',
+        triggered_by_id: s.id,
+        deadline: new Date(Date.now() + 8 * 3600000).toISOString(),
+      })
+      created++
+    }
+  } catch (err) { console.error('[confession] slip sched failed:', err) }
+
+  // 2. Recent arousal spikes without confession yet
+  try {
+    const { data: spikes } = await supabase.from('arousal_log')
+      .select('id, value, created_at')
+      .eq('user_id', userId)
+      .gte('created_at', dayAgoIso)
+      .gte('value', 7)
+      .order('created_at', { ascending: false })
+      .limit(5)
+
+    for (const sp of (spikes || []) as Array<{ id: string; value: number; created_at: string }>) {
+      const { data: exists } = await supabase.from('confession_queue')
+        .select('id').eq('user_id', userId)
+        .eq('triggered_by_table', 'arousal_log').eq('triggered_by_id', sp.id)
+        .maybeSingle()
+      if (exists) continue
+
+      await supabase.from('confession_queue').insert({
+        user_id: userId,
+        category: 'arousal_spike',
+        prompt: `You hit ${sp.value}/10 arousal. Tell me what image, thought, or person was in your head. Name it — no "idk", no softening. If you were thinking about being taken, say it.`,
+        context_note: `Logged ${new Date(sp.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+        triggered_by_table: 'arousal_log',
+        triggered_by_id: sp.id,
+        deadline: new Date(Date.now() + 6 * 3600000).toISOString(),
+      })
+      created++
+    }
+  } catch (err) { console.error('[confession] arousal sched failed:', err) }
+
+  // 3. Daily scheduled confession — one per day, rotates through themes
+  try {
+    const todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+    const { data: todaySched } = await supabase.from('confession_queue')
+      .select('id').eq('user_id', userId)
+      .eq('category', 'scheduled_daily')
+      .gte('created_at', todayStart.toISOString())
+      .maybeSingle()
+
+    if (!todaySched) {
+      const prompts = [
+        'Name one male-coded habit you caught yourself doing today and the cost it has on the version of you that is coming.',
+        'What did you see a woman doing today that you wanted to copy? Describe the exact move, and say out loud that you want it.',
+        'Tell me the last thing you thought about a cock. Full sentence. No euphemisms.',
+        'What did you rationalize today? Quote the excuse you told yourself, then tell me what the real reason was.',
+        'Describe the version of yourself you are becoming. Specific. Body, voice, outfit, what she says when she orders coffee.',
+        "Name someone who doesn't know yet. What does your gut say they'll say when they find out? Say it anyway.",
+        'The last time you tried to act "normal" today — what were you hiding from? Name it.',
+      ]
+      const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000)
+      const prompt = prompts[dayOfYear % prompts.length]
+      const deadline = new Date()
+      deadline.setHours(22, 0, 0, 0)
+      if (deadline.getTime() < Date.now()) deadline.setTime(Date.now() + 6 * 3600000)
+
+      await supabase.from('confession_queue').insert({
+        user_id: userId,
+        category: 'scheduled_daily',
+        prompt,
+        deadline: deadline.toISOString(),
+      })
+      created++
+    }
+  } catch (err) { console.error('[confession] daily sched failed:', err) }
+
+  // 4. Mark missed — any past-deadline + unconfessed
+  try {
+    const { data: missed } = await supabase.from('confession_queue')
+      .select('id').eq('user_id', userId)
+      .is('confessed_at', null).eq('missed', false)
+      .lt('deadline', nowIso)
+      .limit(20)
+    for (const m of (missed || []) as Array<{ id: string }>) {
+      await supabase.from('confession_queue').update({ missed: true }).eq('id', m.id)
+      await supabase.from('slip_log').insert({
+        user_id: userId,
+        slip_type: 'other',
+        slip_points: 2,
+        source_text: `Missed confession (id ${m.id})`,
+        source_table: 'confession_queue',
+        source_id: m.id,
+        metadata: { reason: 'confession_deadline_missed' },
+      })
+    }
+  } catch (err) { console.error('[confession] miss enforcement failed:', err) }
+
+  return created
 }
 
 // ============================================

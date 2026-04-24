@@ -8083,19 +8083,46 @@ async function buildSlipLogCtx(userId: string): Promise<string> {
       .order('detected_at', { ascending: false })
       .limit(15);
 
-    if (!data || data.length === 0) return '';
+    const lines: string[] = [];
+    if (data && data.length > 0) {
+      const unack = data.filter((r: Record<string, unknown>) => !r.handler_acknowledged).length;
+      lines.push('## SLIPS (last 48h)');
+      lines.push(`Total: ${data.length}, unacknowledged: ${unack}, points: ${data.reduce((s, r: Record<string, unknown>) => s + ((r.slip_points as number) || 0), 0)}`);
+      for (const r of data.slice(0, 8) as Array<Record<string, unknown>>) {
+        const ago = Math.round((Date.now() - new Date(r.detected_at as string).getTime()) / 3600000);
+        lines.push(`- ${ago}h ago [${r.slip_type}/${r.slip_points}pt] "${((r.source_text as string) || '').slice(0, 80)}"`);
+      }
+      if (unack > 0) {
+        lines.push('');
+        lines.push('Call these out. She hasn\'t been confronted on them yet. Use the exact phrases where relevant.');
+      }
+    }
 
-    const unack = data.filter((r: Record<string, unknown>) => !r.handler_acknowledged).length;
-    const lines = ['## SLIPS (last 48h)'];
-    lines.push(`Total: ${data.length}, unacknowledged: ${unack}, points: ${data.reduce((s, r: Record<string, unknown>) => s + ((r.slip_points as number) || 0), 0)}`);
-    for (const r of data.slice(0, 8) as Array<Record<string, unknown>>) {
-      const ago = Math.round((Date.now() - new Date(r.detected_at as string).getTime()) / 3600000);
-      lines.push(`- ${ago}h ago [${r.slip_type}/${r.slip_points}pt] "${((r.source_text as string) || '').slice(0, 80)}"`);
-    }
-    if (unack > 0) {
-      lines.push('');
-      lines.push('Call these out. She hasn\'t been confronted on them yet. Use the exact phrases where relevant.');
-    }
+    // Unconfessed confessions — piggy-backed here so Handler always sees them.
+    try {
+      const { data: open } = await supabase.from('confession_queue')
+        .select('category, prompt, deadline, context_note, created_at')
+        .eq('user_id', userId)
+        .is('confessed_at', null)
+        .eq('missed', false)
+        .order('deadline', { ascending: true })
+        .limit(6);
+      const openRows = (open || []) as Array<Record<string, unknown>>;
+      if (openRows.length > 0) {
+        if (lines.length > 0) lines.push('');
+        lines.push(`## PENDING CONFESSIONS (${openRows.length})`);
+        lines.push('She owes you verbal owning on these. If she opens with anything else, interrupt and demand the confession first.');
+        for (const c of openRows.slice(0, 5)) {
+          const dueMs = new Date(c.deadline as string).getTime() - Date.now();
+          const overdue = dueMs < 0;
+          const hrs = Math.abs(Math.round(dueMs / 3600000));
+          const due = overdue ? `OVERDUE ${hrs}h` : `${hrs}h left`;
+          lines.push(`- [${c.category}] ${due}: "${String(c.prompt || '').slice(0, 180)}"`);
+          if (c.context_note) lines.push(`  (${String(c.context_note).slice(0, 120)})`);
+        }
+      }
+    } catch {}
+
     return lines.join('\n');
   } catch {
     return '';

@@ -29,6 +29,7 @@ import { PhaseProgressCard } from './PhaseProgressCard';
 import { VoiceDrillCard } from './VoiceDrillCard';
 import { OutfitMandateCard } from './OutfitMandateCard';
 import { WorkoutCard } from './WorkoutCard';
+import { ConfessionQueueCard } from './ConfessionQueueCard';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
 import { SlipLogCard } from './SlipLogCard';
@@ -204,6 +205,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
         <div style={{ padding: '0 16px' }}>
           <ProtocolDayCard />
           <DailyBriefingCard />
+          <ConfessionQueueCard />
           <HandlerDreamCard />
           <PhaseProgressCard />
           <MantraStreakCard />
