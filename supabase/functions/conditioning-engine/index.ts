@@ -988,7 +988,22 @@ async function executeDirectiveInline(
     case 'prescribe_task': {
       const taskId = val.task_id as string
       const domain = (val.domain as string) || 'general'
-      if (!taskId) return { success: false, error: 'Missing task_id' }
+      const description = (val.description as string) || target || ''
+
+      if (!taskId) {
+        const { data, error } = await supabase
+          .from('handler_notes')
+          .insert({
+            user_id: userId,
+            note_type: 'task_prescription',
+            content: `Prescribe: ${description} (domain: ${domain})`,
+            priority: 3,
+          })
+          .select('id').single()
+        if (error) return { success: false, error: `Note insert failed: ${error.message}` }
+        return { success: true, data: { note_id: data?.id, description, domain, method: 'handler_note_fallback' } }
+      }
+
       const { data, error } = await supabase
         .from('daily_tasks')
         .insert({ user_id: userId, task_id: taskId, domain, prescribed_at: new Date().toISOString(), status: 'pending' })
@@ -997,6 +1012,16 @@ async function executeDirectiveInline(
       if (error) return { success: false, error: `Insert failed: ${error.message}` }
       return { success: true, data: { daily_task_id: data?.id, task_id: taskId, domain } }
     }
+
+    // Client-handled directives: written by Handler chat for in-chat modals
+    // / client state. The execute-directives cron picks these up too; we ack
+    // them as no-op success so they stop rotting as 'failed'.
+    case 'force_mantra_repetition':
+    case 'start_edge_timer':
+    case 'capture_reframing':
+    case 'resolve_decision':
+    case 'write_memory':
+      return { success: true, data: { action, client_handled: true, target } }
 
     case 'modify_schedule': {
       const parameter = val.parameter as string
@@ -1013,11 +1038,26 @@ async function executeDirectiveInline(
       const intensity = (val.intensity as number) ?? 5
       const duration = (val.duration as number) ?? 5
       const pattern = (val.pattern as string) || 'pulse'
-      const { data, error } = await supabase.functions.invoke('lovense-command', {
-        body: { user_id: userId, intensity, duration, pattern, source: 'handler_directive' },
-      })
-      if (error) return { success: false, error: `Edge function failed: ${error.message}` }
-      return { success: true, data: { intensity, duration, pattern, response: data } }
+
+      // Skip if no connection — otherwise this fails 73% of directives.
+      const { data: conn } = await supabase.from('lovense_connections')
+        .select('id').eq('user_id', userId).maybeSingle()
+      if (!conn) {
+        return { success: true, data: { skipped: true, reason: 'no_lovense_connection' } }
+      }
+
+      // Write to lovense_commands queue instead of invoking the user-JWT
+      // edge function. The device bridge polls this table and executes.
+      const { data, error } = await supabase.from('lovense_commands').insert({
+        user_id: userId,
+        command_type: 'Function',
+        command_payload: { action: pattern.includes('edge') ? 'Vibrate' : 'Vibrate', intensity, duration_sec: duration, pattern },
+        trigger_type: 'handler_directive',
+        intensity,
+        duration_sec: duration,
+      }).select('id').single()
+      if (error) return { success: false, error: `Queue insert failed: ${error.message}` }
+      return { success: true, data: { command_id: data?.id, intensity, duration, pattern, method: 'queued' } }
     }
 
     case 'create_narrative_beat': {
