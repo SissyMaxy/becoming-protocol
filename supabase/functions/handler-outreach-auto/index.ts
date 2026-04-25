@@ -502,19 +502,32 @@ OUTPUT: 2-3 sentences, second-person ("you said X — what you were also saying 
         console.error('[OutreachAuto] auto-brief refill failed:', abErr)
       }
 
-      // Daily body-change observation prompt. Only fires when
-      // medication_regimen has an active row (i.e., once she's on HRT or
-      // GLP-1 — currently active for GLP-1). Seeds one prompt per day if
-      // none already exists, rotating across body parts and categories.
+      // Daily body-change observation prompt. ONLY fires when an active HRT
+      // regimen exists (estradiol/spiro/progesterone). HRT-effect prompts
+      // (chest puffiness, body hair slowing, mood softening) on a GLP-1-only
+      // regimen would falsely imply HRT is active. GLP-1 gets its own prompt
+      // set below if active.
       try {
-        const { data: activeRegs } = await supa
+        const { data: hrtReg } = await supa
           .from('medication_regimen')
-          .select('id, started_at, medication_category')
+          .select('id, started_at, medication_name, medication_category')
           .eq('user_id', userId)
           .eq('active', true)
+          .eq('medication_category', 'hrt')
           .limit(1)
           .maybeSingle()
-        if (activeRegs) {
+        const { data: glpReg2 } = await supa
+          .from('medication_regimen')
+          .select('id, started_at, medication_name, medication_category')
+          .eq('user_id', userId)
+          .eq('active', true)
+          .eq('medication_category', 'glp1')
+          .limit(1)
+          .maybeSingle()
+
+        const reg = (hrtReg as { id: string; started_at: string; medication_name: string; medication_category: string } | null)
+                 ?? (glpReg2 as { id: string; started_at: string; medication_name: string; medication_category: string } | null)
+        if (reg) {
           const todayDate = now.toISOString().slice(0, 10)
           const { count: existingCount } = await supa
             .from('body_change_observations')
@@ -522,7 +535,6 @@ OUTPUT: 2-3 sentences, second-person ("you said X — what you were also saying 
             .eq('user_id', userId)
             .eq('observation_date', todayDate)
           if ((existingCount ?? 0) === 0) {
-            // Check if a prompt already exists in handler_outreach_queue today
             const { data: existingPrompt } = await supa
               .from('handler_outreach_queue')
               .select('id')
@@ -532,21 +544,30 @@ OUTPUT: 2-3 sentences, second-person ("you said X — what you were also saying 
               .limit(1)
               .maybeSingle()
             if (!existingPrompt) {
-              const daysOnRegimen = Math.floor((now.getTime() - new Date(activeRegs.started_at as string).getTime()) / 86400000)
-              const FOCI = [
+              const daysOnRegimen = Math.floor((now.getTime() - new Date(reg.started_at).getTime()) / 86400000)
+              const HRT_FOCI = [
                 { area: 'skin', q: "What does your skin feel like today? Softer? Oilier? Different than a week ago?" },
-                { area: 'face', q: "Catch your face in the mirror. Anything different? Softer jaw, puffier cheeks, different?" },
+                { area: 'face', q: "Catch your face in the mirror. Anything different? Softer jaw, puffier cheeks?" },
                 { area: 'chest', q: "Chest — any tenderness, puffiness, asymmetry? Report what you feel." },
-                { area: 'mood', q: "How's your emotional baseline today vs. last week? Crying easier? Less angry? Different?" },
+                { area: 'mood', q: "How's your emotional baseline today vs. last week? Crying easier? Less angry?" },
                 { area: 'libido', q: "Arousal patterns shifting? Harder to get hard? Different kind of wanting?" },
-                { area: 'waist', q: "Tighten your waist. Smaller than last week? Same? Log it." },
-                { area: 'ass_hips', q: "Grab your hip. More there than a week ago? Less? Feel around." },
                 { area: 'body_hair', q: "Body hair growing slower? Less dense? Check arms, chest, back." },
               ]
+              const GLP1_FOCI = [
+                { area: 'waist', q: "Tighten your waist. Smaller than last week? Same? Log it." },
+                { area: 'fullness', q: "How fast did fullness hit at your last meal? Earlier than a week ago?" },
+                { area: 'cravings', q: "Any food noise today? Or quieter? Log the contrast vs. last week." },
+                { area: 'energy', q: "Energy at 3pm — flat or steady? GLP-1 weeks shift this." },
+                { area: 'weight', q: "Step on the scale. Compare to last week's number. Log delta." },
+              ]
+              const FOCI = reg.medication_category === 'hrt' ? HRT_FOCI : GLP1_FOCI
               const focus = FOCI[Math.floor(Math.random() * FOCI.length)]
+              const regimenLabel = reg.medication_category === 'hrt'
+                ? `Day ${daysOnRegimen} on HRT`
+                : `Day ${daysOnRegimen} on ${reg.medication_name}`
               await supa.from('handler_outreach_queue').insert({
                 user_id: userId,
-                message: `Day ${daysOnRegimen} on the regimen. ${focus.q} Log it in body_change_observations — the permanent record of how she's emerging.`,
+                message: `${regimenLabel}. ${focus.q} Log it in body_change_observations — the permanent record of how she's emerging.`,
                 urgency: 'normal',
                 trigger_reason: 'body_change_daily_prompt',
                 scheduled_for: new Date().toISOString(),

@@ -3442,16 +3442,28 @@ async function detectAndExploitPatterns(supabase: any, userId: string): Promise<
   const localHour = (new Date().getUTCHours() - 5 + 24) % 24
   if (Math.abs(localHour - bestHour) > 1) return false
 
-  // Already exploited this window today?
+  // Already exploited this window today? (ilike, case-insensitive — was
+  // matching nothing because reasoning starts "Peak" not "peak", causing
+  // 50+ duplicate fires.)
   const today = new Date().toISOString().split('T')[0]
   const { count: existing } = await supabase
     .from('handler_directives')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', userId)
-    .like('reasoning', '%peak vulnerability%')
+    .ilike('reasoning', '%peak vulnerability%')
     .gte('created_at', `${today}T00:00:00`)
 
   if ((existing || 0) > 0) return false
+
+  // Belt-and-braces: dedupe on the outreach side too, in case the directive
+  // gets pruned or the comparison still drifts.
+  const { count: existingOutreach } = await supabase
+    .from('handler_outreach_queue')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('trigger_reason', 'peak_vulnerability')
+    .gte('scheduled_for', `${today}T00:00:00`)
+  if ((existingOutreach || 0) > 0) return false
 
   // Fire intensive conditioning during peak window
   await supabase.from('handler_directives').insert({
