@@ -454,6 +454,14 @@ For worn items: which item, where on body, hours/days to wear, photo cadence (mo
 
 For DMs: the literal text template with [variable] slots, recipient targeting criteria, follow-up schedule.
 
+PLAIN-ENGLISH RULE for any copy meant for external eyes (Reddit posts, FetLife status, Sniffies bio, DM bodies, captions, auction listings, hypno scripts she sells):
+- NEVER use internal protocol jargon. These are private system terms her audience does not understand and cannot decode:
+  "denial day", "day N of denial", "slip points", "gate", "Handler", "force-feminization", "the protocol",
+  "Maxy fund", "Plume", "the system", "punishment queue", "decree", "commitment", "case file",
+  "compliance", "phase 1/2/3/4", "irreversibility", "shot list", "plan item".
+- Any copy in 'edict' that becomes literal post text or DM text must be plain English her readers actually use.
+- INTERNAL directives (the part Maxy reads to know what to do) can mention internals, but the QUOTED post body she'll publish must be jargon-free.
+
 Each directive MUST:
 - Be executable in 5-30 minutes
 - Specify proof type (photo / audio / video / text / journal_entry / device_state)
