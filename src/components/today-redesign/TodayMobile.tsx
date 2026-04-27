@@ -38,6 +38,7 @@ import { DavidTaxCard } from './DavidTaxCard';
 import { RevenuePlanCard } from './RevenuePlanCard';
 import { NextShotsCard } from './NextShotsCard';
 import { SponsorMilestoneCard } from './SponsorMilestoneCard';
+import { WornItemCard } from './WornItemCard';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
 import { SlipLogCard } from './SlipLogCard';
@@ -216,6 +217,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           <NextShotsCard />
           <RevenueCard />
           <SponsorMilestoneCard />
+          <WornItemCard />
           <RevenuePlanCard />
           <DavidTaxCard />
           <DailyBriefingCard />
