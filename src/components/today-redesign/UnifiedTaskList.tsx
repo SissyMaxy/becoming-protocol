@@ -237,6 +237,15 @@ export function UnifiedTaskList() {
     return () => clearInterval(t);
   }, [load]);
 
+  // Listen for cross-card task-changed events so the list refreshes
+  // immediately when sibling cards (Punishment, Confession, Decree, etc.)
+  // mark items complete instead of waiting for the 90s poll.
+  useEffect(() => {
+    const handler = () => { load(); };
+    window.addEventListener('td-task-changed', handler);
+    return () => window.removeEventListener('td-task-changed', handler);
+  }, [load]);
+
   if (loading || tasks.length === 0) return null;
 
   const overdueCount = tasks.filter(t => formatDue(t.due).overdueHours > 0).length;

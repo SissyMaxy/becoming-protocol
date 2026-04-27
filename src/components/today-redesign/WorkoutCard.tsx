@@ -63,6 +63,7 @@ export function WorkoutCard() {
     setSubmitting(false);
     setNote('');
     load();
+    window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'workout', id: today.id } }));
   };
 
   const isDone = today.status === 'completed';

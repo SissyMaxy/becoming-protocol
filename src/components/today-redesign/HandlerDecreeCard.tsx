@@ -63,6 +63,7 @@ export function HandlerDecreeCard() {
     setSubmittingId(null);
     setNotes(n => { const c = { ...n }; delete c[id]; return c; });
     load();
+    window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'decree', id } }));
   };
 
   if (items.length === 0) return null;

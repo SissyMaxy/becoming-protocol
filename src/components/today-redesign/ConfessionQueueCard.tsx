@@ -140,6 +140,7 @@ export function ConfessionQueueCard() {
     setComposeStarts(s => { const c = { ...s }; delete c[id]; return c; });
     setPasteDetected(p => { const c = { ...p }; delete c[id]; return c; });
     load();
+    window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'confession', id } }));
   };
 
   if (items.length === 0 && totalReceipts === 0) return null;

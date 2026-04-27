@@ -74,6 +74,9 @@ export function PunishmentQueueCard() {
     setEvNotes(s => { const c = { ...s }; delete c[item.id]; return c; });
     setSubmitting(null);
     load();
+    // Tell other cards (notably UnifiedTaskList) that something changed
+    // so they refresh immediately instead of waiting for their own poll.
+    window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'punishment', id: item.id } }));
   };
 
   if (items.length === 0) return null;
