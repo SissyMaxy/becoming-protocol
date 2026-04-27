@@ -34,6 +34,7 @@ import { HandlerDecreeCard } from './HandlerDecreeCard';
 import { UnifiedTaskList } from './UnifiedTaskList';
 import { RevenueCard } from './RevenueCard';
 import { CollapsibleGroup } from './CollapsibleGroup';
+import { DavidTaxCard } from './DavidTaxCard';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
 import { SlipLogCard } from './SlipLogCard';
@@ -210,6 +211,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           <ProtocolDayCard />
           <UnifiedTaskList />
           <RevenueCard />
+          <DavidTaxCard />
           <DailyBriefingCard />
           <HandlerDecreeCard />
           <ConfessionQueueCard />

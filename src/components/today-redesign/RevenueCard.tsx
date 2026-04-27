@@ -79,17 +79,20 @@ export function RevenueCard() {
   };
 
   const now = Date.now();
-  const sumWindow = (days: number) => rows
-    .filter(r => now - new Date(r.created_at).getTime() <= days * 86400000)
+  const isHandlerEarned = (r: RevenueRow) => r.revenue_type !== 'david_tax';
+  const sumWindow = (days: number, predicate: (r: RevenueRow) => boolean = () => true) => rows
+    .filter(r => predicate(r) && now - new Date(r.created_at).getTime() <= days * 86400000)
     .reduce((s, r) => s + Math.round(((r.net_amount ?? r.amount) || 0) * 100), 0);
 
-  const cents7 = sumWindow(7);
-  const cents30 = sumWindow(30);
-  const centsAll = rows.reduce((s, r) => s + Math.round(((r.net_amount ?? r.amount) || 0) * 100), 0);
+  const cents7 = sumWindow(7, isHandlerEarned);
+  const cents30 = sumWindow(30, isHandlerEarned);
+  const centsAll = rows.filter(isHandlerEarned).reduce((s, r) => s + Math.round(((r.net_amount ?? r.amount) || 0) * 100), 0);
+  const davidCents30 = sumWindow(30, r => r.revenue_type === 'david_tax');
+  const davidCentsAll = rows.filter(r => r.revenue_type === 'david_tax').reduce((s, r) => s + Math.round(((r.net_amount ?? r.amount) || 0) * 100), 0);
 
   const monthlyNeed = targets.reduce((s, t) => s + (t.monthly_cents || 0), 0);
   const oneTimeNeed = targets.reduce((s, t) => s + (t.one_time_cents || 0), 0);
-  const monthlyGap = Math.max(0, monthlyNeed - cents30);
+  const monthlyGap = Math.max(0, monthlyNeed - (cents30 + davidCents30));
   const isZero = centsAll === 0;
 
   const tone = isZero ? '#7a1f22' : cents30 >= monthlyNeed ? '#5fc88f' : '#f4c272';
@@ -109,7 +112,11 @@ export function RevenueCard() {
           Maxy fund
         </span>
         <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto', fontStyle: 'italic' }}>
-          {isZero ? 'Handler has earned $0. David is footing this.' : `$${(centsAll / 100).toFixed(2)} earned all-time`}
+          {isZero
+            ? davidCentsAll > 0
+              ? `Handler $0 · David $${(davidCentsAll / 100).toFixed(2)}`
+              : 'Handler has earned $0.'
+            : `Handler $${(centsAll / 100).toFixed(2)}${davidCentsAll > 0 ? ` · David $${(davidCentsAll / 100).toFixed(2)}` : ''}`}
         </span>
       </div>
 
