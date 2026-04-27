@@ -25,6 +25,8 @@ export function VoicePracticeRecorder({
   const [pitches, setPitches] = useState<number[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<{ avgPitch: number; minPitch: number; maxPitch: number; transcript: string; passed: boolean } | null>(null);
+  const [micError, setMicError] = useState<string | null>(null);
+  const [signal, setSignal] = useState<number>(0);
 
   const recordingRef = useRef(false);
   const streamRef = useRef<MediaStream | null>(null);
@@ -39,12 +41,33 @@ export function VoicePracticeRecorder({
     setTranscript('');
     setPitches([]);
     pitchesRef.current = [];
+    setMicError(null);
+    setSignal(0);
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setMicError('This browser does not expose microphone access. Try Chrome or Safari, or open the app in a real browser tab (not in-app webview).');
+      setRecording(false);
+      recordingRef.current = false;
+      return;
+    }
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+      setMicError('Microphone requires HTTPS. Open this app over https:// and reload.');
+      setRecording(false);
+      recordingRef.current = false;
+      return;
+    }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
       streamRef.current = stream;
 
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      // Modern browsers create AudioContext suspended; explicitly resume.
+      if (audioContext.state === 'suspended') {
+        try { await audioContext.resume(); } catch { /* ignore */ }
+      }
       const source = audioContext.createMediaStreamSource(stream);
       const analyser = audioContext.createAnalyser();
       analyser.fftSize = 2048;
@@ -54,6 +77,11 @@ export function VoicePracticeRecorder({
       const measurePitch = () => {
         if (!recordingRef.current) return;
         analyser.getFloatTimeDomainData(buffer);
+        // RMS gives us a live signal-strength readout for the UI.
+        let sumSq = 0;
+        for (let i = 0; i < buffer.length; i++) sumSq += buffer[i] * buffer[i];
+        const rms = Math.sqrt(sumSq / buffer.length);
+        setSignal(rms);
         const pitch = autoCorrelate(buffer, audioContext.sampleRate);
         if (pitch > 80 && pitch < 400) {
           pitchesRef.current.push(pitch);
@@ -89,6 +117,17 @@ export function VoicePracticeRecorder({
     } catch (err) {
       setRecording(false);
       recordingRef.current = false;
+      const e = err as { name?: string; message?: string };
+      console.error('[VoicePracticeRecorder] mic init failed:', e);
+      if (e?.name === 'NotAllowedError' || e?.name === 'PermissionDeniedError') {
+        setMicError('Microphone permission denied. Click the lock icon in your browser address bar → allow microphone → reload.');
+      } else if (e?.name === 'NotFoundError' || e?.name === 'DevicesNotFoundError') {
+        setMicError('No microphone detected. Plug one in or check OS audio settings.');
+      } else if (e?.name === 'NotReadableError') {
+        setMicError('Microphone is being used by another app. Close it and try again.');
+      } else {
+        setMicError(`Mic init failed: ${e?.message || e?.name || 'unknown error'}`);
+      }
     }
   };
 
@@ -162,6 +201,13 @@ export function VoicePracticeRecorder({
           <p className="text-xs text-gray-500 mt-1">Just be you — we're tracking the trend over time</p>
         </div>
 
+        {micError && (
+          <div className="rounded-lg p-3 bg-red-950/40 border border-red-500/40 text-sm text-red-200">
+            <div className="font-semibold mb-1">Microphone unavailable</div>
+            <div className="text-xs leading-relaxed">{micError}</div>
+          </div>
+        )}
+
         <div className="bg-gray-900 rounded-xl p-4">
           <div className="flex justify-between text-xs text-gray-500 mb-1">
             <span>Current: {livePitch ? `${livePitch.toFixed(0)}Hz` : '--'}</span>
@@ -179,6 +225,22 @@ export function VoicePracticeRecorder({
             <span>190Hz</span>
             <span>300Hz</span>
           </div>
+          {recording && (
+            <div className="mt-3">
+              <div className="flex justify-between text-xs text-gray-500 mb-1">
+                <span>Mic signal</span>
+                <span className={signal > 0.005 ? 'text-green-400' : 'text-red-400'}>
+                  {signal > 0.005 ? 'detecting voice' : 'silent — speak louder or check mic'}
+                </span>
+              </div>
+              <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${signal > 0.005 ? 'bg-green-500' : 'bg-gray-700'}`}
+                  style={{ width: `${Math.min(100, signal * 2000)}%` }}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {transcript && (
