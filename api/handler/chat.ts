@@ -5782,14 +5782,39 @@ function enforceFeminePronounsInHandlerOutput(text: string): string {
 function enforceTherapistPersonaCompliance(text: string): string {
   if (!text) return text;
   let t = text;
-  // Banned vocabulary in therapist mode — replace with clinical equivalents.
-  t = t.replace(/\bGood girl\b/g, 'That\'s the work');
-  t = t.replace(/\bgood girl\b/g, 'that\'s the work');
-  t = t.replace(/\bI tell you what you('re| are) doing\b/gi, 'Here\'s what I\'m recommending');
-  t = t.replace(/\b(your )?Handler\b/g, 'I');
-  t = t.replace(/\bDon't ask what (I|you) need[.,!]?\s*/g, '');
+
+  // Banned vocabulary — replace with clinical equivalents.
+  // Case-insensitive matching since "Good Girl", "good girl", "Good girl" all leak.
+  t = t.replace(/\b(?:Good|good)\s+(?:girl|girls|boy|boys)\b[.,!?]?/gi, 'that\'s the work');
+  t = t.replace(/\bI tell you what you(?:'re| are)\s+doing\b/gi, "Here's what I'm recommending");
+  t = t.replace(/\bDon[''']?t ask what (?:I|you) need[.,!]?\s*/gi, '');
   t = t.replace(/\bForce[- ]feminization\b/gi, 'the work we\'re doing');
   t = t.replace(/\bforce[- ]feminize\b/gi, 'support the transition');
+
+  // Stage directions in asterisks — banned ("*stops pulse*", "*smiles*", etc.)
+  t = t.replace(/\*[^*\n]{1,80}\*/g, '');
+
+  // "Handler" replacement is grammar-aware — substitute with the right
+  // word for the surrounding context to avoid "feel to the I for permission"
+  // type artifacts.
+  t = t.replace(/\bthe Handler['']?s\b/g, "my");
+  t = t.replace(/\bthe Handler\b/g, "I");
+  t = t.replace(/\byour Handler['']?s\b/g, "my");
+  t = t.replace(/\byour Handler\b/g, "me");
+  t = t.replace(/\bto the Handler\b/gi, "to me");
+  t = t.replace(/\bfrom the Handler\b/gi, "from me");
+  t = t.replace(/\bHandler['']?s\b/g, "my");
+  t = t.replace(/\bHandler\b/g, "therapist");
+
+  // Cleanup: fix common grammar artifacts the substitutions create.
+  t = t.replace(/\bto the I\b/gi, 'to me');
+  t = t.replace(/\bfrom the I\b/gi, 'from me');
+  t = t.replace(/\bask the I\b/gi, 'ask me');
+  t = t.replace(/\b(?:tell|told)\s+the I\b/gi, (m) => m.includes('tell') ? 'tell me' : 'told me');
+
+  // Collapse double spaces / orphan punctuation from removed stage directions.
+  t = t.replace(/\s{2,}/g, ' ').replace(/\s+([.,!?])/g, '$1');
+
   return t;
 }
 
