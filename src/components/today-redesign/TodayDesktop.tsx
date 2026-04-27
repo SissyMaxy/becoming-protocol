@@ -39,6 +39,7 @@ import { RevenuePlanCard } from './RevenuePlanCard';
 import { NextShotsCard } from './NextShotsCard';
 import { SponsorMilestoneCard } from './SponsorMilestoneCard';
 import { WornItemCard } from './WornItemCard';
+import { DmTemplateCard } from './DmTemplateCard';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
 import { SlipLogCard } from './SlipLogCard';
@@ -267,6 +268,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         <RevenueCard />
         <SponsorMilestoneCard />
         <WornItemCard />
+        <DmTemplateCard />
         <RevenuePlanCard />
         <DavidTaxCard />
         <DailyBriefingCard />
