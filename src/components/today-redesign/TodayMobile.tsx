@@ -33,6 +33,7 @@ import { ConfessionQueueCard } from './ConfessionQueueCard';
 import { HandlerDecreeCard } from './HandlerDecreeCard';
 import { UnifiedTaskList } from './UnifiedTaskList';
 import { RevenueCard } from './RevenueCard';
+import { CollapsibleGroup } from './CollapsibleGroup';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
 import { SlipLogCard } from './SlipLogCard';
@@ -212,34 +213,44 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           <DailyBriefingCard />
           <HandlerDecreeCard />
           <ConfessionQueueCard />
-          <HandlerDreamCard />
-          <PhaseProgressCard />
-          <MantraStreakCard />
-          <IdentityDisplacementCard />
-          <HandlerKnowCard />
-          <HandlerRunningCard />
-          <HandlerEvolutionCard />
-          <OutreachQueueCard />
-          <DeviceScheduleCard />
-          <SlipLogCard />
-          <RationalizationPatternCard />
-          <EvidenceReportsCard />
-          <CommitmentsCard />
-          <OutfitMandateCard />
-          <WorkoutCard />
-          <VoiceDrillCard />
-          <ArousalLogCard />
-          <BodyMeasurementCard />
-          <LovenseHealthBanner />
-          <GinaCaptureCard />
-          <GinaWindowIndicator />
-          <GinaPlaybookCard />
-          <DisclosureDraftsCard />
-          <ComingOutVaultCard />
-          <GinaSessionsCard />
-          <UnifiedCaptureCard />
-          <WitnessObservationCard />
-          <IrreversibilityLedger />
+          <CollapsibleGroup id="today_tasks" label="Today's Tasks" tone="#ec4899" defaultOpen={true} hint="outfit · workout · voice">
+            <OutfitMandateCard />
+            <WorkoutCard />
+            <VoiceDrillCard />
+            <ArousalLogCard />
+          </CollapsibleGroup>
+          <CollapsibleGroup id="progress" label="Progress & Tracking" tone="#6ee7b7" hint="phase · streaks · body">
+            <PhaseProgressCard />
+            <MantraStreakCard />
+            <IdentityDisplacementCard />
+            <BodyMeasurementCard />
+            <HandlerEvolutionCard />
+          </CollapsibleGroup>
+          <CollapsibleGroup id="handler_systems" label="Handler Systems" tone="#c4b5fd" hint="dreams · slips · commitments · evidence">
+            <HandlerDreamCard />
+            <HandlerKnowCard />
+            <HandlerRunningCard />
+            <OutreachQueueCard />
+            <DeviceScheduleCard />
+            <SlipLogCard />
+            <RationalizationPatternCard />
+            <EvidenceReportsCard />
+            <CommitmentsCard />
+          </CollapsibleGroup>
+          <CollapsibleGroup id="gina_systems" label="Gina Systems" tone="#f4a7c4" hint="playbook · disclosures · sessions">
+            <LovenseHealthBanner />
+            <GinaCaptureCard />
+            <GinaWindowIndicator />
+            <GinaPlaybookCard />
+            <DisclosureDraftsCard />
+            <ComingOutVaultCard />
+            <GinaSessionsCard />
+          </CollapsibleGroup>
+          <CollapsibleGroup id="capture" label="Capture & Evidence" tone="#f4c272" hint="proofs · witness · irreversibility">
+            <UnifiedCaptureCard />
+            <WitnessObservationCard />
+            <IrreversibilityLedger />
+          </CollapsibleGroup>
         </div>
       )}
       {tab === 'today' && data.banners.map((banner, i) => {

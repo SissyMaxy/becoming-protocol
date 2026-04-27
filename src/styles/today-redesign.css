@@ -40,12 +40,15 @@
 }
 .td-brandname { font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
 .td-brandrole { font-size: 10px; color: #8a8690; background: #1a1a20; padding: 2px 6px; border-radius: 10px; margin-left: auto; font-weight: 500; }
-.td-navitem { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 6px; font-size: 12.5px; color: #9a95a0; cursor: pointer; transition: all .1s; font-weight: 450; background: none; border: none; width: 100%; text-align: left; font-family: inherit; }
-.td-navitem:hover { background: #16161c; color: #d6d2dd; }
-.td-navitem.on { background: #1a1623; color: #e8dcff; }
+.td-navitem { display: flex; align-items: center; gap: 10px; padding: 7px 10px 7px 14px; border-radius: 6px; font-size: 12.5px; color: #9a95a0; cursor: pointer; transition: all .12s; font-weight: 500; background: none; border: none; border-left: 2px solid transparent; width: calc(100% + 2px); margin-left: -2px; text-align: left; font-family: inherit; }
+.td-navitem:hover { background: #16161c; color: #d6d2dd; border-left-color: #2d1a4d; }
+.td-navitem.on { background: #1a1623; color: #e8dcff; border-left-color: #7c3aed; font-weight: 600; }
 .td-navitem .td-dot { width: 6px; height: 6px; border-radius: 3px; background: #7c3aed; margin-left: auto; box-shadow: 0 0 8px #7c3aed; }
 .td-navitem .td-navbadge { margin-left: auto; font-size: 10px; color: #c4b5fd; background: #1a1226; padding: 1px 6px; border-radius: 8px; font-weight: 600; }
-.td-navsec { font-size: 10px; color: #5a5560; text-transform: uppercase; letter-spacing: 0.08em; padding: 18px 10px 6px; font-weight: 600; }
+.td-navsec { font-size: 9.5px; color: #6a656e; text-transform: uppercase; letter-spacing: 0.12em; padding: 18px 10px 8px 14px; font-weight: 700; border-top: 1px solid #1a1a20; margin-top: 12px; }
+.td-navsec:first-of-type { border-top: none; margin-top: 0; padding-top: 8px; }
+.td-navitem-back { color: #f47272 !important; border-left-color: transparent !important; margin-top: 8px; }
+.td-navitem-back:hover { background: #1a0a0d !important; color: #fc9090 !important; border-left-color: #c4272d !important; }
 
 .td-sidefoot { margin-top: auto; padding: 10px; font-size: 11px; color: #5a5560; display: flex; align-items: center; gap: 8px; }
 .td-sidefoot-avatar { width: 22px; height: 22px; border-radius: 11px; background: #2d1a4d; }
@@ -344,3 +347,20 @@
 .td-task-queue summary:hover { background: #150a1f !important; border-color: #5a3a8a !important; color: #e8dcff !important; }
 .td-task-queue[open] summary .td-chevron { transform: rotate(90deg); }
 .td-task-queue summary .td-chevron { display: inline-block; transition: transform 0.15s; }
+
+/* Tablet pass — narrow desktop should still be usable. The TodayView
+ * picker swaps to TodayMobile <768px; this softens the 768-1024 band. */
+@media (max-width: 1024px) {
+  .td-side { flex: 0 0 150px; padding: 14px 8px; }
+  .td-main { padding: 24px 18px 80px; }
+  .td-stats { grid-template-columns: repeat(2, 1fr) !important; }
+  .td-grid { grid-template-columns: 1fr !important; }
+  .td-grid.even { grid-template-columns: 1fr !important; }
+}
+
+/* Card-header consistency — any card opting into .td-cardhead gets the
+ * canonical 10px/700/uppercase tone label + 10px/600 secondary meta.
+ * New cards should use this; existing inline-styled cards stay as-is. */
+.td-cardhead { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.td-cardhead .td-cardhead-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.09em; font-weight: 700; }
+.td-cardhead .td-cardhead-meta { font-size: 10px; color: #8a8690; margin-left: auto; font-style: italic; }

@@ -33,6 +33,7 @@ import { ConfessionQueueCard } from './ConfessionQueueCard';
 import { HandlerDecreeCard } from './HandlerDecreeCard';
 import { UnifiedTaskList } from './UnifiedTaskList';
 import { RevenueCard } from './RevenueCard';
+import { CollapsibleGroup } from './CollapsibleGroup';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
 import { SlipLogCard } from './SlipLogCard';
@@ -132,6 +133,20 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  // Scrollspy — highlight the nav item whose section is currently in view.
+  const [activeSection, setActiveSection] = useState<string>('td-section-directives');
+  useEffect(() => {
+    const ids = ['td-section-directives', 'td-section-protocol', 'td-section-meal', 'td-section-queue', 'td-section-hrt', 'td-section-future', 'td-section-target', 'td-section-arousal'];
+    const elements = ids.map(id => document.getElementById(id)).filter((e): e is HTMLElement => !!e);
+    if (elements.length === 0) return;
+    const observer = new IntersectionObserver((entries) => {
+      const visible = entries.filter(e => e.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+      if (visible[0]) setActiveSection(visible[0].target.id);
+    }, { rootMargin: '-30% 0px -50% 0px', threshold: [0, 0.25, 0.5, 1] });
+    elements.forEach(el => observer.observe(el));
+    return () => observer.disconnect();
+  }, []);
+
   const sendCompose = () => {
     const text = composeText.trim();
     if (!text) return;
@@ -211,23 +226,23 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
           <div className="td-brandrole">you</div>
         </div>
         <div className="td-navsec">Today</div>
-        <button className="td-navitem on" onClick={() => scrollToSection('td-section-directives')}>Directives<span className="td-dot" /></button>
-        <button className="td-navitem" onClick={() => scrollToSection('td-section-protocol')}>Protocol</button>
-        <button className="td-navitem" onClick={() => scrollToSection('td-section-meal')}>Meal log</button>
+        <button className={`td-navitem ${activeSection === 'td-section-directives' ? 'on' : ''}`} onClick={() => scrollToSection('td-section-directives')}>Directives{activeSection === 'td-section-directives' && <span className="td-dot" />}</button>
+        <button className={`td-navitem ${activeSection === 'td-section-protocol' ? 'on' : ''}`} onClick={() => scrollToSection('td-section-protocol')}>Protocol</button>
+        <button className={`td-navitem ${activeSection === 'td-section-meal' ? 'on' : ''}`} onClick={() => scrollToSection('td-section-meal')}>Meal log</button>
         <div className="td-navsec">Connection</div>
-        <button className="td-navitem" onClick={() => scrollToSection('td-section-queue')}>
+        <button className={`td-navitem ${activeSection === 'td-section-queue' ? 'on' : ''}`} onClick={() => scrollToSection('td-section-queue')}>
           Queue
           {data.queue.length > 0 && <span className="td-navbadge">{data.queue.length}</span>}
         </button>
-        <button className="td-navitem" onClick={() => scrollToSection('td-section-hrt')}>Requests</button>
-        <button className="td-navitem" onClick={() => scrollToSection('td-section-future')}>Reflections</button>
+        <button className={`td-navitem ${activeSection === 'td-section-hrt' ? 'on' : ''}`} onClick={() => scrollToSection('td-section-hrt')}>Requests</button>
+        <button className={`td-navitem ${activeSection === 'td-section-future' ? 'on' : ''}`} onClick={() => scrollToSection('td-section-future')}>Reflections</button>
         <div className="td-navsec">Measures</div>
-        <button className="td-navitem" onClick={() => scrollToSection('td-section-target')}>Body</button>
-        <button className="td-navitem" onClick={() => scrollToSection('td-section-arousal')}>Arousal</button>
-        <button className="td-navitem" onClick={() => scrollToSection('td-section-hrt')}>Medication</button>
+        <button className={`td-navitem ${activeSection === 'td-section-target' ? 'on' : ''}`} onClick={() => scrollToSection('td-section-target')}>Body</button>
+        <button className={`td-navitem ${activeSection === 'td-section-arousal' ? 'on' : ''}`} onClick={() => scrollToSection('td-section-arousal')}>Arousal</button>
+        <button className={`td-navitem ${activeSection === 'td-section-hrt' ? 'on' : ''}`} onClick={() => scrollToSection('td-section-hrt')}>Medication</button>
         {onExit && (
-          <button onClick={onExit} className="td-navitem" style={{ marginTop: 12, color: '#f47272' }}>
-            Back to chat
+          <button onClick={onExit} className="td-navitem td-navitem-back">
+            ← Back to chat
           </button>
         )}
         <div className="td-sidefoot">
@@ -240,40 +255,61 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
       </aside>
 
       <main className="td-main">
+        {/* PRIMARY — always visible. Status, what to do now, what's owed. */}
         <ProtocolDayCard />
         <UnifiedTaskList />
         <RevenueCard />
         <DailyBriefingCard />
         <HandlerDecreeCard />
         <ConfessionQueueCard />
-        <HandlerDreamCard />
-        <PhaseProgressCard />
-        <MantraStreakCard />
-        <IdentityDisplacementCard />
-        <HandlerKnowCard />
-        <HandlerRunningCard />
-        <HandlerEvolutionCard />
-        <OutreachQueueCard />
-        <DeviceScheduleCard />
-        <SlipLogCard />
-        <RationalizationPatternCard />
-        <EvidenceReportsCard />
-        <CommitmentsCard />
-        <OutfitMandateCard />
-        <WorkoutCard />
-        <VoiceDrillCard />
-        <ArousalLogCard />
-        <BodyMeasurementCard />
-        <LovenseHealthBanner />
-        <GinaCaptureCard />
-        <GinaWindowIndicator />
-        <GinaPlaybookCard />
-        <DisclosureDraftsCard />
-        <ComingOutVaultCard />
-        <GinaSessionsCard />
-        <UnifiedCaptureCard />
-        <WitnessObservationCard />
-        <IrreversibilityLedger />
+
+        {/* TODAY'S TASKS — body & voice work due today. Default open. */}
+        <CollapsibleGroup id="today_tasks" label="Today's Tasks" tone="#ec4899" defaultOpen={true} hint="outfit · workout · voice · arousal">
+          <OutfitMandateCard />
+          <WorkoutCard />
+          <VoiceDrillCard />
+          <ArousalLogCard />
+        </CollapsibleGroup>
+
+        {/* PROGRESS — phase, mantra, identity, body measurements. Default closed. */}
+        <CollapsibleGroup id="progress" label="Progress & Tracking" tone="#6ee7b7" hint="phase · streaks · body deltas">
+          <PhaseProgressCard />
+          <MantraStreakCard />
+          <IdentityDisplacementCard />
+          <BodyMeasurementCard />
+          <HandlerEvolutionCard />
+        </CollapsibleGroup>
+
+        {/* HANDLER SYSTEMS — what the Handler is doing in the background. */}
+        <CollapsibleGroup id="handler_systems" label="Handler Systems" tone="#c4b5fd" hint="dreams · outreach · slips · commitments · evidence">
+          <HandlerDreamCard />
+          <HandlerKnowCard />
+          <HandlerRunningCard />
+          <OutreachQueueCard />
+          <DeviceScheduleCard />
+          <SlipLogCard />
+          <RationalizationPatternCard />
+          <EvidenceReportsCard />
+          <CommitmentsCard />
+        </CollapsibleGroup>
+
+        {/* GINA — partner-facing playbook + disclosure pipeline. */}
+        <CollapsibleGroup id="gina_systems" label="Gina Systems" tone="#f4a7c4" hint="playbook · disclosure drafts · sessions">
+          <LovenseHealthBanner />
+          <GinaCaptureCard />
+          <GinaWindowIndicator />
+          <GinaPlaybookCard />
+          <DisclosureDraftsCard />
+          <ComingOutVaultCard />
+          <GinaSessionsCard />
+        </CollapsibleGroup>
+
+        {/* CAPTURE & EVIDENCE — proof + irreversibility ledger. */}
+        <CollapsibleGroup id="capture" label="Capture & Evidence" tone="#f4c272" hint="proof uploads · witness observations · irreversibility">
+          <UnifiedCaptureCard />
+          <WitnessObservationCard />
+          <IrreversibilityLedger />
+        </CollapsibleGroup>
         {data.banners.map((banner, i) => {
           const colors = banner.severity === 'critical'
             ? { border: '#7a1f22', bg: 'linear-gradient(92deg, #2a0a0c 0%, #1a0608 100%)', text: '#f47272', iconBg: '#3a0f12' }
