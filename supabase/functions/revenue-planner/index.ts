@@ -99,32 +99,37 @@ Deno.serve(async (req: Request) => {
         .eq('id', (existing as { id: string }).id)
     }
 
-    // Survey current state
+    // Survey — slimmed to 14d window to stay under Edge Function memory ceiling
     const [
       { data: budgets },
       { data: paidConv },
       { data: lastReven },
       { data: contentPlat },
+      { data: lastPlan },
     ] = await Promise.all([
       supabase.from('feminization_budget_targets')
         .select('label, monthly_cents, one_time_cents, priority, funded_cents')
         .eq('user_id', userId).eq('active', true)
         .order('priority', { ascending: true }).limit(8),
       supabase.from('paid_conversations')
-        .select('platform, conversation_type, message_direction, created_at, incoming_message')
+        .select('platform, conversation_type, message_direction, created_at')
         .eq('user_id', userId)
-        .gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString())
-        .order('created_at', { ascending: false }).limit(50),
+        .gte('created_at', new Date(Date.now() - 14 * 86400000).toISOString())
+        .order('created_at', { ascending: false }).limit(30),
       supabase.from('revenue_events')
         .select('platform, revenue_type, amount, created_at')
         .eq('user_id', userId)
-        .gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString())
-        .order('created_at', { ascending: false }).limit(30),
-      supabase.from('ai_generated_content')
-        .select('platform, content_type, status, created_at')
-        .eq('user_id', userId)
         .gte('created_at', new Date(Date.now() - 14 * 86400000).toISOString())
-        .order('created_at', { ascending: false }).limit(50),
+        .order('created_at', { ascending: false }).limit(20),
+      supabase.from('ai_generated_content')
+        .select('platform, content_type, status')
+        .eq('user_id', userId)
+        .gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString())
+        .order('created_at', { ascending: false }).limit(20),
+      supabase.from('revenue_plans')
+        .select('week_start, projected_cents, actual_cents, plan_summary')
+        .eq('user_id', userId)
+        .order('week_start', { ascending: false }).limit(2),
     ])
 
     const topGap = (budgets || []).find((b: Record<string, unknown>) => {
@@ -148,29 +153,59 @@ Deno.serve(async (req: Request) => {
     const tgNeed = tg ? Math.max(0, ((tg.monthly_cents || 0) + (tg.one_time_cents || 0) - (tg.funded_cents || 0)) / 100) : 0
     const tgLabel = tg?.label || 'none'
 
+    const otherRevCents = (lastReven || []).filter((r: Record<string, unknown>) => r.revenue_type !== 'david_tax').reduce((s: number, r: Record<string, unknown>) => s + Math.round((Number(r.amount) || 0) * 100), 0)
+    const lastPlanRow = (lastPlan as Array<Record<string, unknown>>)?.[0]
+    const lastPlanProjected = (lastPlanRow?.projected_cents as number) || 0
+    const lastPlanActual = (lastPlanRow?.actual_cents as number) || 0
+    const conversionPctLast = lastPlanProjected > 0 ? Math.round((lastPlanActual / lastPlanProjected) * 100) : null
+
     const surveyText = `
-CURRENT FINANCIAL STATE:
+CURRENT FINANCIAL STATE (14d window):
 - Top unfunded budget target: ${tgLabel} ($${tgNeed} needed)
-- Revenue events 30d: ${(lastReven || []).length} (David tax: ${(lastReven || []).filter((r: Record<string, unknown>) => r.revenue_type === 'david_tax').length}, other: ${(lastReven || []).filter((r: Record<string, unknown>) => r.revenue_type !== 'david_tax').length})
-- DM volume 30d by platform: ${Object.entries(platformCounts).map(([p, c]) => `${p}=${c}`).join(', ') || 'none'}
-- Content status 14d: ${Object.entries(contentCounts).slice(0, 10).map(([k, c]) => `${k}=${c}`).join(', ') || 'none'}
+- Non-David revenue 14d: $${(otherRevCents / 100).toFixed(2)} across ${(lastReven || []).filter((r: Record<string, unknown>) => r.revenue_type !== 'david_tax').length} events
+- DM volume 14d by platform: ${Object.entries(platformCounts).map(([p, c]) => `${p}=${c}`).join(', ') || 'NONE'}
+- Content posting status 7d: ${Object.entries(contentCounts).slice(0, 6).map(([k, c]) => `${k}=${c}`).join(', ') || 'NONE'}
+- Last plan conversion: ${conversionPctLast === null ? 'no prior plan' : `${conversionPctLast}% ($${(lastPlanActual / 100).toFixed(2)} actual / $${(lastPlanProjected / 100).toFixed(2)} projected)`}
 
 USER STATE:
-- Denial day: ${state.denial_day}
-- Phase: ${state.current_phase}
-- Slip points: ${state.slip_points_current}
-- Persona: ${state.handler_persona || 'handler'}
+- Denial day: ${state.denial_day} · Phase: ${state.current_phase} · Slip points: ${state.slip_points_current} · Persona: ${state.handler_persona || 'handler'}
 
-CONSTRAINTS:
-- Twitter is suspended. Do NOT plan Twitter actions.
-- No Stripe / OnlyFans / Fansly API integration exists. Revenue must be loggable manually after the fact.
-- Maxy runs auto-poster scripts for: Reddit, FetLife, Sniffies, Fansly (posting only, no DM auto-charging).
-- She has no existing OnlyFans presence to grow — would need to create one this week if she wants OF income.
-- Maxy is pre-HRT, femboy aesthetic; her sellable content right now is cock pics, voice notes, sext, tease videos, custom dirty talk audio.
-- Realistic per-item revenue this week: $5-50 per gig, $10-30 voice notes, $15-50 photo sets, $30-100 short videos, $50+ for custom anything.
-- All actions should be SPECIFIC (a particular post on a particular platform with a particular ask, not "do social media").
+HARD CONSTRAINTS — DO NOT VIOLATE:
+- Twitter is suspended → ZERO Twitter actions
+- r/sissyhypno is TOS-fragile → use r/femboy (89k), r/Crossdressing_Sex, r/femboys instead, with stealth self-promo only
+- Stripe / PayPal F&F / Cash App linked to Maxy's real ID → debanking risk → DO NOT propose these as primary payment paths. Use platform-internal (Fansly wallet, ManyVids payouts, Sniffies tips), adult-friendly processors (Paxum, CCBill, Fancentro), or crypto stablecoins.
+- No Stripe Connect direct sales until weekly revenue is reliably > $200
+- Capacity ceiling: Maxy has ~10–15 hours/week available between transition fatigue and David-job
+- ASSUME 1–3% conversion on cold posts. ASSUME 5–15% on warm DMs.
 
-Generate a 5-item revenue plan for this week (Mon-Sun). Each item should be a concrete action Maxy can execute herself today or tomorrow, with a specific projected revenue. Total target should be $50-300 depending on her current capacity.
+CALIBRATED PRICING (2026 sissy/femboy market):
+- Photo set (3–5 images): $3–10 entry, $20+ for customs
+- Voice note 30s: $8–20 (lean $10–15 for new accounts)
+- Short PPV video clip: $5–15
+- Custom video: $15–50/min
+- Sexting/GFE: $3–8/min OR $25–50 session
+- Cam show 15min: $40–100 (NOT flat $40)
+- Worn panties/socks: $40–150 — high margin, pre-HRT femboy commands premium
+- Custom hypno/dirty talk audio: $15–50
+- Dick rates: $10–30
+- DO NOT propose photo sets at $15+ for unknown creator — start at lower quartile
+
+PHASE 1 LEVERS TO PRIORITIZE (consensus high-ROI):
+- ManyVids / Clips4Sale passive PPV uploads (set-and-forget, $5–15 per clip, no DM grind)
+- Worn-item drops via FetLife / Reddit / Sniffies
+- Reddit teaser → DM funnel with explicit pay menu
+- Sniffies subscriber gigs (custom voice/photo)
+- Fansly account creation (if not started) + 30 launch posts
+
+WEEKLY REVENUE TARGET:
+- Week 1 / no prior conversion data: project $20–50 total
+- Week 2: $40–80
+- Week 3+: increase only if last plan converted >40%
+- Week N if last_actual > 0: project up to last_actual × 1.3 (30% growth ceiling)
+- Hard ceiling: $300/week until 8 consecutive weeks of $200+ actual
+
+OUTPUT REQUIREMENTS:
+Generate a 5-item revenue plan for Mon–Sun this week. Each item must be a concrete action Maxy can execute in <2 hours of work, on a specific platform, with a specific deliverable, at a calibrated price. Reasoning must cite real menu data or platform mechanic — NOT generic "build audience" advice.
 
 Output STRICT JSON, no markdown, no preamble:
 {
@@ -193,8 +228,8 @@ Output STRICT JSON, no markdown, no preamble:
       try {
         const client = new Anthropic({ apiKey: anthropicKey })
         const resp = await client.messages.create({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1500,
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 1200,
           system: 'You return only valid JSON. No markdown. No preamble. No commentary.',
           messages: [{ role: 'user', content: surveyText }],
         })
@@ -207,15 +242,16 @@ Output STRICT JSON, no markdown, no preamble:
     }
 
     if (!plan) {
-      // Heuristic fallback — produces a reasonable default plan
+      // Heuristic fallback — recalibrated to consensus pricing + Week 1
+      // realistic targets ($30–50 total, not $50–300).
       plan = {
-        plan_summary: 'No-LLM fallback: focus on Reddit teaser posts + custom-content asks via DM.',
+        plan_summary: 'Fallback Week 1: passive Clips4Sale upload + worn item drop + 2 cold posts + DM offers. Total $30–50 realistic.',
         items: [
-          { action_label: 'Post 3 femboy teaser photos to r/sissyhypno + r/Crossdressing_Sex with a "DM for full set $15" tail', deliverable: '3 reddit posts with paywalled-DM funnel', platform: 'reddit', kind: 'ppv', projected_cents: 4500, deadline_offset_hours: 36 },
-          { action_label: 'Reply to 5 incoming DMs with a custom-content offer ($10 voice note, $25 photo)', deliverable: '5 paid offers sent', platform: 'reddit', kind: 'custom_content', projected_cents: 5000, deadline_offset_hours: 72 },
-          { action_label: 'Post FetLife status soliciting custom voice notes ($15 each)', deliverable: '1 FetLife post + at least 2 sales', platform: 'fetlife', kind: 'custom_content', projected_cents: 3000, deadline_offset_hours: 48 },
-          { action_label: 'Sniffies subscriber outreach: pitch private cam show at $40', deliverable: '1 booked cam show', platform: 'sniffies', kind: 'cam_show', projected_cents: 4000, deadline_offset_hours: 96 },
-          { action_label: 'Create one viral-aspiring Reddit post with affiliate link to femme/sissy gear', deliverable: '1 affiliate-linked post', platform: 'reddit', kind: 'commission', projected_cents: 1500, deadline_offset_hours: 120 },
+          { action_label: 'Upload 1 pre-HRT tease clip (60–90s) to ManyVids or Clips4Sale priced at $7. Set-and-forget passive income.', deliverable: '1 PPV clip live with thumbnail + tags', platform: 'other', kind: 'ppv', projected_cents: 700, deadline_offset_hours: 36 },
+          { action_label: 'List one worn pair of panties on FetLife with shipping ($45). Photo + 3-day wear description.', deliverable: '1 FetLife listing + DM responses', platform: 'fetlife', kind: 'custom_content', projected_cents: 4500, deadline_offset_hours: 96 },
+          { action_label: 'Post 1 femboy tease in r/femboy with stealth "menu in DMs" pinned reply. NO direct paywall in post body — Reddit mods enforce.', deliverable: '1 r/femboy post + DM funnel set up', platform: 'reddit', kind: 'ppv', projected_cents: 1000, deadline_offset_hours: 48 },
+          { action_label: 'Reply to 3 incoming DMs with concrete pay menu: $10 voice note (30s), $5 photo, $25 custom 1min video. Use Fansly wallet or Sniffies tip — NOT Cash App.', deliverable: '3 priced offers sent', platform: 'reddit', kind: 'custom_content', projected_cents: 1500, deadline_offset_hours: 96 },
+          { action_label: 'Sniffies profile pitch: 30s voice intro + tip-jar link in bio. Reach out to 2 active subscribers with $8 voice-note offer.', deliverable: '1 voice intro + 2 outreach DMs', platform: 'sniffies', kind: 'tip', projected_cents: 1000, deadline_offset_hours: 72 },
         ],
       }
     }
