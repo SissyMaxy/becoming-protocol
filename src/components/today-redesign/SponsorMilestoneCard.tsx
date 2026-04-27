@@ -43,7 +43,7 @@ export function SponsorMilestoneCard() {
   const [tributes, setTributes] = useState<Tribute[]>([]);
   const [copied, setCopied] = useState<string | null>(null);
   const [marking, setMarking] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
 
   const load = useCallback(async () => {
     if (!user?.id) return;
