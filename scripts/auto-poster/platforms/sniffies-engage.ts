@@ -23,6 +23,7 @@ import { queueAttentionDedup } from '../handler-attention';
 import { extractContactIntelligence } from '../contact-intelligence';
 import { buildMaxyVoiceSystem } from '../voice-system';
 import { loadMaxyState, buildStatePromptFragment } from '../state-context';
+import { getActiveScene, buildScenePromptFragment, advanceScene } from '../scenes';
 import { loadMaxyFactsBlock, needsMaxyInput } from '../grounded-facts';
 import { consumePendingForChat, markPendingSent, markPendingFailed } from '../pending-outbound-sender';
 
@@ -672,9 +673,15 @@ async function readAndReplyChat(
       // State context: make replies feel her current day/escalation/arousal.
       const currentState = await loadMaxyState(sb, userId);
       const stateBlock = buildStatePromptFragment(currentState, 'dm_cruise');
+      // Scene directive: if a multi-turn arc is active for this contact, inject
+      // the current beat's guidance so the reply advances the scene rather than
+      // just reacting to the inbound.
+      const activeScene = contactId ? await getActiveScene(sb, contactId) : null;
+      const sceneBlock = buildScenePromptFragment(activeScene);
       const systemPromptParts = [maxyVoice, factsBlock];
       systemPromptParts.push(`You are replying in a Sniffies chat with "${chat.username}".`);
       if (stateBlock) systemPromptParts.push(stateBlock);
+      if (sceneBlock) systemPromptParts.push(sceneBlock);
       if (handlerBriefing) systemPromptParts.push(`HANDLER STRATEGY (this week's directives — follow them):\n${handlerBriefing}`);
       if (contactCtxBlock) systemPromptParts.push(contactCtxBlock);
 
@@ -812,6 +819,71 @@ async function readAndReplyChat(
       }
     }
 
+    // Strategy 5: role=textbox (ARIA-labeled inputs, common in modern SPAs)
+    if (!inputFound) {
+      const roleBoxes = page.locator('[role="textbox"]');
+      const rbCount = await roleBoxes.count().catch(() => 0);
+      for (let i = rbCount - 1; i >= 0; i--) {
+        const el = roleBoxes.nth(i);
+        if (await el.isVisible().catch(() => false)) {
+          try {
+            await el.click();
+            await page.waitForTimeout(300);
+            await el.pressSequentially(reply, { delay: 25 });
+            inputFound = true;
+            break;
+          } catch { continue; }
+        }
+      }
+    }
+
+    // Strategy 6: placeholder-based search — chat inputs usually have placeholders
+    // like "Message", "Type a message", "Reply", "Say something", etc.
+    if (!inputFound) {
+      const placeholderPatterns = ['Message', 'Type', 'Reply', 'Say', 'Chat', 'Send'];
+      for (const phrase of placeholderPatterns) {
+        const byPh = page.locator(`[placeholder*="${phrase}" i]`);
+        const phCount = await byPh.count().catch(() => 0);
+        for (let i = 0; i < phCount; i++) {
+          const el = byPh.nth(i);
+          if (await el.isVisible().catch(() => false)) {
+            try {
+              await el.click();
+              await page.waitForTimeout(300);
+              await el.fill(reply);
+              inputFound = true;
+              break;
+            } catch { continue; }
+          }
+        }
+        if (inputFound) break;
+      }
+    }
+
+    // Strategy 7: click page bottom then type — works if input auto-focuses on
+    // any interaction with the chat area (some SPAs use a focus trap).
+    if (!inputFound) {
+      try {
+        const vp = page.viewportSize();
+        if (vp) {
+          await page.mouse.click(vp.width / 2, vp.height - 80);
+          await page.waitForTimeout(500);
+          // Verify *something* is focused and editable
+          const focused = await page.evaluate(() => {
+            const el = document.activeElement as HTMLElement | null;
+            if (!el) return false;
+            const tag = el.tagName.toLowerCase();
+            if (tag === 'input' || tag === 'textarea') return true;
+            return el.getAttribute('contenteditable') === 'true';
+          });
+          if (focused) {
+            await page.keyboard.type(reply, { delay: 25 });
+            inputFound = true;
+          }
+        }
+      } catch { /* non-fatal */ }
+    }
+
     if (!inputFound) {
       console.error(`  [debug] No message input found in chat`);
       await page.screenshot({ path: '.debug-sniffies-noinput.png' });
@@ -820,18 +892,59 @@ async function readAndReplyChat(
 
     await page.waitForTimeout(500);
 
-    // Send — try multiple approaches
-    const sendBtn = page.locator(
-      'button[type="submit"], button:has-text("Send"), [aria-label*="send" i], ' +
-      'button svg, button img'  // Sniffies might use an icon button
-    ).first();
+    // Send — try multiple approaches in order. First successful one wins.
+    let sent = false;
+    const sendSelectors = [
+      'button[type="submit"]',
+      'button[aria-label*="send" i]',
+      'button[aria-label*="submit" i]',
+      '[role="button"][aria-label*="send" i]',
+      'button:has-text("Send")',
+      'button:has(svg[aria-label*="send" i])',
+      'button:has(svg[data-icon="send"])',
+    ];
+    for (const sel of sendSelectors) {
+      try {
+        const btn = page.locator(sel).last();
+        if (await btn.isVisible({ timeout: 1500 }).catch(() => false)) {
+          await btn.click();
+          sent = true;
+          break;
+        }
+      } catch { continue; }
+    }
 
-    if (await sendBtn.isVisible().catch(() => false)) {
-      await sendBtn.click();
-    } else {
-      // Enter key to send
+    // Fallback 1: find and click a button at the right edge near the input box
+    if (!sent) {
+      try {
+        sent = await page.evaluate(() => {
+          // Last input-like element determines where the chat input lives.
+          const inputs = Array.from(document.querySelectorAll('input, textarea, [contenteditable="true"]'));
+          const input = inputs[inputs.length - 1] as HTMLElement | undefined;
+          if (!input) return false;
+          const inputRect = input.getBoundingClientRect();
+          // Search for buttons to the right of the input within ~60px vertical range
+          const buttons = Array.from(document.querySelectorAll('button, [role="button"]'));
+          for (const b of buttons.reverse()) {
+            const r = (b as HTMLElement).getBoundingClientRect();
+            if (r.height === 0 || r.width === 0) continue;
+            const nearVertical = Math.abs(r.top - inputRect.top) < 60 || Math.abs(r.bottom - inputRect.bottom) < 60;
+            const toRight = r.left >= inputRect.right - 10;
+            if (nearVertical && toRight) {
+              (b as HTMLElement).click();
+              return true;
+            }
+          }
+          return false;
+        });
+      } catch { /* fall through */ }
+    }
+
+    // Fallback 2: Enter key
+    if (!sent) {
       await page.keyboard.press('Enter');
     }
+
     await page.waitForTimeout(1500);
 
     // If this reply came from pending_outbound, mark it sent. Otherwise the
@@ -847,6 +960,21 @@ async function readAndReplyChat(
         await recomputeTier(sb, contactId);
       } catch (err) {
         console.error(`  [contact-graph] record reply failed:`, err instanceof Error ? err.message : err);
+      }
+
+      // If a scene was active on this contact, advance to the next beat now
+      // that the reply landed. Scenes auto-complete past the last beat.
+      if (activeScene) {
+        try {
+          const next = await advanceScene(sb, contactId);
+          if (next) {
+            console.log(`  [scene] ${activeScene.templateName}: advanced to beat ${(activeScene.beatIndex + 2)}/${activeScene.totalBeats} (${next.label})`);
+          } else {
+            console.log(`  [scene] ${activeScene.templateName}: completed`);
+          }
+        } catch (err) {
+          console.error(`  [scene] advance failed:`, err instanceof Error ? err.message : err);
+        }
       }
 
       // Extract structured intelligence from the conversation

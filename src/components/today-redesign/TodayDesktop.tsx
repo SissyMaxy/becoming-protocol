@@ -37,6 +37,7 @@ import { CollapsibleGroup } from './CollapsibleGroup';
 import { DavidTaxCard } from './DavidTaxCard';
 import { RevenuePlanCard } from './RevenuePlanCard';
 import { NextShotsCard } from './NextShotsCard';
+import { SponsorMilestoneCard } from './SponsorMilestoneCard';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
 import { SlipLogCard } from './SlipLogCard';
@@ -263,6 +264,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         <UnifiedTaskList />
         <NextShotsCard />
         <RevenueCard />
+        <SponsorMilestoneCard />
         <RevenuePlanCard />
         <DavidTaxCard />
         <DailyBriefingCard />

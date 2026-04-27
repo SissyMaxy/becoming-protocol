@@ -41,6 +41,8 @@ import { runVoiceLearn } from './voice-learn';
 import { runStaleRevival } from './stale-conversation-revival';
 import { runRedditBackfill } from './backfill-reddit-engagement';
 import { runScheduledAudit } from './audit-alignment';
+import { runWeeklyDigest } from './insights';
+import { queueAttentionDedup } from './handler-attention';
 import { invalidateVoiceCache } from './voice-system';
 import { runAllMoneyIngest } from './money-ingest';
 import { runAnnounceLive } from './announce-live';
@@ -326,6 +328,29 @@ async function tick() {
     const total = vault + ai;
     if (total > 0) {
       console.log(`[${timestamp}] Posted ${vault} vault + ${ai} AI = ${total} item(s)`);
+    }
+
+    // --- Once per scheduler session then every 672 ticks (~7d): weekly digest ---
+    // Synthesizes performance insights and queues them to handler_attention so
+    // Maxy sees "dead subs / best platform / grader agreement" without manually
+    // running insights.ts. Dedup window is 6 days so one digest per week.
+    if (tickCount === 30 || (tickCount > 30 && tickCount % 672 === 30)) {
+      await withTimeout('Weekly digest', async () => {
+        try {
+          const summary = await runWeeklyDigest();
+          if (summary) {
+            await queueAttentionDedup(supabase, USER_ID, {
+              kind: 'custom',
+              severity: 'low',
+              summary: `[weekly_digest] ${summary.slice(0, 450)}`,
+              payload: { digest: summary, generated_at: new Date().toISOString() },
+            }, 6 * 24 * 60);
+            console.log(`[${timestamp}] Weekly digest queued to attention`);
+          }
+        } catch (err) {
+          console.error(`[${timestamp}] Weekly digest failed:`, err instanceof Error ? err.message : err);
+        }
+      }, 60000);
     }
 
     // --- Every 24 ticks (~6h): grade recent content + persist to content_grades ---

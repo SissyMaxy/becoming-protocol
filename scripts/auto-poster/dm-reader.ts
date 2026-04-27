@@ -23,6 +23,7 @@ import { gateOutbound } from './pii-guard';
 import { queueAttentionDedup } from './handler-attention';
 import { getOpenTributeFor } from './tributes';
 import { loadMaxyState, buildStatePromptFragment } from './state-context';
+import { getActiveScene, buildScenePromptFragment, advanceScene } from './scenes';
 
 interface IncomingDM {
   platform: string;
@@ -788,6 +789,7 @@ async function generateDMResponse(
   msg: IncomingDM,
   conversationHistory: string[],
   contactCtx: string = '',
+  contactId: string | null = null,
 ): Promise<string | null> {
   try {
     const historyContext = conversationHistory.length > 0
@@ -808,10 +810,20 @@ async function generateDMResponse(
       } catch { /* non-fatal */ }
     }
 
+    // Scene directive: if this contact has an active multi-turn arc, inject
+    // the current beat's guidance so the reply advances the scene.
+    let sceneBlock = '';
+    if (contactId) {
+      try {
+        const scene = await getActiveScene(supabase, contactId);
+        sceneBlock = buildScenePromptFragment(scene);
+      } catch { /* non-fatal */ }
+    }
+
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 200,
-      system: MAXY_DM_PROMPT + voiceBlock + (stateBlock ? `\n\n${stateBlock}` : '') + (contactCtx ? `\n\n${contactCtx}` : ''),
+      system: MAXY_DM_PROMPT + voiceBlock + (stateBlock ? `\n\n${stateBlock}` : '') + (sceneBlock ? `\n\n${sceneBlock}` : '') + (contactCtx ? `\n\n${contactCtx}` : ''),
       messages: [{
         role: 'user',
         content: `Reply as Maxy to ${msg.fanDisplayName} on ${msg.platform} DMs.${historyContext}\n\nTheir latest message: "${msg.messageText}"\n\nReply in Maxy's voice. Match the example messages in your instructions. If LEARNED VOICE examples exist, match those even more closely. NO asterisks. NO roleplay narration. NO "sweetie" energy. Be Maxy.`,
@@ -963,7 +975,7 @@ async function storeThreadsAndRespond(threads: ConversationThread[], anthropic: 
         receivedAt: new Date().toISOString(),
       };
 
-      let reply = await generateDMResponse(anthropic, dmMsg, historyLines, contactCtxBlock);
+      let reply = await generateDMResponse(anthropic, dmMsg, historyLines, contactCtxBlock, contactId);
       if (reply) {
         // Guardrail: block/deflect outbound before queueing.
         const gate = gateOutbound(lastMsg.text, reply);
@@ -1022,6 +1034,19 @@ async function storeThreadsAndRespond(threads: ConversationThread[], anthropic: 
           } catch (err) {
             console.error(`[contact-graph] DM record failed:`, err instanceof Error ? err.message : err);
           }
+
+          // Advance active scene if one was running on this contact.
+          try {
+            const scene = await getActiveScene(supabase, contactId);
+            if (scene) {
+              const next = await advanceScene(supabase, contactId);
+              if (next) {
+                console.log(`[DM] [scene] ${scene.templateName}: advanced to beat ${(scene.beatIndex + 2)}/${scene.totalBeats} (${next.label})`);
+              } else {
+                console.log(`[DM] [scene] ${scene.templateName}: completed`);
+              }
+            }
+          } catch { /* non-fatal */ }
         }
         console.log(`[DM] Response queued for ${thread.platform}/${thread.fanIdentifier}: "${reply.substring(0, 50)}..."`);
       }

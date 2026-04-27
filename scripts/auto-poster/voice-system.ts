@@ -89,16 +89,19 @@ export async function buildMaxyVoiceSystem(
     const flavorFilter = FLAVOR_CORPUS_FILTER[flavor];
 
     // If this flavor targets a specific corpus subset, try that first.
+    // For mommy-dom flavors, prefer rows with high femme_signal so feminization
+    // content dominates the exemplar pool rather than operational/prosaic DMs.
     let data: Array<{ text: string; source: string; signal_score: number }> | null = null;
     if (flavorFilter) {
-      const { data: flavored } = await sb
+      const preferFemme = flavorFilter === 'mommy_dom_outbound';
+      const q = sb
         .from('user_voice_corpus')
-        .select('text, source, signal_score')
+        .select('text, source, signal_score, femme_signal')
         .in('user_id', userIds)
-        .eq('corpus_flavor', flavorFilter)
-        .order('signal_score', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(8);
+        .eq('corpus_flavor', flavorFilter);
+      const { data: flavored } = preferFemme
+        ? await q.order('femme_signal', { ascending: false }).order('signal_score', { ascending: false }).limit(8)
+        : await q.order('signal_score', { ascending: false }).order('created_at', { ascending: false }).limit(8);
       if (flavored && flavored.length >= 3) data = flavored;
     }
 
