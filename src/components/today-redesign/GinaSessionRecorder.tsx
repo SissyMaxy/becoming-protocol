@@ -178,26 +178,33 @@ export function GinaSessionRecorder() {
           onClick={status === 'recording' ? stopRecording : status === 'idle' ? startRecording : () => setShowPanel(true)}
           disabled={status === 'uploading' || status === 'transcribing'}
           title={status === 'recording' ? 'Stop recording' : 'Record Gina conversation'}
+          aria-label={status === 'recording' ? 'Stop recording' : 'Record Gina conversation'}
           style={{
-            width: 56, height: 56, borderRadius: '50%', border: 'none',
-            background: color,
-            color: '#1a0a12', cursor: 'pointer',
+            height: 44, borderRadius: 22, padding: '0 16px 0 12px', border: 'none',
+            background: color, color: '#1a0a12', cursor: 'pointer',
             boxShadow: status === 'recording'
               ? '0 0 0 0 rgba(244,114,114,0.7), 0 6px 18px rgba(244,114,114,0.5)'
               : '0 4px 14px rgba(0,0,0,0.4)',
             animation: status === 'recording' ? 'gsrPulse 1.5s infinite' : undefined,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            display: 'flex', alignItems: 'center', gap: 8,
+            fontFamily: 'inherit', fontSize: 12, fontWeight: 700, letterSpacing: '0.02em',
           }}
         >
           {status === 'recording' ? (
-            <span style={{ width: 16, height: 16, background: '#1a0a12', borderRadius: 2 }} />
+            <span style={{ width: 14, height: 14, background: '#1a0a12', borderRadius: 2 }} />
           ) : status === 'uploading' || status === 'transcribing' ? (
             <span style={{ fontSize: 10, fontWeight: 700 }}>{status === 'uploading' ? 'UP' : 'TX'}</span>
           ) : (
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="#1a0a12">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="#1a0a12">
               <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zM19 11a1 1 0 0 0-2 0 5 5 0 0 1-10 0 1 1 0 0 0-2 0 7 7 0 0 0 6 6.92V21a1 1 0 0 0 2 0v-3.08A7 7 0 0 0 19 11z"/>
             </svg>
           )}
+          <span>
+            {status === 'recording' ? 'Stop'
+              : status === 'uploading' ? 'Uploading'
+              : status === 'transcribing' ? 'Transcribing'
+              : 'Record Gina'}
+          </span>
         </button>
 
         {status === 'recording' && (

@@ -803,16 +803,19 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
       <button
         onClick={() => setComposeOpen(o => !o)}
         title="Talk to the Handler"
+        aria-label={composeOpen ? 'Close handler chat' : 'Open handler chat'}
         style={{
-          position: 'fixed', right: 28, bottom: 28, width: 54, height: 54, borderRadius: 27,
+          position: 'fixed', right: 28, bottom: 28, height: 44, borderRadius: 22,
+          paddingLeft: 14, paddingRight: 18,
           background: composeOpen ? '#22222a' : '#7c3aed', color: '#fff', border: 'none', cursor: 'pointer',
-          boxShadow: '0 4px 16px rgba(124, 58, 237, 0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontFamily: 'inherit', zIndex: 90,
+          boxShadow: '0 4px 16px rgba(124, 58, 237, 0.35)', display: 'flex', alignItems: 'center', gap: 8,
+          fontFamily: 'inherit', fontSize: 12.5, fontWeight: 600, zIndex: 90,
         }}
       >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           {composeOpen ? <path d="M6 6l12 12M18 6L6 18" /> : <><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></>}
         </svg>
+        <span>{composeOpen ? 'Close' : 'Chat'}</span>
       </button>
       {composeOpen && (
         <div style={{

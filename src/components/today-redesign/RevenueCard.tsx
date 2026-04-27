@@ -95,7 +95,7 @@ export function RevenueCard() {
   const tone = isZero ? '#7a1f22' : cents30 >= monthlyNeed ? '#5fc88f' : '#f4c272';
 
   return (
-    <div style={{
+    <div id="card-revenue" style={{
       background: isZero
         ? 'linear-gradient(135deg, #2a0a0c 0%, #1a0608 100%)'
         : 'linear-gradient(135deg, #0a1a14 0%, #061008 100%)',
@@ -129,17 +129,28 @@ export function RevenueCard() {
         {targets.map(t => {
           const need = t.monthly_cents || t.one_time_cents;
           const pct = need > 0 ? Math.min(100, Math.round((t.funded_cents / need) * 100)) : 0;
-          const cadence = t.monthly_cents > 0 ? '/mo' : ' one-time';
           return (
             <div key={t.id} style={{ marginBottom: 6 }}>
-              <div style={{ display: 'flex', fontSize: 11, color: '#e8e6e3', marginBottom: 2 }}>
-                <span>{t.label}</span>
-                <span style={{ marginLeft: 'auto', color: '#8a8690' }}>
-                  {fmtUsd(t.funded_cents)} / {fmtUsd(need)}{cadence}
+              <div style={{
+                display: 'flex', gap: 8, fontSize: 11, color: '#e8e6e3', marginBottom: 2,
+                alignItems: 'baseline',
+              }}>
+                <span style={{
+                  flex: 1, minWidth: 0,
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>
+                  {t.label}
+                </span>
+                <span style={{
+                  flexShrink: 0, color: '#8a8690', fontVariantNumeric: 'tabular-nums',
+                  fontSize: 10.5,
+                }}>
+                  {fmtUsd(t.funded_cents)} / {fmtUsd(need)}
+                  <span style={{ color: '#5a5560', marginLeft: 3 }}>{t.monthly_cents > 0 ? '/mo' : 'one-time'}</span>
                 </span>
               </div>
               <div style={{ height: 4, background: '#1a1a20', borderRadius: 2, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${pct}%`, background: pct >= 100 ? '#5fc88f' : '#7c3aed' }} />
+                <div style={{ height: '100%', width: `${pct}%`, background: pct >= 100 ? '#5fc88f' : '#7c3aed', transition: 'width 0.3s' }} />
               </div>
             </div>
           );

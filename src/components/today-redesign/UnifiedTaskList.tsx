@@ -44,6 +44,38 @@ const SOURCE_LABEL: Record<Source, string> = {
   hrt_gate: 'HRT gate',
 };
 
+// Each source has a card on Today — scroll the user there when they hit
+// the RIGHT NOW CTA. The id lookup matches anchors on the cards
+// themselves; if missing, we fall back to opening the Handler chat with
+// a prefill.
+function scrollTargetForSource(source: Source): string | null {
+  switch (source) {
+    case 'commitment': return 'card-commitments';
+    case 'decree': return 'card-handler-decree';
+    case 'confession': return 'card-confession-queue';
+    case 'outfit': return 'card-outfit-mandate';
+    case 'workout': return 'card-workout';
+    case 'punishment': return 'card-slip-log';
+    case 'directive': return 'card-handler-running';
+    case 'hrt_gate': return null; // gate is a modal, no scroll target
+    default: return null;
+  }
+}
+
+function ctaLabelForSource(source: Source): string {
+  switch (source) {
+    case 'commitment': return 'Submit evidence';
+    case 'decree': return 'Mark fulfilled';
+    case 'confession': return 'Confess now';
+    case 'outfit': return 'Upload outfit photo';
+    case 'workout': return 'Mark workout done';
+    case 'punishment': return 'Execute punishment';
+    case 'directive': return 'Open directive';
+    case 'hrt_gate': return 'Advance HRT step';
+    default: return 'Take action';
+  }
+}
+
 function formatDue(due: string | null): { text: string; overdueHours: number } {
   if (!due) return { text: 'no deadline', overdueHours: 0 };
   const diffMs = new Date(due).getTime() - Date.now();
@@ -255,7 +287,7 @@ export function UnifiedTaskList() {
         <div style={{ fontSize: 14, color: '#fff', fontWeight: 600, lineHeight: 1.4, marginBottom: 4 }}>
           {rightNow.label}
         </div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 10.5 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 10.5, marginBottom: 10 }}>
           <span style={{ color: formatDue(rightNow.due).overdueHours > 0 ? '#f47272' : '#f4c272', fontWeight: 700 }}>
             {formatDue(rightNow.due).text}
           </span>
@@ -264,6 +296,32 @@ export function UnifiedTaskList() {
           )}
           {rightNow.detail && <span style={{ color: '#8a8690' }}>{rightNow.detail}</span>}
         </div>
+        <button
+          onClick={() => {
+            const id = scrollTargetForSource(rightNow.source);
+            if (id) {
+              const el = document.getElementById(id);
+              if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                el.style.outline = '2px solid #f4c272';
+                el.style.transition = 'outline 0.4s';
+                setTimeout(() => { el.style.outline = ''; }, 1800);
+                return;
+              }
+            }
+            // Fallback: open Handler chat with prefill
+            sessionStorage.setItem('handler_chat_prefill', `Re: ${rightNow.label.slice(0, 120)}\n\n`);
+            window.location.hash = '';
+          }}
+          style={{
+            padding: '8px 14px', borderRadius: 6, border: 'none',
+            background: '#f47272', color: '#1a050a',
+            fontWeight: 700, fontSize: 12, cursor: 'pointer',
+            fontFamily: 'inherit', textTransform: 'uppercase', letterSpacing: '0.04em',
+          }}
+        >
+          {ctaLabelForSource(rightNow.source)}
+        </button>
       </div>
 
       {nextUp && (
@@ -288,13 +346,19 @@ export function UnifiedTaskList() {
       )}
 
       {after.length > 0 && (
-        <details style={{ marginTop: 4 }}>
+        <details style={{ marginTop: 4 }} className="td-task-queue">
           <summary style={{
-            fontSize: 10, color: '#8a8690', cursor: 'pointer',
+            fontSize: 10.5, color: '#c4b5fd', cursor: 'pointer',
             textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6,
             userSelect: 'none',
+            padding: '7px 10px',
+            border: '1px solid #2d1a4d', borderRadius: 5,
+            background: '#0a0a0d',
+            display: 'flex', alignItems: 'center', gap: 6,
+            transition: 'background 0.15s, border-color 0.15s',
           }}>
-            after that · {after.length} more queued
+            <span style={{ display: 'inline-block', transition: 'transform 0.15s' }} className="td-chevron">▸</span>
+            after that · {after.length} more queued · click to expand
           </summary>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
             {after.map(t => {

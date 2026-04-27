@@ -145,7 +145,7 @@ export function ConfessionQueueCard() {
   if (items.length === 0 && totalReceipts === 0) return null;
 
   return (
-    <div style={{
+    <div id="card-confession-queue" style={{
       background: 'linear-gradient(135deg, #2a0a1a 0%, #1a050e 100%)',
       border: '1px solid #7a1f3a', borderRadius: 10, padding: 14, marginBottom: 16,
     }}>
@@ -258,6 +258,13 @@ export function ConfessionQueueCard() {
                 fontFamily: 'inherit', resize: 'vertical',
               }}
             />
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', fontSize: 9.5,
+              color: draft.length >= 30 ? '#5fc88f' : '#8a8690', marginTop: 3,
+            }}>
+              <span>{draft.length} chars · gate accepts at ~30+ with specifics</span>
+              {draft.length >= 30 && <span style={{ color: '#5fc88f' }}>length ok — gate also checks content</span>}
+            </div>
             {gateRejection[c.id] && (
               <div style={{
                 marginTop: 6, padding: '7px 9px',
