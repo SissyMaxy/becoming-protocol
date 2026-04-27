@@ -40,6 +40,7 @@ import { NextShotsCard } from './NextShotsCard';
 import { SponsorMilestoneCard } from './SponsorMilestoneCard';
 import { WornItemCard } from './WornItemCard';
 import { DmTemplateCard } from './DmTemplateCard';
+import { MorningBriefCard } from './MorningBriefCard';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
 import { SlipLogCard } from './SlipLogCard';
@@ -214,6 +215,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
       {tab === 'today' && (
         <div style={{ padding: '0 16px' }}>
           <ProtocolDayCard />
+          <MorningBriefCard />
           <UnifiedTaskList />
           <NextShotsCard />
           <RevenueCard />

@@ -40,6 +40,7 @@ import { NextShotsCard } from './NextShotsCard';
 import { SponsorMilestoneCard } from './SponsorMilestoneCard';
 import { WornItemCard } from './WornItemCard';
 import { DmTemplateCard } from './DmTemplateCard';
+import { MorningBriefCard } from './MorningBriefCard';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
 import { SlipLogCard } from './SlipLogCard';
@@ -263,6 +264,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
       <main className="td-main">
         {/* PRIMARY — always visible. Status, what to do now, what's owed. */}
         <ProtocolDayCard />
+        <MorningBriefCard />
         <UnifiedTaskList />
         <NextShotsCard />
         <RevenueCard />
