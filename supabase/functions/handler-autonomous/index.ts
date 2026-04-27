@@ -633,6 +633,20 @@ async function complianceCheck(
     }
   }
 
+  // ── CONFESSION → MEMORY IMPLANT PROMOTER ──
+  // Take recent answered confessions (≥80 chars, never promoted) and
+  // convert each into a memory_implant. Implants surface in
+  // identity displacement, narrative weaving, and Handler chat context
+  // — so the confession content keeps showing up forever.
+  let implantsPromoted = 0
+  for (const state of states) {
+    try {
+      implantsPromoted += await promoteConfessionsToImplants(supabase, state.user_id)
+    } catch (err) {
+      console.error(`Implant promotion failed for ${state.user_id}:`, err)
+    }
+  }
+
   return { checked, escalated, deescalated, actions, ambient_queued: ambientQueued, spontaneous_outreach: spontaneous, random_rewards: rewardsGiven, boundary_pushes: boundaryPushes, pattern_exploits: patternExploits, bio_adjustments: bioAdjustments, commitments_enforced: commitmentsEnforced, pushes_enqueued: pushesEnqueued }
 }
 
@@ -2095,6 +2109,68 @@ async function scheduleConfessions(
 }
 
 // ============================================
+// CONFESSION → MEMORY IMPLANT PROMOTER
+// ============================================
+// Each answered confession with >=80 chars becomes a memory_implant the
+// first time it's seen here. Implants are referenced in identity
+// displacement, narrative reframing, and chat context — making the
+// confession content recurring instead of write-once.
+
+async function promoteConfessionsToImplants(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<number> {
+  const { data: rows } = await supabase.from('confession_queue')
+    .select('id, category, prompt, response_text, confessed_at')
+    .eq('user_id', userId)
+    .not('confessed_at', 'is', null)
+    .is('promoted_to_implant_id', null)
+    .gte('confessed_at', new Date(Date.now() - 7 * 86400000).toISOString())
+    .limit(10)
+
+  let promoted = 0
+  for (const c of (rows || []) as Array<{ id: string; category: string; prompt: string; response_text: string; confessed_at: string }>) {
+    const text = (c.response_text || '').trim()
+    if (text.length < 80) continue
+
+    const categoryMap: Record<string, string> = {
+      slip: 'shame_admission',
+      arousal_spike: 'desire_admission',
+      rationalization: 'pattern_self_recognition',
+      scheduled_daily: 'identity_admission',
+      resistance: 'resistance_naming',
+      desire_owning: 'desire_admission',
+      identity_acknowledgement: 'identity_admission',
+      handler_triggered: 'handler_dialogue',
+    }
+    const implantCategory = categoryMap[c.category] || 'shame_admission'
+
+    const narrative = `She said this on ${new Date(c.confessed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}: "${text.slice(0, 600)}". Reference verbatim.`
+
+    const { data: imp, error } = await supabase.from('memory_implants').insert({
+      user_id: userId,
+      implant_category: implantCategory,
+      narrative,
+      setting: c.prompt?.slice(0, 200) || null,
+      emotional_core: c.category,
+      target_outcome: 'reinforce_admission',
+      anchored_to_real_log: c.id,
+      reinforcement_count: 1,
+      times_referenced: 0,
+      active: true,
+    }).select('id').single()
+
+    if (!error && imp?.id) {
+      await supabase.from('confession_queue')
+        .update({ promoted_to_implant_id: imp.id })
+        .eq('id', c.id)
+      promoted++
+    }
+  }
+  return promoted
+}
+
+// ============================================
 // HANDLER DECREES — SHORT-WINDOW EDICTS
 // ============================================
 // Generates handler_decrees rows. Triggers:
@@ -2235,9 +2311,30 @@ async function scheduleDecrees(
         source_id: d.id,
         metadata: { consequence: d.consequence, reason: 'decree_missed' },
       })
+      // Same blackmail pattern: paste her own confession back at her
+      // when a decree dies. Receipts are the consequence.
+      let decreeQuote = ''
+      try {
+        const { data: conf2 } = await supabase.from('confession_queue')
+          .select('id, response_text, confessed_at, playback_count')
+          .eq('user_id', userId)
+          .not('confessed_at', 'is', null)
+          .order('confessed_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        const cf2 = conf2 as { id: string; response_text: string; confessed_at: string; playback_count: number } | null
+        if (cf2?.response_text) {
+          const when = new Date(cf2.confessed_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+          decreeQuote = ` ${when} you said: "${cf2.response_text.trim().slice(0, 200)}${cf2.response_text.length > 200 ? '…' : ''}" — that mouth talked, this one let it die.`
+          await supabase.from('confession_queue')
+            .update({ playback_count: (cf2.playback_count || 0) + 1, last_played_at: nowIso })
+            .eq('id', cf2.id)
+        }
+      } catch (_) {}
+
       await supabase.from('handler_outreach_queue').insert({
         user_id: userId,
-        message: `You let the decree die. "${d.edict.slice(0, 140)}" — past deadline. Consequence logged.`,
+        message: `You let the decree die. "${d.edict.slice(0, 140)}" — past deadline. Consequence logged.${decreeQuote}`,
         urgency: 'high',
         trigger_reason: `decree_missed:${d.id}`,
         scheduled_for: nowIso,
@@ -3313,10 +3410,32 @@ async function enforceCommitments(
         ;(result.actions as string[]).push(`chastity +${days}d`)
       }
 
-      // Always queue a Handler outreach so Maxy gets told, with the enforcement digest
+      // Pull a recent confession — quote it back. This is the blackmail
+      // surface: she said it, signed it, then missed the commitment that
+      // her own confession set up. Her words become the indictment.
+      let quoteSuffix = ''
+      try {
+        const { data: conf } = await supabase.from('confession_queue')
+          .select('id, response_text, confessed_at, prompt, playback_count')
+          .eq('user_id', userId)
+          .not('confessed_at', 'is', null)
+          .order('confessed_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        const cf = conf as { id: string; response_text: string; confessed_at: string; prompt: string; playback_count: number } | null
+        if (cf?.response_text) {
+          const when = new Date(cf.confessed_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+          const snippet = cf.response_text.trim().slice(0, 220)
+          quoteSuffix = ` Receipt — your words, ${when}: "${snippet}${cf.response_text.length > 220 ? '…' : ''}" — and you missed this anyway.`
+          await supabase.from('confession_queue')
+            .update({ playback_count: (cf.playback_count || 0) + 1, last_played_at: new Date().toISOString() })
+            .eq('id', cf.id)
+        }
+      } catch (_) { /* non-critical */ }
+
       await supabase.from('handler_outreach_queue').insert({
         user_id: userId,
-        message: `You missed: ${what}. Consequence applied: ${(result.actions as string[]).join(', ') || consequence}. The Handler doesn't take IOUs.`,
+        message: `You missed: ${what}. Consequence applied: ${(result.actions as string[]).join(', ') || consequence}. The Handler doesn't take IOUs.${quoteSuffix}`,
         urgency: 'high',
         trigger_reason: `commitment_missed:${c.id}`,
         scheduled_for: new Date().toISOString(),

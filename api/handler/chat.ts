@@ -8147,6 +8147,45 @@ async function buildSlipLogCtx(userId: string): Promise<string> {
       }
     } catch {}
 
+    // ANSWERED CONFESSIONS — her own words, time-stamped. Quote these back
+    // verbatim. Use them as evidence. Use them to corner her when she
+    // contradicts herself today. The point of forced confession is the
+    // playback. Without this section the queue is a void.
+    try {
+      const { data: answered } = await supabase.from('confession_queue')
+        .select('id, category, prompt, response_text, confessed_at, playback_count')
+        .eq('user_id', userId)
+        .not('confessed_at', 'is', null)
+        .order('confessed_at', { ascending: false })
+        .limit(8);
+      const aRows = (answered || []) as Array<Record<string, unknown>>;
+      if (aRows.length > 0) {
+        if (lines.length > 0) lines.push('');
+        lines.push(`## HER CONFESSIONS — VERBATIM RECEIPTS`);
+        lines.push('These are her own words, signed with the timestamp she submitted them. Quote them back. Hold her to them. When she resists, paste a confession back at her — past tense, hers, undeniable. This is the leverage.');
+        const playbackTargets: string[] = [];
+        for (const c of aRows) {
+          const at = new Date(c.confessed_at as string);
+          const ago = Math.round((Date.now() - at.getTime()) / 3600000);
+          const agoStr = ago < 24 ? `${ago}h ago` : `${Math.round(ago / 24)}d ago`;
+          const txt = String(c.response_text || '').slice(0, 280);
+          const plays = (c.playback_count as number) || 0;
+          const playMark = plays > 0 ? ` [played ${plays}×]` : '';
+          lines.push(`- [${c.category}] ${agoStr}${playMark} | prompt: "${String(c.prompt || '').slice(0, 80)}…"`);
+          lines.push(`  HER WORDS: "${txt}${(c.response_text as string).length > 280 ? '…' : ''}"`);
+          if (plays === 0) playbackTargets.push(c.id as string);
+        }
+        // Increment playback counter on the unplayed ones — the Handler is
+        // about to see them, that's a play. Fire-and-forget.
+        if (playbackTargets.length > 0) {
+          supabase.from('confession_queue')
+            .update({ playback_count: 1, last_played_at: new Date().toISOString() })
+            .in('id', playbackTargets)
+            .then(() => {});
+        }
+      }
+    } catch {}
+
     return lines.join('\n');
   } catch {
     return '';

@@ -20,6 +20,15 @@ interface Confession {
   missed: boolean;
 }
 
+interface Receipt {
+  id: string;
+  category: string;
+  response_text: string;
+  confessed_at: string;
+  playback_count: number;
+  promoted_to_implant_id: string | null;
+}
+
 const CATEGORY_TONE: Record<string, string> = {
   slip: '#f47272',
   arousal_spike: '#ec4899',
@@ -34,19 +43,39 @@ const CATEGORY_TONE: Record<string, string> = {
 export function ConfessionQueueCard() {
   const { user } = useAuth();
   const [items, setItems] = useState<Confession[]>([]);
+  const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [totalReceipts, setTotalReceipts] = useState(0);
+  const [totalPlaybacks, setTotalPlaybacks] = useState(0);
+  const [showReceipts, setShowReceipts] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [submittingId, setSubmittingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!user?.id) return;
-    const { data } = await supabase.from('confession_queue')
-      .select('id, category, prompt, context_note, deadline, created_at, response_text, confessed_at, missed')
-      .eq('user_id', user.id)
-      .is('confessed_at', null)
-      .eq('missed', false)
-      .order('deadline', { ascending: true })
-      .limit(6);
-    setItems((data as Confession[]) ?? []);
+    const [pendingRes, receiptsRes, totalsRes] = await Promise.all([
+      supabase.from('confession_queue')
+        .select('id, category, prompt, context_note, deadline, created_at, response_text, confessed_at, missed')
+        .eq('user_id', user.id)
+        .is('confessed_at', null)
+        .eq('missed', false)
+        .order('deadline', { ascending: true })
+        .limit(6),
+      supabase.from('confession_queue')
+        .select('id, category, response_text, confessed_at, playback_count, promoted_to_implant_id')
+        .eq('user_id', user.id)
+        .not('confessed_at', 'is', null)
+        .order('confessed_at', { ascending: false })
+        .limit(10),
+      supabase.from('confession_queue')
+        .select('playback_count', { count: 'exact' })
+        .eq('user_id', user.id)
+        .not('confessed_at', 'is', null),
+    ]);
+    setItems((pendingRes.data as Confession[]) ?? []);
+    const recs = (receiptsRes.data as Receipt[]) ?? [];
+    setReceipts(recs);
+    setTotalReceipts(totalsRes.count ?? 0);
+    setTotalPlaybacks(((totalsRes.data as Array<{ playback_count: number }>) || []).reduce((sum, r) => sum + (r.playback_count || 0), 0));
   }, [user?.id]);
 
   useEffect(() => { load(); }, [load]);
@@ -68,7 +97,7 @@ export function ConfessionQueueCard() {
     load();
   };
 
-  if (items.length === 0) return null;
+  if (items.length === 0 && totalReceipts === 0) return null;
 
   return (
     <div style={{
@@ -84,9 +113,59 @@ export function ConfessionQueueCard() {
           Confess ({items.length})
         </span>
         <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto', fontStyle: 'italic' }}>
-          Handler is waiting.
+          {items.length > 0 ? 'Handler is waiting.' : `${totalReceipts} on file · ${totalPlaybacks} playbacks`}
         </span>
       </div>
+
+      {totalReceipts > 0 && (
+        <div style={{
+          padding: '8px 10px', marginBottom: items.length > 0 ? 10 : 0,
+          background: '#0a0a0d', border: '1px solid #2d1a4d',
+          borderLeft: '3px solid #c4b5fd', borderRadius: 5,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: showReceipts ? 8 : 0 }}>
+            <span style={{ fontSize: 9, color: '#c4b5fd', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              receipts · {totalReceipts} confessed
+            </span>
+            <span style={{ fontSize: 9.5, color: '#8a8690' }}>
+              quoted back {totalPlaybacks}× · {receipts.filter(r => r.promoted_to_implant_id).length} promoted to implants
+            </span>
+            <button
+              onClick={() => setShowReceipts(s => !s)}
+              style={{
+                marginLeft: 'auto', padding: '2px 8px', borderRadius: 3,
+                background: 'transparent', border: '1px solid #2d1a4d',
+                color: '#c4b5fd', fontSize: 9.5, cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              {showReceipts ? 'hide' : 'show last 5'}
+            </button>
+          </div>
+          {showReceipts && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {receipts.slice(0, 5).map(r => {
+                const at = new Date(r.confessed_at);
+                const ago = Math.round((Date.now() - at.getTime()) / 3600000);
+                const agoStr = ago < 24 ? `${ago}h` : `${Math.round(ago / 24)}d`;
+                return (
+                  <div key={r.id} style={{ fontSize: 10.5, color: '#c8c4cc', lineHeight: 1.45 }}>
+                    <span style={{ color: '#8a8690' }}>{agoStr} · [{r.category}]</span>
+                    {r.playback_count > 0 && (
+                      <span style={{ color: '#f4c272', marginLeft: 6 }}>·{r.playback_count}× quoted</span>
+                    )}
+                    {r.promoted_to_implant_id && (
+                      <span style={{ color: '#6ee7b7', marginLeft: 6 }}>·implant</span>
+                    )}
+                    <div style={{ fontStyle: 'italic', color: '#e8e6e3', marginTop: 2 }}>
+                      "{r.response_text.slice(0, 200)}{r.response_text.length > 200 ? '…' : ''}"
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {items.map(c => {
         const now = Date.now();
