@@ -31,6 +31,7 @@ import { OutfitMandateCard } from './OutfitMandateCard';
 import { WorkoutCard } from './WorkoutCard';
 import { ConfessionQueueCard } from './ConfessionQueueCard';
 import { HandlerDecreeCard } from './HandlerDecreeCard';
+import { UnifiedTaskList } from './UnifiedTaskList';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
 import { SlipLogCard } from './SlipLogCard';
@@ -239,6 +240,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
 
       <main className="td-main">
         <ProtocolDayCard />
+        <UnifiedTaskList />
         <DailyBriefingCard />
         <HandlerDecreeCard />
         <ConfessionQueueCard />

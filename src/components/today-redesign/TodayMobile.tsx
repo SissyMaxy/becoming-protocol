@@ -31,6 +31,7 @@ import { OutfitMandateCard } from './OutfitMandateCard';
 import { WorkoutCard } from './WorkoutCard';
 import { ConfessionQueueCard } from './ConfessionQueueCard';
 import { HandlerDecreeCard } from './HandlerDecreeCard';
+import { UnifiedTaskList } from './UnifiedTaskList';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
 import { SlipLogCard } from './SlipLogCard';
@@ -205,6 +206,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
       {tab === 'today' && (
         <div style={{ padding: '0 16px' }}>
           <ProtocolDayCard />
+          <UnifiedTaskList />
           <DailyBriefingCard />
           <HandlerDecreeCard />
           <ConfessionQueueCard />
