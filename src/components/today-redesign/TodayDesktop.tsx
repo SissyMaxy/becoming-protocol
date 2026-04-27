@@ -41,6 +41,7 @@ import { SponsorMilestoneCard } from './SponsorMilestoneCard';
 import { WornItemCard } from './WornItemCard';
 import { DmTemplateCard } from './DmTemplateCard';
 import { MorningBriefCard } from './MorningBriefCard';
+import { PunishmentQueueCard } from './PunishmentQueueCard';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
 import { SlipLogCard } from './SlipLogCard';
@@ -266,6 +267,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         <ProtocolDayCard />
         <MorningBriefCard />
         <UnifiedTaskList />
+        <PunishmentQueueCard />
         <NextShotsCard />
         <RevenueCard />
         <SponsorMilestoneCard />
