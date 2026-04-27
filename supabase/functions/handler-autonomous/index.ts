@@ -1987,17 +1987,22 @@ async function scheduleConfessions(
   const nowIso = new Date().toISOString()
   const dayAgoIso = new Date(Date.now() - 24 * 3600000).toISOString()
 
-  // 1. Recent slips without confession yet
+  // 1. Recent slips without confession yet — but SKIP slips whose source
+  // is itself confession_queue (missed confession). Otherwise we get a
+  // self-referential loop: missed confession → slip → new confession
+  // demanding atonement for missing the confession → missed → slip → …
   try {
     const { data: slips } = await supabase.from('slip_log')
-      .select('id, slip_type, source_text, detected_at, slip_points')
+      .select('id, slip_type, source_text, source_table, detected_at, slip_points')
       .eq('user_id', userId)
       .gte('detected_at', dayAgoIso)
       .gte('slip_points', 2)
       .order('detected_at', { ascending: false })
       .limit(5)
 
-    for (const s of (slips || []) as Array<{ id: string; slip_type: string; source_text: string | null; detected_at: string; slip_points: number }>) {
+    for (const s of (slips || []) as Array<{ id: string; slip_type: string; source_text: string | null; source_table: string | null; detected_at: string; slip_points: number }>) {
+      if (s.source_table === 'confession_queue') continue
+
       const { data: exists } = await supabase.from('confession_queue')
         .select('id').eq('user_id', userId)
         .eq('triggered_by_table', 'slip_log').eq('triggered_by_id', s.id)
@@ -2096,7 +2101,7 @@ async function scheduleConfessions(
       await supabase.from('slip_log').insert({
         user_id: userId,
         slip_type: 'other',
-        slip_points: 2,
+        slip_points: 1,
         source_text: `Missed confession (id ${m.id})`,
         source_table: 'confession_queue',
         source_id: m.id,
