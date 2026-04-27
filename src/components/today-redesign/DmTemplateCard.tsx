@@ -100,7 +100,7 @@ export function DmTemplateCard() {
   const completeCopy = (t: Template) => {
     let body = t.body;
     for (const v of t.variables) {
-      body = body.replaceAll(`{${v}}`, varValues[v] || `{${v}}`);
+      body = body.split(`{${v}}`).join(varValues[v] || `{${v}}`);
     }
     copyText(t, body);
     setSubstituting(null);
