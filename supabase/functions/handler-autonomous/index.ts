@@ -633,6 +633,19 @@ async function complianceCheck(
     }
   }
 
+  // ── DAILY MORNING BRIEF ──
+  // Fires once per day between 7-9am ET. Picks top 3 active shots due
+  // today, drafts a single push-friendly outreach so Maxy knows what to
+  // do without opening the app. Idempotent via handler_notes marker.
+  let briefsFired = 0
+  for (const state of states) {
+    try {
+      briefsFired += await fireDailyMorningBrief(supabase, state.user_id) ? 1 : 0
+    } catch (err) {
+      console.error(`Morning brief failed for ${state.user_id}:`, err)
+    }
+  }
+
   // ── CONFESSION → MEMORY IMPLANT PROMOTER ──
   // Take recent answered confessions (≥80 chars, never promoted) and
   // convert each into a memory_implant. Implants surface in
@@ -2111,6 +2124,97 @@ async function scheduleConfessions(
   } catch (err) { console.error('[confession] miss enforcement failed:', err) }
 
   return created
+}
+
+// ============================================
+// DAILY MORNING BRIEF
+// ============================================
+// 7-9am ET window. Picks top 3 active shot decrees due today (or
+// soonest due), drafts a single outreach message: "Today's three moves:
+// [shot 1] · then [shot 2] · then [shot 3]. Plan target $X." Idempotent
+// via a handler_notes row tagged note_type='morning_brief' with date.
+
+async function fireDailyMorningBrief(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<boolean> {
+  // Window check — only fire 7-9am ET (12-14 UTC during EDT, 12-14 UTC during EST)
+  // Approx: hour 12-14 UTC covers 7-9am ET in winter (EST=UTC-5) and 8-10am EDT (UTC-4).
+  // Tolerate either; checks UTC hour 11-15 (catches both DST states).
+  const utcHour = new Date().getUTCHours()
+  if (utcHour < 11 || utcHour > 15) return false
+
+  // Idempotent — one brief per UTC date
+  const todayUtc = new Date().toISOString().slice(0, 10)
+  const { count: alreadyFired } = await supabase.from('handler_notes')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('note_type', 'morning_brief')
+    .gte('created_at', `${todayUtc}T00:00:00Z`)
+  if ((alreadyFired || 0) > 0) return false
+
+  // Pick top 3 active shot decrees due today (or in next 24h)
+  const tomorrowIso = new Date(Date.now() + 24 * 3600000).toISOString()
+  const { data: shots } = await supabase.from('handler_decrees')
+    .select('edict, proof_type, deadline, consequence')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .like('trigger_source', 'shot_list:%')
+    .lte('deadline', tomorrowIso)
+    .order('deadline', { ascending: true })
+    .limit(3)
+
+  const shotRows = (shots || []) as Array<{ edict: string; proof_type: string; deadline: string; consequence: string }>
+  if (shotRows.length === 0) return false
+
+  // Pull current week's plan target for context
+  const wDate = new Date()
+  const day = wDate.getUTCDay()
+  const monday = new Date(wDate)
+  monday.setUTCDate(monday.getUTCDate() + (day === 0 ? -6 : -(day - 1)))
+  const wStart = monday.toISOString().slice(0, 10)
+  const { data: plan } = await supabase.from('revenue_plans')
+    .select('projected_cents, actual_cents').eq('user_id', userId).eq('week_start', wStart).maybeSingle()
+  const p = plan as { projected_cents?: number; actual_cents?: number } | null
+  const target = p ? `Week target $${((p.projected_cents || 0) / 100).toFixed(0)} · earned $${((p.actual_cents || 0) / 100).toFixed(2)}.` : ''
+
+  const now = Date.now()
+  const fmtRel = (deadline: string): string => {
+    const ms = new Date(deadline).getTime() - now
+    const h = Math.round(ms / 3600000)
+    if (h <= 0) return 'OVERDUE'
+    if (h < 6) return `by ${h}h`
+    if (h < 18) return `today`
+    return `tomorrow`
+  }
+
+  const lines: string[] = []
+  lines.push(`Today's plan: ${shotRows.length} move${shotRows.length > 1 ? 's' : ''}.`)
+  shotRows.forEach((s, i) => {
+    const tag = i === 0 ? 'NOW' : i === 1 ? 'THEN' : 'AFTER'
+    lines.push(`${tag} (${fmtRel(s.deadline)}, ${s.proof_type}): ${s.edict.slice(0, 140)}`)
+  })
+  if (target) lines.push(target)
+  lines.push('Open Today, scroll to Next Shots, do the first one.')
+
+  await supabase.from('handler_outreach_queue').insert({
+    user_id: userId,
+    message: lines.join('\n\n'),
+    urgency: 'high',
+    trigger_reason: 'daily_morning_brief',
+    scheduled_for: new Date().toISOString(),
+    expires_at: new Date(Date.now() + 18 * 3600000).toISOString(),
+    source: 'morning_brief',
+  })
+
+  await supabase.from('handler_notes').insert({
+    user_id: userId,
+    note_type: 'morning_brief',
+    content: `Brief fired at ${new Date().toISOString()} with ${shotRows.length} shots.`,
+    priority: 3,
+  })
+
+  return true
 }
 
 // ============================================
