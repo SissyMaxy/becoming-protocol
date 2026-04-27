@@ -40,6 +40,8 @@ const CATEGORY_TONE: Record<string, string> = {
   handler_triggered: '#c4b5fd',
 };
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+
 export function ConfessionQueueCard() {
   const { user } = useAuth();
   const [items, setItems] = useState<Confession[]>([]);
@@ -49,6 +51,9 @@ export function ConfessionQueueCard() {
   const [showReceipts, setShowReceipts] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [submittingId, setSubmittingId] = useState<string | null>(null);
+  const [gateRejection, setGateRejection] = useState<Record<string, { reason: string; hint: string }>>({});
+  const [composeStarts, setComposeStarts] = useState<Record<string, number>>({});
+  const [pasteDetected, setPasteDetected] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -87,13 +92,53 @@ export function ConfessionQueueCard() {
   const confess = async (id: string) => {
     const text = (drafts[id] || '').trim();
     if (!text) return;
+    const item = items.find(i => i.id === id);
+    if (!item) return;
     setSubmittingId(id);
+    setGateRejection(g => { const c = { ...g }; delete c[id]; return c; });
+
+    // Authenticity gate — catches paste / boilerplate before save
+    try {
+      const start = composeStarts[id];
+      const msToCompose = start ? Date.now() - start : null;
+      const gateRes = await fetch(`${SUPABASE_URL}/functions/v1/proof-gate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: item.prompt,
+          response: text,
+          kind: 'confession',
+          ms_to_compose: msToCompose,
+          paste_detected: !!pasteDetected[id],
+        }),
+      });
+      if (gateRes.ok) {
+        const gate = await gateRes.json() as { accept: boolean; reason?: string; rewrite_hint?: string };
+        if (!gate.accept) {
+          setGateRejection(g => ({
+            ...g,
+            [id]: {
+              reason: gate.reason || 'That reads performative.',
+              hint: gate.rewrite_hint || 'Anchor it in something specific only you know.',
+            },
+          }));
+          setSubmittingId(null);
+          return;
+        }
+      }
+      // If gate is unreachable, fall through and accept — don't block on infra failure.
+    } catch {
+      // network failure → accept; don't block on infra
+    }
+
     await supabase.from('confession_queue').update({
       response_text: text,
       confessed_at: new Date().toISOString(),
     }).eq('id', id);
     setSubmittingId(null);
     setDrafts(d => { const c = { ...d }; delete c[id]; return c; });
+    setComposeStarts(s => { const c = { ...s }; delete c[id]; return c; });
+    setPasteDetected(p => { const c = { ...p }; delete c[id]; return c; });
     load();
   };
 
@@ -198,7 +243,13 @@ export function ConfessionQueueCard() {
             )}
             <textarea
               value={draft}
-              onChange={e => setDrafts(d => ({ ...d, [c.id]: e.target.value }))}
+              onChange={e => {
+                setDrafts(d => ({ ...d, [c.id]: e.target.value }));
+                setComposeStarts(s => s[c.id] ? s : { ...s, [c.id]: Date.now() });
+              }}
+              onPaste={() => {
+                setPasteDetected(p => ({ ...p, [c.id]: true }));
+              }}
               placeholder="Say it. In your own words. No softening."
               rows={3}
               style={{
@@ -207,6 +258,22 @@ export function ConfessionQueueCard() {
                 fontFamily: 'inherit', resize: 'vertical',
               }}
             />
+            {gateRejection[c.id] && (
+              <div style={{
+                marginTop: 6, padding: '7px 9px',
+                background: '#2a0a0c', border: '1px solid #7a1f22', borderRadius: 4,
+              }}>
+                <div style={{ fontSize: 10, color: '#f47272', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>
+                  rejected — write it again
+                </div>
+                <div style={{ fontSize: 11, color: '#f4a7c4', lineHeight: 1.4 }}>
+                  {gateRejection[c.id].reason}
+                </div>
+                <div style={{ fontSize: 10.5, color: '#c8c4cc', marginTop: 3, fontStyle: 'italic' }}>
+                  {gateRejection[c.id].hint}
+                </div>
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
               <button
                 onClick={() => confess(c.id)}
@@ -223,7 +290,7 @@ export function ConfessionQueueCard() {
                 {submittingId === c.id ? '…' : 'Confess'}
               </button>
               <span style={{ fontSize: 10, color: '#5a5560', alignSelf: 'center' }}>
-                Handler reads this next turn.
+                Authenticity gate runs before save. Boilerplate gets refused.
               </span>
             </div>
           </div>
