@@ -50,6 +50,8 @@ export function RevenuePlanCard() {
   const [loading, setLoading] = useState(false);
   const [logging, setLogging] = useState<string | null>(null);
   const [logAmount, setLogAmount] = useState<Record<string, string>>({});
+  const [generatingShots, setGeneratingShots] = useState<string | null>(null);
+  const [shotsByItem, setShotsByItem] = useState<Record<string, number>>({});
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -63,11 +65,40 @@ export function RevenuePlanCard() {
         .select('id, action_label, deliverable, platform, kind, projected_cents, actual_cents, status, deadline, notes')
         .eq('plan_id', (p as Plan).id)
         .order('deadline', { ascending: true });
-      setItems((i as PlanItem[]) ?? []);
+      const itemList = (i as PlanItem[]) ?? [];
+      setItems(itemList);
+
+      // Look up how many shot decrees already exist per plan item
+      if (itemList.length > 0) {
+        const counts: Record<string, number> = {};
+        await Promise.all(itemList.map(async (it) => {
+          const { count } = await supabase.from('handler_decrees')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', user.id)
+            .eq('trigger_source', `shot_list:${it.id}`);
+          counts[it.id] = count || 0;
+        }));
+        setShotsByItem(counts);
+      }
     } else {
       setItems([]);
+      setShotsByItem({});
     }
   }, [user?.id]);
+
+  const generateShotList = async (itemId: string) => {
+    if (!user?.id || generatingShots) return;
+    setGeneratingShots(itemId);
+    try {
+      await fetch(`${SUPABASE_URL}/functions/v1/revenue-planner`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: user.id, shot_list_for_plan_item_id: itemId }),
+      });
+    } catch {}
+    await load();
+    setGeneratingShots(null);
+  };
 
   useEffect(() => { load(); }, [load]);
 
@@ -229,30 +260,51 @@ export function RevenuePlanCard() {
               <div style={{ height: '100%', width: `${itemPct}%`, background: itemPct >= 100 ? '#5fc88f' : tone, transition: 'width 0.3s' }} />
             </div>
             {item.status !== 'completed' && (
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                <input
-                  value={logAmount[item.id] || ''}
-                  onChange={e => setLogAmount(s => ({ ...s, [item.id]: e.target.value }))}
-                  placeholder="$ earned"
-                  inputMode="decimal"
-                  style={{
-                    flex: 1, background: '#050507', border: '1px solid #22222a', borderRadius: 4,
-                    padding: '5px 8px', fontSize: 11, color: '#e8e6e3', fontFamily: 'inherit',
-                  }}
-                />
-                <button
-                  onClick={() => logActual(item)}
-                  disabled={!parseFloat(logAmount[item.id] || '0') || logging === item.id}
-                  style={{
-                    padding: '5px 12px', borderRadius: 4, border: 'none',
-                    background: parseFloat(logAmount[item.id] || '0') ? '#5fc88f' : '#22222a',
-                    color: parseFloat(logAmount[item.id] || '0') ? '#0a1a14' : '#5a5560',
-                    fontWeight: 700, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
-                  }}
-                >
-                  {logging === item.id ? '…' : 'Log'}
-                </button>
-              </div>
+              <>
+                <div style={{ display: 'flex', gap: 6, marginBottom: 5 }}>
+                  <button
+                    onClick={() => generateShotList(item.id)}
+                    disabled={generatingShots === item.id}
+                    style={{
+                      flex: 1, padding: '6px 10px', borderRadius: 4, border: 'none',
+                      background: shotsByItem[item.id] > 0 ? '#1a1226' : '#7c3aed',
+                      color: shotsByItem[item.id] > 0 ? '#c4b5fd' : '#fff',
+                      fontWeight: 700, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit',
+                      textTransform: 'uppercase', letterSpacing: '0.04em',
+                    }}
+                  >
+                    {generatingShots === item.id
+                      ? 'generating shots…'
+                      : shotsByItem[item.id] > 0
+                        ? `${shotsByItem[item.id]} shots in decree queue`
+                        : 'Tell me exactly what to do'}
+                  </button>
+                </div>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <input
+                    value={logAmount[item.id] || ''}
+                    onChange={e => setLogAmount(s => ({ ...s, [item.id]: e.target.value }))}
+                    placeholder="$ earned"
+                    inputMode="decimal"
+                    style={{
+                      flex: 1, background: '#050507', border: '1px solid #22222a', borderRadius: 4,
+                      padding: '5px 8px', fontSize: 11, color: '#e8e6e3', fontFamily: 'inherit',
+                    }}
+                  />
+                  <button
+                    onClick={() => logActual(item)}
+                    disabled={!parseFloat(logAmount[item.id] || '0') || logging === item.id}
+                    style={{
+                      padding: '5px 12px', borderRadius: 4, border: 'none',
+                      background: parseFloat(logAmount[item.id] || '0') ? '#5fc88f' : '#22222a',
+                      color: parseFloat(logAmount[item.id] || '0') ? '#0a1a14' : '#5a5560',
+                      fontWeight: 700, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                    }}
+                  >
+                    {logging === item.id ? '…' : 'Log'}
+                  </button>
+                </div>
+              </>
             )}
           </div>
         );
