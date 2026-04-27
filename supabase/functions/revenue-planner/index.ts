@@ -502,17 +502,33 @@ Output STRICT JSON only:
 
   if (shots.length === 0) return { generated: 0, error: 'no shots generated' }
 
-  // Write each shot as a handler_decree linked back via trigger_source
-  const decreeRows = shots.map(s => ({
-    user_id: userId,
-    edict: s.edict,
-    proof_type: s.proof_type,
-    deadline: new Date(Date.now() + (s.deadline_offset_hours || 24) * 3600000).toISOString(),
-    consequence: 'slip +1',
-    reasoning: `Shot from plan item "${item.action_label}". ${s.reasoning || ''} (~${s.estimated_minutes || 10}min)`,
-    phase: null,
-    trigger_source: `shot_list:${item.id}`,
-  }))
+  // Write each shot as a handler_decree linked back via trigger_source.
+  // For text-proof shots, extract literal post/DM body if quoted in the
+  // edict so the auto-poster bridge can pick it up later.
+  const decreeRows = shots.map(s => {
+    const literalMatch = s.edict.match(/['"]([^'"]{20,400})['"]/)
+    const targetPlatform = (s as { target_platform?: string }).target_platform
+      || (item.platform && item.platform !== 'other' ? item.platform : null)
+    const payload: Record<string, unknown> = {
+      plan_item_id: item.id,
+      estimated_minutes: s.estimated_minutes || 10,
+    }
+    if (literalMatch && (s.proof_type === 'text' || s.proof_type === 'journal_entry')) {
+      payload.literal_text = literalMatch[1]
+    }
+    if (targetPlatform) payload.target_platform = targetPlatform
+    return {
+      user_id: userId,
+      edict: s.edict,
+      proof_type: s.proof_type,
+      deadline: new Date(Date.now() + (s.deadline_offset_hours || 24) * 3600000).toISOString(),
+      consequence: 'slip +1',
+      reasoning: `Shot from plan item "${item.action_label}". ${s.reasoning || ''} (~${s.estimated_minutes || 10}min)`,
+      phase: null,
+      trigger_source: `shot_list:${item.id}`,
+      proof_payload: payload,
+    }
+  })
   const { data: inserted } = await supabase.from('handler_decrees').insert(decreeRows).select('id')
 
   return {

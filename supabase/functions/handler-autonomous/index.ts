@@ -633,6 +633,19 @@ async function complianceCheck(
     }
   }
 
+  // ── AUTO-POSTER BRIDGE ──
+  // Shots with proof_type='text' AND a literal_text payload + target_platform
+  // get mirrored to ai_generated_content with status='scheduled' so the
+  // existing auto-poster scripts (Reddit/FetLife/Sniffies) pick them up.
+  let bridgedToPoster = 0
+  for (const state of states) {
+    try {
+      bridgedToPoster += await bridgeShotsToContentQueue(supabase, state.user_id)
+    } catch (err) {
+      console.error(`Auto-poster bridge failed for ${state.user_id}:`, err)
+    }
+  }
+
   // ── DAILY MORNING BRIEF ──
   // Fires once per day between 7-9am ET. Picks top 3 active shots due
   // today, drafts a single push-friendly outreach so Maxy knows what to
@@ -2124,6 +2137,81 @@ async function scheduleConfessions(
   } catch (err) { console.error('[confession] miss enforcement failed:', err) }
 
   return created
+}
+
+// ============================================
+// AUTO-POSTER BRIDGE
+// ============================================
+// Mirror shot decrees with literal post/comment text payloads into
+// ai_generated_content so the existing auto-poster scripts pick them
+// up. Idempotent — uses proof_payload.bridged_to_content_id as marker.
+
+async function bridgeShotsToContentQueue(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<number> {
+  const { data: shots } = await supabase.from('handler_decrees')
+    .select('id, proof_payload, edict, deadline, trigger_source')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .like('trigger_source', 'shot_list:%')
+    .in('proof_type', ['text', 'journal_entry'])
+    .limit(20)
+
+  let bridged = 0
+  for (const s of (shots || []) as Array<Record<string, unknown>>) {
+    const payload = (s.proof_payload as Record<string, unknown> | null) || {}
+    if (payload.bridged_to_content_id) continue
+    const literalText = payload.literal_text as string | undefined
+    const platform = payload.target_platform as string | undefined
+    if (!literalText || !platform || platform === 'irl' || platform === 'other') continue
+    if (literalText.length < 10) continue
+
+    // Skip if a content row with same body already exists today
+    const todayIso = new Date(Date.now() - 24 * 3600000).toISOString()
+    const { data: dupe } = await supabase.from('ai_generated_content')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('platform', platform)
+      .eq('content', literalText)
+      .gte('created_at', todayIso)
+      .maybeSingle()
+    if (dupe) {
+      // Mark already bridged so we don't keep checking
+      await supabase.from('handler_decrees').update({
+        proof_payload: { ...payload, bridged_to_content_id: (dupe as { id: string }).id, bridge_status: 'duplicate' },
+      }).eq('id', s.id as string)
+      continue
+    }
+
+    const contentType = platform === 'reddit' ? 'reddit_post'
+      : platform === 'fetlife' ? 'fetlife_post'
+      : platform === 'sniffies' ? 'sniffies_post'
+      : platform === 'fansly' ? 'fansly_post'
+      : 'post'
+
+    const { data: contentRow, error } = await supabase.from('ai_generated_content').insert({
+      user_id: userId,
+      platform,
+      content_type: contentType,
+      content: literalText,
+      status: 'scheduled',
+      generation_strategy: 'shot_decree_bridge',
+      generation_prompt: `decree:${s.id}`,
+    }).select('id').single()
+
+    if (error) {
+      console.error('[bridge] insert failed for decree', s.id, error)
+      continue
+    }
+    if (contentRow) {
+      await supabase.from('handler_decrees').update({
+        proof_payload: { ...payload, bridged_to_content_id: (contentRow as { id: string }).id, bridge_status: 'scheduled' },
+      }).eq('id', s.id as string)
+      bridged++
+    }
+  }
+  return bridged
 }
 
 // ============================================
