@@ -323,6 +323,20 @@ Output STRICT JSON, no markdown, no preamble:
       source: 'revenue_planner',
     })
 
+    // Auto-fan-out shot lists for each item. Fire-and-forget so the
+    // response returns immediately. Each call generates 3-5 atomic
+    // handler_decrees so every plan item is immediately actionable.
+    const fanOutItemIds: string[] = (insertedItems || []).map((r: { id: string }) => r.id)
+    queueMicrotask(async () => {
+      for (const itemId of fanOutItemIds) {
+        try {
+          await generateShotList(supabase, userId, itemId, anthropicKey ?? '')
+        } catch (e) {
+          console.error('[revenue-planner] auto-fan-out failed for', itemId, e)
+        }
+      }
+    })
+
     return new Response(JSON.stringify({
       ok: true,
       plan_id: planId,
@@ -330,6 +344,7 @@ Output STRICT JSON, no markdown, no preamble:
       projected_cents: totalProjected,
       items: plan.items.length,
       summary: plan.plan_summary,
+      shots_fanning_out: fanOutItemIds.length,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   } catch (err) {
     console.error('[revenue-planner] error:', err)

@@ -36,6 +36,7 @@ import { RevenueCard } from './RevenueCard';
 import { CollapsibleGroup } from './CollapsibleGroup';
 import { DavidTaxCard } from './DavidTaxCard';
 import { RevenuePlanCard } from './RevenuePlanCard';
+import { NextShotsCard } from './NextShotsCard';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
 import { SlipLogCard } from './SlipLogCard';
@@ -260,6 +261,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         {/* PRIMARY — always visible. Status, what to do now, what's owed. */}
         <ProtocolDayCard />
         <UnifiedTaskList />
+        <NextShotsCard />
         <RevenueCard />
         <RevenuePlanCard />
         <DavidTaxCard />
