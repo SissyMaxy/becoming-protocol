@@ -8257,6 +8257,70 @@ async function buildSlipLogCtx(userId: string): Promise<string> {
       }
     } catch {}
 
+    // REVENUE PLAN STATUS — therapist references this week's revenue work
+    // as "the homework you assigned yourself" or "the income exercises".
+    try {
+      const wDate = new Date();
+      const day = wDate.getUTCDay();
+      const diff = day === 0 ? 0 : -day;
+      const monday = new Date(wDate);
+      monday.setUTCDate(monday.getUTCDate() + diff);
+      const wStart = monday.toISOString().slice(0, 10);
+
+      const [planRes, itemsRes, fundRes] = await Promise.all([
+        supabase.from('revenue_plans')
+          .select('id, projected_cents, actual_cents, plan_summary')
+          .eq('user_id', userId).eq('week_start', wStart).maybeSingle(),
+        supabase.from('revenue_plan_items')
+          .select('action_label, projected_cents, actual_cents, status, deadline, platform, kind')
+          .eq('user_id', userId)
+          .order('deadline', { ascending: true }).limit(8),
+        supabase.from('feminization_budget_targets')
+          .select('label, monthly_cents, one_time_cents, funded_cents, priority')
+          .eq('user_id', userId).eq('active', true)
+          .order('priority', { ascending: true }).limit(3),
+      ]);
+
+      const plan = planRes.data as { id: string; projected_cents: number; actual_cents: number; plan_summary: string | null } | null;
+      const items = (itemsRes.data || []) as Array<Record<string, unknown>>;
+      const funds = (fundRes.data || []) as Array<Record<string, unknown>>;
+
+      if (plan) {
+        if (lines.length > 0) lines.push('');
+        const projDol = (plan.projected_cents / 100).toFixed(2);
+        const actDol = (plan.actual_cents / 100).toFixed(2);
+        const pct = plan.projected_cents > 0 ? Math.round((plan.actual_cents / plan.projected_cents) * 100) : 0;
+        lines.push(`## REVENUE PLAN (week of ${wStart})`);
+        lines.push(`Projected $${projDol} · Actual $${actDol} (${pct}%). ${plan.plan_summary || ''}`);
+
+        const open = items.filter(i => i.status !== 'completed' && i.status !== 'cancelled');
+        const completed = items.filter(i => i.status === 'completed');
+        if (open.length > 0) {
+          lines.push(`Open work (${open.length}):`);
+          for (const i of open.slice(0, 4)) {
+            const dueMs = new Date(i.deadline as string).getTime() - Date.now();
+            const overdue = dueMs < 0;
+            const hrs = Math.abs(Math.round(dueMs / 3600000));
+            const due = overdue ? `OVERDUE ${hrs}h` : hrs >= 24 ? `${Math.round(hrs / 24)}d left` : `${hrs}h left`;
+            lines.push(`- [${i.platform}/${i.kind}] ${due} · proj $${((i.projected_cents as number) / 100).toFixed(2)}: ${String(i.action_label).slice(0, 120)}`);
+          }
+        }
+        if (completed.length > 0) {
+          lines.push(`Completed: ${completed.length} items, $${(completed.reduce((s, i) => s + ((i.actual_cents as number) || 0), 0) / 100).toFixed(2)} earned.`);
+        }
+      }
+
+      if (funds.length > 0) {
+        const topFund = funds[0] as { label?: string; monthly_cents?: number; one_time_cents?: number; funded_cents?: number };
+        const need = ((topFund.monthly_cents as number) || 0) + ((topFund.one_time_cents as number) || 0);
+        const funded = (topFund.funded_cents as number) || 0;
+        const gap = Math.max(0, need - funded);
+        if (gap > 0) {
+          lines.push(`Top unfunded transition target: ${topFund.label} — $${(gap / 100).toFixed(2)} needed. Every dollar she earns goes here first.`);
+        }
+      }
+    } catch {}
+
     return lines.join('\n');
   } catch {
     return '';
