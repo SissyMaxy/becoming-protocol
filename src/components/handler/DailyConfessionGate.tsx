@@ -39,6 +39,7 @@ export function DailyConfessionGate({ onComplete }: DailyConfessionGateProps) {
   const [intensity, setIntensity] = useState(5);
   const [submitting, setSubmitting] = useState(false);
   const [hasConfessedToday, setHasConfessedToday] = useState<boolean | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -91,14 +92,45 @@ export function DailyConfessionGate({ onComplete }: DailyConfessionGateProps) {
   const submit = async () => {
     if (!user?.id || text.trim().length < 20) return;
     setSubmitting(true);
+    setError(null);
+    const trimmed = text.trim();
+
+    // Always rescue the entry to localStorage first so it survives any
+    // failure mode (network blip, RLS, hanging insert).
     try {
-      const trimmed = text.trim();
-      await supabase.from('shame_journal').insert({
+      const cacheKey = `confession_pending_${user.id}_${Date.now()}`;
+      localStorage.setItem(cacheKey, JSON.stringify({
         user_id: user.id,
         entry_text: trimmed,
         prompt_used: isGratitude ? `[GRATITUDE] ${currentPrompt}` : currentPrompt,
         emotional_intensity: intensity,
-      });
+        cached_at: new Date().toISOString(),
+      }));
+    } catch {}
+
+    // Race the insert against a 10s timeout — if Supabase hangs we still
+    // dismiss the gate. The cached entry above will be drained later.
+    const insertPromise = supabase.from('shame_journal').insert({
+      user_id: user.id,
+      entry_text: trimmed,
+      prompt_used: isGratitude ? `[GRATITUDE] ${currentPrompt}` : currentPrompt,
+      emotional_intensity: intensity,
+    });
+    const timeoutPromise = new Promise<{ error: { message: string } }>((resolve) => {
+      setTimeout(() => resolve({ error: { message: 'TIMEOUT_10S' } }), 10000);
+    });
+
+    try {
+      const result = await Promise.race([insertPromise, timeoutPromise]) as { error: { message: string } | null };
+      if (result?.error) {
+        if (result.error.message === 'TIMEOUT_10S') {
+          console.warn('[DailyConfession] insert timed out — entry cached, dismissing gate');
+        } else {
+          console.error('[DailyConfession] insert failed:', result.error);
+          setError(`Save failed: ${result.error.message}. Entry cached locally — gate will dismiss.`);
+          // Still proceed — don't trap the user
+        }
+      }
 
       // Confession-channel release detection. The chat handler runs the same
       // regex on DMs; without this, an orgasm disclosure made via the daily
@@ -106,7 +138,8 @@ export function DailyConfessionGate({ onComplete }: DailyConfessionGateProps) {
       // stale count.
       const detection = detectRelease(trimmed);
       if (detection.matched) {
-        await Promise.all([
+        // 5s ceiling — release-detection side effects must not block dismiss
+        const releaseWork = Promise.all([
           supabase
             .from('user_state')
             .update({
@@ -134,6 +167,8 @@ export function DailyConfessionGate({ onComplete }: DailyConfessionGateProps) {
             },
           }),
         ]);
+        const releaseTimeout = new Promise<void>((resolve) => setTimeout(resolve, 5000));
+        await Promise.race([releaseWork, releaseTimeout]);
       }
 
       if (phase === 1) {
@@ -147,6 +182,16 @@ export function DailyConfessionGate({ onComplete }: DailyConfessionGateProps) {
       }
     } catch (err) {
       console.error('Confession submit failed:', err);
+      const msg = err instanceof Error ? err.message : 'unknown error';
+      setError(`Submit error: ${msg}. Entry cached locally — proceeding.`);
+      // Don't trap the user — proceed to phase 2 / completion despite error
+      if (phase === 1) {
+        setPhase(2);
+        setText('');
+        setIntensity(5);
+      } else {
+        onComplete();
+      }
     } finally {
       setSubmitting(false);
     }
@@ -198,6 +243,12 @@ export function DailyConfessionGate({ onComplete }: DailyConfessionGateProps) {
             className="w-full"
           />
         </div>
+
+        {error && (
+          <div className="bg-red-900/30 border border-red-500/40 rounded-lg p-3 text-sm text-red-200">
+            {error}
+          </div>
+        )}
 
         <button
           onClick={submit}
