@@ -4,6 +4,31 @@ import { Sparkles, Mail, Lock, Loader2, ArrowRight } from 'lucide-react';
 
 type AuthMode = 'signin' | 'signup' | 'forgot' | 'reset';
 
+// Pull a human-readable message out of whatever the auth call threw.
+// Supabase AuthError + fetch errors hide their useful fields behind
+// non-enumerable properties, so JSON.stringify returns "{}". Try a
+// chain of likely property names and fall back to a friendly default.
+function extractErrorMessage(err: unknown): string {
+  if (!err) return 'Sign-in failed for unknown reason. Check the browser console for details.';
+  if (err instanceof Error && err.message) return err.message;
+  if (typeof err === 'string') return err;
+  if (typeof err === 'object') {
+    const e = err as Record<string, unknown>;
+    const candidates = [
+      e.message, e.error_description, e.msg,
+      (e.error as Record<string, unknown> | undefined)?.message,
+      (e.cause as Record<string, unknown> | undefined)?.message,
+      (e.response as Record<string, unknown> | undefined)?.statusText,
+      e.statusText, e.error,
+    ];
+    for (const c of candidates) {
+      if (typeof c === 'string' && c.length > 0) return c;
+    }
+    if (typeof e.status === 'number') return `Auth call failed with HTTP ${e.status}. Check internet/console.`;
+  }
+  return 'Sign-in failed. Likely network or wrong credentials. Check the browser console for details.';
+}
+
 interface AuthProps {
   initialMode?: AuthMode;
 }
@@ -43,8 +68,9 @@ export function Auth({ initialMode = 'signin' }: AuthProps) {
           setMessage('Check your email for a password reset link');
         }
       } catch (err) {
-        const msg = err instanceof Error ? err.message : JSON.stringify(err);
-        setError(msg || 'An unexpected error occurred');
+        console.error('[Auth] caught error:', err);
+        const msg = extractErrorMessage(err);
+        setError(msg);
       } finally {
         setIsLoading(false);
       }
@@ -76,8 +102,9 @@ export function Auth({ initialMode = 'signin' }: AuthProps) {
           setTimeout(() => switchMode('signin'), 2000);
         }
       } catch (err) {
-        const msg = err instanceof Error ? err.message : JSON.stringify(err);
-        setError(msg || 'An unexpected error occurred');
+        console.error('[Auth] caught error:', err);
+        const msg = extractErrorMessage(err);
+        setError(msg);
       } finally {
         setIsLoading(false);
       }
