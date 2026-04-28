@@ -196,13 +196,16 @@ export function VoiceGate({ onPass }: VoiceGateProps) {
         </button>
 
         {/* Typed fallback for devices without mic */}
-        <TypedMantraFallback mantra={mantra} onPass={async () => {
-          if (user?.id) {
-            try {
-              await supabase.from('voice_practice_log').insert({ user_id: user.id, duration_seconds: 5, avg_pitch_hz: 0 });
-            } catch {}
-          }
+        <TypedMantraFallback mantra={mantra} onPass={() => {
+          // Dismiss gate immediately — log fire-and-forget so a slow or
+          // failed insert never blocks the dismiss.
           onPass();
+          if (user?.id) {
+            supabase.from('voice_practice_log')
+              .insert({ user_id: user.id, duration_seconds: 5, avg_pitch_hz: 0 })
+              .then(() => {})
+              .then(undefined, () => {});
+          }
         }} />
 
         <p className="text-xs text-gray-500 text-center">
@@ -256,16 +259,19 @@ function TypedMantraFallback({ mantra, onPass }: { mantra: string; onPass: () =>
   const [typed, setTyped] = useState('');
   const [count, setCount] = useState(0);
   const [hint, setHint] = useState<string | null>(null);
+  const passedRef = useRef(false);
   const required = 3;
   const matches = normalize(typed) === normalize(mantra);
 
   const handleSubmit = () => {
+    if (passedRef.current) return; // already dismissed once
     if (matches) {
       const newCount = count + 1;
       setCount(newCount);
       setTyped('');
       setHint(null);
       if (newCount >= required) {
+        passedRef.current = true;
         onPass();
       }
     } else if (typed.trim().length > 0) {
