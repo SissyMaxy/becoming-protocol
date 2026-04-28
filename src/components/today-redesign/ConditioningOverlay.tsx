@@ -150,7 +150,8 @@ export function ConditioningOverlay({ reframings, implants, displacementScore, e
     setMantraGate(null);
   };
 
-  // 3. Forced reframe interrupt — every ~8–12 min, scaled by displacementScore
+  // 3. Forced reframe interrupt — every ~8–12 min, scaled by displacementScore.
+  // Honors a localStorage-based snooze so the user can opt out for an hour.
   useEffect(() => {
     if (!enabled) return;
     if (reframings.length === 0 && implants.length === 0) return;
@@ -161,6 +162,11 @@ export function ConditioningOverlay({ reframings, implants, displacementScore, e
       const delay = Math.max(4 * 60_000, base - jitter);
       const t = setTimeout(() => {
         if (!alive) return;
+        // Snooze check
+        try {
+          const until = parseInt(localStorage.getItem('co_reframe_snooze_until') || '0', 10);
+          if (Date.now() < until) { schedule(); return; }
+        } catch {}
         // Prefer reframings, fall back to implants
         const useReframe = reframings.length > 0 && (implants.length === 0 || Math.random() < 0.65);
         if (useReframe) {
@@ -178,6 +184,13 @@ export function ConditioningOverlay({ reframings, implants, displacementScore, e
     const t = schedule();
     return () => { alive = false; clearTimeout(t); };
   }, [enabled, reframings, implants, displacementScore]);
+
+  const snooze1h = () => {
+    try {
+      localStorage.setItem('co_reframe_snooze_until', String(Date.now() + 3600 * 1000));
+    } catch {}
+    setReframe(null);
+  };
 
   // Read-delay timer on reframe modal (3s time-lock)
   useEffect(() => {
@@ -310,8 +323,22 @@ export function ConditioningOverlay({ reframings, implants, displacementScore, e
             backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
           }}
         >
-          <div style={{ maxWidth: 520, width: '100%', background: '#111116', border: '1px solid #7c3aed', borderRadius: 14, padding: 24 }}>
-            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#c4b5fd', fontWeight: 700, marginBottom: 10 }}>
+          <div style={{ maxWidth: 520, width: '100%', background: '#111116', border: '1px solid #7c3aed', borderRadius: 14, padding: 24, position: 'relative' }}>
+            <button
+              onClick={logResistance}
+              aria-label="Dismiss"
+              title="Dismiss (logs resistance)"
+              style={{
+                position: 'absolute', top: 10, right: 10,
+                width: 30, height: 30, borderRadius: 15, border: '1px solid #2d1a4d',
+                background: '#0a0a0d', color: '#c4b5fd', fontSize: 16, lineHeight: 1,
+                cursor: 'pointer', fontFamily: 'inherit', display: 'flex',
+                alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              ×
+            </button>
+            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#c4b5fd', fontWeight: 700, marginBottom: 10, paddingRight: 36 }}>
               Handler reframe · read it
             </div>
             <div style={{ fontSize: 15, lineHeight: 1.55, color: '#e8e6e3', marginBottom: 20, fontStyle: reframe.kind === 'implant' ? 'italic' : 'normal' }}>
@@ -332,15 +359,20 @@ export function ConditioningOverlay({ reframings, implants, displacementScore, e
                 {readDelayDone ? 'I hear it' : 'Read it first…'}
               </button>
               <button
-                onClick={logResistance}
-                style={{ padding: '10px 14px', borderRadius: 6, border: '1px solid #1a1a20', background: '#0a0a0d', color: '#6a656e', fontWeight: 500, fontSize: 12, fontFamily: 'inherit', cursor: 'pointer' }}
-                title="Logs resistance + queues a Handler correction"
+                onClick={snooze1h}
+                style={{
+                  padding: '10px 14px', borderRadius: 6,
+                  border: '1px solid #2d1a4d', background: '#1a1226',
+                  color: '#c4b5fd', fontWeight: 600, fontSize: 12,
+                  fontFamily: 'inherit', cursor: 'pointer',
+                }}
+                title="Closes and snoozes new reframes for 1 hour"
               >
-                Close
+                Snooze 1h
               </button>
             </div>
             <div style={{ fontSize: 10, color: '#5a5560', marginTop: 10, textAlign: 'center' }}>
-              {readDelayDone ? 'Acknowledging increments the reference counter — it will come back' : 'Time-locked. Sit with it.'}
+              {readDelayDone ? 'Acknowledging increments the reference counter. Snooze pauses new reframes for 1 hour.' : 'Time-locked. Sit with it.'}
             </div>
           </div>
         </div>
