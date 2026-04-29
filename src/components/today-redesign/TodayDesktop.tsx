@@ -47,6 +47,7 @@ import { MorningBriefCard } from './MorningBriefCard';
 import { StrategicPlanCard } from './StrategicPlanCard';
 import { CodeAuditCard } from './CodeAuditCard';
 import { ConfessionLockoutGate } from './ConfessionLockoutGate';
+import { HandlerPlanCalendar } from './HandlerPlanCalendar';
 import { PunishmentQueueCard } from './PunishmentQueueCard';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
@@ -273,6 +274,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         {/* PRIMARY — always visible. Status, what to do now, what's owed. */}
         <ProtocolDayCard />
         <MorningBriefCard />
+        <HandlerPlanCalendar />
         <StrategicPlanCard />
         <CodeAuditCard />
         <UnifiedTaskList />
