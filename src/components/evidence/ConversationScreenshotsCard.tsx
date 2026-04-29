@@ -101,7 +101,10 @@ export function ConversationScreenshotsCard() {
         const uploaded: string[] = [];
         for (const f of files) {
           const ext = f.name.split('.').pop() || 'jpg';
-          const path = `conversation-screenshots/${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+          // RLS on storage.objects requires (storage.foldername(name))[1] = auth.uid().
+          // Path MUST start with user.id, not a topical folder. Was previously
+          // `conversation-screenshots/<user.id>/...` which always RLS-denied.
+          const path = `${user.id}/conversation-screenshots/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
           const { error: upErr } = await supabase.storage.from('evidence').upload(path, f, {
             contentType: f.type,
             upsert: false,

@@ -156,8 +156,10 @@ export function VoiceJournalCard() {
           setSubmitting(true);
           const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
 
-          // Upload audio to evidence bucket
-          const path = `voice-journal/${user.id}/${Date.now()}.webm`;
+          // Upload audio to evidence bucket. RLS on storage.objects requires
+          // (storage.foldername(name))[1] = auth.uid() — path must start with
+          // user.id, not a topical folder.
+          const path = `${user.id}/voice-journal/${Date.now()}.webm`;
           const { error: upErr } = await supabase.storage.from('evidence').upload(path, blob, {
             contentType: 'audio/webm',
             upsert: false,

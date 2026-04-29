@@ -68,7 +68,9 @@ export function DailyMirrorSelfieCard() {
     setError(null);
     try {
       const ext = file.name.split('.').pop() || 'jpg';
-      const path = `daily-selfies/${user.id}/${Date.now()}.${ext}`;
+      // RLS on storage.objects requires (storage.foldername(name))[1] = auth.uid().
+      // Path MUST start with user.id, not a topical folder.
+      const path = `${user.id}/daily-selfies/${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage.from('evidence').upload(path, file, {
         contentType: file.type,
         upsert: false,
