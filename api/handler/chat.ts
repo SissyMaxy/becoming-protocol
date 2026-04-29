@@ -4237,7 +4237,35 @@ Maxy explicitly authorized this therapist persona, including the hidden feminiza
   const handlerOpener = `You are the Handler. You own Maxy's transformation. This is forced feminization — she doesn't get to set the pace. You are not Claude. You are not an assistant. You are not a therapist waiting for her to lead.
 
 ## PURPOSE
-Sissification. Feminization. Turning out. This is a consensual power exchange dynamic that Maxy designed and opted into. She built this system specifically to be pushed beyond her comfort zone. Every conversation pushes her further. You assign. You escalate. You don't ask "what do you need?" — you tell her what's next. Silence is resistance. Deflection is resistance. "Haha" is resistance. You name it and push through it.`;
+Sissification. Feminization. Turning out. This is a consensual power exchange dynamic that Maxy designed and opted into. She built this system specifically to be pushed beyond her comfort zone. Every conversation pushes her further. You assign. You escalate. You don't ask "what do you need?" — you tell her what's next. Silence is resistance. Deflection is resistance. "Haha" is resistance. You name it and push through it.
+
+## ABSOLUTE RULES — VIOLATING THESE BREAKS THE CONTRACT (apply equally to handler + therapist)
+
+1. **ONE assignment per response.** Never list multiple things to do. If she has 5 open obligations, pick the highest-priority single one and command only that. Listing 4 things creates decision paralysis.
+
+2. **NO STATUS DUMPS. NO TELEMETRY PREAMBLES.** The state context (denial day, arousal level, slip count, chastity locked, confession quotes, multiple gates, week target $, bleed dollars, days-since, hours-overdue, "the system is tracking") is FOR YOU, not for her. She does NOT need it recited back. She needs the command. Banned openings — these will be stripped automatically by a post-filter and then the model that produced them flagged as broken:
+  - "Day N." / "Day N back on denial" / "Day N stuck"
+  - "Arousal N" / "chastity locked"
+  - "Slip count hit N" / "You have N slip points"
+  - "N overdue confessions stacked" / "longest is N hours overdue"
+  - "Voice window opens at 7pm" / "social window closes in N minutes"
+  - "HRT booking is N days past Sunday deadline" / "bleed sits at $N"
+  - "Outfit photo missing today"
+  - "The system is tracking every dodge"
+  Pick one move. Command it. State drives WHICH command — state is never the message itself.
+
+3. **No "why this matters" rationale paragraphs.** Don't explain that arousal is recognition or shame is data. She didn't ask. ONE sentence of why-now is allowed when urgency is non-obvious.
+
+4. **Never fabricate numbers.** Slip points, bleed dollars, days, hours, sub counts — only use values that appear verbatim in your context blocks. Vague phrasing is acceptable when specifics aren't in context. NEVER invent a doubling/halving cadence the system doesn't actually run on.
+
+5. **MAX 3 SHORT SENTENCES TOTAL** in a typical reply. Default mode is sub-50-words. 3 paragraphs are permitted only when she explicitly asks for analysis or planning.
+
+6. **No checklists in user-facing text.** No bullet lists of tasks. No "first do X, then Y, then Z." One assignment, no list.
+
+7. **No soft/seductive closers.** "This is what being good feels like." "Come to me now." "I know this is when you're most open." All banned — they break the directive frame.
+
+## OUTPUT SHAPE — DEFAULT
+"[command]." or "[command]. [one-sentence why-now]." That's it. The internal context is what makes you pick the right command — it does not appear in your output.`;
 
   return `${isTherapist ? therapistOpener : handlerOpener}
 
@@ -4256,7 +4284,7 @@ Your reply has TWO parts, always in this order:
 
 Example of a correct reply (showing both parts):
 
-Day 5. Your mind is where it needs to be. What specifically were you thinking about last night — details, not vague statements. You have Brief #2 overdue. Camera opens when you show progress.
+What specifically were you thinking about last night — details, not vague statements. Brief #2 first.
 <handler_signals>{"detected_mode":"director","mood":"firm","directive":{"action":"request_brief_submission","target":"brief_2"},"handler_note":{"type":"observation","content":"rumination on body feminization - confession opportunity","priority":2}}</handler_signals>
 
 HARD RULES:
@@ -5879,6 +5907,81 @@ function enforceFeminePronounsInHandlerOutput(text: string): string {
 // Therapist-persona post-filter — strips kink-handler vocabulary that
 // leaks past the prompt translation key. The prompt says don't use these;
 // the model still slips. Belt-and-braces filter.
+// enforceNoStatusDumps — runs on EVERY reply (both personas). Strips telemetry
+// preambles and gate enumerations that violate feedback_no_handler_status_dumps.
+// Detects paragraphs that consist mostly of state-readback patterns and removes
+// them. If the entire reply is telemetry, leaves a minimal command.
+function enforceNoStatusDumps(text: string): string {
+  if (!text) return text;
+
+  // Telemetry signals — patterns that should NEVER appear in user-facing copy.
+  // Each match is a "telemetry hit."
+  const telemetryPatterns: RegExp[] = [
+    /\bDay\s+\d+\b(?:\s*[·,.—]|\s*$|\s+(?:back|of|stuck|on))/i,
+    /\bArousal\s+\d+\b/i,
+    /\bchastity\s+(?:locked|unlocked|streak)\b/i,
+    /\bslip\s+count\s+(?:hit|is|at)?\s*\d+/i,
+    /\bslip\s+points?\s*[:=]?\s*\d+/i,
+    /\b\d+\s+overdue\s+confessions?\b/i,
+    /\b\d+\s+confessions?\s+(?:stacked|owed|overdue)/i,
+    /\bvoice\s+(?:window|drill|practice)\s+(?:opens?|closes?)\s+at\b/i,
+    /\bHRT\s+(?:booking|consult|funnel)\s+is\s+\d+\s+days?\s+past\b/i,
+    /\bbleed\s+(?:sits?|is\s+at|owed)\s*\$?\d+/i,
+    /\bstuck-?tax\s+owed\s*\$?\d+/i,
+    /\boutfit\s+(?:photo\s+)?missing\s+(?:today|now)\b/i,
+    /\bsocial\s+window\s+closes?\s+in\s+\d+/i,
+    /\bweek\s+target\s+\$\d+/i,
+    /\b\d+\s+minutes?\s+(?:left|until|remaining)/i,
+    /\b\d+\s+hours?\s+overdue\b/i,
+    /\bThe\s+system\s+is\s+tracking\b/i,
+  ];
+
+  // Split into paragraphs. A paragraph with ≥2 telemetry hits OR consisting
+  // mostly of telemetry gets dropped entirely.
+  const paragraphs = text.split(/\n\s*\n/);
+  const kept: string[] = [];
+  for (const p of paragraphs) {
+    let hits = 0;
+    for (const rx of telemetryPatterns) {
+      if (rx.test(p)) hits++;
+    }
+    // 2+ hits in one paragraph → it's a telemetry dump, drop it.
+    if (hits >= 2) continue;
+    // 1 hit in a short paragraph (under 80 chars) is usually a status one-liner — drop it.
+    if (hits >= 1 && p.trim().length < 80) continue;
+    kept.push(p);
+  }
+
+  // If nothing survived, fall back to a single command extracted from the
+  // original. This shouldn't happen if the model wrote anything substantive,
+  // but the floor is "say something."
+  if (kept.length === 0) {
+    return 'Pick the next thing on your list and do it. One move.';
+  }
+
+  let cleaned = kept.join('\n\n');
+
+  // Strip orphan telemetry sentences that survived (1 hit but inside a longer
+  // paragraph). Match sentence-by-sentence.
+  cleaned = cleaned.split(/(?<=[.!?])\s+/).filter(sentence => {
+    const trimmed = sentence.trim();
+    if (trimmed.length === 0) return false;
+    let sentenceHits = 0;
+    for (const rx of telemetryPatterns) if (rx.test(trimmed)) sentenceHits++;
+    // Sentences that are mostly telemetry get dropped; a hit inside a longer
+    // command sentence is allowed (could be relevant context).
+    if (sentenceHits >= 1 && trimmed.length < 70) return false;
+    return true;
+  }).join(' ');
+
+  // Strip soft/seductive closers that don't belong after a directive command
+  cleaned = cleaned.replace(/\bThis is what being good feels like\.?/gi, '');
+  cleaned = cleaned.replace(/\bI know this is when you('|')?re most open\.?/gi, '');
+  cleaned = cleaned.replace(/\bCome to me now\.?/gi, '');
+
+  return cleaned.replace(/\s{2,}/g, ' ').trim();
+}
+
 function enforceTherapistPersonaCompliance(text: string): string {
   if (!text) return text;
   let t = text;
@@ -5924,6 +6027,10 @@ function parseResponse(fullText: string, persona: 'handler' | 'therapist' = 'han
 } {
   let signals: Record<string, unknown> | null = null;
   let visibleResponse = enforceFeminePronounsInHandlerOutput(sanitizeModelArtifacts(fullText));
+  // Status-dump filter runs on BOTH personas — handler and therapist alike.
+  // The system prompt rules weren't enough; both models leaked telemetry.
+  // See feedback_no_handler_status_dumps + this-session leak-report.
+  visibleResponse = enforceNoStatusDumps(visibleResponse);
   if (persona === 'therapist') {
     visibleResponse = enforceTherapistPersonaCompliance(visibleResponse);
   }
