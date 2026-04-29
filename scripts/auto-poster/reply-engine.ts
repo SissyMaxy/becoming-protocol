@@ -19,6 +19,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import { supabase, PLATFORMS } from './config';
 import { extractSafeText } from './refusal-filter';
 import { fullSlopCheck, patternSlopCheck } from './slop-detector';
+import { loadStructuredFacts, factsClaimGuard } from './grounded-facts';
+import { supabase } from './config';
 import { getVoiceRules } from './voice';
 import { resolveContact, recordEvent, getContactContext, recomputeTier, flagContact } from './contact-graph';
 import { gateOutbound } from './pii-guard';
@@ -379,6 +381,20 @@ async function generateReply(
       if (text.length > 280) {
         console.error(`[Reply] Too long (${text.length} chars), skipping`);
         return { text: null, attempts: attempt + 1, slop: lastSlop };
+      }
+
+      // ── Fact-claim guard ──
+      // Reject any reply that contradicts maxy_facts (HRT/chastity/partner).
+      // Belt-and-braces: prompt has facts block injected, this catches model leaks.
+      const userId = process.env.USER_ID || '';
+      if (userId) {
+        const facts = await loadStructuredFacts(supabase, userId);
+        const guard = factsClaimGuard(text, facts);
+        if (!guard.ok) {
+          console.log(`  [facts-guard] Twitter reply contradicts maxy_facts — dropping:`);
+          for (const v of guard.violations) console.log(`    ✗ ${v.rule} — matched: "${v.matched}"`);
+          return { text: null, attempts: attempt + 1, slop: lastSlop };
+        }
       }
 
       // ── Self-evaluation ──

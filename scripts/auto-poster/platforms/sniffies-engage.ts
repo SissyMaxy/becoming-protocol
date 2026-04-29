@@ -24,7 +24,7 @@ import { extractContactIntelligence } from '../contact-intelligence';
 import { buildMaxyVoiceSystem } from '../voice-system';
 import { loadMaxyState, buildStatePromptFragment } from '../state-context';
 import { getActiveScene, buildScenePromptFragment, advanceScene } from '../scenes';
-import { loadMaxyFactsBlock, needsMaxyInput } from '../grounded-facts';
+import { loadMaxyFactsBlock, loadStructuredFacts, factsClaimGuard, needsMaxyInput } from '../grounded-facts';
 import { consumePendingForChat, markPendingSent, markPendingFailed } from '../pending-outbound-sender';
 
 const USER_ID = process.env.USER_ID || '';
@@ -700,6 +700,18 @@ async function readAndReplyChat(
       reply = stripMetaCommentary(extracted);
       if (!reply || reply.length < 2) {
         console.log(`  [meta-strip] reply was entirely meta-commentary, skipping`);
+        return { success: false };
+      }
+
+      // Hard fact-guard: reject any reply that contradicts maxy_facts.
+      // Catches HRT fabrications, partner-name leaks, fake chastity claims —
+      // even if the model ignored the facts block in the prompt.
+      const structuredFacts = await loadStructuredFacts(sb, userId);
+      const factGuard = factsClaimGuard(reply, structuredFacts);
+      if (!factGuard.ok) {
+        console.log(`  [facts-guard] reply contradicts maxy_facts:`);
+        for (const v of factGuard.violations) console.log(`    ✗ ${v.rule} — matched: "${v.matched}"`);
+        console.log(`  [facts-guard] Skipping outbound. Update maxy_facts if the claim is now true.`);
         return { success: false };
       }
     }

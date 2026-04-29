@@ -310,7 +310,7 @@ export function ConfessionQueueCard() {
                 {submittingId === c.id ? '…' : 'Confess'}
               </button>
               <span style={{ fontSize: 10, color: '#5a5560', alignSelf: 'center' }}>
-                Authenticity gate refuses obvious boilerplate. Real attempts pass even if they're flat. After 2 rejects, gate accepts as-is.
+                Be specific — name a moment, a feeling, a person, a body part, a time of day. Boilerplate gets refused.
               </span>
             </div>
           </div>

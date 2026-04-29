@@ -2161,11 +2161,16 @@ async function scheduleConfessions(
       .limit(20)
     for (const m of (missed || []) as Array<{ id: string }>) {
       await supabase.from('confession_queue').update({ missed: true }).eq('id', m.id)
+      // Use slip_type='confession_missed' (specific, in constraint, and the
+      // demands-confession trigger explicitly skips this type to avoid the
+      // confession→slip→confession circular loop). source_text is plain
+      // English — no UUIDs, no internal field names — because anything
+      // here can become a confession prompt or appear in slip_log queries.
       await supabase.from('slip_log').insert({
         user_id: userId,
-        slip_type: 'other',
+        slip_type: 'confession_missed',
         slip_points: 1,
-        source_text: `Missed confession (id ${m.id})`,
+        source_text: 'A confession deadline passed without an answer.',
         source_table: 'confession_queue',
         source_id: m.id,
         metadata: { reason: 'confession_deadline_missed' },

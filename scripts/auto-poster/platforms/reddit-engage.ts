@@ -15,6 +15,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { supabase, PLATFORMS } from '../config';
 import { buildMaxyVoiceSystem } from '../voice-system';
 import { loadMaxyState, buildStatePromptFragment } from '../state-context';
+import { loadStructuredFacts, factsClaimGuard } from '../grounded-facts';
 // rotateFansly intentionally NOT wired into comments — Reddit shadowbans
 // accounts that drop links in comment replies. Link rotation happens only
 // in original posts (platforms/reddit-original-posts.ts).
@@ -449,6 +450,18 @@ ${contactCtx ? `\n${contactCtx}\n` : ''}`,
     const text = extractSafeText(response, 10, `Reddit r/${subreddit}`);
     if (!text) return null;
 
+    // Fact-claim guard — runs before slop check. Catches HRT/chastity/partner
+    // fabrications regardless of whether the model honored the facts block.
+    if (sb && userId) {
+      const structuredFacts = await loadStructuredFacts(sb, userId);
+      const factGuard = factsClaimGuard(text, structuredFacts);
+      if (!factGuard.ok) {
+        console.log(`  [facts-guard] Reddit comment contradicts maxy_facts:`);
+        for (const v of factGuard.violations) console.log(`    ✗ ${v.rule} — matched: "${v.matched}"`);
+        return null;
+      }
+    }
+
     // Fast slop check — retry once if it fails
     const slopResult = patternSlopCheck(text);
     if (!slopResult.pass) {
@@ -462,7 +475,16 @@ ${contactCtx ? `\n${contactCtx}\n` : ''}`,
           content: `Post title: "${post.title}"\nPost body: "${post.body || '(no body)'}"\nAuthor: u/${post.author}\n\nWrite Maxy's comment. Output ONLY the comment text.`,
         }],
       });
-      return extractSafeText(retry, 10, `Reddit r/${subreddit} (retry)`);
+      const retryText = extractSafeText(retry, 10, `Reddit r/${subreddit} (retry)`);
+      if (retryText && sb && userId) {
+        const facts = await loadStructuredFacts(sb, userId);
+        const guard = factsClaimGuard(retryText, facts);
+        if (!guard.ok) {
+          console.log(`  [facts-guard] Reddit retry also contradicts maxy_facts — dropping`);
+          return null;
+        }
+      }
+      return retryText;
     }
 
     return text;

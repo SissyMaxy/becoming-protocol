@@ -74,17 +74,25 @@ export interface ClaimGuardResult {
  *
  * Add new rules here as facts grow. The pattern: "if facts.X = Y, ban patterns Z".
  */
+const HYPOTHETICAL_MARKERS = /\b(thinking about|maybe|might|considering|considering it|someday|some day|could|could be|hoping to|planning to|want to start|wish i could|wish to|wondering about|if i (?:ever |someday )?|imagine|tempted to|been (?:thinking|considering|wanting))\b/i;
+
+function hasHypotheticalContext(text: string, matchIndex: number, matchLen: number): boolean {
+  const start = Math.max(0, matchIndex - 80);
+  const end = Math.min(text.length, matchIndex + matchLen + 40);
+  const window = text.slice(start, end);
+  return HYPOTHETICAL_MARKERS.test(window);
+}
+
 export function factsClaimGuard(text: string, facts: StructuredFacts | null): ClaimGuardResult {
   const violations: ClaimGuardResult['violations'] = [];
   if (!facts) return { ok: true, violations };
 
-  const lower = text.toLowerCase();
-
-  // Medical-status claims when not on HRT
+  // Medical-status claims when not on HRT.
+  // Exception: hypothetical/questioning language ("thinking about starting hormones") is allowed.
   if (!facts.onHrt) {
     const hrtPatterns = [
       { rx: /\bon\s*hrt\b/i, label: 'on hrt' },
-      { rx: /\b(started|starting)\s+(hrt|estrogen|hormones?|estradiol|spiro|spironolactone)\b/i, label: 'started HRT/E/spiro' },
+      { rx: /\b(started|starting)\s+(hrt|estrogen|hormones?|estradiol|spiro|spironolactone|e\b)/i, label: 'started HRT/E/spiro' },
       { rx: /\bmonth(s)?\s+(\d+|one|two|three|four|five|six|\w+)\s+(on|of)\s+(hrt|hormones|e\b|estrogen)/i, label: 'month X on HRT/E' },
       { rx: /\bday\s+\d+\s+of\s+(hrt|estrogen|hormones)/i, label: 'day N of HRT' },
       { rx: /\b(hrt|estrogen|estradiol)\s+(brain|fog|titt|tit|breast|chest|skin|hips)/i, label: 'HRT-induced body change' },
@@ -93,7 +101,10 @@ export function factsClaimGuard(text: string, facts: StructuredFacts | null): Cl
     ];
     for (const { rx, label } of hrtPatterns) {
       const m = text.match(rx);
-      if (m) violations.push({ rule: `medical fabrication: ${label} (Maxy is not on HRT)`, matched: m[0] });
+      if (!m) continue;
+      // Allow questioning/considering framing — "thinking about starting hormones" is honest.
+      if (hasHypotheticalContext(text, m.index ?? 0, m[0].length)) continue;
+      violations.push({ rule: `medical fabrication: ${label} (Maxy is not on HRT)`, matched: m[0] });
     }
   }
 
@@ -106,13 +117,15 @@ export function factsClaimGuard(text: string, facts: StructuredFacts | null): Cl
     ];
     for (const { rx, label } of lockPatterns) {
       const m = text.match(rx);
-      if (m) violations.push({ rule: `chastity fabrication: ${label} (Maxy is not currently locked)`, matched: m[0] });
+      if (!m) continue;
+      if (hasHypotheticalContext(text, m.index ?? 0, m[0].length)) continue;
+      violations.push({ rule: `chastity fabrication: ${label} (Maxy is not currently locked)`, matched: m[0] });
     }
   }
 
   // Partner-name leak — if partnerName set, refuse to print it on public surfaces
   if (facts.partnerName && facts.partnerName.length > 0) {
-    const partnerRx = new RegExp(`\\b${facts.partnerName.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\b`, 'i');
+    const partnerRx = new RegExp(`\\b${facts.partnerName.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}\\b`, 'i');
     const m = text.match(partnerRx);
     if (m) violations.push({ rule: `partner name leak: "${facts.partnerName}" must not appear in public-facing copy`, matched: m[0] });
   }

@@ -24,6 +24,7 @@ import { queueAttentionDedup } from './handler-attention';
 import { getOpenTributeFor } from './tributes';
 import { loadMaxyState, buildStatePromptFragment } from './state-context';
 import { getActiveScene, buildScenePromptFragment, advanceScene } from './scenes';
+import { loadStructuredFacts, factsClaimGuard } from './grounded-facts';
 
 interface IncomingDM {
   platform: string;
@@ -834,7 +835,21 @@ async function generateDMResponse(
     });
 
     const text = response.content[0]?.type === 'text' ? response.content[0].text.trim() : '';
-    return text || null;
+    if (!text) return null;
+
+    // Fact-claim guard — drop replies that contradict maxy_facts (HRT
+    // fabrications, partner-name leaks, chastity claims).
+    if (userId) {
+      const facts = await loadStructuredFacts(supabase, userId);
+      const guard = factsClaimGuard(text, facts);
+      if (!guard.ok) {
+        console.log(`[DM] [facts-guard] reply contradicts maxy_facts — dropping:`);
+        for (const v of guard.violations) console.log(`    ✗ ${v.rule} — matched: "${v.matched}"`);
+        return null;
+      }
+    }
+
+    return text;
   } catch (err) {
     console.error('[DM] Response generation failed:', err instanceof Error ? err.message : err);
     return null;
