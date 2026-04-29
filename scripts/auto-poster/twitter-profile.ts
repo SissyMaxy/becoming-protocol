@@ -21,6 +21,7 @@ import 'dotenv/config';
 import { supabase } from './config';
 import { buildMaxyVoiceSystem } from './voice-system';
 import { loadMaxyState, buildStatePromptFragment } from './state-context';
+import { loadMaxyFactsBlock, loadStructuredFacts, factsClaimGuard } from './grounded-facts';
 import Anthropic from '@anthropic-ai/sdk';
 
 const USER_ID = process.env.USER_ID || '';
@@ -156,6 +157,17 @@ async function cmdSetBio(bio: string) {
     console.error(`Bio is ${bio.length} chars; Twitter limits to 160.`);
     process.exit(1);
   }
+  // Hard claim-guard: even on manual set-bio, prevent committing a bio that
+  // contradicts maxy_facts. Maxy might paste something with "on hrt" by
+  // accident; this catches it before it lands.
+  const facts = await loadStructuredFacts(supabase, USER_ID);
+  const guard = factsClaimGuard(bio, facts);
+  if (!guard.ok) {
+    console.error(`Bio rejected — contradicts maxy_facts:`);
+    for (const v of guard.violations) console.error(`  ✗ ${v.rule} — matched: "${v.matched}"`);
+    console.error(`Update maxy_facts first, or rewrite the bio.`);
+    process.exit(1);
+  }
   await update({ bio });
   console.log(`[bio] Set (${bio.length}/160 chars).`);
 }
@@ -167,10 +179,16 @@ async function cmdGenBio() {
   const voice = await buildMaxyVoiceSystem(supabase, USER_ID, 'post');
   const state = await loadMaxyState(supabase, USER_ID);
   const stateBlock = buildStatePromptFragment(state, 'public');
+  // Ground-truth facts: prevents the model from claiming HRT, chastity status,
+  // partner names, or anything else that contradicts maxy_facts.
+  const factsBlock = await loadMaxyFactsBlock(supabase, USER_ID);
+  const structuredFacts = await loadStructuredFacts(supabase, USER_ID);
 
   const sys = `${voice}
 
 ${stateBlock}
+
+${factsBlock}
 
 You're writing the Twitter bio for Maxy's new account. The previous account got banned, so this is a fresh start.
 
@@ -214,14 +232,29 @@ Output format:
 
 NO commentary, NO preamble. Just the three numbered bios.`;
 
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 800,
-    system: sys,
-    messages: [{ role: 'user', content: 'Generate 3 bio candidates for the new Twitter account.' }],
-  });
-
-  const text = response.content[0]?.type === 'text' ? response.content[0].text.trim() : '';
+  // Generate up to 3 attempts; reject if claim-guard flags any candidate.
+  let text = '';
+  let attempt = 0;
+  let lastViolations: Array<{ rule: string; matched: string }> = [];
+  while (attempt < 3) {
+    attempt++;
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 800,
+      system: sys,
+      messages: [{ role: 'user', content: 'Generate 3 bio candidates for the new Twitter account.' }],
+    });
+    text = response.content[0]?.type === 'text' ? response.content[0].text.trim() : '';
+    const guard = factsClaimGuard(text, structuredFacts);
+    if (guard.ok) break;
+    lastViolations = guard.violations;
+    console.log(`[gen-bio] attempt ${attempt}/3 violated facts:`);
+    for (const v of guard.violations) console.log(`  ✗ ${v.rule} — matched: "${v.matched}"`);
+    if (attempt < 3) console.log(`  regenerating...`);
+  }
+  if (lastViolations.length > 0 && attempt === 3) {
+    console.log('\n⚠ All 3 attempts contained fact violations. Showing last attempt anyway:');
+  }
   console.log('\n═══ Bio candidates ═══\n');
   console.log(text);
   console.log('\n═══════════════════════════');
@@ -235,8 +268,12 @@ async function cmdGenPin() {
   const anthropic = new Anthropic();
 
   const voice = await buildMaxyVoiceSystem(supabase, USER_ID, 'post');
+  const factsBlock = await loadMaxyFactsBlock(supabase, USER_ID);
+  const structuredFacts = await loadStructuredFacts(supabase, USER_ID);
 
   const sys = `${voice}
+
+${factsBlock}
 
 Generate the FIRST tweet for Maxy's new account — the one she'll pin.
 This is the introduction visitors see when they hit her profile.
@@ -267,14 +304,28 @@ Generate THREE candidates, all from the operator side:
 
 Format: 1., 2., 3. Just the tweets, no commentary, no preamble.`;
 
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 800,
-    system: sys,
-    messages: [{ role: 'user', content: 'Three pinned-tweet candidates for the fresh account.' }],
-  });
-
-  const text = response.content[0]?.type === 'text' ? response.content[0].text.trim() : '';
+  let text = '';
+  let attempt = 0;
+  let lastViolations: Array<{ rule: string; matched: string }> = [];
+  while (attempt < 3) {
+    attempt++;
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 800,
+      system: sys,
+      messages: [{ role: 'user', content: 'Three pinned-tweet candidates for the fresh account.' }],
+    });
+    text = response.content[0]?.type === 'text' ? response.content[0].text.trim() : '';
+    const guard = factsClaimGuard(text, structuredFacts);
+    if (guard.ok) break;
+    lastViolations = guard.violations;
+    console.log(`[gen-pin] attempt ${attempt}/3 violated facts:`);
+    for (const v of guard.violations) console.log(`  ✗ ${v.rule} — matched: "${v.matched}"`);
+    if (attempt < 3) console.log(`  regenerating...`);
+  }
+  if (lastViolations.length > 0 && attempt === 3) {
+    console.log('\n⚠ All 3 attempts contained fact violations. Showing last attempt anyway:');
+  }
   console.log('\n═══ Pinned-tweet candidates ═══\n');
   console.log(text);
 }

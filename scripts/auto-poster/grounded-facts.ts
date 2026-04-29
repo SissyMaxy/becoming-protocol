@@ -12,6 +12,114 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+export interface StructuredFacts {
+  onHrt: boolean;
+  hrtStartDate: string | null;
+  chastityActive: boolean;
+  chastityStartDate: string | null;
+  outPublicly: boolean;
+  partnerName: string | null;
+  chosenName: string | null;
+  age: number | null;
+  pronouns: string | null;
+}
+
+const FACTS_CACHE_TTL_MS = 60 * 1000;
+const factsCache = new Map<string, { facts: StructuredFacts | null; at: number }>();
+
+export async function loadStructuredFacts(
+  sb: SupabaseClient,
+  userId: string,
+): Promise<StructuredFacts | null> {
+  const hit = factsCache.get(userId);
+  if (hit && Date.now() - hit.at < FACTS_CACHE_TTL_MS) return hit.facts;
+  try {
+    const { data } = await sb
+      .from('maxy_facts')
+      .select('on_hrt, hrt_start_date, chastity_active, chastity_start_date, out_publicly, partner_name, chosen_name, age, pronouns')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (!data) {
+      factsCache.set(userId, { facts: null, at: Date.now() });
+      return null;
+    }
+    const facts: StructuredFacts = {
+      onHrt: !!data.on_hrt,
+      hrtStartDate: data.hrt_start_date || null,
+      chastityActive: !!data.chastity_active,
+      chastityStartDate: data.chastity_start_date || null,
+      outPublicly: !!data.out_publicly,
+      partnerName: data.partner_name || null,
+      chosenName: data.chosen_name || null,
+      age: data.age ?? null,
+      pronouns: data.pronouns || null,
+    };
+    factsCache.set(userId, { facts, at: Date.now() });
+    return facts;
+  } catch {
+    return null;
+  }
+}
+
+export interface ClaimGuardResult {
+  ok: boolean;
+  violations: Array<{ rule: string; matched: string }>;
+}
+
+/**
+ * Hard claim-guard: scan candidate output text for claims that contradict
+ * the user's structured facts. Returns violations so the caller can reject
+ * + regenerate. This runs ALONGSIDE the slop-detector — slop catches AI
+ * crutch phrases; this catches lies about Maxy.
+ *
+ * Add new rules here as facts grow. The pattern: "if facts.X = Y, ban patterns Z".
+ */
+export function factsClaimGuard(text: string, facts: StructuredFacts | null): ClaimGuardResult {
+  const violations: ClaimGuardResult['violations'] = [];
+  if (!facts) return { ok: true, violations };
+
+  const lower = text.toLowerCase();
+
+  // Medical-status claims when not on HRT
+  if (!facts.onHrt) {
+    const hrtPatterns = [
+      { rx: /\bon\s*hrt\b/i, label: 'on hrt' },
+      { rx: /\b(started|starting)\s+(hrt|estrogen|hormones?|estradiol|spiro|spironolactone)\b/i, label: 'started HRT/E/spiro' },
+      { rx: /\bmonth(s)?\s+(\d+|one|two|three|four|five|six|\w+)\s+(on|of)\s+(hrt|hormones|e\b|estrogen)/i, label: 'month X on HRT/E' },
+      { rx: /\bday\s+\d+\s+of\s+(hrt|estrogen|hormones)/i, label: 'day N of HRT' },
+      { rx: /\b(hrt|estrogen|estradiol)\s+(brain|fog|titt|tit|breast|chest|skin|hips)/i, label: 'HRT-induced body change' },
+      { rx: /\b(my\s+)?(estrogen|estradiol)\s+(level|dose|prescription|pill|injection|patch)/i, label: 'HRT prescription detail' },
+      { rx: /\b(taking|on)\s+(estrogen|estradiol|spiro|spironolactone)\b/i, label: 'taking hormones' },
+    ];
+    for (const { rx, label } of hrtPatterns) {
+      const m = text.match(rx);
+      if (m) violations.push({ rule: `medical fabrication: ${label} (Maxy is not on HRT)`, matched: m[0] });
+    }
+  }
+
+  // Chastity claims when not actually locked
+  if (!facts.chastityActive) {
+    const lockPatterns = [
+      { rx: /\b(currently|right now|been|am)\s+(locked|caged|in\s+(my\s+)?cage)\b/i, label: 'currently locked claim' },
+      { rx: /\bday\s+\d+\s+of\s+(chastity|denial|locked|cage)/i, label: 'day N locked' },
+      { rx: /\b(my\s+)?cage\s+(is\s+)?(on|locked)\b/i, label: 'cage on/locked claim' },
+    ];
+    for (const { rx, label } of lockPatterns) {
+      const m = text.match(rx);
+      if (m) violations.push({ rule: `chastity fabrication: ${label} (Maxy is not currently locked)`, matched: m[0] });
+    }
+  }
+
+  // Partner-name leak — if partnerName set, refuse to print it on public surfaces
+  if (facts.partnerName && facts.partnerName.length > 0) {
+    const partnerRx = new RegExp(`\\b${facts.partnerName.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\b`, 'i');
+    const m = text.match(partnerRx);
+    if (m) violations.push({ rule: `partner name leak: "${facts.partnerName}" must not appear in public-facing copy`, matched: m[0] });
+  }
+
+  return { ok: violations.length === 0, violations };
+}
+
 const NO_IMPROVISE_RULES = `
 HARD RULES (violating any means Maxy gets kicked off the platform or meets a stranger under false pretenses):
 - Only state facts from the list above. Do NOT invent age, measurements, location, past events, or availability not explicitly listed.
