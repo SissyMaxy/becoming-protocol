@@ -2063,21 +2063,23 @@ async function scheduleConfessions(
       if (exists) continue
 
       const truncated = snippet.length >= 120 ? `${snippet}…` : snippet
-      // Frame the prompt based on the source. "You said:" is only correct
-      // when the snippet is the user's actual words (chat, journal, confession).
-      // For system-generated descriptions like "Missed commitment: X" or
-      // "Dodged punishment: Y", a "You said:" framing reads as fabricated and
-      // breaks trust. Use action-framed copy instead.
-      const isSystemFramed = /^(missed|dodged|skipped|ignored)\s+/i.test(snippet)
-      const promptText = isSystemFramed
-        ? `${truncated} — that's the slip (${s.slip_type}, ${s.slip_points}pt). 100 words: what crowded this out, what was the easier story you told yourself, what do you do tonight to close it.`
-        : `You said: "${truncated}" — that's a slip (${s.slip_type}, ${s.slip_points}pt). Tell me why you thought you could get away with it and what you'll do tonight to make it right.`
+      // Skip system-framed slips ("Missed commitment: X", "Missed decree: Y")
+      // entirely. Those represent autonomous-engine-generated obligations
+      // the user often never saw before they were "missed" — penalizing
+      // them violates feedback_visible_before_penalized.md. Only chat-side
+      // and direct user-action slips produce confessions here.
+      const isSystemFramed = /^(missed|dodged|skipped|ignored)\s+(commitment|decree|punishment|task|directive)/i.test(snippet)
+      if (isSystemFramed) continue
+
+      // Plain prompt — no "(slip_type, Npt)" telemetry, no "what crowded this out"
+      // boilerplate. Just the quote + one sharp question.
+      const promptText = `You said: "${truncated}". Write 100 words: what was happening, what you wanted, what came out instead. Deadline: 8 hours.`
 
       await supabase.from('confession_queue').insert({
         user_id: userId,
         category: 'slip',
         prompt: promptText,
-        context_note: `Trigger: "${truncated}"`,
+        context_note: null,
         triggered_by_table: 'slip_log',
         triggered_by_id: s.id,
         deadline: new Date(Date.now() + 8 * 3600000).toISOString(),
@@ -2526,18 +2528,34 @@ async function scheduleDecrees(
     }
   } catch (err) { console.error('[decree] daily sched failed:', err) }
 
-  // 3. Past-deadline → missed + slip
+  // 3. Past-deadline → missed + slip (ONLY if visible to user)
   try {
     const { data: expired } = await supabase.from('handler_decrees')
-      .select('id, edict, consequence')
+      .select('id, edict, consequence, trigger_source')
       .eq('user_id', userId).eq('status', 'active')
       .lt('deadline', nowIso)
       .limit(20)
-    for (const d of (expired || []) as Array<{ id: string; edict: string; consequence: string }>) {
+    for (const d of (expired || []) as Array<{ id: string; edict: string; consequence: string; trigger_source: string | null }>) {
       await supabase.from('handler_decrees').update({
         status: 'missed',
         missed_at: nowIso,
       }).eq('id', d.id)
+
+      // VISIBILITY CHECK (feedback_visible_before_penalized.md): a missed
+      // decree only counts as a slip if the user was actually alerted to it.
+      // Check for an outreach that referenced this decree id. Without
+      // visibility, mark missed but DON'T log a slip — silent escalation
+      // is the bug pattern, not protocol working as intended.
+      const { count: outreachCount } = await supabase.from('handler_outreach_queue')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .ilike('message', `%${d.id}%`)
+      const wasVisible = (outreachCount || 0) > 0
+        || /shot_list:|morning_brief:|chat:/.test(d.trigger_source || '')
+      if (!wasVisible) {
+        console.log(`[decree] suppressed slip for decree ${d.id} — never surfaced to user`)
+        continue
+      }
 
       const slipMatch = (d.consequence || '').match(/slip\s*\+(\d+)/)
       const pts = slipMatch ? Math.min(10, parseInt(slipMatch[1], 10)) : 2
@@ -3691,9 +3709,18 @@ async function enforceCommitments(
 
     // Parse & execute each clause
     try {
+      // VISIBILITY CHECK: skip the slip insert if the commitment was never
+      // surfaced to the user (no outreach filed referencing this commitment).
+      // feedback_visible_before_penalized.md — silent escalation is the bug.
+      const { count: oc } = await supabase.from('handler_outreach_queue')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .ilike('message', `%${c.id}%`)
+      const wasCommitmentVisible = (oc || 0) > 0
+
       // Slip increment — writes slip_log entry + bumps user_state.slip_points_current
       const slipMatch = consequence.match(/slip\s*\+(\d+)/)
-      if (slipMatch) {
+      if (slipMatch && wasCommitmentVisible) {
         const n = Math.min(10, parseInt(slipMatch[1], 10))
         await supabase.from('slip_log').insert({
           user_id: userId,
