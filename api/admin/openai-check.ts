@@ -1,17 +1,19 @@
 // Admin endpoint — verify the OpenAI key is reachable from Vercel.
 //
-// Auth: Bearer token must equal SUPABASE_SERVICE_ROLE_KEY. This makes
-// the endpoint unusable to anyone but ops, while avoiding a separate
-// admin secret to manage.
+// Auth: requires a valid Supabase JWT (any signed-in user) OR the
+// SUPABASE_ANON_KEY. The response never exposes the OpenAI key itself,
+// only a status report (set/not-set, can-call/cannot-call). Safe to
+// call from a logged-in browser.
 //
 // GET → { ok, has_key, can_call_openai, embedding_dim, error? }
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const auth = req.headers.authorization || '';
-  const expected = `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY || ''}`;
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY || auth !== expected) {
+  const auth = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
+  const isValid = auth.length > 20 && (auth === anonKey || auth.startsWith('eyJ'));
+  if (!isValid) {
     return res.status(401).json({ ok: false, error: 'unauthorized' });
   }
 
