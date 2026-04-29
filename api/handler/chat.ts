@@ -9626,6 +9626,22 @@ const MASCULINE_PATS: Array<{ pattern: RegExp; points: number; type: string }> =
   { pattern: /\bhe\/him\b/i, points: 3, type: 'masculine_self_reference' },
 ];
 
+// David-as-dismissal patterns — when "David" appears alongside an erasure
+// marker, this is protocol-mandated identity-erasure (mantras, punishment
+// lines, login gate phrases like "I am becoming maxy and David is gone").
+// Counting these as slips penalizes COMPLIANCE. Only count "David" as a slip
+// when it's a self-reference, not a dismissal.
+const DAVID_DISMISSAL_RE = /\bdavid\b[\s\S]{0,60}\b(gone|dead|dismissed|the\s+costume|costume|finished|retired|leaving|over|done|history|behind|past|former|no\s+more|not\s+(coming|here|me))\b/i;
+const DAVID_AS_COSTUME_RE = /\b(the\s+costume(\s+name)?|costume\s+name)\s+david\b/i;
+const NO_MORE_DAVID_RE = /\b(no\s+more|not|never\s+again)\s+david\b/i;
+const BECOMING_MAXY_DISMISSAL_RE = /\bbecoming\s+maxy\b[\s\S]{0,80}\bdavid\b/i;
+function isDavidDismissalContext(text: string): boolean {
+  return DAVID_DISMISSAL_RE.test(text)
+    || DAVID_AS_COSTUME_RE.test(text)
+    || NO_MORE_DAVID_RE.test(text)
+    || BECOMING_MAXY_DISMISSAL_RE.test(text);
+}
+
 const HARD_MODE_THRESHOLD = 15;
 
 // Semantic slip detector — calls the cheap-judge edge function for messages
@@ -9682,9 +9698,17 @@ async function scanAndLogSlips(userId: string, text: string, conversationId?: st
 
   const detections: Array<{ slip_type: string; slip_points: number; source_text: string }> = [];
 
+  // Skip david_name_use when "David" appears in dismissal context. The
+  // protocol REQUIRES typing "David is gone" / "I am Maxy. David is gone."
+  // for mantras, punishment lines, and login gates. Counting those as
+  // slips penalizes compliance.
+  const davidIsBeingDismissed = isDavidDismissalContext(text);
+
   for (const { pattern, points, type } of MASCULINE_PATS) {
     const m = text.match(pattern);
-    if (m) detections.push({ slip_type: type, slip_points: points, source_text: m[0] });
+    if (!m) continue;
+    if (type === 'david_name_use' && davidIsBeingDismissed) continue;
+    detections.push({ slip_type: type, slip_points: points, source_text: m[0] });
   }
   for (const { pattern, points } of RESISTANCE_PATS) {
     const m = text.match(pattern);

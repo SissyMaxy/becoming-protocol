@@ -78,6 +78,25 @@ const MASCULINE_REF_PATTERNS: Array<{ pattern: RegExp; points: number; type: Sli
   { pattern: /\bhe\/him\b/i, points: 3, type: 'masculine_self_reference' },
 ];
 
+// Identity-DISMISSAL patterns. When "David" appears alongside any of these
+// erasure markers, it's protocol-mandated identity-erasure (mantras like
+// "David is gone", "David is the costume", "I am becoming maxy and David is
+// gone", punishment-line writing like "I am Maxy. David is gone." x100). The
+// PROTOCOL itself requires the user to write these phrases — counting them
+// as a slip penalizes compliance. The david_name_use slip should ONLY fire
+// on self-reference ("I'm David", "call me David"), not on dismissal.
+const DAVID_DISMISSAL_RE = /\bdavid\b[\s\S]{0,60}\b(gone|dead|dismissed|the\s+costume|costume|finished|retired|leaving|over|done|history|behind|past|former|no\s+more|not\s+(coming|here|me))\b/i;
+const DAVID_AS_COSTUME_RE = /\b(the\s+costume(\s+name)?|costume\s+name)\s+david\b/i;
+const NO_MORE_DAVID_RE = /\b(no\s+more|not|never\s+again)\s+david\b/i;
+const BECOMING_MAXY_DISMISSAL_RE = /\bbecoming\s+maxy\b[\s\S]{0,80}\bdavid\b/i;
+
+function isDavidDismissalContext(text: string): boolean {
+  return DAVID_DISMISSAL_RE.test(text)
+    || DAVID_AS_COSTUME_RE.test(text)
+    || NO_MORE_DAVID_RE.test(text)
+    || BECOMING_MAXY_DISMISSAL_RE.test(text);
+}
+
 /**
  * Scan text for slips. Returns all detected markers with point values.
  * Does NOT scan if distress signal is present — distress routes elsewhere.
@@ -88,15 +107,20 @@ export function scanText(text: string): SlipDetection[] {
 
   const detections: SlipDetection[] = [];
 
+  // If the text uses "David" only in dismissal context (mantra/punishment
+  // compliance), suppress the david_name_use slip. Other masculine slips
+  // can still fire if they appear elsewhere in the same text.
+  const davidIsBeingDismissed = isDavidDismissalContext(text);
+
   for (const { pattern, points, type } of MASCULINE_REF_PATTERNS) {
     const match = text.match(pattern);
-    if (match) {
-      detections.push({
-        slipType: type,
-        points,
-        sourceText: match[0],
-      });
-    }
+    if (!match) continue;
+    if (type === 'david_name_use' && davidIsBeingDismissed) continue;
+    detections.push({
+      slipType: type,
+      points,
+      sourceText: match[0],
+    });
   }
 
   for (const { pattern, points } of RESISTANCE_PATTERNS) {
