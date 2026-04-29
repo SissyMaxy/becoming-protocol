@@ -49,6 +49,7 @@ import { CodeAuditCard } from './CodeAuditCard';
 import { ConfessionLockoutGate } from './ConfessionLockoutGate';
 import { HandlerPlanCalendar } from './HandlerPlanCalendar';
 import { RightNowCard } from './RightNowCard';
+import { FocusMode } from './FocusMode';
 import { PunishmentQueueCard } from './PunishmentQueueCard';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
@@ -80,6 +81,16 @@ interface TodayMobileProps {
 
 export function TodayMobile({ onExit }: TodayMobileProps) {
   const { data, toggleDirective, setArousal, ackQueueMsg, logMeal, uploadDirectiveProof, logDoseTaken, logDoseSkipped } = useTodayData();
+  // Focus Mode is the default. The Handler points at one task; she does it; next.
+  // She can fall back to the calendar view via "view plan" if she wants context.
+  // Persisted across sessions so the user's last preference holds.
+  const [viewMode, setViewMode] = useState<'focus' | 'calendar'>(() => {
+    if (typeof localStorage === 'undefined') return 'focus';
+    return (localStorage.getItem('td_view_mode') as 'focus' | 'calendar' | null) ?? 'focus';
+  });
+  useEffect(() => {
+    try { localStorage.setItem('td_view_mode', viewMode); } catch {}
+  }, [viewMode]);
   const [tab, setTab] = useState<MobileTab>('today');
   const [mealTab, setMealTab] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('breakfast');
   const [expandedDirective, setExpandedDirective] = useState<string | null>(null);
@@ -155,6 +166,10 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
   const ringCirc = 2 * Math.PI * ringRadius;
   const ringDash = (proteinPct / 100) * ringCirc;
 
+  if (viewMode === 'focus') {
+    return <FocusMode onSwitchToCalendar={() => setViewMode('calendar')} />;
+  }
+
   return (
     <div className="tdm-root">
       <ConditioningOverlay
@@ -224,6 +239,18 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
       {tab === 'today' && (
         <div style={{ padding: '0 16px' }}>
           <ConfessionLockoutGate>
+          <button
+            onClick={() => setViewMode('focus')}
+            style={{
+              width: '100%', marginBottom: 12, padding: '8px 12px',
+              background: '#7c3aed', color: '#fff', border: 'none',
+              borderRadius: 6, fontSize: 11, fontWeight: 700,
+              textTransform: 'uppercase', letterSpacing: '0.06em',
+              fontFamily: 'inherit', cursor: 'pointer',
+            }}
+          >
+            ← back to focus mode
+          </button>
           {/* SPINE — always visible, top of page. Single answer to "what now". */}
           <RightNowCard />
           <ProtocolDayCard />

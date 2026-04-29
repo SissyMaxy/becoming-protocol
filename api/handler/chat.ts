@@ -5916,28 +5916,43 @@ function enforceNoStatusDumps(text: string): string {
 
   // Telemetry signals — patterns that should NEVER appear in user-facing copy.
   // Each match is a "telemetry hit."
+  // 2026-04-29 expansion: real leak example was "Day 3 denied, arousal at edge.
+  // The cage is doing its work. Your confession yesterday: '...'. That mouth
+  // that won't stop wanting — it's the clearest signal in your case file. The
+  // outfit photo from yesterday's decree is missing. One hour thirty-four
+  // minutes left or it's slip +3 and denial extends." None of those fired
+  // under the previous rule set.
   const telemetryPatterns: RegExp[] = [
-    /\bDay\s+\d+\b(?:\s*[·,.—]|\s*$|\s+(?:back|of|stuck|on))/i,
-    /\bArousal\s+\d+\b/i,
-    /\bchastity\s+(?:locked|unlocked|streak)\b/i,
+    /\bDay\s+\d+\b(?:\s*[·,.—]|\s*$|\s+(?:back|of|stuck|on|denied|locked|chaste))/i,
+    /\bArousal\s+(?:\d+|at\s+(?:edge|peak|the\s+edge))\b/i,
+    /\bchastity\s+(?:locked|unlocked|streak|day\s+\d+)\b/i,
+    /\bcage\s+is\s+(?:doing|locked|the\s+work)\b/i,
     /\bslip\s+count\s+(?:hit|is|at)?\s*\d+/i,
     /\bslip\s+points?\s*[:=]?\s*\d+/i,
+    /\bslip\s*\+\s*\d+/i,                  // "slip +3"
+    /\bdenial\s+(?:extends?|stretched|added)/i,
     /\b\d+\s+overdue\s+confessions?\b/i,
     /\b\d+\s+confessions?\s+(?:stacked|owed|overdue)/i,
+    /\bYour\s+confession\s+(?:yesterday|today|from)/i,  // quoted-confession preamble
+    /\bcase\s+file\b/i,                                  // therapist-leak-into-handler
     /\bvoice\s+(?:window|drill|practice)\s+(?:opens?|closes?)\s+at\b/i,
     /\bHRT\s+(?:booking|consult|funnel)\s+is\s+\d+\s+days?\s+past\b/i,
     /\bbleed\s+(?:sits?|is\s+at|owed)\s*\$?\d+/i,
     /\bstuck-?tax\s+owed\s*\$?\d+/i,
-    /\boutfit\s+(?:photo\s+)?missing\s+(?:today|now)\b/i,
+    /\boutfit\s+(?:photo\s+)?(?:missing|is\s+missing|from\s+yesterday)/i,
+    /\bfrom\s+yesterday[''']?s\s+decree\b/i,             // decree-history preamble
     /\bsocial\s+window\s+closes?\s+in\s+\d+/i,
     /\bweek\s+target\s+\$\d+/i,
     /\b\d+\s+minutes?\s+(?:left|until|remaining)/i,
+    /\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+hours?\s+(?:and\s+\w+\s+)?(?:minutes?\s+)?(?:left|remaining|until)/i,  // written-out countdowns
     /\b\d+\s+hours?\s+overdue\b/i,
     /\bThe\s+system\s+is\s+tracking\b/i,
+    /\bclearest\s+signal\b/i,                            // "it's the clearest signal"
   ];
 
-  // Split into paragraphs. A paragraph with ≥2 telemetry hits OR consisting
-  // mostly of telemetry gets dropped entirely.
+  // Split into paragraphs. Drop paragraphs with telemetry hits unless very long.
+  // Lowered threshold from 2→1 hit because real leaks pack 1 hit per sentence
+  // across multiple sentences, and even one telemetry sentence breaks voice.
   const paragraphs = text.split(/\n\s*\n/);
   const kept: string[] = [];
   for (const p of paragraphs) {
@@ -5945,34 +5960,57 @@ function enforceNoStatusDumps(text: string): string {
     for (const rx of telemetryPatterns) {
       if (rx.test(p)) hits++;
     }
-    // 2+ hits in one paragraph → it's a telemetry dump, drop it.
+    // 2+ hits → telemetry dump.
     if (hits >= 2) continue;
-    // 1 hit in a short paragraph (under 80 chars) is usually a status one-liner — drop it.
-    if (hits >= 1 && p.trim().length < 80) continue;
+    // 1 hit in a paragraph under 200 chars → still drop (was 80; bumped because
+    // the leak example had ~150-char sentences with 1 hit each).
+    if (hits >= 1 && p.trim().length < 200) continue;
     kept.push(p);
   }
 
-  // If nothing survived, fall back to a single command extracted from the
-  // original. This shouldn't happen if the model wrote anything substantive,
-  // but the floor is "say something."
   if (kept.length === 0) {
     return 'Pick the next thing on your list and do it. One move.';
   }
 
   let cleaned = kept.join('\n\n');
 
-  // Strip orphan telemetry sentences that survived (1 hit but inside a longer
-  // paragraph). Match sentence-by-sentence.
+  // Strip orphan telemetry sentences inside surviving paragraphs.
   cleaned = cleaned.split(/(?<=[.!?])\s+/).filter(sentence => {
     const trimmed = sentence.trim();
     if (trimmed.length === 0) return false;
     let sentenceHits = 0;
     for (const rx of telemetryPatterns) if (rx.test(trimmed)) sentenceHits++;
-    // Sentences that are mostly telemetry get dropped; a hit inside a longer
-    // command sentence is allowed (could be relevant context).
-    if (sentenceHits >= 1 && trimmed.length < 70) return false;
+    // Bumped from 70→120 — the leak had ~100-char telemetry sentences.
+    if (sentenceHits >= 1 && trimmed.length < 120) return false;
     return true;
   }).join(' ');
+
+  // Tail-extraction: if the reply still has a status-style preamble before
+  // a clean directive ("Mirror photo now. Full body, tuck visible..."), keep
+  // only the directive. Heuristic: if the LAST 1-2 sentences contain an
+  // imperative verb + no telemetry, AND earlier sentences have telemetry,
+  // drop everything before the imperative tail.
+  const sentences = cleaned.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean);
+  if (sentences.length >= 3) {
+    // Find the last clean imperative sentence pair
+    const imperativeRx = /^(?:Mirror|Photo|Take|Log|Write|Submit|Record|Read|Repeat|Open|Close|Lock|Unlock|Send|Post|Confess|Mark|Show|Tell|Say|Stand|Sit|Kneel|Pose|Strip|Tuck|Wear|Put|Pull|Push|Press|Squat|Stretch|Reach|Touch|Hold|Move|Step|Go|Come|Stop|Start|Finish|Cancel|Skip|Now|Do|Don't)\b/i;
+    let imperativeStart = -1;
+    for (let i = 0; i < sentences.length; i++) {
+      if (imperativeRx.test(sentences[i])) {
+        imperativeStart = i;
+        break;
+      }
+    }
+    if (imperativeStart > 0) {
+      // Check that earlier sentences had telemetry (else the preamble was meaningful)
+      const preamble = sentences.slice(0, imperativeStart).join(' ');
+      let preambleHits = 0;
+      for (const rx of telemetryPatterns) if (rx.test(preamble)) preambleHits++;
+      if (preambleHits >= 1) {
+        cleaned = sentences.slice(imperativeStart).join(' ');
+      }
+    }
+  }
 
   // Strip soft/seductive closers that don't belong after a directive command
   cleaned = cleaned.replace(/\bThis is what being good feels like\.?/gi, '');

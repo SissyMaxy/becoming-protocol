@@ -49,6 +49,7 @@ import { CodeAuditCard } from './CodeAuditCard';
 import { ConfessionLockoutGate } from './ConfessionLockoutGate';
 import { HandlerPlanCalendar } from './HandlerPlanCalendar';
 import { RightNowCard } from './RightNowCard';
+import { FocusMode } from './FocusMode';
 import { PunishmentQueueCard } from './PunishmentQueueCard';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
@@ -110,6 +111,14 @@ interface TodayDesktopProps {
 
 export function TodayDesktop({ onExit }: TodayDesktopProps) {
   const { data, toggleDirective, setArousal, ackQueueMsg, saveDiaryResponse, logMeal, uploadDirectiveProof, logDoseTaken, logDoseSkipped } = useTodayData();
+  // Focus Mode default — see TodayMobile for rationale.
+  const [viewMode, setViewMode] = useState<'focus' | 'calendar'>(() => {
+    if (typeof localStorage === 'undefined') return 'focus';
+    return (localStorage.getItem('td_view_mode') as 'focus' | 'calendar' | null) ?? 'focus';
+  });
+  useEffect(() => {
+    try { localStorage.setItem('td_view_mode', viewMode); } catch {}
+  }, [viewMode]);
   const [mealTab, setMealTab] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('breakfast');
   const [mealForm, setMealForm] = useState({ foods: '', protein: '', calories: '', permission: false, photo: false });
   const [uploadingId, setUploadingId] = useState<string | null>(null);
@@ -226,6 +235,10 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
 
   const currentStep = data.chastityLocked ? `CHASTITY · DAY ${data.chastityStreakDays}` : data.denialDay > 0 ? `DENIAL · DAY ${data.denialDay}` : 'UNCOMMITTED';
 
+  if (viewMode === 'focus') {
+    return <FocusMode onSwitchToCalendar={() => setViewMode('calendar')} />;
+  }
+
   return (
     <div className="td-root">
       <ConditioningOverlay
@@ -272,6 +285,18 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
 
       <main className="td-main">
         <ConfessionLockoutGate>
+        <button
+          onClick={() => setViewMode('focus')}
+          style={{
+            marginBottom: 12, padding: '8px 14px',
+            background: '#7c3aed', color: '#fff', border: 'none',
+            borderRadius: 6, fontSize: 11, fontWeight: 700,
+            textTransform: 'uppercase', letterSpacing: '0.06em',
+            fontFamily: 'inherit', cursor: 'pointer',
+          }}
+        >
+          ← back to focus mode
+        </button>
         {/* SPINE — always visible. Single answer to "what now". */}
         <RightNowCard />
         <ProtocolDayCard />
