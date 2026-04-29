@@ -1,7 +1,8 @@
 /**
  * ConfessionReinforcer — surfaces a random key admission and asks "still
- * true?". Tapping yes increments the reinforcement on that confession +
- * writes a handler_directive audit. Every confirmation deepens the record.
+ * true?". Tapping yes records a reinforcement directive (no duplicate
+ * confession row). Each admission has a 14-day cooldown after reinforcement
+ * so the same questions don't keep cycling back at the user.
  */
 
 import { useEffect, useState } from 'react';
@@ -16,6 +17,8 @@ interface Confession {
   created_at: string;
 }
 
+const COOLDOWN_DAYS = 14;
+
 export function ConfessionReinforcer() {
   const { user } = useAuth();
   const [confession, setConfession] = useState<Confession | null>(null);
@@ -27,18 +30,43 @@ export function ConfessionReinforcer() {
     setLoading(true);
     setActed(null);
     try {
+      // 1) Pull original key admissions (NOT reinforcement copies — those
+      //    are tagged source='confession_reinforcer' and would just echo
+      //    the original content).
       const { data } = await supabase
         .from('confessions')
         .select('id, response, sentiment, created_at')
         .eq('user_id', user.id)
         .eq('is_key_admission', true)
+        .neq('source', 'confession_reinforcer')
         .order('created_at', { ascending: false })
-        .limit(20);
-      const rows = (data || []) as Confession[];
-      if (rows.length === 0) {
+        .limit(50);
+      const candidates = (data || []) as Confession[];
+
+      // 2) Find which admissions have been reinforced (or skipped) recently.
+      //    Cooldown applies to BOTH outcomes — if she just answered, don't
+      //    re-ask the same one within COOLDOWN_DAYS.
+      const cutoff = new Date(Date.now() - COOLDOWN_DAYS * 86400_000).toISOString();
+      const { data: recent } = await supabase
+        .from('handler_directives')
+        .select('target, created_at')
+        .eq('user_id', user.id)
+        .in('action', ['confession_reinforced', 'confession_skipped'])
+        .gte('created_at', cutoff);
+      const onCooldown = new Set(((recent || []) as Array<{ target: string }>).map(r => r.target));
+
+      // 3) Filter out cooldown candidates. If everything is on cooldown
+      //    (rare — only when she's answered everything in last 14d),
+      //    fall through to least-recently-reinforced from the FULL list.
+      const fresh = candidates.filter(c => !onCooldown.has(c.id));
+      const pool = fresh.length > 0 ? fresh : candidates;
+
+      if (pool.length === 0) {
         setConfession(null);
       } else {
-        setConfession(rows[Math.floor(Math.random() * rows.length)]);
+        // Random pick from the cooled-down pool — fair rotation across
+        // admissions she hasn't touched recently.
+        setConfession(pool[Math.floor(Math.random() * pool.length)]);
       }
     } finally {
       setLoading(false);
@@ -49,21 +77,15 @@ export function ConfessionReinforcer() {
 
   const confirm = async () => {
     if (!user?.id || !confession) return;
+    // Audit only — DON'T insert a duplicate confessions row, that was the
+    // bug that kept the same content cycling back. The directive is the
+    // record of reinforcement; the original confession stays as-is.
     await supabase.from('handler_directives').insert({
       user_id: user.id,
       action: 'confession_reinforced',
       target: confession.id,
       value: { response: confession.response.slice(0, 200), sentiment: confession.sentiment },
-      reasoning: 'User confirmed confession still true via reinforcer widget',
-    });
-    // Also insert a new confession row with same content marking the reinforcement
-    await supabase.from('confessions').insert({
-      user_id: user.id,
-      prompt: 'reinforcement_tap',
-      response: confession.response,
-      sentiment: confession.sentiment,
-      is_key_admission: true,
-      source: 'confession_reinforcer',
+      reasoning: 'User confirmed admission still true via reinforcer widget',
     });
     setActed('confirmed');
     setTimeout(() => pick(), 1200);
@@ -76,7 +98,7 @@ export function ConfessionReinforcer() {
       action: 'confession_skipped',
       target: confession.id,
       value: { response: confession.response.slice(0, 200) },
-      reasoning: 'User skipped confession prompt — possible resistance signal',
+      reasoning: 'User skipped reinforcer prompt — possible resistance signal',
     });
     setActed('skipped');
     setTimeout(() => pick(), 800);
@@ -110,9 +132,9 @@ export function ConfessionReinforcer() {
         {confession.response.length > 280 && '...'}
       </div>
       {acted === 'confirmed' ? (
-        <p className="text-[11px] text-fuchsia-300 text-center">reinforced.</p>
+        <p className="text-[11px] text-fuchsia-300 text-center">reinforced. won't be re-asked for {COOLDOWN_DAYS} days.</p>
       ) : acted === 'skipped' ? (
-        <p className="text-[11px] text-gray-500 text-center">skipped — logged as resistance signal.</p>
+        <p className="text-[11px] text-gray-500 text-center">skipped — won't be re-asked for {COOLDOWN_DAYS} days.</p>
       ) : (
         <div className="flex gap-1">
           <button
@@ -125,7 +147,7 @@ export function ConfessionReinforcer() {
             onClick={skip}
             className="px-3 py-1.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-400 text-[11px]"
           >
-            skip
+            no longer / skip
           </button>
         </div>
       )}
