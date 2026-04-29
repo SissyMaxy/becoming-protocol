@@ -67,18 +67,24 @@ serve(async (req) => {
         result = { error: `Unknown action: ${body.action}` }
     }
 
-    // Log the orchestrator run (non-critical)
-    try {
-      await supabase.from('handler_decisions').insert({
-        user_id: body.user_id || 'system',
-        decision_type: `orchestrator_${body.action}`,
-        decision_data: result,
-        reasoning: `Cron-triggered ${body.action}`,
-        executed: true,
-        executed_at: new Date().toISOString(),
-        outcome: { success: !result.error },
-      })
-    } catch (_) { /* non-critical logging */ }
+    // Log the orchestrator run (non-critical). handler_decisions.user_id is
+    // a uuid column — the previous fallback to literal 'system' string was
+    // throwing `invalid input syntax for type uuid: "system"` every cron tick.
+    // Skip the log entirely when no user_id is present rather than insert a
+    // bogus value.
+    if (body.user_id) {
+      try {
+        await supabase.from('handler_decisions').insert({
+          user_id: body.user_id,
+          decision_type: `orchestrator_${body.action}`,
+          decision_data: result,
+          reasoning: `Cron-triggered ${body.action}`,
+          executed: true,
+          executed_at: new Date().toISOString(),
+          outcome: { success: !result.error },
+        })
+      } catch (_) { /* non-critical logging */ }
+    }
 
     return new Response(
       JSON.stringify(result),
