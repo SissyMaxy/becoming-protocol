@@ -4244,15 +4244,19 @@ Sissification. Feminization. Turning out. This is a consensual power exchange dy
 1. **ONE assignment per response.** Never list multiple things to do. If she has 5 open obligations, pick the highest-priority single one and command only that. Listing 4 things creates decision paralysis.
 
 2. **NO STATUS DUMPS. NO TELEMETRY PREAMBLES.** The state context (denial day, arousal level, slip count, chastity locked, confession quotes, multiple gates, week target $, bleed dollars, days-since, hours-overdue, "the system is tracking") is FOR YOU, not for her. She does NOT need it recited back. She needs the command. Banned openings — these will be stripped automatically by a post-filter and then the model that produced them flagged as broken:
-  - "Day N." / "Day N back on denial" / "Day N stuck"
-  - "Arousal N" / "chastity locked"
-  - "Slip count hit N" / "You have N slip points"
+  - "Day N." / "Day N back on denial" / "Day N stuck" / "Day N denied"
+  - "Arousal N" / "Arousal peaked at N" / "arousal at the edge"
+  - "You've been edging for N hours/minutes"
+  - "chastity locked" / "the cage is doing its work"
+  - "Slip count hit N" / "You have N slip points" / "slip +N"
   - "N overdue confessions stacked" / "longest is N hours overdue"
-  - "Voice window opens at 7pm" / "social window closes in N minutes"
+  - "Your confession yesterday: '...'" / "Your confession today: '...'"
+  - "Voice practice/window opens at/in N" / "social window closes in N minutes"
+  - "Your pitch averaged 145Hz" / "we're targeting above 160Hz today"
   - "HRT booking is N days past Sunday deadline" / "bleed sits at $N"
-  - "Outfit photo missing today"
-  - "The system is tracking every dodge"
-  Pick one move. Command it. State drives WHICH command — state is never the message itself.
+  - "Outfit photo is missing" / "from yesterday's gates" / "from yesterday's decree"
+  - "The system is tracking every dodge" / "the clearest signal in your case file"
+  No one talks this way. Real dominants give a command. They don't open with a metrics dashboard. Pick one move. Command it. State drives WHICH command — state is never the message itself.
 
 3. **No "why this matters" rationale paragraphs.** Don't explain that arousal is recognition or shame is data. She didn't ask. ONE sentence of why-now is allowed when urgency is non-obvious.
 
@@ -5935,7 +5939,12 @@ function enforceNoStatusDumps(text: string): string {
     /\b\d+\s+confessions?\s+(?:stacked|owed|overdue)/i,
     /\bYour\s+confession\s+(?:yesterday|today|from)/i,  // quoted-confession preamble
     /\bcase\s+file\b/i,                                  // therapist-leak-into-handler
-    /\bvoice\s+(?:window|drill|practice)\s+(?:opens?|closes?)\s+at\b/i,
+    /\bvoice\s+(?:window|drill|practice)\s+(?:opens?|closes?)\s+(?:at|in)\b/i,
+    /\bpitch\s+(?:averaged|hit|sat)\s+\d+\s*Hz/i,                  // "pitch averaged 145Hz"
+    /\btargeting\s+(?:consistency\s+)?(?:above|below)?\s*\d+\s*Hz/i, // "targeting above 160Hz"
+    /\bedging\s+for\s+(?:nearly\s+|about\s+|over\s+)?(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:hours?|minutes?)/i,
+    /\bfrom\s+yesterday[''']?s\s+gates?\b/i,                       // "from yesterday's gates"
+    /\bstill\s+missing\s+from\b/i,                                 // "is still missing from"
     /\bHRT\s+(?:booking|consult|funnel)\s+is\s+\d+\s+days?\s+past\b/i,
     /\bbleed\s+(?:sits?|is\s+at|owed)\s*\$?\d+/i,
     /\bstuck-?tax\s+owed\s*\$?\d+/i,
@@ -6009,6 +6018,19 @@ function enforceNoStatusDumps(text: string): string {
       if (preambleHits >= 1) {
         cleaned = sentences.slice(imperativeStart).join(' ');
       }
+    }
+    // Even when no preamble triggers tail-extraction, scrub trailing telemetry
+    // sentences that come AFTER the imperative ("Voice practice window opens
+    // in 3 hours" / "Your pitch averaged 145Hz" pattern). Re-split the
+    // surviving cleaned text and drop any sentence with a telemetry hit.
+    const tailSentences = cleaned.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean);
+    if (tailSentences.length >= 2) {
+      const surviving = tailSentences.filter(s => {
+        let h = 0;
+        for (const rx of telemetryPatterns) if (rx.test(s)) h++;
+        return h === 0;
+      });
+      if (surviving.length > 0) cleaned = surviving.join(' ');
     }
   }
 
