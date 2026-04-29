@@ -180,11 +180,16 @@ const baselinePath = join(__dirname, 'pattern-lint-baseline.json');
 const updateBaseline = process.argv.includes('--update-baseline');
 
 // Build the current-run hit set as { pattern: Set<"file:line:trimmed-snippet"> }
+// Normalize file paths to forward slashes so the baseline is portable across
+// Windows (\\) and Linux CI (/). Without this, every CI run on Linux fails
+// because the baseline written from Windows uses backslashes that never
+// match the Linux scan.
+const norm = (p) => p.replace(/\\/g, '/');
 const currentHitKeys = new Map();
 for (const [name, hits] of byPattern) {
   const set = new Set();
   for (const h of hits) {
-    set.add(`${h.file}:${h.line}::${h.snippet.replace(/\s+/g, ' ').trim()}`);
+    set.add(`${norm(h.file)}:${h.line}::${h.snippet.replace(/\s+/g, ' ').trim()}`);
   }
   currentHitKeys.set(name, set);
 }
