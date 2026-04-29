@@ -3841,6 +3841,24 @@ HARD RULES FOR ALL PERSONAS:
       scoreConversationQuality(user.id, convId!, messageIndex, signals).catch(() => {});
     }
 
+    // 9f. Cross-model reply quality grade (fire-and-forget). Logs every reply
+    // to handler_reply_grades. When trends show fail-rate, we'll switch to
+    // synchronous re-roll. For now, observe what the post-filter still misses.
+    if ((visibleResponse || finalResponse) && (visibleResponse || finalResponse).length >= 30) {
+      const supaUrl = process.env.SUPABASE_URL;
+      if (supaUrl) {
+        fetch(`${supaUrl}/functions/v1/handler-reply-grader`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: user.id,
+            reply_text: visibleResponse || finalResponse,
+            conversation_id: convId,
+          }),
+        }).catch(() => {});
+      }
+    }
+
     // 10. Return
     const responseJson: Record<string, unknown> = {
       conversationId: convId,
