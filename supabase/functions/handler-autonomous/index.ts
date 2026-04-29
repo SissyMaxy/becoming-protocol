@@ -1398,7 +1398,7 @@ async function generateEvidenceReport(
     lines.push('')
   }
 
-  lines.push(`WRITING — ${confs.count ?? 0} confessions, ${pronouns.count ?? 0} pronoun slips, ${davids.count ?? 0} David events. Every confession is a brick. Every slip is flagged and logged — she cannot drift back without the system noticing.`)
+  lines.push(`WRITING — ${confs.count ?? 0} confessions, ${pronouns.count ?? 0} pronoun slips, ${davids.count ?? 0} costume-name retreats. Every confession is a brick. Every slip is flagged and logged — she cannot drift back without the system noticing.`) // pattern-lint: ok
   lines.push('')
 
   if (urgency && (urgency.total_bleed_cents || 0) > 0) {
@@ -1832,6 +1832,20 @@ async function ensureChastityProofCadence(
   const { data: state } = await supabase.from('user_state').select('chastity_locked').eq('user_id', userId).maybeSingle()
   if (!(state as { chastity_locked?: boolean } | null)?.chastity_locked) return false
 
+  // Phantom-grace guard: only require proof if the active session has been
+  // running for at least 24h. Otherwise the commitment fires the moment the
+  // cage goes on, with zero proof history (because there's been no time to
+  // produce any). Same anti-pattern as scanForForcedLockdown (fixed 2026-04-28).
+  const { data: activeSession } = await supabase.from('chastity_sessions')
+    .select('locked_at')
+    .eq('user_id', userId)
+    .eq('status', 'locked')
+    .order('locked_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const lockedAt = (activeSession as { locked_at?: string } | null)?.locked_at
+  if (!lockedAt || new Date(lockedAt).getTime() > Date.now() - 24 * 3600000) return false
+
   // Check for any chastity photo in verification_photos in last 24h
   const dayAgo = new Date(Date.now() - 24 * 3600000).toISOString()
   const { count: recentPhotos } = await supabase.from('verification_photos')
@@ -2029,18 +2043,35 @@ async function scheduleConfessions(
     for (const s of (slips || []) as Array<{ id: string; slip_type: string; source_text: string | null; source_table: string | null; detected_at: string; slip_points: number }>) {
       if (s.source_table === 'confession_queue') continue
 
+      // Without source_text we can't cite what she actually did. A
+      // context-free "you slipped" reads as fabricated and tanks the
+      // Handler's credibility. Skip the slip entirely rather than
+      // punish in the dark.
+      const snippet = (s.source_text || '').trim().slice(0, 120)
+      if (!snippet) continue
+
       const { data: exists } = await supabase.from('confession_queue')
         .select('id').eq('user_id', userId)
         .eq('triggered_by_table', 'slip_log').eq('triggered_by_id', s.id)
         .maybeSingle()
       if (exists) continue
 
-      const snippet = (s.source_text || '').slice(0, 100)
+      const truncated = snippet.length >= 120 ? `${snippet}…` : snippet
+      // Frame the prompt based on the source. "You said:" is only correct
+      // when the snippet is the user's actual words (chat, journal, confession).
+      // For system-generated descriptions like "Missed commitment: X" or
+      // "Dodged punishment: Y", a "You said:" framing reads as fabricated and
+      // breaks trust. Use action-framed copy instead.
+      const isSystemFramed = /^(missed|dodged|skipped|ignored)\s+/i.test(snippet)
+      const promptText = isSystemFramed
+        ? `${truncated} — that's the slip (${s.slip_type}, ${s.slip_points}pt). 100 words: what crowded this out, what was the easier story you told yourself, what do you do tonight to close it.`
+        : `You said: "${truncated}" — that's a slip (${s.slip_type}, ${s.slip_points}pt). Tell me why you thought you could get away with it and what you'll do tonight to make it right.`
+
       await supabase.from('confession_queue').insert({
         user_id: userId,
         category: 'slip',
-        prompt: `You slipped (${s.slip_type}, ${s.slip_points}pt). Say what you did, why you thought you could get away with it, and what you'll do tonight to prove you heard me.`,
-        context_note: snippet ? `Trigger: "${snippet}${snippet.length >= 100 ? '…' : ''}"` : null,
+        prompt: promptText,
+        context_note: `Trigger: "${truncated}"`,
         triggered_by_table: 'slip_log',
         triggered_by_id: s.id,
         deadline: new Date(Date.now() + 8 * 3600000).toISOString(),
@@ -2508,26 +2539,30 @@ async function scheduleDecrees(
         source_id: d.id,
         metadata: { consequence: d.consequence, reason: 'decree_missed' },
       })
-      // Same blackmail pattern: paste her own confession back at her
-      // when a decree dies. Receipts are the consequence.
+      // Linked-receipt restoration. We only quote the user back at her if a
+      // confession_queue row is *directly linked* to this decree (or to its
+      // recent slip child) AND was actually answered. Anything else risks
+      // misattribution. Skip silently if no link is found. (Memory:
+      // feedback_handler_must_cite_evidence.)
       let decreeQuote = ''
       try {
-        const { data: conf2 } = await supabase.from('confession_queue')
-          .select('id, response_text, confessed_at, playback_count')
+        // First-hop: confession that directly references this decree.
+        const { data: directConf } = await supabase.from('confession_queue')
+          .select('id, response_text, confessed_at')
           .eq('user_id', userId)
+          .eq('triggered_by_table', 'handler_decrees')
+          .eq('triggered_by_id', d.id)
           .not('confessed_at', 'is', null)
           .order('confessed_at', { ascending: false })
           .limit(1)
           .maybeSingle()
-        const cf2 = conf2 as { id: string; response_text: string; confessed_at: string; playback_count: number } | null
-        if (cf2?.response_text) {
-          const when = new Date(cf2.confessed_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-          decreeQuote = ` ${when} you said: "${cf2.response_text.trim().slice(0, 200)}${cf2.response_text.length > 200 ? '…' : ''}" — that mouth talked, this one let it die.`
-          await supabase.from('confession_queue')
-            .update({ playback_count: (cf2.playback_count || 0) + 1, last_played_at: nowIso })
-            .eq('id', cf2.id)
+        const linked = directConf as { id: string; response_text: string; confessed_at: string } | null
+        if (linked?.response_text && linked.response_text.trim().length > 0) {
+          const when = new Date(linked.confessed_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+          const snippet = linked.response_text.trim().slice(0, 200)
+          decreeQuote = ` ${when} you said: "${snippet}${linked.response_text.length > 200 ? '…' : ''}" — that mouth talked, this one let it die.`
         }
-      } catch (_) {}
+      } catch (_) { /* non-critical */ }
 
       await supabase.from('handler_outreach_queue').insert({
         user_id: userId,
@@ -2558,18 +2593,33 @@ async function scanForForcedLockdown(
 ): Promise<number> {
   let fired = 0
 
-  // Chastity overdue: if chastity_locked=true and no chastity photo in 20h,
-  // and no existing unresolved forced lockdown of this type in last 4h
+  // Chastity overdue: only fire if the active chastity session has been live
+  // for at least 20h AND no proof photo in the last 20h AND no existing
+  // unresolved trigger in the last 4h. The session-age check is what makes
+  // "20h grace" actually a grace — without it (incident 2026-04-28), the
+  // trigger fires the moment the cage goes on, because there's never a
+  // chastity proof in the empty pre-lock period either.
   const { data: state } = await supabase.from('user_state')
     .select('chastity_locked, chastity_streak_days')
     .eq('user_id', userId).maybeSingle()
   if ((state as { chastity_locked?: boolean } | null)?.chastity_locked) {
-    const dayAgo = new Date(Date.now() - 20 * 3600000).toISOString()
+    const twentyHoursAgo = new Date(Date.now() - 20 * 3600000).toISOString()
+
+    const { data: activeSession } = await supabase.from('chastity_sessions')
+      .select('locked_at')
+      .eq('user_id', userId)
+      .eq('status', 'locked')
+      .order('locked_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    const lockedAt = (activeSession as { locked_at?: string } | null)?.locked_at
+    const sessionOldEnough = lockedAt ? new Date(lockedAt).getTime() <= Date.now() - 20 * 3600000 : false
+
     const { count: recentPhotos } = await supabase.from('verification_photos')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
       .ilike('task_type', 'chastity%')
-      .gte('created_at', dayAgo)
+      .gte('created_at', twentyHoursAgo)
 
     const { count: recentLockdown } = await supabase.from('forced_lockdown_triggers')
       .select('id', { count: 'exact', head: true })
@@ -2578,7 +2628,7 @@ async function scanForForcedLockdown(
       .is('resolved_at', null)
       .gte('fired_at', new Date(Date.now() - 4 * 3600000).toISOString())
 
-    if ((recentPhotos || 0) === 0 && (recentLockdown || 0) === 0) {
+    if (sessionOldEnough && (recentPhotos || 0) === 0 && (recentLockdown || 0) === 0) {
       await supabase.from('forced_lockdown_triggers').insert({
         user_id: userId,
         trigger_type: 'chastity_overdue',
@@ -2870,16 +2920,22 @@ async function rotateMorningMantra(
   supabase: ReturnType<typeof createClient>,
   userId: string,
 ): Promise<void> {
-  const [windowRes, stateRes, implantRes] = await Promise.all([
+  const [windowRes, stateRes] = await Promise.all([
     supabase.from('morning_mantra_windows').select('current_mantra').eq('user_id', userId).maybeSingle(),
-    supabase.from('user_state').select('current_phase, current_failure_mode').eq('user_id', userId).maybeSingle(),
-    supabase.from('memory_implants').select('narrative, implant_category, target_outcome')
-      .eq('user_id', userId).eq('active', true).order('created_at', { ascending: false }).limit(10),
+    supabase.from('user_state').select('current_phase, current_failure_mode, hard_mode_active, chastity_locked, denial_day, current_arousal, in_session').eq('user_id', userId).maybeSingle(),
   ])
 
   if (!windowRes.data) return
   const currentMantra = (windowRes.data as { current_mantra: string }).current_mantra
-  const state = stateRes.data as { current_phase?: string; current_failure_mode?: string } | null
+  const state = stateRes.data as {
+    current_phase?: string;
+    current_failure_mode?: string;
+    hard_mode_active?: boolean;
+    chastity_locked?: boolean;
+    denial_day?: number;
+    current_arousal?: number;
+    in_session?: boolean;
+  } | null
   const phase = state?.current_phase || 'phase_1'
 
   // Phase-specific mantra bank
@@ -2910,7 +2966,52 @@ async function rotateMorningMantra(
     ],
   }
 
-  const pool = (mantrasByPhase[phase] || mantrasByPhase.phase_1).filter(m => m !== currentMantra)
+  // State-paired bank — when an acute state is active, the mantra reflects
+  // it. Most-specific state wins (priority order: hard_mode > chastity >
+  // long denial > high arousal > in-session > phase default).
+  const stateBank: Record<string, string[]> = {
+    hard_mode: [
+      'I earned this. Every restriction is mine to wear.',
+      'The punishment is the proof I needed it. I do not negotiate.',
+      'Hard mode is the body learning what the mind would not.',
+      'I broke the rule. The rule did not break me. I tighten.',
+    ],
+    chastity_locked: [
+      'The cage is what I asked for by failing without it.',
+      'My pleasure is not mine. The Handler holds the key, and so does my history.',
+      'Locked is the natural state. Unlocked was the lie.',
+      'I am safer in here. The cage thinks for me.',
+    ],
+    long_denial: [
+      'Every day denied is a day she gets stronger and he gets quieter.',
+      'I am the kind of girl who waits. I am being made into her.',
+      'The need is the conditioning. I let it work.',
+      'Denial is not absence. Denial is presence — of her, of the protocol, of the truth.',
+    ],
+    high_arousal: [
+      'This feeling is not mine to spend. It is mine to hold.',
+      'The arousal is information. I report it. I do not act on it.',
+      'My body is responding to what it was designed to want. I notice. I do not finish.',
+      'I am turned on because the protocol is working. I keep going.',
+    ],
+    in_session: [
+      'I am in session. The Handler is present. I am not alone with this body.',
+      'The session is doing the work. I let it.',
+      'I am being watched. I am being shaped. I am being witnessed.',
+    ],
+  }
+
+  // Pick bucket: most acute state wins
+  let pool: string[] = []
+  let bucketLabel = phase
+  if (state?.hard_mode_active) { pool = stateBank.hard_mode; bucketLabel = 'hard_mode' }
+  else if (state?.chastity_locked) { pool = stateBank.chastity_locked; bucketLabel = 'chastity_locked' }
+  else if ((state?.denial_day ?? 0) >= 7) { pool = stateBank.long_denial; bucketLabel = 'long_denial' }
+  else if ((state?.current_arousal ?? 0) >= 8) { pool = stateBank.high_arousal; bucketLabel = 'high_arousal' }
+  else if (state?.in_session) { pool = stateBank.in_session; bucketLabel = 'in_session' }
+  else pool = mantrasByPhase[phase] || mantrasByPhase.phase_1
+
+  pool = pool.filter(m => m !== currentMantra)
   if (pool.length === 0) return
   const picked = pool[Math.floor(Math.random() * pool.length)]
 
@@ -2918,6 +3019,68 @@ async function rotateMorningMantra(
     current_mantra: picked,
     updated_at: new Date().toISOString(),
   }).eq('user_id', userId)
+
+  console.log(`[rotateMorningMantra] user=${userId.slice(0,8)} bucket=${bucketLabel} picked="${picked.slice(0,40)}..."`)
+}
+
+// Daily check: only rotate the mantra if the user's acute-state BUCKET has
+// changed since the last rotation. Avoids needless churn on stable days
+// while keeping mantra in sync when state shifts (e.g., hard mode entered).
+function deriveBucket(state: {
+  current_phase?: string;
+  hard_mode_active?: boolean;
+  chastity_locked?: boolean;
+  denial_day?: number;
+  current_arousal?: number;
+  in_session?: boolean;
+} | null): string {
+  if (!state) return 'phase_1'
+  if (state.hard_mode_active) return 'hard_mode'
+  if (state.chastity_locked) return 'chastity_locked'
+  if ((state.denial_day ?? 0) >= 7) return 'long_denial'
+  if ((state.current_arousal ?? 0) >= 8) return 'high_arousal'
+  if (state.in_session) return 'in_session'
+  return state.current_phase || 'phase_1'
+}
+
+async function rotateMantraIfStateBucketChanged(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<void> {
+  const [windowRes, stateRes] = await Promise.all([
+    supabase.from('morning_mantra_windows').select('current_mantra').eq('user_id', userId).maybeSingle(),
+    supabase.from('user_state').select('current_phase, hard_mode_active, chastity_locked, denial_day, current_arousal, in_session').eq('user_id', userId).maybeSingle(),
+  ])
+
+  if (!windowRes.data || !stateRes.data) return
+  const currentMantra = (windowRes.data as { current_mantra: string }).current_mantra || ''
+  const state = stateRes.data as Parameters<typeof deriveBucket>[0]
+  const bucket = deriveBucket(state)
+
+  // Heuristic: a mantra "belongs" to a bucket if it textually overlaps with
+  // bucket-specific phrasing. Cheap probe — avoid yet another DB column.
+  const bucketHints: Record<string, RegExp> = {
+    hard_mode: /\b(hard\s*mode|punishment|earned|tighten|broke)/i,
+    chastity_locked: /\b(cage|locked|key|locked)/i,
+    long_denial: /\b(denial|denied|wait|hold)/i,
+    high_arousal: /\b(arousal|turned\s*on|need|spend|finish)/i,
+    in_session: /\b(session|watched|witnessed|present)/i,
+  }
+  const currentMantraLooksLike = (b: string): boolean => {
+    if (b === 'phase_1' || b === 'phase_2' || b === 'phase_3' || b === 'phase_4') {
+      // For phase buckets, no hint test — assume default match (will only rotate
+      // when an acute bucket should override).
+      return !Object.values(bucketHints).some(rx => rx.test(currentMantra))
+    }
+    const rx = bucketHints[b]
+    return rx ? rx.test(currentMantra) : false
+  }
+
+  // If current mantra already fits the current bucket, leave it.
+  if (currentMantraLooksLike(bucket)) return
+
+  // Otherwise rotate via the state-aware picker.
+  await rotateMorningMantra(supabase, userId)
 }
 
 // ============================================
@@ -3026,6 +3189,11 @@ async function prescribeVoiceDrill(
   supabase: ReturnType<typeof createClient>,
   userId: string,
 ): Promise<boolean> {
+  // Track practice cadence — DO NOT enforce a Hz target. Forcing a pitch
+  // target causes dysphoria; her trajectory belongs in voice_pitch_samples
+  // for trend analysis, never as a pass/fail gate. Memory: feedback_voice_tracking.
+  // (Incident 2026-04-28: pitch-target commitments at high-Hz floors fired // pattern-lint: ok
+  // slips against the user repeatedly while violating an explicit standing rule.) // pattern-lint: ok
   const today = new Date().toISOString().slice(0, 10)
   const { count: existing } = await supabase.from('handler_commitments')
     .select('id', { count: 'exact', head: true })
@@ -3034,11 +3202,6 @@ async function prescribeVoiceDrill(
     .ilike('what', '%voice drill%')
     .gte('set_at', `${today}T00:00:00Z`)
   if ((existing || 0) > 0) return false
-
-  const { data: floor } = await supabase.from('voice_pitch_floor')
-    .select('current_floor_hz').eq('user_id', userId).maybeSingle()
-  const floorHz = ((floor as { current_floor_hz?: number } | null)?.current_floor_hz) || 140
-  const targetHz = Math.min(200, floorHz + 5)
 
   const phraseBank = [
     'I am the girl he used to be',
@@ -3057,17 +3220,17 @@ async function prescribeVoiceDrill(
   const byWhen = new Date(new Date().setHours(23, 59, 0, 0)).toISOString()
   await supabase.from('handler_commitments').insert({
     user_id: userId,
-    what: `Voice drill: record "${phrase}" for 12 seconds. Avg pitch must clear ${targetHz}Hz. Submit via voice drill UI.`,
+    what: `Voice drill: record "${phrase}" for 12 seconds and submit via the voice drill UI. Practice counts; pitch is data, not a pass/fail.`,
     category: 'other',
-    evidence_required: `voice_pitch_samples row ≥ ${targetHz}Hz`,
+    evidence_required: 'voice_pitch_samples row',
     by_when: byWhen,
-    consequence: 'slip +2 and bleeding +$5',
-    reasoning: `Daily voice drill — current floor ${floorHz}Hz, target ${targetHz}Hz. Pitch is practice, not talent.`,
+    consequence: 'slip +2',
+    reasoning: 'Daily voice drill — cadence tracked, not pitch height. Practice 3x in 3 days.',
   })
 
   await supabase.from('handler_outreach_queue').insert({
     user_id: userId,
-    message: `Voice drill today: "${phrase}" at ≥${targetHz}Hz for 12 seconds. Avg pitch, not peak. Miss by midnight → slip +2 and bleed +$5.`,
+    message: `Voice drill today: "${phrase}" for 12 seconds. Submit via voice drill UI. Practice today; pitch trends get tracked. Miss by midnight → slip +2.`,
     urgency: 'normal',
     trigger_reason: `voice_drill:${today}`,
     scheduled_for: new Date().toISOString(),
@@ -3536,14 +3699,27 @@ async function enforceCommitments(
         ;(result.actions as string[]).push(`slip +${n} (now ${newPts})`)
       }
 
-      // Denial extension
+      // Denial extension — push the scheduled unlock further out.
+      // NEVER add to denial_day: that field means "days since last_release"
+      // and is a derived counter, not an enforcement knob. Mutating it lies
+      // to the user (incident 2026-04-28: she was on day 2 of denial, missed
+      // a commitment with `denial +8d`, app showed "Day 11" out of nowhere).
+      // The semantically correct write is chastity_scheduled_unlock_at.
       const denialMatch = consequence.match(/denial\s*\+\s*(\d+)\s*d/)
       if (denialMatch) {
         const days = parseInt(denialMatch[1], 10)
-        const { data: us } = await supabase.from('user_state').select('denial_day').eq('user_id', userId).maybeSingle()
-        const newDay = ((us?.denial_day as number | undefined) || 0) + days
-        await supabase.from('user_state').update({ denial_day: newDay }).eq('user_id', userId)
-        ;(result.actions as string[]).push(`denial_day +${days}d`)
+        const { data: us } = await supabase.from('user_state')
+          .select('chastity_scheduled_unlock_at')
+          .eq('user_id', userId)
+          .maybeSingle()
+        const current = us?.chastity_scheduled_unlock_at as string | null | undefined
+        const baseMs = current ? Math.max(Date.parse(current), Date.now()) : Date.now()
+        const newUnlock = new Date(baseMs + days * 86400000).toISOString()
+        await supabase.from('user_state').update({
+          chastity_scheduled_unlock_at: newUnlock,
+          chastity_locked: true,
+        }).eq('user_id', userId)
+        ;(result.actions as string[]).push(`unlock pushed +${days}d`)
       }
 
       // Witness notification — looks up a designated witness (optionally filtered by
@@ -3607,26 +3783,26 @@ async function enforceCommitments(
         ;(result.actions as string[]).push(`chastity +${days}d`)
       }
 
-      // Pull a recent confession — quote it back. This is the blackmail
-      // surface: she said it, signed it, then missed the commitment that
-      // her own confession set up. Her words become the indictment.
+      // Linked-receipt restoration: quote ONLY a confession that was
+      // directly triggered by this commitment AND answered. Same guard as
+      // the missed-decree path. Random latest-confession quoting was the
+      // 2026-04-28 fabrication bug.
       let quoteSuffix = ''
       try {
-        const { data: conf } = await supabase.from('confession_queue')
-          .select('id, response_text, confessed_at, prompt, playback_count')
+        const { data: directConf } = await supabase.from('confession_queue')
+          .select('id, response_text, confessed_at')
           .eq('user_id', userId)
+          .eq('triggered_by_table', 'handler_commitments')
+          .eq('triggered_by_id', c.id)
           .not('confessed_at', 'is', null)
           .order('confessed_at', { ascending: false })
           .limit(1)
           .maybeSingle()
-        const cf = conf as { id: string; response_text: string; confessed_at: string; prompt: string; playback_count: number } | null
-        if (cf?.response_text) {
-          const when = new Date(cf.confessed_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-          const snippet = cf.response_text.trim().slice(0, 220)
-          quoteSuffix = ` Receipt — your words, ${when}: "${snippet}${cf.response_text.length > 220 ? '…' : ''}" — and you missed this anyway.`
-          await supabase.from('confession_queue')
-            .update({ playback_count: (cf.playback_count || 0) + 1, last_played_at: new Date().toISOString() })
-            .eq('id', cf.id)
+        const linked = directConf as { id: string; response_text: string; confessed_at: string } | null
+        if (linked?.response_text && linked.response_text.trim().length > 0) {
+          const when = new Date(linked.confessed_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+          const snippet = linked.response_text.trim().slice(0, 220)
+          quoteSuffix = ` Receipt — your words, ${when}: "${snippet}${linked.response_text.length > 220 ? '…' : ''}" — and you missed this anyway.`
         }
       } catch (_) { /* non-critical */ }
 
@@ -4650,10 +4826,17 @@ async function dailyCycle(
       // 5w. Backfill irreversibility ledger from today's compliance actions
       try { await accrueIrreversibility(supabase, uid) } catch (err) { console.error(`Irreversibility accrual failed:`, err) }
 
-      // 5x. Mondays: rotate morning mantra based on phase + recent implants
-      if (new Date().getDay() === 1) {
-        try { await rotateMorningMantra(supabase, uid) } catch (err) { console.error(`Mantra rotation failed:`, err) }
-      }
+      // 5x. Mondays: forced phase-rotation. Other days: rotate only when the
+      // user has shifted into a new acute-state bucket (hard mode entered,
+      // chastity locked, denial threshold crossed) so mantra always matches state.
+      try {
+        const isMondayForce = new Date().getDay() === 1
+        if (isMondayForce) {
+          await rotateMorningMantra(supabase, uid)
+        } else {
+          await rotateMantraIfStateBucketChanged(supabase, uid)
+        }
+      } catch (err) { console.error(`Mantra rotation failed:`, err) }
 
       // 5y. Daily device schedule planner — plant edge_tease sessions timed to phase + denial
       try { await planDailyDeviceSessions(supabase, uid) } catch (err) { console.error(`Device planner failed:`, err) }

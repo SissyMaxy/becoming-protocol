@@ -27,6 +27,7 @@ type RevenueAction =
   | 'multiply_content'
   | 'respond_dm'
   | 'generate_post'
+  | 'regenerate_drafts'
 
 interface RevenueRequest {
   action: RevenueAction
@@ -97,8 +98,12 @@ serve(async (req) => {
         result = await generatePost(supabase, anthropic, userId, body.data || {})
         break
 
+      case 'regenerate_drafts':
+        result = await regenerateSlopDrafts(supabase, anthropic, userId)
+        break
+
       default:
-        result = { ok: false, error: `Unknown action: ${body.action}`, available: ['process_ai_queue','engagement_cycle','daily_batch','gfe_morning','gfe_evening','weekly_batch','multiply_content','respond_dm','generate_post'] }
+        result = { ok: false, error: `Unknown action: ${body.action}`, available: ['process_ai_queue','engagement_cycle','daily_batch','gfe_morning','gfe_evening','weekly_batch','multiply_content','respond_dm','generate_post','regenerate_drafts'] }
     }
 
     // Log the operation
@@ -152,11 +157,190 @@ async function processAIQueue(supabase: ReturnType<typeof createClient>): Promis
   return { dueItems: data?.length || 0 }
 }
 
+// Handler-state loader. Every revenue generator reads this before
+// producing user-facing content so output reflects current persona,
+// phase, denial state, and chastity/hard-mode flags. Closes the
+// centrality audit gap. Memory: feedback_handler_is_singular_authority.
+async function loadRevenueHandlerState(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<{
+  handler_persona?: string | null;
+  current_phase?: number | null;
+  denial_day?: number | null;
+  hard_mode_active?: boolean | null;
+  slip_points_current?: number | null;
+  chastity_locked?: boolean | null;
+} | null> {
+  if (!userId) return null;
+  const { data } = await supabase
+    .from('user_state')
+    .select('handler_persona, current_phase, denial_day, hard_mode_active, slip_points_current, chastity_locked')
+    .eq('user_id', userId)
+    .maybeSingle();
+  return (data as Record<string, unknown>) || null;
+}
+
+function handlerVoiceFooter(state: Awaited<ReturnType<typeof loadRevenueHandlerState>>): string {
+  if (!state) return '';
+  const parts: string[] = [];
+  if (state.handler_persona) parts.push(`persona=${state.handler_persona}`);
+  if (state.current_phase != null) parts.push(`phase=${state.current_phase}`);
+  if (state.denial_day != null) parts.push(`denial_day=${state.denial_day}`);
+  if (state.hard_mode_active) parts.push('hard_mode=on');
+  if (state.chastity_locked) parts.push('chastity=locked');
+  return parts.length ? `\nCurrent state: ${parts.join(', ')}. Voice and content must reflect this.` : '';
+}
+
+// Cross-model authenticity grader. Calls grade-post-authenticity edge fn
+// (GPT-4o-mini adversary). Returns { accept, score, reasons } so the caller
+// can decide: accept → status='scheduled'; reject → status='draft' for
+// user review (and log the slop reasons for trend tracking).
+async function gradePostBeforePublish(opts: {
+  content: string;
+  platform: string;
+  niche?: string;
+  contentType?: string;
+  userId: string;
+  sourceId?: string;
+}): Promise<{ accept: boolean; score: number; reasons: string[]; suggestions: string[] }> {
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const r = await fetch(`${supabaseUrl}/functions/v1/grade-post-authenticity`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        content: opts.content,
+        platform: opts.platform,
+        niche: opts.niche,
+        content_type: opts.contentType,
+        user_id: opts.userId,
+        source_id: opts.sourceId,
+      }),
+    });
+    if (!r.ok) return { accept: true, score: 65, reasons: [`grader_http_${r.status}`], suggestions: [] };
+    const data = await r.json() as { ok?: boolean; authentic_score?: number; accept?: boolean; reasons?: string[]; suggestions?: string[] };
+    return {
+      accept: data.accept ?? true,
+      score: data.authentic_score ?? 65,
+      reasons: data.reasons ?? [],
+      suggestions: data.suggestions ?? [],
+    };
+  } catch (err) {
+    // Default permissive — don't let grader failures block publishing
+    console.warn('[gradePostBeforePublish] error:', err);
+    return { accept: true, score: 65, reasons: ['grader_error'], suggestions: [] };
+  }
+}
+
+// Auto-regenerate drafts that were rejected by the grader. Reads slop reasons
+// + suggestions from generation_context, re-prompts Claude with that feedback
+// baked in, re-grades, and upgrades to 'scheduled' on accept. Caps at 2 attempts
+// per row so we don't loop on stubborn slop.
+async function regenerateSlopDrafts(
+  supabase: ReturnType<typeof createClient>,
+  anthropic: InstanceType<typeof Anthropic>,
+  userId?: string,
+): Promise<Record<string, unknown>> {
+  const MAX_ATTEMPTS = 2;
+  const BATCH_LIMIT = 10;
+
+  let q = supabase
+    .from('ai_generated_content')
+    .select('id, user_id, content, content_type, platform, target_subreddit, target_account, generation_context, generation_prompt')
+    .eq('status', 'draft')
+    .order('created_at', { ascending: true })
+    .limit(BATCH_LIMIT);
+  if (userId) q = q.eq('user_id', userId);
+  const { data: drafts, error } = await q;
+  if (error) return { error: error.message };
+  if (!drafts || drafts.length === 0) return { processed: 0, upgraded: 0, kept_draft: 0 };
+
+  let upgraded = 0;
+  let keptDraft = 0;
+  let skipped = 0;
+
+  for (const draft of drafts) {
+    const ctx = (draft.generation_context as Record<string, unknown> | null) ?? {};
+    const reasons = (ctx.slop_reasons as string[] | undefined) ?? [];
+    const suggestions = (ctx.slop_suggestions as string[] | undefined) ?? [];
+    const attempts = Number(ctx.regenerate_attempts ?? 0);
+
+    // Skip rows that were never graded (no slop_reasons) — they're drafts for some other reason
+    if (reasons.length === 0 && suggestions.length === 0) { skipped++; continue; }
+    if (attempts >= MAX_ATTEMPTS) { skipped++; continue; }
+
+    // Build retry prompt from original prompt + slop feedback
+    const originalPrompt = (draft.generation_prompt as string | null) ?? `Write a ${draft.content_type || 'post'} for ${draft.platform}.`;
+    const retryPrompt = `${originalPrompt}
+
+Your previous attempt was rejected by an authenticity judge.
+Issues found: ${reasons.join('; ')}
+${suggestions.length > 0 ? `Specific fixes the judge suggested: ${suggestions.join('; ')}` : ''}
+
+REWRITE COMPLETELY. Different angle, different words, different structure. Sound like a real person typed it on their phone — not a brand, not a therapist, not a motivational poster. Lowercase ok. Rough edges ok. Specificity required.
+
+Output ONLY the new ${draft.content_type || 'post'} text, no preamble.`;
+
+    let newContent = '';
+    try {
+      const response = await anthropic.messages.create({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 600,
+        system: MAXY_VOICE,
+        messages: [{ role: 'user', content: retryPrompt }],
+      });
+      newContent = response.content[0]?.type === 'text' ? response.content[0].text.trim() : '';
+    } catch (err) {
+      console.warn('[regenerateSlopDrafts] regen LLM error:', err);
+      keptDraft++;
+      continue;
+    }
+
+    if (!newContent || newContent.length < 5) { keptDraft++; continue; }
+
+    // Re-grade the regenerated version
+    const grade = await gradePostBeforePublish({
+      content: newContent,
+      platform: (draft.platform as string) || 'twitter',
+      niche: (draft.target_subreddit as string | null) ?? undefined,
+      contentType: (draft.content_type as string) || 'tweet',
+      userId: draft.user_id as string,
+    });
+
+    const newCtx: Record<string, unknown> = {
+      ...ctx,
+      regenerate_attempts: attempts + 1,
+      regenerate_last_at: new Date().toISOString(),
+      authentic_score: grade.score,
+      slop_reasons: grade.reasons,
+      slop_suggestions: grade.suggestions,
+      previous_content: draft.content,
+    };
+
+    if (grade.accept) {
+      await supabase.from('ai_generated_content')
+        .update({ content: newContent, status: 'scheduled', generation_context: newCtx })
+        .eq('id', draft.id);
+      upgraded++;
+    } else {
+      // Keep as draft with updated content + reasons; user can review
+      await supabase.from('ai_generated_content')
+        .update({ content: newContent, generation_context: newCtx })
+        .eq('id', draft.id);
+      keptDraft++;
+    }
+  }
+
+  return { processed: drafts.length, upgraded, kept_draft: keptDraft, skipped };
+}
+
 async function engagementCycle(
   supabase: ReturnType<typeof createClient>,
   anthropic: InstanceType<typeof Anthropic>,
   userId: string,
 ): Promise<Record<string, unknown>> {
+  const handlerState = await loadRevenueHandlerState(supabase, userId);
   const { data: targets } = await supabase
     .from('engagement_targets')
     .select('*')
@@ -174,7 +358,7 @@ async function engagementCycle(
       platform: target.platform,
       content: '',
       target_account: target.target_handle,
-      generation_prompt: `Reply to @${target.target_handle} as Maxy. Strategy: ${target.strategy || 'genuine engagement'}. 1-2 sentences.`,
+      generation_prompt: `Reply to @${target.target_handle} as Maxy. Strategy: ${target.strategy || 'genuine engagement'}. 1-2 sentences.${handlerVoiceFooter(handlerState)}`,
       generation_strategy: 'engagement',
       status: 'scheduled',
       scheduled_at: new Date().toISOString(),
@@ -217,7 +401,8 @@ async function generateContentCalendar(
   anthropic: InstanceType<typeof Anthropic>,
   userId: string,
 ): Promise<Record<string, unknown>> {
-  const prompt = `
+  const handlerState = await loadRevenueHandlerState(supabase, userId);
+  const prompt = handlerVoiceFooter(handlerState) + `
 Generate tomorrow's social media content calendar for Maxy.
 
 Twitter: 6-8 posts/day (personality, thirst, vulnerability, engagement bait)
@@ -246,10 +431,21 @@ Return ONLY a valid JSON array.`
     const dateStr = tomorrow.toISOString().split('T')[0]
 
     let scheduled = 0
+    let drafted = 0
     for (const post of posts) {
       const [hours, minutes] = (post.time || '12:00').split(':').map(Number)
       const scheduledAt = new Date(tomorrow)
       scheduledAt.setHours(hours || 12, minutes || 0, 0, 0)
+
+      // Grade with cross-model adversary BEFORE publishing. Slop drafts go to
+      // 'draft' status so user reviews; clean ones go to 'scheduled'.
+      const grade = await gradePostBeforePublish({
+        content: post.text || '',
+        platform: post.platform || 'twitter',
+        niche: post.subreddit || undefined,
+        contentType: post.content_type || 'tweet',
+        userId,
+      })
 
       const { error } = await supabase.from('ai_generated_content').insert({
         user_id: userId,
@@ -259,11 +455,19 @@ Return ONLY a valid JSON array.`
         target_subreddit: post.subreddit || null,
         target_hashtags: post.hashtags || [],
         generation_strategy: post.content_type || 'personality',
-        status: 'scheduled',
+        status: grade.accept ? 'scheduled' : 'draft',
         scheduled_at: scheduledAt.toISOString(),
+        generation_context: {
+          authentic_score: grade.score,
+          slop_reasons: grade.reasons,
+          slop_suggestions: grade.suggestions,
+          graded_by: 'gpt-4o-mini',
+        },
       })
 
-      if (!error) scheduled++
+      if (!error) {
+        if (grade.accept) scheduled++; else drafted++
+      }
     }
 
     // Save calendar summary
@@ -278,7 +482,7 @@ Return ONLY a valid JSON array.`
       }, { onConflict: 'user_id,date,platform' })
     }
 
-    return { postsScheduled: scheduled, platforms }
+    return { postsScheduled: scheduled, postsDrafted: drafted, platforms }
   } catch {
     return { error: 'Failed to parse calendar JSON' }
   }
@@ -290,6 +494,8 @@ async function gfeMessages(
   userId: string,
   timeOfDay: 'morning' | 'evening',
 ): Promise<Record<string, unknown>> {
+  const handlerState = await loadRevenueHandlerState(supabase, userId);
+  const stateFooter = handlerVoiceFooter(handlerState);
   const { data: subscribers } = await supabase
     .from('gfe_subscribers')
     .select('*')
@@ -303,7 +509,7 @@ async function gfeMessages(
     const prompt = `Write a ${timeOfDay} GFE message from Maxy to ${sub.subscriber_name || 'subscriber'}.
 Tier: ${sub.tier}. Preferences: ${sub.known_preferences || 'none yet'}.
 ${timeOfDay === 'morning' ? 'Just woke up energy.' : 'Crawling into bed energy.'}
-2-4 sentences. Output ONLY the message.`
+2-4 sentences. Output ONLY the message.${stateFooter}`
 
     try {
       const response = await anthropic.messages.create({
@@ -363,6 +569,7 @@ async function revenueReview(
   anthropic: InstanceType<typeof Anthropic>,
   userId: string,
 ): Promise<Record<string, unknown>> {
+  const handlerState = await loadRevenueHandlerState(supabase, userId);
   // Get this week's revenue
   const weekStart = getWeekStart()
   const { data: revenueData } = await supabase
@@ -375,7 +582,7 @@ async function revenueReview(
 
   const prompt = `Weekly revenue review. This week: $${total.toFixed(2)}.
 Make decisions on: pricing, promotions, content focus, platform focus, investments.
-Output JSON with: pricing_changes, promotions_to_run, content_focus_this_week, platform_focus, investment_decisions, projected_next_week, months_to_crossover.`
+Output JSON with: pricing_changes, promotions_to_run, content_focus_this_week, platform_focus, investment_decisions, projected_next_week, months_to_crossover.${handlerVoiceFooter(handlerState)}`
 
   try {
     const response = await anthropic.messages.create({
@@ -410,10 +617,12 @@ async function generateWrittenContent(
   userId: string,
   type: 'erotica' | 'affiliate',
 ): Promise<Record<string, unknown>> {
+  const handlerState = await loadRevenueHandlerState(supabase, userId);
+  const stateFooter = handlerVoiceFooter(handlerState);
   if (type === 'erotica') {
     const prompt = `Write a short erotic story (500-1500 words) as Maxy. First person, present tense.
 Topics: denial, chastity, the Handler, conditioning, feminization.
-Output JSON: { "title": "...", "content": "...", "tags": [...], "teaser": "..." }`
+Output JSON: { "title": "...", "content": "...", "tags": [...], "teaser": "..." }${stateFooter}`
 
     try {
       const response = await anthropic.messages.create({
@@ -453,7 +662,7 @@ Output JSON: { "title": "...", "content": "...", "tags": [...], "teaser": "..." 
 
   const product = links[0]
   const prompt = `Write a product review as Maxy for: ${product.product_name} (${product.product_category}).
-Casual, genuine recommendation. Output JSON: { "twitter": "...", "reddit": "...", "blog": "..." }`
+Casual, genuine recommendation. Output JSON: { "twitter": "...", "reddit": "...", "blog": "..." }${stateFooter}`
 
   try {
     const response = await anthropic.messages.create({
@@ -492,6 +701,8 @@ async function multiplyNewContent(
   anthropic: InstanceType<typeof Anthropic>,
   userId: string,
 ): Promise<Record<string, unknown>> {
+  const handlerState = await loadRevenueHandlerState(supabase, userId);
+  const stateFooter = handlerVoiceFooter(handlerState);
   const { data: items } = await supabase
     .from('content_vault')
     .select('id, media_type, content_type, description, content_tags')
@@ -516,7 +727,7 @@ async function multiplyNewContent(
     for (const d of derivatives) {
       const scheduledAt = new Date(Date.now() + d.delay_hours * 3600000)
 
-      const captionPrompt = `Write a caption for a ${d.type} post on ${d.platform}. Strategy: ${d.caption_strategy}. Content: ${item.description || 'content'}. 1-3 sentences.`
+      const captionPrompt = `Write a caption for a ${d.type} post on ${d.platform}. Strategy: ${d.caption_strategy}. Content: ${item.description || 'content'}. 1-3 sentences.${stateFooter}`
       const response = await anthropic.messages.create({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 200,
@@ -527,20 +738,36 @@ async function multiplyNewContent(
       const caption = response.content[0].type === 'text' ? response.content[0].text.trim() : ''
       if (!caption) continue
 
+      const cType = d.platform === 'twitter' ? 'tweet'
+        : d.platform === 'reddit' ? 'reddit_post'
+        : d.platform === 'fetlife' ? 'fetlife_post'
+        : 'caption';
+
+      const grade = await gradePostBeforePublish({
+        content: caption,
+        platform: d.platform,
+        niche: d.subreddit || undefined,
+        contentType: cType,
+        userId,
+      });
+
       await supabase.from('ai_generated_content').insert({
         user_id: userId,
         vault_item_id: item.id,
         platform: d.platform,
         content: caption,
-        content_type: d.platform === 'twitter' ? 'tweet'
-          : d.platform === 'reddit' ? 'reddit_post'
-          : d.platform === 'fetlife' ? 'fetlife_post'
-          : 'caption',
+        content_type: cType,
         target_subreddit: d.subreddit || null,
         target_hashtags: [],
         generation_strategy: 'handler_revenue_derivative',
         scheduled_at: scheduledAt.toISOString(),
-        status: 'scheduled',
+        status: grade.accept ? 'scheduled' : 'draft',
+        generation_context: {
+          authentic_score: grade.score,
+          slop_reasons: grade.reasons,
+          slop_suggestions: grade.suggestions,
+          graded_by: 'gpt-4o-mini',
+        },
       })
     }
     processed++
@@ -596,6 +823,7 @@ async function respondToDM(
   userId: string,
   data: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
+  const handlerState = await loadRevenueHandlerState(supabase, userId);
   const { data: history } = await supabase
     .from('paid_conversations')
     .select('handler_response')
@@ -607,7 +835,7 @@ async function respondToDM(
   const context = history?.map((h: Record<string, string>) => `Maxy: ${h.handler_response}`).reverse().join('\n') || 'First message.'
 
   const prompt = `Respond to DM as Maxy. Their message: "${data.content}". Name: ${data.sender_name}. Platform: ${data.platform}.
-History:\n${context}\nMatch their energy. 1-3 sentences. Output ONLY the reply.`
+History:\n${context}\nMatch their energy. 1-3 sentences. Output ONLY the reply.${handlerVoiceFooter(handlerState)}`
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
@@ -637,10 +865,11 @@ async function generatePost(
   userId: string,
   data: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
+  const handlerState = await loadRevenueHandlerState(supabase, userId);
   const platform = (data.platform as string) || 'twitter'
   const strategy = (data.strategy as string) || 'personality'
 
-  const prompt = `Write a single ${platform} post as Maxy. Strategy: ${strategy}. Output ONLY the post text.`
+  const prompt = `Write a single ${platform} post as Maxy. Strategy: ${strategy}. Output ONLY the post text.${handlerVoiceFooter(handlerState)}`
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
@@ -651,16 +880,27 @@ async function generatePost(
 
   const content = response.content[0].type === 'text' ? response.content[0].text.trim() : ''
 
+  const cType = platform === 'reddit' ? 'reddit_post' : 'tweet';
+  const grade = await gradePostBeforePublish({
+    content, platform, contentType: cType, userId,
+  });
+
   const { data: inserted } = await supabase.from('ai_generated_content').insert({
     user_id: userId,
-    content_type: platform === 'reddit' ? 'reddit_post' : 'tweet',
+    content_type: cType,
     platform,
     content,
     generation_strategy: strategy,
-    status: 'generated',
+    status: grade.accept ? 'generated' : 'draft',
+    generation_context: {
+      authentic_score: grade.score,
+      slop_reasons: grade.reasons,
+      slop_suggestions: grade.suggestions,
+      graded_by: 'gpt-4o-mini',
+    },
   }).select('id').single()
 
-  return { content, id: inserted?.id }
+  return { content, id: inserted?.id, authentic_score: grade.score, accepted: grade.accept }
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────

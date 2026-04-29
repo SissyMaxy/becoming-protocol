@@ -11,16 +11,23 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 
 type Source = 'commitment' | 'decree' | 'confession' | 'outfit' | 'workout' | 'punishment' | 'directive' | 'hrt_gate';
+type Bucket = 'momentum' | 'debt';
 
 interface Task {
   id: string;
   source: Source;
+  bucket: Bucket;        // 'momentum' = assigned forward work; 'debt' = consequence/cleanup
   label: string;
   detail?: string;
   due: string | null;
   consequence?: string;
   badge?: string;
 }
+
+// Bucket determination is per-row at collection time (each insert picks
+// 'momentum' or 'debt' based on source + category). No global set needed —
+// confessions split by their .category, punishments are always 'debt',
+// everything else is 'momentum'.
 
 const SOURCE_TONE: Record<Source, string> = {
   commitment: '#7c3aed',
@@ -144,6 +151,7 @@ export function UnifiedTaskList() {
       collected.push({
         id: `cmt:${c.id}`,
         source: 'commitment',
+        bucket: 'momentum',
         label: String(c.what).slice(0, 140),
         due: c.by_when as string | null,
         consequence: (c.consequence as string) || undefined,
@@ -154,18 +162,23 @@ export function UnifiedTaskList() {
       collected.push({
         id: `dec:${d.id}`,
         source: 'decree',
+        bucket: 'momentum',
         label: String(d.edict).slice(0, 140),
         due: d.deadline as string | null,
         consequence: (d.consequence as string) || undefined,
       });
     }
     for (const cf of (confRes.data || []) as Array<Record<string, unknown>>) {
+      // Confessions split by category: 'slip' → debt; everything else → momentum
+      const cat = String(cf.category);
+      const isDebt = cat === 'slip';
       collected.push({
         id: `cnf:${cf.id}`,
         source: 'confession',
+        bucket: isDebt ? 'debt' : 'momentum',
         label: String(cf.prompt).slice(0, 140),
         due: cf.deadline as string | null,
-        badge: String(cf.category).replace(/_/g, ' '),
+        badge: cat.replace(/_/g, ' '),
       });
     }
     const outfit = outfitRes.data as { id: string; prescription: Record<string, string>; target_date: string; photo_proof_url: string | null; completed_at: string | null } | null;
@@ -175,6 +188,7 @@ export function UnifiedTaskList() {
       collected.push({
         id: `out:${outfit.id}`,
         source: 'outfit',
+        bucket: 'momentum',
         label: `Today's outfit: ${parts}`,
         detail: outfit.photo_proof_url ? 'photo submitted' : 'photo proof required',
         due: eod.toISOString(),
@@ -185,6 +199,7 @@ export function UnifiedTaskList() {
       collected.push({
         id: `wkt:${w.id}`,
         source: 'workout',
+        bucket: 'momentum',
         label: `${w.workout_type}${w.focus_area ? ` — focus: ${w.focus_area}` : ''}`,
         due: eod.toISOString(),
       });
@@ -193,6 +208,7 @@ export function UnifiedTaskList() {
       collected.push({
         id: `pun:${p.id}`,
         source: 'punishment',
+        bucket: 'debt',
         label: String(p.title).slice(0, 140),
         detail: p.description ? String(p.description).slice(0, 120) : undefined,
         due: p.due_by as string | null,
@@ -205,6 +221,7 @@ export function UnifiedTaskList() {
       collected.push({
         id: `dir:${d.id}`,
         source: 'directive',
+        bucket: 'momentum',
         label: `[${d.action}] ${desc}`.slice(0, 140),
         due: null,
       });
@@ -216,6 +233,7 @@ export function UnifiedTaskList() {
       collected.push({
         id: 'hrt_gate',
         source: 'hrt_gate',
+        bucket: 'momentum',
         label: `HRT daily gate — advance from "${hrtStep.replace(/_/g, ' ')}" or write the obstacle`,
         due: eod.toISOString(),
       });
@@ -248,8 +266,52 @@ export function UnifiedTaskList() {
 
   if (loading || tasks.length === 0) return null;
 
-  const overdueCount = tasks.filter(t => formatDue(t.due).overdueHours > 0).length;
+  // Split into momentum (assigned forward work) vs debt (slips/punishments).
+  // The user asked for visual separation — debt is consequence, momentum is
+  // what builds the protocol. They feel different, deserve different cards.
+  const momentumTasks = tasks.filter(t => t.bucket === 'momentum');
+  const debtTasks = tasks.filter(t => t.bucket === 'debt');
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+      {momentumTasks.length > 0 && (
+        <TaskSection
+          tasks={momentumTasks}
+          headerLabel="Assigned"
+          headerHint="Forward work. Build with it."
+          accent="#c4b5fd"
+          urgentAccent="#f4c272"
+          urgentBg="linear-gradient(135deg, #2a1f0a 0%, #1a1305 100%)"
+          urgentBorder="#7a4f1f"
+        />
+      )}
+      {debtTasks.length > 0 && (
+        <TaskSection
+          tasks={debtTasks}
+          headerLabel={`Slip debt`}
+          headerHint="Consequences from slips. Clear before midnight."
+          accent="#f47272"
+          urgentAccent="#f47272"
+          urgentBg="linear-gradient(135deg, #2a0a14 0%, #1a050a 100%)"
+          urgentBorder="#7a1f22"
+        />
+      )}
+    </div>
+  );
+}
+
+// Per-bucket section: header + RIGHT NOW + then next + collapsed queue.
+function TaskSection({ tasks, headerLabel, headerHint, accent, urgentAccent, urgentBg, urgentBorder }: {
+  tasks: Task[];
+  headerLabel: string;
+  headerHint: string;
+  accent: string;
+  urgentAccent: string;
+  urgentBg: string;
+  urgentBorder: string;
+}) {
   const totalCount = tasks.length;
+  const overdueCount = tasks.filter(t => formatDue(t.due).overdueHours > 0).length;
   const rightNow = tasks[0];
   const nextUp = tasks[1];
   const after = tasks.slice(2);
@@ -257,19 +319,16 @@ export function UnifiedTaskList() {
   return (
     <div style={{
       background: 'linear-gradient(135deg, #1a0f2e 0%, #0f0820 100%)',
-      border: `2px solid ${overdueCount > 5 ? '#7a1f22' : '#2d1a4d'}`,
-      borderRadius: 10, padding: 14, marginBottom: 16,
+      border: `2px solid ${overdueCount > 3 ? urgentBorder : '#2d1a4d'}`,
+      borderRadius: 10, padding: 14,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" strokeWidth="1.8">
-          <path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-        </svg>
-        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#c4b5fd', fontWeight: 700 }}>
-          Open tasks ({totalCount})
+        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: accent, fontWeight: 700 }}>
+          {headerLabel} ({totalCount})
         </span>
         {overdueCount > 0 && (
           <span style={{
-            fontSize: 10, color: '#fff', background: '#7a1f22',
+            fontSize: 10, color: '#fff', background: urgentBorder,
             padding: '2px 7px', borderRadius: 8, fontWeight: 700,
             textTransform: 'uppercase', letterSpacing: '0.04em',
           }}>
@@ -277,18 +336,17 @@ export function UnifiedTaskList() {
           </span>
         )}
         <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto', fontStyle: 'italic' }}>
-          Every assignment, one place.
+          {headerHint}
         </span>
       </div>
 
-      {/* RIGHT NOW + NEXT UP prominence */}
       <div style={{
-        background: 'linear-gradient(135deg, #2a0a14 0%, #1a050a 100%)',
-        border: '2px solid #7a1f22',
+        background: urgentBg,
+        border: `2px solid ${urgentBorder}`,
         borderRadius: 8, padding: '12px 14px', marginBottom: 10,
       }}>
         <div style={{
-          fontSize: 9.5, color: '#f47272', fontWeight: 700,
+          fontSize: 9.5, color: urgentAccent, fontWeight: 700,
           textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4,
         }}>
           ▸ RIGHT NOW · {SOURCE_LABEL[rightNow.source]}
@@ -318,13 +376,12 @@ export function UnifiedTaskList() {
                 return;
               }
             }
-            // Fallback: open Handler chat with prefill
             sessionStorage.setItem('handler_chat_prefill', `Re: ${rightNow.label.slice(0, 120)}\n\n`);
             window.location.hash = '';
           }}
           style={{
             padding: '8px 14px', borderRadius: 6, border: 'none',
-            background: '#f47272', color: '#1a050a',
+            background: urgentAccent, color: '#1a050a',
             fontWeight: 700, fontSize: 12, cursor: 'pointer',
             fontFamily: 'inherit', textTransform: 'uppercase', letterSpacing: '0.04em',
           }}

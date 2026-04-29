@@ -54,6 +54,9 @@ export function ConfessionQueueCard() {
   const [gateRejection, setGateRejection] = useState<Record<string, { reason: string; hint: string }>>({});
   const [composeStarts, setComposeStarts] = useState<Record<string, number>>({});
   const [pasteDetected, setPasteDetected] = useState<Record<string, boolean>>({});
+  // After 2 gate rejections, the next attempt accepts even if the gate refuses.
+  // Prevents the "I can't figure out what the handler wants" loop the user flagged.
+  const [rejectCount, setRejectCount] = useState<Record<string, number>>({});
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -114,7 +117,10 @@ export function ConfessionQueueCard() {
       });
       if (gateRes.ok) {
         const gate = await gateRes.json() as { accept: boolean; reason?: string; rewrite_hint?: string };
-        if (!gate.accept) {
+        const priorRejects = rejectCount[id] || 0;
+        // After 2 rejections, accept anyway — don't trap the user in a loop.
+        // Show a soft notice on save instead of hard-blocking.
+        if (!gate.accept && priorRejects < 2) {
           setGateRejection(g => ({
             ...g,
             [id]: {
@@ -122,6 +128,7 @@ export function ConfessionQueueCard() {
               hint: gate.rewrite_hint || 'Anchor it in something specific only you know.',
             },
           }));
+          setRejectCount(r => ({ ...r, [id]: priorRejects + 1 }));
           setSubmittingId(null);
           return;
         }
@@ -139,6 +146,8 @@ export function ConfessionQueueCard() {
     setDrafts(d => { const c = { ...d }; delete c[id]; return c; });
     setComposeStarts(s => { const c = { ...s }; delete c[id]; return c; });
     setPasteDetected(p => { const c = { ...p }; delete c[id]; return c; });
+    setRejectCount(r => { const c = { ...r }; delete c[id]; return c; });
+    setGateRejection(g => { const c = { ...g }; delete c[id]; return c; });
     load();
     window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'confession', id } }));
   };
@@ -263,8 +272,8 @@ export function ConfessionQueueCard() {
               display: 'flex', justifyContent: 'space-between', fontSize: 9.5,
               color: draft.length >= 30 ? '#5fc88f' : '#8a8690', marginTop: 3,
             }}>
-              <span>{draft.length} chars · gate accepts at ~30+ with specifics</span>
-              {draft.length >= 30 && <span style={{ color: '#5fc88f' }}>length ok — gate also checks content</span>}
+              <span>{draft.length} chars · 30+ name a specific (a task, a feeling, a moment, a person)</span>
+              {draft.length >= 30 && <span style={{ color: '#5fc88f' }}>length ok</span>}
             </div>
             {gateRejection[c.id] && (
               <div style={{
@@ -272,13 +281,16 @@ export function ConfessionQueueCard() {
                 background: '#2a0a0c', border: '1px solid #7a1f22', borderRadius: 4,
               }}>
                 <div style={{ fontSize: 10, color: '#f47272', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>
-                  rejected — write it again
+                  rejected — try once more, then it accepts
                 </div>
                 <div style={{ fontSize: 11, color: '#f4a7c4', lineHeight: 1.4 }}>
                   {gateRejection[c.id].reason}
                 </div>
                 <div style={{ fontSize: 10.5, color: '#c8c4cc', marginTop: 3, fontStyle: 'italic' }}>
                   {gateRejection[c.id].hint}
+                </div>
+                <div style={{ fontSize: 9.5, color: '#8a8690', marginTop: 4 }}>
+                  After 2 rejects the gate steps back. Click Confess again to submit as-is — the Handler reads what you actually wrote.
                 </div>
               </div>
             )}
@@ -298,7 +310,7 @@ export function ConfessionQueueCard() {
                 {submittingId === c.id ? '…' : 'Confess'}
               </button>
               <span style={{ fontSize: 10, color: '#5a5560', alignSelf: 'center' }}>
-                Authenticity gate runs before save. Boilerplate gets refused.
+                Authenticity gate refuses obvious boilerplate. Real attempts pass even if they're flat. After 2 rejects, gate accepts as-is.
               </span>
             </div>
           </div>

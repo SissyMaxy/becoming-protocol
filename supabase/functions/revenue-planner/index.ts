@@ -356,14 +356,37 @@ Output STRICT JSON, no markdown, no preamble:
   }
 })
 
+// Categories whose presence is required before a wardrobe-presumptive shot
+// can name them in a directive. If inventory is empty for the relevant
+// category, we either fall through to inventory-agnostic alternatives or
+// skip the shot entirely. (Memory: feedback_no_clerical_decrees and the
+// 2026-04-28 incident where the planner generated "pink lace panties +
+// matching bra" with no check on whether she owned them.)
+function inventoryHas(inventory: WardrobeItem[], category: string): boolean {
+  return inventory.some(i => (i.category || '').toLowerCase() === category.toLowerCase())
+}
+
+interface WardrobeItem {
+  item_name: string
+  category: string
+  femininity_level?: number | null
+}
+
 function heuristicShotsFor(
-  item: { action_label: string; platform: string; kind: string }
+  item: { action_label: string; platform: string; kind: string },
+  inventory: WardrobeItem[] = []
 ): Array<{ edict: string; proof_type: string; estimated_minutes: number; deadline_offset_hours: number; reasoning: string }> {
   const p = (item.platform || '').toLowerCase()
   const k = (item.kind || '').toLowerCase()
 
-  // Worn-item / panties path
+  // Worn-item / panties path — requires owned panties. Without them, the
+  // worn-item path produces fabricated decrees ("wear your pink cotton
+  // panties for 18 hours") referencing items the user doesn't have. Skip
+  // entirely; the planner should pick a different revenue mechanic instead.
   if (k === 'custom_content' && /panties|worn|sock/i.test(item.action_label)) {
+    if (!inventoryHas(inventory, 'panties') && !inventoryHas(inventory, 'underwear') && !inventoryHas(inventory, 'socks')) {
+      return [] // no inventory → no worn-item shots
+    }
     return [
       { edict: 'Pick the pair you will wear: cotton thong or pink/black satin. Photo of pair flat on bed, natural window light, no face. This is the listing hero shot.', proof_type: 'photo', estimated_minutes: 5, deadline_offset_hours: 6, reasoning: 'Listing needs one clean product shot before wear cycle starts.' },
       { edict: 'Wear them now. Begin Day 1 of 3. Take a mirror selfie wearing only the panties — phone at hip level, no face, side angle showing the curve of your hip. Save to drive.', proof_type: 'photo', estimated_minutes: 5, deadline_offset_hours: 12, reasoning: 'Day 1 wear photo proves authenticity and seeds buyer fantasy.' },
@@ -418,6 +441,21 @@ async function generateShotList(
   planItemId: string,
   anthropicKey: string,
 ): Promise<Record<string, unknown>> {
+  // Read Handler state and inject it into the LLM prompt so the shot list
+  // reflects current persona, phase, denial state. Closes centrality audit gap.
+  const { data: handlerState } = await supabase
+    .from('user_state')
+    .select('handler_persona, current_phase, denial_day, hard_mode_active, chastity_locked')
+    .eq('user_id', userId)
+    .maybeSingle() as { data: { handler_persona?: string | null; current_phase?: number | null; denial_day?: number | null; hard_mode_active?: boolean | null; chastity_locked?: boolean | null } | null }
+  const stateParts: string[] = []
+  if (handlerState?.handler_persona) stateParts.push(`persona=${handlerState.handler_persona}`)
+  if (handlerState?.current_phase != null) stateParts.push(`phase=${handlerState.current_phase}`)
+  if (handlerState?.denial_day != null) stateParts.push(`denial_day=${handlerState.denial_day}`)
+  if (handlerState?.hard_mode_active) stateParts.push('hard_mode=on')
+  if (handlerState?.chastity_locked) stateParts.push('chastity=locked')
+  const stateFooter = stateParts.length ? `\n\nCURRENT HANDLER STATE: ${stateParts.join(', ')}. Tone, intensity, and difficulty of every directive must reflect this.` : ''
+
   const { data: itemRow, error } = await supabase.from('revenue_plan_items')
     .select('id, action_label, deliverable, platform, kind, projected_cents, deadline')
     .eq('id', planItemId)
@@ -435,6 +473,19 @@ async function generateShotList(
     return { generated: 0, reason: 'already_generated', existing }
   }
 
+  // Inventory check — the LLM and the heuristic fallback BOTH need to know
+  // what the user actually owns. Without this gate the planner fabricates
+  // wardrobe ("wear your pink lace panties...") that the user doesn't have,
+  // generating decrees she can't satisfy. (Incident 2026-04-28.)
+  const { data: invRows } = await supabase.from('wardrobe_inventory')
+    .select('item_name, category, femininity_level')
+    .eq('user_id', userId)
+    .eq('purchased', true)
+  const inventory: WardrobeItem[] = (invRows || []) as WardrobeItem[]
+  const inventoryDescription = inventory.length > 0
+    ? inventory.map(i => `- ${i.item_name} (${i.category})`).join('\n')
+    : '(EMPTY — user has logged no wardrobe items. You may NOT specify any clothing item by name, color, or material. Use generic phrasing like "what she\'s wearing" / "her usual underwear" / "any top with a soft neckline" — never invent specifics.)'
+
   const prompt = `Maxy is a pre-HRT femboy creator. The Handler issued this plan item:
 - Action: "${item.action_label}"
 - Deliverable: ${item.deliverable || 'not specified'}
@@ -450,9 +501,14 @@ For audio: exact spoken words verbatim, target duration in seconds, vocal style 
 
 For video: shot list (intro→middle→outro), specific actions per shot, framing, total length.
 
-For worn items: which item, where on body, hours/days to wear, photo cadence (morning/post-workout/end-of-day), shipping prep instructions.
+For worn items: which item (FROM THE INVENTORY LIST BELOW — never invent), where on body, hours/days to wear, photo cadence (morning/post-workout/end-of-day), shipping prep instructions.
 
 For DMs: the literal text template with [variable] slots, recipient targeting criteria, follow-up schedule.
+
+WARDROBE CONSTRAINT — this is non-negotiable:
+${inventoryDescription}
+
+If a directive needs a clothing item the inventory does not list, the directive must use generic placeholders ("what you're wearing", "any underwear", "soft fabric on top") — NEVER invent specifics like "pink lace panties," "white crew socks," "fishnet stockings," "thigh highs," "boyshorts." The user has explicitly flagged invented wardrobe as the #1 credibility-destroying bug; produce zero new instances.
 
 PLAIN-ENGLISH RULE for any copy meant for external eyes (Reddit posts, FetLife status, Sniffies bio, DM bodies, captions, auction listings, hypno scripts she sells):
 - NEVER use internal protocol jargon. These are private system terms her audience does not understand and cannot decode:
@@ -479,7 +535,7 @@ Output STRICT JSON only:
       "reasoning": "<one short sentence on why this shot serves the plan item>"
     }
   ]
-}`
+}${stateFooter}`
 
   let shots: Array<{ edict: string; proof_type: string; estimated_minutes: number; deadline_offset_hours: number; reasoning: string }> = []
   if (anthropicKey) {
@@ -503,9 +559,11 @@ Output STRICT JSON only:
   }
 
   // Heuristic fallback — deterministic shots per platform/kind so the user
-  // gets something concrete even if the LLM refuses the prompt.
+  // gets something concrete even if the LLM refuses the prompt. Inventory-
+  // aware: if the heuristic for this item type requires wardrobe she doesn't
+  // own, returns [] and we fall through to a generic fallback (or skip).
   if (shots.length === 0) {
-    shots = heuristicShotsFor(item)
+    shots = heuristicShotsFor(item, inventory)
   }
 
   if (shots.length === 0) return { generated: 0, error: 'no shots generated' }
@@ -551,6 +609,16 @@ async function reviewPlan(
   supabase: ReturnType<typeof createClient>,
   userId: string,
 ): Promise<Record<string, unknown>> {
+  // Read Handler state so the outreach message reflects current persona/phase
+  const { data: handlerState } = await supabase
+    .from('user_state')
+    .select('handler_persona, current_phase, denial_day, slip_points_current')
+    .eq('user_id', userId)
+    .maybeSingle() as { data: { handler_persona?: string | null; current_phase?: number | null; denial_day?: number | null; slip_points_current?: number | null } | null }
+  const stateContext = handlerState
+    ? ` [persona=${handlerState.handler_persona || 'default'}, phase=${handlerState.current_phase ?? 0}, denial=${handlerState.denial_day ?? 0}d]`
+    : ''
+
   // Find last week's plan
   const lastWeek = new Date()
   lastWeek.setDate(lastWeek.getDate() - 7)
@@ -586,7 +654,7 @@ async function reviewPlan(
 
   await supabase.from('handler_outreach_queue').insert({
     user_id: userId,
-    message: `Revenue review: ${summary} ${conversionPct < 50 ? 'Below target — adjusting next week.' : 'On track.'}`,
+    message: `Revenue review${stateContext}: ${summary} ${conversionPct < 50 ? 'Below target — adjusting next week.' : 'On track.'}`,
     urgency: 'standard',
     trigger_reason: 'revenue_plan_review',
     scheduled_for: new Date().toISOString(),

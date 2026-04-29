@@ -370,6 +370,13 @@ async function writeWeeklyDigest(
   supabase: ReturnType<typeof createClient>,
   userId: string,
 ): Promise<string> {
+  // Centrality: read user_state so the digest reflects current persona/phase
+  const { data: handlerState } = await supabase
+    .from('user_state')
+    .select('handler_persona, current_phase, denial_day, slip_points_current')
+    .eq('user_id', userId)
+    .maybeSingle() as { data: { handler_persona?: string | null; current_phase?: number | null; denial_day?: number | null; slip_points_current?: number | null } | null }
+
   const sevenAgo = new Date(Date.now() - 7 * 86400000).toISOString()
 
   const [pActive, pNew, pRetired, implants7d, ref7d, wf7d,
@@ -393,11 +400,14 @@ async function writeWeeklyDigest(
   const c = (commits.data || []) as Array<{ status: string }>
   const urg = urgency.data as { total_bleed_cents?: number; resolved_at?: string | null } | null
 
+  const stateHeader = handlerState
+    ? `Persona=${handlerState.handler_persona || 'default'}, phase=${handlerState.current_phase ?? 0}, denial=${handlerState.denial_day ?? 0}d, slip_points=${handlerState.slip_points_current ?? 0}.`
+    : ''
   const lines = [
-    `WEEKLY EVOLUTION DIGEST — 7 days.`,
+    `WEEKLY EVOLUTION DIGEST — 7 days.${stateHeader ? ' ' + stateHeader : ''}`,
     `Active prompt patches: ${pActive.count ?? 0}. New this week: ${pNew.count ?? 0}. Retired: ${pRetired.count ?? 0}. Evolve cycles run: ${evolveRuns.count ?? 0}.`,
     `Coercion library growth: +${implants7d.count ?? 0} implants, +${ref7d.count ?? 0} reframings, +${wf7d.count ?? 0} witness fabrications.`,
-    `Pronoun slips: ${pronouns.count ?? 0}. David events: ${davids.count ?? 0}. Total slip points: ${totalSlipPoints}.`,
+    `Pronoun slips: ${pronouns.count ?? 0}. Costume-name retreats: ${davids.count ?? 0}. Total slip points: ${totalSlipPoints}.`,
     `Commitments: ${c.filter(x => x.status === 'fulfilled').length} fulfilled, ${c.filter(x => x.status === 'missed').length} missed, ${c.filter(x => x.status === 'pending').length} pending.`,
   ]
   if (urg && urg.total_bleed_cents && !urg.resolved_at) {

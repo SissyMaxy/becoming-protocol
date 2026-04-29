@@ -43,6 +43,7 @@ import { runRedditBackfill } from './backfill-reddit-engagement';
 import { runScheduledAudit } from './audit-alignment';
 import { runWeeklyDigest } from './insights';
 import { queueAttentionDedup } from './handler-attention';
+import { isTwitterReady, checkTwitterReadiness } from './twitter-readiness';
 import { invalidateVoiceCache } from './voice-system';
 import { runAllMoneyIngest } from './money-ingest';
 import { runAnnounceLive } from './announce-live';
@@ -405,7 +406,17 @@ async function tick() {
     // --- Every 16th tick (~4h): scrape Twitter DMs for new voice samples ---
     // Auto-poster must keep learning from manually-typed DMs. Invalidates the
     // voice cache so subsequent ticks pick up the new exemplars immediately.
-    if (tickCount % 16 === 1 && PLATFORMS.twitter.enabled) {
+    // Readiness gate — blocks all Twitter engines until twitter-status passes.
+    // Cached 5min so checking on every twitter-engine line below is cheap.
+    const twitterReady = await isTwitterReady();
+    if (PLATFORMS.twitter.enabled && !twitterReady && tickCount === 1) {
+      const r = await checkTwitterReadiness();
+      console.log(`[${timestamp}] ⚠ Twitter engines BLOCKED by readiness gate:`);
+      for (const b of r.blockers) console.log(`    ✗ ${b}`);
+      console.log(`    (run: npm run twitter-status for full report)`);
+    }
+
+    if (twitterReady && tickCount % 16 === 1 && PLATFORMS.twitter.engines.voiceLearn) {
       await withTimeout('Voice learn', async () => {
         try {
           const r = await runVoiceLearn();
@@ -418,7 +429,7 @@ async function tick() {
     }
 
     // --- Every tick: Twitter replies (4-5) --- (5 min timeout)
-    if (PLATFORMS.twitter.enabled) {
+    if (twitterReady && PLATFORMS.twitter.engines.replies) {
       await withTimeout('Twitter replies', async () => {
         const hasBudget = await checkBudget(supabase, USER_ID, 'twitter', 'reply');
         if (hasBudget) {
@@ -436,7 +447,7 @@ async function tick() {
 
     // --- Every 4th tick (~1h): Twitter follow operations ---
     // Fires on ticks 1, 5, 9, ... (immediate on first tick for verification)
-    if (tickCount % 4 === 1 && PLATFORMS.twitter.enabled) {
+    if (twitterReady && tickCount % 4 === 1 && PLATFORMS.twitter.engines.follows) {
       let twitterFollowCtx: BrowserContext | null = null;
       await withTimeout('Twitter follows', async () => {
         const hasFollowBudget = await checkBudget(supabase, USER_ID, 'twitter', 'follow');
@@ -471,7 +482,7 @@ async function tick() {
     }
 
     // --- Every 8th tick (~2h): Strategic follows + unfollow stales ---
-    if (tickCount % 8 === 0 && PLATFORMS.twitter.enabled) {
+    if (twitterReady && tickCount % 8 === 0 && PLATFORMS.twitter.engines.follows) {
       let twitterGrowthCtx: BrowserContext | null = null;
       await withTimeout('Twitter growth', async () => {
         // Clear lock file
@@ -506,7 +517,7 @@ async function tick() {
     }
 
     // --- Every 4th tick (~1h): Quote tweets (2-3) ---
-    if (tickCount % 4 === 2 && PLATFORMS.twitter.enabled) {
+    if (twitterReady && tickCount % 4 === 2 && PLATFORMS.twitter.engines.quoteTweets) {
       await withTimeout('Quote tweets', async () => {
         const hasQTBudget = await checkBudget(supabase, USER_ID, 'twitter', 'quote_tweet');
         if (hasQTBudget) {
@@ -650,7 +661,9 @@ async function tick() {
     }
 
     // --- Every 2nd tick: DM Outreach --- (2 min timeout)
-    if (tickCount % 2 === 0 && PLATFORMS.twitter.enabled) {
+    // CRITICAL: cold DM outreach is what got @Soft_Maxy banned. Default OFF.
+    // Re-enabling requires extreme caution + cooldowns + much smaller cohort.
+    if (twitterReady && tickCount % 2 === 0 && PLATFORMS.twitter.engines.dmOutreach) {
       await withTimeout('DM Outreach', async () => {
         const hasBudget = await checkBudget(supabase, USER_ID, 'twitter', 'dm');
         if (hasBudget) {

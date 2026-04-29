@@ -10,6 +10,35 @@ import Anthropic from '@anthropic-ai/sdk';
 import { supabase } from '../supabase';
 import type { RevenueDecision, WeeklyRevenueReview } from '../../types/revenue-engine';
 
+// ── Handler-state loader (centrality compliance) ───────────────────
+
+async function loadRevenueHandlerState(userId: string): Promise<{
+  handler_persona: string | null;
+  current_phase: number | null;
+  denial_day: number | null;
+  hard_mode_active: boolean | null;
+  chastity_locked: boolean | null;
+} | null> {
+  if (!userId) return null;
+  const { data } = await supabase
+    .from('user_state')
+    .select('handler_persona, current_phase, denial_day, hard_mode_active, chastity_locked')
+    .eq('user_id', userId)
+    .maybeSingle();
+  return (data as Record<string, unknown> as never) || null;
+}
+
+function handlerVoiceFooter(state: Awaited<ReturnType<typeof loadRevenueHandlerState>>): string {
+  if (!state) return '';
+  const parts: string[] = [];
+  if (state.handler_persona) parts.push(`persona=${state.handler_persona}`);
+  if (state.current_phase != null) parts.push(`phase=${state.current_phase}`);
+  if (state.denial_day != null) parts.push(`denial_day=${state.denial_day}`);
+  if (state.hard_mode_active) parts.push('hard_mode=on');
+  if (state.chastity_locked) parts.push('chastity=locked');
+  return parts.length ? `\nCurrent state: ${parts.join(', ')}. Decisions must reflect this.` : '';
+}
+
 // ── Date helpers ────────────────────────────────────────────────────
 
 function getWeekStart(): string {
@@ -73,6 +102,8 @@ export async function weeklyRevenueReview(
   client: Anthropic,
   userId: string,
 ): Promise<WeeklyRevenueReview | null> {
+  const handlerState = await loadRevenueHandlerState(userId);
+  const stateFooter = handlerVoiceFooter(handlerState);
   const weekStart = getWeekStart();
   const prevWeekStart = getPreviousWeekStart();
 
@@ -133,7 +164,7 @@ Output JSON:
   "investment_decisions": [{"type": "...", "amount": N, "reason": "..."}],
   "projected_next_week": N,
   "months_to_crossover": N
-}
+}${stateFooter}
   `;
 
   try {
@@ -176,10 +207,14 @@ async function logDecision(
   data: Record<string, unknown>,
   rationale: string,
 ): Promise<void> {
+  // Tag every decision with current handler state — every revenue decision
+  // is a Handler-authored artifact; persona/phase/mode at decision-time is
+  // forensic context for review and undo.
+  const handlerState = await loadRevenueHandlerState(userId);
   await supabase.from('revenue_decisions').insert({
     user_id: userId,
     decision_type: type,
-    decision_data: data,
+    decision_data: { ...data, _handler_state_at_decision: handlerState },
     rationale,
   });
 }

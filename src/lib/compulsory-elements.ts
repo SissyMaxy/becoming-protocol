@@ -74,7 +74,7 @@ export const COMPULSORY_ELEMENTS: CompulsoryElement[] = [
   {
     id: 'evening_log',
     name: 'Evening Reflection',
-    description: 'How was David today? How was Maxy? Log one moment from each.',
+    description: 'How was the costume today? How was Maxy? Log one moment from each.',
     mustCompleteBy: '23:00',
     blocksIfIncomplete: ['release_eligibility'],
     estimatedMinutes: 2,

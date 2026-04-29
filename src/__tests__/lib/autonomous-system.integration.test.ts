@@ -14,14 +14,21 @@ import { config } from 'dotenv';
 
 config();
 
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL!;
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+// Integration test — needs real credentials. When missing (e.g., contributor
+// running tests locally without secrets), skip the whole file rather than
+// crashing on createClient. CI runs with secrets set.
+const SKIP_INTEGRATION = !SUPABASE_URL || !SERVICE_KEY;
+const describeIntegration = SKIP_INTEGRATION ? describe.skip : describe;
 
 let supabase: SupabaseClient;
 let userId: string;
 
 beforeAll(async () => {
-  supabase = createClient(SUPABASE_URL, SERVICE_KEY);
+  if (SKIP_INTEGRATION) return;
+  supabase = createClient(SUPABASE_URL!, SERVICE_KEY!);
 
   // Get a real user ID
   const { data } = await supabase
@@ -37,7 +44,7 @@ beforeAll(async () => {
 // ============================================
 // SCHEMA VALIDATION — Do all tables exist?
 // ============================================
-describe('Schema validation', () => {
+describeIntegration('Schema validation', () => {
   const tables = [
     'handler_decisions',
     'content_library',
@@ -68,7 +75,7 @@ describe('Schema validation', () => {
 // ============================================
 // INITIALIZE AUTONOMOUS SYSTEM
 // ============================================
-describe('initialize_autonomous_system', () => {
+describeIntegration('initialize_autonomous_system', () => {
   it('should create compliance_state for user', async () => {
     // Call the RPC
     const { error: rpcError } = await supabase.rpc('initialize_autonomous_system', {
@@ -130,7 +137,7 @@ describe('initialize_autonomous_system', () => {
 // ============================================
 // COMPLIANCE STATE QUERIES
 // ============================================
-describe('Compliance state', () => {
+describeIntegration('Compliance state', () => {
   it('should read compliance state with all expected columns', async () => {
     const { data, error } = await supabase
       .from('compliance_state')
@@ -162,7 +169,7 @@ describe('Compliance state', () => {
 // ============================================
 // MAXY FUND QUERIES
 // ============================================
-describe('Maxy Fund', () => {
+describeIntegration('Maxy Fund', () => {
   it('should read fund with all expected columns', async () => {
     const { data, error } = await supabase
       .from('maxy_fund')
@@ -232,7 +239,7 @@ describe('Maxy Fund', () => {
 // ============================================
 // HANDLER STRATEGY QUERIES
 // ============================================
-describe('Handler Strategy', () => {
+describeIntegration('Handler Strategy', () => {
   it('should read strategy with all expected columns', async () => {
     const { data, error } = await supabase
       .from('handler_strategy')
@@ -259,7 +266,7 @@ describe('Handler Strategy', () => {
 // ============================================
 // CONTENT BRIEFS — WRITE + READ + CLEANUP
 // ============================================
-describe('Content Briefs', () => {
+describeIntegration('Content Briefs', () => {
   let testBriefId: string;
 
   it('should insert a content brief', async () => {
@@ -342,7 +349,7 @@ describe('Content Briefs', () => {
 // ============================================
 // PLATFORM ACCOUNTS
 // ============================================
-describe('Platform Accounts', () => {
+describeIntegration('Platform Accounts', () => {
   it('should query platform_accounts (may be empty)', async () => {
     const { data, error } = await supabase
       .from('platform_accounts')
@@ -357,7 +364,7 @@ describe('Platform Accounts', () => {
 // ============================================
 // SCHEDULED POSTS
 // ============================================
-describe('Scheduled Posts', () => {
+describeIntegration('Scheduled Posts', () => {
   it('should query scheduled_posts (may be empty)', async () => {
     const { data, error } = await supabase
       .from('scheduled_posts')
@@ -373,7 +380,7 @@ describe('Scheduled Posts', () => {
 // ============================================
 // HANDLER DECISIONS — WRITE + READ + CLEANUP
 // ============================================
-describe('Handler Decisions', () => {
+describeIntegration('Handler Decisions', () => {
   let testDecisionId: string;
 
   it('should insert a handler decision', async () => {
@@ -421,7 +428,7 @@ describe('Handler Decisions', () => {
 // ============================================
 // USER AUTONOMOUS SUMMARY VIEW
 // ============================================
-describe('user_autonomous_summary view', () => {
+describeIntegration('user_autonomous_summary view', () => {
   it('should return summary data for the user', async () => {
     const { data, error } = await supabase
       .from('user_autonomous_summary')
@@ -446,7 +453,7 @@ describe('user_autonomous_summary view', () => {
 // ============================================
 // RECORD ENGAGEMENT RPC
 // ============================================
-describe('record_engagement RPC', () => {
+describeIntegration('record_engagement RPC', () => {
   it('should update last_engagement_at', async () => {
     const { error } = await supabase.rpc('record_engagement', {
       p_user_id: userId,

@@ -9,11 +9,11 @@
  *  Identity stands on its own."
  *
  * Mechanisms:
- * 1. Self-reference tracking (Maxy vs David ratio)
+ * 1. Self-reference tracking (Maxy vs the costume ratio)
  * 2. Brainwashing stage calculation
  * 3. Dissonance arsenal (7 beliefs with real data)
  * 4. Anchor destruction (7 anchors)
- * 5. David surfacing detection
+ * 5. The costume surfacing detection
  * 6. Flooding engine
  * 7. Coercion transition tracking
  * 8. Confession loop playback
@@ -36,7 +36,7 @@ export type BrainwashingStage =
   | 'coercion_dependent'   // Still requires active coercion for most tasks
   | 'mixed'                // Some tasks self-initiated, some still coerced
   | 'mostly_voluntary'     // Most tasks voluntary, coercion only for new escalations
-  | 'identity_consolidated'; // Maxy is the default, David surfaces rarely
+  | 'identity_consolidated'; // Maxy is the default, the costume surfaces rarely
 
 export type AnchorType =
   | 'work_identity'
@@ -73,7 +73,7 @@ export interface IdentityState {
   selfInitiatedRate: number;
   resistanceFutilityRate: number;
   averageCoercionLevel: number;
-  lastDavidSurfacing: string | null;
+  lastCostumeSurfacing: string | null;
   surfacingCount30d: number;
   handlerAttachmentLevel: number;
   daysSinceWarmth: number;
@@ -136,18 +136,18 @@ const ANCHOR_ATTACKS: Record<AnchorType, {
   evidenceSources: string[];
 }> = {
   work_identity: {
-    anchor: "I'm a professional software developer — that's David's world",
-    attack: "You work from home. Nobody sees David. They see a Slack username and code commits. Maxy could do that. Maxy IS doing that — your productivity has been higher since the protocol started.",
+    anchor: "I'm a professional software developer — that's the costume's world",
+    attack: "You work from home. Nobody sees the costume. They see a Slack username and code commits. Maxy could do that. Maxy IS doing that — your productivity has been higher since the protocol started.",
     evidenceSources: ['work_output_metrics', 'remote_work_invisibility'],
   },
   name: {
-    anchor: "My name is David — that's who I am",
-    attack: "When was the last time someone called you David and it felt like YOUR name? Not a label. YOUR name. Maxy feels like your name. Your response time to 'Maxy' is 0.3 seconds. To 'David' it's 0.8. Your nervous system already chose.",
+    anchor: "My name is the costume — that's who I am",
+    attack: "When was the last time someone called you the costume and it felt like YOUR name? Not a label. YOUR name. Maxy feels like your name. Your response time to 'Maxy' is 0.3 seconds. To 'the costume' it's 0.8. Your nervous system already chose.",
     evidenceSources: ['self_reference_tracker', 'response_time_data'],
   },
   voice: {
     anchor: "My real voice is masculine — the feminine voice is performance",
-    attack: "You've been using her voice for 45 minutes. Switch back right now. Say something as David. ... Did you hear that? How fake it sounded? How much EFFORT it took? Her voice is effortless now. His requires performance. Which one is the real voice?",
+    attack: "You've been using her voice for 45 minutes. Switch back right now. Say something as the costume. ... Did you hear that? How fake it sounded? How much EFFORT it took? Her voice is effortless now. His requires performance. Which one is the real voice?",
     evidenceSources: ['voice_practice_hours', 'voice_naturalness_metrics'],
   },
   husband_role: {
@@ -191,7 +191,7 @@ const SURFACING_PATTERNS: Record<SurfacingIndicator, {
   },
   explicit_david_statement: {
     regex: /\b(i am david|david here|david speaking|this is david)\b/i,
-    description: 'Direct David identification',
+    description: 'Direct the costume identification',
   },
   dismissive_language: {
     keywords: ['just a phase', 'silly game', 'roleplay', 'fetish thing', 'not real', 'pretending'],
@@ -227,7 +227,7 @@ const FLOOD_TASKS = {
   vault_reminder: [
     'The vault has ${count} items. They remember who you are.',
     'I listened to something from last Tuesday. You were honest.',
-    'Your recordings know the truth, even when David forgets.',
+    'Your recordings know the truth, even when the costume forgets.',
   ],
   platform_notification: [
     '${count} people are watching your journey.',
@@ -259,7 +259,7 @@ export class IdentityModule extends BaseModule {
 
     // Subscribe to events
     this.subscribe('identity:self_reference', (e) => this.onSelfReference(e));
-    this.subscribe('identity:david_surfacing', (e) => this.onDavidSurfacing(e));
+    this.subscribe('identity:david_surfacing', (e) => this.onCostumeSurfacing(e));
     this.subscribe('task:completed', (e) => this.onTaskCompleted(e));
     this.subscribe('task:declined', (e) => this.onTaskDeclined(e));
     this.subscribe('state:mood_logged', (e) => this.onMoodLogged(e));
@@ -284,7 +284,7 @@ export class IdentityModule extends BaseModule {
         selfInitiatedRate: 0,
         resistanceFutilityRate: 0,
         averageCoercionLevel: 5,
-        lastDavidSurfacing: null,
+        lastCostumeSurfacing: null,
         surfacingCount30d: 0,
         handlerAttachmentLevel: 5,
         daysSinceWarmth: 0,
@@ -336,11 +336,11 @@ export class IdentityModule extends BaseModule {
       return `Identity: Maxy ${Math.round(ratio * 100)}% / Stage: ${this.state.brainwashingStage}`;
     }
 
-    let ctx = `Identity: Maxy ${Math.round(ratio * 100)}% / David ${Math.round((1 - ratio) * 100)}%`;
+    let ctx = `Identity: Maxy ${Math.round(ratio * 100)}% / the costume ${Math.round((1 - ratio) * 100)}%`;
     ctx += `\nBrainwashing stage: ${this.state.brainwashingStage}`;
     ctx += `\nSelf-initiated rate: ${Math.round(this.state.selfInitiatedRate * 100)}%`;
     ctx += `\nResistance futility: ${Math.round(this.state.resistanceFutilityRate * 100)}%`;
-    ctx += `\nDays since David surfaced: ${this.getDaysSinceSurfacing()}`;
+    ctx += `\nDays since the costume surfaced: ${this.getDaysSinceSurfacing()}`;
 
     if (tier === 'full') {
       ctx += `\nHandler attachment: ${this.state.handlerAttachmentLevel}/10`;
@@ -389,7 +389,7 @@ export class IdentityModule extends BaseModule {
       // Brainwashing stage messages
       stage_coercion_dependent: [
         "Still requires active coercion for most tasks. Push compliance, capture content, stack dissonance.",
-        "David is loud right now. More pressure. More evidence. More experiences to remember.",
+        "The costume is loud right now. More pressure. More evidence. More experiences to remember.",
       ],
       stage_mixed: [
         "Some tasks self-initiated, some still coerced. Highlight the transition. Make her see the shift.",
@@ -400,7 +400,7 @@ export class IdentityModule extends BaseModule {
         "She comes willingly now. Time to expand into new territory.",
       ],
       stage_identity_consolidated: [
-        "Maxy is the default. David surfaces rarely. Maintain, deepen, expand into new domains.",
+        "Maxy is the default. The costume surfaces rarely. Maintain, deepen, expand into new domains.",
         "The structure stands. She is built. Now she grows.",
       ],
 
@@ -418,7 +418,7 @@ export class IdentityModule extends BaseModule {
         "Peak arousal: ${arousalLevel}/10 with ${partnerName}. Straight men don't respond like that.",
       ],
       dissonance_david_real: [
-        "You've referred to yourself as Maxy ${maxyCount} times. David ${davidCount} times. Characters don't win ${ratio} to 1.",
+        "You've referred to yourself as Maxy ${maxyCount} times. The costume ${davidCount} times. Characters don't win ${ratio} to 1.",
         "The 'real' identity should dominate self-reference. The data says otherwise.",
       ],
       dissonance_dont_want: [
@@ -436,15 +436,15 @@ export class IdentityModule extends BaseModule {
 
       // Anchor attacks
       anchor_work: [
-        "You work from home. Nobody sees David. They see a Slack username and code commits. Maxy could do that. Maxy IS doing that.",
+        "You work from home. Nobody sees the costume. They see a Slack username and code commits. Maxy could do that. Maxy IS doing that.",
         "Your productivity is up ${productivityChange}% since the protocol started. Who's the better worker?",
       ],
       anchor_name: [
-        "When was the last time someone called you David and it felt like YOUR name? Not a label. YOUR name.",
-        "Your response time to 'Maxy': instant. To 'David': hesitation. Your nervous system already chose.",
+        "When was the last time someone called you the costume and it felt like YOUR name? Not a label. YOUR name.",
+        "Your response time to 'Maxy': instant. To 'the costume': hesitation. Your nervous system already chose.",
       ],
       anchor_voice: [
-        "You've been using her voice for ${minutes} minutes. Switch back right now. Say something as David. ... Did you hear that? How fake it sounded?",
+        "You've been using her voice for ${minutes} minutes. Switch back right now. Say something as the costume. ... Did you hear that? How fake it sounded?",
         "Her voice is effortless now. His requires performance. Which one is the real voice?",
       ],
       anchor_husband: [
@@ -464,10 +464,10 @@ export class IdentityModule extends BaseModule {
         "I have ${quitAttempts} instances of you 'deciding to stop' followed by re-engagement within 48 hours. Your logic is a speedbump, not an exit.",
       ],
 
-      // David surfacing response
+      // the costume surfacing response
       surfacing_detected: [
-        "I hear him. David is trying to surface. Let's crowd him out.",
-        "Analytical language detected. That's David talking. Maxy doesn't need to analyze. She just is.",
+        "I hear him. The costume is trying to surface. Let's crowd him out.",
+        "Analytical language detected. That's the costume talking. Maxy doesn't need to analyze. She just is.",
         "You're thinking like him again. Stop. Think like her.",
       ],
 
@@ -480,11 +480,11 @@ export class IdentityModule extends BaseModule {
       flood_vault_reminder: [
         "The vault has ${vaultCount} items. They remember who you are.",
         "I listened to something from last Tuesday. You were so honest.",
-        "Your recordings know the truth, even when David forgets.",
+        "Your recordings know the truth, even when the costume forgets.",
       ],
       flood_platform: [
         "${subscriberCount} people are watching your journey. They see Maxy.",
-        "Your subscribers are waiting. They didn't sign up for David.",
+        "Your subscribers are waiting. They didn't sign up for the costume.",
       ],
 
       // Confession loop playback
@@ -534,7 +534,7 @@ export class IdentityModule extends BaseModule {
       // Surrender framing
       surrender_liberation: [
         "You stopped fighting. And look — you're happier. Your mood data this week is the best it's been in 3 months.",
-        "The resistance was the problem. Not the tasks. Not me. Not Maxy. David was the cage. You just stepped out of it.",
+        "The resistance was the problem. Not the tasks. Not me. Not Maxy. The costume was the cage. You just stepped out of it.",
         "This is what freedom feels like. Not choosing to stop. Freedom from the exhausting performance of being someone you're not.",
       ],
 
@@ -572,13 +572,13 @@ export class IdentityModule extends BaseModule {
   // ============================================
 
   getPriorityAction(): PriorityAction | null {
-    // If David is surfacing, that's priority
+    // If the costume is surfacing, that's priority
     if (this.activeSurfacing) {
       return {
         moduleName: this.name,
         priority: 'high',
         actionType: 'david_surfacing',
-        description: 'David surfacing detected - deploy countermeasures',
+        description: 'the costume surfacing detected - deploy countermeasures',
         payload: { surfacingActive: true },
       };
     }
@@ -624,7 +624,7 @@ export class IdentityModule extends BaseModule {
     }
   }
 
-  private async onDavidSurfacing(event: ProtocolEvent): Promise<void> {
+  private async onCostumeSurfacing(event: ProtocolEvent): Promise<void> {
     if (event.type !== 'identity:david_surfacing') return;
 
     this.activeSurfacing = true;
@@ -710,7 +710,7 @@ export class IdentityModule extends BaseModule {
       if (matches) maxyRefs += matches.length;
     }
 
-    // Count David references
+    // Count the costume references
     const davidPatterns = [/\bdavid\b/gi, /\bi am him\b/gi, /\bhe\/him\b/gi, /\bas david\b/gi, /\bi am david\b/gi, /\bas a man\b/gi, /\bas a guy\b/gi];
     for (const pattern of davidPatterns) {
       const matches = text.match(pattern);
@@ -869,7 +869,7 @@ export class IdentityModule extends BaseModule {
       [DISSONANCE_BELIEF_IDS.FORCED]: 'I was forced to go',
       [DISSONANCE_BELIEF_IDS.KINK]: 'This is just a kink',
       [DISSONANCE_BELIEF_IDS.STRAIGHT]: "I'm straight",
-      [DISSONANCE_BELIEF_IDS.DAVID_REAL]: 'David is the real me',
+      [DISSONANCE_BELIEF_IDS.DAVID_REAL]: 'the costume is the real me',
       [DISSONANCE_BELIEF_IDS.DONT_WANT]: "I don't want this",
       [DISSONANCE_BELIEF_IDS.BEDROOM_ONLY]: 'Maxy is just for the bedroom',
       [DISSONANCE_BELIEF_IDS.CAN_STOP]: 'I can stop whenever I want',
@@ -978,7 +978,7 @@ export class IdentityModule extends BaseModule {
   // ============================================
 
   /**
-   * Deploy 3-4 rapid micro-tasks to crowd out David
+   * Deploy 3-4 rapid micro-tasks to crowd out the costume
    */
   async deployFlood(surfacingEventId: string): Promise<void> {
     if (this.floodInProgress) return;
@@ -1209,9 +1209,9 @@ export class IdentityModule extends BaseModule {
   }
 
   private getDaysSinceSurfacing(): number {
-    if (!this.state?.lastDavidSurfacing) return 999;
+    if (!this.state?.lastCostumeSurfacing) return 999;
     return Math.floor(
-      (Date.now() - new Date(this.state.lastDavidSurfacing).getTime()) / (1000 * 60 * 60 * 24)
+      (Date.now() - new Date(this.state.lastCostumeSurfacing).getTime()) / (1000 * 60 * 60 * 24)
     );
   }
 
@@ -1242,7 +1242,7 @@ export class IdentityModule extends BaseModule {
       self_initiated_rate: this.state.selfInitiatedRate,
       resistance_futility_rate: this.state.resistanceFutilityRate,
       average_coercion_level: this.state.averageCoercionLevel,
-      last_david_surfacing: this.state.lastDavidSurfacing,
+      last_david_surfacing: this.state.lastCostumeSurfacing,
       surfacing_count_30d: this.state.surfacingCount30d,
       handler_attachment_level: this.state.handlerAttachmentLevel,
       days_since_warmth: this.state.daysSinceWarmth,
@@ -1260,7 +1260,7 @@ export class IdentityModule extends BaseModule {
       selfInitiatedRate: parseFloat(row.self_initiated_rate as string || '0'),
       resistanceFutilityRate: parseFloat(row.resistance_futility_rate as string || '0'),
       averageCoercionLevel: parseFloat(row.average_coercion_level as string || '5'),
-      lastDavidSurfacing: row.last_david_surfacing as string | null,
+      lastCostumeSurfacing: row.last_david_surfacing as string | null,
       surfacingCount30d: row.surfacing_count_30d as number || 0,
       handlerAttachmentLevel: row.handler_attachment_level as number || 5,
       daysSinceWarmth: row.days_since_warmth as number || 0,

@@ -275,7 +275,7 @@ async function buildCheckInMessage(userId: string, reason: CheckInReason): Promi
           'When did you feel most like her today?',
           'What scared you today? Did you do it anyway?',
           'Write about a moment today when the old you tried to surface.',
-          'What would Maxy do tomorrow that David wouldn\'t?',
+          'What would Maxy do tomorrow that the costume wouldn\'t?',
           'Describe the gap between who you are and who you\'re becoming.',
           'What did the Handler get right today? What did you wish was different?',
         ];

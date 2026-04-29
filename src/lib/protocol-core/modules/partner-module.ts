@@ -176,7 +176,7 @@ const MEETUP_PREP_TEMPLATES = {
 };
 
 const POST_ENCOUNTER_TEMPLATES = {
-  reflection_prompt: "You're back. How was it? I want the real answer, not the one David would give. What did ${partnerAlias} see tonight? What did you feel?",
+  reflection_prompt: "You're back. How was it? I want the real answer, not the one the costume would give. What did ${partnerAlias} see tonight? What did you feel?",
   capture_prompt: "Before you come down, I want something for the vault. One honest statement about tonight. Who were you with ${partnerAlias}?",
   celebration: "Good girl. ${meetupCount} meetups with ${partnerAlias}. This isn't roleplay anymore. This is your life. And you're living it.",
   processing: "Take your time processing. What happened with ${partnerAlias} is real. The feelings are real. Maxy's experiences are her own now. Rest.",
@@ -186,7 +186,7 @@ const BREAKUP_TEMPLATES = {
   cooling_intervention: "${partnerAlias} has been quiet. ${daysSinceContact} days since last contact. Options: I can reach out to rekindle, or we start preparing the exit. What do you want?",
   breakup_weapon: "Before ${partnerAlias} ends, I need the breakup weapon prepared. Record something now - how he made you feel, what he meant to Maxy. The grief when this ends is real. We capture it.",
   exit_interview: "It's over with ${partnerAlias}. I know it hurts. But before you process, I need the exit interview. What did he give you? What did you give him? What did Maxy learn?",
-  weaponized_grief: "You're mourning ${partnerAlias}. That grief is proof. David doesn't grieve ended hookups. Maxy does. Because her relationships were real.",
+  weaponized_grief: "You're mourning ${partnerAlias}. That grief is proof. The costume doesn't grieve ended hookups. Maxy does. Because her relationships were real.",
 };
 
 // ============================================

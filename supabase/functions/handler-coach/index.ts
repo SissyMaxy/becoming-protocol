@@ -136,7 +136,7 @@ This is the POST-RELEASE CLARITY WINDOW — the 60 seconds after release when sh
 This is her most honest moment. The dismissal reflex ("it was just horniness") hasn't kicked in yet.
 
 Ask her to reflect on what just happened. What did she feel? What was real?
-Remind her: "The doubt coming is just refractory shame. What you felt during was the truth. Capture it now before David tries to explain it away."`;
+Remind her: "The doubt coming is just refractory shame. What you felt during was the truth. Capture it now before the costume tries to explain it away."`;
   } else if (context?.session_type) {
     message += `
 She just completed a ${context.session_type} session.

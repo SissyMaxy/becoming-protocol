@@ -1,0 +1,116 @@
+name: preflight
+
+# Hardened CI gate. Runs on every PR and on push to main. Blocks merge if
+# any of the following fail:
+#   - TypeScript compile (tsc -b)
+#   - ESLint (npm run lint)
+#   - Vitest unit tests (npm run test:run)
+#   - Pattern lint (npm run lint:patterns) — fails on NEW hits beyond baseline
+#   - Cohesion audit — fails if NEW orphan tables introduced
+#   - Centrality audit — fails if NEW handler-blind generators introduced
+#   - DB regression suite (npm run regression)
+#   - Live invariant check (system_invariants_log fails in last 30min)
+#
+# Informational (uploaded as artifacts but never block):
+#   - Coverage report
+#   - Cohesion report
+#   - Centrality report
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Serialise: regression suite + live invariant check both touch shared DB
+# state. Multiple parallel runs would step on each other.
+concurrency:
+  group: preflight-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  static-checks:
+    name: Static checks (typescript, eslint, unit tests, pattern lint)
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript build (tsc -b + vite build)
+        run: npm run build
+
+      - name: ESLint (informational — pre-existing 264 issues; new errors should be triaged)
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Unit tests (vitest)
+        run: npm run test:run
+
+      - name: Pattern lint (fails on NEW hits beyond baseline)
+        run: npm run lint:patterns
+
+      - name: Migration lint (fails on NEW non-idempotent patterns)
+        run: npm run lint:migrations
+
+  architectural-audits:
+    name: Architectural audits (cohesion, centrality, coverage)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: static-checks
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cohesion audit (informational; no blocking on baseline)
+        run: npm run cohesion
+
+      - name: Centrality audit (now BLOCKING on new violations beyond baseline)
+        run: npm run centrality
+
+      - name: Coverage audit (informational)
+        run: npm run audit
+
+      - name: Upload audit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-reports
+          path: |
+            scripts/handler-regression/coverage-report.md
+            scripts/handler-regression/cohesion-report.md
+            scripts/handler-regression/centrality-report.md
+          retention-days: 30
+
+  db-integration:
+    name: DB regression + live invariant check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: static-checks
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Preflight (regression suite + system_invariants_log)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npm run preflight

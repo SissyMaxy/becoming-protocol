@@ -18,6 +18,26 @@ async function generateCaption(
   item: Record<string, unknown>,
   derivative: ContentDerivative,
 ): Promise<string> {
+  // Centrality: load Handler state and inject it into the prompt so the
+  // caption voice tracks current persona, phase, and denial state.
+  let stateFooter = '';
+  if (_userId) {
+    const { data: state } = await supabase
+      .from('user_state')
+      .select('handler_persona, current_phase, denial_day, hard_mode_active, chastity_locked')
+      .eq('user_id', _userId)
+      .maybeSingle();
+    if (state) {
+      const parts: string[] = [];
+      if (state.handler_persona) parts.push(`persona=${state.handler_persona}`);
+      if (state.current_phase != null) parts.push(`phase=${state.current_phase}`);
+      if (state.denial_day != null) parts.push(`denial_day=${state.denial_day}`);
+      if (state.hard_mode_active) parts.push('hard_mode=on');
+      if (state.chastity_locked) parts.push('chastity=locked');
+      if (parts.length) stateFooter = `\nCurrent state: ${parts.join(', ')}. Caption must reflect this.`;
+    }
+  }
+
   const prompt = `
 Write a caption for a ${derivative.type} post on ${derivative.platform}.
 Strategy: ${derivative.caption_strategy}
@@ -34,7 +54,7 @@ ${derivative.type === 'throwback' ? 'This is a throwback/repost. Frame it nostal
 ${derivative.type === 'clip_teaser' ? 'This is a teaser clip. Drive viewers to see the full version.' : ''}
 ${derivative.type === 'caption_post' ? 'Write a sissy/feminization caption to overlay on the image. 1-3 sentences, evocative.' : ''}
 
-Write ONLY the caption text. 1-3 sentences max.
+Write ONLY the caption text. 1-3 sentences max.${stateFooter}
   `;
 
   const response = await client.messages.create({

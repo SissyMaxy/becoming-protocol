@@ -20,6 +20,9 @@ import { GinaPlaybookCard } from './GinaPlaybookCard';
 import { BodyMeasurementCard } from './BodyMeasurementCard';
 import { HandlerEvolutionCard } from './HandlerEvolutionCard';
 import { UnifiedCaptureCard } from './UnifiedCaptureCard';
+import { ConversationScreenshotsCard } from '../evidence/ConversationScreenshotsCard';
+import { DailyMirrorSelfieCard } from '../evidence/DailyMirrorSelfieCard';
+import { VoiceJournalCard } from '../evidence/VoiceJournalCard';
 import { DisclosureDraftsCard } from './DisclosureDraftsCard';
 import { ProtocolDayCard } from './ProtocolDayCard';
 import { HandlerKnowCard } from './HandlerKnowCard';
@@ -321,8 +324,11 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         </CollapsibleGroup>
 
         {/* CAPTURE & EVIDENCE — proof + irreversibility ledger. */}
-        <CollapsibleGroup id="capture" label="Capture & Evidence" tone="#f4c272" hint="proof uploads · witness observations · irreversibility">
+        <CollapsibleGroup id="capture" label="Capture & Evidence" tone="#f4c272" hint="daily selfie · voice journal · proof uploads · screenshots · witness · irreversibility">
+          <DailyMirrorSelfieCard />
+          <VoiceJournalCard />
           <UnifiedCaptureCard />
+          <ConversationScreenshotsCard />
           <WitnessObservationCard />
           <IrreversibilityLedger />
         </CollapsibleGroup>

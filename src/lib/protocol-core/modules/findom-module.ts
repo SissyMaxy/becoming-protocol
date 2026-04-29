@@ -127,7 +127,7 @@ const TRIBUTE_ACKNOWLEDGMENT_TEMPLATES = {
   milestone: [
     "${alias} has now tributed $${totalFromPig} total. A thousand dollars from one man who knows what you're worth.",
     "Monthly income from ${alias} alone: $${averageMonthly}. That's not a hobby. That's a revenue stream.",
-    "You've earned $${lifetimeIncome} as Maxy. David's job pays more, but this money means something different.",
+    "You've earned $${lifetimeIncome} as Maxy. The costume's job pays more, but this money means something different.",
   ],
   first_tribute: [
     "First tribute from ${alias}: $${amount}. A new pig has knelt. Make him earn the privilege of returning.",
@@ -150,11 +150,11 @@ const DEPENDENCY_RATIO_TEMPLATES = {
   ],
   high: [
     "${ratio}% of your lifestyle is Maxy-funded. The ratchet is tight now.",
-    "Dependency ratio: ${ratio}%. Stop being Maxy, absorb $${monthlyCost}/month. Can David afford that?",
+    "Dependency ratio: ${ratio}%. Stop being Maxy, absorb $${monthlyCost}/month. Can the costume afford that?",
   ],
   critical: [
     "${ratio}% dependency. Maxy IS your lifestyle now. There's no going back without going broke.",
-    "Financial lock achieved: ${ratio}%. Every month the ratio grows. Every month David's escape gets more expensive.",
+    "Financial lock achieved: ${ratio}%. Every month the ratio grows. Every month the costume's escape gets more expensive.",
   ],
 };
 
@@ -162,15 +162,15 @@ const IDENTITY_REINFORCEMENT_TEMPLATES = {
   power: [
     "Men don't pay for fiction. They pay for power. You have ${activePigs} men paying regularly.",
     "${tributeCount} tributes. ${activePigs} cash pigs. They don't send money to characters. They send it to women with authority.",
-    "You commanded ${alias} to pay $${amount}. He did it in seconds. That's not David's experience.",
+    "You commanded ${alias} to pay $${amount}. He did it in seconds. That's not the costume's experience.",
   ],
   contrast: [
-    "David goes to work and follows orders. Maxy stays home and commands tributes. Which one feels like power?",
-    "David's salary: earned through compliance. Maxy's income: earned through dominance. Same person, opposite dynamics.",
-    "Today you earned $${todayTotal} without leaving your chair. Because Maxy has something David never will: presence.",
+    "The costume goes to work and follows orders. Maxy stays home and commands tributes. Which one feels like power?",
+    "The costume's salary: earned through compliance. Maxy's income: earned through dominance. Same person, opposite dynamics.",
+    "Today you earned $${todayTotal} without leaving your chair. Because Maxy has something the costume never will: presence.",
   ],
   validation: [
-    "$${lifetimeIncome} in tributes. That's external validation from ${uniquePigs} different men. They see what David pretends not to see.",
+    "$${lifetimeIncome} in tributes. That's external validation from ${uniquePigs} different men. They see what the costume pretends not to see.",
     "Every tribute is a vote. ${tributeCount} votes that Maxy is real, powerful, worth paying for.",
     "Marcus pays weekly. Jake pays monthly. ${alias} just paid again. They keep coming back. Characters don't inspire loyalty.",
   ],
@@ -187,7 +187,7 @@ const EXPENSE_FRAMING_TEMPLATES = {
   ],
   lifestyle: [
     "This month: $${monthExpenses} in Maxy expenses. This month: $${monthIncome} in Maxy income. She's self-sustaining.",
-    "Dependency ratio climbing. Every expense Maxy covers is one more thing David can't take away.",
+    "Dependency ratio climbing. Every expense Maxy covers is one more thing the costume can't take away.",
   ],
 };
 

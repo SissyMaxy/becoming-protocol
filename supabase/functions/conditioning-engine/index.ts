@@ -844,6 +844,21 @@ async function executeDirectiveInline(
   const { action, user_id: userId, target, value: v } = directive
   const val = (v || {}) as Record<string, unknown>
 
+  // Centrality: read Handler state so device commands and other directives
+  // execute with reference to current persona, phase, hard mode, etc.
+  const { data: handlerState } = await supabase
+    .from('user_state')
+    .select('handler_persona, current_phase, hard_mode_active, chastity_locked, denial_day')
+    .eq('user_id', userId)
+    .maybeSingle() as { data: { handler_persona?: string | null; current_phase?: number | null; hard_mode_active?: boolean | null; chastity_locked?: boolean | null; denial_day?: number | null } | null }
+
+  // State-aware gating: refuse device commands when chastity_locked is false but
+  // the directive expects an active session. This is a defensive rail — the
+  // upstream caller should have checked, but Handler-state authority lives here.
+  if (action === 'send_device_command' && handlerState && !handlerState.chastity_locked && val.requires_chastity === true) {
+    return { success: false, error: 'state_gated: chastity_locked=false but directive requires lock' }
+  }
+
   switch (action) {
     case 'modify_parameter': {
       const parameter = val.parameter as string
@@ -1254,6 +1269,15 @@ async function handleGenerateWeeklyReflection(supabase: ReturnType<typeof create
 async function handleProcessDeviceSchedule(supabase: ReturnType<typeof createClient>) {
   const nowIso = new Date().toISOString()
 
+  // Read Handler state for all users with pending device schedule items
+  // before processing. State is folded into each scheduled directive so the
+  // device command and its paired message reflect persona/phase at fire time.
+  const { data: stateRows } = await supabase
+    .from('user_state')
+    .select('user_id, handler_persona, current_phase, hard_mode_active, chastity_locked, denial_day, in_session') as { data: Array<{ user_id: string; handler_persona?: string | null; current_phase?: number | null; hard_mode_active?: boolean | null; chastity_locked?: boolean | null; denial_day?: number | null; in_session?: boolean | null }> | null }
+  const stateByUser = new Map<string, { handler_persona?: string | null; current_phase?: number | null; hard_mode_active?: boolean | null; chastity_locked?: boolean | null; denial_day?: number | null; in_session?: boolean | null }>()
+  for (const s of (stateRows || [])) stateByUser.set(s.user_id, s)
+
   const { data: due, error: dueErr } = await supabase
     .from('device_schedule')
     .select('id, user_id, intensity, duration_seconds, pattern, pattern_data, paired_message, scheduled_at, expires_at, schedule_type')
@@ -1288,6 +1312,8 @@ async function handleProcessDeviceSchedule(supabase: ReturnType<typeof createCli
         continue
       }
 
+      const userState = stateByUser.get(row.user_id) || null
+
       // Queue the device command as a handler_directive (device-control consumes these)
       await supabase.from('handler_directives').insert({
         user_id: row.user_id,
@@ -1298,9 +1324,10 @@ async function handleProcessDeviceSchedule(supabase: ReturnType<typeof createCli
           duration: row.duration_seconds ?? 30,
           pattern: row.pattern || 'pulse',
           ...(row.pattern_data || {}),
+          _handler_state_at_fire: userState,
         },
         priority: 'normal',
-        reasoning: `Scheduled device event ${row.id} (${row.schedule_type || 'unknown'}) @ ${row.scheduled_at}`,
+        reasoning: `Scheduled device event ${row.id} (${row.schedule_type || 'unknown'}) @ ${row.scheduled_at}${userState ? ` [persona=${userState.handler_persona || 'default'}, phase=${userState.current_phase ?? 0}]` : ''}`,
       })
 
       // Paired message (if any) goes to the Handler outreach queue
@@ -1313,6 +1340,7 @@ async function handleProcessDeviceSchedule(supabase: ReturnType<typeof createCli
           scheduled_for: nowIso,
           expires_at: new Date(Date.now() + 6 * 3600000).toISOString(),
           source: 'device_schedule',
+          context_data: userState ? { handler_state_at_schedule: userState } : null,
         })
       }
 

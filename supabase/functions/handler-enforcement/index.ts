@@ -478,21 +478,25 @@ async function evaluateCompliance(
     current_tier: 0,
   })
 
-  // 7. Voice pitch quality — avg pitch must be >= 160Hz over last 3 days
+  // 7. Voice practice cadence — count practice frequency, NOT pitch height.
+  // Forcing a pitch target causes dysphoria (memory: feedback_voice_tracking.md).
+  // Compliance = "she practiced ≥3x in the last 3 days." Her pitch trajectory
+  // gets tracked in voice_pitch_samples for trends, never as a pass/fail gate.
   const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
   const { data: pitchSamples } = await supabase
     .from('voice_pitch_samples')
-    .select('pitch_hz')
+    .select('pitch_hz, created_at')
     .eq('user_id', userId)
     .gte('created_at', threeDaysAgo)
 
-  let voicePitchCompliant = false
-  let pitchDetails = 'No voice pitch samples in last 3 days'
-  if (pitchSamples && pitchSamples.length > 0) {
-    const avgPitch = pitchSamples.reduce((sum: number, s: { pitch_hz: number }) => sum + s.pitch_hz, 0) / pitchSamples.length
-    voicePitchCompliant = avgPitch >= 160
-    pitchDetails = `Avg pitch: ${avgPitch.toFixed(1)}Hz across ${pitchSamples.length} samples (min 160Hz required)`
-  }
+  const sampleCount = pitchSamples?.length || 0
+  const voicePitchCompliant = sampleCount >= 3
+  const avgPitch = sampleCount > 0
+    ? (pitchSamples as { pitch_hz: number }[]).reduce((sum, s) => sum + s.pitch_hz, 0) / sampleCount
+    : 0
+  const pitchDetails = sampleCount === 0
+    ? 'No voice practice in last 3 days (need ≥3 sessions)'
+    : `${sampleCount} practice session${sampleCount > 1 ? 's' : ''} in last 3 days · trend avg ${avgPitch.toFixed(1)}Hz (informational only)`;
 
   const { data: voicePitchStreak } = await supabase
     .from('noncompliance_streaks')

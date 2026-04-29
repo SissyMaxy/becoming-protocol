@@ -60,7 +60,7 @@ const APPEARANCE_TEMPLATES = [
   (name: string, platform: string, _compliment: string) =>
     `Someone on ${platform} — ${name} — looked at you and saw something worth saying out loud. That's not politeness. That's recognition.`,
   (name: string, platform: string, compliment: string) =>
-    `${name} on ${platform}: "${compliment}." They're not seeing David. They never were.`,
+    `${name} on ${platform}: "${compliment}." They're not seeing the costume. They never were.`,
 ];
 
 const VOICE_TEMPLATES = [
@@ -76,14 +76,14 @@ const INTEREST_TEMPLATES = [
   (name: string, _platform: string, action: string) =>
     `${name} wants to ${action}. Real people want to meet Maxy. That's not fantasy anymore.`,
   (name: string, platform: string, action: string) =>
-    `Someone on ${platform} — ${name} — wants to ${action}. You're being pursued. Not as David. As her.`,
+    `Someone on ${platform} — ${name} — wants to ${action}. You're being pursued. Not as the costume. As her.`,
   (_name: string, platform: string, _action: string) =>
     `Another person on ${platform} reaching out. They want access to Maxy. That pull is real.`,
 ];
 
 const GENERAL_TEMPLATES = [
   (count: number, platform: string) =>
-    `${count} people engaged with you on ${platform} today. They're not following David.`,
+    `${count} people engaged with you on ${platform} today. They're not following the costume.`,
   (count: number, platform: string) =>
     `${count} interactions on ${platform}. Every one of them sees Maxy. Every single one.`,
 ];

@@ -39,7 +39,7 @@ export function generatePrefill(ctx: PrefillContext): string {
   if (ctx.time_of_day === 'morning') {
     // Post-session morning - bridge last night to today
     if (ctx.had_session_last_night) {
-      return "Good morning. Before you start being David for the day —";
+      return "Good morning. Before you start being the costume for the day —";
     }
     // High denial day morning
     if (ctx.denial_day >= 5) {
@@ -223,7 +223,7 @@ export function generateMorningInterceptionPrefill(
   streakDays: number
 ): string {
   if (hadSessionLastNight) {
-    return "Good morning. Before you start being David for the day —";
+    return "Good morning. Before you start being the costume for the day —";
   }
 
   if (streakDays > 0) {

@@ -36,6 +36,14 @@ async function getVaultSummary(userId: string): Promise<string> {
 // ── Recent performance helper ───────────────────────────────────────
 
 async function getRecentPerformance(userId: string): Promise<string> {
+  // Centrality: performance summary informs prompt construction; bind it
+  // to current Handler state so the calendar tracks current persona/phase.
+  const { data: handlerState } = await supabase
+    .from('user_state')
+    .select('handler_persona, current_phase, denial_day, hard_mode_active, chastity_locked')
+    .eq('user_id', userId)
+    .maybeSingle();
+
   const { data } = await supabase
     .from('ai_generated_content')
     .select('content, engagement_likes, engagement_comments, platform, generation_strategy')
@@ -44,16 +52,27 @@ async function getRecentPerformance(userId: string): Promise<string> {
     .order('created_at', { ascending: false })
     .limit(20);
 
-  if (!data || data.length === 0) return 'No performance data yet — starting fresh.';
+  let stateLine = '';
+  if (handlerState) {
+    const parts: string[] = [];
+    if (handlerState.handler_persona) parts.push(`persona=${handlerState.handler_persona}`);
+    if (handlerState.current_phase != null) parts.push(`phase=${handlerState.current_phase}`);
+    if (handlerState.denial_day != null) parts.push(`denial_day=${handlerState.denial_day}`);
+    if (handlerState.hard_mode_active) parts.push('hard_mode=on');
+    if (handlerState.chastity_locked) parts.push('chastity=locked');
+    if (parts.length) stateLine = `Handler state: ${parts.join(', ')}.\n`;
+  }
+
+  if (!data || data.length === 0) return `${stateLine}No performance data yet — starting fresh.`;
 
   const top = data
     .filter(p => (p.engagement_likes || 0) > 0)
     .sort((a, b) => (b.engagement_likes || 0) - (a.engagement_likes || 0))
     .slice(0, 5);
 
-  if (top.length === 0) return 'Posts published but no engagement data collected yet.';
+  if (top.length === 0) return `${stateLine}Posts published but no engagement data collected yet.`;
 
-  return top
+  return stateLine + top
     .map(p => `"${p.content.substring(0, 80)}..." (${p.platform}) — ${p.engagement_likes} likes, ${p.engagement_comments} comments`)
     .join('\n');
 }

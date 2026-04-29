@@ -219,7 +219,7 @@ export async function evolvePersonality(userId: string): Promise<PersonalityStat
     const phrasePatterns = [
       'You already know',
       'Good girl',
-      'That\'s not David talking',
+      'That\'s not the costume talking',
       'She\'s right here',
       'You earned this',
       'Don\'t think',

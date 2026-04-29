@@ -375,7 +375,7 @@ export function getInitiationMessage(
     case 'momentum':
       return "Good girl. You're on a roll. I have something for you. Open.";
     case 'integration_window':
-      return "Good morning. Before you start being David for the day — let's talk about last night.";
+      return "Good morning. Before you start being the costume for the day — let's talk about last night.";
     case 'support_needed':
       return "Hey. I see you.";
     case 'post_session':

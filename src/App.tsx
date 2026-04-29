@@ -90,6 +90,9 @@ import { VectorGridView } from './components/adaptive-feminization';
 import { VoiceAffirmationGame } from './components/voice-game';
 import { VoiceDrillView } from './components/voice-game/VoiceDrillView';
 import { Dashboard } from './components/dashboard';
+import { WardrobeInventoryView } from './components/wardrobe';
+import { GinaVibeCaptureCard } from './components/gina';
+import { TrajectoryArchiveView } from './components/trajectory';
 import { JournalView } from './components/journal';
 import { ProtocolAnalytics } from './components/analytics/ProtocolAnalytics';
 import { HandlerAutonomousView } from './components/autonomous';
@@ -155,7 +158,7 @@ function LoadingScreen() {
   );
 }
 
-type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | 'hypno-learning' | 'goon-session' | 'progress-page' | 'sealed-page' | 'content-capture' | 'content-queue' | 'content-calendar' | 'content-fans' | 'content-polls' | 'content-revenue' | 'content-settings' | 'vault-browser' | 'log-release' | 'conditioning-library' | 'social-dashboard' | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol' | 'escalation_ladder' | 'force' | null;
+type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | 'hypno-learning' | 'goon-session' | 'progress-page' | 'sealed-page' | 'content-capture' | 'content-queue' | 'content-calendar' | 'content-fans' | 'content-polls' | 'content-revenue' | 'content-settings' | 'vault-browser' | 'log-release' | 'conditioning-library' | 'social-dashboard' | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol' | 'escalation_ladder' | 'force' | 'wardrobe' | 'gina-vibe' | 'trajectory' | null;
 
 /** Session picker → launches immersive SessionContainer */
 function SessionPickerOrContainer({ onBack }: { onBack: () => void }) {
@@ -844,6 +847,22 @@ function AuthenticatedAppInner() {
         return <GoonSessionView onBack={handleBackFromSubView} />;
       case 'conditioning-library':
         return <ConditioningLibrary onBack={handleBackFromSubView} />;
+      case 'wardrobe':
+        return <WardrobeInventoryView onBack={handleBackFromSubView} />;
+      case 'gina-vibe':
+        return (
+          <div>
+            <button onClick={handleBackFromSubView} className="mb-4 text-sm text-protocol-text-muted hover:text-protocol-text">&larr; Back</button>
+            <h2 className="text-lg font-semibold mb-2 text-protocol-text">Gina Vibe Capture</h2>
+            <p className="text-xs text-protocol-text-muted mb-4">
+              Log her words and energy verbatim. Each capture silently inflates readiness on related merge pipeline items
+              and feeds Handler chat with re-citation material. The closer to her actual words, the better.
+            </p>
+            <GinaVibeCaptureCard />
+          </div>
+        );
+      case 'trajectory':
+        return <TrajectoryArchiveView onBack={handleBackFromSubView} />;
       case 'social-dashboard':
         return <SocialMediaDashboard onBack={handleBackFromSubView} />;
       case 'dashboard':

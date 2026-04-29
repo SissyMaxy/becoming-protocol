@@ -76,8 +76,68 @@ export function HandlerStatusBriefing({ className = '' }: HandlerStatusBriefingP
     setExpandedSection(prev => prev === section ? null : section);
   };
 
+  const score = briefing.complianceScore;
+
   return (
     <div className={`space-y-3 ${className}`}>
+      {/* COMPLIANCE SCORE — single number that aggregates today's protocol activity.
+          Tone-keyed colors so it reads as a quick anchor on app open. */}
+      {score && (
+        <div className={`rounded-xl p-3 flex items-center gap-3 ${
+          isBambiMode ? 'bg-pink-50 border-2 border-pink-200' :
+          score.tone === 'PUSH' ? 'bg-emerald-900/20 border border-emerald-500/30' :
+          score.tone === 'STEADY' ? 'bg-indigo-900/20 border border-indigo-500/30' :
+          score.tone === 'RECOVERY' ? 'bg-amber-900/20 border border-amber-500/30' :
+          'bg-rose-900/20 border border-rose-500/30'
+        }`}>
+          <div className={`text-3xl font-bold ${
+            isBambiMode ? 'text-pink-700' :
+            score.tone === 'PUSH' ? 'text-emerald-300' :
+            score.tone === 'STEADY' ? 'text-indigo-300' :
+            score.tone === 'RECOVERY' ? 'text-amber-300' :
+            'text-rose-300'
+          }`}>{score.score}</div>
+          <div className="flex-1">
+            <div className={`text-xs font-medium uppercase tracking-wider ${
+              isBambiMode ? 'text-pink-500' :
+              score.tone === 'PUSH' ? 'text-emerald-400' :
+              score.tone === 'STEADY' ? 'text-indigo-400' :
+              score.tone === 'RECOVERY' ? 'text-amber-400' :
+              'text-rose-400'
+            }`}>
+              Today's score · {score.tone === 'PUSH' ? 'push forward' : score.tone === 'STEADY' ? 'steady' : score.tone === 'RECOVERY' ? 'recovery mode' : 'crisis'}
+            </div>
+            <div className={`text-sm mt-0.5 ${isBambiMode ? 'text-pink-700' : 'text-protocol-text'}`}>
+              {score.done} done · {score.misses} missed
+              {score.trend !== 0 && (
+                <span className={`ml-2 ${score.trend > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {score.trend > 0 ? '+' : ''}{score.trend} vs yesterday
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* HER OWN WORDS — surfaced first so she meets herself before the day's tasks.
+          Pulled from key_admissions + self-authored memory_implants (last 7d). */}
+      {briefing.ownWordsCallback && briefing.ownWordsCallback.length > 0 && (
+        <div className={`rounded-xl p-4 ${
+          isBambiMode ? 'bg-rose-50 border-2 border-rose-200' : 'bg-rose-900/20 border border-rose-500/30'
+        }`}>
+          <div className="flex items-center gap-2 mb-2">
+            <span className={`text-xs font-medium uppercase tracking-wider ${
+              isBambiMode ? 'text-rose-500' : 'text-rose-400'
+            }`}>
+              YOUR WORDS — ON FILE
+            </span>
+          </div>
+          <p className={`text-sm handler-voice ${isBambiMode ? 'text-rose-700' : 'text-protocol-text'}`}>
+            {briefing.ownWordsCallback}
+          </p>
+        </div>
+      )}
+
       {/* OVERNIGHT — skip when nothing real to report */}
       {briefing.overnight.items.some(i => !/^Day 1\. No data yet/.test(i.text) && !/^Nothing logged/.test(i.text)) && (
         <BriefingSection

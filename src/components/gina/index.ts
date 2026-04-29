@@ -8,6 +8,9 @@ export { GinaInteractionLogger } from './GinaInteractionLogger';
 export { GinaContentImport } from './GinaContentImport';
 export { GinaAnalyticsDashboard } from './GinaAnalyticsDashboard';
 
+// v3.1 cultivation engine
+export { GinaVibeCaptureCard } from './GinaVibeCaptureCard';
+
 // Gina Ladder Pipeline (Phase F)
 export { GinaLadderView } from './GinaLadderView';
 export { SeedLogger } from './SeedLogger';

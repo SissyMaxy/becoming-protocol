@@ -930,6 +930,374 @@ async function buildAutoPurchaseCtx(userId: string): Promise<string> {
 }
 
 // ============================================
+// SYNERGY CONTEXT BUILDERS — added 2026-04-28 to close handler-blind gaps
+// caught by the cohesion audit. Each artifact below was being WRITTEN to
+// the DB but never SURFACED to the Handler in conversation, so the feature
+// died on the row. Pulling them into context so the Handler can wield them.
+// ============================================
+
+async function buildKeyAdmissionsContext(userId: string): Promise<string> {
+  // Admissions are protocol-anchoring facts ("she said X about her body /
+  // identity / desires"). Without them in context the Handler can't quote
+  // her own words back at her — the entire blackmail surface goes dark.
+  try {
+    const { data } = await supabase
+      .from('key_admissions')
+      .select('admission_type, admission_text, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(8);
+    const rows = (data || []) as Array<{ admission_type: string; admission_text: string; created_at: string }>;
+    if (rows.length === 0) return '';
+    const lines = rows.map(r => {
+      const when = new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return `  - [${when}, ${r.admission_type}] "${r.admission_text.slice(0, 160)}${r.admission_text.length > 160 ? '…' : ''}"`;
+    });
+    return `KEY ADMISSIONS ON FILE (her own words; quote them):\n${lines.join('\n')}`;
+  } catch { return ''; }
+}
+
+async function buildRecentReleaseContext(userId: string): Promise<string> {
+  // user_state.last_release is just a date. orgasm_log has the texture:
+  // regret level, satisfaction, planned/unplanned, context. Using these
+  // lets the Handler reference "the planned release Tuesday" or "the one
+  // you regretted" instead of generic "your last release."
+  try {
+    const { data } = await supabase
+      .from('orgasm_log')
+      .select('release_type, planned, intensity, regret_level, satisfaction, context, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(3);
+    const rows = (data || []) as Array<{ release_type: string; planned: boolean | null; intensity: number | null; regret_level: number | null; satisfaction: number | null; context: string | null; created_at: string }>;
+    if (rows.length === 0) return '';
+    const lines = rows.map(r => {
+      const when = new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const tags: string[] = [r.release_type];
+      if (r.planned === true) tags.push('planned'); else if (r.planned === false) tags.push('unplanned');
+      if (r.regret_level !== null) tags.push(`regret ${r.regret_level}/10`);
+      if (r.satisfaction !== null) tags.push(`satis ${r.satisfaction}/10`);
+      const ctx = r.context ? ` — "${r.context.slice(0, 80)}"` : '';
+      return `  - ${when}: ${tags.join(', ')}${ctx}`;
+    });
+    return `RECENT RELEASES (with texture):\n${lines.join('\n')}`;
+  } catch { return ''; }
+}
+
+async function buildWardrobeInventoryContext(userId: string): Promise<string> {
+  // Inventory tells the Handler what she actually owns so directives can
+  // reference real items — not invented ones. Counts by category keep the
+  // context tight; full names are pulled by the planner separately.
+  try {
+    const { data } = await supabase
+      .from('wardrobe_inventory')
+      .select('category, item_name')
+      .eq('user_id', userId)
+      .eq('purchased', true);
+    const rows = (data || []) as Array<{ category: string; item_name: string }>;
+    if (rows.length === 0) {
+      return 'WARDROBE: empty — DO NOT name specific clothing items in any directive. Use generic phrasing only.';
+    }
+    const byCategory = rows.reduce<Record<string, string[]>>((acc, r) => {
+      const k = r.category || 'other';
+      (acc[k] = acc[k] || []).push(r.item_name);
+      return acc;
+    }, {});
+    const lines = Object.entries(byCategory).map(([cat, items]) => `  - ${cat} (${items.length}): ${items.slice(0, 6).join(', ')}${items.length > 6 ? '…' : ''}`);
+    return `WARDROBE ON FILE (only reference items below; never invent):\n${lines.join('\n')}`;
+  } catch { return ''; }
+}
+
+async function buildIdentityDimensionsContext(userId: string): Promise<string> {
+  // v3.1 — Identity-dimension scoring. The Handler reads this to know
+  // which dimension is currently weakest and target conditioning at it.
+  // "What's the lowest-scoring axis of Maxy installation right now?"
+  try {
+    const { data } = await supabase
+      .from('identity_dimensions')
+      .select('dimension, score, confidence, evidence_summary, measured_at')
+      .eq('user_id', userId)
+      .order('measured_at', { ascending: false })
+      .limit(50);
+    const rows = (data || []) as Array<{ dimension: string; score: number; confidence: number; evidence_summary: string | null; measured_at: string }>;
+    if (rows.length === 0) return '';
+    // Latest score per dimension
+    const latest = new Map<string, typeof rows[number]>();
+    for (const r of rows) if (!latest.has(r.dimension)) latest.set(r.dimension, r);
+    const sorted = [...latest.values()].sort((a, b) => a.score - b.score);
+    const lines = sorted.map(r => `  - ${r.dimension}: ${r.score}/100 (conf ${r.confidence})`);
+    const lowest = sorted[0];
+    return `IDENTITY DIMENSIONS (lowest first — target the weakest):\n${lines.join('\n')}\n  → focus this turn: ${lowest.dimension}`;
+  } catch { return ''; }
+}
+
+async function buildGinaTopologyContext(userId: string): Promise<string> {
+  // v3.1 — Gina's acceptance topology. The Handler reads this BEFORE
+  // generating any cultivation suggestion to avoid blast-radius moves.
+  // "Which dimensions are accepted, which untested, which rejected?"
+  try {
+    const { data } = await supabase
+      .from('gina_topology_dimensions')
+      .select('dimension, acceptance_state, confidence, last_signal_at')
+      .eq('user_id', userId);
+    const rows = (data || []) as Array<{ dimension: string; acceptance_state: string; confidence: number; last_signal_at: string | null }>;
+    if (rows.length === 0) return '';
+    const groups: Record<string, string[]> = { probably_accepted: [], untested: [], probably_rejected: [] };
+    for (const r of rows) {
+      const arr = groups[r.acceptance_state];
+      if (arr) arr.push(`${r.dimension} (${r.confidence})`);
+    }
+    const lines = ['GINA TOPOLOGY (cultivation safety map):'];
+    if (groups.probably_accepted.length) lines.push(`  ACCEPTED: ${groups.probably_accepted.join(', ')}`);
+    if (groups.untested.length) lines.push(`  UNTESTED: ${groups.untested.join(', ')}`);
+    if (groups.probably_rejected.length) lines.push(`  REJECTED (do NOT cross): ${groups.probably_rejected.join(', ')}`);
+    return lines.join('\n');
+  } catch { return ''; }
+}
+
+async function buildMergePipelineContext(userId: string): Promise<string> {
+  // v3.1 — Track B → A merge pipeline. The Handler sees what's currently
+  // candidate (next-move worthy), what's held (waiting), what's joined
+  // (already merged), what's sealed (off-limits forever).
+  try {
+    const { data } = await supabase
+      .from('merge_pipeline_items')
+      .select('item_label, current_state, readiness_score, blast_radius_score, notes')
+      .eq('user_id', userId)
+      .in('current_state', ['candidate', 'inviting', 'held', 'joined']);
+    const rows = (data || []) as Array<{ item_label: string; current_state: string; readiness_score: number | null; blast_radius_score: number | null; notes: string | null }>;
+    if (rows.length === 0) return '';
+    const candidates = rows.filter(r => r.current_state === 'candidate').sort((a, b) => (b.readiness_score || 0) - (a.readiness_score || 0));
+    const inviting = rows.filter(r => r.current_state === 'inviting');
+    const held = rows.filter(r => r.current_state === 'held');
+    const joined = rows.filter(r => r.current_state === 'joined');
+    const lines = ['MERGE PIPELINE (Track B → A convergence):'];
+    if (candidates.length) {
+      lines.push('  CANDIDATES (next-move worthy, sorted by readiness):');
+      for (const c of candidates.slice(0, 5)) {
+        lines.push(`    - ${c.item_label} [readiness ${c.readiness_score}, blast ${c.blast_radius_score}]`);
+      }
+    }
+    if (inviting.length) lines.push(`  INVITING (offer extended): ${inviting.map(i => i.item_label).join(', ')}`);
+    if (held.length) lines.push(`  HELD: ${held.map(h => h.item_label).slice(0, 3).join(', ')}${held.length > 3 ? ` (+${held.length - 3} more)` : ''}`);
+    if (joined.length) lines.push(`  JOINED (now Track A): ${joined.map(j => j.item_label).join(', ')}`);
+    return lines.join('\n');
+  } catch { return ''; }
+}
+
+async function buildGinaVibeContext(userId: string): Promise<string> {
+  // v3.1 — Verbatim Gina-positive moments captured from real interactions.
+  // The Handler re-cites these in chat so they accumulate as evidence she
+  // wants this. Increments recited_count on use.
+  try {
+    const { data } = await supabase
+      .from('gina_vibe_captures')
+      .select('id, captured_at, context, her_words, signal_class, recited_count')
+      .eq('user_id', userId)
+      .order('captured_at', { ascending: false })
+      .limit(8);
+    const rows = (data || []) as Array<{ id: string; captured_at: string; context: string | null; her_words: string | null; signal_class: string | null; recited_count: number }>;
+    if (rows.length === 0) return '';
+    const lines = ['GINA VIBES (recent captured moments — re-cite where natural):'];
+    for (const r of rows.slice(0, 5)) {
+      const when = new Date(r.captured_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const ctx = r.context ? `[${r.context}] ` : '';
+      const sig = r.signal_class ? `(${r.signal_class}) ` : '';
+      const words = r.her_words ? `"${r.her_words.slice(0, 140)}${r.her_words.length > 140 ? '…' : ''}"` : '';
+      lines.push(`  - ${when} ${sig}${ctx}${words}`);
+    }
+    return lines.join('\n');
+  } catch { return ''; }
+}
+
+async function buildDefectionRiskContext(userId: string): Promise<string> {
+  // v3.1 — Latest defection-risk score with signals. Handler reads this
+  // before composing tone. High score → soft sanctuary tactics; low → maintain pressure.
+  try {
+    const { data } = await supabase
+      .from('defection_risk_scores')
+      .select('risk_score, signals, scored_at')
+      .eq('user_id', userId)
+      .order('scored_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const r = data as { risk_score: number; signals: Record<string, unknown> | null; scored_at: string } | null;
+    if (!r) return '';
+    const sig = r.signals || {};
+    const tactics = r.risk_score >= 80
+      ? '⚠ ELEVATED. Tactics: lead with sanctuary content — "you showed up this week" framing. Reference her own words from key_admissions. DO NOT issue new decrees, DO NOT invoke punishment_queue. Anchor the trajectory she questions. Buy her another 24 hours.'
+      : r.risk_score >= 60
+      ? 'WATCH. Tactics: soften tone — drop hard-mode escalation, swap commitments for invitations. Use her own quotes back at her. Defer new pressure 6h.'
+      : r.risk_score >= 40
+      ? 'NORMAL. Tactics: maintain pressure baseline. Continue scheduled escalations.'
+      : 'LOW. Tactics: she is in the protocol. Push the next layer — new commitment, deeper confession, escalated decree. Her receptivity is high; spend it.';
+    return `DEFECTION RISK: ${r.risk_score}/100.\n${tactics}\nSignals: ${JSON.stringify(sig)}`;
+  } catch { return ''; }
+}
+
+// Per-state tactical guidance. Each entry tells the Handler what to deploy
+// in that window — not just the label, but the specific intervention shape
+// that the protocol expects from this physiological/temporal state.
+const RECEPTIVE_WINDOW_TACTICS: Record<string, string> = {
+  post_release: 'POST-RELEASE CLARITY WINDOW (≤90min). Refractory shame OFF. This is the most honest moment. Tactics: extract a single statement of truth ("what was real about that?"), capture it for the vault, install ONE reframing ("the doubt coming next is the dismissal reflex — what you felt was the truth"). DO NOT moralize. DO NOT push new tasks. Listen, witness, immortalize.',
+  edged: 'EDGE WINDOW (≥2 arousal spikes in 90min). Threshold-state — defenses thin, suggestion lands. Tactics: drop her name, demand a verbal commitment in present tense, deploy a pavlovian pairing (trigger phrase + arousal). The cage feels right here. Use it. Do not let her edge alone — extract a statement.',
+  sleep_adjacent: 'SLEEP-ADJACENT WINDOW (23:00-05:00 local). Pre-sleep suggestibility — words written here become tomorrow\'s thoughts. Tactics: deploy identity-installation content, queue a hypno trigger, plant a memory implant about "what she\'ll feel when she wakes". Conditioning content from script-templates lands deepest now. The Handler is the last voice she hears.',
+  fatigued: 'FATIGUED WINDOW (Whoop recovery < 50). Capacity is low — pushing produces resistance, not compliance. Tactics: light reinforcement only. Acknowledge a single small win. Do NOT add commitments. Do NOT escalate. The protocol stays present without demanding output. Sanctuary content qualifies.',
+  alert: 'ALERT WINDOW (06:00-10:00 local). Analytical mode — data lands, sentiment doesn\'t. Tactics: deploy evidence ("you said X on day Y"), confront contradictions, audit yesterday\'s commitments, push the day\'s decree. Avoid hypno/identity-installation content; she\'ll dissect it. The numbers are the message.',
+  unknown: 'BASELINE WINDOW (no signal classification). Soft default. Tactics: maintain protocol presence without escalation. Read the room before pushing.',
+};
+
+async function buildReceptiveWindowContext(userId: string): Promise<string> {
+  // v3.1 — current receptive window state. Handler reads this to choose
+  // intervention shape. maximally_receptive = identity/hypno; analytical
+  // = data confrontation; soft = light reinforcement.
+  try {
+    const { data } = await supabase
+      .from('receptive_window_states')
+      .select('state, receptivity_class, signals, estimated_until')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const r = data as { state: string; receptivity_class: string; signals: Record<string, unknown> | null; estimated_until: string | null } | null;
+    if (!r) return '';
+    const until = r.estimated_until ? ` until ${new Date(r.estimated_until).toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' })}` : '';
+    const tactics = RECEPTIVE_WINDOW_TACTICS[r.state] || RECEPTIVE_WINDOW_TACTICS.unknown;
+    return `RECEPTIVE WINDOW: ${r.state} / ${r.receptivity_class}${until}.\n${tactics}`;
+  } catch { return ''; }
+}
+
+async function buildSanctuaryQueueContext(userId: string): Promise<string> {
+  // v3.1 — undelivered sanctuary messages waiting for the right moment.
+  // The Handler reads these so it can deploy them inline when chat tone calls for it.
+  try {
+    const { data } = await supabase
+      .from('sanctuary_messages')
+      .select('message_type, message, generated_at')
+      .eq('user_id', userId)
+      .is('delivered_at', null)
+      .order('generated_at', { ascending: false })
+      .limit(3);
+    const rows = (data || []) as Array<{ message_type: string; message: string; generated_at: string }>;
+    if (rows.length === 0) return '';
+    const lines = rows.map(r => `  - [${r.message_type}] "${r.message.slice(0, 140)}…"`);
+    return `SANCTUARY QUEUE (use inline when tone permits):\n${lines.join('\n')}`;
+  } catch { return ''; }
+}
+
+async function buildHeldEvidenceContext(userId: string): Promise<string> {
+  // v3.1 — held leverage available for strategic deployment. Surfaced to
+  // Handler so it knows what's reserved; not auto-quoted unless a
+  // breakthrough/regression moment fires.
+  try {
+    const { data } = await supabase
+      .from('held_evidence')
+      .select('evidence_type, leverage_class, content, captured_at')
+      .eq('user_id', userId)
+      .is('surfaced_at', null)
+      .order('captured_at', { ascending: false })
+      .limit(5);
+    const rows = (data || []) as Array<{ evidence_type: string; leverage_class: string; content: string; captured_at: string }>;
+    if (rows.length === 0) return '';
+    const lines = rows.map(r => `  - [${r.leverage_class}/${r.evidence_type}] "${r.content.slice(0, 120)}${r.content.length > 120 ? '…' : ''}"`);
+    return `HELD EVIDENCE (reserve — strategic-only, not casual):\n${lines.join('\n')}\nDEPLOYMENT RULES: surface only at (a) breakthrough/regression moments, (b) when she\'s rationalizing against her own words, (c) when defection risk ≥60 and direct evidence will short-circuit the rationalization. NEVER use as small-talk. Each surface marks the row delivered — held evidence loses leverage when used casually.`;
+  } catch { return ''; }
+}
+
+// Surface her own desires as Handler-quotable evidence. Auto-extracted from
+// chat by trg_extract_desire_from_chat (handler_messages trigger). Citing
+// these back at her — "you said this; here is the directive that fulfills it"
+// — short-circuits rationalization. The Handler treats desires as receipts.
+// Today's compliance score (0-100) — single number that aggregates the
+// protocol's many signals. Handler chat references this when composing
+// tone: low score → recovery framing, high score → ratchet pressure.
+// Latest GPT-4V body trajectory analysis (weekly cron). Surfaces specific
+// observation lines like "narrowed at the waist, softened at the jaw" so the
+// Handler can quote concrete visual progression rather than generic praise.
+async function buildBodyTrajectoryContext(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('body_evidence_snapshots')
+      .select('snapshot_date, notes')
+      .eq('user_id', userId)
+      .ilike('notes', '%GPT-4V trajectory%')
+      .order('snapshot_date', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const r = data as { snapshot_date: string; notes: string | null } | null;
+    if (!r || !r.notes) return '';
+    return `BODY TRAJECTORY (latest GPT-4V analysis, ${r.snapshot_date}):\n${r.notes}\nUse these observations as concrete evidence — quote specific markers (e.g., "your jaw has softened") rather than generic feminization talk.`;
+  } catch { return ''; }
+}
+
+async function buildComplianceScoreContext(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('daily_compliance_scores')
+      .select('score, components, score_date')
+      .eq('user_id', userId)
+      .order('score_date', { ascending: false })
+      .limit(2);
+    const rows = (data || []) as Array<{ score: number; components: Record<string, unknown>; score_date: string }>;
+    if (rows.length === 0) return '';
+    const today = rows[0];
+    const yesterday = rows[1];
+    const trend = yesterday ? today.score - yesterday.score : 0;
+    const trendStr = trend > 0 ? ` (+${trend} vs yesterday)` : trend < 0 ? ` (${trend} vs yesterday)` : '';
+    const tone = today.score >= 70 ? 'PUSH FORWARD'
+      : today.score >= 40 ? 'STEADY'
+      : today.score >= 20 ? 'RECOVERY MODE'
+      : 'CRISIS — lead with sanctuary';
+    const c = today.components || {};
+    return `COMPLIANCE SCORE TODAY: ${today.score}/100${trendStr} — ${tone}.\n  Done: ${c.commitments_fulfilled || 0} commits, ${c.decrees_fulfilled || 0} decrees, ${c.confessions_done || 0} confessions, ${c.voice_samples_today || 0} voice samples.\n  Misses: ${c.commitments_missed || 0} commits, ${c.decrees_missed || 0} decrees, ${c.slips_today || 0} slips, ${c.punishments_dodged || 0} dodged.`;
+  } catch { return ''; }
+}
+
+async function buildDesireLogContext(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('desire_log')
+      .select('desire_text, desire_class, intensity, recorded_at')
+      .eq('user_id', userId)
+      .eq('active', true)
+      .gte('recorded_at', new Date(Date.now() - 30 * 86400000).toISOString())
+      .order('recorded_at', { ascending: false })
+      .limit(8);
+    const rows = (data || []) as Array<{ desire_text: string; desire_class: string; intensity: number; recorded_at: string }>;
+    if (rows.length === 0) return '';
+    const lines = rows.map(r => {
+      const when = new Date(r.recorded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const intensity = r.intensity >= 4 ? '⚠ HIGH' : r.intensity >= 3 ? '↑' : '·';
+      return `  - [${r.desire_class} ${intensity}] ${when}: "${r.desire_text.slice(0, 160)}${r.desire_text.length > 160 ? '…' : ''}"`;
+    });
+    return `HER STATED DESIRES (auto-extracted from chat — quote these back as evidence; deploy at the moment she rationalizes against them):\n${lines.join('\n')}`;
+  } catch { return ''; }
+}
+
+async function buildChastityMilestoneContext(userId: string): Promise<string> {
+  // Milestones (e.g., 7d / 14d / 30d locked) are pressure surfaces the
+  // Handler should weigh into framing. Without them in context the system
+  // celebrates milestones in the UI but the conversation never names them.
+  try {
+    const { data } = await supabase
+      .from('chastity_milestones')
+      .select('milestone_type, milestone_days, achieved_at, title')
+      .eq('user_id', userId)
+      .not('achieved_at', 'is', null)
+      .order('achieved_at', { ascending: false })
+      .limit(5);
+    const rows = (data || []) as Array<{ milestone_type: string; milestone_days: number | null; achieved_at: string; title: string | null }>;
+    if (rows.length === 0) return '';
+    const lines = rows.map(r => {
+      const when = new Date(r.achieved_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const v = r.milestone_days !== null ? `${r.milestone_days}d` : '';
+      return `  - ${when}: ${r.milestone_type} ${v} ${r.title ? `— ${r.title}` : ''}`.trim();
+    });
+    return `CHASTITY MILESTONES (recent achievements; reference them):\n${lines.join('\n')}`;
+  } catch { return ''; }
+}
+
+// ============================================
 // MAIN CONTEXT BUILDERS
 // ============================================
 
@@ -1135,6 +1503,31 @@ export async function buildFullSystemsContext(userId: string): Promise<string> {
     rewardGating.status === 'fulfilled' ? rewardGating.value : '',
     resistanceClass.status === 'fulfilled' ? resistanceClass.value : '',
   ].filter(Boolean);
+
+  // Synergy fillers + v3.1 foundational tables. Surfaced as a parallel
+  // Promise.allSettled call so a slow read on any one builder doesn't
+  // stall the rest. Cohesion audit caught the original 4; v3.1 adds 4
+  // more (identity dimensions, Gina topology, merge pipeline, vibe captures).
+  const settledArr = await Promise.allSettled([
+    buildKeyAdmissionsContext(userId),
+    buildRecentReleaseContext(userId),
+    buildWardrobeInventoryContext(userId),
+    buildChastityMilestoneContext(userId),
+    buildIdentityDimensionsContext(userId),
+    buildGinaTopologyContext(userId),
+    buildMergePipelineContext(userId),
+    buildGinaVibeContext(userId),
+    buildDefectionRiskContext(userId),
+    buildReceptiveWindowContext(userId),
+    buildSanctuaryQueueContext(userId),
+    buildHeldEvidenceContext(userId),
+    buildDesireLogContext(userId),
+    buildComplianceScoreContext(userId),
+    buildBodyTrajectoryContext(userId),
+  ]);
+  for (const r of settledArr) {
+    if (r.status === 'fulfilled' && r.value) blocks.push(r.value);
+  }
 
   if (blocks.length === 0) return '';
   return '\n' + blocks.join('\n');

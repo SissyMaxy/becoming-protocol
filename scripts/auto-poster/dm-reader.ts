@@ -525,7 +525,10 @@ function parseChatBlocks(allText: string, contactName: string): Array<{ from: 't
 
 async function readTwitterDMs(): Promise<ConversationThread[]> {
   const config = PLATFORMS.twitter;
-  if (!config.enabled) return [];
+  // Granular gate — DM reader is OFF by default for fresh accounts. Twitter
+  // detects automated DM activity quickly; only enable once account has
+  // ramped past the warm-up window.
+  if (!config.engines.dmReader) return [];
 
   let context: BrowserContext | null = null;
   const threads: ConversationThread[] = [];

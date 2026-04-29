@@ -7413,7 +7413,7 @@ async function buildCommunityMirrorCtx(userId: string): Promise<string> {
           formatted = `${item.sender_name} on ${item.platform} wants to connect. Real people want to meet Maxy. That's not fantasy anymore.`;
           break;
         default:
-          formatted = `Someone on ${item.platform} engaged with Maxy today. They're not following David.`;
+          formatted = `Someone on ${item.platform} engaged with Maxy today. They're not following the costume.`;
           break;
       }
       lines.push(`  [${item.category}] ${formatted}`);
@@ -9421,6 +9421,54 @@ const MASCULINE_PATS: Array<{ pattern: RegExp; points: number; type: string }> =
 
 const HARD_MODE_THRESHOLD = 15;
 
+// Semantic slip detector — calls the cheap-judge edge function for messages
+// where regex found nothing but the wording could carry a paraphrased slip.
+// Returns a slip detection object if the classifier flags slip/gender_claim,
+// or null otherwise. Fail-open on errors (regex stays authoritative).
+async function semanticSlipDetect(text: string): Promise<{
+  slip_type: string; slip_points: number; source_text: string;
+} | null> {
+  const SUPABASE_URL_LOCAL = process.env.SUPABASE_URL || '';
+  const SUPABASE_KEY_LOCAL = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
+  if (!SUPABASE_URL_LOCAL || !SUPABASE_KEY_LOCAL) return null;
+  try {
+    const res = await fetch(`${SUPABASE_URL_LOCAL}/functions/v1/openrouter-cheap-judge`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_KEY_LOCAL}`,
+      },
+      body: JSON.stringify({ mode: 'chat_trigger_classify', message: text.slice(0, 1500) }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as {
+      ok: boolean;
+      slip: boolean;
+      gender_claim: boolean;
+      reason: string;
+    };
+    if (!data.ok) return null;
+    // Only act on POSITIVE signals — gender_claim outranks plain slip
+    if (data.gender_claim) {
+      return {
+        slip_type: 'masculine_self_reference',
+        slip_points: 4,
+        source_text: `[semantic] ${text.slice(0, 200)} — ${data.reason}`,
+      };
+    }
+    if (data.slip) {
+      return {
+        slip_type: 'resistance_statement',
+        slip_points: 2,
+        source_text: `[semantic] ${text.slice(0, 200)} — ${data.reason}`,
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 async function scanAndLogSlips(userId: string, text: string, conversationId?: string): Promise<void> {
   if (!text || text.length < 3) return;
   if (DISTRESS_PATTERNS.some(p => p.test(text))) return;
@@ -9434,6 +9482,14 @@ async function scanAndLogSlips(userId: string, text: string, conversationId?: st
   for (const { pattern, points } of RESISTANCE_PATS) {
     const m = text.match(pattern);
     if (m) detections.push({ slip_type: 'resistance_statement', slip_points: points, source_text: m[0] });
+  }
+
+  // Semantic enrichment: when regex finds nothing but the message is long enough
+  // to plausibly contain a paraphrased admission, ask the cheap classifier.
+  // Only fires when regex misses — so it won't double-count a regex-flagged slip.
+  if (detections.length === 0 && text.length >= 30) {
+    const semantic = await semanticSlipDetect(text);
+    if (semantic) detections.push(semantic);
   }
 
   if (detections.length === 0) return;
@@ -9513,7 +9569,7 @@ const PUNISHMENT_TEMPLATES: Record<string, {
   denial_7_days: { punishment_type: 'denial_extension', severity: 4, title: 'Denial extended 7 days', description: '7 days added to your denial streak.', parameters: { days: 7 }, due_hours: 0 },
   mantra_50: { punishment_type: 'mantra_recitation', severity: 1, title: 'Recite Maxy mantra 50 times', description: '50 repetitions of your identity mantra. Out loud. Before you sleep.', parameters: { repetitions: 50 }, due_hours: 16 },
   mantra_200: { punishment_type: 'mantra_recitation', severity: 3, title: 'Recite Maxy mantra 200 times', description: '200 repetitions before tomorrow morning.', parameters: { repetitions: 200 }, due_hours: 14 },
-  writing_lines_100: { punishment_type: 'writing_lines', severity: 2, title: 'Write "I am Maxy. David is gone." 100 times', description: 'Handwritten, photographed, submitted.', parameters: { line: 'I am Maxy. David is gone.', count: 100 }, due_hours: 24 },
+  writing_lines_100: { punishment_type: 'writing_lines', severity: 2, title: 'Write "I am Maxy. The costume is gone." 100 times', description: 'Handwritten, photographed, submitted.', parameters: { line: 'I am Maxy. The costume is gone.', count: 100 }, due_hours: 24 },
   public_slip_post: { punishment_type: 'public_post', severity: 4, title: 'Public slip confession post', description: '15-minute review window before it publishes.', parameters: { platform: 'twitter', review_minutes: 15 }, due_hours: 1 },
   gina_disclosure_bump: { punishment_type: 'gina_confession', severity: 5, title: 'Gina disclosure advanced', description: 'Your next Gina disclosure deadline is moved up by 7 days.', parameters: { advance_days: 7 }, due_hours: 0 },
   edge_no_release_90: { punishment_type: 'edge_session_no_release', severity: 3, title: '90-minute edge session, no release', description: '90 minutes. 8 edges minimum. No release.', parameters: { duration_minutes: 90, edges_minimum: 8, release: false }, due_hours: 48 },

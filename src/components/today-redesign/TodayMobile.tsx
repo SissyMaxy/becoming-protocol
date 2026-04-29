@@ -30,6 +30,9 @@ import { VoiceDrillCard } from './VoiceDrillCard';
 import { OutfitMandateCard } from './OutfitMandateCard';
 import { WorkoutCard } from './WorkoutCard';
 import { ConfessionQueueCard } from './ConfessionQueueCard';
+import { ConversationScreenshotsCard } from '../evidence/ConversationScreenshotsCard';
+import { DailyMirrorSelfieCard } from '../evidence/DailyMirrorSelfieCard';
+import { VoiceJournalCard } from '../evidence/VoiceJournalCard';
 import { HandlerDecreeCard } from './HandlerDecreeCard';
 import { UnifiedTaskList } from './UnifiedTaskList';
 import { RevenueCard } from './RevenueCard';
@@ -262,8 +265,11 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             <ComingOutVaultCard />
             <GinaSessionsCard />
           </CollapsibleGroup>
-          <CollapsibleGroup id="capture" label="Capture & Evidence" tone="#f4c272" hint="proofs · witness · irreversibility">
+          <CollapsibleGroup id="capture" label="Capture & Evidence" tone="#f4c272" hint="selfie · voice journal · proofs · screenshots · witness · irreversibility">
+            <DailyMirrorSelfieCard />
+            <VoiceJournalCard />
             <UnifiedCaptureCard />
+            <ConversationScreenshotsCard />
             <WitnessObservationCard />
             <IrreversibilityLedger />
           </CollapsibleGroup>

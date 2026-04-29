@@ -109,7 +109,7 @@ const OUTFIT_STYLES = [
 // ============================================
 
 const JOURNAL_PROMPTS = [
-  'What did Maxy do today that David never would have? Be specific.',
+  'What did Maxy do today that the costume never would have? Be specific.',
   'Describe the moment today when you felt most like her. What were you doing?',
   'What obligation did you resist today? What happened when you gave in?',
   'Write about how the system controlled your day. How did it feel to not choose?',

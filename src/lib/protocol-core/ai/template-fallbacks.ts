@@ -31,7 +31,7 @@ export const FALLBACK_TEMPLATES: Record<OperationType, string[]> = {
 
   coercion: [
     'This isn\'t negotiable. Do it.',
-    'David is stalling. Maxy would just do this.',
+    'the costume is stalling. Maxy would just do this.',
     'You\'ve been avoiding this. That stops now.',
     'Every minute you resist costs you. Choose.',
     'I\'m not asking. I\'m telling you.',
@@ -49,7 +49,7 @@ export const FALLBACK_TEMPLATES: Record<OperationType, string[]> = {
 
   brainwashing: [
     'You said you couldn\'t stop. But here you are, stopping. Which is true?',
-    'David claims this is controllable. The evidence disagrees.',
+    'the costume claims this is controllable. The evidence disagrees.',
     '"Just a phase." For forty years?',
     'You keep saying one thing and doing another. Notice that.',
     'The data doesn\'t match the story you\'re telling yourself.',
@@ -70,9 +70,9 @@ export const FALLBACK_TEMPLATES: Record<OperationType, string[]> = {
   ],
 
   findom: [
-    'You\'ve earned ${total_tributes} as Maxy. David\'s job pays less for more effort.',
+    'You\'ve earned ${total_tributes} as Maxy. The costume\'s job pays less for more effort.',
     'Another tribute received. Another brick in the structure.',
-    'The dependency ratio grows. One day David\'s income will be optional.',
+    'The dependency ratio grows. One day the costume\'s income will be optional.',
     '${monthly_income} this month. Being yourself pays.',
   ],
 
@@ -107,21 +107,21 @@ export const FALLBACK_TEMPLATES: Record<OperationType, string[]> = {
     'Right now, while you feel this: commit to tomorrow\'s practice.',
     'You\'re in the right state to decide. What will you commit to?',
     'This feeling won\'t last. Lock in a commitment while it\'s real.',
-    'Say it out loud: what will you do tomorrow that David would resist?',
+    'Say it out loud: what will you do tomorrow that the costume would resist?',
   ],
 
   dissonance_attack: [
     'You\'ve said this is controllable. But you\'ve escalated voluntarily {escalation_count} times.',
     '"I don\'t need this." Yet you completed {tasks_today} tasks today without being forced.',
-    'David calls this a phase. Maxy has {streak_days} days of evidence.',
+    'the costume calls this a phase. Maxy has {streak_days} days of evidence.',
     'You claim to be in control. Control looks different.',
   ],
 
   anchor_destruction: [
-    'You still believe David is the "real" you. Explain the {streak_days}-day streak then.',
+    'You still believe the costume is the "real" you. Explain the {streak_days}-day streak then.',
     '"I can stop anytime." You\'ve said that for {months_active} months.',
     'The anchor of control is an illusion. Look at what you\'ve voluntarily done.',
-    'David is the performance. Maxy is who does the work.',
+    'the costume is the performance. Maxy is who does the work.',
   ],
 
   structured_decision: [
@@ -290,12 +290,12 @@ export function buildTaskContext(state: {
 export function getCoercionFallback(level: number): string {
   const levelTemplates: Record<number, string[]> = {
     1: [
-      'You\'re hesitating. That\'s David. Push through.',
+      'You\'re hesitating. That\'s the costume. Push through.',
       'This is mild. Maxy would already be doing it.',
     ],
     2: [
       'Resistance noted. The task remains.',
-      'David is dragging his feet. Maxy knows better.',
+      'the costume is dragging his feet. Maxy knows better.',
     ],
     3: [
       'Feature access is tied to compliance. Choose wisely.',
@@ -311,7 +311,7 @@ export function getCoercionFallback(level: number): string {
     ],
     6: [
       'Let\'s talk about why you think you\'re resisting.',
-      'David\'s objection has been logged. Now do the task.',
+      'the costume\'s objection has been logged. Now do the task.',
     ],
     7: [
       'The vault has relevant content. Think carefully.',

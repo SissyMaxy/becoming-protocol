@@ -1,0 +1,1 @@
+export { WardrobeInventoryView } from './WardrobeInventoryView';

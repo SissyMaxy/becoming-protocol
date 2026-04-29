@@ -29,17 +29,24 @@ interface PromptRow {
   id: string;
   prompt_question: string;
   target_focus: string | null;
+  min_chars: number | null;
 }
 
-const SEED_PROMPTS: { focus: string; question: string }[] = [
-  { focus: 'body_part', question: 'Name the body part you caught yourself wanting most this week. One word, then the moment you noticed.' },
-  { focus: 'mirror', question: 'Last time you avoided a mirror — when and why?' },
-  { focus: 'arousal', question: 'When you got off last, whose body did you end up imagining?' },
-  { focus: 'voice', question: 'Tell me the exact sound your voice makes that you wish was different.' },
-  { focus: 'partner', question: 'What did Gina see of the real you this week that she pretended not to notice?' },
-  { focus: 'future_self', question: 'Fast forward 6 months on HRT. What is the first thing you notice in the shower?' },
-  { focus: 'past_self', question: 'The first time you wanted to be her instead of have her — how old were you?' },
-  { focus: 'hrt_timeline', question: 'What specifically did you not do toward HRT yesterday that you could have?' },
+// Per-prompt char minimums. Terse prompts ("name a body part") get small
+// floors so honest two-word answers + a sentence of context clear the gate;
+// longform prompts demand fuller responses. The global
+// compulsory_confession_windows.min_chars is now a SOFT floor — the
+// per-prompt min wins when smaller, the global wins when larger. Memory:
+// feedback_char_min_per_prompt.
+const SEED_PROMPTS: { focus: string; question: string; min_chars: number }[] = [
+  { focus: 'body_part', question: 'Name the body part you caught yourself wanting most this week. One word, then the moment you noticed.', min_chars: 60 },
+  { focus: 'mirror', question: 'Last time you avoided a mirror — when and why?', min_chars: 100 },
+  { focus: 'arousal', question: 'When you got off last, whose body did you end up imagining?', min_chars: 80 },
+  { focus: 'voice', question: 'Tell me the exact sound your voice makes that you wish was different.', min_chars: 80 },
+  { focus: 'partner', question: 'What did Gina see of the real you this week that she pretended not to notice?', min_chars: 150 },
+  { focus: 'future_self', question: 'Fast forward 6 months on HRT. What is the first thing you notice in the shower?', min_chars: 150 },
+  { focus: 'past_self', question: 'The first time you wanted to be her instead of have her — how old were you?', min_chars: 100 },
+  { focus: 'hrt_timeline', question: 'What specifically did you not do toward HRT yesterday that you could have?', min_chars: 100 },
 ];
 
 function minutesSinceMidnightInTz(date: Date, tz: string): number {
@@ -59,7 +66,7 @@ function dateKeyInTz(date: Date, tz: string): string {
 export function CompulsoryConfessionGate() {
   const { user } = useAuth();
   const [cfg, setCfg] = useState<WindowCfg | null>(null);
-  const [prompt, setPrompt] = useState<PromptRow | { id: null; prompt_question: string; target_focus: string } | null>(null);
+  const [prompt, setPrompt] = useState<PromptRow | { id: null; prompt_question: string; target_focus: string; min_chars: number } | null>(null);
   const [text, setText] = useState('');
   const [gateOpen, setGateOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -115,7 +122,7 @@ export function CompulsoryConfessionGate() {
       if (!prompt) {
         const { data: dpRow } = await supabase
           .from('dysphoria_diary_prompts')
-          .select('id, prompt_question, target_focus')
+          .select('id, prompt_question, target_focus, min_chars')
           .eq('user_id', user.id)
           .eq('prompt_date', today)
           .is('response', null)
@@ -126,7 +133,7 @@ export function CompulsoryConfessionGate() {
           setPrompt(dpRow as PromptRow);
         } else {
           const seed = SEED_PROMPTS[Math.floor(Math.random() * SEED_PROMPTS.length)];
-          setPrompt({ id: null, prompt_question: seed.question, target_focus: seed.focus });
+          setPrompt({ id: null, prompt_question: seed.question, target_focus: seed.focus, min_chars: seed.min_chars });
         }
       }
 
@@ -137,8 +144,12 @@ export function CompulsoryConfessionGate() {
     return () => { if (loopRef.current) clearInterval(loopRef.current); };
   }, [cfg, user?.id, prompt, localKey]);
 
+  // Per-prompt min wins when set; global window min only acts when there's
+  // no per-prompt override. (Memory: feedback_char_min_per_prompt.)
+  const promptMin = (prompt as { min_chars?: number | null } | null)?.min_chars;
+  const effectiveMin = promptMin && promptMin > 0 ? promptMin : (cfg?.min_chars ?? 100);
   const trimmedLen = text.trim().length;
-  const canSubmit = cfg ? trimmedLen >= cfg.min_chars : false;
+  const canSubmit = cfg ? trimmedLen >= effectiveMin : false;
 
   const handleSubmit = async () => {
     if (!user?.id || !cfg || !canSubmit || !prompt) return;
@@ -205,7 +216,7 @@ export function CompulsoryConfessionGate() {
           {prompt.prompt_question}
         </div>
         <div style={{ fontSize: 11.5, color: '#8a8690', marginBottom: 10 }}>
-          Write {cfg.min_chars}+ characters. Honest. No editing out. This goes into the permanent record and the Handler will quote it back.
+          Write {effectiveMin}+ characters. Honest. No editing out. This goes into the permanent record and the Handler will quote it back.
         </div>
         <textarea
           autoFocus
@@ -220,7 +231,7 @@ export function CompulsoryConfessionGate() {
           }}
         />
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, marginBottom: 14, fontSize: 11, color: canSubmit ? '#5fc88f' : '#8a8690' }}>
-          <span>{trimmedLen} / {cfg.min_chars} chars</span>
+          <span>{trimmedLen} / {effectiveMin} chars</span>
           <span>source: compulsory_gate · source_focus: {prompt.target_focus || 'identity'}</span>
         </div>
         {submitError && (
@@ -239,7 +250,7 @@ export function CompulsoryConfessionGate() {
             cursor: canSubmit && !submitting ? 'pointer' : 'not-allowed',
           }}
         >
-          {submitting ? 'submitting…' : canSubmit ? 'Submit confession & unlock' : `${cfg.min_chars - trimmedLen} more characters`}
+          {submitting ? 'submitting…' : canSubmit ? 'Submit confession & unlock' : `${effectiveMin - trimmedLen} more characters`}
         </button>
         <div style={{ fontSize: 10.5, color: '#5a5560', marginTop: 10, textAlign: 'center' }}>
           You can't skip this. The app stays locked until you finish. No safeword for this gate — the whole point is to finish.

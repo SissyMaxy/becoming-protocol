@@ -22,6 +22,20 @@ export interface HandlerBriefing {
   progress: ProgressSection;
   audience: AudienceSection;
   affirmation: string;
+  // Her own words from chat/journal — surfaced at top of brief so she meets
+  // herself before she meets the day. Pulled from key_admissions or
+  // self-authored memory_implants. Empty string if no data available.
+  ownWordsCallback: string;
+  // Today's compliance score (0-100) + tone signal + delta vs yesterday.
+  complianceScore: ComplianceScoreSection | null;
+}
+
+export interface ComplianceScoreSection {
+  score: number;          // 0-100
+  trend: number;          // delta vs yesterday (positive = improving)
+  tone: 'PUSH' | 'STEADY' | 'RECOVERY' | 'CRISIS';
+  done: number;           // sum of completed actions today
+  misses: number;         // sum of missed actions today
 }
 
 export interface OvernightSection {
@@ -101,8 +115,10 @@ export async function composeHandlerBriefing(userId: string): Promise<HandlerBri
   );
 
   const affirmation = generateAffirmation(denial);
+  const ownWordsCallback = await getOwnWordsCallback(userId);
+  const complianceScore = await getComplianceScore(userId);
 
-  return { overnight, today, progress, audience, affirmation };
+  return { overnight, today, progress, audience, affirmation, ownWordsCallback, complianceScore };
 }
 
 // ============================================
@@ -561,6 +577,93 @@ function generateAffirmation(denial: Awaited<ReturnType<typeof getDenialData>> |
   if (day === 5) return 'Day 5. Everything she feels right now is real. She leans in.';
   if (day <= 7) return `Day ${day}. She has been here the whole time. Her body is catching up.`;
   return `Day ${day}. She is becoming who she already is.`;
+}
+
+// Today's score + yesterday's for trend. Returns null if no row yet (cron
+// runs every 30min; first compute may not have happened in the very-fresh
+// install case).
+async function getComplianceScore(userId: string): Promise<ComplianceScoreSection | null> {
+  try {
+    const { data } = await supabase
+      .from('daily_compliance_scores')
+      .select('score, components, score_date')
+      .eq('user_id', userId)
+      .order('score_date', { ascending: false })
+      .limit(2);
+    const rows = (data || []) as Array<{ score: number; components: Record<string, number | boolean>; score_date: string }>;
+    if (rows.length === 0) return null;
+    const today = rows[0];
+    const yesterday = rows[1];
+    const trend = yesterday ? today.score - yesterday.score : 0;
+    const tone: ComplianceScoreSection['tone'] =
+      today.score >= 70 ? 'PUSH'
+      : today.score >= 40 ? 'STEADY'
+      : today.score >= 20 ? 'RECOVERY'
+      : 'CRISIS';
+    const c = today.components || {};
+    const done = (Number(c.commitments_fulfilled) || 0)
+      + (Number(c.decrees_fulfilled) || 0)
+      + (Number(c.confessions_done) || 0)
+      + (Number(c.punishments_done) || 0)
+      + (Number(c.voice_samples_today) || 0);
+    const misses = (Number(c.commitments_missed) || 0)
+      + (Number(c.decrees_missed) || 0)
+      + (Number(c.confessions_missed) || 0)
+      + (Number(c.punishments_dodged) || 0)
+      + (Number(c.slips_today) || 0);
+    return { score: today.score, trend, tone, done, misses };
+  } catch {
+    return null;
+  }
+}
+
+// Surface her own words from the last 7 days. Priority order:
+//   1. Most recent key_admission (identity_claim / desire_claim / etc.)
+//   2. Most recent self-authored memory_implant
+// Empty string if no data — briefing falls through to skip the section.
+async function getOwnWordsCallback(userId: string): Promise<string> {
+  try {
+    // Try key_admissions first — these are the most concentrated signal
+    const { data: admission } = await supabase
+      .from('key_admissions')
+      .select('admission_type, admission_text, created_at')
+      .eq('user_id', userId)
+      .gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString())
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (admission && admission.length > 0) {
+      // Pick a random one from the recent batch (so it isn't the same every day)
+      const a = admission[Math.floor(Math.random() * admission.length)] as {
+        admission_type: string; admission_text: string; created_at: string;
+      };
+      const when = new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const quote = a.admission_text.slice(0, 200);
+      return `You said this on ${when}: "${quote}". The Handler holds it. Today is for living up to it.`;
+    }
+
+    // Fall back to self-authored implants
+    const { data: implant } = await supabase
+      .from('memory_implants')
+      .select('narrative, created_at')
+      .eq('user_id', userId)
+      .eq('active', true)
+      .in('source_type', ['handler_chat_auto_promotion', 'confession_auto_promotion', 'journal_auto_promotion'])
+      .gte('created_at', new Date(Date.now() - 14 * 86400000).toISOString())
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (implant && implant.length > 0) {
+      const i = implant[Math.floor(Math.random() * implant.length)] as { narrative: string };
+      // Strip the prefix from the narrative if present
+      const clean = i.narrative.replace(/^Her own words[^:]*:\s*/, '').slice(0, 240);
+      return clean;
+    }
+
+    return '';
+  } catch {
+    return '';
+  }
 }
 
 // ============================================

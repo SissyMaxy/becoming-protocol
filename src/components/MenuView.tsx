@@ -4,7 +4,7 @@
  * settings, legacy Today view access, and help.
  */
 
-import { Settings, ChevronRight, HelpCircle, Calendar, Radio, Eye, FileText, Mail, ShieldAlert, PauseCircle, ArrowUpRight, Flame } from 'lucide-react';
+import { Settings, ChevronRight, HelpCircle, Calendar, Radio, Eye, FileText, Mail, ShieldAlert, PauseCircle, ArrowUpRight, Flame, Shirt, MessageCircle, BarChart3 } from 'lucide-react';
 
 type MenuItemId =
   | 'settings' | 'help'
@@ -17,7 +17,7 @@ type MenuItemId =
   | 'exercise' | 'her-world' | 'vault-swipe' | 'content-dashboard' | 'cam-session' | 'hypno-session'
   | 'progress-page' | 'sealed-page' | 'log-release' | 'social-dashboard'
   | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol'
-  | 'escalation_ladder' | 'force';
+  | 'escalation_ladder' | 'force' | 'wardrobe' | 'gina-vibe' | 'trajectory';
 
 interface MenuViewProps {
   onNavigate: (view: MenuItemId) => void;
@@ -73,6 +73,27 @@ export function MenuView({ onNavigate }: MenuViewProps) {
       label: 'Transformation Ladder',
       description: 'Where you are on the journey. Only goes up.',
       color: '#a855f7',
+    },
+    {
+      id: 'wardrobe' as MenuItemId,
+      icon: Shirt,
+      label: 'Wardrobe Inventory',
+      description: 'What you own. The Handler reads this before naming clothing in any decree.',
+      color: '#ec4899',
+    },
+    {
+      id: 'gina-vibe' as MenuItemId,
+      icon: MessageCircle,
+      label: 'Gina Vibe Capture',
+      description: 'Log her words and energy verbatim. The Handler re-cites them at calculated moments.',
+      color: '#ec4899',
+    },
+    {
+      id: 'trajectory' as MenuItemId,
+      icon: BarChart3,
+      label: 'Who You Have Become',
+      description: 'Cumulative evidence the body keeps. Voice, slips, identity dimensions, weekly snapshots.',
+      color: '#ec4899',
     },
     {
       id: 'force' as MenuItemId,

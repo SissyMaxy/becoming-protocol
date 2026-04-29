@@ -176,25 +176,24 @@ export function ConditioningLockdown() {
       }
     }
 
-    // First pick any window that's LIVE (within the scheduled range)
-    let active = wins.find(w => isInWindow(w, now)) || null;
-    // If nothing live, check catch-up: a window whose start has passed today but
-    // we have no completed/safeworded session yet today for this user.
-    if (!active) {
-      for (const w of wins) {
-        if (!isInCatchUpWindow(w, now)) continue;
-        const dayStartUTC = new Date(dateKeyInTz(now, w.timezone) + 'T00:00:00Z').toISOString();
-        const { data: todaySessions } = await supabase
-          .from('conditioning_lockdown_sessions')
-          .select('id, ended_reason')
-          .eq('user_id', user.id)
-          .eq('window_id', w.id)
-          .gte('started_at', dayStartUTC)
-          .in('ended_reason', ['completed', 'safeword']);
-        if (!todaySessions || todaySessions.length === 0) {
-          active = w;
-          break;
-        }
+    // Pick a window that's LIVE (or in catch-up) AND has no completed/safeworded
+    // session yet today. The "today already done" check applies to BOTH the
+    // live and catch-up cases — without it, safeword exit during a live window
+    // gets re-opened on the next tick because the time-of-day still matches.
+    let active: LockdownWindow | null = null;
+    const candidates = wins.filter(w => isInWindow(w, now) || isInCatchUpWindow(w, now));
+    for (const w of candidates) {
+      const dayStartUTC = new Date(dateKeyInTz(now, w.timezone) + 'T00:00:00Z').toISOString();
+      const { data: todaySessions } = await supabase
+        .from('conditioning_lockdown_sessions')
+        .select('id, ended_reason')
+        .eq('user_id', user.id)
+        .eq('window_id', w.id)
+        .gte('started_at', dayStartUTC)
+        .in('ended_reason', ['completed', 'safeword']);
+      if (!todaySessions || todaySessions.length === 0) {
+        active = w;
+        break;
       }
     }
     if (active && !activeWindow) {
@@ -237,14 +236,27 @@ export function ConditioningLockdown() {
       return;
     }
     const durationSec = Math.floor((Date.now() - started) / 1000);
-    await supabase
-      .from('conditioning_lockdown_sessions')
-      .update({
-        ended_at: new Date().toISOString(),
-        ended_reason: reason,
-        duration_actual_seconds: durationSec,
-      })
-      .eq('id', sessionId);
+
+    // Forced lockdowns synthesize a window from a forced_lockdown_triggers row.
+    // Their session id IS the trigger id (line 161). Without resolving the
+    // trigger here, safeword exits get re-opened on the next loadConfig tick
+    // because the unresolved trigger keeps matching. (Incident 2026-04-28.)
+    const isForced = activeWindow?.id?.startsWith('forced:') ?? false;
+    if (isForced && sessionId) {
+      await supabase
+        .from('forced_lockdown_triggers')
+        .update({ resolved_at: new Date().toISOString() })
+        .eq('id', sessionId);
+    } else {
+      await supabase
+        .from('conditioning_lockdown_sessions')
+        .update({
+          ended_at: new Date().toISOString(),
+          ended_reason: reason,
+          duration_actual_seconds: durationSec,
+        })
+        .eq('id', sessionId);
+    }
     // Audit: handler_directives row
     if (user?.id) {
       await supabase.from('handler_directives').insert({

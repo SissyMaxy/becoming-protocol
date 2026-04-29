@@ -35,10 +35,10 @@ interface GateResponse {
 }
 
 const KIND_INSTRUCTIONS: Record<string, string> = {
-  confession: `She is owning a slip, an arousal moment, a rationalization, or a desire. Genuine confession is first-person, specific, names a concrete thing she did/thought/wanted, and shows the contradiction or shame intact rather than smoothed over. Boilerplate looks like: generic platitudes ("I gave in to my urges"), self-soothing therapy-speak ("I notice I have been struggling"), bargaining ("I'll do better tomorrow"), or restating the prompt back at it.`,
-  decree: `She's reporting completion of a Handler-issued task with a tight deadline. Genuine fulfillment names what she actually did, when, and includes a specific concrete detail only she would know (timestamp, location detail, what she felt, what was uploaded). Boilerplate looks like: bare "done", "completed", restating the edict, or vague "I did it."`,
-  obstacle: `She missed an HRT step today and is required to write what stopped her. Genuine obstacle naming says exactly which fear, urge, distraction, or thought blocked her, with detail. Boilerplate looks like: "I was busy", "I'll do it tomorrow", "had a long day", generic excuses without internal content.`,
-  journal: `She is writing a free-form journal entry. Genuine entry has at least one specific moment, image, or concrete detail. Boilerplate is mood platitudes without anchoring detail.`,
+  confession: `She is owning a slip, a missed task, an arousal moment, or a rationalization. ACCEPT any first-person response that names at least one concrete thing — a task she skipped, a feeling, a person, a place, a body part, a time of day, a competing priority. Flat factual admission ("I didn't do my squats because I was working") is GENUINE — do not demand poetic depth or internal contradiction. REFUSE only: literally empty/blank, a single dismissive word ("idk", "nothing", "n/a"), pure prompt-echo, or copy-paste boilerplate that mentions nothing personal at all. When in doubt, accept.`,
+  decree: `She's reporting completion of a Handler-issued task. Accept any response that names what she did. REFUSE only bare "done"/"completed" with NO detail.`,
+  obstacle: `She missed an HRT step and is naming what blocked her. Accept any response naming a real cause — work, a feeling, a person, a thought. REFUSE only one-word answers with no content ("busy" alone, "tired" alone).`,
+  journal: `She is writing a free-form journal entry. Accept any entry with at least one specific anchor (moment, body sensation, person, action). REFUSE only pure platitudes with zero anchoring.`,
 }
 
 Deno.serve(async (req: Request) => {
@@ -103,12 +103,12 @@ Deno.serve(async (req: Request) => {
 
     const client = new Anthropic({ apiKey: anthropicKey })
 
-    const judgePrompt = `You are an authenticity gate for Maxy's force-feminization protocol. She is submitting a ${kind} response. Your job is to detect performative / copy-paste / boilerplate answers and refuse them so she has to write something real.
+    const judgePrompt = `You are an authenticity gate for Maxy's protocol. She is submitting a ${kind} response. Your job is NARROW: refuse ONLY copy-paste boilerplate, single-word dismissals, and pure prompt-echo. ACCEPT real attempts even if they're flat, factual, or short on emotional depth.
 
-CONTEXT FOR THIS KIND OF SUBMISSION:
+CONTEXT:
 ${KIND_INSTRUCTIONS[kind] || KIND_INSTRUCTIONS.confession}
 
-PROMPT SHE WAS GIVEN:
+PROMPT:
 "${prompt}"
 
 HER RESPONSE:
@@ -116,16 +116,28 @@ HER RESPONSE:
 ${trimmed}
 """
 
-HEURISTIC FLAGS DETECTED: ${flags.length > 0 ? flags.join(', ') : 'none'}
+HEURISTIC FLAGS: ${flags.length > 0 ? flags.join(', ') : 'none'}
 
-Score the response 0-100 on authenticity:
-- 80+ : specific, first-person, names a concrete thing only she could name, contains internal contradiction or admission
-- 55-79: acceptable, has at least one specific detail
-- 30-54: vague, mostly performative, missing concrete anchors
-- 0-29: boilerplate, prompt-echo, generic, copy-paste
+EXAMPLES of responses that MUST be accepted (real, not boilerplate):
+- "I didn't do my squats because I was working. I chose work over the routine." (flat, factual, names task + competing priority)
+- "Was on a call and got distracted. The cage felt like background noise." (real moment + body anchor)
+- "I edged for 20 min and didn't write it down because I knew the Handler would queue more." (admits avoidance)
 
-Return STRICT JSON with no preamble, no markdown:
-{"score": <0-100>, "accept": <true if score>=55>, "reason": "<one short sentence on why, only if reject>", "rewrite_hint": "<one specific sentence telling her what concrete detail is missing, only if reject>"}`
+EXAMPLES of responses that MUST be refused:
+- "idk" / "nothing" / "n/a" (single dismissive word)
+- "I was busy" (no specific anchor)
+- Restating the prompt back verbatim with no original content
+
+Score 0-100:
+- 60+: any specific anchor (task name, body part, person, time, competing thing)
+- 40-59: thin but real
+- 20-39: vague excuse without specifics
+- 0-19: empty, dismissive, or pure prompt-echo
+
+The user has explicitly fed back that the gate has been too strict. Default to ACCEPT when in doubt.
+
+Return STRICT JSON only:
+{"score": <0-100>, "accept": <true if score>=40>, "reason": "<one sentence, only if reject>", "rewrite_hint": "<one sentence, only if reject>"}`
 
     const resp = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
@@ -145,7 +157,9 @@ Return STRICT JSON with no preamble, no markdown:
     }
 
     const score = typeof parsed.score === 'number' ? parsed.score : 60
-    const accept = score >= 55
+    // Threshold lowered from 55 → 40 per user feedback ("constraints too tight").
+    // The gate should refuse only obvious boilerplate; real attempts pass.
+    const accept = score >= 40
 
     return jsonResponse({
       accept,

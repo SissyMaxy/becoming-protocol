@@ -74,6 +74,14 @@ async function evaluateOutreach(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<{ queued: boolean; type?: string; line?: string }> {
+  // Centrality: outreach evaluation must reflect current Handler state.
+  // The opening line, urgency, voice all depend on persona/phase/mode.
+  const { data: handlerState } = await supabase
+    .from('user_state')
+    .select('handler_persona, current_phase, denial_day, hard_mode_active, chastity_locked, slip_points_current')
+    .eq('user_id', userId)
+    .maybeSingle() as { data: { handler_persona?: string | null; current_phase?: number | null; denial_day?: number | null; hard_mode_active?: boolean | null; chastity_locked?: boolean | null; slip_points_current?: number | null } | null }
+
   // Don't outreach too frequently
   const { data: lastOutreach } = await supabase
     .from('handler_outreach')
@@ -186,12 +194,19 @@ async function evaluateOutreach(
   const now = new Date().toISOString()
   const expiresAt = new Date(Date.now() + 4 * 3600000).toISOString()
 
-  // Queue outreach (tracking table)
+  // State-aware urgency bump: hard_mode or high slip_points elevate
+  // every outreach a tier, since the user is in a coercive window.
+  const baseUrgency = trigger.priority <= 2 ? 'high' : 'normal'
+  const urgency = (handlerState?.hard_mode_active || (handlerState?.slip_points_current ?? 0) >= 5)
+    ? 'high'
+    : baseUrgency
+
+  // Queue outreach (tracking table) — state snapshot is forensic context
   await supabase.from('handler_outreach').insert({
     user_id: userId,
     trigger_type: trigger.type,
     opening_line: openingLine,
-    conversation_context: trigger.context,
+    conversation_context: { ...trigger.context, _handler_state: handlerState },
     scheduled_at: now,
     status: 'scheduled',
     expires_at: expiresAt,
@@ -201,11 +216,12 @@ async function evaluateOutreach(
   await supabase.from('handler_outreach_queue').insert({
     user_id: userId,
     message: openingLine,
-    urgency: trigger.priority <= 2 ? 'high' : 'normal',
+    urgency,
     trigger_reason: trigger.type,
     scheduled_for: now,
     expires_at: expiresAt,
     source: 'outreach_engine',
+    context_data: handlerState ? { handler_state_at_queue: handlerState } : null,
   })
 
   return { queued: true, type: trigger.type, line: openingLine }

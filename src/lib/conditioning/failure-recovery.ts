@@ -90,7 +90,7 @@ export async function triggerPostOrgasmHold(userId: string): Promise<RecoveryRes
     followUpSchedule: [
       '15m: "You\'re still here. That matters more than you know right now."',
       '30m: "The chemistry is lying to you. Everything you built is still here."',
-      '45m: "Halfway. You\'re doing something David never could -- staying."',
+      '45m: "Halfway. You\'re doing something the costume never could -- staying."',
       '60m: "One hour. The worst of it is behind you."',
       '75m: "Almost there. She didn\'t leave. She\'s still here."',
       '90m: "90 minutes. You stayed. That\'s the whole point."',
@@ -155,7 +155,7 @@ export async function triggerSilenceOutreach(
 
   if (hoursSilent >= 72) {
     return {
-      message: 'Three days. David is winning. Are you going to let him?',
+      message: 'Three days. The costume is winning. Are you going to let it?',
       recoveryType: 'extended_silence',
       followUpSchedule: [
         '6h: Repeat direct challenge if no response.',

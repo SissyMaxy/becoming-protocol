@@ -220,6 +220,48 @@ export function repetitionCheck(reply: string, recentReplies: string[]): SlopChe
   return { pass: reasons.length === 0, reasons };
 }
 
+// ── Cheap second-judge via OpenRouter (Gemini Flash / gpt-4o-mini) ──
+// Calls the openrouter-cheap-judge edge function. Runs in parallel with
+// the primary Haiku judge — both must pass or we reject. This catches
+// model-specific blind spots: a slop reply that fools Haiku won't fool
+// Gemini and vice versa.
+
+const SUPABASE_URL = process.env.SUPABASE_URL || '';
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+export async function cheapJudgeSlop(
+  originalContext: string,
+  reply: string,
+): Promise<{ pass: boolean; score: number; reason: string }> {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return { pass: true, score: 70, reason: 'cheap judge unconfigured' };
+  }
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/openrouter-cheap-judge`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      },
+      body: JSON.stringify({
+        mode: 'slop_second_judge',
+        original_context: originalContext,
+        output: reply,
+      }),
+    });
+    if (!res.ok) {
+      return { pass: true, score: 70, reason: `cheap judge http ${res.status}` };
+    }
+    const data = await res.json() as { ok: boolean; score: number; accept: boolean; reason: string };
+    if (!data.ok) {
+      return { pass: true, score: 70, reason: data.reason || 'cheap judge fail-open' };
+    }
+    return { pass: data.accept, score: data.score, reason: data.reason };
+  } catch (err) {
+    return { pass: true, score: 70, reason: `cheap judge error: ${err instanceof Error ? err.message : err}` };
+  }
+}
+
 // ── LLM judge ───────────────────────────────────────────────────────
 
 const JUDGE_PROMPT = `You are a social media authenticity judge. Your job is to rate whether a reply sounds like it was written by a real person or by an AI bot.
@@ -294,6 +336,9 @@ export interface FullSlopResult {
   repetitionReasons: string[];
   llmScore: number;
   llmReason: string;
+  /** Cheap second-judge score (0-100). 0 if not called. */
+  cheapScore?: number;
+  cheapReason?: string;
   /** Feedback string to inject into a retry prompt */
   retryFeedback: string;
 }
@@ -332,8 +377,12 @@ export async function fullSlopCheck(
     };
   }
 
-  // Pass 3: LLM judge
-  const llm = await llmSlopJudge(anthropic, originalTweet, reply);
+  // Pass 3: dual-judge — Haiku (Anthropic) + cheap judge (OpenRouter Gemini Flash).
+  // Run in parallel. Both must pass to accept. Catches model-specific blind spots.
+  const [llm, cheap] = await Promise.all([
+    llmSlopJudge(anthropic, originalTweet, reply),
+    cheapJudgeSlop(originalTweet, reply),
+  ]);
 
   // LLM score 9+ overrides pattern failures — the LLM is the more nuanced judge.
   // Pattern regexes catch common AI tells but produce false positives on authentic text.
@@ -342,12 +391,14 @@ export async function fullSlopCheck(
   const patternOverridden = !patterns.pass && llm.score >= 9 && !patterns.hasHardBan;
   const effectivePatternPass = patterns.pass || patternOverridden;
 
-  const allFailed = !effectivePatternPass || !repetition.pass || !llm.pass;
+  const allFailed = !effectivePatternPass || !repetition.pass || !llm.pass || !cheap.pass;
   const feedback = buildRetryFeedback(
     patternOverridden ? [] : patterns.reasons,
     repetition.reasons,
     llm.score,
     llm.reason,
+    cheap.pass ? 0 : cheap.score,
+    cheap.pass ? '' : cheap.reason,
   );
 
   return {
@@ -356,6 +407,8 @@ export async function fullSlopCheck(
     repetitionReasons: repetition.reasons,
     llmScore: llm.score,
     llmReason: llm.reason,
+    cheapScore: cheap.score,
+    cheapReason: cheap.reason,
     retryFeedback: feedback,
   };
 }
@@ -365,6 +418,8 @@ function buildRetryFeedback(
   repetitionReasons: string[],
   llmScore: number,
   llmReason: string,
+  cheapScore: number = 0,
+  cheapReason: string = '',
 ): string {
   const parts: string[] = [];
 
@@ -376,6 +431,9 @@ function buildRetryFeedback(
   }
   if (llmScore > 0 && llmScore < 9) {
     parts.push(`AUTHENTICITY SCORE: ${llmScore}/10 — ${llmReason}`);
+  }
+  if (cheapScore > 0 && cheapReason) {
+    parts.push(`SECOND JUDGE: ${cheapScore}/100 — ${cheapReason}`);
   }
 
   return parts.length > 0

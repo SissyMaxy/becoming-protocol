@@ -6,7 +6,7 @@
  * is a state machine with clear transitions."
  *
  * 10-level coercion from Feature 43:
- * 1. Reframe - "That's David talking. Maxy wants this."
+ * 1. Reframe - "That's the costume talking. Maxy wants this."
  * 2. Evidence guilt - "300 hours invested. Don't waste them."
  * 3. Compliance gate - "No session tonight until this is done."
  * 4. Punishment - "+2 denial days. Content locked 48hr."
@@ -120,10 +120,10 @@ const COERCION_TEMPLATES: Record<number, {
   1: {
     name: 'reframe_david',
     templates: [
-      "That's David talking. Maxy wants this.",
-      "I hear him. David is scared. But Maxy isn't scared. She's ready.",
+      "That's the costume talking. Maxy wants this.",
+      "I hear him. The costume is scared. But Maxy isn't scared. She's ready.",
       "You're thinking like him again. Stop. Think like her.",
-      "David is trying to protect you from something Maxy actually wants.",
+      "The costume is trying to protect you from something Maxy actually wants.",
       "Who's making this decision? Him or her?",
     ],
   },
@@ -133,7 +133,7 @@ const COERCION_TEMPLATES: Record<number, {
       "300 hours invested. Don't waste them.",
       "${hours} hours of practice. ${sessions} sessions. ${completedTasks} tasks completed. This is the hill you want to die on?",
       "You've come so far. This resistance is a speedbump, not an exit.",
-      "Your investment dashboard says $${invested}. Your time log says ${hours} hours. Are you really going to let David throw that away?",
+      "Your investment dashboard says $${invested}. Your time log says ${hours} hours. Are you really going to let the costume throw that away?",
       "Every time you've felt this resistance before, you did the task anyway. 100% of the time. This time won't be different.",
     ],
   },
@@ -358,7 +358,7 @@ export class CoercionModule extends BaseModule {
       compliance_acknowledgment: [
         "Good girl. Compliance noted.",
         "That's what I wanted to see. Task complete.",
-        "You did it. The resistance was David. The completion is Maxy.",
+        "You did it. The resistance was the costume. The completion is Maxy.",
       ],
       futility_reminder: [
         "Your resistance success rate: ${futilityRate}%. Think about that.",

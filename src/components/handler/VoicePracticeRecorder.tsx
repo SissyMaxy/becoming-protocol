@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Mic, MicOff, Loader2, Check } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { estimatePitchHz } from '../../lib/voice-pitch';
 
 interface VoicePracticeRecorderProps {
   targetPhrase?: string;
@@ -82,7 +83,7 @@ export function VoicePracticeRecorder({
         for (let i = 0; i < buffer.length; i++) sumSq += buffer[i] * buffer[i];
         const rms = Math.sqrt(sumSq / buffer.length);
         setSignal(rms);
-        const pitch = autoCorrelate(buffer, audioContext.sampleRate);
+        const pitch = estimatePitchHz(buffer, audioContext.sampleRate);
         if (pitch > 80 && pitch < 400) {
           pitchesRef.current.push(pitch);
           setPitches(prev => [...prev, pitch]);
@@ -294,51 +295,3 @@ export function VoicePracticeRecorder({
   );
 }
 
-// YIN pitch detection — resists octave errors and subharmonics that plagued the
-// previous peak-picking autocorrelation. Based on de Cheveigné & Kawahara 2002.
-function autoCorrelate(buffer: Float32Array, sampleRate: number): number {
-  const MIN_HZ = 75;
-  const MAX_HZ = 500;
-  const YIN_THRESHOLD = 0.15;
-
-  let rms = 0;
-  for (let i = 0; i < buffer.length; i++) rms += buffer[i] * buffer[i];
-  rms = Math.sqrt(rms / buffer.length);
-  if (rms < 0.01) return -1;
-
-  const tauMin = Math.max(2, Math.floor(sampleRate / MAX_HZ));
-  const tauMax = Math.min(buffer.length >> 1, Math.floor(sampleRate / MIN_HZ));
-  if (tauMax <= tauMin) return -1;
-
-  const yinBuf = new Float32Array(tauMax + 1);
-  yinBuf[0] = 1;
-  let runningSum = 0;
-
-  for (let tau = 1; tau <= tauMax; tau++) {
-    let sum = 0;
-    for (let i = 0; i < tauMax; i++) {
-      const delta = buffer[i] - buffer[i + tau];
-      sum += delta * delta;
-    }
-    runningSum += sum;
-    yinBuf[tau] = runningSum > 0 ? (sum * tau) / runningSum : 1;
-  }
-
-  let tauEstimate = -1;
-  for (let tau = tauMin; tau <= tauMax; tau++) {
-    if (yinBuf[tau] < YIN_THRESHOLD) {
-      while (tau + 1 <= tauMax && yinBuf[tau + 1] < yinBuf[tau]) tau++;
-      tauEstimate = tau;
-      break;
-    }
-  }
-  if (tauEstimate === -1) return -1;
-
-  const x0 = tauEstimate > 0 ? yinBuf[tauEstimate - 1] : yinBuf[tauEstimate];
-  const x1 = yinBuf[tauEstimate];
-  const x2 = tauEstimate < tauMax ? yinBuf[tauEstimate + 1] : yinBuf[tauEstimate];
-  const denom = x0 + x2 - 2 * x1;
-  const refinedTau = Math.abs(denom) < 1e-10 ? tauEstimate : tauEstimate + (x0 - x2) / (2 * denom);
-
-  return sampleRate / refinedTau;
-}
