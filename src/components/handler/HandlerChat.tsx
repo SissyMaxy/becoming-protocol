@@ -266,8 +266,53 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
       voiceInput.stopListening();
       prevTranscriptRef.current = '';
     }
-    sendMessage(input.trim());
+    const text = input.trim();
+    sendMessage(text);
     setInput('');
+
+    // Loop-breaker for the "Re: <task>" prefill flow:
+    // when the user clicked RIGHT NOW for a commitment/confession/decree
+    // and fell through to chat (because the source card wasn't on screen),
+    // we stashed the row id in sessionStorage. If the user actually sends
+    // a substantive reply (>30 chars), mark the row as fulfilled so it
+    // doesn't keep re-appearing as RIGHT NOW. Without this, the same gate
+    // re-prompts on every poll until the deadline passes.
+    if (text.length >= 30) {
+      try {
+        const cmtId = sessionStorage.getItem('handler_chat_resolve_commitment_id');
+        const cnfId = sessionStorage.getItem('handler_chat_resolve_confession_id');
+        const decId = sessionStorage.getItem('handler_chat_resolve_decree_id');
+        if (cmtId) {
+          sessionStorage.removeItem('handler_chat_resolve_commitment_id');
+          import('../../lib/supabase').then(({ supabase }) => {
+            supabase.from('handler_commitments').update({
+              status: 'fulfilled',
+              fulfilled_at: new Date().toISOString(),
+              fulfillment_note: `Answered in chat: "${text.slice(0, 200)}"`,
+            }).eq('id', cmtId).then(() => {
+              window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'commitment', id: cmtId } }));
+            });
+          });
+        }
+        if (cnfId) {
+          sessionStorage.removeItem('handler_chat_resolve_confession_id');
+          import('../../lib/supabase').then(({ supabase }) => {
+            supabase.from('confession_queue').update({
+              confessed_at: new Date().toISOString(),
+              response: text.slice(0, 2000),
+            }).eq('id', cnfId).then(() => {
+              window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'confession', id: cnfId } }));
+            });
+          });
+        }
+        if (decId) {
+          sessionStorage.removeItem('handler_chat_resolve_decree_id');
+          // Decrees need proof typically — don't auto-fulfill, just clear the
+          // resolver so it doesn't fire on a later message. The user will use
+          // the dedicated decree card.
+        }
+      } catch { /* storage unavailable */ }
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

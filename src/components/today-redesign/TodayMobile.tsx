@@ -230,8 +230,9 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           <HandlerPlanCalendar />
 
           {/* OWED — consequence-bearing work. Open by default, red tone. */}
-          <CollapsibleGroup id="owed_work" label="Owed Work" tone="#f47272" defaultOpen={true} hint="tasks · punishments · decrees · confessions">
+          <CollapsibleGroup id="owed_work" label="Owed Work" tone="#f47272" defaultOpen={true} hint="tasks · commitments · punishments · decrees · confessions">
             <UnifiedTaskList />
+            <CommitmentsCard />
             <PunishmentQueueCard />
             <HandlerDecreeCard />
             <ConfessionQueueCard />
@@ -270,7 +271,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             <BodyMeasurementCard />
             <HandlerEvolutionCard />
           </CollapsibleGroup>
-          <CollapsibleGroup id="handler_systems" label="Handler Systems" tone="#c4b5fd" hint="dreams · slips · commitments · evidence">
+          <CollapsibleGroup id="handler_systems" label="Handler Systems" tone="#c4b5fd" hint="dreams · slips · evidence">
             <HandlerDreamCard />
             <HandlerKnowCard />
             <HandlerRunningCard />
@@ -279,7 +280,6 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             <SlipLogCard />
             <RationalizationPatternCard />
             <EvidenceReportsCard />
-            <CommitmentsCard />
           </CollapsibleGroup>
           <CollapsibleGroup id="gina_systems" label="Gina Systems" tone="#f4a7c4" hint="playbook · disclosures · sessions">
             <LovenseHealthBanner />

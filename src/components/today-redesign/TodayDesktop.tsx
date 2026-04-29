@@ -278,8 +278,9 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         <HandlerPlanCalendar />
 
         {/* OWED — consequence-bearing work. Open by default, red tone. */}
-        <CollapsibleGroup id="owed_work" label="Owed Work" tone="#f47272" defaultOpen={true} hint="tasks · punishments · decrees · confessions">
+        <CollapsibleGroup id="owed_work" label="Owed Work" tone="#f47272" defaultOpen={true} hint="tasks · commitments · punishments · decrees · confessions">
           <UnifiedTaskList />
+          <CommitmentsCard />
           <PunishmentQueueCard />
           <HandlerDecreeCard />
           <ConfessionQueueCard />
@@ -322,7 +323,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         </CollapsibleGroup>
 
         {/* HANDLER SYSTEMS — what the Handler is doing in the background. */}
-        <CollapsibleGroup id="handler_systems" label="Handler Systems" tone="#c4b5fd" hint="dreams · outreach · slips · commitments · evidence">
+        <CollapsibleGroup id="handler_systems" label="Handler Systems" tone="#c4b5fd" hint="dreams · outreach · slips · evidence">
           <HandlerDreamCard />
           <HandlerKnowCard />
           <HandlerRunningCard />
@@ -331,7 +332,6 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
           <SlipLogCard />
           <RationalizationPatternCard />
           <EvidenceReportsCard />
-          <CommitmentsCard />
         </CollapsibleGroup>
 
         {/* GINA — partner-facing playbook + disclosure pipeline. */}

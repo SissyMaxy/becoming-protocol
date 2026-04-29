@@ -364,7 +364,7 @@ function TaskSection({ tasks, headerLabel, headerHint, accent, urgentAccent, urg
           {rightNow.detail && <span style={{ color: '#8a8690' }}>{rightNow.detail}</span>}
         </div>
         <button
-          onClick={() => {
+          onClick={async () => {
             const id = scrollTargetForSource(rightNow.source);
             if (id) {
               const el = document.getElementById(id);
@@ -375,6 +375,18 @@ function TaskSection({ tasks, headerLabel, headerHint, accent, urgentAccent, urg
                 setTimeout(() => { el.style.outline = ''; }, 1800);
                 return;
               }
+            }
+            // Fallback: scroll target missing (card hidden in collapsed group, etc).
+            // Send the user to chat to answer, AND pass the source row id so the
+            // chat handler can mark it fulfilled when the user replies. Prevents
+            // the same item from re-appearing as RIGHT NOW on every poll.
+            const rawId = rightNow.id.split(':')[1];
+            if (rawId && rightNow.source === 'commitment') {
+              sessionStorage.setItem('handler_chat_resolve_commitment_id', rawId);
+            } else if (rawId && rightNow.source === 'confession') {
+              sessionStorage.setItem('handler_chat_resolve_confession_id', rawId);
+            } else if (rawId && rightNow.source === 'decree') {
+              sessionStorage.setItem('handler_chat_resolve_decree_id', rawId);
             }
             sessionStorage.setItem('handler_chat_prefill', `Re: ${rightNow.label.slice(0, 120)}\n\n`);
             window.location.hash = '';
