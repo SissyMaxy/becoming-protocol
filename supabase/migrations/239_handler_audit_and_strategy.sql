@@ -78,6 +78,11 @@ CREATE TABLE IF NOT EXISTS handler_strategic_plans (
 CREATE INDEX IF NOT EXISTS idx_strategic_plans_user
   ON handler_strategic_plans(user_id, status, created_at DESC);
 
+-- Bridges (added 2026-04-29):
+-- bridge_strategist_to_decrees() — escalation_moves → handler_decrees
+-- bridge_contradictions_to_implants() — contradictions → memory_implants
+-- (function bodies live in dedicated migrations 240+ for tracking)
+
 ALTER TABLE handler_strategic_plans ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users see their own strategic plans"

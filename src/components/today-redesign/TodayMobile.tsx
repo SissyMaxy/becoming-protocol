@@ -46,6 +46,7 @@ import { DmTemplateCard } from './DmTemplateCard';
 import { MorningBriefCard } from './MorningBriefCard';
 import { StrategicPlanCard } from './StrategicPlanCard';
 import { CodeAuditCard } from './CodeAuditCard';
+import { ConfessionLockoutGate } from './ConfessionLockoutGate';
 import { PunishmentQueueCard } from './PunishmentQueueCard';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
@@ -220,6 +221,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
 
       {tab === 'today' && (
         <div style={{ padding: '0 16px' }}>
+          <ConfessionLockoutGate>
           <ProtocolDayCard />
           <MorningBriefCard />
           <StrategicPlanCard />
@@ -277,6 +279,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             <WitnessObservationCard />
             <IrreversibilityLedger />
           </CollapsibleGroup>
+          </ConfessionLockoutGate>
         </div>
       )}
       {tab === 'today' && data.banners.map((banner, i) => {

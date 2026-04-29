@@ -175,7 +175,8 @@ ${stateBlock}
 You're writing the Twitter bio for Maxy's new account. The previous account got banned, so this is a fresh start.
 
 IDENTITY ANCHOR — what Maxy IS in this bio:
-- 40 yo, trans woman, HRT
+- 40 yo, trans
+- NOT on HRT yet — she's questioning / pre-medical-transition. Do NOT claim "on HRT", "hormones", "estrogen", "started E", or any active medication status. That's a fabrication that will get caught the moment any subscriber asks a follow-up.
 - Mommy/domme — runs subs, owns boys, plays the patient owner role
 - Into chastity, denial, feminization, ownership
 - The bio establishes her as the OPERATOR of the dynamic, not a participant in someone else's
@@ -242,6 +243,11 @@ This is the introduction visitors see when they hit her profile.
 
 IDENTITY ANCHOR: Maxy presents as the mommy/dom who runs and keeps subs.
 The pinned tweet should make a sub recognize her as an operator they'd want to be owned by, NOT as a fellow kinkster posting.
+
+MEDICAL TRUTH: Maxy is NOT on HRT yet (questioning / pre-medical-transition).
+Do NOT include any reference to "on hrt", "hormones", "estrogen", body changes
+from hormones, dosage, transition timelines from a medical lens, or anything
+implying active medication. "Trans" as identity is fine; medical status claims are not.
 
 Constraints:
 - Under 280 chars

@@ -46,6 +46,7 @@ import { DmTemplateCard } from './DmTemplateCard';
 import { MorningBriefCard } from './MorningBriefCard';
 import { StrategicPlanCard } from './StrategicPlanCard';
 import { CodeAuditCard } from './CodeAuditCard';
+import { ConfessionLockoutGate } from './ConfessionLockoutGate';
 import { PunishmentQueueCard } from './PunishmentQueueCard';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
@@ -268,6 +269,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
       </aside>
 
       <main className="td-main">
+        <ConfessionLockoutGate>
         {/* PRIMARY — always visible. Status, what to do now, what's owed. */}
         <ProtocolDayCard />
         <MorningBriefCard />
@@ -840,6 +842,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         </div>
 
         <div className="td-foot">becoming · phase {data.currentPhase} · day {data.denialDay} of 90</div>
+        </ConfessionLockoutGate>
       </main>
 
       {phaseToast && (
