@@ -50,6 +50,7 @@ import { ConfessionLockoutGate } from './ConfessionLockoutGate';
 import { HandlerPlanCalendar } from './HandlerPlanCalendar';
 import { RightNowCard } from './RightNowCard';
 import { FocusMode } from './FocusMode';
+import { ProtocolHealthCard } from './ProtocolHealthCard';
 import { PunishmentQueueCard } from './PunishmentQueueCard';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
@@ -332,7 +333,8 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         </CollapsibleGroup>
 
         {/* STRATEGY & BRIEFINGS — meta-layer, lower priority. */}
-        <CollapsibleGroup id="strategy_briefings" label="Strategy & Briefings" tone="#a78bfa" hint="daily brief · strategist · code audit">
+        <CollapsibleGroup id="strategy_briefings" label="Strategy & Briefings" tone="#a78bfa" hint="health · daily brief · strategist · code audit">
+          <ProtocolHealthCard />
           <DailyBriefingCard />
           <StrategicPlanCard />
           <CodeAuditCard />
