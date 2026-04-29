@@ -142,7 +142,9 @@ for (const entry of entries) {
 const baselinePath = join(__dirname, 'migration-lint-baseline.json');
 const updateBaseline = process.argv.includes('--update-baseline');
 
-const currentKeys = new Set(allHits.map(h => `${h.file}:${h.line}:${h.rule}`));
+// Normalize paths to forward slashes — same Windows/Linux bug as pattern-lint.
+const norm = (p) => p.replace(/\\/g, '/');
+const currentKeys = new Set(allHits.map(h => `${norm(h.file)}:${h.line}:${h.rule}`));
 
 if (updateBaseline) {
   writeFileSync(baselinePath, JSON.stringify([...currentKeys].sort(), null, 2) + '\n');
@@ -155,7 +157,7 @@ if (existsSync(baselinePath)) {
   try { baseline = new Set(JSON.parse(readFileSync(baselinePath, 'utf8'))); } catch { baseline = new Set(); }
 }
 
-const newHits = allHits.filter(h => !baseline.has(`${h.file}:${h.line}:${h.rule}`));
+const newHits = allHits.filter(h => !baseline.has(`${norm(h.file)}:${h.line}:${h.rule}`));
 
 if (allHits.length === 0) {
   console.log('[migration-lint] CLEAN — all migrations are idempotent.');
