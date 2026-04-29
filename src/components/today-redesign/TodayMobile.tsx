@@ -48,6 +48,7 @@ import { StrategicPlanCard } from './StrategicPlanCard';
 import { CodeAuditCard } from './CodeAuditCard';
 import { ConfessionLockoutGate } from './ConfessionLockoutGate';
 import { HandlerPlanCalendar } from './HandlerPlanCalendar';
+import { RightNowCard } from './RightNowCard';
 import { PunishmentQueueCard } from './PunishmentQueueCard';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
@@ -223,28 +224,44 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
       {tab === 'today' && (
         <div style={{ padding: '0 16px' }}>
           <ConfessionLockoutGate>
+          {/* SPINE — always visible, top of page. Single answer to "what now". */}
+          <RightNowCard />
           <ProtocolDayCard />
-          <MorningBriefCard />
           <HandlerPlanCalendar />
-          <StrategicPlanCard />
-          <CodeAuditCard />
-          <UnifiedTaskList />
-          <PunishmentQueueCard />
-          <NextShotsCard />
-          <RevenueCard />
-          <SponsorMilestoneCard />
-          <WornItemCard />
-          <DmTemplateCard />
-          <RevenuePlanCard />
-          <DavidTaxCard />
-          <DailyBriefingCard />
-          <HandlerDecreeCard />
-          <ConfessionQueueCard />
-          <CollapsibleGroup id="today_tasks" label="Today's Tasks" tone="#ec4899" defaultOpen={true} hint="outfit · workout · voice">
+
+          {/* OWED — consequence-bearing work. Open by default, red tone. */}
+          <CollapsibleGroup id="owed_work" label="Owed Work" tone="#f47272" defaultOpen={true} hint="tasks · punishments · decrees · confessions">
+            <UnifiedTaskList />
+            <PunishmentQueueCard />
+            <HandlerDecreeCard />
+            <ConfessionQueueCard />
+            <MorningBriefCard />
+          </CollapsibleGroup>
+
+          {/* TODAY'S BODY WORK — outfit, workout, voice, arousal, doses. */}
+          <CollapsibleGroup id="today_tasks" label="Today's Body Work" tone="#ec4899" defaultOpen={true} hint="outfit · workout · voice · arousal · doses">
+            <NextShotsCard />
             <OutfitMandateCard />
             <WorkoutCard />
             <VoiceDrillCard />
             <ArousalLogCard />
+          </CollapsibleGroup>
+
+          {/* REVENUE — sub-funnel work, default closed. */}
+          <CollapsibleGroup id="revenue_work" label="Revenue & Outreach" tone="#f4c272" hint="revenue · david tax · plan · sponsors · DMs · worn">
+            <RevenueCard />
+            <DavidTaxCard />
+            <RevenuePlanCard />
+            <SponsorMilestoneCard />
+            <DmTemplateCard />
+            <WornItemCard />
+          </CollapsibleGroup>
+
+          {/* STRATEGY & BRIEFINGS — meta-layer, lower priority. */}
+          <CollapsibleGroup id="strategy_briefings" label="Strategy & Briefings" tone="#a78bfa" hint="daily brief · strategist · code audit">
+            <DailyBriefingCard />
+            <StrategicPlanCard />
+            <CodeAuditCard />
           </CollapsibleGroup>
           <CollapsibleGroup id="progress" label="Progress & Tracking" tone="#6ee7b7" hint="phase · streaks · body">
             <PhaseProgressCard />

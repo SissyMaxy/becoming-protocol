@@ -69,7 +69,7 @@ export function HandlerDecreeCard() {
   if (items.length === 0) return null;
 
   return (
-    <div style={{
+    <div id="card-handler-decree" style={{
       background: 'linear-gradient(135deg, #2e1a0f 0%, #1f1008 100%)',
       border: '1px solid #c4272d', borderRadius: 10, padding: 14, marginBottom: 16,
     }}>
