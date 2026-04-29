@@ -862,15 +862,24 @@ export function useTodayData() {
     setData(d => ({ ...d, diaryPrompts: d.diaryPrompts.map(p => p.id === id ? { ...p, response } : p) }));
   }, []);
 
-  const logDoseTaken = useCallback(async (regimenId: string, medicationName: string, doseAmount: string | null) => {
+  // takenAtIso: optional. If omitted, defaults to now. Used so the user can
+  // backdate "Mark taken" when she actually took the dose earlier (without
+  // backdating, weekly schedules read incorrectly — "Due in 7d" appears even
+  // when the real dose was 4 days ago).
+  const logDoseTaken = useCallback(async (
+    regimenId: string,
+    medicationName: string,
+    doseAmount: string | null,
+    takenAtIso?: string,
+  ) => {
     if (!user?.id) return;
-    const takenAt = new Date().toISOString();
+    const takenAt = takenAtIso ?? new Date().toISOString();
     await supabase.from('hrt_dose_log').insert({
       user_id: user.id,
       regimen_id: regimenId,
       dose_taken_at: takenAt,
       skipped: false,
-      notes: `Logged via Today. ${medicationName}${doseAmount ? ` ${doseAmount}` : ''}`,
+      notes: `Logged via Today. ${medicationName}${doseAmount ? ` ${doseAmount}` : ''}${takenAtIso ? ' (backdated)' : ''}`,
     });
     await supabase.from('dose_log').insert({
       user_id: user.id,
@@ -881,8 +890,8 @@ export function useTodayData() {
       user_id: user.id,
       action: 'dose_logged_by_user',
       target: regimenId,
-      value: { medication: medicationName, dose: doseAmount },
-      reasoning: 'User logged dose taken via Today screen',
+      value: { medication: medicationName, dose: doseAmount, backdated: !!takenAtIso },
+      reasoning: takenAtIso ? `User backdated dose to ${takenAt}` : 'User logged dose taken via Today screen',
     });
     await load();
   }, [user?.id, load]);

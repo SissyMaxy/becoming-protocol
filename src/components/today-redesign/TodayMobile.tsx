@@ -376,13 +376,28 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
                       {dose.isWeekly ? 'weekly' : 'daily'}
                     </span>
                   </div>
-                  <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                  <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
                     <button
                       className="tdm-btn primary"
                       onClick={() => logDoseTaken(dose.regimenId, dose.medicationName, null)}
                       style={{ flex: 1, justifyContent: 'center', padding: '6px', textAlign: 'center' }}
                     >
-                      Mark taken
+                      Mark taken (today)
+                    </button>
+                    <button
+                      className="tdm-btn"
+                      onClick={() => {
+                        const input = window.prompt('When did you actually take it? YYYY-MM-DD (e.g., 2026-04-25)');
+                        if (!input) return;
+                        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input.trim());
+                        if (!m) { window.alert('Format: YYYY-MM-DD'); return; }
+                        const iso = new Date(`${input.trim()}T18:00:00Z`).toISOString();
+                        logDoseTaken(dose.regimenId, dose.medicationName, null, iso);
+                      }}
+                      style={{ padding: '6px 10px' }}
+                      title="Backdate"
+                    >
+                      Earlier…
                     </button>
                     <button
                       className="tdm-btn"

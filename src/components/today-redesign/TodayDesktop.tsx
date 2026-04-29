@@ -507,13 +507,28 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
                             {dose.isWeekly ? 'weekly' : 'daily'}
                           </span>
                         </div>
-                        <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                        <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                           <button
                             className="td-btn primary"
                             onClick={() => logDoseTaken(dose.regimenId, dose.medicationName, null)}
                             style={{ fontSize: 11 }}
                           >
-                            Mark taken
+                            Mark taken (today)
+                          </button>
+                          <button
+                            className="td-btn"
+                            onClick={() => {
+                              const input = window.prompt('When did you actually take it? Enter date as YYYY-MM-DD (e.g., 2026-04-25 for last Saturday).');
+                              if (!input) return;
+                              const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input.trim());
+                              if (!m) { window.alert('Format: YYYY-MM-DD'); return; }
+                              const iso = new Date(`${input.trim()}T18:00:00Z`).toISOString();
+                              logDoseTaken(dose.regimenId, dose.medicationName, null, iso);
+                            }}
+                            style={{ fontSize: 11 }}
+                            title="Backdate to the day you actually took it"
+                          >
+                            Took it earlier…
                           </button>
                           <button
                             className="td-btn"
