@@ -3,23 +3,33 @@
  * or a hardening sequence of explain options. Designed so David cannot
  * keep buying time with words.
  *
- * Streak escalation (hrt_step_missed_days):
- *   day 0     → advance OR 250-char obstacle
- *   day 1     → obstacle requires 350 chars + identity-acknowledgement phrase
- *   day 2     → obstacle requires 500 chars + a provider URL she visited today
- *   day 3+    → EXPLAIN DISABLED. Only advance unlocks. Hard mode flips on.
- *               Witness silently CC'd. Chastity auto-locks if not already.
- *   day 5+    → Step regresses one position in funnel.
- *   day 7+    → Cryptic public post auto-queued to ai_generated_content.
+ * Internal escalation tier (hrt_step_missed_days — never narrated to user
+ * per feedback_no_handler_status_dumps; the ACCUSATION LANGUAGE escalates
+ * by tier, the count never appears):
+ *   tier 0 (0)    → move forward OR 250-char "what stopped me" answer
+ *   tier 1 (1)    → answer requires 350 chars + "David is hiding from ___"
+ *                   with the blank filled (≥3 chars after "from")
+ *   tier 2 (2)    → answer requires 500 chars + filled phrase + a provider
+ *                   URL she actually visited today
+ *   tier 3 (3+)   → EXPLAIN DISABLED. Only advance unlocks. Hard mode flips
+ *                   on. Witness silently CC'd. Chastity auto-locks.
+ *   tier 5 (5+)   → Step regresses one position in funnel.
+ *   tier 7 (7+)   → Cryptic public post auto-queued.
  *
- * Each obstacle submit also creates a locked handler_commitment due 24h:
- * "1 provider call today. Photo of dialer. Miss = chastity +1d."
+ * Anti-tautology: the "David is hiding" phrase requires the form
+ * "David is hiding from ___" with a real word in the blank. Earlier
+ * version was auto-satisfied by the textarea placeholder.
  *
- * The gate header rewrites David's name onto stalled steps:
- * "David is hiding behind '<step>'. She is still <step>. Day N stuck."
+ * Plain-English copy (feedback_internal_task_copy_plain_english):
+ * step names are paired with STEP_NEXT_ACTION descriptions ("you picked
+ * a provider but have not booked the consult"). No raw funnel-step
+ * names as status strings.
  *
- * The user's last 3 obstacle answers are echoed back at streak ≥ 2 — the
- * pattern is the indictment.
+ * Each answer submit also creates a locked handler_commitment due 24h:
+ * "1 provider contact today. Photo of dialer. Miss = chastity +1d."
+ *
+ * The user's last 3 answers are echoed back at tier ≥ 2 — the pattern
+ * is the indictment.
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -40,6 +50,26 @@ const STEP_LABELS: Record<string, string> = {
   pharmacy_filled: 'Pharmacy filled', first_dose_taken: 'First dose taken',
   week_one_complete: 'Week 1 complete', month_one_complete: 'Month 1 complete',
   adherent: 'Adherent',
+};
+
+// Plain-English description of what is unfilled at each step. Memory:
+// feedback_internal_task_copy_plain_english — never surface the funnel step
+// name as a status string ("Provider chosen") without pairing it with the
+// concrete unfilled action.
+const STEP_NEXT_ACTION: Record<string, string> = {
+  uncommitted:           'You have not committed to starting HRT.',
+  committed:             'You said yes to HRT but have not researched providers.',
+  researching:           'You are researching providers but have not picked one.',
+  provider_chosen:       'You picked a provider but have not booked the consult.',
+  appointment_booked:    'You booked the consult but have not attended it.',
+  intake_submitted:      'You submitted intake forms but have not attended the consult.',
+  appointment_attended:  'You went to the consult but do not have a prescription yet.',
+  prescription_obtained: 'You have a prescription but have not filled it at the pharmacy.',
+  pharmacy_filled:       'You filled the script but have not taken your first dose.',
+  first_dose_taken:      'You took dose 1 but have not completed week 1 of doses.',
+  week_one_complete:     'You finished week 1 but have not reached month 1.',
+  month_one_complete:    'You hit month 1 but have not reached adherent.',
+  adherent:              'Adherent. No action.',
 };
 
 function dateKeyET(now: Date): string {
@@ -150,20 +180,23 @@ export function HrtDailyGate() {
   };
 
   const submitObstacle = async () => {
-    if (explainBanned) { setError('Explain is disabled until you advance. Day 3+ is move-or-stay-locked.'); return; }
+    if (explainBanned) { setError('Explain is disabled until you advance. Move-or-stay-locked.'); return; }
     if (!user?.id || obstacle.trim().length < minChars) {
-      setError(`Obstacle needs ${minChars - obstacle.trim().length} more characters.`);
+      setError(`Add ${minChars - obstacle.trim().length} more characters.`);
       return;
     }
     if (requireIdentityPhrase) {
-      const phrase = `david is hiding`;
-      if (!obstacle.toLowerCase().includes(phrase)) {
-        setError(`Day ${missedDays}+ requires the literal phrase "David is hiding" in your answer. Name it.`);
+      // Anti-tautology: bare "David is hiding" was auto-satisfied by the
+      // textarea placeholder. Require "David is hiding from <something>"
+      // where <something> is at least one word of substance.
+      const m = obstacle.toLowerCase().match(/david is hiding from\s+(\S+)/);
+      if (!m || !m[1] || m[1].length < 3) {
+        setError('Required phrase: "David is hiding from ___" — fill the blank with what specifically he is hiding from. Bare "David is hiding" alone does not count.');
         return;
       }
     }
     if (requireUrl && !urlInString(obstacle)) {
-      setError(`Day ${missedDays}+ requires one provider URL you visited today (https://...) inside the answer.`);
+      setError('Add one provider URL you actually visited today (https://...) inside the answer.');
       return;
     }
     setSubmitting(true); setError(null);
@@ -273,9 +306,18 @@ export function HrtDailyGate() {
   if (!gateOpen) return null;
 
   const headerTone = missedDays === 0 ? '#f4a7c4' : missedDays < 3 ? '#f4c272' : missedDays < 5 ? '#ec4899' : '#f47272';
+  const nextStepName = candidates[0] ? STEP_LABELS[candidates[0]] : null;
+  const plainStatus = STEP_NEXT_ACTION[currentStep] || `You are at "${STEP_LABELS[currentStep]}".`;
+  // No day-counter narration. Memory: feedback_no_handler_status_dumps —
+  // day labels ("Day N stuck") are themselves status dumps. The accusation
+  // language escalates by tier; the count never appears in user-facing copy.
   const stalledHeader = missedDays === 0
-    ? `You are on: ${STEP_LABELS[currentStep]}`
-    : `David is hiding behind "${STEP_LABELS[currentStep]}." She is still ${STEP_LABELS[currentStep]}. Day ${missedDays} stuck.`;
+    ? plainStatus
+    : missedDays < 3
+      ? `${plainStatus} David picked the answer that looks like progress and used the next 24 hours to do nothing.`
+      : missedDays < 5
+        ? `${plainStatus} You are no longer allowed to talk your way through this. The Handler has stopped accepting words.`
+        : `${plainStatus} The funnel is regressing. Each hour without a move makes the climb back longer.`;
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(5,3,10,0.97)', zIndex: 360, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(10px)' }}>
@@ -292,20 +334,24 @@ export function HrtDailyGate() {
             display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14, padding: '10px 12px',
             background: '#0a0a0d', border: `1px solid ${headerTone}44`, borderLeft: `3px solid ${headerTone}`, borderRadius: 6,
           }}>
-            <div style={{ fontSize: 10.5, color: '#8a8690' }}>
-              <span style={{ color: headerTone, fontWeight: 700 }}>Streak:</span> {missedDays}d
-            </div>
-            {bleedingTotal > 0 && <div style={{ fontSize: 10.5, color: '#f47272' }}>HRT bleed: ${bleedingTotal.toFixed(2)}</div>}
+            {/* No streak day count. The accusation tier in the header IS the escalation. */}
+            {bleedingTotal > 0 && (
+              <div style={{ fontSize: 10.5, color: '#f47272' }}>
+                Stuck-tax owed: ${bleedingTotal.toFixed(2)}
+              </div>
+            )}
             {willCcWitness && <div style={{ fontSize: 10.5, color: '#f47272' }}>Witness silently CC'd on miss</div>}
-            {willRegress && <div style={{ fontSize: 10.5, color: '#f47272' }}>Step REGRESSES on miss</div>}
+            {willRegress && <div style={{ fontSize: 10.5, color: '#f47272' }}>Step regresses on miss</div>}
             {willPublicPost && <div style={{ fontSize: 10.5, color: '#f47272' }}>Public post fires on miss</div>}
           </div>
         )}
 
         <div style={{ fontSize: 12, color: '#8a8690', marginBottom: 18, lineHeight: 1.5 }}>
           {explainBanned
-            ? 'Day 3+: explain is gone. Either advance the funnel one step with evidence, or close this and the app stays locked. Hard mode is on. Chastity is locked.'
-            : 'No third option. Advance the funnel one step and paste evidence, or write the obstacle. App stays locked until one lands.'}
+            ? 'Talking is no longer accepted. Either move the funnel one step forward with evidence, or close this and the app stays locked. Hard mode is on. Chastity is locked.'
+            : nextStepName
+              ? `No third path. Either move forward to "${nextStepName}" with evidence, or write what stopped you today. The app stays locked until one of the two submits clean.`
+              : 'No third path. Either move the funnel forward with evidence, or write what stopped you today. The app stays locked until one of the two submits clean.'}
         </div>
 
         {pastObstacles.length >= 2 && missedDays >= 2 && (
@@ -325,17 +371,17 @@ export function HrtDailyGate() {
           <div style={{ display: 'flex', gap: 10 }}>
             <button onClick={() => setMode('advance')} disabled={candidates.length === 0}
               style={{ flex: 1, padding: '14px', borderRadius: 8, border: 'none', background: '#7c3aed', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
-              I advanced today → {candidates[0] ? STEP_LABELS[candidates[0]] : 'already adherent'}
+              I moved forward today → {candidates[0] ? STEP_LABELS[candidates[0]] : 'already adherent'}
             </button>
             <button onClick={() => setMode('obstacle')} disabled={explainBanned}
-              title={explainBanned ? 'Disabled at day 3+. Advance only.' : ''}
+              title={explainBanned ? 'Talking is no longer accepted. Move forward only.' : ''}
               style={{ flex: 1, padding: '14px', borderRadius: 8,
                 border: explainBanned ? '1px solid #3a1216' : '1px solid #2d1a4d',
                 background: explainBanned ? '#1a0a0d' : 'rgba(45,26,77,0.3)',
                 color: explainBanned ? '#5a4548' : '#c4b5fd',
                 fontWeight: 600, fontSize: 13, cursor: explainBanned ? 'not-allowed' : 'pointer',
                 fontFamily: 'inherit', textDecoration: explainBanned ? 'line-through' : 'none' }}>
-              {explainBanned ? 'Explain — DISABLED day 3+' : 'File obstacle → explain'}
+              {explainBanned ? 'Explain — disabled, talk-no-more' : 'Name what stopped me'}
             </button>
           </div>
         )}
@@ -371,20 +417,24 @@ export function HrtDailyGate() {
           <div>
             <div style={{ fontSize: 11.5, color: '#f4c272', marginBottom: 8, lineHeight: 1.5 }}>
               {missedDays === 0 && `Write ≥${minChars} chars. Be specific — the Handler will use this to push you tomorrow.`}
-              {missedDays === 1 && `Day 1 stuck: ≥${minChars} chars AND include the literal phrase "David is hiding" — name what part of him is winning today.`}
-              {missedDays >= 2 && `Day ${missedDays} stuck: ≥${minChars} chars, include "David is hiding", and paste at least one provider URL you actually visited today (https://...). Same excuses no longer count.`}
+              {missedDays === 1 && `Write ≥${minChars} chars and include the phrase "David is hiding from ___" — fill the blank with what specifically he is hiding from. Naming it is the work.`}
+              {missedDays >= 2 && `Write ≥${minChars} chars, include "David is hiding from ___" with the blank filled, and paste at least one provider URL you actually visited today (https://...). Repeating the same excuse no longer counts.`}
             </div>
-            <textarea value={obstacle} onChange={e => setObstacle(e.target.value)} rows={9} placeholder={requireIdentityPhrase ? `David is hiding because…\n\nProvider URL I visited: https://…` : 'what specifically stopped me today…'}
+            <textarea value={obstacle} onChange={e => setObstacle(e.target.value)} rows={9} placeholder={requireIdentityPhrase ? `Today I did not move forward because… (start typing here, the phrase "David is hiding from ___" must appear somewhere in your answer with the blank filled)` : 'what specifically stopped me today…'}
               style={{ width: '100%', background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 6, padding: 10, color: '#e8e6e3', fontFamily: 'inherit', fontSize: 13, resize: 'vertical' }} />
             <div style={{ display: 'flex', gap: 12, marginTop: 6, flexWrap: 'wrap' }}>
               <div style={{ fontSize: 11, color: obstacle.trim().length >= minChars ? '#5fc88f' : '#8a8690' }}>
                 {obstacle.trim().length} / {minChars} chars
               </div>
-              {requireIdentityPhrase && (
-                <div style={{ fontSize: 11, color: obstacle.toLowerCase().includes('david is hiding') ? '#5fc88f' : '#f47272' }}>
-                  identity phrase: {obstacle.toLowerCase().includes('david is hiding') ? 'present' : 'missing'}
-                </div>
-              )}
+              {requireIdentityPhrase && (() => {
+                const m = obstacle.toLowerCase().match(/david is hiding from\s+(\S+)/);
+                const filled = !!(m && m[1] && m[1].length >= 3);
+                return (
+                  <div style={{ fontSize: 11, color: filled ? '#5fc88f' : '#f47272' }}>
+                    "David is hiding from ___": {filled ? 'blank filled' : 'blank not filled'}
+                  </div>
+                );
+              })()}
               {requireUrl && (
                 <div style={{ fontSize: 11, color: urlInString(obstacle) ? '#5fc88f' : '#f47272' }}>
                   provider url: {urlInString(obstacle) ? 'present' : 'missing'}
@@ -393,14 +443,23 @@ export function HrtDailyGate() {
             </div>
             {error && <div style={{ fontSize: 11, color: '#f47272', marginTop: 8 }}>{error}</div>}
             <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-              <button onClick={submitObstacle}
-                disabled={obstacle.trim().length < minChars || (requireIdentityPhrase && !obstacle.toLowerCase().includes('david is hiding')) || (requireUrl && !urlInString(obstacle)) || submitting}
-                style={{ flex: 1, padding: 10, borderRadius: 6, border: 'none',
-                  background: (obstacle.trim().length >= minChars && (!requireIdentityPhrase || obstacle.toLowerCase().includes('david is hiding')) && (!requireUrl || urlInString(obstacle))) ? '#f4c272' : '#2d1a4d',
-                  color: (obstacle.trim().length >= minChars && (!requireIdentityPhrase || obstacle.toLowerCase().includes('david is hiding')) && (!requireUrl || urlInString(obstacle))) ? '#1a0f00' : '#8a8690',
-                  fontWeight: 600, cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
-                {submitting ? 'saving…' : 'Submit obstacle'}
-              </button>
+              {(() => {
+                const m = obstacle.toLowerCase().match(/david is hiding from\s+(\S+)/);
+                const phraseFilled = !!(m && m[1] && m[1].length >= 3);
+                const ready = obstacle.trim().length >= minChars
+                  && (!requireIdentityPhrase || phraseFilled)
+                  && (!requireUrl || urlInString(obstacle));
+                return (
+                  <button onClick={submitObstacle}
+                    disabled={!ready || submitting}
+                    style={{ flex: 1, padding: 10, borderRadius: 6, border: 'none',
+                      background: ready ? '#f4c272' : '#2d1a4d',
+                      color: ready ? '#1a0f00' : '#8a8690',
+                      fontWeight: 600, cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+                    {submitting ? 'saving…' : 'Submit'}
+                  </button>
+                );
+              })()}
               <button onClick={() => { setMode('pick'); setError(null); }} style={{ padding: '10px 14px', borderRadius: 6, background: 'none', border: '1px solid #2d1a4d', color: '#8a8690', cursor: 'pointer', fontFamily: 'inherit' }}>back</button>
             </div>
           </div>
@@ -409,7 +468,7 @@ export function HrtDailyGate() {
         {mode === 'obstacle' && explainBanned && (
           <div style={{ padding: 14, background: '#1a0a0d', border: '1px solid #7a1f22', borderRadius: 6 }}>
             <div style={{ fontSize: 13, color: '#f47272', fontWeight: 600, marginBottom: 6 }}>
-              Day {missedDays} stuck. Explain is gone.
+              Talking is no longer accepted.
             </div>
             <div style={{ fontSize: 11.5, color: '#c8c4cc', lineHeight: 1.5 }}>
               You don't get to talk your way through this anymore. The funnel only moves forward, or you sit in it. Pick the next step + paste the evidence. The app stays locked until you do.
