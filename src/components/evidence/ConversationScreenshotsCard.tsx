@@ -60,7 +60,7 @@ export function ConversationScreenshotsCard() {
   const [contactLabel, setContactLabel] = useState('');
   const [relationship, setRelationship] = useState('wife');
   const [userNote, setUserNote] = useState('');
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [pastedText, setPastedText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +82,7 @@ export function ConversationScreenshotsCard() {
 
   const submit = async () => {
     if (!user?.id || !contactLabel.trim()) return;
-    if (mode === 'image' && !file) return;
+    if (mode === 'image' && files.length === 0) return;
     if (mode === 'text' && pastedText.trim().length < 20) {
       setError('Paste at least 20 characters of conversation text.');
       return;
@@ -92,19 +92,26 @@ export function ConversationScreenshotsCard() {
 
     try {
       let screenshotUrl: string | null = null;
+      let additionalUrls: string[] = [];
       let initialOcrText: string | null = null;
 
-      if (mode === 'image' && file) {
-        // Upload to evidence bucket
-        const ext = file.name.split('.').pop() || 'jpg';
-        const path = `conversation-screenshots/${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-        const { error: upErr } = await supabase.storage.from('evidence').upload(path, file, {
-          contentType: file.type,
-          upsert: false,
-        });
-        if (upErr) throw upErr;
-        const { data: pub } = supabase.storage.from('evidence').getPublicUrl(path);
-        screenshotUrl = pub.publicUrl;
+      if (mode === 'image' && files.length > 0) {
+        // Upload all selected screenshots. First becomes screenshot_url,
+        // rest accumulate in additional_screenshot_urls.
+        const uploaded: string[] = [];
+        for (const f of files) {
+          const ext = f.name.split('.').pop() || 'jpg';
+          const path = `conversation-screenshots/${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+          const { error: upErr } = await supabase.storage.from('evidence').upload(path, f, {
+            contentType: f.type,
+            upsert: false,
+          });
+          if (upErr) throw upErr;
+          const { data: pub } = supabase.storage.from('evidence').getPublicUrl(path);
+          uploaded.push(pub.publicUrl);
+        }
+        screenshotUrl = uploaded[0];
+        additionalUrls = uploaded.slice(1);
       } else {
         // Text mode — skip the storage step entirely. Pre-populate ocr_text.
         initialOcrText = pastedText.trim();
@@ -115,6 +122,7 @@ export function ConversationScreenshotsCard() {
         contact_label: contactLabel.trim(),
         contact_relationship: relationship,
         screenshot_url: screenshotUrl,
+        additional_screenshot_urls: additionalUrls,
         ocr_text: initialOcrText,
         user_note: userNote.trim() || null,
         status: 'pending_classification',
@@ -130,7 +138,7 @@ export function ConversationScreenshotsCard() {
       }).catch(e => console.warn('[classify] non-blocking error:', e));
 
       // Reset form
-      setFile(null);
+      setFiles([]);
       setPastedText('');
       setContactLabel('');
       setUserNote('');
@@ -168,13 +176,13 @@ export function ConversationScreenshotsCard() {
         <button
           onClick={() => setShowUpload(true)}
           style={{
-            width: '100%', padding: '10px 14px', borderRadius: 7, border: '1px dashed #2d1a4d',
-            background: 'transparent', color: '#c4b5fd',
-            fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+            width: '100%', padding: '12px 14px', borderRadius: 7, border: 'none',
+            background: '#7c3aed', color: '#fff',
+            fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
             marginBottom: 10,
           }}
         >
-          + add conversation evidence — screenshot OR pasted text (Gina, Jake, fans, partners…)
+          📷 upload conversation screenshots
         </button>
       )}
 
@@ -211,13 +219,27 @@ export function ConversationScreenshotsCard() {
           </div>
 
           {mode === 'image' && (
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={e => setFile(e.target.files?.[0] ?? null)}
-              style={{ marginBottom: 10, color: '#c4b5fd', fontSize: 12 }}
-            />
+            <div style={{ marginBottom: 10 }}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={e => {
+                  const arr = Array.from(e.target.files ?? []);
+                  setFiles(arr);
+                }}
+                style={{ color: '#c4b5fd', fontSize: 12, width: '100%' }}
+              />
+              {files.length > 0 && (
+                <div style={{ marginTop: 6, fontSize: 11, color: '#5fc88f' }}>
+                  {files.length} screenshot{files.length === 1 ? '' : 's'} selected — they'll classify as ONE conversation.
+                </div>
+              )}
+              <div style={{ marginTop: 4, fontSize: 10, color: '#8a8690', fontStyle: 'italic' }}>
+                Tip: select multiple screenshots from your camera roll for a long conversation. iOS lets you long-press the first then tap others.
+              </div>
+            </div>
           )}
 
           {mode === 'text' && (
@@ -269,7 +291,7 @@ export function ConversationScreenshotsCard() {
           {error && <div style={{ fontSize: 11, color: '#f47272', marginBottom: 8 }}>{error}</div>}
           <div style={{ display: 'flex', gap: 6 }}>
             <button
-              onClick={() => { setShowUpload(false); setFile(null); setPastedText(''); setContactLabel(''); setUserNote(''); }}
+              onClick={() => { setShowUpload(false); setFiles([]); setPastedText(''); setContactLabel(''); setUserNote(''); }}
               style={{
                 padding: '7px 12px', borderRadius: 5, border: '1px solid #22222a',
                 background: 'transparent', color: '#8a8690',
@@ -279,8 +301,11 @@ export function ConversationScreenshotsCard() {
               cancel
             </button>
             {(() => {
-              const hasContent = mode === 'image' ? !!file : pastedText.trim().length >= 20;
+              const hasContent = mode === 'image' ? files.length > 0 : pastedText.trim().length >= 20;
               const ready = hasContent && contactLabel.trim().length > 0 && !submitting;
+              const label = submitting
+                ? (mode === 'image' && files.length > 1 ? `uploading ${files.length} screenshots…` : 'classifying…')
+                : (mode === 'image' ? `upload & classify${files.length > 1 ? ` (${files.length})` : ''}` : 'classify pasted text');
               return (
                 <button
                   onClick={submit}
@@ -293,7 +318,7 @@ export function ConversationScreenshotsCard() {
                     fontFamily: 'inherit',
                   }}
                 >
-                  {submitting ? 'classifying…' : (mode === 'image' ? 'upload & classify' : 'classify pasted text')}
+                  {label}
                 </button>
               );
             })()}
