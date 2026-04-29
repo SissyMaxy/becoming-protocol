@@ -324,10 +324,15 @@ export function ConditioningLockdown() {
     if (!activeWindow || !user?.id) { setSegments([]); setSegmentIdx(0); return; }
     let cancelled = false;
     (async () => {
+      // Cap each library hard so the lockdown never feels like a chore-bar.
+      // Total max = 5 segments per session. User feedback 2026-04-29:
+      // "1 / 30 ... this is so dumb the punishment punative". Per
+      // feedback_no_copy_paste_rituals: forced reading of N narratives
+      // is busywork. 5 quality segments > 30 mediocre ones.
       const [impR, refR, witR] = await Promise.all([
-        supabase.from('memory_implants').select('id, narrative, implant_category, times_referenced').eq('user_id', user.id).eq('active', true).order('times_referenced', { ascending: true }).limit(12),
-        supabase.from('narrative_reframings').select('id, reframed_text, reframe_angle, times_referenced').eq('user_id', user.id).order('intensity', { ascending: false }).order('times_referenced', { ascending: true }).limit(10),
-        supabase.from('witness_fabrications').select('id, content, category, intensity, times_referenced').eq('user_id', user.id).eq('active', true).order('times_referenced', { ascending: true }).limit(8),
+        supabase.from('memory_implants').select('id, narrative, implant_category, times_referenced').eq('user_id', user.id).eq('active', true).order('times_referenced', { ascending: true }).limit(2),
+        supabase.from('narrative_reframings').select('id, reframed_text, reframe_angle, times_referenced').eq('user_id', user.id).order('intensity', { ascending: false }).order('times_referenced', { ascending: true }).limit(2),
+        supabase.from('witness_fabrications').select('id, content, category, intensity, times_referenced').eq('user_id', user.id).eq('active', true).order('times_referenced', { ascending: true }).limit(1),
       ]);
       if (cancelled) return;
       const mix: Segment[] = [];
@@ -340,9 +345,9 @@ export function ConditioningLockdown() {
       for (const r of (witR.data || []) as Array<Record<string, unknown>>) {
         mix.push({ id: r.id as string, kind: 'witness', label: `Gina · ${String(r.category || 'observation').replace(/_/g, ' ')}`, text: String(r.content || ''), sourceTable: 'witness_fabrications' });
       }
-      // Shuffle deterministically per session then interleave so user doesn't get 6 implants in a row
       mix.sort(() => Math.random() - 0.5);
-      const final = mix.length > 0 ? mix : FALLBACK_SEGMENTS;
+      // Hard cap to 5 even if libraries return more (defensive)
+      const final = (mix.length > 0 ? mix : FALLBACK_SEGMENTS).slice(0, 5);
       setSegments(final);
       setSegmentIdx(0);
     })();
@@ -421,8 +426,10 @@ export function ConditioningLockdown() {
             {segments[segmentIdx]?.text}
           </div>
           <style>{`@keyframes td-seg-fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }`}</style>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 18, fontSize: 10, color: '#6a5a7e' }}>
-            <span>{segmentIdx + 1} / {segments.length}</span>
+          {/* No counter — the segment count was reading as a chore-bar
+              ("1 / 30, next, next..."). The window itself has a timer
+              progress; users can advance manually if they want. */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 18, fontSize: 10, color: '#6a5a7e' }}>
             <button
               onClick={() => setSegmentIdx(i => (i + 1) % segments.length)}
               style={{ background: 'none', border: '1px solid rgba(196,181,253,0.2)', color: '#c4b5fd', borderRadius: 4, padding: '3px 10px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.05em', textTransform: 'uppercase' }}
