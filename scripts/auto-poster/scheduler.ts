@@ -44,6 +44,7 @@ import { runScheduledAudit } from './audit-alignment';
 import { runWeeklyDigest } from './insights';
 import { queueAttentionDedup } from './handler-attention';
 import { isTwitterReady, checkTwitterReadiness } from './twitter-readiness';
+import { runDecreeCycle } from './handler-decree';
 import { invalidateVoiceCache } from './voice-system';
 import { runAllMoneyIngest } from './money-ingest';
 import { runAnnounceLive } from './announce-live';
@@ -329,6 +330,21 @@ async function tick() {
     const total = vault + ai;
     if (total > 0) {
       console.log(`[${timestamp}] Posted ${vault} vault + ${ai} AI = ${total} item(s)`);
+    }
+
+    // --- Tick 12 then every 96 ticks (~24h): decree cycle ---
+    // Sweeps overdue decrees → marks missed → fires consequences.
+    // Generates a new decree if none open. Compliance band tracks Maxy's pattern.
+    if (tickCount === 12 || (tickCount > 12 && tickCount % 96 === 12)) {
+      await withTimeout('Decree cycle', async () => {
+        try {
+          const r = await runDecreeCycle();
+          if (r.missed > 0) console.log(`[${timestamp}] Decree sweep: ${r.missed} missed`);
+          if (r.generated) console.log(`[${timestamp}] Decree issued: ${r.generated.slice(0, 8)}`);
+        } catch (err) {
+          console.error(`[${timestamp}] Decree cycle failed:`, err instanceof Error ? err.message : err);
+        }
+      }, 60000);
     }
 
     // --- Once per scheduler session then every 672 ticks (~7d): weekly digest ---

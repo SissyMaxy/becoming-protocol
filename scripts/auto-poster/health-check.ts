@@ -132,7 +132,10 @@ async function checkRecentActivity() {
     const ageMs = Date.now() - new Date(data[0].created_at).getTime();
     const ageHours = Math.round(ageMs / 3600_000);
     if (ageHours > 48) {
-      record(`activity:${name}`, 'fail', `last activity ${ageHours}h ago`);
+      // Stale platforms are a soft signal — the scheduler being paused is normal,
+      // and FAILing here creates a bootstrap loop where you can't restart after
+      // a pause. Keep at warn so it surfaces without blocking.
+      record(`activity:${name}`, 'warn', `last activity ${ageHours}h ago`);
     } else if (ageHours > 24) {
       record(`activity:${name}`, 'warn', `last activity ${ageHours}h ago`);
     } else {

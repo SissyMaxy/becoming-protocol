@@ -25,6 +25,7 @@
     "mommy-review": "npx tsx mommy-review.ts",
     "insights": "npx tsx insights.ts",
     "scene": "npx tsx scene.ts",
+    "decree": "npx tsx decree.ts",
     "twitter-reset": "npx tsx twitter-reset.ts",
     "twitter-profile": "npx tsx twitter-profile.ts",
     "twitter-status": "npx tsx twitter-readiness.ts",
