@@ -233,8 +233,11 @@ export async function cheapJudgeSlop(
   originalContext: string,
   reply: string,
 ): Promise<{ pass: boolean; score: number; reason: string }> {
+  // Audit finding (handler_audit_findings): "Cheap judge fails open on all errors"
+  // — switched to fail-CLOSED. If we can't grade, we don't post. Better a missed
+  // post than a slop post that flags Maxy as a bot.
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    return { pass: true, score: 70, reason: 'cheap judge unconfigured' };
+    return { pass: false, score: 0, reason: 'cheap judge unconfigured — failing closed for safety' };
   }
   try {
     const res = await fetch(`${SUPABASE_URL}/functions/v1/openrouter-cheap-judge`, {
@@ -250,15 +253,15 @@ export async function cheapJudgeSlop(
       }),
     });
     if (!res.ok) {
-      return { pass: true, score: 70, reason: `cheap judge http ${res.status}` };
+      return { pass: false, score: 0, reason: `cheap judge http ${res.status} — failing closed` };
     }
     const data = await res.json() as { ok: boolean; score: number; accept: boolean; reason: string };
     if (!data.ok) {
-      return { pass: true, score: 70, reason: data.reason || 'cheap judge fail-open' };
+      return { pass: false, score: 0, reason: data.reason || 'cheap judge returned ok:false — failing closed' };
     }
     return { pass: data.accept, score: data.score, reason: data.reason };
   } catch (err) {
-    return { pass: true, score: 70, reason: `cheap judge error: ${err instanceof Error ? err.message : err}` };
+    return { pass: false, score: 0, reason: `cheap judge error: ${err instanceof Error ? err.message : err} — failing closed` };
   }
 }
 
@@ -323,8 +326,9 @@ export async function llmSlopJudge(
     return { pass, score, reason };
   } catch (err) {
     console.error('[SlopJudge] LLM judge failed:', err instanceof Error ? err.message : err);
-    // Fail open — if the judge errors, let the reply through
-    return { pass: true, score: 7, reason: 'judge unavailable' };
+    // Audit finding: was failing OPEN. Now fails CLOSED — better a missed post
+    // than a slop post that flags Maxy as a bot. Same posture as cheapJudgeSlop.
+    return { pass: false, score: 0, reason: 'judge unavailable — failing closed for safety' };
   }
 }
 

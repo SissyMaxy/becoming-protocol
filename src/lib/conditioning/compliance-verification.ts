@@ -740,8 +740,8 @@ async function verifySocialInteraction(
       validCount++;
     } else {
       tooShortCount++;
-      // Log short DMs
-      if ((msg.body ?? '').trim().length < 20) {
+      // Log short DMs (threshold ratcheted from 20 → 50 by code-audit hardening)
+      if ((msg.body ?? '').trim().length < 50) {
         await supabase.from('handler_interventions').insert({
           user_id: userId,
           intervention_type: 'dm_too_short',
@@ -757,7 +757,7 @@ async function verifySocialInteraction(
 
   if (validCount > 0) {
     const evidence = tooShortCount > 0
-      ? `${validCount} valid DMs sent. ${tooShortCount} too short (< 20 chars) and rejected.`
+      ? `${validCount} valid DMs sent. ${tooShortCount} too short (< 50 chars) and rejected.`
       : `${validCount} valid DMs sent.`;
 
     return {
@@ -771,7 +771,7 @@ async function verifySocialInteraction(
   return {
     verified: false,
     confidence: 'high',
-    evidence: `${messages.length} DMs sent but ALL were under 20 characters. One-word responses dont count as social engagement.`,
+    evidence: `${messages.length} DMs sent but ALL were under 50 characters. Half-effort one-liners do not count as engagement.`,
     method: 'session_completed',
   };
 }

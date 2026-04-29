@@ -44,6 +44,8 @@ import { SponsorMilestoneCard } from './SponsorMilestoneCard';
 import { WornItemCard } from './WornItemCard';
 import { DmTemplateCard } from './DmTemplateCard';
 import { MorningBriefCard } from './MorningBriefCard';
+import { StrategicPlanCard } from './StrategicPlanCard';
+import { CodeAuditCard } from './CodeAuditCard';
 import { PunishmentQueueCard } from './PunishmentQueueCard';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
@@ -269,6 +271,8 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         {/* PRIMARY — always visible. Status, what to do now, what's owed. */}
         <ProtocolDayCard />
         <MorningBriefCard />
+        <StrategicPlanCard />
+        <CodeAuditCard />
         <UnifiedTaskList />
         <PunishmentQueueCard />
         <NextShotsCard />

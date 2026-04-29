@@ -615,11 +615,15 @@ export async function validateDMResponse(
     const body = msg.body ?? '';
     const length = body.trim().length;
 
-    if (length < 20) {
+    // Audit-ratcheted threshold: was 20 chars, raised to 50 to filter out
+    // half-effort one-line replies. Real engagement is multi-sentence.
+    // Caught by handler-code-audit as permissive_default.
+    const MIN_DM_LENGTH = 50;
+    if (length < MIN_DM_LENGTH) {
       return {
         valid: false,
         length,
-        reason: `Response is ${length} characters. Minimum is 20. One-word DMs dont count as social engagement.`,
+        reason: `Response is ${length} characters. Minimum is ${MIN_DM_LENGTH}. Half-effort one-liners do not count as engagement.`,
       };
     }
 

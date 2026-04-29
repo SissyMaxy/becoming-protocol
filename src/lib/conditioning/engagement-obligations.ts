@@ -458,7 +458,10 @@ async function verifyObligationCompletion(
       const totalMinutes = (samples ?? []).reduce(
         (sum, s) => sum + (s.duration_seconds ?? 0), 0,
       ) / 60;
-      return totalMinutes >= 10; // At least 10 min
+      // Audit-ratcheted threshold: was 10 min, raised to 15 min to match the
+      // template the obligation was created from. Caught by handler-code-audit
+      // as a permissive_default in handler_audit_findings.
+      return totalMinutes >= 15;
     }
 
     default:
