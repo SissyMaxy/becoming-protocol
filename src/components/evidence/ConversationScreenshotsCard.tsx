@@ -56,10 +56,12 @@ export function ConversationScreenshotsCard() {
   const { user } = useAuth();
   const [recent, setRecent] = useState<Screenshot[]>([]);
   const [showUpload, setShowUpload] = useState(false);
+  const [mode, setMode] = useState<'image' | 'text'>('image');
   const [contactLabel, setContactLabel] = useState('');
   const [relationship, setRelationship] = useState('wife');
   const [userNote, setUserNote] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [pastedText, setPastedText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -79,33 +81,48 @@ export function ConversationScreenshotsCard() {
   useEffect(() => { const t = setInterval(load, 30000); return () => clearInterval(t); }, [load]);
 
   const submit = async () => {
-    if (!user?.id || !file || !contactLabel.trim()) return;
+    if (!user?.id || !contactLabel.trim()) return;
+    if (mode === 'image' && !file) return;
+    if (mode === 'text' && pastedText.trim().length < 20) {
+      setError('Paste at least 20 characters of conversation text.');
+      return;
+    }
     setSubmitting(true);
     setError(null);
 
     try {
-      // Upload to evidence bucket
-      const ext = file.name.split('.').pop() || 'jpg';
-      const path = `conversation-screenshots/${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      const { error: upErr } = await supabase.storage.from('evidence').upload(path, file, {
-        contentType: file.type,
-        upsert: false,
-      });
-      if (upErr) throw upErr;
-      const { data: pub } = supabase.storage.from('evidence').getPublicUrl(path);
+      let screenshotUrl: string | null = null;
+      let initialOcrText: string | null = null;
 
-      // Create row
+      if (mode === 'image' && file) {
+        // Upload to evidence bucket
+        const ext = file.name.split('.').pop() || 'jpg';
+        const path = `conversation-screenshots/${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const { error: upErr } = await supabase.storage.from('evidence').upload(path, file, {
+          contentType: file.type,
+          upsert: false,
+        });
+        if (upErr) throw upErr;
+        const { data: pub } = supabase.storage.from('evidence').getPublicUrl(path);
+        screenshotUrl = pub.publicUrl;
+      } else {
+        // Text mode — skip the storage step entirely. Pre-populate ocr_text.
+        initialOcrText = pastedText.trim();
+      }
+
       const { data: ins, error: insErr } = await supabase.from('conversation_screenshots').insert({
         user_id: user.id,
         contact_label: contactLabel.trim(),
         contact_relationship: relationship,
-        screenshot_url: pub.publicUrl,
+        screenshot_url: screenshotUrl,
+        ocr_text: initialOcrText,
         user_note: userNote.trim() || null,
         status: 'pending_classification',
       }).select('id').single();
       if (insErr) throw insErr;
 
-      // Fire classify (non-blocking — UI will see status update on next poll)
+      // Fire classify. The edge function will skip OCR when ocr_text is
+      // already present (text-paste mode) and go straight to classification.
       fetch(`${SUPABASE_URL}/functions/v1/classify-conversation-screenshot`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -114,6 +131,7 @@ export function ConversationScreenshotsCard() {
 
       // Reset form
       setFile(null);
+      setPastedText('');
       setContactLabel('');
       setUserNote('');
       setShowUpload(false);
@@ -156,7 +174,7 @@ export function ConversationScreenshotsCard() {
             marginBottom: 10,
           }}
         >
-          + upload a screenshot (Gina, Jake, fans, partners…)
+          + add conversation evidence — screenshot OR pasted text (Gina, Jake, fans, partners…)
         </button>
       )}
 
@@ -164,13 +182,57 @@ export function ConversationScreenshotsCard() {
         <div style={{
           background: '#050507', border: '1px solid #2d1a4d', borderRadius: 8, padding: 12, marginBottom: 12,
         }}>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={e => setFile(e.target.files?.[0] ?? null)}
-            style={{ marginBottom: 10, color: '#c4b5fd', fontSize: 12 }}
-          />
+          {/* Mode toggle: screenshot vs pasted text */}
+          <div style={{ display: 'flex', gap: 4, marginBottom: 10 }}>
+            <button
+              onClick={() => setMode('image')}
+              style={{
+                flex: 1, padding: '6px 10px', borderRadius: 5,
+                border: '1px solid ' + (mode === 'image' ? '#7c3aed' : '#22222a'),
+                background: mode === 'image' ? '#1a0f2e' : 'transparent',
+                color: mode === 'image' ? '#fff' : '#8a8690',
+                fontWeight: 600, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              📷 screenshot
+            </button>
+            <button
+              onClick={() => setMode('text')}
+              style={{
+                flex: 1, padding: '6px 10px', borderRadius: 5,
+                border: '1px solid ' + (mode === 'text' ? '#7c3aed' : '#22222a'),
+                background: mode === 'text' ? '#1a0f2e' : 'transparent',
+                color: mode === 'text' ? '#fff' : '#8a8690',
+                fontWeight: 600, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              ✍ paste text
+            </button>
+          </div>
+
+          {mode === 'image' && (
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={e => setFile(e.target.files?.[0] ?? null)}
+              style={{ marginBottom: 10, color: '#c4b5fd', fontSize: 12 }}
+            />
+          )}
+
+          {mode === 'text' && (
+            <textarea
+              placeholder={`Paste the conversation. Format like:\n\nGina: how was today\nMe: rough\nGina: tell me\n\nOr just paste the raw thread — the classifier handles either.`}
+              value={pastedText}
+              onChange={e => setPastedText(e.target.value)}
+              rows={10}
+              style={{
+                width: '100%', background: '#111116', border: '1px solid #22222a',
+                borderRadius: 5, padding: 8, color: '#e8e6e3', fontSize: 12, marginBottom: 10,
+                fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.4,
+              }}
+            />
+          )}
           <input
             type="text"
             placeholder="Who is this with? (Gina, Jake, alias)"
@@ -207,7 +269,7 @@ export function ConversationScreenshotsCard() {
           {error && <div style={{ fontSize: 11, color: '#f47272', marginBottom: 8 }}>{error}</div>}
           <div style={{ display: 'flex', gap: 6 }}>
             <button
-              onClick={() => { setShowUpload(false); setFile(null); setContactLabel(''); setUserNote(''); }}
+              onClick={() => { setShowUpload(false); setFile(null); setPastedText(''); setContactLabel(''); setUserNote(''); }}
               style={{
                 padding: '7px 12px', borderRadius: 5, border: '1px solid #22222a',
                 background: 'transparent', color: '#8a8690',
@@ -216,19 +278,25 @@ export function ConversationScreenshotsCard() {
             >
               cancel
             </button>
-            <button
-              onClick={submit}
-              disabled={!file || !contactLabel.trim() || submitting}
-              style={{
-                flex: 1, padding: '7px 12px', borderRadius: 5, border: 'none',
-                background: file && contactLabel.trim() && !submitting ? '#7c3aed' : '#22222a',
-                color: file && contactLabel.trim() && !submitting ? '#fff' : '#6a656e',
-                fontWeight: 700, fontSize: 11, cursor: file && contactLabel.trim() && !submitting ? 'pointer' : 'not-allowed',
-                fontFamily: 'inherit',
-              }}
-            >
-              {submitting ? 'uploading & classifying…' : 'upload & classify'}
-            </button>
+            {(() => {
+              const hasContent = mode === 'image' ? !!file : pastedText.trim().length >= 20;
+              const ready = hasContent && contactLabel.trim().length > 0 && !submitting;
+              return (
+                <button
+                  onClick={submit}
+                  disabled={!ready}
+                  style={{
+                    flex: 1, padding: '7px 12px', borderRadius: 5, border: 'none',
+                    background: ready ? '#7c3aed' : '#22222a',
+                    color: ready ? '#fff' : '#6a656e',
+                    fontWeight: 700, fontSize: 11, cursor: ready ? 'pointer' : 'not-allowed',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  {submitting ? 'classifying…' : (mode === 'image' ? 'upload & classify' : 'classify pasted text')}
+                </button>
+              );
+            })()}
           </div>
         </div>
       )}
