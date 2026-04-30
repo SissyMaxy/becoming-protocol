@@ -21,6 +21,40 @@ type CachedExemplars = { block: string; at: number };
 const voiceExemplarCache = new Map<string, CachedExemplars>();
 const VOICE_CACHE_TTL_MS = 5 * 60 * 1000;
 
+// Self-amending banned-openings list. handler-prompt-amender writes new
+// rules to handler_prompt_amendments based on recent failed reply grades;
+// we read the active rows here and append to the system prompt so the
+// model sees her own most-recent leak patterns. 5-min cache to keep the
+// per-request cost low.
+type CachedAmendments = { block: string; at: number };
+const amendmentsCache = new Map<string, CachedAmendments>();
+const AMENDMENTS_TTL_MS = 5 * 60 * 1000;
+
+async function buildPromptAmendmentsBlock(userId: string): Promise<string> {
+  const cached = amendmentsCache.get(userId);
+  if (cached && Date.now() - cached.at < AMENDMENTS_TTL_MS) return cached.block;
+  try {
+    const { data } = await supabase
+      .from('handler_prompt_amendments')
+      .select('amendment_kind, amendment_text')
+      .eq('user_id', userId)
+      .eq('active', true)
+      .order('created_at', { ascending: false })
+      .limit(20);
+    const rows = (data ?? []) as Array<{ amendment_kind: string; amendment_text: string }>;
+    if (rows.length === 0) {
+      amendmentsCache.set(userId, { block: '', at: Date.now() });
+      return '';
+    }
+    const lines = rows.map(r => r.amendment_text).filter(Boolean).join('\n');
+    const block = `\n\n## RECENTLY OBSERVED LEAKS — ALSO BANNED\nThese are openings she actually flagged in the last week. Learn from her own corrections; never repeat:\n${lines}\n`;
+    amendmentsCache.set(userId, { block, at: Date.now() });
+    return block;
+  } catch {
+    return '';
+  }
+}
+
 async function buildVoiceExemplarBlock(userId: string): Promise<string> {
   const cached = voiceExemplarCache.get(userId);
   if (cached && Date.now() - cached.at < VOICE_CACHE_TTL_MS) return cached.block;
@@ -1773,6 +1807,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (voiceBlock) finalSystemPrompt += voiceBlock;
     } catch {
       // Voice block failure is non-critical
+    }
+
+    // 4c-bis. Self-amending banned-openings — the handler-prompt-amender
+    // cron writes new banned phrases to handler_prompt_amendments based on
+    // recent failed reply grades. Append them so the model sees her actual
+    // most-recent corrections.
+    try {
+      const amendmentsBlock = await buildPromptAmendmentsBlock(user.id);
+      if (amendmentsBlock) finalSystemPrompt += amendmentsBlock;
+    } catch {
+      // non-critical
     }
 
     // 4d. Temporal grounding — Handler was prescribing "outfit photo by noon"

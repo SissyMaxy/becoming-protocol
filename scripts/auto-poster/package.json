@@ -30,6 +30,7 @@
     "twitter-profile": "npx tsx twitter-profile.ts",
     "twitter-status": "npx tsx twitter-readiness.ts",
     "twitter-apply": "npx tsx twitter-apply.ts",
+    "twitter-discover": "npx tsx twitter-discover.ts",
     "backfill": "npx tsx backfill-reddit-engagement.ts",
     "money-ingest": "npx tsx money-ingest.ts",
     "announce-live": "npx tsx announce-live.ts",
