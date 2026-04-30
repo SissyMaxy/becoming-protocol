@@ -26,6 +26,25 @@ const SEARCH_TERMS: Array<{ category: string; terms: string[] }> = [
   { category: 'trans_voices', terms: ['trans woman hrt', 'transitioning at 40', 'late transition', 'trans femme'] },
   { category: 'hrt_journey', terms: ['hrt month', 'estrogen month', 'transition timeline', 'hrt update'] },
   { category: 'adjacent_kink', terms: ['femboy', 'tgirl', 'transformation kink', 'goon brain'] },
+  // Thirst/egirl/thot creators — feed-saturation category. Higher term count and
+  // wider net because the goal is volume of thirst content in the timeline.
+  { category: 'thirst_creators', terms: [
+    'tgirl thirst trap', 'trans thirst', 'tgirl selfie', 'trans girl onlyfans',
+    'egirl trans', 'thot tgirl', 'sissy thirst trap', 'femboy thirst',
+    'trans cosplay thirst', 'tgirl content creator', 'trans goth egirl',
+    'tgirl alt girl', 'trans bimbo', 'transgirl pussy', 'femboy onlyfans',
+    'sissy onlyfans', 'tgirl panties selfie', 'trans cum slut',
+  ]},
+  // Cute/soft/adorable trans girls — non-sexual feminization aspiration. Shows
+  // the soft girlhood Maxy is being shaped toward; balances kink/thirst content
+  // in the feed with daily-life femininity.
+  { category: 'cute_soft_trans', terms: [
+    'cute trans girl', 'soft trans', 'adorable tgirl', 'trans girl smile',
+    'trans princess', 'pink trans girl', 'sweet tgirl', 'pastel trans',
+    'shy trans girl', 'trans girl blushing', 'wholesome trans',
+    'soft femme trans', 'trans girl hair', 'cute tgirl outfit',
+    'trans girl plushie', 'trans girl fluffy', 'trans baby girl', 'cottagecore trans',
+  ]},
 ];
 
 const MAX_PER_TERM = 8;
@@ -41,12 +60,17 @@ async function isLoggedIn(page: import('playwright').Page): Promise<boolean> {
 }
 
 function looksLikeBot(handle: string, displayName: string, bioText: string): boolean {
-  // Cheap heuristics for spam/promo accounts. We don't want the bot to populate
-  // the seed list with link-farms.
-  if (/^[a-z]+\d{6,}$/i.test(handle)) return true;          // bob123456 pattern
-  if (/(linktr|onlyfans|fansly|cash[\s.]?app|venmo|paypal\.me)/i.test(bioText)) return true;
-  if (/(promo|free trial|click here|telegram\s*:)/i.test(bioText)) return true;
-  if (handle.length > 24) return true;                       // suspiciously long
+  // Filter spam/promo accounts WITHOUT rejecting legitimate sex workers.
+  // OF/Fansly links in bio are normal for thirst creators — that's the audience.
+  // Rejection signals are: link-only bios, explicit promo templates, payment
+  // solicitation pitches, generated handles.
+  if (/^[a-z]+\d{6,}$/i.test(handle)) return true;          // bob123456 generated pattern
+  if (handle.length > 24) return true;                       // generated long handle
+  // Hard pitch-style language — these are link-farm bots, not creators
+  if (/\b(promote your|dm for promo|free trial|click here|telegram\s*:|dm for collab|paid promotion)\b/i.test(bioText)) return true;
+  if (/\$\d+|\$+\s*for\s*/i.test(bioText)) return true;     // explicit pricing-in-bio
+  // Bio that's literally JUST a link with no other content
+  if (bioText.trim().length > 0 && bioText.trim().length < 30 && /^https?:\/\//.test(bioText.trim())) return true;
   return false;
 }
 
