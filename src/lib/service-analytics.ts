@@ -698,17 +698,16 @@ function calculateTrends(
     recentGina < olderGina * 0.8 ? 'decreasing' : 'stable';
 
   // Stage velocity
-  if (progressions.length < 3) {
-    var stageVelocity: 'accelerating' | 'steady' | 'slowing' = 'steady';
-  } else {
+  let stageVelocity: 'accelerating' | 'steady' | 'slowing' = 'steady';
+  if (progressions.length >= 3) {
     const recentStageGap = calculateDaysBetween(
       progressions[progressions.length - 2].enteredAt,
       progressions[progressions.length - 1].enteredAt
     );
-    const olderStageGap = progressions.length >= 3 ? calculateDaysBetween(
+    const olderStageGap = calculateDaysBetween(
       progressions[progressions.length - 3].enteredAt,
       progressions[progressions.length - 2].enteredAt
-    ) : recentStageGap;
+    );
 
     stageVelocity = recentStageGap < olderStageGap * 0.8 ? 'accelerating' :
       recentStageGap > olderStageGap * 1.2 ? 'slowing' : 'steady';
