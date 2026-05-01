@@ -50,6 +50,9 @@ import { ConfessionLockoutGate } from './ConfessionLockoutGate';
 import { HandlerPlanCalendar } from './HandlerPlanCalendar';
 import { RightNowCard } from './RightNowCard';
 import { FocusMode } from './FocusMode';
+import { MommyMoodIndicator } from '../persona/MommyMoodIndicator';
+import { ArousalTouchCard } from '../persona/ArousalTouchCard';
+import { GoodGirlPointsCard } from '../persona/GoodGirlPointsCard';
 import { ProtocolHealthCard } from './ProtocolHealthCard';
 import { PunishmentQueueCard } from './PunishmentQueueCard';
 import { ArousalLogCard } from './ArousalLogCard';
@@ -253,6 +256,9 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             ← back to focus mode
           </button>
           {/* SPINE — always visible, top of page. Single answer to "what now". */}
+          <MommyMoodIndicator />
+          <GoodGirlPointsCard />
+          <ArousalTouchCard />
           <RightNowCard />
           <ProtocolDayCard />
           <HandlerPlanCalendar />

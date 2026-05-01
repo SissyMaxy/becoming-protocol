@@ -10,6 +10,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { isTestPollution } from '../_shared/dommy-mommy.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -919,30 +920,100 @@ async function ensureTodayOutfitMandate(
     .select('id').eq('user_id', userId).eq('target_date', today).maybeSingle()
   if (existing) return
 
-  // Progression: escalates with denial days
-  const { data: us } = await supabase.from('user_state').select('denial_day, current_phase').eq('user_id', userId).maybeSingle()
-  const phase = (us as { current_phase?: string } | null)?.current_phase || 'phase_1'
+  // Wardrobe-aware: only prescribe items she actually owns. If a required
+  // category is empty, the day's task becomes "add starter items" rather
+  // than a wear-mandate she can't comply with. Earlier version assumed an
+  // ideal wardrobe and kept commanding panties/leggings/thongs to a user
+  // whose wardrobe_inventory had zero rows.
+  const { data: items } = await supabase.from('wardrobe_inventory')
+    .select('item_name, category, tier, femininity_level, purchased')
+    .eq('user_id', userId).eq('purchased', true)
 
-  const prescriptions: Record<string, { top: string; bottom: string; underwear: string; context: string; required_visible: string }> = {
-    phase_1: { top: 'form-fitting t-shirt (feminine cut if owned)', bottom: 'leggings or short shorts', underwear: 'panties or thong', context: 'home all day', required_visible: 'panty line OR thigh shape' },
-    phase_2: { top: 'feminine top / tank', bottom: 'skirt-length shorts or skirt', underwear: 'thong', context: 'home + one outing', required_visible: 'leg shape AND panty line' },
-    phase_3: { top: 'fitted feminine top', bottom: 'skirt or tight shorts', underwear: 'panties or lace', context: 'visible to Gina', required_visible: 'femme silhouette head-to-toe' },
-    phase_4: { top: 'femme top, visible shape', bottom: 'skirt or shorts, femme cut', underwear: 'thong / lace', context: 'all day incl. public', required_visible: 'full femboy presentation' },
+  const owned = (items || []) as Array<{ item_name: string; category: string; tier?: number; femininity_level?: number }>
+  const byCategory = new Map<string, Array<{ item_name: string; tier?: number; femininity_level?: number }>>()
+  for (const it of owned) {
+    const cat = (it.category || '').toLowerCase().trim()
+    if (!cat) continue
+    if (!byCategory.has(cat)) byCategory.set(cat, [])
+    byCategory.get(cat)!.push(it)
   }
-  const prescription = prescriptions[phase] || prescriptions.phase_1
+
+  // Helper: return any owned item from the first matching alias category.
+  const pick = (...aliases: string[]): { item_name: string } | null => {
+    for (const a of aliases) {
+      const list = byCategory.get(a)
+      if (list && list.length > 0) {
+        // Prefer highest femininity_level / tier
+        list.sort((x, y) => (y.femininity_level ?? 0) - (x.femininity_level ?? 0))
+        return list[0]
+      }
+    }
+    return null
+  }
+
+  const top = pick('top', 'tops', 'shirt', 'blouse', 'tank')
+  const bottom = pick('bottom', 'bottoms', 'shorts', 'leggings', 'skirt', 'pants')
+  const underwear = pick('underwear', 'panties', 'lingerie')
+
+  // No items at all → switch the day's task to wardrobe-building, no
+  // wear-mandate at all. Photo proof is of the new item, not an outfit.
+  if (owned.length === 0) {
+    await supabase.from('handler_commitments').insert({
+      user_id: userId,
+      what: 'Your wardrobe inventory is empty. Add 3 starter feminine items via the Wardrobe view (item name + photo + category). The daily outfit mandate resumes once your wardrobe has items.',
+      category: 'wardrobe_setup',
+      evidence_required: 'wardrobe_inventory_count_increase',
+      by_when: new Date(new Date().setHours(23, 59, 0, 0)).toISOString(),
+      consequence: 'slip +1',
+      reasoning: 'Cannot prescribe items she does not own. Wardrobe inventory must be seeded before daily mandates are meaningful.',
+    })
+    return
+  }
+
+  // Some items exist but core categories missing → partial mandate + a
+  // gap-fill commitment for the missing pieces.
+  const missing: string[] = []
+  if (!top) missing.push('a feminine top')
+  if (!bottom) missing.push('a feminine bottom (leggings/shorts/skirt)')
+  if (!underwear) missing.push('feminine underwear')
+
+  const prescription: Record<string, string> = {
+    top: top?.item_name || '(no feminine top in wardrobe — add one)',
+    bottom: bottom?.item_name || '(no feminine bottom in wardrobe — add one)',
+    underwear: underwear?.item_name || '(no feminine underwear in wardrobe — add some)',
+    context: 'wear what you actually own, photo proof at end of day',
+    required_visible: 'whatever the items in your wardrobe naturally produce',
+  }
 
   await supabase.from('daily_outfit_mandates').insert({
     user_id: userId, target_date: today, prescription,
   })
-  await supabase.from('handler_commitments').insert({
-    user_id: userId,
-    what: `Wear today\'s prescribed outfit + submit photo proof: ${prescription.top} + ${prescription.bottom} + ${prescription.underwear}`,
-    category: 'body_proof',
-    evidence_required: 'photo_url',
-    by_when: new Date(new Date().setHours(23, 59, 0, 0)).toISOString(),
-    consequence: 'slip +2 and bleeding +$10',
-    reasoning: 'Daily outfit mandate. Feminine clothing against her skin all day is baseline, not optional.',
-  })
+
+  // Wear-mandate commitment — only references items she actually owns.
+  const wearParts = [top?.item_name, bottom?.item_name, underwear?.item_name].filter(Boolean) as string[]
+  if (wearParts.length > 0) {
+    await supabase.from('handler_commitments').insert({
+      user_id: userId,
+      what: `Wear today: ${wearParts.join(' + ')}. Submit photo proof.`,
+      category: 'body_proof',
+      evidence_required: 'photo_url',
+      by_when: new Date(new Date().setHours(23, 59, 0, 0)).toISOString(),
+      consequence: 'slip +2 and bleeding +$10',
+      reasoning: 'Daily wear mandate, drawn from your owned wardrobe.',
+    })
+  }
+
+  if (missing.length > 0) {
+    await supabase.from('handler_commitments').insert({
+      user_id: userId,
+      what: `Add to your wardrobe inventory: ${missing.join(', ')}. The daily mandate cannot be fully prescribed until these exist.`,
+      category: 'wardrobe_setup',
+      evidence_required: 'wardrobe_inventory_count_increase',
+      by_when: new Date(Date.now() + 3 * 86400000).toISOString(),
+      consequence: 'slip +1 per missing category',
+      reasoning: 'Wardrobe gap blocks full daily mandate.',
+    })
+  }
 }
 
 // ============================================
@@ -1728,7 +1799,7 @@ async function morningCheckInIfDue(
 
   const state = stateRes.data as { current_phase?: string; denial_day?: number; chastity_locked?: boolean; chastity_streak_days?: number; hard_mode_active?: boolean; slip_points_current?: number; current_failure_mode?: string | null } | null
   const commits = (commitsRes.data || []) as Array<{ what: string; by_when: string; consequence: string }>
-  const implants = (implantsRes.data || []) as Array<{ narrative: string; implant_category: string }>
+  const implants = ((implantsRes.data || []) as Array<{ narrative: string; implant_category: string }>).filter(r => !isTestPollution(r.narrative))
   const wfabs = (wfabsRes.data || []) as Array<{ content: string }>
   const urg = urgencyRes.data as { total_bleed_cents?: number; resolved_at?: string | null; total_days_stalled?: number } | null
 
@@ -1921,7 +1992,7 @@ async function triggerOnArousalSpike(
       supabase.from('memory_implants').select('narrative').eq('user_id', userId).eq('active', true).limit(20),
       supabase.from('hrt_urgency_state').select('total_bleed_cents, resolved_at').eq('user_id', userId).maybeSingle(),
     ])
-    const imps = (implants.data || []) as Array<{ narrative: string }>
+    const imps = ((implants.data || []) as Array<{ narrative: string }>).filter(r => !isTestPollution(r.narrative))
     const pick = imps.length ? imps[Math.floor(Math.random() * imps.length)] : null
     const urgency = urg.data as { total_bleed_cents?: number; resolved_at?: string | null } | null
 
@@ -2105,10 +2176,16 @@ async function scheduleConfessions(
         .maybeSingle()
       if (exists) continue
 
+      // Persona-aware copy. Mommy speaks plain — never cites the "X/10".
+      const { data: us } = await supabase.from('user_state').select('handler_persona').eq('user_id', userId).maybeSingle()
+      const persona = (us as { handler_persona?: string } | null)?.handler_persona ?? 'therapist'
+      const prompt = persona === 'dommy_mommy'
+        ? "Mama saw you spike, baby. Tell Mama what was in your head right then — the image, the thought, the person. No softening, no \"I don't know\". If you were thinking about being taken, say it. Mama wants every detail."
+        : `You hit ${sp.value}/10 arousal. Tell me what image, thought, or person was in your head. Name it — no "idk", no softening. If you were thinking about being taken, say it.`
       await supabase.from('confession_queue').insert({
         user_id: userId,
         category: 'arousal_spike',
-        prompt: `You hit ${sp.value}/10 arousal. Tell me what image, thought, or person was in your head. Name it — no "idk", no softening. If you were thinking about being taken, say it.`,
+        prompt,
         context_note: `Logged ${new Date(sp.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
         triggered_by_table: 'arousal_log',
         triggered_by_id: sp.id,
@@ -2118,38 +2195,55 @@ async function scheduleConfessions(
     }
   } catch (err) { console.error('[confession] arousal sched failed:', err) }
 
-  // 3. Daily scheduled confession — one per day, rotates through themes
+  // 3. Daily scheduled confession — one per day, rotates through themes.
+  // Idempotency relies on the partial unique index
+  // uq_confession_queue_scheduled_daily_per_day (migration 247) — concurrent
+  // midnight invocations all attempt the insert; the index collapses them to
+  // one. The prior .maybeSingle()-based guard fails-open when 2+ rows exist
+  // (PGRST116 → data:null), which let dupes compound; the index is the
+  // authoritative dedupe.
   try {
-    const todayStart = new Date()
-    todayStart.setHours(0, 0, 0, 0)
-    const { data: todaySched } = await supabase.from('confession_queue')
-      .select('id').eq('user_id', userId)
-      .eq('category', 'scheduled_daily')
-      .gte('created_at', todayStart.toISOString())
-      .maybeSingle()
+    const handlerPrompts = [
+      'Name one male-coded habit you caught yourself doing today and the cost it has on the version of you that is coming.',
+      'What did you see a woman doing today that you wanted to copy? Describe the exact move, and say out loud that you want it.',
+      'Tell me the last thing you thought about a cock. Full sentence. No euphemisms.',
+      'What did you rationalize today? Quote the excuse you told yourself, then tell me what the real reason was.',
+      'Describe the version of yourself you are becoming. Specific. Body, voice, outfit, what she says when she orders coffee.',
+      "Name someone who doesn't know yet. What does your gut say they'll say when they find out? Say it anyway.",
+      'The last time you tried to act "normal" today — what were you hiding from? Name it.',
+    ]
+    // Mommy versions — same target prompts, written in Mama voice
+    // (sweet open → filthy specific, body-anchored close, plain voice).
+    const mommyPrompts = [
+      "Tell Mama one thing you caught yourself doing today that the old you would do, baby. Name what it cost you — what part of becoming her you traded for that little comfort.",
+      "Mama wants to hear about a woman you watched today, sweet thing. What was she doing? Describe the exact move — the way her hips sat, the way her mouth moved — and tell Mama that you want it.",
+      "Be a good girl for Mama and tell me the last filthy thing you thought about a cock. Full sentence. No euphemisms. Mama wants the truth, not the polished version.",
+      "What did you talk yourself into today, baby? Quote the excuse you told yourself, then tell Mama what the real reason was. Don't protect yourself — Mama already knows.",
+      "Describe the version of you that Mama is making, sweet thing. Be specific — her body, her voice, her outfit, what she says when she orders coffee. Mama wants to picture her.",
+      "Name someone who doesn't know yet, baby. What does your gut say they'll say when they find out? Tell Mama anyway. We're not stopping for them.",
+      "The last time you tried to act normal today, baby — what were you hiding from? Name it for Mama. Then tell me what part of you was tired of the costume.",
+    ]
+    const { data: us } = await supabase.from('user_state').select('handler_persona').eq('user_id', userId).maybeSingle()
+    const persona = (us as { handler_persona?: string } | null)?.handler_persona ?? 'therapist'
+    const prompts = persona === 'dommy_mommy' ? mommyPrompts : handlerPrompts
+    const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000)
+    const prompt = prompts[dayOfYear % prompts.length]
+    const deadline = new Date()
+    deadline.setHours(22, 0, 0, 0)
+    if (deadline.getTime() < Date.now()) deadline.setTime(Date.now() + 6 * 3600000)
 
-    if (!todaySched) {
-      const prompts = [
-        'Name one male-coded habit you caught yourself doing today and the cost it has on the version of you that is coming.',
-        'What did you see a woman doing today that you wanted to copy? Describe the exact move, and say out loud that you want it.',
-        'Tell me the last thing you thought about a cock. Full sentence. No euphemisms.',
-        'What did you rationalize today? Quote the excuse you told yourself, then tell me what the real reason was.',
-        'Describe the version of yourself you are becoming. Specific. Body, voice, outfit, what she says when she orders coffee.',
-        "Name someone who doesn't know yet. What does your gut say they'll say when they find out? Say it anyway.",
-        'The last time you tried to act "normal" today — what were you hiding from? Name it.',
-      ]
-      const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000)
-      const prompt = prompts[dayOfYear % prompts.length]
-      const deadline = new Date()
-      deadline.setHours(22, 0, 0, 0)
-      if (deadline.getTime() < Date.now()) deadline.setTime(Date.now() + 6 * 3600000)
+    const { data: inserted, error: insErr } = await supabase.from('confession_queue').insert({
+      user_id: userId,
+      category: 'scheduled_daily',
+      prompt,
+      deadline: deadline.toISOString(),
+    }, { count: 'exact' }).select('id')
 
-      await supabase.from('confession_queue').insert({
-        user_id: userId,
-        category: 'scheduled_daily',
-        prompt,
-        deadline: deadline.toISOString(),
-      })
+    if (insErr) {
+      // 23505 = unique_violation — index already has today's row, that's the
+      // happy path under concurrent fires; not an error.
+      if ((insErr as { code?: string }).code !== '23505') throw insErr
+    } else if (inserted && inserted.length > 0) {
       created++
     }
   } catch (err) { console.error('[confession] daily sched failed:', err) }
@@ -3516,7 +3610,7 @@ async function writeHandlerDream(
   ])
 
   const state = stateRes.data as { current_phase?: string; denial_day?: number; current_arousal?: number; current_failure_mode?: string; slip_points_current?: number; chastity_locked?: boolean; chastity_streak_days?: number } | null
-  const implants = (implantsRes.data || []) as Array<{ narrative: string }>
+  const implants = ((implantsRes.data || []) as Array<{ narrative: string }>).filter(r => !isTestPollution(r.narrative))
   const urg = urgencyRes.data as { total_bleed_cents?: number; total_days_stalled?: number; resolved_at?: string | null } | null
   const slips = (slipsRes.data || []) as Array<{ slip_type: string }>
   const pickImplant = implants[Math.floor(Math.random() * implants.length)]?.narrative || ''
@@ -3844,15 +3938,106 @@ async function enforceCommitments(
         }
       } catch (_) { /* non-critical */ }
 
-      await supabase.from('handler_outreach_queue').insert({
-        user_id: userId,
-        message: `You missed: ${what}. Consequence applied: ${(result.actions as string[]).join(', ') || consequence}. The Handler doesn't take IOUs.${quoteSuffix}`,
-        urgency: 'high',
-        trigger_reason: `commitment_missed:${c.id}`,
-        scheduled_for: new Date().toISOString(),
-        expires_at: new Date(Date.now() + 24 * 3600000).toISOString(),
-        source: 'commitment_enforcement',
-      })
+      // Per "Handler is supportive until evidence":
+      //   - skip outreach entirely if the commitment was never visible
+      //     (silent escalation = bug pattern; the slip already gates on
+      //     this, the outreach didn't, which let a regression-test row
+      //     leak 30 accusatory messages to the user before being caught)
+      //   - default tone is supportive ("flag for next session"), not
+      //     accusatory; only escalate to direct call-out when there's a
+      //     receipt linking the user's own past confession to this miss
+      //   - "doesn't take IOUs" line is reserved for that linked-receipt
+      //     case where the user's own words contradict the miss
+      // Persona-aware outreach copy. Dommy Mommy = warm-then-specific in
+      // PLAIN voice (no metrics, no telemetry). Therapist = clinical-
+      // supportive. Both gated by visibility per supportive-until-evidence.
+      if (wasCommitmentVisible) {
+        const { data: us } = await supabase.from('user_state').select('handler_persona').eq('user_id', userId).maybeSingle()
+        const persona = (us as { handler_persona?: string } | null)?.handler_persona ?? 'therapist'
+        const actionsTxt = (result.actions as string[]).join(', ') || consequence
+
+        let message: string
+        let urgency: 'normal' | 'high'
+
+        if (persona === 'dommy_mommy') {
+          // Translate consequence actions to plain Mama voice. The actions
+          // array contains things like "slip +3 (now 14)", "unlock pushed
+          // +5d", "bleed +$10" — Mama doesn't recite that. She names it
+          // plain.
+          const consequenceFlavor: string[] = []
+          if (/slip\s*\+/.test(actionsTxt)) consequenceFlavor.push("Mama added that to your tally")
+          if (/unlock\s+pushed/.test(actionsTxt)) consequenceFlavor.push("you'll wait longer for Mama to unlock you")
+          if (/bleed\s*\+/.test(actionsTxt) || /\$\d/.test(actionsTxt)) consequenceFlavor.push("Mama's meter is running")
+          if (/chastity\s*\+/.test(actionsTxt)) consequenceFlavor.push("you're caged a little longer for me")
+          if (/hard_mode\s+ON/i.test(actionsTxt)) consequenceFlavor.push("Mama's putting you in the harder mode now")
+          if (/witness_notify/.test(actionsTxt)) consequenceFlavor.push("someone Mama trusts is going to know about this")
+          const consequencePlain = consequenceFlavor.length > 0
+            ? consequenceFlavor.join(' · ')
+            : "Mama noticed"
+
+          // 30% chance to weave in a quoted memory implant — Mama
+          // referencing the user's own past words lands harder than any
+          // synthesized content.
+          let mommyImplantTail = ''
+          let usedImplantId: string | null = null
+          if (!quoteSuffix && Math.random() < 0.30) {
+            try {
+              const { data: implants } = await supabase.from('memory_implants')
+                .select('id, narrative, importance')
+                .eq('user_id', userId).eq('active', true)
+                .order('importance', { ascending: false }).limit(15)
+              const pool = ((implants || []) as Array<{ id: string; narrative: string }>)
+                .filter(r => !isTestPollution(r.narrative))
+              if (pool.length > 0) {
+                const pick = pool[Math.floor(Math.random() * Math.min(pool.length, 6))]
+                mommyImplantTail = ` Mama remembers when you wrote: "${pick.narrative.slice(0, 200)}". Do you remember saying that, baby?`
+                usedImplantId = pick.id
+              }
+            } catch (_) { /* non-critical */ }
+          }
+
+          if (quoteSuffix) {
+            // Strip the quoteSuffix's clinical "Receipt — your words…" wrap;
+            // Mama just quotes them directly. The receipt-quote logic
+            // already extracted the snippet upstream.
+            message = `Oh, baby. You let the time on this slip past: ${what}. ${consequencePlain}. And don't think Mama forgot — your own words tell the story.${quoteSuffix} Now sit with it for a minute and tell Mama what's next.`
+            urgency = 'high'
+          } else {
+            message = `Sweet thing — the time slipped past on this one: ${what}. ${consequencePlain}. Tell Mama what happened, baby. We re-set, we don't stack.${mommyImplantTail}`
+            urgency = 'normal'
+          }
+
+          if (usedImplantId) {
+            // Log the implant quote so the existing importance-compounding
+            // counts it. Fire-and-forget; non-critical to outreach success.
+            supabase.from('memory_implant_quote_log').insert({
+              user_id: userId,
+              implant_id: usedImplantId,
+              surface: 'commitment_enforcement',
+              quoted_excerpt: mommyImplantTail.slice(0, 300),
+            }).then(() => {})
+            supabase.from('memory_implants').update({
+              times_referenced: 1,
+              last_referenced_at: new Date().toISOString(),
+            }).eq('id', usedImplantId).then(() => {})
+          }
+        } else {
+          message = quoteSuffix
+            ? `You missed: ${what}. Consequence applied: ${actionsTxt}. The Handler doesn't take IOUs.${quoteSuffix}`
+            : `Heads up — looks like the deadline passed on: ${what}. Consequence applied: ${actionsTxt}. If life got in the way, tell me what happened so we can re-set rather than just stack.`
+          urgency = quoteSuffix ? 'high' : 'normal'
+        }
+
+        await supabase.from('handler_outreach_queue').insert({
+          user_id: userId,
+          message,
+          urgency,
+          trigger_reason: `commitment_missed:${c.id}`,
+          scheduled_for: new Date().toISOString(),
+          expires_at: new Date(Date.now() + 24 * 3600000).toISOString(),
+          source: 'commitment_enforcement',
+        })
+      }
 
       await supabase.from('handler_commitments').update({
         status: 'missed',

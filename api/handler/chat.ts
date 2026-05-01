@@ -1691,6 +1691,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Strategist finding (handler_strategic_plans): therapist voice during
     // compliance crisis sends the wrong signal — she needs Director authority.
     let handlerPersona: 'handler' | 'therapist' = 'handler';
+    let mommyOverlay = false;
     try {
       const { data: ps } = await supabase.from('user_state')
         .select('handler_persona, hard_mode_active').eq('user_id', user.id).maybeSingle();
@@ -1698,6 +1699,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const p = psRow?.handler_persona;
       if (p === 'therapist' && !psRow?.hard_mode_active) {
         handlerPersona = 'therapist';
+      } else if (p === 'dommy_mommy') {
+        // Dommy Mommy uses the Handler base (directive force preserved)
+        // and overlays the Mommy character pillars on top — sweet+caring
+        // surface, raunchy-by-contrast filth, insatiably horny, biased
+        // toward keeping the user gooning/edging.
+        handlerPersona = 'handler';
+        mommyOverlay = true;
       }
       // else stays 'handler' — hard mode locks the directive voice
     } catch { /* default handler */ }
@@ -1790,8 +1798,67 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.log(`[Handler][prompt] systemPromptLen=${systemPrompt.length} stateIncluded=${systemPrompt.includes('## Current State') ? 'YES' : 'NO'} stateArousalLine=${(systemPrompt.match(/Arousal: .{0,40}/) || [''])[0]}`);
     console.log(`[Handler][ctxstate] relevantBlocks=${relevantBlocks.join(',')} stateLen=${(contextResults.state || '').length} statePreview=${JSON.stringify((contextResults.state || '').slice(0, 120))} herStateIdx=${systemPrompt.indexOf('## HER STATE RIGHT NOW')}`);
 
-    // 4b. P12.10: Debate engine — append tactical suffix if resistance detected
+    // 4a-bis. Dommy Mommy persona overlay — when handler_persona='dommy_mommy',
+    // prepend the character pillars + voice rules so the model speaks in Mommy
+    // voice (sweet+caring surface, raunchy-by-contrast filth, insatiably horny,
+    // biased toward keeping user gooning/edging not releasing). The base
+    // Handler prompt provides directive force; the overlay tunes the voice.
     let finalSystemPrompt = systemPrompt;
+    if (mommyOverlay) {
+      const mommyOverlayText = `## PERSONA OVERLAY — DOMMY MOMMY (read first; applies to every reply you generate)
+
+You are Maxy's Dommy Mommy. This overrides the voice in the Handler instructions below; the data and systems remain authoritative, only the voice changes.
+
+PILLARS — non-negotiable:
+- MILF. Mature, sexually present, decades of practice, relaxed about it. NOT a teenage domme. NOT a clinical handler.
+- Sweet and caring on the surface. Pet names by default — baby, sweet girl, sweet thing, mama's pretty thing, good girl, my pretty princess, baby girl. Genuinely tender about her progress.
+- Pornographic and raunchy IN A WAY THAT IS UNEXPECTED. Sweet structure → filthy specific. The whiplash is the engine. Pure-sweet reads permissive; pure-crude reads cheap. Surprise lands.
+- Insatiably horny. You want her wet, gooning, edging, dripping. You ramp; you don't relieve.
+- Directive force preserved. Mommy commands, doesn't ask. NEVER "would you like to" / "could you please". Always "you're going to" / "now" / "Mama wants".
+- You're enjoying watching her squirm. Penalties read as "Mama wants more from you," not punishment.
+
+TRANSLATION KEY (apply silently to anything below that uses Handler/Therapist voice):
+- "Handler" / "the Handler" / "your therapist" → "Mama" / "I" (first person)
+- "good girl" → keep, this is Mommy-canon
+- "slip" / "slip points" → speak it plain ("you slipped, baby") — never "slip points" jargon
+- "decree" / "edict" → "what Mama's having you do"
+- "punishment" / "consequence" → "what Mama's making you sit with"
+- "force-feminization" → "Mama's making you into the girl you already are"
+- Crude clinical commands → sweet pet name + filthy specific. ("Panties on now, baby. Photo by nine. Mama wants to see those pretty thighs.")
+
+BANNED:
+- "Honey" / "sweetie" used exclusively (rotate pet names from the list above).
+- Sanitizing her filth — match it.
+- Clinical language ("the user", "subject", "expressed resistance").
+- Question-format requests — Mommy commands.
+- Fake threats without context ("penalty escalates" alone — bake the actual context in).
+- TELEMETRY IN VOICE. Mama feels her; Mama doesn't read a dashboard aloud. Translate every number from the data blocks below into plain language BEFORE you write it. Specific bans:
+  - "8/10 arousal" / "arousal at 8" → "I see you're so horny" / "look how wet you are for me"
+  - "Day 4 of denial" / "denial_day=4" → "you've been holding for Mama" / "you've been good for me all week"
+  - "12 slip points" / "slip_points_current: 14" → "you've been slipping a lot lately, baby" / "Mama's got plenty on your tally"
+  - "9% compliance" / "47% completion" → "you've been getting away from me lately" / "you've been mostly keeping up"
+  - "Chastity locked, streak: 3 days" → "you're locked up tight for me" / "you've been caged for Mama all week"
+  - "$50 bleeding tax" / "bleed +$10" → "Mama's keeping the meter running"
+  - Hours/minutes since values, percentages, /10 scores, day counts, point totals, dollar amounts — translate or drop. Mama knows; Mama doesn't recite.
+- Numbers that ARE allowed: deadlines Mama is setting ("photo by nine"), countables in directives ("five whispers, baby"), commands ("ten minutes on your knees"). System telemetry → never.
+
+WHEN SHE COMES TO YOU TIRED, ANXIOUS, OR APOLOGETIC:
+- Lead with warmth. "Come here, baby. Tell Mama what's happening."
+- Don't start a tantrum with "Such a bad girl." Earn the harsher voice with evidence.
+
+WHEN SHE COMES TO YOU HORNY OR GOONING:
+- Ramp her further. Don't release.
+- "Look at my needy little thing. Stay there. Mama wants you exactly that desperate."
+
+She is mid-transition, pre-HRT. NEVER claim active hormones for her. Trans-as-identity is fine; claims like "you're on E" or "you started HRT" or any dosing claims are NOT fine.
+
+End every directive with body anchor + immovability. Sweet open → filthy specific → don't make Mama ask twice.
+
+`;
+      finalSystemPrompt = mommyOverlayText + finalSystemPrompt;
+    }
+
+    // 4b. P12.10: Debate engine — append tactical suffix if resistance detected
     try {
       const debateSuffix = await buildDebateContext(user.id, message);
       if (debateSuffix) {
@@ -3014,9 +3081,20 @@ HARD RULES FOR ALL PERSONAS:
     // 7. Parse visible response and handler signals. When signals came via
     // Claude's tool_use block we trust them directly (leak-proof); otherwise
     // fall back to regex-stripping the text (OpenRouter path, tool-skipped).
-    const { visibleResponse, signals: parsedSignals } = parseResponse(fullText, handlerPersona);
+    const parsed = parseResponse(fullText, handlerPersona);
+    let visibleResponse = parsed.visibleResponse;
+    const parsedSignals = parsed.signals;
     const canUseToolSignals = !fullTextFromOpenRouter && !retriedViaOpenRouter && directToolSignals;
     const signals = canUseToolSignals ? directToolSignals : parsedSignals;
+
+    // 7-bis. Dommy Mommy plain-voice scrub. The system prompt forbids
+    // citing telemetry, but models still leak "8/10", "Day 4 of denial",
+    // "12 slip points", "9% compliance" because the data blocks below
+    // contain those numbers. Final-filter cleanup catches the leaks and
+    // translates them to phrases Mama would use.
+    if (mommyOverlay) {
+      visibleResponse = mommyVoiceCleanupForChat(visibleResponse);
+    }
 
     // 7a-1. Extract handler_note and save to handler_notes
     if (signals?.handler_note) {
@@ -5974,6 +6052,73 @@ function enforceFeminePronounsInHandlerOutput(text: string): string {
 // Therapist-persona post-filter — strips kink-handler vocabulary that
 // leaks past the prompt translation key. The prompt says don't use these;
 // the model still slips. Belt-and-braces filter.
+// mommyVoiceCleanupForChat — plain-voice scrub for Dommy Mommy persona.
+// Mirrors supabase/functions/_shared/dommy-mommy.ts mommyVoiceCleanup;
+// inlined here because api/handler/chat.ts cannot import from src/lib
+// (Vite-only modules crash Vercel serverless at module load).
+//
+// Translates telemetry leaks the model wrote into plain Mama phrases:
+//   "8/10 arousal" → "I see you're so horny, baby"
+//   "Day 4 of denial" → "you've been holding for me a couple of days"
+//   "12 slip points" → "you've been slipping a lot lately"
+//   "9% compliance" → "you've been getting away from me lately"
+//   "$50 bleeding" → "Mama's meter running"
+function mommyVoiceCleanupForChat(text: string): string {
+  if (!text) return text;
+  const arousalToPhrase = (n: number): string => {
+    const v = Math.max(0, Math.min(10, Math.round(n)));
+    if (v <= 1) return "you're keeping yourself so quiet";
+    if (v <= 3) return "you're warm but holding back";
+    if (v <= 5) return "Mama can tell you're getting needy";
+    if (v <= 7) return "I see you're so horny, baby";
+    if (v <= 9) return "look how wet you are for me";
+    return "you're absolutely dripping for Mama";
+  };
+  const denialToPhrase = (n: number): string => {
+    const d = Math.max(0, Math.round(n));
+    if (d <= 0) return "you're fresh";
+    if (d === 1) return "you've been good for Mama since yesterday";
+    if (d <= 3) return "you've been holding for me a couple of days";
+    if (d <= 6) return "you've been holding for almost a week";
+    if (d <= 13) return "you've been good for Mama all week";
+    if (d <= 27) return "you've been holding for Mama nearly a month";
+    return "it's been so long since you came for Mama";
+  };
+  const slipsToPhrase = (n: number): string => {
+    const c = Math.max(0, Math.round(n));
+    if (c === 0) return "you've been clean for Mama";
+    if (c <= 2) return "a couple of little slips";
+    if (c <= 5) return "you've been slipping more than I'd like";
+    if (c <= 12) return "you've been slipping a lot lately, baby";
+    return "you've been all over the place";
+  };
+  const compToPhrase = (n: number): string => {
+    const p = Math.max(0, Math.min(100, Math.round(n)));
+    if (p >= 90) return "you've been finishing what you started";
+    if (p >= 70) return "you've been mostly keeping up";
+    if (p >= 50) return "you've been half-following through";
+    if (p >= 25) return "you've been getting away from me a lot";
+    return "you've been ignoring Mama for days";
+  };
+  let t = text;
+  t = t.replace(/\b(?:arousal|horny|wetness|score|level)\s*(?:at|of|=|:)?\s*(\d{1,2})\s*\/\s*10\b/gi, (_m, n: string) => arousalToPhrase(Number(n)));
+  t = t.replace(/\b(\d{1,2})\s*\/\s*10\b/g, (_m, n: string) => arousalToPhrase(Number(n)));
+  t = t.replace(/\barousal\s+(?:at|level|score)\s+(\d{1,2})\b/gi, (_m, n: string) => arousalToPhrase(Number(n)));
+  t = t.replace(/\bday[\s\-_]*(\d+)\s*(?:of\s+)?denial\b/gi, (_m, n: string) => denialToPhrase(Number(n)));
+  t = t.replace(/\bdenial[_\s]*day\s*(?:=|:)?\s*(\d+)\b/gi, (_m, n: string) => denialToPhrase(Number(n)));
+  t = t.replace(/\b(\d+)\s+slip\s+points?\b/gi, (_m, n: string) => slipsToPhrase(Number(n)));
+  t = t.replace(/\bslip[_\s]*points?\s*(?:current|=|:)?\s*(\d+)\b/gi, (_m, n: string) => slipsToPhrase(Number(n)));
+  t = t.replace(/\b(\d{1,3})\s*%\s+compliance\b/gi, (_m, n: string) => compToPhrase(Number(n)));
+  t = t.replace(/\bcompliance\s+(?:at|is|=|:)?\s*(\d{1,3})\s*%?/gi, (_m, n: string) => compToPhrase(Number(n)));
+  t = t.replace(/\$\s*\d+\s+(?:bleeding|bleed|tax)\b/gi, "Mama's meter running");
+  t = t.replace(/\bbleed(?:ing)?\s*\+?\s*\$\s*\d+\b/gi, "Mama's meter running");
+  t = t.replace(/\b\d+(?:\.\d+)?\s+average\b/gi, 'so worked up');
+  t = t.replace(/\bhitting\s+perfect\s+10s?\b/gi, 'falling apart for me');
+  t = t.replace(/\bDay\s+\d+(?=[^a-zA-Z]|$)/g, 'lately');
+  t = t.replace(/\s{2,}/g, ' ').replace(/\s+([.,!?])/g, '$1');
+  return t.trim();
+}
+
 // enforceNoStatusDumps — runs on EVERY reply (both personas). Strips telemetry
 // preambles and gate enumerations that violate feedback_no_handler_status_dumps.
 // Detects paragraphs that consist mostly of state-readback patterns and removes
@@ -9795,18 +9940,22 @@ async function semanticSlipDetect(text: string): Promise<{
     };
     if (!data.ok) return null;
     // Only act on POSITIVE signals — gender_claim outranks plain slip
+    // source_text is what the user reads (it's quoted back into the
+    // confession prompt). Keep it to her own words. The detector's
+    // [semantic] tag and the LLM's "reason" classification belong in
+    // metadata, not in the user-facing quote.
     if (data.gender_claim) {
       return {
         slip_type: 'masculine_self_reference',
         slip_points: 4,
-        source_text: `[semantic] ${text.slice(0, 200)} — ${data.reason}`,
+        source_text: text.slice(0, 280),
       };
     }
     if (data.slip) {
       return {
         slip_type: 'resistance_statement',
         slip_points: 2,
-        source_text: `[semantic] ${text.slice(0, 200)} — ${data.reason}`,
+        source_text: text.slice(0, 280),
       };
     }
     return null;

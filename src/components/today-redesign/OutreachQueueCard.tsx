@@ -14,7 +14,7 @@ interface Outreach {
   urgency: string;
   trigger_reason: string;
   scheduled_for: string;
-  sent_at: string | null;
+  delivered_at: string | null;
   expires_at: string;
   source: string;
 }
@@ -24,21 +24,31 @@ export function OutreachQueueCard() {
   const [pending, setPending] = useState<Outreach[]>([]);
   const [recent, setRecent] = useState<Outreach[]>([]);
 
+  const ack = useCallback(async (id: string) => {
+    if (!user?.id) return;
+    await supabase.from('handler_outreach_queue')
+      .update({ delivered_at: new Date().toISOString(), status: 'delivered' })
+      .eq('id', id);
+    // Refresh the lists so the row jumps from pending → recent
+    setPending(p => p.filter(o => o.id !== id));
+    window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'outreach_ack', id } }));
+  }, [user?.id]);
+
   const load = useCallback(async () => {
     if (!user?.id) return;
     const [pRes, rRes] = await Promise.all([
       supabase.from('handler_outreach_queue')
-        .select('id, message, urgency, trigger_reason, scheduled_for, sent_at, expires_at, source')
+        .select('id, message, urgency, trigger_reason, scheduled_for, delivered_at, expires_at, source')
         .eq('user_id', user.id)
-        .is('sent_at', null)
+        .is('delivered_at', null)
         .gte('expires_at', new Date().toISOString())
         .order('scheduled_for', { ascending: true })
         .limit(8),
       supabase.from('handler_outreach_queue')
-        .select('id, message, urgency, trigger_reason, scheduled_for, sent_at, expires_at, source')
+        .select('id, message, urgency, trigger_reason, scheduled_for, delivered_at, expires_at, source')
         .eq('user_id', user.id)
-        .not('sent_at', 'is', null)
-        .order('sent_at', { ascending: false })
+        .not('delivered_at', 'is', null)
+        .order('delivered_at', { ascending: false })
         .limit(3),
     ]);
     setPending((pRes.data || []) as Outreach[]);
@@ -90,9 +100,21 @@ export function OutreachQueueCard() {
                     {mins <= 0 ? 'now' : mins < 60 ? `in ${mins}m` : `in ${Math.floor(mins / 60)}h`}
                   </span>
                 </div>
-                <div style={{ fontSize: 11, color: '#c8c4cc', lineHeight: 1.4 }}>
+                <div style={{ fontSize: 11, color: '#c8c4cc', lineHeight: 1.4, marginBottom: 6 }}>
                   {o.message.slice(0, 240)}{o.message.length > 240 ? '…' : ''}
                 </div>
+                <button
+                  onClick={() => ack(o.id)}
+                  style={{
+                    background: 'transparent', color: urgencyColor(o.urgency),
+                    border: `1px solid ${urgencyColor(o.urgency)}55`,
+                    padding: '3px 9px', borderRadius: 4,
+                    fontSize: 10, fontWeight: 600, letterSpacing: '0.04em',
+                    fontFamily: 'inherit', cursor: 'pointer', textTransform: 'uppercase',
+                  }}
+                >
+                  got it →
+                </button>
               </div>
             );
           })}
@@ -105,7 +127,7 @@ export function OutreachQueueCard() {
             recently delivered
           </div>
           {recent.map(o => {
-            const sent = new Date(o.sent_at!).getTime();
+            const sent = new Date(o.delivered_at!).getTime();
             const ago = Math.round((Date.now() - sent) / 60000);
             return (
               <div key={o.id} style={{

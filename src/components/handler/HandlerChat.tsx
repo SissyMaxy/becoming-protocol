@@ -297,11 +297,16 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
         if (cnfId) {
           sessionStorage.removeItem('handler_chat_resolve_confession_id');
           import('../../lib/supabase').then(({ supabase }) => {
+            // Column is response_text (migration 234). Earlier code wrote
+            // to a non-existent `response` column; Postgres rejected the
+            // whole update, confessed_at never landed, FocusMode kept
+            // re-asking the same prompt every poll.
             supabase.from('confession_queue').update({
               confessed_at: new Date().toISOString(),
-              response: text.slice(0, 2000),
-            }).eq('id', cnfId).then(() => {
-              window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'confession', id: cnfId } }));
+              response_text: text.slice(0, 2000),
+            }).eq('id', cnfId).then(({ error }) => {
+              if (error) console.error('[HandlerChat] confession update failed:', error);
+              else window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'confession', id: cnfId } }));
             });
           });
         }

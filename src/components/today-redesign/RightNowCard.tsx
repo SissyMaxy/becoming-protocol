@@ -136,10 +136,14 @@ export function RightNowCard() {
     } else if (overdueConfs.data?.[0]) {
       const c = overdueConfs.data[0] as { id: string; prompt: string; deadline: string };
       const hours = Math.abs((new Date(c.deadline).getTime() - now) / 3600_000);
+      // Per "Handler is supportive until evidence" rule: don't threaten
+      // escalating penalty just because the clock moved. Past-deadline
+      // alone isn't evidence of avoidance — she might have just opened
+      // the app. State the timing fact, ask her to answer.
       chosen = {
         kind: 'overdue_confession',
         title: c.prompt.slice(0, 110),
-        detail: `Past deadline by ${fmtHours(hours)}. Penalty escalates the longer it sits.`,
+        detail: `Past deadline by ${fmtHours(hours)}. Answer it whenever you can — the Handler still wants the answer.`,
         ageHours: hours,
         ctaLabel: 'Answer it →',
         ctaScrollTo: 'card-confession-queue',

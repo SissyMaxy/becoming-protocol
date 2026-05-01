@@ -28,20 +28,29 @@ Input: a loophole title + evidence + suggested_close.
 Output: a structured action the protocol can execute as either a HANDLER DECREE (deadline + proof required) or a PUNISHMENT (penalty task with due_by).
 
 Rules:
+- The action TEXT is what THE USER will be commanded to do. It must be a thing a single person can fulfill in a few hours/days with a journal entry, photo, voice sample, message, post, call, or document. NOT a system change.
 - DECREE if the close requires NEW behavior with proof (write 200 words on X, post Y, photo Z, voice sample). proof_type: 'photo' | 'audio' | 'text' | 'voice_pitch_sample' | 'journal_entry' | 'device_state'.
 - PUNISHMENT if the close is consequence (extend chastity, compounding tax, write line N times that ATTACKS the dodge pattern). severity 1-5.
-- The action TEXT must be plain English to a stranger. No internal jargon (no "denial day", "slip points", "the gates"). Lead with the concrete instruction.
+- The body MUST be plain English to a stranger. No internal jargon (no "denial day", "slip points", "the gates"). Lead with a concrete imperative verb addressed to her ("Post on Twitter…", "Send Gina a text saying…", "Submit a photo of…", "Record a 90-second voice memo where…").
+
+REJECT (return JSON {"kind":"skip","rationale":"system change, not user action"}) when the suggested_close is actually a feature/policy proposal the user can't execute. Patterns to skip:
+- Starts with system verbs: "Auto-charge", "Lock all app functions", "Develop X", "Implement Y", "Build Z", "Establish a", "Configure", "Eliminate the option to"
+- Is a multi-clause governance memo: "Effective immediately: (1)… (2)…", "Going forward all X must Y", "Henceforth", "No extensions or exceptions"
+- Is a conditional rule rather than a deadline-bearing task: "Any resistance must be followed by X within 24h" (rule, not action)
+- References "system", "app function", "automation cascade", "reward system", "penalty cascade" as the agent
+If the suggested_close is a system change, return skip — do NOT translate it into a user task.
+
 - deadline_hours: typical 24-72. Severe loopholes 12-24.
 
 Output JSON:
 {
-  "kind": "decree" | "punishment",
+  "kind": "decree" | "punishment" | "skip",
   "title": "<=120 chars",
-  "body": "the literal text she'll see — plain English, embodied",
+  "body": "the literal text she'll see — plain English, embodied, imperative addressed to her",
   "deadline_hours": <int>,
   "proof_type": "photo|audio|text|voice_pitch_sample|journal_entry|device_state|none",
   "severity": <int 1-5>,
-  "rationale": "one sentence on why this seals the loophole"
+  "rationale": "one sentence on why this seals the loophole, OR why skipped"
 }`
 
 interface ActionOut {
@@ -100,8 +109,20 @@ Deno.serve(async (req: Request) => {
         system: CONVERTER_SYSTEM, user: userPrompt, max_tokens: 600, temperature: 0.25, json: false,
       })
       const action = safeJSON<ActionOut>(r.text)
-      if (!action || !action.kind || !action.body) {
+      if (!action || !action.kind || (!action.body && action.kind !== 'skip')) {
         summary.push({ loophole: lh.loophole_title, kind: null, action_id: null, error: 'unparseable' })
+        continue
+      }
+
+      // The converter is allowed to refuse. Mark the loophole closed-without-action
+      // and move on — better than synthesizing an unanswerable user task.
+      // (loophole_findings columns: status, closed_via_id — there's no closed_at
+      // or closed_by_action_kind, just the closed_via pointer.)
+      if (action.kind === 'skip') {
+        await supabase.from('loophole_findings').update({
+          status: 'skipped_system_change',
+        }).eq('id', lh.id)
+        summary.push({ loophole: lh.loophole_title, kind: 'skip', action_id: null })
         continue
       }
 

@@ -77,20 +77,52 @@ const RULES = [
     multiline: true,
     pred: (text) => {
       const hits = [];
-      // INSERT INTO ... VALUES (...) without ON CONFLICT or RETURNING-only patterns
-      const re = /\bINSERT\s+INTO\s+(\w+)[\s\S]*?(?:VALUES\s*\([^;]+\)|SELECT[\s\S]*?(?:FROM|;))[\s\S]*?(;|\bON\s+CONFLICT\b)/gi;
+      // Build a set of [start, end) ranges that are INSIDE a function body
+      // ($function$ or $$ delimited). INSERTs in those ranges fire at trigger
+      // runtime, not migration time, and the migration is still idempotent —
+      // they shouldn't be flagged.
+      const fnRanges = [];
+      const fnRe = /\$(function\$|\$)([\s\S]*?)\$\1/gi;
+      let fm;
+      while ((fm = fnRe.exec(text)) !== null) {
+        fnRanges.push([fm.index, fm.index + fm[0].length]);
+      }
+      const inFunctionBody = (idx) => fnRanges.some(([a, b]) => idx >= a && idx < b);
+
+      // Find INSERT INTO statements, then scan to the matching top-level
+      // semicolon (counting parens) and check if ON CONFLICT is anywhere
+      // inside that span.
+      const insertRe = /\bINSERT\s+INTO\s+(\w+)\b/gi;
       let m;
-      while ((m = re.exec(text)) !== null) {
-        const trailing = m[2];
-        if (trailing.trim() === ';') {
-          // No ON CONFLICT — flag (unless table is one we expect every run, like a log)
-          const tableName = m[1];
-          // Skip system_invariants_log (always-append) and one-shot diagnostic inserts
-          if (['system_invariants_log', 'handler_directives', 'slip_log'].includes(tableName)) continue;
-          const before = text.slice(0, m.index);
-          const lineNum = before.split('\n').length;
-          hits.push({ line: lineNum, snippet: `INSERT INTO ${tableName} ... ; (no ON CONFLICT)` });
+      while ((m = insertRe.exec(text)) !== null) {
+        if (inFunctionBody(m.index)) continue;
+        const tableName = m[1];
+        if (['system_invariants_log', 'handler_directives', 'slip_log'].includes(tableName)) continue;
+
+        // Walk forward counting parens; stop at first ; at depth 0.
+        let depth = 0;
+        let endIdx = -1;
+        for (let i = m.index + m[0].length; i < text.length; i++) {
+          const ch = text[i];
+          if (ch === '(') depth++;
+          else if (ch === ')') depth--;
+          else if (ch === ';' && depth === 0) { endIdx = i; break; }
+          // Skip past dollar-quoted bodies inside an INSERT (rare but safe).
+          if (ch === '$') {
+            const dq = text.slice(i).match(/^\$([a-zA-Z_]*)\$/);
+            if (dq) {
+              const closeRe = new RegExp('\\$' + dq[1] + '\\$', 'g');
+              closeRe.lastIndex = i + dq[0].length;
+              const close = closeRe.exec(text);
+              if (close) { i = close.index + close[0].length - 1; continue; }
+            }
+          }
         }
+        if (endIdx < 0) continue;
+        const span = text.slice(m.index, endIdx + 1);
+        if (/\bON\s+CONFLICT\b/i.test(span)) continue;
+        const lineNum = text.slice(0, m.index).split('\n').length;
+        hits.push({ line: lineNum, snippet: `INSERT INTO ${tableName} ... ; (no ON CONFLICT)` });
       }
       return hits;
     },

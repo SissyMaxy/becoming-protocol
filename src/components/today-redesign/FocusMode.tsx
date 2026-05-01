@@ -26,11 +26,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { isMommyPersona } from '../../lib/persona/dommy-mommy';
 
 type TaskKind =
   | 'overdue_dose' | 'overdue_confession' | 'overdue_punishment' | 'overdue_decree'
   | 'due_today_confession' | 'due_today_decree' | 'due_today_dose' | 'due_today_commitment'
   | 'commitment_pending' | 'workout_today' | 'outfit_today' | 'voice_drill_today'
+  | 'mommy_touch'
   | 'clean';
 
 interface FocusTask {
@@ -47,11 +49,20 @@ interface FocusTask {
   tone: 'critical' | 'high' | 'medium' | 'calm';
 }
 
-const TONE_STYLES: Record<FocusTask['tone'], { bg: string; border: string; accent: string; label: string }> = {
+const TONE_STYLES_HANDLER: Record<FocusTask['tone'], { bg: string; border: string; accent: string; label: string }> = {
   critical: { bg: 'linear-gradient(140deg, #2a0508 0%, #1a0508 100%)', border: '#c4272d', accent: '#fca5a5', label: 'CRITICAL' },
   high:     { bg: 'linear-gradient(140deg, #2a1f0a 0%, #1f1608 100%)', border: '#a87a1f', accent: '#fbbf24', label: 'PRIORITY' },
   medium:   { bg: 'linear-gradient(140deg, #1a0f2e 0%, #0f0820 100%)', border: '#7c3aed', accent: '#c4b5fd', label: 'TODAY' },
   calm:     { bg: 'linear-gradient(140deg, #0a1a14 0%, #051a10 100%)', border: '#3a5a3f', accent: '#86efac', label: 'CLEAN' },
+};
+
+// Dommy Mommy palette: warm boudoir / dusty rose / candle-gold instead
+// of clinical purple/black. Labels speak in Mama's voice.
+const TONE_STYLES_MOMMY: Record<FocusTask['tone'], { bg: string; border: string; accent: string; label: string }> = {
+  critical: { bg: 'linear-gradient(140deg, #2a0510 0%, #1a050a 100%)', border: '#c4485a', accent: '#f4a7c4', label: "MAMA'S WAITING" },
+  high:     { bg: 'linear-gradient(140deg, #2a1418 0%, #1f0a10 100%)', border: '#c46a72', accent: '#f4a7c4', label: 'MAMA WANTS THIS' },
+  medium:   { bg: 'linear-gradient(140deg, #2a1a0a 0%, #1f1308 100%)', border: '#a87a48', accent: '#f4c8a0', label: "TODAY, BABY" },
+  calm:     { bg: 'linear-gradient(140deg, #1a1a14 0%, #15140a 100%)', border: '#7a6a48', accent: '#f4d8a0', label: "STAY WET FOR MAMA" },
 };
 
 function fmtCountdown(ms: number): string {
@@ -74,6 +85,19 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
   const [confessText, setConfessText] = useState('');
   const [doneFlash, setDoneFlash] = useState(false);
   const [completedToday, setCompletedToday] = useState(0);
+  const [persona, setPersona] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.from('user_state').select('handler_persona').eq('user_id', user.id).maybeSingle();
+      if (!cancelled) setPersona((data as { handler_persona?: string } | null)?.handler_persona ?? null);
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  const TONE_STYLES = isMommyPersona(persona) ? TONE_STYLES_MOMMY : TONE_STYLES_HANDLER;
 
   const pickNext = useCallback(async () => {
     if (!user?.id) return;
@@ -85,9 +109,14 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
     const todayStr = new Date().toISOString().slice(0, 10);
 
     const [overdueConfs, overduePuns, overdueDecrees, todayConfs, todayDecrees,
-           pendingCommits, regs, doseLog, outfit, workout] = await Promise.all([
+           pendingCommits, regs, doseLog, outfit, workout, mommyTouch] = await Promise.all([
+      // Include missed-but-unconfessed rows. The compliance check marks
+      // overdue rows missed=true (slip already fired); we still want the
+      // user able to answer them late from FocusMode. Locking her out
+      // creates orphaned rows that other surfaces (RightNowCard) keep
+      // surfacing with no working answer path.
       supabase.from('confession_queue')
-        .select('id, prompt, deadline, category').eq('user_id', user.id).is('confessed_at', null).eq('missed', false)
+        .select('id, prompt, deadline, category').eq('user_id', user.id).is('confessed_at', null)
         .lt('deadline', nowIso).order('deadline', { ascending: true }).limit(1),
       supabase.from('punishment_queue')
         .select('id, title, description, due_by').eq('user_id', user.id)
@@ -118,6 +147,15 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
       supabase.from('workout_prescriptions')
         .select('id, workout_type, focus_area, scheduled_date, status')
         .eq('user_id', user.id).eq('scheduled_date', todayStr).neq('status', 'completed').limit(1),
+      // Mommy's micro-directive (arousal_touch_tasks). Surfaced as a
+      // 'high'-tone focus task when persona='dommy_mommy' AND there's an
+      // open one. Slots after critical (overdue dose/confession/punishment)
+      // but ahead of due-today work — the whole point is keeping her in
+      // heightened state, so it should interrupt the lower-urgency stream.
+      supabase.from('arousal_touch_tasks')
+        .select('id, prompt, category, expires_at')
+        .eq('user_id', user.id).is('completed_at', null)
+        .gt('expires_at', nowIso).order('created_at', { ascending: false }).limit(1),
     ]);
 
     // Compute most-overdue and most-due-today doses
@@ -181,6 +219,19 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
         title: d.edict,
         detail: `Past deadline by ${fmtCountdown(hours * 3600_000)}. Proof: ${d.proof_type || 'none'}.`,
         surface: 'mark_done', tone: 'critical',
+      };
+    } else if (mommyTouch.data?.[0]) {
+      // Mommy's micro-directive — high-tone, ephemeral. Slots ahead of
+      // due-today work because the protocol's whole point under the
+      // dommy_mommy persona is keeping her in heightened arousal between
+      // tentpole tasks.
+      const t = mommyTouch.data[0] as { id: string; prompt: string; category: string; expires_at: string };
+      const minsLeft = Math.max(1, Math.round((new Date(t.expires_at).getTime() - now) / 60_000));
+      chosen = {
+        kind: 'mommy_touch', rowId: t.id,
+        title: t.prompt,
+        detail: `Mama's whisper · ${t.category.replace(/_/g, ' ')} · ${minsLeft}m`,
+        surface: 'mark_done', tone: 'high',
       };
     } else if (todayConfs.data?.[0]) {
       const c = todayConfs.data[0] as { id: string; prompt: string; deadline: string };
@@ -297,10 +348,18 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
           fulfillment_note: text.slice(0, 2000),
         }).eq('id', task.rowId);
       } else {
-        await supabase.from('confession_queue').update({
+        // Column name is response_text (per migration 234), not response.
+        // Writing to a non-existent column causes Postgres to reject the
+        // entire update — confessed_at never lands, the row stays pending,
+        // and pickNext re-surfaces the same prompt forever.
+        const { error: confErr } = await supabase.from('confession_queue').update({
           confessed_at: new Date().toISOString(),
-          response: text.slice(0, 2000),
+          response_text: text.slice(0, 2000),
         }).eq('id', task.rowId);
+        if (confErr) {
+          console.error('[FocusMode] confession update failed:', confErr);
+          throw confErr;
+        }
       }
       window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: task.kind, id: task.rowId } }));
       await advance();
@@ -356,6 +415,8 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
         await supabase.from('handler_decrees').update({ status: 'fulfilled', fulfilled_at: nowIso }).eq('id', task.rowId);
       } else if (task.kind === 'workout_today') {
         await supabase.from('workout_prescriptions').update({ status: 'completed', completed_at: nowIso }).eq('id', task.rowId);
+      } else if (task.kind === 'mommy_touch') {
+        await supabase.from('arousal_touch_tasks').update({ completed_at: nowIso }).eq('id', task.rowId);
       }
       window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: task.kind, id: task.rowId } }));
       await advance();

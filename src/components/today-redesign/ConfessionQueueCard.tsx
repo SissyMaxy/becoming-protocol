@@ -61,11 +61,18 @@ export function ConfessionQueueCard() {
   const load = useCallback(async () => {
     if (!user?.id) return;
     const [pendingRes, receiptsRes, totalsRes] = await Promise.all([
+      // Include missed-but-unconfessed rows. The compliance check marks
+      // overdue rows missed=true (a slip already fired); previously this
+      // query filtered them out, leaving them orphaned: RightNowCard would
+      // still surface them as OVERDUE CONFESSION (no missed filter there)
+      // with an "Answer it →" CTA that scrolled to card-confession-queue —
+      // but if every pending row was missed, this card returned null and
+      // the anchor didn't exist. The button silently did nothing.
+      // Letting the user answer late is better than locking her out.
       supabase.from('confession_queue')
         .select('id, category, prompt, context_note, deadline, created_at, response_text, confessed_at, missed')
         .eq('user_id', user.id)
         .is('confessed_at', null)
-        .eq('missed', false)
         .order('deadline', { ascending: true })
         .limit(6),
       supabase.from('confession_queue')

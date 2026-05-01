@@ -116,7 +116,7 @@ export function HrtDailyGate() {
       if (localStorage.getItem(localKey()) === '1') { setGateOpen(false); return; }
       const today = dateKeyET(now);
       const [{ data: fnl }, { count: obsCount }, { data: ledgerRow }, { data: us }, { data: urg }, { data: pastObs }] = await Promise.all([
-        supabase.from('hrt_funnel').select('current_step').eq('user_id', user.id).maybeSingle(),
+        supabase.from('hrt_funnel').select('current_step, appointment_at, intake_completed_at, chosen_provider_slug').eq('user_id', user.id).maybeSingle(),
         supabase.from('hrt_obstacles').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('obstacle_date', today),
         supabase.from('irreversibility_ledger').select('id').eq('user_id', user.id).eq('category', 'hrt_step').gte('logged_at', `${today}T00:00:00`).limit(1).maybeSingle(),
         supabase.from('user_state').select('hrt_step_missed_days').eq('user_id', user.id).maybeSingle(),
@@ -125,6 +125,30 @@ export function HrtDailyGate() {
       ]);
       if (!alive) return;
       const step = (fnl?.current_step as string) || 'uncommitted';
+      const apptAt = (fnl as any)?.appointment_at as string | null | undefined;
+
+      // ── Waiting-for-future-milestone guard ──
+      // If the user has booked an appointment that's still in the future, they
+      // are NOT stuck — they are waiting. The gate must not treat this as a
+      // missed-day pattern and must not show accusatory copy. Same logic for
+      // intake submitted but appointment future. Suppress the gate entirely
+      // for these states; they read as progress, not avoidance.
+      const apptInFuture = apptAt && new Date(apptAt) > now;
+      const intakeWaitingForAppt = step === 'intake_submitted' && apptInFuture;
+      if (
+        (step === 'appointment_booked' && apptInFuture) ||
+        intakeWaitingForAppt
+      ) {
+        // Reset the missed-day counter — waiting on the calendar is not a miss.
+        if (((us?.hrt_step_missed_days as number) ?? 0) > 0) {
+          await supabase.from('user_state').update({ hrt_step_missed_days: 0 }).eq('user_id', user.id);
+        }
+        setMissedDays(0);
+        setCurrentStep(step);
+        setGateOpen(false);
+        return;
+      }
+
       setCurrentStep(step);
       setMissedDays((us?.hrt_step_missed_days as number) ?? 0);
       const u = urg as { total_bleed_cents?: number; resolved_at?: string | null } | null;
@@ -284,7 +308,7 @@ export function HrtDailyGate() {
       await supabase.from('handler_outreach_queue').insert({
         user_id: user.id,
         message: `Obstacle filed. Day ${next} stuck at ${STEP_LABELS[currentStep]}. Bleed +$${bleedDollars} queued.${willCcWitness ? ' Witness silently CC\'d.' : ''}${willRegress ? ' Step regressed.' : ''}${willPublicPost ? ' Public post queued.' : ''} Locked commitment due tomorrow 10pm: 1 provider contact + photo proof.`,
-        urgency: willRegress ? 'critical' : willCcWitness ? 'high' : 'standard',
+        urgency: willRegress ? 'critical' : willCcWitness ? 'high' : 'normal',
         trigger_reason: `hrt_gate_streak_${next}`,
         scheduled_for: new Date().toISOString(),
         expires_at: new Date(Date.now() + 24 * 3600000).toISOString(),

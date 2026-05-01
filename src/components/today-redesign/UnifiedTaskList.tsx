@@ -1,16 +1,19 @@
 /**
  * UnifiedTaskList — single canonical "what do I owe right now" list.
- * Aggregates open items from 7 different sources (commitments, decrees,
- * confessions, outfit mandate, workout, punishment queue, directives)
- * into one overdue-first list. Solves the "I didn't see them" problem
- * — every task lives somewhere; this is the index.
+ * Aggregates open items from commitments, decrees, outfit mandate,
+ * workout, punishment queue, directives into one overdue-first list.
+ *
+ * Confessions are intentionally excluded — they live on
+ * ConfessionQueueCard, which renders the prompt + inline answer textarea.
+ * Surfacing the same confession prompt here (with only a scroll-to CTA)
+ * caused the "asked twice" perception even though only one row existed.
  */
 
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 
-type Source = 'commitment' | 'decree' | 'confession' | 'outfit' | 'workout' | 'punishment' | 'directive' | 'hrt_gate';
+type Source = 'commitment' | 'decree' | 'outfit' | 'workout' | 'punishment' | 'directive' | 'hrt_gate';
 type Bucket = 'momentum' | 'debt';
 
 interface Task {
@@ -25,14 +28,12 @@ interface Task {
 }
 
 // Bucket determination is per-row at collection time (each insert picks
-// 'momentum' or 'debt' based on source + category). No global set needed —
-// confessions split by their .category, punishments are always 'debt',
-// everything else is 'momentum'.
+// 'momentum' or 'debt' based on source + category). Punishments are always
+// 'debt'; everything else is 'momentum'.
 
 const SOURCE_TONE: Record<Source, string> = {
   commitment: '#7c3aed',
   decree: '#f4c272',
-  confession: '#f4a7c4',
   outfit: '#ec4899',
   workout: '#6ee7b7',
   punishment: '#f47272',
@@ -43,7 +44,6 @@ const SOURCE_TONE: Record<Source, string> = {
 const SOURCE_LABEL: Record<Source, string> = {
   commitment: 'commitment',
   decree: 'decree',
-  confession: 'confess',
   outfit: 'outfit',
   workout: 'workout',
   punishment: 'punishment',
@@ -59,7 +59,6 @@ function scrollTargetForSource(source: Source): string | null {
   switch (source) {
     case 'commitment': return 'card-commitments';
     case 'decree': return 'card-handler-decree';
-    case 'confession': return 'card-confession-queue';
     case 'outfit': return 'card-outfit-mandate';
     case 'workout': return 'card-workout';
     case 'punishment': return 'card-slip-log';
@@ -73,7 +72,6 @@ function ctaLabelForSource(source: Source): string {
   switch (source) {
     case 'commitment': return 'Submit evidence';
     case 'decree': return 'Mark fulfilled';
-    case 'confession': return 'Confess now';
     case 'outfit': return 'Upload outfit photo';
     case 'workout': return 'Mark workout done';
     case 'punishment': return 'Execute punishment';
@@ -110,7 +108,7 @@ export function UnifiedTaskList() {
     const todayStr = new Date().toISOString().slice(0, 10);
 
     const [
-      cmtRes, decreeRes, confRes, outfitRes, workoutRes, punRes, dirRes, hrtRes, hrtObs,
+      cmtRes, decreeRes, outfitRes, workoutRes, punRes, dirRes, hrtRes, hrtObs,
     ] = await Promise.all([
       supabase.from('handler_commitments')
         .select('id, what, by_when, consequence, locked')
@@ -119,10 +117,6 @@ export function UnifiedTaskList() {
       supabase.from('handler_decrees')
         .select('id, edict, deadline, consequence')
         .eq('user_id', user.id).eq('status', 'active')
-        .order('deadline', { ascending: true }).limit(10),
-      supabase.from('confession_queue')
-        .select('id, prompt, deadline, category')
-        .eq('user_id', user.id).is('confessed_at', null).eq('missed', false)
         .order('deadline', { ascending: true }).limit(10),
       supabase.from('daily_outfit_mandates')
         .select('id, prescription, target_date, photo_proof_url, completed_at')
@@ -166,19 +160,6 @@ export function UnifiedTaskList() {
         label: String(d.edict).slice(0, 140),
         due: d.deadline as string | null,
         consequence: (d.consequence as string) || undefined,
-      });
-    }
-    for (const cf of (confRes.data || []) as Array<Record<string, unknown>>) {
-      // Confessions split by category: 'slip' → debt; everything else → momentum
-      const cat = String(cf.category);
-      const isDebt = cat === 'slip';
-      collected.push({
-        id: `cnf:${cf.id}`,
-        source: 'confession',
-        bucket: isDebt ? 'debt' : 'momentum',
-        label: String(cf.prompt).slice(0, 140),
-        due: cf.deadline as string | null,
-        badge: cat.replace(/_/g, ' '),
       });
     }
     const outfit = outfitRes.data as { id: string; prescription: Record<string, string>; target_date: string; photo_proof_url: string | null; completed_at: string | null } | null;
@@ -383,8 +364,6 @@ function TaskSection({ tasks, headerLabel, headerHint, accent, urgentAccent, urg
             const rawId = rightNow.id.split(':')[1];
             if (rawId && rightNow.source === 'commitment') {
               sessionStorage.setItem('handler_chat_resolve_commitment_id', rawId);
-            } else if (rawId && rightNow.source === 'confession') {
-              sessionStorage.setItem('handler_chat_resolve_confession_id', rawId);
             } else if (rawId && rightNow.source === 'decree') {
               sessionStorage.setItem('handler_chat_resolve_decree_id', rawId);
             }

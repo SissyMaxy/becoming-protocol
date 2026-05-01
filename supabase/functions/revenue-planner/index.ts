@@ -652,10 +652,12 @@ async function reviewPlan(
     reviewed_summary: summary,
   }).eq('id', planId)
 
+  // urgency CHECK on handler_outreach_queue allows low/normal/high/critical
+  // only — 'standard' was silently rejected by Postgres on every fire.
   await supabase.from('handler_outreach_queue').insert({
     user_id: userId,
     message: `Revenue review${stateContext}: ${summary} ${conversionPct < 50 ? 'Below target — adjusting next week.' : 'On track.'}`,
-    urgency: 'standard',
+    urgency: 'normal',
     trigger_reason: 'revenue_plan_review',
     scheduled_for: new Date().toISOString(),
     expires_at: new Date(Date.now() + 3 * 86400000).toISOString(),

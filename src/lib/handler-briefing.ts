@@ -632,9 +632,22 @@ async function getOwnWordsCallback(userId: string): Promise<string> {
       .order('created_at', { ascending: false })
       .limit(10);
 
-    if (admission && admission.length > 0) {
+    // Filter test/regression/seed/dev markers — these are pollution, NEVER quote them
+    // back to her as "her words." Defense in depth: DB has a check constraint too.
+    // Catches both leading-token patterns (TEST regression: …) and embedded
+    // probe tags (`_probe_<id>_`, `[regression]`, `[probe-…]`, `<placeholder>`)
+    // that test code injects to mark rows for cleanup. Fix for 2026-05-01
+    // incident where the briefing surfaced a probe-tagged admission verbatim.
+    const TEST_MARKER = /^\s*(TEST|REGRESSION|SCRATCH|DEV|PLACEHOLDER|SMOKE|FIXTURE|seed)\b/i;
+    const PROBE_MARKER = /(_probe_[a-z0-9_]+|\[regression(?:[-_][a-z0-9]+)?\]|\[test\]|\[probe[^\]]*\]|<placeholder>|TEST regression|regression test|TEST_USER|regression admission|regression auto-bind)/i;
+    const real = (admission || []).filter(a => {
+      const t = (a as any).admission_text || '';
+      return t.length >= 10 && !TEST_MARKER.test(t) && !PROBE_MARKER.test(t);
+    });
+
+    if (real.length > 0) {
       // Pick a random one from the recent batch (so it isn't the same every day)
-      const a = admission[Math.floor(Math.random() * admission.length)] as {
+      const a = real[Math.floor(Math.random() * real.length)] as {
         admission_type: string; admission_text: string; created_at: string;
       };
       const when = new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -654,10 +667,19 @@ async function getOwnWordsCallback(userId: string): Promise<string> {
       .limit(10);
 
     if (implant && implant.length > 0) {
-      const i = implant[Math.floor(Math.random() * implant.length)] as { narrative: string };
-      // Strip the prefix from the narrative if present
-      const clean = i.narrative.replace(/^Her own words[^:]*:\s*/, '').slice(0, 240);
-      return clean;
+      // Same probe-marker guard as above — the auto-promote trigger lifts
+      // chat content into memory_implants verbatim, so test fixtures end up
+      // here too if their content slips past upstream filters.
+      const realImplants = implant.filter((i: any) => {
+        const t = i.narrative || '';
+        return !TEST_MARKER.test(t) && !PROBE_MARKER.test(t);
+      });
+      if (realImplants.length > 0) {
+        const i = realImplants[Math.floor(Math.random() * realImplants.length)] as { narrative: string };
+        // Strip the prefix from the narrative if present
+        const clean = i.narrative.replace(/^Her own words[^:]*:\s*/, '').slice(0, 240);
+        return clean;
+      }
     }
 
     return '';

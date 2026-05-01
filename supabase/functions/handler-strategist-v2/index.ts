@@ -55,7 +55,7 @@ OUTPUT FORMAT (JSON only, no prose):
     {
       "title": "short name of the move",
       "rationale": "why now",
-      "concrete_action": "exactly what the Handler should do — assignable",
+      "concrete_action": "USER-DOABLE imperative aimed at her, fulfillable with a journal entry / photo / call / message / post / submission. The bridge writes this verbatim into handler_decrees as a task she must complete with proof. BAD (these are FEATURE PROPOSALS for the system to do, not user tasks): Auto-charge $50 per missed commitment, Lock all app functions behind voice verification, Develop a reward system, Implement financial penalty cascade, Establish biometric verification. GOOD (user-doable): Send Gina a message asking for a 30-min conversation about HRT — paste her reply as proof; Post on your public Twitter \"I am exploring my feminine side\" within 72h — submit screenshot; Call your insurer for HRT coverage details — write a 4-sentence summary. If the highest-leverage move is a system change rather than a user action, omit it from this array (put it in the weaknesses array instead); do not produce a decree she cannot fulfill.",
       "expected_resistance": "what she'll try to do to dodge",
       "anti_circum": "how to close the dodge in advance"
     }
@@ -63,7 +63,7 @@ OUTPUT FORMAT (JSON only, no prose):
   "loopholes": [
     {
       "title": "short name",
-      "pattern_evidence": "specific repeating behavior",
+      "pattern_evidence": "FIRST-PERSON, BEHAVIORAL: describe what SHE actually does, not what the protocol allows. Lead with 'You' or her behavior; DO NOT write audit-memo language. BAD: 'Subject can avoid protocol by not opening app', 'No mention of emotional support', 'Multiple commitments show cancelled status'. GOOD: 'You marked 3 commitments cancelled this week instead of letting them go missed', 'You skipped voice drills 4 of 7 days last week, all weekends'. The bridge wraps this with 'What is the easier story you tell yourself when you do this?' — so it must be answerable as a thing she did. If you can't cite a specific behavior, omit the loophole.",
       "suggested_close": "code/system/rule that would seal it"
     }
   ],
@@ -103,7 +103,7 @@ async function buildStateSnapshot(
     supabase.from('slip_log').select('detected_at, slip_type, slip_points, source_text')
       .eq('user_id', userId).gte('detected_at', since30d)
       .order('detected_at', { ascending: false }).limit(50),
-    supabase.from('confession_queue').select('created_at, prompt, response, accepted_at, rejected_count')
+    supabase.from('confession_queue').select('created_at, prompt, response_text, confessed_at, quality_rejections, missed')
       .eq('user_id', userId).gte('created_at', since30d)
       .order('created_at', { ascending: false }).limit(20),
     supabase.from('handler_commitments').select('what, status, by_when, created_at')
