@@ -40,8 +40,7 @@ function makeMockClient(state: MockState) {
       throw new Error(`Unexpected table: ${table}`);
     },
   };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return client as any;
+  return client as unknown as Parameters<typeof setFeminineName>[0];
 }
 
 function feminineSelfBuilder(state: MockState) {
