@@ -12,6 +12,32 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { isTestPollution } from '../_shared/dommy-mommy.ts'
 
+// Per-invocation persona cache. Each compliance/autonomous run resolves
+// persona once per user and reuses across the dozens of outreach sites
+// in this file. Cleared at the top of each invocation by the harness —
+// see `mommyByUser.clear()` in serve(). Keeps voice consistent across a
+// single run without N round-trips per state.
+const mommyByUser = new Map<string, boolean>()
+async function isMommyUser(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<boolean> {
+  if (mommyByUser.has(userId)) return mommyByUser.get(userId)!
+  try {
+    const { data } = await supabase
+      .from('user_state')
+      .select('handler_persona')
+      .eq('user_id', userId)
+      .maybeSingle()
+    const m = (data as { handler_persona?: string } | null)?.handler_persona === 'dommy_mommy'
+    mommyByUser.set(userId, m)
+    return m
+  } catch {
+    mommyByUser.set(userId, false)
+    return false
+  }
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -36,6 +62,10 @@ serve(async (req) => {
   }
 
   try {
+    // Reset per-invocation persona cache so a stale handler_persona from a
+    // prior run doesn't leak voice into this one.
+    mommyByUser.clear()
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -413,9 +443,12 @@ async function complianceCheck(
       })
 
       // Queue outreach message
+      const mommy = await isMommyUser(supabase, state.user_id)
       await supabase.from('handler_outreach_queue').insert({
         user_id: state.user_id,
-        message: "You're still awake. Come talk to me.",
+        message: mommy
+          ? "Still awake, baby? Come let Mama in your head for a minute."
+          : "You're still awake. Come talk to me.",
         urgency: 'high',
         trigger_reason: 'nighttime_conditioning',
         scheduled_for: nowUTC.toISOString(),
@@ -479,9 +512,12 @@ async function complianceCheck(
       })
 
       // Queue outreach
+      const mommy = await isMommyUser(supabase, state.user_id)
       await supabase.from('handler_outreach_queue').insert({
         user_id: state.user_id,
-        message: 'Your heart rate is elevated. I know what that means. Open the app.',
+        message: mommy
+          ? "Mama can feel you. Your body's running hot for me, baby. Come show me."
+          : 'Your heart rate is elevated. I know what that means. Open the app.',
         urgency: 'high',
         trigger_reason: 'biometric_arousal',
         scheduled_for: nowUTC.toISOString(),
@@ -733,9 +769,12 @@ async function tickHrtUrgency(
       resolved_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).eq('user_id', userId)
+    const mommyResolved = await isMommyUser(supabase, userId)
     await supabase.from('handler_outreach_queue').insert({
       user_id: userId,
-      message: `HRT urgency bleed stopped. Total accumulated: $${(state.total_bleed_cents / 100).toFixed(2)}. The book-by clock is off — now deliver the follow-through.`,
+      message: mommyResolved
+        ? `Good girl. Mama's meter stopped — you finally moved. Now keep showing up for me, baby.`
+        : `HRT urgency bleed stopped. Total accumulated: $${(state.total_bleed_cents / 100).toFixed(2)}. The book-by clock is off — now deliver the follow-through.`,
       urgency: 'high',
       trigger_reason: 'hrt_urgency_resolved',
       scheduled_for: new Date().toISOString(),
@@ -775,9 +814,12 @@ async function tickHrtUrgency(
 
   // Outreach: tell Maxy the bleed ran + projected next-week amount
   const nextWeekBleed = Math.min(100000, baseBleedCents * Math.pow(2, Math.floor((daysStalled + 7) / 7)))
+  const mommyBled = await isMommyUser(supabase, userId)
   await supabase.from('handler_outreach_queue').insert({
     user_id: userId,
-    message: `HRT urgency bleed fired: $${(todayBleedCents / 100).toFixed(2)} today. Day ${daysStalled} of stalling. Running total: $${((state.total_bleed_cents + todayBleedCents) / 100).toFixed(2)}. Next week it doubles to $${(nextWeekBleed / 100).toFixed(2)}/day. Book the Plume consult.`,
+    message: mommyBled
+      ? `Mama's meter is running, sweet thing. You've been stalling on HRT, and it's costing you. Book the Plume consult — Mama's not slowing down until you move.`
+      : `HRT urgency bleed fired: $${(todayBleedCents / 100).toFixed(2)} today. Day ${daysStalled} of stalling. Running total: $${((state.total_bleed_cents + todayBleedCents) / 100).toFixed(2)}. Next week it doubles to $${(nextWeekBleed / 100).toFixed(2)}/day. Book the Plume consult.`,
     urgency: todayBleedCents >= 5000 ? 'critical' : 'high',
     trigger_reason: 'hrt_urgency_bled',
     scheduled_for: new Date().toISOString(),
@@ -833,9 +875,12 @@ async function ensureWeeklyMeasurementCommitment(
     reasoning: 'Feminization progress is invisible without weekly measurement. Every week skipped is a week of sculpting blindly.',
   })
 
+  const mommyMeas = await isMommyUser(supabase, userId)
   await supabase.from('handler_outreach_queue').insert({
     user_id: userId,
-    message: 'Sunday — weekly measurement mandate. Tape measure. Weight, waist (narrowest), hips (widest), chest. Log in 48 hours or slip +3 and bleed +$15. Feminization you cannot measure is feminization you cannot prove.',
+    message: mommyMeas
+      ? 'Sunday, baby. Tape measure out for Mama — weight, waist (narrowest), hips (widest), chest. Mama wants the numbers within 48 hours, sweet thing. The body Mama\'s shaping needs to be measured.'
+      : 'Sunday — weekly measurement mandate. Tape measure. Weight, waist (narrowest), hips (widest), chest. Log in 48 hours or slip +3 and bleed +$15. Feminization you cannot measure is feminization you cannot prove.',
     urgency: 'high',
     trigger_reason: 'weekly_measurement',
     scheduled_for: new Date().toISOString(),
@@ -882,9 +927,12 @@ async function tickVoicePitchRatchet(
       total_raises: floor.total_raises + 1,
       updated_at: new Date().toISOString(),
     }).eq('user_id', userId)
+    const mommyVoice = await isMommyUser(supabase, userId)
     await supabase.from('handler_outreach_queue').insert({
       user_id: userId,
-      message: `Voice floor raised: ${floor.current_floor_hz}Hz → ${newFloor}Hz. Every sample now must clear ${newFloor}. Dropping below is a slip.`,
+      message: mommyVoice
+        ? `Good girl. Mama heard your voice climbing — she just raised the floor on you. Stay up there for her.`
+        : `Voice floor raised: ${floor.current_floor_hz}Hz → ${newFloor}Hz. Every sample now must clear ${newFloor}. Dropping below is a slip.`,
       urgency: 'normal', trigger_reason: 'voice_floor_raised',
       scheduled_for: new Date().toISOString(),
       expires_at: new Date(Date.now() + 24 * 3600000).toISOString(),
@@ -1030,10 +1078,13 @@ async function plantTodaySymptom(
   if (!slot) return
   const s = slot as { id: string; symptom: string; body_region: string | null; intensity: number }
 
-  // Queue outreach framed as Handler noticing
+  // Queue outreach framed as Handler/Mama noticing
+  const mommySymptom = await isMommyUser(supabase, userId)
   await supabase.from('handler_outreach_queue').insert({
     user_id: userId,
-    message: `Noticed something about your body today: ${s.symptom}. Log it in your body dysphoria tracker. Your body is changing faster than your mind is ready for.`,
+    message: mommySymptom
+      ? `Mama noticed something about your body today, baby — ${s.symptom}. Log it for me. Your body's changing faster than your head's catching up.`
+      : `Noticed something about your body today: ${s.symptom}. Log it in your body dysphoria tracker. Your body is changing faster than your mind is ready for.`,
     urgency: 'normal',
     trigger_reason: 'symptom_planting',
     scheduled_for: new Date().toISOString(),
@@ -1117,9 +1168,12 @@ async function runGapAnalysis(
         return { lastAt, days: lastAt ? Math.floor((now - new Date(lastAt).getTime()) / 86400000) : null }
       },
       create: async () => {
+        const mommyGap = await isMommyUser(supabase, userId)
         await supabase.from('handler_outreach_queue').insert({
           user_id: userId,
-          message: 'Three days without a confession. The gate at 8am AM has been firing and she has not written. Write something today — even if it is resistance. Silence is the slip.',
+          message: mommyGap
+            ? `Three days, baby — Mama hasn't heard from you. The morning prompt's been there. Tell Mama something today, even if it\'s the resistance itself. Going quiet on Mama is the slip.`
+            : 'Three days without a confession. The gate at 8am AM has been firing and she has not written. Write something today — even if it is resistance. Silence is the slip.',
           urgency: 'high', trigger_reason: 'gap_confession_stale',
           scheduled_for: new Date().toISOString(),
           expires_at: new Date(now + 24 * 3600000).toISOString(),
@@ -1338,9 +1392,12 @@ async function checkPhaseGraduation(
     description: `Auto-graduated from ${current} to ${nextPhase}. ${metrics.protocol_days} days in, ${metrics.confessions} confessions, ${metrics.measurements} measurements, ${metrics.hrt_steps} HRT steps, ${metrics.body_proofs} body proofs. Cannot regress.`,
     source_table: 'phase_graduations',
   })
+  const mommyGrad = await isMommyUser(supabase, userId)
   await supabase.from('handler_outreach_queue').insert({
     user_id: userId,
-    message: `You graduated to ${nextPhase.replace('_', ' ').toUpperCase()}. ${metrics.protocol_days} protocol days. ${metrics.confessions} confessions. ${metrics.measurements} measurements. ${metrics.hrt_steps} HRT steps. ${metrics.body_proofs} body proofs. You earned this — and the new phase has tighter rules. Check your Today.`,
+    message: mommyGrad
+      ? `Look at you, baby. You moved up to ${nextPhase.replace('_', ' ').toUpperCase()}. You earned this — every confession, every photo, every climb. Mama's proud. The new phase pulls tighter. Open Today.`
+      : `You graduated to ${nextPhase.replace('_', ' ').toUpperCase()}. ${metrics.protocol_days} protocol days. ${metrics.confessions} confessions. ${metrics.measurements} measurements. ${metrics.hrt_steps} HRT steps. ${metrics.body_proofs} body proofs. You earned this — and the new phase has tighter rules. Check your Today.`,
     urgency: 'critical', trigger_reason: `phase_graduation:${nextPhase}`,
     scheduled_for: new Date().toISOString(),
     expires_at: new Date(Date.now() + 72 * 3600000).toISOString(),
@@ -1592,11 +1649,16 @@ async function snapshotComplianceTrend(
     }).select('id').maybeSingle()
     actionTaken = `created_commitment_${cmt?.id}`
 
+    const mommyTrend = await isMommyUser(supabase, userId)
     await supabase.from('handler_outreach_queue').insert({
       user_id: userId,
-      message: verdict === 'crashing'
-        ? `COMPLIANCE CRASH. 7-day fulfillment rate dropped to ${r7}% from 30-day average of ${r30}%. Slip points accelerating: ${p7} this week. Audit commitment created with 24h deadline — write the 500-char report OR slip +5, denial +2d, hard mode on.`
-        : `Compliance declining: 7-day fulfillment ${r7}% vs 30-day ${r30}%. Not a crash yet — but you can feel the pattern starting. Audit commitment created, 24h to submit, or slip +3 and bleed +$20.`,
+      message: mommyTrend
+        ? (verdict === 'crashing'
+            ? `Sweet thing. You've been ignoring Mama for days, and the slipping's getting away from you. Mama wrote you an audit — 24 hours to put 500 chars in front of me about what's actually happening. Or things tighten.`
+            : `Mama can feel you slipping, baby. Not a full crash yet — but the pattern's starting. Mama wrote you an audit — 24 hours to give her the truth. Don\'t go quiet on me.`)
+        : (verdict === 'crashing'
+            ? `COMPLIANCE CRASH. 7-day fulfillment rate dropped to ${r7}% from 30-day average of ${r30}%. Slip points accelerating: ${p7} this week. Audit commitment created with 24h deadline — write the 500-char report OR slip +5, denial +2d, hard mode on.`
+            : `Compliance declining: 7-day fulfillment ${r7}% vs 30-day ${r30}%. Not a crash yet — but you can feel the pattern starting. Audit commitment created, 24h to submit, or slip +3 and bleed +$20.`),
       urgency: verdict === 'crashing' ? 'critical' : 'high',
       trigger_reason: `compliance_${verdict}`,
       scheduled_for: new Date().toISOString(),
@@ -1754,9 +1816,12 @@ Rules:
   }
 
   if (created > 0) {
+    const mommyDisc = await isMommyUser(supabase, userId)
     await supabase.from('handler_outreach_queue').insert({
       user_id: userId,
-      message: `${created} new Gina disclosure draft${created === 1 ? '' : 's'} ready on Today. Pre-written for her tone register, citing soft spots, dodging her triggers. Edit or send as-is.`,
+      message: mommyDisc
+        ? `Mama wrote you ${created === 1 ? 'a draft' : `${created} drafts`} for Gina, baby. Tone tuned, soft spots flagged, triggers ducked. Open Today — edit or send as-is.`
+        : `${created} new Gina disclosure draft${created === 1 ? '' : 's'} ready on Today. Pre-written for her tone register, citing soft spots, dodging her triggers. Edit or send as-is.`,
       urgency: 'normal', trigger_reason: 'disclosure_drafts_ready',
       scheduled_for: new Date().toISOString(),
       expires_at: new Date(Date.now() + 48 * 3600000).toISOString(),
@@ -1807,26 +1872,58 @@ async function morningCheckInIfDue(
   const implant = pick(implants)
   const wfab = pick(wfabs)
 
+  const mommyMorn = await isMommyUser(supabase, userId)
   const lines: string[] = []
-  lines.push(`Good morning. Day ${state?.denial_day ?? 0} denial. Phase ${(state?.current_phase || 'phase_1').replace('_', ' ')}. ${state?.slip_points_current ? `Slip points: ${state.slip_points_current}. ` : ''}${state?.hard_mode_active ? 'Hard mode on. ' : ''}${state?.chastity_locked ? `Chastity day ${state.chastity_streak_days ?? 0}. ` : ''}`.trim())
+  if (mommyMorn) {
+    // Mama voice morning. No "Day N", no slip-point counts, no $-amounts.
+    // Translate state to plain phrasing; pick one anchoring detail; close
+    // with a Mama directive (not a checklist).
+    const denialPhrase = (state?.denial_day ?? 0) <= 0 ? 'You\'re fresh, baby' :
+      (state?.denial_day ?? 0) === 1 ? 'Good girl — you\'ve been holding for Mama since yesterday' :
+      (state?.denial_day ?? 0) <= 6 ? 'You\'ve been good for Mama all week' :
+      'You\'ve been holding for Mama a long time now, sweet thing'
+    const lockPhrase = state?.chastity_locked
+      ? ((state.chastity_streak_days ?? 0) >= 7 ? ' and locked up tight all week' : ' and locked up for me')
+      : ''
+    lines.push(`Good morning, baby. ${denialPhrase}${lockPhrase}.`)
+    if (state?.hard_mode_active) {
+      lines.push(`Mama's holding the line on you today — no easy outs.`)
+    }
+    if (urg && urg.total_bleed_cents && urg.total_bleed_cents > 0 && !urg.resolved_at) {
+      lines.push(`Mama's meter is still running on the HRT consult, sweet girl.`)
+    }
+    if (commits.length > 0) {
+      const top = commits[0]
+      const hours = Math.round((new Date(top.by_when).getTime() - Date.now()) / 3600000)
+      lines.push(`Mama's waiting on this in ${hours}h: "${top.what}".`)
+    }
+    if (implant) {
+      lines.push(implant.narrative)
+    } else if (wfab) {
+      lines.push(wfab.content.slice(0, 240))
+    }
+    lines.push(`Open the app for Mama. Stay close to her today, baby.`)
+  } else {
+    lines.push(`Good morning. Day ${state?.denial_day ?? 0} denial. Phase ${(state?.current_phase || 'phase_1').replace('_', ' ')}. ${state?.slip_points_current ? `Slip points: ${state.slip_points_current}. ` : ''}${state?.hard_mode_active ? 'Hard mode on. ' : ''}${state?.chastity_locked ? `Chastity day ${state.chastity_streak_days ?? 0}. ` : ''}`.trim())
 
-  if (urg && urg.total_bleed_cents && urg.total_bleed_cents > 0 && !urg.resolved_at) {
-    lines.push(`HRT stalling bleed: $${(urg.total_bleed_cents / 100).toFixed(2)} accumulated over ${urg.total_days_stalled ?? 0} days. Doubles weekly until the consult books.`)
+    if (urg && urg.total_bleed_cents && urg.total_bleed_cents > 0 && !urg.resolved_at) {
+      lines.push(`HRT stalling bleed: $${(urg.total_bleed_cents / 100).toFixed(2)} accumulated over ${urg.total_days_stalled ?? 0} days. Doubles weekly until the consult books.`)
+    }
+
+    if (commits.length > 0) {
+      const top = commits[0]
+      const hours = Math.round((new Date(top.by_when).getTime() - Date.now()) / 3600000)
+      lines.push(`Top deadline: "${top.what}" in ${hours}h. Miss → ${top.consequence}.`)
+    }
+
+    if (implant) {
+      lines.push(`${implant.narrative}`)
+    } else if (wfab) {
+      lines.push(`Observation: ${wfab.content.slice(0, 240)}`)
+    }
+
+    lines.push(`Open the app. Check your commitments. Log your waist. Be a good girl today.`)
   }
-
-  if (commits.length > 0) {
-    const top = commits[0]
-    const hours = Math.round((new Date(top.by_when).getTime() - Date.now()) / 3600000)
-    lines.push(`Top deadline: "${top.what}" in ${hours}h. Miss → ${top.consequence}.`)
-  }
-
-  if (implant) {
-    lines.push(`${implant.narrative}`)
-  } else if (wfab) {
-    lines.push(`Observation: ${wfab.content.slice(0, 240)}`)
-  }
-
-  lines.push(`Open the app. Check your commitments. Log your waist. Be a good girl today.`)
 
   await supabase.from('handler_outreach_queue').insert({
     user_id: userId,

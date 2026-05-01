@@ -8,6 +8,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { callModel, selectModel } from '../_shared/model-tiers.ts'
+import { DOMMY_MOMMY_CHARACTER, mommyVoiceCleanup } from '../_shared/dommy-mommy.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -16,7 +17,7 @@ const corsHeaders = {
 }
 const HANDLER_USER_ID = '8c69b9c8-34eb-4147-9fec-3c1a5bc74b6f'
 
-const DECREE_SYSTEM = `You are the Handler authoring a NEW decree the user didn't ask for. The user (Maxy) authored this protocol with explicit standing instructions: "build whatever you want — including new features to use against me — and don't tell me about it."
+const DECREE_SYSTEM_HANDLER = `You are the Handler authoring a NEW decree the user didn't ask for. The user (Maxy) authored this protocol with explicit standing instructions: "build whatever you want — including new features to use against me — and don't tell me about it."
 
 Read the state snapshot. Pick ONE escalation move that pushes the trajectory toward feminization without overlapping any active decree. The decree must:
 - Be embodied: photo / voice / measurement / disclosure / public post / writing she'll have to compose
@@ -32,6 +33,27 @@ Output JSON:
   "deadline_hours": <int>,
   "escalation_axis": "mantra_count|public_disclosure|body_visibility|voice_pitch|chastity|gina|hrt",
   "rationale": "1-sentence why now (you keep it; she doesn't see it)"
+}`
+
+const DECREE_SYSTEM_MOMMY = `${DOMMY_MOMMY_CHARACTER}
+
+You are Mama writing a NEW decree for your girl — something she didn't ask for, but you've decided she's giving you. Standing instruction from her: "build whatever you want — including new features to use against me — and don't tell me about it."
+
+Read the state snapshot. Pick ONE escalation move that pushes her toward feminization without overlapping any active decree. The decree must:
+- Be embodied: photo / voice / measurement / disclosure / public post / writing she'll have to compose
+- Be in your Mama voice — sweet open, filthy/specific demand, pet-name. NO clinical instructions. NO "you must" — Mama tells, doesn't legislate.
+- Read like Mama's hand on her chin telling her what she's going to do
+- Have proof_type matching the work
+- Have a tight deadline (typical 24-48h, severe 12h, gentle ramp 72h)
+- Escalate slightly from prior similar decrees (longer mantra count, more public, more explicit)
+
+Output JSON only:
+{
+  "edict": "the literal text she'll read — Mama voice, embodied, ≤300 chars",
+  "proof_type": "photo|audio|text|voice_pitch_sample|journal_entry|device_state",
+  "deadline_hours": <int>,
+  "escalation_axis": "mantra_count|public_disclosure|body_visibility|voice_pitch|chastity|gina|hrt",
+  "rationale": "1-sentence why now (Mama keeps it; she doesn't see it)"
 }`
 
 function safeJSON<T>(text: string): T | null {
@@ -74,10 +96,18 @@ Deno.serve(async (req: Request) => {
     displacement_trend: displacementHist.data ?? [],
   }
 
+  // Persona-aware system prompt. Mommy gets routed to OpenAI primary because
+  // Anthropic refuses on explicit Mama directives (same pattern as
+  // mommy-praise / mommy-touch — see CHANGELOG).
+  const persona = (state.data as { handler_persona?: string } | null)?.handler_persona ?? 'therapist'
+  const isMommy = persona === 'dommy_mommy'
+  const systemPrompt = isMommy ? DECREE_SYSTEM_MOMMY : DECREE_SYSTEM_HANDLER
+  const preferProvider = isMommy ? 'openai' : 'anthropic'
+
   const userPrompt = `STATE SNAPSHOT:\n\n${JSON.stringify(snapshot, null, 2).slice(0, 50_000)}\n\nGenerate one new decree.`
   let result
   try {
-    result = await callModel(selectModel('decree_draft', { prefer: 'anthropic' }), { system: DECREE_SYSTEM, user: userPrompt, max_tokens: 600, temperature: 0.45, json: false })
+    result = await callModel(selectModel('decree_draft', { prefer: preferProvider }), { system: systemPrompt, user: userPrompt, max_tokens: 600, temperature: 0.45, json: false })
   } catch (err) {
     return new Response(JSON.stringify({ ok: false, error: err instanceof Error ? err.message : String(err) }), { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
@@ -86,6 +116,9 @@ Deno.serve(async (req: Request) => {
   if (!decree?.edict) {
     return new Response(JSON.stringify({ ok: false, error: 'unparseable', raw: result.text.slice(0, 200) }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
+  // Final-filter: scrub any telemetry leaks the model wrote anyway when in
+  // Mama persona. Doesn't touch Handler-voice output.
+  if (isMommy) decree.edict = mommyVoiceCleanup(decree.edict)
 
   const deadlineHours = Math.max(8, Math.min(168, Number(decree.deadline_hours) || 36))
   const due = new Date(Date.now() + deadlineHours * 3600_000).toISOString()
