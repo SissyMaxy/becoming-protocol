@@ -29,6 +29,9 @@ export interface UserState {
   sessions_completed?: number;
   domain_last_completed?: Record<string, string>;
   completed_today?: boolean;
+  // From user_state.handler_persona — drives Mama-voice swap in the coach
+  // edge function's system prompt.
+  handler_persona?: string;
 }
 
 export type RequestType = 'daily_briefing' | 'task_framing' | 'session_guidance' | 'reflection' | 'check_in';
@@ -181,6 +184,13 @@ export async function buildUserState(userId: string): Promise<UserState> {
     .eq('user_id', userId)
     .single();
 
+  // Persona drives the coach voice — pulled from user_state, not user_profile.
+  const { data: us } = await supabase
+    .from('user_state')
+    .select('handler_persona')
+    .eq('user_id', userId)
+    .maybeSingle();
+
   // Fetch last session info
   const { data: lastSession } = await supabase
     .from('edge_sessions')
@@ -251,7 +261,8 @@ export async function buildUserState(userId: string): Promise<UserState> {
     last_session_type: lastSession?.session_type,
     had_session_last_night: hadSessionLastNight,
     last_engagement_level: lastSession?.engagement_rating,
-    domain_last_completed: domainLastCompleted
+    domain_last_completed: domainLastCompleted,
+    handler_persona: (us as { handler_persona?: string } | null)?.handler_persona ?? undefined,
   };
 }
 

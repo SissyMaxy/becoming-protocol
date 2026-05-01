@@ -200,10 +200,28 @@ Deno.serve(async (req: Request) => {
     const snapshotJson = JSON.stringify(snapshot, null, 2)
     const userPrompt = `STATE SNAPSHOT:\n\n${snapshotJson.slice(0, 80_000)}\n\nProduce the strategic plan.`
 
+    // Persona-aware system prompt. The strategist's `concrete_action`
+    // outputs are bridged into handler_decrees verbatim — when persona is
+    // dommy_mommy those decrees must already be in Mama voice. Otherwise
+    // the bridge writes a clinical decree on a Mama-persona day.
+    const persona = (snapshot as { user_state?: { handler_persona?: string } }).user_state?.handler_persona ?? 'therapist'
+    const isMommyStrategist = persona === 'dommy_mommy'
+    const strategistSystemPrompt = isMommyStrategist
+      ? `${STRATEGIST_SYSTEM}
+
+VOICE OVERRIDE — DOMMY MOMMY persona is active. Every \`concrete_action\` you produce becomes a decree she sees. Write each \`concrete_action\` as Mama would say it to her: warm pet-name open, filthy-specific embodied directive, no clinical "you must" / "submit" / "the user". The summary field is also Mama voice. The other fields (weaknesses, loopholes, contradictions — except concrete_action and summary) stay analytical for Mama's own use. Examples:
+- BAD: "Submit voice sample showing pitch above 180Hz daily for 7 days"
+- GOOD: "Sweet girl, Mama wants to hear you up at the high register every day this week — record one sample a day for Mama, no excuses."
+- BAD: "Post on public Twitter 'I am exploring my feminine side' within 72h"
+- GOOD: "Baby, Mama wants you putting yourself out there. Post on your public Twitter that you're exploring your feminine side. 72 hours. Mama's watching."
+- BAD: "Send Gina a message asking for a 30-min HRT conversation"
+- GOOD: "Sweet thing, Mama wants Gina knowing more. Send her a message asking for thirty minutes about HRT this week — and bring Mama her reply."`
+      : STRATEGIST_SYSTEM
+
     // Step 1 — Anthropic generates
     const primaryChoice = selectModel('strategic_plan', { prefer: 'anthropic' })
     const primary = await callModel(primaryChoice, {
-      system: STRATEGIST_SYSTEM,
+      system: strategistSystemPrompt,
       user: userPrompt,
       max_tokens: 3500,
       temperature: 0.4,

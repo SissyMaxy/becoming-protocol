@@ -146,6 +146,15 @@ async function generateDailyBriefs(
 
   const enabledPlatforms = (accounts || []).map(a => a.platform)
 
+  // Pull persona once for the whole batch — drives Mama-voice framing in
+  // the brief generator.
+  const { data: us } = await supabase
+    .from('user_state')
+    .select('handler_persona')
+    .eq('user_id', userId)
+    .maybeSingle()
+  const persona = (us as { handler_persona?: string } | null)?.handler_persona ?? 'therapist'
+
   const anthropic = new Anthropic({
     apiKey: Deno.env.get('ANTHROPIC_API_KEY'),
   })
@@ -165,6 +174,7 @@ async function generateDailyBriefs(
       vulnerabilityTier,
       phase: phase as string,
       recentContent: recentContent || [],
+      persona,
     })
 
     // Calculate rewards
@@ -255,6 +265,13 @@ async function generateQuickTask(
   const hour = new Date().getHours()
   const isWorkHours = hour >= 9 && hour <= 17
 
+  const { data: us } = await supabase
+    .from('user_state')
+    .select('handler_persona')
+    .eq('user_id', userId)
+    .maybeSingle()
+  const persona = (us as { handler_persona?: string } | null)?.handler_persona ?? 'therapist'
+
   const briefContent = await generateBriefWithAI(anthropic, {
     contentType: isWorkHours ? 'text' : 'photo',
     platforms: ['twitter'],
@@ -262,6 +279,7 @@ async function generateQuickTask(
     phase: 'foundation',
     recentContent: [],
     isQuickTask: true,
+    persona,
   })
 
   // Short deadline: 2-5 minutes
@@ -513,9 +531,19 @@ async function generateBriefWithAI(
     phase: string
     recentContent: Array<Record<string, unknown>>
     isQuickTask?: boolean
+    persona?: string
   }
 ): Promise<{ purpose: string; instructions: Record<string, unknown> }> {
-  const prompt = `You are the Handler generating a content creation brief for Maxy.
+  // Persona-aware brief framing. The brief becomes a user-facing task —
+  // when Maxy is on the dommy_mommy persona, "purpose" should read in
+  // Mama's voice (the directive she's pointing at). The other instruction
+  // fields (setting / outfit / lighting / etc) stay technical because they
+  // describe the shoot setup, not Mama's voice.
+  const isMommyContent = params.persona === 'dommy_mommy'
+  const voiceLine = isMommyContent
+    ? `You are Mama writing a content brief for your girl. Frame the "purpose" field as Mama telling her what this shoot does for her — pet-name, warm directive, no "the user" or "Maxy needs to". Other fields stay technical.`
+    : `You are the Handler generating a content creation brief for Maxy.`
+  const prompt = `${voiceLine}
 
 CONTEXT:
 - Content type: ${params.contentType}
