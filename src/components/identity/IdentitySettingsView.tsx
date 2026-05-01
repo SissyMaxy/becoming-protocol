@@ -23,6 +23,7 @@ import {
   listWardrobeItems,
   listPhaseDefinitions,
   getPhaseDefinition,
+  advancePhase,
 } from '../../lib/identity/feminine-self';
 import {
   WARDROBE_ITEM_TYPES,
@@ -73,6 +74,17 @@ export function IdentitySettingsView({ onBack }: Props) {
   const [newItemName, setNewItemName] = useState('');
   const [newItemNotes, setNewItemNotes] = useState('');
   const [adding, setAdding] = useState(false);
+
+  // Honorific suggestion surfaced after phase advance. NOT auto-applied —
+  // caller decides whether to accept it. Per the design rule: phase
+  // advancement *suggests*, the user (or persona) accepts.
+  const [phaseSuggestion, setPhaseSuggestion] = useState<{
+    fromPhase: number;
+    toPhase: number;
+    newPhaseName: string | null;
+    suggestedHonorific: string | null;
+  } | null>(null);
+  const [advancing, setAdvancing] = useState(false);
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -133,6 +145,39 @@ export function IdentitySettingsView({ onBack }: Props) {
       setSaving(false);
     }
   };
+
+  const handleAdvancePhase = async () => {
+    if (!user?.id) return;
+    setAdvancing(true);
+    try {
+      const result = await advancePhase(supabase, user.id);
+      setSelf(result.feminineSelf);
+      setPhaseDef(result.newPhaseDef);
+      setPhaseSuggestion({
+        fromPhase: result.fromPhase,
+        toPhase: result.toPhase,
+        newPhaseName: result.newPhaseDef?.name ?? null,
+        suggestedHonorific: result.suggestedHonorific,
+      });
+    } finally {
+      setAdvancing(false);
+    }
+  };
+
+  const acceptHonorificSuggestion = async () => {
+    if (!user?.id || !phaseSuggestion?.suggestedHonorific) return;
+    setSaving(true);
+    try {
+      const updated = await setHonorific(supabase, user.id, phaseSuggestion.suggestedHonorific);
+      setSelf(updated);
+      setHonorificDraft(updated.currentHonorific ?? '');
+      setPhaseSuggestion(null);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const dismissPhaseSuggestion = () => setPhaseSuggestion(null);
 
   const addItem = async () => {
     if (!user?.id || !newItemName.trim()) return;
@@ -196,6 +241,48 @@ export function IdentitySettingsView({ onBack }: Props) {
         </div>
       ) : (
         <>
+          {/* Phase advancement suggestion banner */}
+          {phaseSuggestion && (
+            <div style={{
+              background: 'linear-gradient(140deg, #2a1a4d 0%, #1a0f2e 100%)',
+              border: `1px solid ${PALETTE.accent}`,
+              borderRadius: 10, padding: 14, marginBottom: 14,
+            }}>
+              <div style={{
+                fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em',
+                color: PALETTE.accentBright, fontWeight: 700, marginBottom: 8,
+              }}>
+                Phase {phaseSuggestion.fromPhase} → {phaseSuggestion.toPhase}
+                {phaseSuggestion.newPhaseName ? ` — ${phaseSuggestion.newPhaseName}` : ''}
+              </div>
+              {phaseSuggestion.suggestedHonorific ? (
+                <>
+                  <p style={{ fontSize: 12.5, color: PALETTE.textBody, margin: '0 0 12px' }}>
+                    Mommy wants to start calling you{' '}
+                    <strong style={{ color: PALETTE.accentBright }}>"{phaseSuggestion.suggestedHonorific}"</strong>.
+                  </p>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={acceptHonorificSuggestion} disabled={saving} style={btnPrimary(saving)}>
+                      accept
+                    </button>
+                    <button onClick={dismissPhaseSuggestion} style={btnSecondary(false)}>
+                      keep current
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p style={{ fontSize: 12.5, color: PALETTE.textBody, margin: '0 0 12px' }}>
+                    No honorific suggestion for this phase.
+                  </p>
+                  <button onClick={dismissPhaseSuggestion} style={btnSecondary(false)}>
+                    dismiss
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
           {/* Phase */}
           <Section title={phaseDef ? `Phase ${self?.transformationPhase ?? 1} — ${phaseDef.name}` : 'Phase'}>
             <p style={{ fontSize: 12.5, lineHeight: 1.55, color: PALETTE.textBody, margin: 0 }}>
@@ -204,6 +291,17 @@ export function IdentitySettingsView({ onBack }: Props) {
             {phaseDef && phaseDef.honorifics.length > 0 && (
               <div style={{ marginTop: 12, fontSize: 11, color: PALETTE.textMuted }}>
                 Honorifics this phase suggests: {phaseDef.honorifics.join(', ')}
+              </div>
+            )}
+            {(self?.transformationPhase ?? 1) < 7 && (
+              <div style={{ marginTop: 14 }}>
+                <button
+                  onClick={handleAdvancePhase}
+                  disabled={advancing}
+                  style={btnSecondary(advancing)}
+                >
+                  {advancing ? 'advancing…' : `advance to phase ${(self?.transformationPhase ?? 1) + 1}`}
+                </button>
               </div>
             )}
             {phaseDefs.length > 0 && (
