@@ -162,3 +162,4 @@ export * from './gina-discovery';
 export * from './bambi';
 export * from './content-permanence';
 export * from './hrt';
+export * from './identity';
