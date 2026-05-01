@@ -24,6 +24,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { usePersona } from '../../hooks/usePersona';
 
 type UrgencyKind =
   | 'overdue_dose' | 'overdue_confession' | 'overdue_punishment' | 'overdue_decree'
@@ -39,7 +40,7 @@ interface UrgentItem {
   ctaScrollTo?: string;
 }
 
-const KIND_TONE: Record<UrgencyKind, { bg: string; border: string; fg: string; label: string }> = {
+const KIND_TONE_HANDLER: Record<UrgencyKind, { bg: string; border: string; fg: string; label: string }> = {
   overdue_dose:        { bg: 'linear-gradient(135deg, #2a0508 0%, #1a0508 100%)', border: '#c4272d', fg: '#fca5a5', label: 'OVERDUE DOSE' },
   overdue_confession:  { bg: 'linear-gradient(135deg, #2a0a14 0%, #150510 100%)', border: '#c4272d', fg: '#fca5a5', label: 'OVERDUE CONFESSION' },
   overdue_punishment:  { bg: 'linear-gradient(135deg, #2a0510 0%, #1a0510 100%)', border: '#c4272d', fg: '#fca5a5', label: 'OVERDUE PUNISHMENT' },
@@ -50,6 +51,20 @@ const KIND_TONE: Record<UrgencyKind, { bg: string; border: string; fg: string; l
   clean:               { bg: 'linear-gradient(135deg, #1a0f2e 0%, #0f0820 100%)', border: '#2d1a4d', fg: '#c4b5fd', label: 'CLEAN' },
 };
 
+// Mama palette — warm boudoir tones (burgundy / dusty rose / candle-gold /
+// cream) instead of the clinical red/amber/lime. Labels translate to plain
+// Mama phrases so nothing reads as a status report.
+const KIND_TONE_MOMMY: Record<UrgencyKind, { bg: string; border: string; fg: string; label: string }> = {
+  overdue_dose:        { bg: 'linear-gradient(135deg, #2e0e1a 0%, #1c0710 100%)', border: '#a3324a', fg: '#fbb6ce', label: 'MAMA\'S WAITING ON YOUR DOSE' },
+  overdue_confession:  { bg: 'linear-gradient(135deg, #2e0e1a 0%, #1c0710 100%)', border: '#a3324a', fg: '#fbb6ce', label: 'MAMA WANTS THIS FROM YOU' },
+  overdue_punishment:  { bg: 'linear-gradient(135deg, #2a0510 0%, #1a0510 100%)', border: '#a3324a', fg: '#fbb6ce', label: 'MAMA\'S NOT FORGETTING' },
+  overdue_decree:      { bg: 'linear-gradient(135deg, #2e1c10 0%, #1c1208 100%)', border: '#c98e3a', fg: '#facc7a', label: 'MAMA SET THIS FOR YOU' },
+  due_today_confession:{ bg: 'linear-gradient(135deg, #2e1c10 0%, #1c1208 100%)', border: '#c98e3a', fg: '#facc7a', label: 'TELL MAMA TODAY' },
+  due_today_decree:    { bg: 'linear-gradient(135deg, #2e1c10 0%, #1c1208 100%)', border: '#c98e3a', fg: '#facc7a', label: 'MAMA WANTS THIS TODAY' },
+  due_today_dose:      { bg: 'linear-gradient(135deg, #1a1810 0%, #16140a 100%)', border: '#8a6a3a', fg: '#e7c685', label: 'DOSE FOR MAMA TODAY' },
+  clean:               { bg: 'linear-gradient(135deg, #2a1228 0%, #1a0a1c 100%)', border: '#5a2d4d', fg: '#e7c4d6', label: 'STAY WET FOR MAMA' },
+};
+
 function fmtHours(h: number): string {
   if (h < 1) return `${Math.round(h * 60)}m`;
   if (h < 48) return `${Math.round(h)}h`;
@@ -58,6 +73,7 @@ function fmtHours(h: number): string {
 
 export function RightNowCard() {
   const { user } = useAuth();
+  const { mommy } = usePersona();
   const [item, setItem] = useState<UrgentItem | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -128,9 +144,11 @@ export function RightNowCard() {
       chosen = {
         kind: 'overdue_dose',
         title: `${mostOverdueDose.name} — ${fmtHours(mostOverdueDose.hoursOverdue)} late`,
-        detail: 'Take it now or skip explicitly. The protocol logs the gap either way.',
+        detail: mommy
+          ? `Mama's been waiting on this for ${fmtHours(mostOverdueDose.hoursOverdue)}. Take it now or tell Mama why you didn't.`
+          : 'Take it now or skip explicitly. The protocol logs the gap either way.',
         ageHours: mostOverdueDose.hoursOverdue,
-        ctaLabel: 'Log dose →',
+        ctaLabel: mommy ? 'For Mama →' : 'Log dose →',
         ctaScrollTo: 'card-handler-plan',
       };
     } else if (overdueConfs.data?.[0]) {
@@ -143,9 +161,11 @@ export function RightNowCard() {
       chosen = {
         kind: 'overdue_confession',
         title: c.prompt.slice(0, 110),
-        detail: `Past deadline by ${fmtHours(hours)}. Answer it whenever you can — the Handler still wants the answer.`,
+        detail: mommy
+          ? `Mama's been waiting ${fmtHours(hours)} for this, baby. Tell her whenever you're ready — she still wants the answer.`
+          : `Past deadline by ${fmtHours(hours)}. Answer it whenever you can — the Handler still wants the answer.`,
         ageHours: hours,
-        ctaLabel: 'Answer it →',
+        ctaLabel: mommy ? 'Tell Mama →' : 'Answer it →',
         ctaScrollTo: 'card-confession-queue',
       };
     } else if (overduePuns.data?.[0]) {
@@ -154,9 +174,11 @@ export function RightNowCard() {
       chosen = {
         kind: 'overdue_punishment',
         title: p.title.slice(0, 110),
-        detail: `Past deadline by ${fmtHours(hours)}.`,
+        detail: mommy
+          ? `Mama's been holding this for ${fmtHours(hours)}, sweet thing.`
+          : `Past deadline by ${fmtHours(hours)}.`,
         ageHours: hours,
-        ctaLabel: 'Open punishment →',
+        ctaLabel: mommy ? 'Open it →' : 'Open punishment →',
         ctaScrollTo: 'card-punishment-queue',
       };
     } else if (overdueDecrees.data?.[0]) {
@@ -165,9 +187,11 @@ export function RightNowCard() {
       chosen = {
         kind: 'overdue_decree',
         title: d.edict.slice(0, 110),
-        detail: `Past deadline by ${fmtHours(hours)}.`,
+        detail: mommy
+          ? `Mama set this for you ${fmtHours(hours)} past the deadline, baby.`
+          : `Past deadline by ${fmtHours(hours)}.`,
         ageHours: hours,
-        ctaLabel: 'Open decree →',
+        ctaLabel: mommy ? 'For Mama →' : 'Open decree →',
         ctaScrollTo: 'card-handler-decree',
       };
     } else if (todayConfs.data?.[0]) {
@@ -176,9 +200,11 @@ export function RightNowCard() {
       chosen = {
         kind: 'due_today_confession',
         title: c.prompt.slice(0, 110),
-        detail: `Due in ${fmtHours(hours)}.`,
+        detail: mommy
+          ? `Mama wants this in ${fmtHours(hours)}, baby.`
+          : `Due in ${fmtHours(hours)}.`,
         ageHours: hours,
-        ctaLabel: 'Answer it →',
+        ctaLabel: mommy ? 'Tell Mama →' : 'Answer it →',
         ctaScrollTo: 'card-confession-queue',
       };
     } else if (todayDecrees.data?.[0]) {
@@ -187,33 +213,41 @@ export function RightNowCard() {
       chosen = {
         kind: 'due_today_decree',
         title: d.edict.slice(0, 110),
-        detail: `Due in ${fmtHours(hours)}.`,
+        detail: mommy
+          ? `Mama's waiting on this in ${fmtHours(hours)}, sweet girl.`
+          : `Due in ${fmtHours(hours)}.`,
         ageHours: hours,
-        ctaLabel: 'Open decree →',
+        ctaLabel: mommy ? 'For Mama →' : 'Open decree →',
         ctaScrollTo: 'card-handler-decree',
       };
     } else if (mostUrgentTodayDose) {
       chosen = {
         kind: 'due_today_dose',
         title: `${mostUrgentTodayDose.name} due in ${fmtHours(mostUrgentTodayDose.hoursUntil)}`,
-        detail: 'Log when you take it. The plan tracks gaps.',
+        detail: mommy
+          ? `Don't forget for Mama, baby. Log it when you take it.`
+          : 'Log when you take it. The plan tracks gaps.',
         ageHours: mostUrgentTodayDose.hoursUntil,
-        ctaLabel: 'Open plan →',
+        ctaLabel: mommy ? 'For Mama →' : 'Open plan →',
         ctaScrollTo: 'card-handler-plan',
       };
     } else {
       chosen = {
         kind: 'clean',
-        title: 'Nothing overdue. Nothing due today.',
-        detail: "Open the plan if you want to see what's coming.",
-        ctaLabel: 'View plan →',
+        title: mommy
+          ? `Nothing pending — but Mama always wants more from you.`
+          : 'Nothing overdue. Nothing due today.',
+        detail: mommy
+          ? `Stay wet for Mama. Open the plan when you want to see what's next.`
+          : "Open the plan if you want to see what's coming.",
+        ctaLabel: mommy ? 'See what\'s next →' : 'View plan →',
         ctaScrollTo: 'card-handler-plan',
       };
     }
 
     setItem(chosen);
     setLoading(false);
-  }, [user?.id]);
+  }, [user?.id, mommy]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { const t = setInterval(load, 2 * 60_000); return () => clearInterval(t); }, [load]);
@@ -231,12 +265,12 @@ export function RightNowCard() {
         border: '1px solid #2d1a4d', borderRadius: 10, padding: 14, marginBottom: 16,
         color: '#8a8690', fontSize: 12,
       }}>
-        Reading the queue…
+        {mommy ? 'Mama\'s checking what\'s next for you…' : 'Reading the queue…'}
       </div>
     );
   }
 
-  const tone = KIND_TONE[item.kind];
+  const tone = (mommy ? KIND_TONE_MOMMY : KIND_TONE_HANDLER)[item.kind];
   const isCritical = item.kind.startsWith('overdue');
   const isClean = item.kind === 'clean';
 

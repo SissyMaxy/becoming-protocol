@@ -11,7 +11,10 @@
 import { supabase } from './supabase';
 import { getActiveAnchors } from './ritual-anchors';
 import type { AnchorStrength } from '../types/hypno-session';
-import { isMommyPersona, isTestPollution, mommyVoiceCleanup } from './persona/dommy-mommy';
+import {
+  isMommyPersona, isTestPollution, mommyVoiceCleanup,
+  denialDaysToPhrase,
+} from './persona/dommy-mommy';
 
 // ============================================
 // TYPES
@@ -29,6 +32,10 @@ export interface HandlerBriefing {
   ownWordsCallback: string;
   // Today's compliance score (0-100) + tone signal + delta vs yesterday.
   complianceScore: ComplianceScoreSection | null;
+  // Resolved persona flag — drives section labels and microcopy in the UI.
+  // True when handler_persona='dommy_mommy'. Other personas read as default
+  // (clinical/therapist Handler voice).
+  isMommy: boolean;
 }
 
 export interface ComplianceScoreSection {
@@ -78,6 +85,16 @@ export interface CuratedComment {
 // ============================================
 
 export async function composeHandlerBriefing(userId: string): Promise<HandlerBriefing> {
+  // Persona pull drives voice for every section. Mama wraps everything in
+  // pet-name + plain phrasing; default Handler keeps the clinical/data
+  // voice. Resolved once and threaded through.
+  const personaPromise = supabase
+    .from('user_state')
+    .select('handler_persona')
+    .eq('user_id', userId)
+    .maybeSingle()
+    .then(({ data }) => isMommyPersona((data as { handler_persona?: string } | null)?.handler_persona ?? null));
+
   const [
     overnightData,
     todayData,
@@ -85,13 +102,15 @@ export async function composeHandlerBriefing(userId: string): Promise<HandlerBri
     audienceData,
     denialData,
     anchorData,
-  ] = await Promise.allSettled([
-    getOvernightData(userId),
-    getTodayData(userId),
-    getProgressData(userId),
-    getAudienceData(userId),
-    getDenialData(userId),
-    getActiveAnchors(userId),
+    mommy,
+  ] = await Promise.all([
+    Promise.allSettled([getOvernightData(userId)]).then(r => r[0]),
+    Promise.allSettled([getTodayData(userId)]).then(r => r[0]),
+    Promise.allSettled([getProgressData(userId)]).then(r => r[0]),
+    Promise.allSettled([getAudienceData(userId)]).then(r => r[0]),
+    Promise.allSettled([getDenialData(userId)]).then(r => r[0]),
+    Promise.allSettled([getActiveAnchors(userId)]).then(r => r[0]),
+    personaPromise,
   ]);
 
   const denial = denialData.status === 'fulfilled' ? denialData.value : null;
@@ -99,27 +118,30 @@ export async function composeHandlerBriefing(userId: string): Promise<HandlerBri
   const overnight = buildOvernightSection(
     overnightData.status === 'fulfilled' ? overnightData.value : null,
     denial,
+    mommy,
   );
 
   const today = buildTodaySection(
     todayData.status === 'fulfilled' ? todayData.value : null,
     denial,
     anchorData.status === 'fulfilled' ? anchorData.value : [],
+    mommy,
   );
 
   const progress = buildProgressSection(
     progressData.status === 'fulfilled' ? progressData.value : null,
+    mommy,
   );
 
   const audience = buildAudienceSection(
     audienceData.status === 'fulfilled' ? audienceData.value : null,
   );
 
-  const affirmation = generateAffirmation(denial);
+  const affirmation = generateAffirmation(denial, mommy);
   const ownWordsCallback = await getOwnWordsCallback(userId);
   const complianceScore = await getComplianceScore(userId);
 
-  return { overnight, today, progress, audience, affirmation, ownWordsCallback, complianceScore };
+  return { overnight, today, progress, audience, affirmation, ownWordsCallback, complianceScore, isMommy: mommy };
 }
 
 // ============================================
@@ -330,6 +352,7 @@ async function getDenialData(userId: string) {
 function buildOvernightSection(
   data: Awaited<ReturnType<typeof getOvernightData>> | null,
   _denial: Awaited<ReturnType<typeof getDenialData>> | null,
+  mommy: boolean,
 ): OvernightSection {
   const items: BriefingItem[] = [];
 
@@ -343,9 +366,16 @@ function buildOvernightSection(
       if (taskBank?.domain) domains.add(taskBank.domain);
     }
     const domainList = Array.from(domains).join(', ');
+    const n = data.yesterdayTasks.length;
     items.push({
       icon: 'bot',
-      text: `She completed ${data.yesterdayTasks.length} task${data.yesterdayTasks.length > 1 ? 's' : ''} yesterday${domainList ? ` — ${domainList}` : ''}.`,
+      text: mommy
+        ? (n === 1
+            ? `You finished one thing for Mama yesterday${domainList ? ` (${domainList})` : ''}, baby.`
+            : n <= 3
+              ? `You did a few things for Mama yesterday${domainList ? ` — ${domainList}` : ''}.`
+              : `You stayed busy for Mama yesterday${domainList ? ` — ${domainList}` : ''}, sweet thing.`)
+        : `She completed ${n} task${n > 1 ? 's' : ''} yesterday${domainList ? ` — ${domainList}` : ''}.`,
       type: 'info',
     });
   }
@@ -354,16 +384,23 @@ function buildOvernightSection(
   if (data.yesterdayEntry) {
     const e = data.yesterdayEntry;
     if (e.alignment_score) {
+      const a = e.alignment_score;
       items.push({
         icon: 'wave',
-        text: `Alignment: ${e.alignment_score}/10.`,
+        text: mommy
+          ? (a >= 8 ? 'You felt close to her yesterday, baby — Mama could tell.'
+            : a >= 5 ? 'You held the shape yesterday, sweet girl. Mama saw you trying.'
+            : 'You drifted yesterday, baby. Mama wants you closer today.')
+          : `Alignment: ${a}/10.`,
         type: 'info',
       });
     }
     if (e.points_earned && e.points_earned > 0) {
       items.push({
         icon: 'dollar',
-        text: `${e.points_earned} points earned yesterday.`,
+        text: mommy
+          ? 'Mama saw you earning yesterday. Good girl.'
+          : `${e.points_earned} points earned yesterday.`,
         type: 'info',
       });
     }
@@ -371,23 +408,31 @@ function buildOvernightSection(
 
   // Evening mood
   if (data.eveningMood?.score) {
-    const moodLabel = data.eveningMood.score >= 7 ? 'Good' : data.eveningMood.score >= 5 ? 'Steady' : 'Low';
-    items.push({
-      icon: 'moon',
-      text: `Evening mood: ${moodLabel} (${data.eveningMood.score}/10).`,
-      type: 'info',
-    });
+    const score = data.eveningMood.score;
+    if (mommy) {
+      const phrase = score >= 7 ? 'You went to bed soft for Mama, baby.'
+        : score >= 5 ? 'You went to bed steady, sweet thing.'
+        : 'You went to bed low last night, baby. Tell Mama what was sitting on you.';
+      items.push({ icon: 'moon', text: phrase, type: 'info' });
+    } else {
+      const moodLabel = score >= 7 ? 'Good' : score >= 5 ? 'Steady' : 'Low';
+      items.push({
+        icon: 'moon',
+        text: `Evening mood: ${moodLabel} (${score}/10).`,
+        type: 'info',
+      });
+    }
   }
-
-  // Release info removed from OVERNIGHT — the Release Check-In component
-  // on MorningBriefing handles this with actual date, context, and follow-up.
 
   // Content posted overnight
   if (data.contentPosted.length > 0) {
     const platforms = [...new Set(data.contentPosted.map(c => c.platform))].join(', ');
+    const n = data.contentPosted.length;
     items.push({
       icon: 'bot',
-      text: `${data.contentPosted.length} post${data.contentPosted.length > 1 ? 's' : ''} went live${platforms ? ` on ${platforms}` : ''}.`,
+      text: mommy
+        ? `Your posts went out overnight${platforms ? ` on ${platforms}` : ''}, baby. Mama's watching the response.`
+        : `${n} post${n > 1 ? 's' : ''} went live${platforms ? ` on ${platforms}` : ''}.`,
       type: 'info',
     });
   }
@@ -395,21 +440,31 @@ function buildOvernightSection(
   // Last hypno session
   if (data.lastSession) {
     const s = data.lastSession;
-    items.push({
-      icon: 'wave',
-      text: `Last session: ${s.total_duration_minutes}min, depth ${s.trance_depth_self_report}/5${s.commitment_extracted ? ' — commitment extracted' : ''}.`,
-      type: 'info',
-    });
+    if (mommy) {
+      const depth = s.trance_depth_self_report >= 4 ? 'gone deep for Mama'
+        : s.trance_depth_self_report >= 2 ? 'opened up for Mama'
+        : 'sat with Mama, even shallow';
+      items.push({
+        icon: 'wave',
+        text: `You ${depth} last session, ${s.total_duration_minutes} minutes${s.commitment_extracted ? ' — and you gave Mama something' : ''}.`,
+        type: 'info',
+      });
+    } else {
+      items.push({
+        icon: 'wave',
+        text: `Last session: ${s.total_duration_minutes}min, depth ${s.trance_depth_self_report}/5${s.commitment_extracted ? ' — commitment extracted' : ''}.`,
+        type: 'info',
+      });
+    }
   }
-
-  // Nothing at all — only fallback. Do NOT say "Day 1 no data" if she
-  // actually has history; the section is hidden by the UI when empty.
 
   const summary = items.length === 0
     ? ''
     : items.length === 1
       ? items[0].text
-      : `${items.length} data points from yesterday.`;
+      : (mommy
+          ? `Mama saw all of it, baby.`
+          : `${items.length} data points from yesterday.`);
 
   return { items, summary };
 }
@@ -418,20 +473,28 @@ function buildTodaySection(
   data: Awaited<ReturnType<typeof getTodayData>> | null,
   denial: Awaited<ReturnType<typeof getDenialData>> | null,
   anchors: Awaited<ReturnType<typeof getActiveAnchors>>,
+  mommy: boolean,
 ): TodaySection {
   const items: BriefingItem[] = [];
 
-  // Denial day + streak (always present after day 0)
+  // Denial / chastity status. Mommy refuses to cite "Day N" — translates.
   if (denial) {
-    const parts: string[] = [];
-    if (denial.denial_day !== null && denial.denial_day !== undefined) {
-      parts.push(`Day ${denial.denial_day} denial`);
-    }
-    if (denial.streak_days) {
-      parts.push(`${denial.streak_days}-day streak`);
-    }
-    if (parts.length > 0) {
-      items.push({ icon: 'lock', text: `${parts.join('. ')}.`, type: 'fact' });
+    if (mommy) {
+      const phrase = denialDaysToPhrase(denial.denial_day ?? 0);
+      // Capitalize first char.
+      const cap = phrase.charAt(0).toUpperCase() + phrase.slice(1);
+      items.push({ icon: 'lock', text: `${cap}.`, type: 'fact' });
+    } else {
+      const parts: string[] = [];
+      if (denial.denial_day !== null && denial.denial_day !== undefined) {
+        parts.push(`Day ${denial.denial_day} denial`);
+      }
+      if (denial.streak_days) {
+        parts.push(`${denial.streak_days}-day streak`);
+      }
+      if (parts.length > 0) {
+        items.push({ icon: 'lock', text: `${parts.join('. ')}.`, type: 'fact' });
+      }
     }
   }
 
@@ -439,9 +502,16 @@ function buildTodaySection(
   if (data?.todayTasks && data.todayTasks.length > 0) {
     const pending = data.todayTasks.filter(t => t.status === 'pending').length;
     const completed = data.todayTasks.filter(t => t.status === 'completed').length;
+    const total = data.todayTasks.length;
     items.push({
       icon: 'bot',
-      text: `${data.todayTasks.length} tasks prescribed. ${completed > 0 ? `${completed} done.` : `${pending} pending.`}`,
+      text: mommy
+        ? (completed > 0
+            ? `Mama set you ${total === 1 ? 'one thing' : `${total} things`} today, baby — you've already done ${completed}. Good girl.`
+            : pending === 1
+              ? `Mama wants one thing from you today, sweet girl.`
+              : `Mama's got a few things lined up for you today, baby.`)
+        : `${total} tasks prescribed. ${completed > 0 ? `${completed} done.` : `${pending} pending.`}`,
       type: 'fact',
     });
   }
@@ -451,7 +521,9 @@ function buildTodaySection(
   if (totalQueued > 0) {
     items.push({
       icon: 'bot',
-      text: `${totalQueued} content item${totalQueued > 1 ? 's' : ''} awaiting review.`,
+      text: mommy
+        ? `Mama's holding ${totalQueued === 1 ? 'a piece of content' : 'content'} for you to look at, baby.`
+        : `${totalQueued} content item${totalQueued > 1 ? 's' : ''} awaiting review.`,
       type: 'action',
     });
   }
@@ -459,9 +531,12 @@ function buildTodaySection(
   // Scheduled posts
   if (data?.scheduledPosts && data.scheduledPosts.length > 0) {
     const platforms = [...new Set(data.scheduledPosts.map(p => p.platform))].join(', ');
+    const n = data.scheduledPosts.length;
     items.push({
       icon: 'bot',
-      text: `${data.scheduledPosts.length} post${data.scheduledPosts.length > 1 ? 's' : ''} scheduled today (${platforms}).`,
+      text: mommy
+        ? `Your posts go out today${platforms ? ` on ${platforms}` : ''}, sweet thing. Mama's watching.`
+        : `${n} post${n > 1 ? 's' : ''} scheduled today (${platforms}).`,
       type: 'scheduled',
     });
   }
@@ -469,9 +544,21 @@ function buildTodaySection(
   // Gina status
   if (denial) {
     if (denial.gina_home === false) {
-      items.push({ icon: 'lock', text: 'Gina away — full protocol window open.', type: 'info' });
+      items.push({
+        icon: 'lock',
+        text: mommy
+          ? `Gina's out, baby. Full window — Mama wants more from you while she's gone.`
+          : 'Gina away — full protocol window open.',
+        type: 'info',
+      });
     } else if (denial.gina_asleep) {
-      items.push({ icon: 'lock', text: 'Gina asleep — extended window.', type: 'info' });
+      items.push({
+        icon: 'lock',
+        text: mommy
+          ? `Gina's asleep, sweet girl. Mama's got you for a while longer.`
+          : 'Gina asleep — extended window.',
+        type: 'info',
+      });
     }
   }
 
@@ -480,60 +567,81 @@ function buildTodaySection(
     const strongest = anchors.reduce((a, b) =>
       strengthOrder(b.estimated_strength) > strengthOrder(a.estimated_strength) ? b : a
     );
+    const anchorName = strongest.anchor_value.split('_').slice(0, 2).join(' ');
     items.push({
       icon: 'anchor',
-      text: `Anchor "${strongest.anchor_value.split('_').slice(0, 2).join(' ')}": ${strongest.estimated_strength} (${strongest.sessions_paired} sessions).`,
+      text: mommy
+        ? `Mama's got "${anchorName}" sitting in your head — ${
+            strongest.estimated_strength === 'conditioned' ? 'it lights you up now, baby' :
+            strongest.estimated_strength === 'established' ? 'it lands every time for Mama' :
+            strongest.estimated_strength === 'forming' ? 'getting deeper every session' :
+            'just starting to take, sweet thing'
+          }.`
+        : `Anchor "${anchorName}": ${strongest.estimated_strength} (${strongest.sessions_paired} sessions).`,
       type: 'info',
     });
   }
 
   const summary = items.length === 0
-    ? 'Nothing prescribed yet.'
+    ? (mommy ? `Mama hasn't lined anything up yet, baby.` : 'Nothing prescribed yet.')
     : items.length <= 2
       ? items.map(i => i.text).join(' ')
-      : `${items.length} things in motion.`;
+      : (mommy ? `Mama's got you busy today, sweet girl.` : `${items.length} things in motion.`);
 
   return { items, summary };
 }
 
 function buildProgressSection(
   data: Awaited<ReturnType<typeof getProgressData>> | null,
+  mommy: boolean,
 ): ProgressSection {
   if (!data || (data.monthlyCompletions === 0 && data.totalCompletions === 0)) {
     return {
       domain: 'Protocol',
-      highlight: 'No tasks completed yet. Her first task changes that.',
+      highlight: mommy
+        ? `You haven't done anything for Mama yet, baby. First one starts now.`
+        : 'No tasks completed yet. Her first task changes that.',
     };
   }
 
   const { monthlyCompletions, totalCompletions, domainCounts, streakDays } = data;
 
-  // Find the most-practiced domain
   const sortedDomains = Object.entries(domainCounts).sort((a, b) => b[1] - a[1]);
   const topDomain = sortedDomains.length > 0 ? sortedDomains[0] : null;
   const activeDomainCount = sortedDomains.length;
 
+  if (mommy) {
+    const lines: string[] = [];
+    if (topDomain) {
+      lines.push(`Mama's seen you working on ${topDomain[0]} most this month, sweet girl.`);
+    }
+    if (activeDomainCount > 1) {
+      lines.push(`You've been touching a few different things for Mama.`);
+    }
+    if (streakDays > 0) {
+      lines.push(streakDays >= 14
+        ? `And you've been showing up for Mama every day for weeks now, baby.`
+        : streakDays >= 7
+          ? `You've been showing up for Mama every day for over a week.`
+          : streakDays >= 3
+            ? `You've been keeping a streak for Mama, sweet thing.`
+            : `You've started a little streak for Mama.`);
+    }
+    return {
+      domain: topDomain?.[0] || 'Protocol',
+      highlight: lines.join(' '),
+      hrtReframe: topDomain && (topDomain[0] === 'voice' || topDomain[0] === 'style')
+        ? 'Every bit of this is your body catching up to who Mama already sees.'
+        : undefined,
+    };
+  }
+
   const parts: string[] = [];
-
-  if (topDomain) {
-    parts.push(`Most active: ${topDomain[0]} (${topDomain[1]} this month)`);
-  }
-
-  if (activeDomainCount > 1) {
-    parts.push(`${activeDomainCount} domains practiced`);
-  }
-
-  if (monthlyCompletions > 0) {
-    parts.push(`${monthlyCompletions} tasks this month`);
-  }
-
-  if (totalCompletions > monthlyCompletions) {
-    parts.push(`${totalCompletions} all-time`);
-  }
-
-  if (streakDays > 0) {
-    parts.push(`${streakDays}-day streak`);
-  }
+  if (topDomain) parts.push(`Most active: ${topDomain[0]} (${topDomain[1]} this month)`);
+  if (activeDomainCount > 1) parts.push(`${activeDomainCount} domains practiced`);
+  if (monthlyCompletions > 0) parts.push(`${monthlyCompletions} tasks this month`);
+  if (totalCompletions > monthlyCompletions) parts.push(`${totalCompletions} all-time`);
+  if (streakDays > 0) parts.push(`${streakDays}-day streak`);
 
   return {
     domain: topDomain?.[0] || 'Protocol',
@@ -569,8 +677,22 @@ function buildAudienceSection(
   return { comments, conditioningTarget };
 }
 
-function generateAffirmation(denial: Awaited<ReturnType<typeof getDenialData>> | null): string {
+function generateAffirmation(
+  denial: Awaited<ReturnType<typeof getDenialData>> | null,
+  mommy: boolean,
+): string {
   const day = denial?.denial_day || 0;
+
+  if (mommy) {
+    // No "Day N" citations. Translate denial duration to plain Mama voice.
+    if (day === 0) return 'You showed up for Mama today, baby. That\'s where it starts.';
+    if (day <= 2) return 'Good girl. You\'ve been holding for Mama since yesterday.';
+    if (day <= 4) return 'Mama can feel the restlessness in you, sweet thing. Don\'t fight it — let it work.';
+    if (day === 5) return 'Everything you\'re feeling right now is real, baby. Stay with Mama in it.';
+    if (day <= 7) return 'You\'ve been good for Mama all week. Your body\'s catching up to her, sweet girl.';
+    if (day <= 13) return 'You\'ve been holding for Mama almost two weeks now, baby. She\'s proud of you.';
+    return 'It\'s been so long since you came for Mama. You\'re becoming who she already sees.';
+  }
 
   if (day === 0) return 'She showed up. Day zero. The foundation starts here.';
   if (day <= 2) return `Good girl. Day ${day} denial. She's building something.`;

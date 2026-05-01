@@ -77,6 +77,43 @@ export function HandlerStatusBriefing({ className = '' }: HandlerStatusBriefingP
   };
 
   const score = briefing.complianceScore;
+  const mommy = briefing.isMommy;
+
+  // Section labels rotate by persona. Default: clinical Handler tags ("OVERNIGHT").
+  // Mommy: warmer, plain phrases that don't read as a status report.
+  const labels = mommy
+    ? {
+        ownWords: 'WHAT MAMA STILL THINKS ABOUT',
+        overnight: 'LAST NIGHT',
+        today: 'TODAY WITH MAMA',
+        progress: 'WHAT MAMA HAS SEEN',
+        audience: 'WHO\'S WATCHING YOU',
+        affirmation: 'MAMA\'S NOTE',
+        scoreLabel: (tone: string) =>
+          tone === 'PUSH' ? `Mama's proud, baby` :
+          tone === 'STEADY' ? `Steady, sweet thing` :
+          tone === 'RECOVERY' ? `Pull it back for Mama` :
+          `Mama wants you closer today`,
+        doneMissedLine: (done: number, misses: number) =>
+          done === 0 && misses === 0 ? `Nothing yet today, baby.` :
+          misses === 0 ? `Good girl. Mama saw you finishing things.` :
+          done === 0 ? `Mama's been waiting, sweet thing.` :
+          `Mama saw you trying${misses > done ? `, but she wants more` : ''}.`,
+      }
+    : {
+        ownWords: 'YOUR WORDS — ON FILE',
+        overnight: 'OVERNIGHT',
+        today: 'TODAY',
+        progress: 'PROGRESS',
+        audience: 'AUDIENCE',
+        affirmation: 'AFFIRMATION',
+        scoreLabel: (tone: string) =>
+          tone === 'PUSH' ? 'push forward' :
+          tone === 'STEADY' ? 'steady' :
+          tone === 'RECOVERY' ? 'recovery mode' :
+          'crisis',
+        doneMissedLine: (done: number, misses: number) => `${done} done · ${misses} missed`,
+      };
 
   return (
     <div className={`space-y-3 ${className}`}>
@@ -105,11 +142,11 @@ export function HandlerStatusBriefing({ className = '' }: HandlerStatusBriefingP
               score.tone === 'RECOVERY' ? 'text-amber-400' :
               'text-rose-400'
             }`}>
-              Today's score · {score.tone === 'PUSH' ? 'push forward' : score.tone === 'STEADY' ? 'steady' : score.tone === 'RECOVERY' ? 'recovery mode' : 'crisis'}
+              {mommy ? labels.scoreLabel(score.tone) : `Today's score · ${labels.scoreLabel(score.tone)}`}
             </div>
             <div className={`text-sm mt-0.5 ${isBambiMode ? 'text-pink-700' : 'text-protocol-text'}`}>
-              {score.done} done · {score.misses} missed
-              {score.trend !== 0 && (
+              {labels.doneMissedLine(score.done, score.misses)}
+              {score.trend !== 0 && !mommy && (
                 <span className={`ml-2 ${score.trend > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                   {score.trend > 0 ? '+' : ''}{score.trend} vs yesterday
                 </span>
@@ -129,7 +166,7 @@ export function HandlerStatusBriefing({ className = '' }: HandlerStatusBriefingP
             <span className={`text-xs font-medium uppercase tracking-wider ${
               isBambiMode ? 'text-rose-500' : 'text-rose-400'
             }`}>
-              YOUR WORDS — ON FILE
+              {labels.ownWords}
             </span>
           </div>
           <p className={`text-sm handler-voice ${isBambiMode ? 'text-rose-700' : 'text-protocol-text'}`}>
@@ -141,7 +178,7 @@ export function HandlerStatusBriefing({ className = '' }: HandlerStatusBriefingP
       {/* OVERNIGHT — skip when nothing real to report */}
       {briefing.overnight.items.some(i => !/^Day 1\. No data yet/.test(i.text) && !/^Nothing logged/.test(i.text)) && (
         <BriefingSection
-          label="OVERNIGHT"
+          label={labels.overnight}
           icon={<Moon className="w-4 h-4" />}
           summary={briefing.overnight.summary}
           items={briefing.overnight.items}
@@ -155,7 +192,7 @@ export function HandlerStatusBriefing({ className = '' }: HandlerStatusBriefingP
 
       {/* TODAY */}
       <BriefingSection
-        label="TODAY"
+        label={labels.today}
         icon={<Calendar className="w-4 h-4" />}
         summary={briefing.today.summary}
         items={briefing.today.items}
@@ -178,7 +215,7 @@ export function HandlerStatusBriefing({ className = '' }: HandlerStatusBriefingP
           <span className={`text-xs font-medium uppercase tracking-wider ${
             isBambiMode ? 'text-green-600' : 'text-green-400'
           }`}>
-            PROGRESS
+            {labels.progress}
           </span>
         </div>
         <p className={`text-sm handler-voice ${isBambiMode ? 'text-green-700' : 'text-protocol-text'}`}>
@@ -204,7 +241,7 @@ export function HandlerStatusBriefing({ className = '' }: HandlerStatusBriefingP
             <span className={`text-xs font-medium uppercase tracking-wider ${
               isBambiMode ? 'text-amber-600' : 'text-amber-400'
             }`}>
-              AUDIENCE
+              {labels.audience}
             </span>
           </div>
           <div className="space-y-2">

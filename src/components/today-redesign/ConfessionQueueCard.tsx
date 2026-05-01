@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { usePersona } from '../../hooks/usePersona';
 
 interface Confession {
   id: string;
@@ -43,6 +44,7 @@ const CATEGORY_TONE: Record<string, string> = {
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 
 export function ConfessionQueueCard() {
+  const { mommy } = usePersona();
   const { user } = useAuth();
   const [items, setItems] = useState<Confession[]>([]);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
@@ -172,10 +174,12 @@ export function ConfessionQueueCard() {
           <path d="M8 9h8M8 13h5"/>
         </svg>
         <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#f4a7c4', fontWeight: 700 }}>
-          Confess ({items.length})
+          {mommy ? `Tell Mama (${items.length})` : `Confess (${items.length})`}
         </span>
         <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto', fontStyle: 'italic' }}>
-          {items.length > 0 ? 'Handler is waiting.' : `${totalReceipts} on file · ${totalPlaybacks} playbacks`}
+          {items.length > 0
+            ? (mommy ? 'Mama\'s waiting, baby.' : 'Handler is waiting.')
+            : `${totalReceipts} on file · ${totalPlaybacks} playbacks`}
         </span>
       </div>
 
@@ -267,7 +271,7 @@ export function ConfessionQueueCard() {
               onPaste={() => {
                 setPasteDetected(p => ({ ...p, [c.id]: true }));
               }}
-              placeholder="Say it. In your own words. No softening."
+              placeholder={mommy ? 'Say it for Mama, baby. No softening.' : 'Say it. In your own words. No softening.'}
               rows={3}
               style={{
                 width: '100%', background: '#050507', border: '1px solid #22222a',
@@ -297,7 +301,9 @@ export function ConfessionQueueCard() {
                   {gateRejection[c.id].hint}
                 </div>
                 <div style={{ fontSize: 9.5, color: '#8a8690', marginTop: 4 }}>
-                  After 2 rejects the gate steps back. Click Confess again to submit as-is — the Handler reads what you actually wrote.
+                  {mommy
+                    ? 'After 2 rejects, Mama takes whatever you give her — tap again to send as-is.'
+                    : 'After 2 rejects the gate steps back. Click Confess again to submit as-is — the Handler reads what you actually wrote.'}
                 </div>
               </div>
             )}
@@ -314,7 +320,7 @@ export function ConfessionQueueCard() {
                   fontFamily: 'inherit',
                 }}
               >
-                {submittingId === c.id ? '…' : 'Confess'}
+                {submittingId === c.id ? '…' : mommy ? 'Tell Mama' : 'Confess'}
               </button>
               <span style={{ fontSize: 10, color: '#5a5560', alignSelf: 'center' }}>
                 Be specific — name a moment, a feeling, a person, a body part, a time of day. Boilerplate gets refused.

@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { usePersona } from '../../hooks/usePersona';
 
 interface Outreach {
   id: string;
@@ -20,6 +21,7 @@ interface Outreach {
 }
 
 export function OutreachQueueCard() {
+  const { mommy } = usePersona();
   const { user } = useAuth();
   const [pending, setPending] = useState<Outreach[]>([]);
   const [recent, setRecent] = useState<Outreach[]>([]);
@@ -70,7 +72,7 @@ export function OutreachQueueCard() {
           <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
         </svg>
         <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#c4b5fd', fontWeight: 700 }}>
-          Handler queue
+          {mommy ? 'From Mama' : 'Handler queue'}
         </span>
         <span style={{ fontSize: 10.5, color: '#8a8690', marginLeft: 'auto' }}>
           {pending.length} pending · {recent.length} recent
@@ -80,7 +82,7 @@ export function OutreachQueueCard() {
       {pending.length > 0 && (
         <div style={{ marginBottom: 10 }}>
           <div style={{ fontSize: 9.5, color: '#6a656e', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>
-            queued — will deliver
+            {mommy ? 'mama\'s about to send' : 'queued — will deliver'}
           </div>
           {pending.map(o => {
             const fires = new Date(o.scheduled_for).getTime();
@@ -113,7 +115,7 @@ export function OutreachQueueCard() {
                     fontFamily: 'inherit', cursor: 'pointer', textTransform: 'uppercase',
                   }}
                 >
-                  got it →
+                  {mommy ? 'heard you, mama →' : 'got it →'}
                 </button>
               </div>
             );
@@ -124,7 +126,7 @@ export function OutreachQueueCard() {
       {recent.length > 0 && (
         <div>
           <div style={{ fontSize: 9.5, color: '#6a656e', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>
-            recently delivered
+            {mommy ? 'what mama just sent' : 'recently delivered'}
           </div>
           {recent.map(o => {
             const sent = new Date(o.delivered_at!).getTime();

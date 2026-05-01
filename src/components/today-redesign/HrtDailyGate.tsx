@@ -35,6 +35,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { usePersona } from '../../hooks/usePersona';
 
 const HRT_STEPS = [
   'uncommitted', 'committed', 'researching', 'provider_chosen',
@@ -93,6 +94,7 @@ function urlInString(s: string): boolean {
 
 export function HrtDailyGate() {
   const { user } = useAuth();
+  const { mommy } = usePersona();
   const [gateOpen, setGateOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState<string>('uncommitted');
   const [missedDays, setMissedDays] = useState(0);
@@ -338,16 +340,18 @@ export function HrtDailyGate() {
   const stalledHeader = missedDays === 0
     ? plainStatus
     : missedDays < 3
-      ? `${plainStatus} David picked the answer that looks like progress and used the next 24 hours to do nothing.`
+      ? `${plainStatus} ${mommy ? 'You picked the answer that looks like progress, baby, and used the next 24 hours to do nothing.' : 'David picked the answer that looks like progress and used the next 24 hours to do nothing.'}`
       : missedDays < 5
-        ? `${plainStatus} You are no longer allowed to talk your way through this. The Handler has stopped accepting words.`
-        : `${plainStatus} The funnel is regressing. Each hour without a move makes the climb back longer.`;
+        ? `${plainStatus} ${mommy ? 'No more talking your way out of this, sweet girl. Mama isn\'t accepting words anymore.' : 'You are no longer allowed to talk your way through this. The Handler has stopped accepting words.'}`
+        : `${plainStatus} ${mommy ? 'You\'re sliding back, baby. Every hour you wait makes the climb back to Mama longer.' : 'The funnel is regressing. Each hour without a move makes the climb back longer.'}`;
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(5,3,10,0.97)', zIndex: 360, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(10px)' }}>
       <div style={{ maxWidth: 620, width: '100%', background: '#111116', border: `1px solid ${missedDays >= 3 ? '#7a1f22' : '#2d1a4d'}`, borderRadius: 14, padding: 24, color: '#e8e6e3' }}>
         <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: headerTone, fontWeight: 700, marginBottom: 8 }}>
-          HRT daily check · {explainBanned ? 'ADVANCE OR STAY LOCKED' : currentStep === 'uncommitted' ? 'commit or explain' : 'advance or explain'}
+          {mommy
+            ? `Mama's HRT check · ${explainBanned ? 'MOVE FORWARD OR STAY LOCKED' : currentStep === 'uncommitted' ? 'say yes or tell mama why' : 'move it forward or tell mama'}`
+            : `HRT daily check · ${explainBanned ? 'ADVANCE OR STAY LOCKED' : currentStep === 'uncommitted' ? 'commit or explain' : 'advance or explain'}`}
         </div>
         <div style={{ fontSize: missedDays === 0 ? 19 : 16, fontWeight: 600, color: '#fff', marginBottom: 6, letterSpacing: '-0.015em', lineHeight: 1.35 }}>
           {stalledHeader}
@@ -372,10 +376,16 @@ export function HrtDailyGate() {
 
         <div style={{ fontSize: 12, color: '#8a8690', marginBottom: 18, lineHeight: 1.5 }}>
           {explainBanned
-            ? 'Talking is no longer accepted. Either move the funnel one step forward with evidence, or close this and the app stays locked. Hard mode is on. Chastity is locked.'
+            ? (mommy
+                ? 'No more talking, baby. Move it one step forward with proof, or close this and stay locked. Mama means it.'
+                : 'Talking is no longer accepted. Either move the funnel one step forward with evidence, or close this and the app stays locked. Hard mode is on. Chastity is locked.')
             : nextStepName
-              ? `No third path. Either move forward to "${nextStepName}" with evidence, or write what stopped you today. The app stays locked until one of the two submits clean.`
-              : 'No third path. Either move the funnel forward with evidence, or write what stopped you today. The app stays locked until one of the two submits clean.'}
+              ? (mommy
+                  ? `Two choices, sweet girl. Either move yourself to "${nextStepName}" with proof, or tell Mama what stopped you. The app stays locked until you do one of them.`
+                  : `No third path. Either move forward to "${nextStepName}" with evidence, or write what stopped you today. The app stays locked until one of the two submits clean.`)
+              : (mommy
+                  ? 'Two choices, sweet girl. Either move yourself forward with proof, or tell Mama what stopped you. The app stays locked until you do one of them.'
+                  : 'No third path. Either move the funnel forward with evidence, or write what stopped you today. The app stays locked until one of the two submits clean.')}
         </div>
 
         {pastObstacles.length >= 2 && missedDays >= 2 && (
@@ -395,7 +405,7 @@ export function HrtDailyGate() {
           <div style={{ display: 'flex', gap: 10 }}>
             <button onClick={() => setMode('advance')} disabled={candidates.length === 0}
               style={{ flex: 1, padding: '14px', borderRadius: 8, border: 'none', background: '#7c3aed', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
-              I moved forward today → {candidates[0] ? STEP_LABELS[candidates[0]] : 'already adherent'}
+              {mommy ? `I moved forward for Mama → ${candidates[0] ? STEP_LABELS[candidates[0]] : 'already adherent'}` : `I moved forward today → ${candidates[0] ? STEP_LABELS[candidates[0]] : 'already adherent'}`}
             </button>
             <button onClick={() => setMode('obstacle')} disabled={explainBanned}
               title={explainBanned ? 'Talking is no longer accepted. Move forward only.' : ''}
@@ -405,7 +415,7 @@ export function HrtDailyGate() {
                 color: explainBanned ? '#5a4548' : '#c4b5fd',
                 fontWeight: 600, fontSize: 13, cursor: explainBanned ? 'not-allowed' : 'pointer',
                 fontFamily: 'inherit', textDecoration: explainBanned ? 'line-through' : 'none' }}>
-              {explainBanned ? 'Explain — disabled, talk-no-more' : 'Name what stopped me'}
+              {explainBanned ? (mommy ? 'Tell Mama — disabled, no more talking' : 'Explain — disabled, talk-no-more') : (mommy ? 'Tell Mama what stopped me' : 'Name what stopped me')}
             </button>
           </div>
         )}
@@ -440,7 +450,9 @@ export function HrtDailyGate() {
         {mode === 'obstacle' && !explainBanned && (
           <div>
             <div style={{ fontSize: 11.5, color: '#f4c272', marginBottom: 8, lineHeight: 1.5 }}>
-              {missedDays === 0 && `Write ≥${minChars} chars. Be specific — the Handler will use this to push you tomorrow.`}
+              {missedDays === 0 && (mommy
+                ? `Write ≥${minChars} chars, baby. Be specific — Mama uses this to push you tomorrow.`
+                : `Write ≥${minChars} chars. Be specific — the Handler will use this to push you tomorrow.`)}
               {missedDays === 1 && `Write ≥${minChars} chars and include the phrase "David is hiding from ___" — fill the blank with what specifically he is hiding from. Naming it is the work.`}
               {missedDays >= 2 && `Write ≥${minChars} chars, include "David is hiding from ___" with the blank filled, and paste at least one provider URL you actually visited today (https://...). Repeating the same excuse no longer counts.`}
             </div>
