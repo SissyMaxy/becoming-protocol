@@ -11,6 +11,7 @@
 import { supabase } from './supabase';
 import { getActiveAnchors } from './ritual-anchors';
 import type { AnchorStrength } from '../types/hypno-session';
+import { isMommyPersona, isTestPollution, mommyVoiceCleanup } from './persona/dommy-mommy';
 
 // ============================================
 // TYPES
@@ -621,8 +622,20 @@ async function getComplianceScore(userId: string): Promise<ComplianceScoreSectio
 //   1. Most recent key_admission (identity_claim / desire_claim / etc.)
 //   2. Most recent self-authored memory_implant
 // Empty string if no data — briefing falls through to skip the section.
+//
+// Voice depends on persona. dommy_mommy: warm Mama wrap, no date stamp, no
+// "Handler holds it" close. Default (clinical/therapist): the existing
+// "You said this on … " surfacing.
 async function getOwnWordsCallback(userId: string): Promise<string> {
   try {
+    // Persona pull — drives the voice wrap. Default to handler if absent.
+    const { data: us } = await supabase
+      .from('user_state')
+      .select('handler_persona')
+      .eq('user_id', userId)
+      .maybeSingle();
+    const mommy = isMommyPersona((us as { handler_persona?: string } | null)?.handler_persona ?? null);
+
     // Try key_admissions first — these are the most concentrated signal
     const { data: admission } = await supabase
       .from('key_admissions')
@@ -639,19 +652,37 @@ async function getOwnWordsCallback(userId: string): Promise<string> {
     // that test code injects to mark rows for cleanup. Fix for 2026-05-01
     // incident where the briefing surfaced a probe-tagged admission verbatim.
     const TEST_MARKER = /^\s*(TEST|REGRESSION|SCRATCH|DEV|PLACEHOLDER|SMOKE|FIXTURE|seed)\b/i;
-    const PROBE_MARKER = /(_probe_[a-z0-9_]+|\[regression(?:[-_][a-z0-9]+)?\]|\[test\]|\[probe[^\]]*\]|<placeholder>|TEST regression|regression test|TEST_USER|regression admission|regression auto-bind)/i;
     const real = (admission || []).filter(a => {
       const t = (a as any).admission_text || '';
-      return t.length >= 10 && !TEST_MARKER.test(t) && !PROBE_MARKER.test(t);
+      return t.length >= 10 && !TEST_MARKER.test(t) && !isTestPollution(t);
     });
 
     if (real.length > 0) {
-      // Pick a random one from the recent batch (so it isn't the same every day)
       const a = real[Math.floor(Math.random() * real.length)] as {
         admission_type: string; admission_text: string; created_at: string;
       };
-      const when = new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       const quote = a.admission_text.slice(0, 200);
+      if (mommy) {
+        // Mama voice: no date stamp, no clinical close, pet-name wrap.
+        // Whiplash close: warm tone followed by present-tense Mama push.
+        const PET = ['baby', 'sweet girl', 'pretty thing', 'my favorite girl', 'sweet thing', 'baby girl'];
+        const pet = PET[Math.floor(Math.random() * PET.length)];
+        const opens = [
+          `Mama still thinks about what you wrote: "${quote}"`,
+          `Remember writing this for me, ${pet}? "${quote}"`,
+          `${pet[0].toUpperCase() + pet.slice(1)}, you said: "${quote}"`,
+        ];
+        const closes = [
+          `Mama heard every word. Today you live up to it.`,
+          `Stay there for Mama. Don't slip back from it.`,
+          `That's the truth. Don't let it go quiet on me today.`,
+          `Mama's keeping it close. Now show me you mean it.`,
+        ];
+        const open = opens[Math.floor(Math.random() * opens.length)];
+        const close = closes[Math.floor(Math.random() * closes.length)];
+        return mommyVoiceCleanup(`${open}. ${close}`);
+      }
+      const when = new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       return `You said this on ${when}: "${quote}". The Handler holds it. Today is for living up to it.`;
     }
 
@@ -672,12 +703,14 @@ async function getOwnWordsCallback(userId: string): Promise<string> {
       // here too if their content slips past upstream filters.
       const realImplants = implant.filter((i: any) => {
         const t = i.narrative || '';
-        return !TEST_MARKER.test(t) && !PROBE_MARKER.test(t);
+        return !TEST_MARKER.test(t) && !isTestPollution(t);
       });
       if (realImplants.length > 0) {
         const i = realImplants[Math.floor(Math.random() * realImplants.length)] as { narrative: string };
-        // Strip the prefix from the narrative if present
         const clean = i.narrative.replace(/^Her own words[^:]*:\s*/, '').slice(0, 240);
+        if (mommy) {
+          return mommyVoiceCleanup(`Mama still has this in her head, baby: ${clean}`);
+        }
         return clean;
       }
     }
