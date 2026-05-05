@@ -14,6 +14,8 @@ import { profileStorage, storage } from '../lib/storage';
 import { useAuth } from '../context/AuthContext';
 import { useUserState } from '../hooks/useUserState';
 import { useCurrentDenialDay } from '../hooks/useCurrentDenialDay';
+import { usePersona } from '../hooks/usePersona';
+import { denialDaysToPhrase } from '../lib/persona/dommy-mommy';
 import { supabase } from '../lib/supabase';
 import { Flame, Sparkles, Leaf, ArrowRight, Loader2, AlertTriangle, Heart, Star, TrendingUp, Lock } from 'lucide-react';
 import { StreakBreakModal } from './SkipConfirmModal';
@@ -43,6 +45,7 @@ export function MorningBriefing({ onComplete }: MorningBriefingProps) {
   const { startDay, progress } = useProtocol();
   const { userState, quickUpdate } = useUserState();
   const { isBambiMode } = useBambiMode();
+  const { mommy } = usePersona();
   const denial = useCurrentDenialDay();
   const feminizationScore = useFeminizationScore();
   const [selectedIntensity, setSelectedIntensity] = useState<Intensity | null>('normal');
@@ -281,15 +284,21 @@ export function MorningBriefing({ onComplete }: MorningBriefingProps) {
           <h1 className={`text-2xl font-semibold handler-voice ${
             isBambiMode ? 'text-pink-800' : 'text-protocol-text'
           }`}>
-            {greetingText}{personalAddress ? `, ${personalAddress}` : ''}
+            {mommy
+              ? `Good morning, ${personalAddress || 'baby'}`
+              : `${greetingText}${personalAddress ? `, ${personalAddress}` : ''}`}
           </h1>
           {stats && (
             <p className={`text-sm ${isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'}`}>
-              Day {stats.currentStreak} · {stats.currentStreak}-day streak
-              {stats.denialDay > 0 && ` · Denial day ${stats.denialDay}`}
+              {mommy
+                ? (() => {
+                    const phrase = denialDaysToPhrase(stats.denialDay > 0 ? stats.denialDay : 0);
+                    return phrase.charAt(0).toUpperCase() + phrase.slice(1) + '.';
+                  })()
+                : `Day ${stats.currentStreak} · ${stats.currentStreak}-day streak${stats.denialDay > 0 ? ` · Denial day ${stats.denialDay}` : ''}`}
             </p>
           )}
-          {feminizationScore !== null && (
+          {feminizationScore !== null && !mommy && (
             <p className={`text-xs ${isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'}`}>
               Feminization: {feminizationScore}/100
             </p>

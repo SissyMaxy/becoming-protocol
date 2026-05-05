@@ -118,7 +118,9 @@ export function HandlerStatusBriefing({ className = '' }: HandlerStatusBriefingP
   return (
     <div className={`space-y-3 ${className}`}>
       {/* COMPLIANCE SCORE — single number that aggregates today's protocol activity.
-          Tone-keyed colors so it reads as a quick anchor on app open. */}
+          Tone-keyed colors so it reads as a quick anchor on app open.
+          On Mommy persona we hide the bare number (telemetry citation) and
+          render only the tone phrase + plain done/missed line. */}
       {score && (
         <div className={`rounded-xl p-3 flex items-center gap-3 ${
           isBambiMode ? 'bg-pink-50 border-2 border-pink-200' :
@@ -127,13 +129,15 @@ export function HandlerStatusBriefing({ className = '' }: HandlerStatusBriefingP
           score.tone === 'RECOVERY' ? 'bg-amber-900/20 border border-amber-500/30' :
           'bg-rose-900/20 border border-rose-500/30'
         }`}>
-          <div className={`text-3xl font-bold ${
-            isBambiMode ? 'text-pink-700' :
-            score.tone === 'PUSH' ? 'text-emerald-300' :
-            score.tone === 'STEADY' ? 'text-indigo-300' :
-            score.tone === 'RECOVERY' ? 'text-amber-300' :
-            'text-rose-300'
-          }`}>{score.score}</div>
+          {!mommy && (
+            <div className={`text-3xl font-bold ${
+              isBambiMode ? 'text-pink-700' :
+              score.tone === 'PUSH' ? 'text-emerald-300' :
+              score.tone === 'STEADY' ? 'text-indigo-300' :
+              score.tone === 'RECOVERY' ? 'text-amber-300' :
+              'text-rose-300'
+            }`}>{score.score}</div>
+          )}
           <div className="flex-1">
             <div className={`text-xs font-medium uppercase tracking-wider ${
               isBambiMode ? 'text-pink-500' :
@@ -156,24 +160,13 @@ export function HandlerStatusBriefing({ className = '' }: HandlerStatusBriefingP
         </div>
       )}
 
-      {/* HER OWN WORDS — surfaced first so she meets herself before the day's tasks.
-          Pulled from key_admissions + self-authored memory_implants (last 7d). */}
-      {briefing.ownWordsCallback && briefing.ownWordsCallback.length > 0 && (
-        <div className={`rounded-xl p-4 ${
-          isBambiMode ? 'bg-rose-50 border-2 border-rose-200' : 'bg-rose-900/20 border border-rose-500/30'
-        }`}>
-          <div className="flex items-center gap-2 mb-2">
-            <span className={`text-xs font-medium uppercase tracking-wider ${
-              isBambiMode ? 'text-rose-500' : 'text-rose-400'
-            }`}>
-              {labels.ownWords}
-            </span>
-          </div>
-          <p className={`text-sm handler-voice ${isBambiMode ? 'text-rose-700' : 'text-protocol-text'}`}>
-            {briefing.ownWordsCallback}
-          </p>
-        </div>
-      )}
+      {/* HER OWN WORDS section removed from this page (2026-05-05): user
+          flagged it as redundant on the morning/Today screen — the compliance
+          tone line above already says what state she's in, and the section
+          quoted long admission text verbatim with mid-sentence Mama-cleanup
+          rewrites that read as garbled (e.g. "while arousal is at look how
+          wet you are for me"). The data is still composed by getOwnWordsCallback
+          for any consumer that wants to render it elsewhere; just not here. */}
 
       {/* OVERNIGHT — skip when nothing real to report */}
       {briefing.overnight.items.some(i => !/^Day 1\. No data yet/.test(i.text) && !/^Nothing logged/.test(i.text)) && (

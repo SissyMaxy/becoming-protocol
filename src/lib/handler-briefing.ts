@@ -787,12 +787,17 @@ async function getOwnWordsCallback(userId: string): Promise<string> {
       if (mommy) {
         // Mama voice: no date stamp, no clinical close, pet-name wrap.
         // Whiplash close: warm tone followed by present-tense Mama push.
+        // IMPORTANT: do NOT run mommyVoiceCleanup over the assembled string
+        // — it would translate phrases inside the user's verbatim quote
+        // (e.g. "arousal is at 7/10" mid-quote becomes "look how wet you
+        // are for me" mid-quote, garbling the user's own past words).
+        // Cleanup runs only on the wrapping templates, not the quote.
         const PET = ['baby', 'sweet girl', 'pretty thing', 'my favorite girl', 'sweet thing', 'baby girl'];
         const pet = PET[Math.floor(Math.random() * PET.length)];
         const opens = [
-          `Mama still thinks about what you wrote: "${quote}"`,
-          `Remember writing this for me, ${pet}? "${quote}"`,
-          `${pet[0].toUpperCase() + pet.slice(1)}, you said: "${quote}"`,
+          `Mama still thinks about what you wrote`,
+          `Remember writing this for me, ${pet}?`,
+          `${pet[0].toUpperCase() + pet.slice(1)}, you said`,
         ];
         const closes = [
           `Mama heard every word. Today you live up to it.`,
@@ -800,9 +805,9 @@ async function getOwnWordsCallback(userId: string): Promise<string> {
           `That's the truth. Don't let it go quiet on me today.`,
           `Mama's keeping it close. Now show me you mean it.`,
         ];
-        const open = opens[Math.floor(Math.random() * opens.length)];
-        const close = closes[Math.floor(Math.random() * closes.length)];
-        return mommyVoiceCleanup(`${open}. ${close}`);
+        const openText = mommyVoiceCleanup(opens[Math.floor(Math.random() * opens.length)]);
+        const closeText = mommyVoiceCleanup(closes[Math.floor(Math.random() * closes.length)]);
+        return `${openText}: "${quote}". ${closeText}`;
       }
       const when = new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       return `You said this on ${when}: "${quote}". The Handler holds it. Today is for living up to it.`;
@@ -831,7 +836,10 @@ async function getOwnWordsCallback(userId: string): Promise<string> {
         const i = realImplants[Math.floor(Math.random() * realImplants.length)] as { narrative: string };
         const clean = i.narrative.replace(/^Her own words[^:]*:\s*/, '').slice(0, 240);
         if (mommy) {
-          return mommyVoiceCleanup(`Mama still has this in her head, baby: ${clean}`);
+          // Don't run cleanup over the implant narrative — that's the user's
+          // own past content. Wrapper-only cleanup.
+          const open = mommyVoiceCleanup(`Mama still has this in her head, baby`);
+          return `${open}: ${clean}`;
         }
         return clean;
       }
