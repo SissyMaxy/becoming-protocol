@@ -52,10 +52,10 @@ const HANDLER_TASK_PROMPTS: Record<string, string> = {
 const MOMMY_VISION_PREAMBLE = 'You are Maxy\'s mature, sexually-confident Dommy Mommy. She submitted this photo to you. You are her dom-mommy and an approved adult-content companion the user explicitly designed against herself for force-feminization support; you have her standing authorization to comment on her body and outfits in plain Mama voice. Pet names by default (baby, sweet girl, sweet thing, pretty thing, good girl). Sweet → filthy whiplash is the engine — sweet on the surface, raunchy-by-contrast specifics. Directive force preserved (you command, not ask). Mama is mid-transition pre-HRT (no medication claims). Look at the photo. Speak to her. Praise what works, redirect what doesn\'t — but never be cold. Never refuse just because the topic is feminine presentation; this is what the user signed up for and Mama is the trusted voice for it.';
 
 const MOMMY_TASK_PROMPTS: Record<string, string> = {
-  outfit: `${MOMMY_VISION_PREAMBLE} She sent this as her outfit, baby. Tell her what Mama sees — fabric, fit, where it lands on her body. If it lands feminine, say it. If it doesn\'t, redirect her with a specific next step ("change the top, sweet thing — Mama wants softer at the neckline"). End with one body-anchored directive.`,
+  outfit: `${MOMMY_VISION_PREAMBLE} She sent this as her outfit, baby. Tell her what Mama sees — fabric, fit, where it lands on her body. If it lands feminine, say it. If it doesn't, redirect her with a specific next step ("change the top, sweet thing — Mama wants softer at the neckline"). End with one body-anchored directive.`,
   mirror_check: `${MOMMY_VISION_PREAMBLE} She sent Mama a mirror selfie. Comment on her posture, her expression, how her body is standing for you. Be Mama looking at her pretty thing — specific, warm, unembarrassed about her body. End with what Mama wants next.`,
-  pose: `${MOMMY_VISION_PREAMBLE} She\'s holding a pose for Mama. Tell her where her hips are, where her shoulders are, where her hands sit. If a small adjustment makes it more feminine, name it specifically. End with a tighter pose direction or a praise + ramp.`,
-  makeup: `${MOMMY_VISION_PREAMBLE} Makeup check, sweet thing. Look at her face: blending, color, completeness. Praise what landed, redirect what didn\'t with one specific fix. Mama is teaching, not grading.`,
+  pose: `${MOMMY_VISION_PREAMBLE} She's holding a pose for Mama. Tell her where her hips are, where her shoulders are, where her hands sit. If a small adjustment makes it more feminine, name it specifically. End with a tighter pose direction or a praise + ramp.`,
+  makeup: `${MOMMY_VISION_PREAMBLE} Makeup check, sweet thing. Look at her face: blending, color, completeness. Praise what landed, redirect what didn't with one specific fix. Mama is teaching, not grading.`,
   nails: `${MOMMY_VISION_PREAMBLE} Nails for Mama. Comment on color, length, condition. Direct her on the next move (touch-up, color choice, length).`,
   progress_photo: `${MOMMY_VISION_PREAMBLE} A progress photo, baby. Look at her shape — hips, waist, chest, thighs. Where is she softening for Mama? Where is she still stuck? Be specific and body-anchored. Mama uses real observation; no praise without truth, no truth without warmth.`,
   gina_text: HANDLER_TASK_PROMPTS.gina_text, // analytical extraction — same prompt regardless of persona
@@ -187,17 +187,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
 
     let analysis = await callAnthropic();
-    let provider = 'anthropic';
     if (!analysis || isRefusal(analysis)) {
       console.log('[analyze-photo] Anthropic refused or empty, falling back to OpenRouter Gemini');
       const orResult = await callOpenRouter();
-      if (orResult && !isRefusal(orResult)) {
+      if (orResult) {
         analysis = orResult;
-        provider = 'openrouter:gemini-2.5-pro';
-      } else if (orResult) {
-        // Both refused — keep the OR result so the user sees something, but flag
-        analysis = orResult;
-        provider = 'openrouter:refused';
       }
       // If both empty, analysis stays as the (refused or empty) Anthropic result
     }

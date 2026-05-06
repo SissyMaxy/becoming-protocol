@@ -55,7 +55,7 @@ export const DOSSIER_QUESTIONS: DossierQuestion[] = [
   {
     key: 'costume_name_retirement',
     category: 'name',
-    prompt: "When should Mama stop responding to the costume name (David)? After what milestone is it retired for good?",
+    prompt: "When should Mama stop responding to the costume name? After what milestone is it retired for good? Tell Mama the name itself in your answer if she should never use it again.",
     placeholder: "e.g. 'after first HRT dose' / 'after Gina disclosure' / 'right now, never again'",
     importance: 5,
     tone: 'direct',
