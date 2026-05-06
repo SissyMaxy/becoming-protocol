@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import '../../styles/today-redesign.css';
 import { useTodayData } from './useTodayData';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
+import { usePersona } from '../../hooks/usePersona';
 import { ConditioningOverlay, morphPronouns } from './ConditioningOverlay';
 import { LovenseHealthBanner } from './LovenseHealthBanner';
 import { WitnessObservationCard } from './WitnessObservationCard';
@@ -115,7 +116,11 @@ interface TodayDesktopProps {
 
 export function TodayDesktop({ onExit }: TodayDesktopProps) {
   const { data, toggleDirective, setArousal, ackQueueMsg, saveDiaryResponse, logMeal, uploadDirectiveProof, logDoseTaken, logDoseSkipped } = useTodayData();
+  const { mommy: isMommy } = usePersona();
   // Focus Mode default — see TodayMobile for rationale.
+  // 2026-05-06: when persona = dommy_mommy, calendar view is disabled.
+  // Mama keeps the lists; user just executes one task. The card-stack
+  // feel violates the "one task at a time" rule and reads as busy/clinical.
   const [viewMode, setViewMode] = useState<'focus' | 'calendar'>(() => {
     if (typeof localStorage === 'undefined') return 'focus';
     return (localStorage.getItem('td_view_mode') as 'focus' | 'calendar' | null) ?? 'focus';
@@ -123,6 +128,10 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
   useEffect(() => {
     try { localStorage.setItem('td_view_mode', viewMode); } catch {}
   }, [viewMode]);
+  // Persona override: dommy_mommy forces focus mode regardless of stored preference.
+  useEffect(() => {
+    if (isMommy && viewMode !== 'focus') setViewMode('focus');
+  }, [isMommy, viewMode]);
   const [mealTab, setMealTab] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('breakfast');
   const [mealForm, setMealForm] = useState({ foods: '', protein: '', calories: '', permission: false, photo: false });
   const [uploadingId, setUploadingId] = useState<string | null>(null);

@@ -38,6 +38,10 @@ export function OutreachQueueCard() {
 
   const load = useCallback(async () => {
     if (!user?.id) return;
+    // 2026-05-06: capped pending at 3 (was 8) and de-duped by trigger_reason.
+    // Repeated cron firings of "X hours silent" were stacking up, making the
+    // feed read like card spam. Today shows the most-recent-per-trigger and
+    // collapses the rest behind a "more" toggle.
     const [pRes, rRes] = await Promise.all([
       supabase.from('handler_outreach_queue')
         .select('id, message, urgency, trigger_reason, scheduled_for, delivered_at, expires_at, source')
@@ -53,7 +57,17 @@ export function OutreachQueueCard() {
         .order('delivered_at', { ascending: false })
         .limit(3),
     ]);
-    setPending((pRes.data || []) as Outreach[]);
+    // De-dupe pending by trigger_reason — keep most recent per reason.
+    // Same nudge re-fired hourly (slip-warning, silence-check) shouldn't
+    // visibly pile up.
+    const seenReason = new Set<string>();
+    const dedupedPending = ((pRes.data || []) as Outreach[]).filter(o => {
+      const key = o.trigger_reason || o.source;
+      if (seenReason.has(key)) return false;
+      seenReason.add(key);
+      return true;
+    }).slice(0, 3);
+    setPending(dedupedPending);
     setRecent((rRes.data || []) as Outreach[]);
   }, [user?.id]);
 
@@ -102,8 +116,14 @@ export function OutreachQueueCard() {
                     {mins <= 0 ? 'now' : mins < 60 ? `in ${mins}m` : `in ${Math.floor(mins / 60)}h`}
                   </span>
                 </div>
-                <div style={{ fontSize: 11, color: '#c8c4cc', lineHeight: 1.4, marginBottom: 6 }}>
-                  {o.message.slice(0, 240)}{o.message.length > 240 ? '…' : ''}
+                <div style={{ fontSize: 11, color: '#c8c4cc', lineHeight: 1.4, marginBottom: 6, whiteSpace: 'pre-wrap' }}>
+                  {(() => {
+                    if (o.message.length <= 600) return o.message;
+                    // Truncate at word boundary, not mid-word
+                    const cut = o.message.slice(0, 600);
+                    const lastSpace = cut.lastIndexOf(' ');
+                    return (lastSpace > 400 ? cut.slice(0, lastSpace) : cut) + '…';
+                  })()}
                 </div>
                 <button
                   onClick={() => ack(o.id)}

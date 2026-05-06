@@ -73,20 +73,82 @@ const HIGH_DENIAL_PRIORITY_DOMAINS: FeminizationDomain[] = [
 // ============================================
 
 /**
+ * Per-domain skip rate over the last N days. Domains the user consistently
+ * ignores get penalized in scoring; persistently-ignored domains get a
+ * cooldown (excluded entirely for a few days).
+ *
+ * This is the engagement-feedback loop the engine was missing — without it,
+ * the same voice drills/content locks kept getting prescribed regardless of
+ * whether she ever did them. The "Handler is dumb" feeling.
+ */
+export interface DomainSkipRate {
+  domain: string;
+  total: number;
+  skipped: number;
+  completed: number;
+  skipRate: number; // 0..1
+}
+
+export async function fetchDomainSkipRates(
+  userId: string,
+  days = 7
+): Promise<Record<string, DomainSkipRate>> {
+  const since = new Date(Date.now() - days * 86400000).toISOString().split('T')[0];
+
+  const { data, error } = await supabase
+    .from('feminization_prescriptions')
+    .select('domain, status')
+    .eq('user_id', userId)
+    .gte('prescribed_date', since);
+
+  if (error || !data) return {};
+
+  const rates: Record<string, DomainSkipRate> = {};
+  for (const row of data) {
+    const d = row.domain as string;
+    if (!rates[d]) rates[d] = { domain: d, total: 0, skipped: 0, completed: 0, skipRate: 0 };
+    rates[d].total += 1;
+    if (row.status === 'skipped') rates[d].skipped += 1;
+    else if (row.status === 'completed') rates[d].completed += 1;
+  }
+  for (const d of Object.keys(rates)) {
+    rates[d].skipRate = rates[d].total > 0 ? rates[d].skipped / rates[d].total : 0;
+  }
+  return rates;
+}
+
+/**
+ * Score adjustment for a domain based on skip rate. Returns negative for
+ * high-skip domains (push them down the priority list) and excludes
+ * entirely if the user has skipped almost every prescription.
+ */
+export function skipRatePenalty(rate: DomainSkipRate | undefined): { delta: number; exclude: boolean } {
+  if (!rate || rate.total < 3) return { delta: 0, exclude: false }; // not enough signal
+  if (rate.skipRate >= 0.85) return { delta: -100, exclude: true }; // 7-day cooldown
+  if (rate.skipRate >= 0.7) return { delta: -45, exclude: false };
+  if (rate.skipRate >= 0.5) return { delta: -25, exclude: false };
+  if (rate.skipRate >= 0.3) return { delta: -10, exclude: false };
+  if (rate.skipRate <= 0.1 && rate.completed >= 3) return { delta: +8, exclude: false }; // reward streak
+  return { delta: 0, exclude: false };
+}
+
+/**
  * Generate a daily feminization prescription for the user.
- * Selects 3-5 tasks from task_bank filtered by phase, recovery, denial, and recency.
+ * Selects 3-5 tasks from task_bank filtered by phase, recovery, denial,
+ * recency, AND engagement (skip-rate penalty per domain).
  */
 export async function generateDailyPrescription(
   userId: string
 ): Promise<DailyFeminizationPrescription> {
   const today = new Date().toISOString().split('T')[0];
 
-  // Parallel fetch: user state, whoop, hidden ops, recent completions
-  const [stateResult, whoopResult, intensityResult, recentResult] = await Promise.allSettled([
+  // Parallel fetch: user state, whoop, hidden ops, recent completions, skip rates
+  const [stateResult, whoopResult, intensityResult, recentResult, skipResult] = await Promise.allSettled([
     fetchUserState(userId),
     buildWhoopContext(userId),
     getHiddenParam(userId, 'conditioning_intensity_multiplier'),
     fetchRecentTaskIds(userId, 14), // last 14 days
+    fetchDomainSkipRates(userId, 7),
   ]);
 
   const state: UserPrescriptionState = stateResult.status === 'fulfilled'
@@ -96,6 +158,14 @@ export async function generateDailyPrescription(
   const whoop = whoopResult.status === 'fulfilled' ? whoopResult.value : null;
   const intensityMultiplier = intensityResult.status === 'fulfilled' ? intensityResult.value : 1.0;
   const recentTaskIds = recentResult.status === 'fulfilled' ? recentResult.value : [];
+  const skipRates: Record<string, DomainSkipRate> = skipResult.status === 'fulfilled' ? skipResult.value : {};
+
+  // Gate: skip-rate fetch happened. If a future refactor removes this, the
+  // assertion below trips loudly rather than silently regressing the
+  // adaptive behavior. Memory rule: bug fix requires generation-site gate.
+  if (skipResult.status !== 'fulfilled') {
+    console.warn('[fem-prescription] skip rate fetch failed — adaptive scoring skipped this cycle');
+  }
 
   // Determine recovery gate
   const recoveryZone = whoop?.recoveryZone ?? 'YELLOW';
@@ -103,12 +173,33 @@ export async function generateDailyPrescription(
 
   // Determine available domains for current phase
   const effectivePhase = Math.min(state.phase, 4);
-  const availableDomains = PHASE_DOMAINS[effectivePhase] ?? PHASE_DOMAINS[0];
+  let availableDomains = PHASE_DOMAINS[effectivePhase] ?? PHASE_DOMAINS[0];
 
-  // Determine how many tasks to prescribe (3-5)
+  // Skip-rate cooldown: drop domains the user has skipped > 85% of recent
+  // prescriptions. They get a 7-day breather from being assigned at all.
+  const cooldownDomains = new Set<string>();
+  for (const [d, r] of Object.entries(skipRates)) {
+    if (skipRatePenalty(r).exclude) cooldownDomains.add(d);
+  }
+  if (cooldownDomains.size > 0) {
+    availableDomains = availableDomains.filter(d => !cooldownDomains.has(d));
+    console.log('[fem-prescription] cooldown domains', Array.from(cooldownDomains));
+    // If we cooled down ALL phase domains, fall back to phase 0 essentials so
+    // the user still gets SOMETHING. Better one task she'll skip than zero.
+    if (availableDomains.length === 0) {
+      availableDomains = PHASE_DOMAINS[0];
+    }
+  }
+
+  // Determine how many tasks to prescribe (3-5). Reduce when skip rate is
+  // high overall — pushing 5 tasks at someone ignoring 4 of them is
+  // counter-productive. Better to land 2 well than fail 5 loudly.
   let taskCount = 4;
   if (recoveryZone === 'RED') taskCount = 3;
   if (recoveryZone === 'GREEN' && state.denialDay >= 3) taskCount = 5;
+  const overallSkipRate = computeOverallSkipRate(skipRates);
+  if (overallSkipRate >= 0.6) taskCount = Math.max(2, taskCount - 2);
+  else if (overallSkipRate >= 0.4) taskCount = Math.max(3, taskCount - 1);
 
   // Query candidate tasks — skill-tree-gated when available, fallback to flat pool
   const candidates = await fetchSkillTreeGatedTasks(userId, availableDomains, maxIntensity);
@@ -141,6 +232,15 @@ export async function generateDailyPrescription(
       score += 5;
     }
 
+    // ── ENGAGEMENT FEEDBACK ────────────────────────────────────────
+    // The reason this engine exists. Domains the user consistently
+    // ignores lose priority. Domains she follows through on get a small
+    // boost. Without this, the engine prescribes voice drills she
+    // hasn't done in 30 days because some other rule said "voice has
+    // recency gap → boost." That's the bug.
+    const skipAdj = skipRatePenalty(skipRates[task.domain]);
+    score += skipAdj.delta;
+
     // Small random factor for variety
     score += Math.random() * 8;
 
@@ -171,8 +271,13 @@ export async function generateDailyPrescription(
     duration: t.duration_minutes,
   }));
 
-  // Persist today's prescription
-  await persistPrescription(userId, today, tasks, recoveryZone, state.phase);
+  // Persist today's prescription with engagement metadata so we can audit
+  // what got deprioritized and why.
+  await persistPrescription(userId, today, tasks, recoveryZone, state.phase, {
+    cooldownDomains: Array.from(cooldownDomains),
+    skipRatesSnapshot: skipRates,
+    overallSkipRate,
+  });
 
   return {
     tasks,
@@ -182,6 +287,16 @@ export async function generateDailyPrescription(
     denialDay: state.denialDay,
     intensityMultiplier,
   };
+}
+
+function computeOverallSkipRate(rates: Record<string, DomainSkipRate>): number {
+  let total = 0;
+  let skipped = 0;
+  for (const r of Object.values(rates)) {
+    total += r.total;
+    skipped += r.skipped;
+  }
+  return total > 0 ? skipped / total : 0;
 }
 
 /**
@@ -359,7 +474,12 @@ async function persistPrescription(
   date: string,
   tasks: PrescribedTask[],
   recoveryGate: string,
-  phase: number
+  phase: number,
+  engagement?: {
+    cooldownDomains: string[];
+    skipRatesSnapshot: Record<string, DomainSkipRate>;
+    overallSkipRate: number;
+  }
 ): Promise<void> {
   try {
     // Upsert rows into feminization_prescriptions
@@ -374,6 +494,10 @@ async function persistPrescription(
       recovery_gate: recoveryGate,
       phase,
       status: 'pending',
+      // Engagement metadata — what the engine knew about her recent
+      // engagement when it picked these tasks. Lets a future audit show
+      // "voice had skip_rate 0.9, was on cooldown" rather than guessing.
+      engagement_meta: engagement ?? null,
     }));
 
     // Delete any existing prescriptions for today, then insert fresh
@@ -388,7 +512,21 @@ async function persistPrescription(
       .insert(rows);
 
     if (error) {
-      console.error('[fem-prescription] persistPrescription error:', error.message);
+      // engagement_meta column may not exist yet — fall back to insert
+      // without it so the prescription still ships. Migration adds the
+      // column; if it hasn't been applied we just lose the audit trail
+      // for one cycle.
+      if (/engagement_meta/.test(error.message)) {
+        const { error: e2 } = await supabase
+          .from('feminization_prescriptions')
+          .insert(rows.map(r => {
+            const { engagement_meta: _, ...rest } = r as Record<string, unknown>;
+            return rest;
+          }));
+        if (e2) console.error('[fem-prescription] persistPrescription fallback error:', e2.message);
+      } else {
+        console.error('[fem-prescription] persistPrescription error:', error.message);
+      }
     }
   } catch (err) {
     console.error('[fem-prescription] persistPrescription exception:', err);

@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import '../../styles/today-redesign.css';
 import { useTodayData } from './useTodayData';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
+import { usePersona } from '../../hooks/usePersona';
 import { ConditioningOverlay, morphPronouns } from './ConditioningOverlay';
 import { LovenseHealthBanner } from './LovenseHealthBanner';
 import { WitnessObservationCard } from './WitnessObservationCard';
@@ -88,6 +89,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
   // Focus Mode is the default. The Handler points at one task; she does it; next.
   // She can fall back to the calendar view via "view plan" if she wants context.
   // Persisted across sessions so the user's last preference holds.
+  const { mommy: isMommy } = usePersona();
   const [viewMode, setViewMode] = useState<'focus' | 'calendar'>(() => {
     if (typeof localStorage === 'undefined') return 'focus';
     return (localStorage.getItem('td_view_mode') as 'focus' | 'calendar' | null) ?? 'focus';
@@ -95,6 +97,10 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
   useEffect(() => {
     try { localStorage.setItem('td_view_mode', viewMode); } catch {}
   }, [viewMode]);
+  // Persona override: dommy_mommy forces focus mode regardless of stored preference.
+  useEffect(() => {
+    if (isMommy && viewMode !== 'focus') setViewMode('focus');
+  }, [isMommy, viewMode]);
   const [tab, setTab] = useState<MobileTab>('today');
   const [mealTab, setMealTab] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('breakfast');
   const [expandedDirective, setExpandedDirective] = useState<string | null>(null);
