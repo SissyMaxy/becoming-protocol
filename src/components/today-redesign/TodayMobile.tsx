@@ -9,6 +9,7 @@ import '../../styles/today-redesign.css';
 import { useTodayData } from './useTodayData';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { usePersona } from '../../hooks/usePersona';
+import { MommyDossierBanner } from '../persona/MommyDossierBanner';
 import { ConditioningOverlay, morphPronouns } from './ConditioningOverlay';
 import { LovenseHealthBanner } from './LovenseHealthBanner';
 import { WitnessObservationCard } from './WitnessObservationCard';
@@ -177,7 +178,14 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
   const ringDash = (proteinPct / 100) * ringCirc;
 
   if (viewMode === 'focus') {
-    return <FocusMode onSwitchToCalendar={() => setViewMode('calendar')} />;
+    return (
+      <>
+        <div style={{ padding: '8px 12px 0' }}>
+          <MommyDossierBanner />
+        </div>
+        <FocusMode onSwitchToCalendar={() => setViewMode('calendar')} />
+      </>
+    );
   }
 
   return (

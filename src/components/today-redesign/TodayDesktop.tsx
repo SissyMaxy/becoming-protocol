@@ -9,6 +9,7 @@ import '../../styles/today-redesign.css';
 import { useTodayData } from './useTodayData';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { usePersona } from '../../hooks/usePersona';
+import { MommyDossierBanner } from '../persona/MommyDossierBanner';
 import { ConditioningOverlay, morphPronouns } from './ConditioningOverlay';
 import { LovenseHealthBanner } from './LovenseHealthBanner';
 import { WitnessObservationCard } from './WitnessObservationCard';
@@ -249,7 +250,14 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
   const currentStep = data.chastityLocked ? `CHASTITY · DAY ${data.chastityStreakDays}` : data.denialDay > 0 ? `DENIAL · DAY ${data.denialDay}` : 'UNCOMMITTED';
 
   if (viewMode === 'focus') {
-    return <FocusMode onSwitchToCalendar={() => setViewMode('calendar')} />;
+    return (
+      <>
+        <div style={{ maxWidth: 720, margin: '0 auto', padding: '12px 16px 0' }}>
+          <MommyDossierBanner />
+        </div>
+        <FocusMode onSwitchToCalendar={() => setViewMode('calendar')} />
+      </>
+    );
   }
 
   return (

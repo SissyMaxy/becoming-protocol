@@ -132,7 +132,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
-          max_tokens: 600,
+          max_tokens: 2000,
           system: systemPrompt,
           messages: [{
             role: 'user',
@@ -164,7 +164,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
         body: JSON.stringify({
           model: 'google/gemini-2.5-pro',
-          max_tokens: 600,
+          max_tokens: 2000,
           messages: [
             { role: 'system', content: systemPrompt },
             {

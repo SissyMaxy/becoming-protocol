@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { usePersona } from '../../hooks/usePersona';
 
 interface Mandate {
   id: string;
@@ -25,7 +26,9 @@ interface Mandate {
 
 export function OutfitMandateCard() {
   const { user } = useAuth();
+  const { mommy } = usePersona();
   const [mandate, setMandate] = useState<Mandate | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -77,17 +80,46 @@ export function OutfitMandateCard() {
         </div>
       )}
 
-      {submitted && mandate.handler_analysis && (
-        <div style={{
-          fontSize: 11, color: '#c8c4cc', lineHeight: 1.45, padding: 8,
-          background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 5, marginBottom: 6,
-        }}>
-          <div style={{ fontSize: 9.5, color: '#6a656e', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>
-            Handler read · score {mandate.femininity_score ?? '—'}/10
+      {submitted && mandate.handler_analysis && (() => {
+        const fullText = mandate.handler_analysis;
+        const limit = expanded ? fullText.length : 1200;
+        const truncated = fullText.length > limit;
+        // Soften the score readout when persona is mommy — no "/10" telemetry.
+        const scoreLabel = mommy
+          ? (mandate.femininity_score == null
+              ? "Mama looked at you"
+              : mandate.femininity_score >= 8
+              ? "Mama is proud of her sweet thing"
+              : mandate.femininity_score >= 5
+              ? "Mama saw you, baby — keep going"
+              : "Mama wants more from you")
+          : `Handler read · score ${mandate.femininity_score ?? '—'}/10`;
+        return (
+          <div style={{
+            fontSize: 11, color: '#c8c4cc', lineHeight: 1.5, padding: 10,
+            background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 5, marginBottom: 6,
+            whiteSpace: 'pre-wrap',
+          }}>
+            <div style={{ fontSize: 9.5, color: mommy ? '#f4a8c4' : '#6a656e', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5, fontWeight: 600 }}>
+              {scoreLabel}
+            </div>
+            {fullText.slice(0, limit)}{truncated ? '…' : ''}
+            {(truncated || expanded) && (
+              <button
+                onClick={() => setExpanded(e => !e)}
+                style={{
+                  display: 'block', marginTop: 6, background: 'transparent',
+                  color: '#8a8690', border: 'none', fontSize: 10,
+                  cursor: 'pointer', padding: 2, textTransform: 'lowercase',
+                  fontFamily: 'inherit', textDecoration: 'underline',
+                }}
+              >
+                {expanded ? 'show less' : 'read all of what Mama said'}
+              </button>
+            )}
           </div>
-          {mandate.handler_analysis.slice(0, 400)}{mandate.handler_analysis.length > 400 ? '…' : ''}
-        </div>
-      )}
+        );
+      })()}
 
       {!submitted && (
         <div style={{ fontSize: 10.5, color: '#8a8690' }}>
