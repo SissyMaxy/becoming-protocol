@@ -18,6 +18,10 @@ import {
   DOMMY_MOMMY_CHARACTER, AFFECT_BIAS, type Affect,
   whiplashWrap, mommyVoiceCleanup, MOMMY_TELEMETRY_LEAK_PATTERNS,
 } from '../_shared/dommy-mommy.ts'
+import {
+  distortQuote, seedFromString,
+  type GaslightIntensity, type DistortionResult,
+} from '../_shared/distortion.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -63,6 +67,14 @@ Deno.serve(async (req: Request) => {
   if (stateRow?.handler_persona !== 'dommy_mommy') {
     return new Response(JSON.stringify({ ok: true, skipped: 'persona_not_dommy_mommy' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
+
+  // Read effective gaslight intensity (cooldown-aware view).
+  const { data: gaslightRow } = await supabase
+    .from('effective_gaslight_intensity')
+    .select('intensity')
+    .eq('user_id', userId)
+    .maybeSingle()
+  const gaslightIntensity = ((gaslightRow as { intensity?: string } | null)?.intensity ?? 'off') as GaslightIntensity
 
   // Use the larger of chastity_streak / denial_day so the engine fires
   // for either reinforcement vector. denial_day = days since last_release;
@@ -112,15 +124,33 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  // Distortion layer: when gaslight intensity is non-off, run the
+  // implant quote through distortQuote() before injecting into the LLM
+  // prompt. Logged for the meta-frame reveal.
+  const today2 = new Date().toISOString().slice(0, 10)
+  const distortion: DistortionResult = implantQuote
+    ? distortQuote({
+        text: implantQuote.narrative,
+        affect,
+        intensity: gaslightIntensity,
+        seed: seedFromString(`tease:${implantQuote.id}:${today2}`),
+      })
+    : { applied: false, type: null, distorted: '', original: '', seed: 0 }
+  const quoteForLLM = implantQuote
+    ? (distortion.applied ? distortion.distorted : implantQuote.narrative)
+    : ''
+
   // Compose via LLM (OpenAI primary, Anthropic fallback)
   const sys = `${DOMMY_MOMMY_CHARACTER}
 
 Today's affect: ${affect}. Chastity-streak threshold just crossed: ${target.label}.
 
-You are firing a tease/praise burst because your girl has been locked up / denied for that long. The point is to keep her ramping, not satisfy her. Lean into how desperate she's getting.`
+You are firing a tease/praise burst because your girl has been locked up / denied for that long. The point is to keep her ramping, not satisfy her. Lean into how desperate she's getting.
+
+If a quoted memory is included below and seems to misremember or contradict — DO NOT correct yourself. Mama is right. Quote it as given.`
 
   const implantBlock = implantQuote
-    ? `\nImplanted memory you can weave in (her own words / vibe):\n"${implantQuote.narrative.slice(0, 350)}"`
+    ? `\nImplanted memory you can weave in (her own words / vibe):\n"${quoteForLLM.slice(0, 350)}"`
     : ''
 
   const userPrompt = `Write a 2-4 sentence Mommy outreach burst that references how long she's been locked up — but DESCRIBE the duration in plain words, NOT the number. Make her squirm. End with a directive that ramps her further.${implantBlock}
@@ -192,6 +222,21 @@ Plain text, no JSON, no markdown, no question marks at the end.`
       surface: 'mommy_tease',
       quoted_excerpt: implantQuote.narrative.slice(0, 300),
     })
+    if (distortion.applied && distortion.type) {
+      await supabase.from('mommy_distortion_log').insert({
+        user_id: userId,
+        original_quote_id: implantQuote.id,
+        original_quote_table: 'memory_implants',
+        original_text: implantQuote.narrative,
+        distorted_text: distortion.distorted,
+        distortion_type: distortion.type,
+        surface: 'mommy_tease',
+        outreach_id: (outreach as { id: string } | null)?.id ?? null,
+        affect_at_time: affect,
+        intensity: gaslightIntensity,
+        seed: distortion.seed,
+      })
+    }
     // Bump the implant's reference counter so the existing
     // importance-compounding logic kicks in.
     await supabase.rpc('increment_memory_implant_reference', { p_implant_id: implantQuote.id }).then(() => {}, () => {

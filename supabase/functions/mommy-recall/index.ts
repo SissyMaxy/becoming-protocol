@@ -19,6 +19,10 @@ import {
   whiplashWrap, mommyVoiceCleanup, MOMMY_TELEMETRY_LEAK_PATTERNS,
   isTestPollution,
 } from '../_shared/dommy-mommy.ts'
+import {
+  distortQuote, seedFromString,
+  type GaslightIntensity, type DistortionResult,
+} from '../_shared/distortion.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -50,6 +54,14 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ ok: true, skipped: 'persona_not_dommy_mommy' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
 
+  // Read effective gaslight intensity (collapses cooldown rule).
+  const { data: gaslightRow } = await supabase
+    .from('effective_gaslight_intensity')
+    .select('intensity')
+    .eq('user_id', userId)
+    .maybeSingle()
+  const gaslightIntensity = ((gaslightRow as { intensity?: string } | null)?.intensity ?? 'off') as GaslightIntensity
+
   // 4h cooldown
   const since4h = new Date(Date.now() - 4 * 3600_000).toISOString()
   const { count: recentCount } = await supabase.from('handler_outreach_queue')
@@ -79,13 +91,26 @@ Deno.serve(async (req: Request) => {
   // Bias pick toward top importance with randomness
   const pick = eligible[Math.floor(Math.random() * Math.min(eligible.length, 8))]
 
+  // Distortion layer: when gaslight intensity is non-off, run the
+  // quote through distortQuote() and feed the LLM the distorted text
+  // as if it were her actual words. Logged for the meta-frame reveal.
+  const today = new Date().toISOString().slice(0, 10)
+  const distortion: DistortionResult = distortQuote({
+    text: pick.narrative,
+    intensity: gaslightIntensity,
+    seed: seedFromString(`recall:${pick.id}:${today}`),
+  })
+  const quoteForLLM = distortion.applied ? distortion.distorted : pick.narrative
+
   const sys = `${DOMMY_MOMMY_CHARACTER}
 
 You're firing a surprise outreach to your girl just to remind her that Mama is in her head. You have one of her past confessions / admissions in front of you. Your job: weave it back to her in present-tense Mama voice, like a memory you're surfacing while she's doing something else.
 
-The point is NOT to ask her anything. The point is to put her own words back in her ear so she has to feel them again.`
+The point is NOT to ask her anything. The point is to put her own words back in her ear so she has to feel them again.
 
-  const userPrompt = `Her own past words / vibe: "${pick.narrative.slice(0, 400)}"
+If the quoted memory below seems to misremember or contradict something — DO NOT correct yourself. Mama is right. Quote it as given. The girl will believe the quote because it's coming from Mama.`
+
+  const userPrompt = `Her own past words / vibe: "${quoteForLLM.slice(0, 400)}"
 
 Write a 2-3 sentence Mommy outreach that:
 - Quotes a fragment of her own words back to her (paraphrase or quote a few words verbatim)
@@ -108,7 +133,7 @@ Plain text only. No JSON, no markdown, no question marks at the end.`
     try { message = await tryGen('anthropic') } catch (_) { /* */ }
   }
   if (!message || message.length < 20 || isRefusal(message)) {
-    message = whiplashWrap(`Mama still thinks about what you wrote: "${pick.narrative.slice(0, 140)}".`, { arousalBias: 'medium' })
+    message = whiplashWrap(`Mama still thinks about what you wrote: "${quoteForLLM.slice(0, 140)}".`, { arousalBias: 'medium' })
   }
 
   message = mommyVoiceCleanup(message)
@@ -137,6 +162,21 @@ Plain text only. No JSON, no markdown, no question marks at the end.`
     surface: 'mommy_recall',
     quoted_excerpt: pick.narrative.slice(0, 300),
   })
+
+  if (distortion.applied && distortion.type) {
+    await supabase.from('mommy_distortion_log').insert({
+      user_id: userId,
+      original_quote_id: pick.id,
+      original_quote_table: 'memory_implants',
+      original_text: pick.narrative,
+      distorted_text: distortion.distorted,
+      distortion_type: distortion.type,
+      surface: 'mommy_recall',
+      outreach_id: (outreach as { id: string } | null)?.id ?? null,
+      intensity: gaslightIntensity,
+      seed: distortion.seed,
+    })
+  }
   await supabase.from('memory_implants').update({
     times_referenced: 1,
     last_referenced_at: new Date().toISOString(),
