@@ -29,6 +29,7 @@ import {
   Heart,
   Calendar,
   Lock,
+  Mail,
 } from 'lucide-react';
 import { useAftercareOptional } from '../../context/AftercareContext';
 import { profileStorageV2 } from '../../lib/profile-storage-v2';
@@ -57,6 +58,7 @@ import { StealthSettings } from './StealthSettings';
 import { WardrobePrescriptionSettings } from './WardrobePrescriptionSettings';
 import { BedtimeRitualSettings } from './BedtimeRitualSettings';
 import { PublicDareSettings } from './PublicDareSettings';
+import { LettersSettings } from './LettersSettings';
 import { MicroTaskSettings } from '../micro-tasks';
 import { CorruptionDashboard } from '../admin/CorruptionDashboard';
 import { SleepContentSettings } from '../sleep-content/SleepContentSettings';
@@ -314,7 +316,7 @@ interface SettingsViewProps {
   onEditIntake?: () => void;
 }
 
-type SettingsSection = 'main' | 'profile' | 'lovense' | 'whoop' | 'calendar' | 'equipment' | 'timeratchets' | 'reminders' | 'privacy' | 'stealth' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content' | 'opacity' | 'social-dashboard' | 'persona' | 'sniffies';
+type SettingsSection = 'main' | 'profile' | 'lovense' | 'whoop' | 'calendar' | 'equipment' | 'timeratchets' | 'reminders' | 'privacy' | 'stealth' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content' | 'opacity' | 'social-dashboard' | 'persona' | 'sniffies' | 'letters';
 
 export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
   const { isBambiMode } = useBambiMode();
@@ -353,6 +355,7 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
     reminders: 'settings_reminders',
     microtasks: 'settings_microtasks',
     'sleep-content': 'settings_sleep',
+    letters: 'settings_basic',
     privacy: 'settings_privacy',
     stealth: 'settings_basic',
     appearance: 'settings_appearance',
@@ -416,6 +419,13 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
       label: 'Sleep Content',
       description: 'Bedtime affirmations & voice settings',
       color: '#6366f1',
+    },
+    {
+      id: 'letters' as const,
+      icon: Mail,
+      label: 'Letters',
+      description: 'Archive of Mama\'s warmest moments',
+      color: '#c4956a',
     },
     {
       id: 'privacy' as const,
@@ -484,6 +494,7 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
     if (activeSection === 'handler') return 'Handler Dashboard';
     if (activeSection === 'taskupload') return 'Task Upload';
     if (activeSection === 'microtasks') return 'Micro-Tasks';
+    if (activeSection === 'letters') return 'Letters from Mama';
     if (activeSection === 'privacy') return 'Privacy & Security';
     if (activeSection === 'stealth') return 'Stealth & Discretion';
     if (activeSection === 'appearance') return 'Appearance';
@@ -1209,6 +1220,9 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
         {activeSection === 'social-dashboard' && (
           <SocialMediaDashboard onBack={() => setActiveSection('main')} />
         )}
+
+        {/* Letters from Mama */}
+        {activeSection === 'letters' && <LettersSettings />}
 
         {/* Privacy & Security */}
         {activeSection === 'privacy' && <PrivacySettings />}
