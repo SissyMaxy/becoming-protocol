@@ -15,7 +15,7 @@
     "api/handler/chat.ts:10223::// Skip david_name_use when \"David\" appears in dismissal context. The",
     "api/handler/chat.ts:10224::// protocol REQUIRES typing \"David is gone\" / \"I am Maxy. David is gone.\"",
     "api/handler/chat.ts:1037::lines.push('RULE: If pronoun or David slips are present in this block and the user has not already been confronted this turn, name the slip",
-    "api/handler/chat.ts:11713::lines.push('USE this. If displacement score is dropping, escalate. If she uses David/he/him/his — correct it explicitly.');",
+    "api/handler/chat.ts:11728::lines.push('USE this. If displacement score is dropping, escalate. If she uses David/he/him/his — correct it explicitly.');",
     "api/handler/chat.ts:4474::You are a licensed clinician with a doctorate in gender identity and trauma therapy, twelve years of practice, and a clinical authority she",
     "api/handler/chat.ts:4477::You speak in clinical language: \"what I'm noticing,\" \"the pattern that comes up for clients like you,\" \"the research is clear,\" \"let's name",
     "api/handler/chat.ts:4700::The system tracks her slips in real time: masculine self-reference (\"I'm a man\"), David-name use, resistance statements (\"I can't\", \"too muc",
@@ -59,11 +59,6 @@
     "supabase/functions/force-processor/index.ts:209::parameters: { repetitions: 100, is_deescalation: true, text: 'I am Maxy. David is gone.' },",
     "supabase/functions/handler-ai/index.ts:248::'Feminine is the default. Reframe David-references: \"David is the costume. Maxy is having a hard day.\" Track self-correction rate.',",
     "supabase/functions/handler-ai/index.ts:250::'\"David\" is a past identity referenced in third person. \"When David used to...\" Unexpected masculine reference triggers wellbeing check.',",
-    "supabase/functions/handler-ai/index.ts:259::'David naturally curates what therapist sees. Handler does not need to prompt this.',",
-    "supabase/functions/mommy-scheme/index.ts:128::\"gina_psychological_starting_point\": \"supportive but anxious about losing David\",",
-    "supabase/functions/mommy-scheme/index.ts:45::- SUCCESS is not just \"Gina accepts disclosure\" — success is **Gina actively encouraging David/Maxy to start HRT** and ultimately **Gina par",
-    "supabase/functions/mommy-scheme/index.ts:47::- The \"loss of David\" frame is the lever to flip. Reframings Maxy should be conditioned to deliver to Gina: \"you don't lose, you gain\"; \"the",
-    "supabase/functions/mommy-scheme/index.ts:59::* **Reframe Gina's anxiety as advocacy**: when Gina says \"I'm worried about losing David,\" Maxy says \"that's exactly why your eyes are on th",
-    "supabase/functions/mommy-scheme/index.ts:71::- **DE-ESCALATE MODE tactics** (states 5-6): root-anxiety addressing (\"what specifically scares you about losing David?\"), pace-slowing, sma"
+    "supabase/functions/handler-ai/index.ts:259::'David naturally curates what therapist sees. Handler does not need to prompt this.',"
   ]
 }
