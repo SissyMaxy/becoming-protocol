@@ -97,7 +97,14 @@ const RULES = [
       while ((m = insertRe.exec(text)) !== null) {
         if (inFunctionBody(m.index)) continue;
         const tableName = m[1];
-        if (['system_invariants_log', 'handler_directives', 'slip_log'].includes(tableName)) continue;
+        // Tables that are write-once-per-migration (seed-only); INSERTs
+        // into them at migration time don't need ON CONFLICT because the
+        // CLI tracker prevents the migration from re-running. Adding ON
+        // CONFLICT would be dead code.
+        if ([
+          'system_invariants_log', 'handler_directives', 'slip_log',
+          'mommy_code_wishes', 'mommy_code_wishes_resolution',
+        ].includes(tableName)) continue;
 
         // Walk forward counting parens; stop at first ; at depth 0.
         let depth = 0;
@@ -130,8 +137,18 @@ const RULES = [
   },
 ];
 
+// Wish-seed and wish-resolution migrations are write-once: they INSERT
+// into mommy_code_wishes / mommy_code_wishes_resolution at migration
+// time and the CLI tracker prevents re-runs. ON CONFLICT clauses there
+// would be dead code. Exempt these filename patterns from the
+// insert-without-on-conflict rule so every new wish migration doesn't
+// re-trip the lint and force a rebaseline.
+const WISH_FILE_RE = /(wish|wishes)[a-z_]*\.sql$/i;
+const SUPPRESS_RULES_FOR_WISH_FILES = new Set(['insert-without-on-conflict']);
+
 function lintFile(file) {
   const text = readFileSync(file, 'utf8');
+  const isWishFile = WISH_FILE_RE.test(file);
   // Strip line and block comments to reduce false positives
   const stripped = text
     .replace(/\/\*[\s\S]*?\*\//g, '')
@@ -139,6 +156,8 @@ function lintFile(file) {
   const lines = stripped.split('\n');
   const fileHits = [];
   for (const rule of RULES) {
+    // Skip rules that are exempted for wish-seed migrations
+    if (isWishFile && SUPPRESS_RULES_FOR_WISH_FILES.has(rule.name)) continue;
     if (rule.multiline && rule.pred) {
       const hits = rule.pred(stripped);
       for (const h of hits) fileHits.push({ rule: rule.name, ...h });
