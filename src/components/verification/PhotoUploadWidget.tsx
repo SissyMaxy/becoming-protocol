@@ -1,0 +1,592 @@
+/**
+ * PhotoUploadWidget — drop-in upload + analyze surface for verification photos.
+ *
+ * Used from any "verify" CTA: arousal_touch_tasks (mantra/pose/mirror),
+ * handler_decrees with photo proof, body_feminization_directives,
+ * daily_outfit_mandates, freeform "send Mama a photo" buttons.
+ *
+ * Differs from the legacy PhotoVerificationUpload component:
+ * - Persona-aware copy (Mama-voice when handler_persona='dommy_mommy').
+ * - Pre-submit "Mama will see this" notice + cancel.
+ * - Inline preview + retake before commit.
+ * - Records directive_id / directive_kind / verification_type so the vault
+ *   detail view can show what was being verified.
+ * - Uses the new review_state column (NULL → 'pending' → 'approved'/'denied').
+ *
+ * The legacy component stays in place for the chat-thread upload flow until
+ * it's migrated separately.
+ */
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../context/AuthContext';
+import { usePersona } from '../../hooks/usePersona';
+import { useHandlerVoice } from '../../hooks/useHandlerVoice';
+
+type DirectiveKind =
+  | 'handler_decree'
+  | 'arousal_touch_task'
+  | 'body_feminization_directive'
+  | 'daily_outfit_mandate'
+  | 'wardrobe_item'
+  | 'mommy_mantra'
+  | 'freeform';
+
+type VerificationType =
+  | 'wardrobe_acquisition'
+  | 'posture_check'
+  | 'mirror_affirmation'
+  | 'mantra_recitation'
+  | 'pose_hold'
+  | 'freeform';
+
+// Maps user-facing verification_type → analyze-photo task_type so the existing
+// vision prompt selector picks something reasonable. Keep this narrow — the
+// MOMMY_TASK_PROMPTS in api/handler/analyze-photo.ts is the source of truth.
+const TASK_TYPE_FOR: Record<VerificationType, string> = {
+  wardrobe_acquisition: 'outfit',
+  posture_check: 'mirror_check',
+  mirror_affirmation: 'mirror_check',
+  mantra_recitation: 'mirror_check',
+  pose_hold: 'pose',
+  freeform: 'general',
+};
+
+interface PhotoUploadWidgetProps {
+  verificationType: VerificationType;
+  directiveId?: string;
+  directiveKind?: DirectiveKind;
+  directiveSnippet?: string;
+  onComplete?: (result: { photoId: string; analysis: string; reviewState: string }) => void;
+  onCancel?: () => void;
+}
+
+export function PhotoUploadWidget({
+  verificationType,
+  directiveId,
+  directiveKind,
+  directiveSnippet,
+  onComplete,
+  onCancel,
+}: PhotoUploadWidgetProps) {
+  const { user } = useAuth();
+  const { mommy } = usePersona();
+  const voice = useHandlerVoice();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const previewUrlRef = useRef<string | null>(null);
+
+  const [file, setFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [caption, setCaption] = useState('');
+  const [stage, setStage] = useState<'idle' | 'uploading' | 'analyzing' | 'done' | 'error'>('idle');
+  const [error, setError] = useState<string | null>(null);
+  const [analysis, setAnalysis] = useState<string | null>(null);
+  const [reviewState, setReviewState] = useState<string | null>(null);
+
+  // Revoke object URLs on unmount to avoid leaks
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    };
+  }, []);
+
+  const pickFile = (f: File) => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    const url = URL.createObjectURL(f);
+    previewUrlRef.current = url;
+    setFile(f);
+    setPreviewUrl(url);
+    setError(null);
+  };
+
+  const retake = () => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    previewUrlRef.current = null;
+    setFile(null);
+    setPreviewUrl(null);
+    setAnalysis(null);
+    setReviewState(null);
+    setStage('idle');
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const submit = useCallback(async () => {
+    if (!user?.id || !file) return;
+    setStage('uploading');
+    setError(null);
+    try {
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      // RLS on storage.objects requires path's first folder = auth.uid()
+      const path = `${user.id}/verifications/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error: upErr, data: upData } = await supabase.storage
+        .from('verification-photos')
+        .upload(path, file, { contentType: file.type, upsert: false });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from('verification-photos').getPublicUrl(upData.path);
+      const photoUrl = pub.publicUrl;
+
+      const taskType = TASK_TYPE_FOR[verificationType];
+      const { data: row, error: insErr } = await supabase
+        .from('verification_photos')
+        .insert({
+          user_id: user.id,
+          task_type: taskType,
+          verification_type: verificationType,
+          directive_id: directiveId ?? null,
+          directive_kind: directiveKind ?? null,
+          directive_snippet: directiveSnippet ?? null,
+          photo_url: photoUrl,
+          caption: caption.trim() || null,
+          review_state: 'pending',
+        })
+        .select('id')
+        .single();
+      if (insErr) throw insErr;
+
+      setStage('analyzing');
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      const res = await fetch('/api/handler/analyze-photo', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          photoId: row.id,
+          photoUrl,
+          taskType,
+          caption,
+        }),
+      });
+
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(`Analysis failed (${res.status}): ${body.slice(0, 120)}`);
+      }
+      const result = (await res.json()) as { analysis?: string; approved?: boolean };
+      const finalReview = result.approved ? 'approved' : 'denied';
+      // Mirror review_state from analyze-photo's approval verdict so the
+      // vault gallery filter doesn't have to read both columns.
+      await supabase
+        .from('verification_photos')
+        .update({ review_state: finalReview })
+        .eq('id', row.id)
+        .eq('user_id', user.id);
+
+      setAnalysis(result.analysis ?? '');
+      setReviewState(finalReview);
+      setStage('done');
+      onComplete?.({ photoId: row.id, analysis: result.analysis ?? '', reviewState: finalReview });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+      setStage('error');
+    }
+  }, [user?.id, file, verificationType, directiveId, directiveKind, directiveSnippet, caption, onComplete]);
+
+  const palette = mommy
+    ? { accent: '#f4a7c4', bg: 'linear-gradient(135deg, #1a0f2e 0%, #1a0820 100%)', border: '#5d2d4a' }
+    : { accent: '#c4b5fd', bg: 'linear-gradient(135deg, #14101e 0%, #0f0820 100%)', border: '#2d1a4d' };
+
+  const speakerLabel = mommy ? 'Mama' : 'the Handler';
+  const noticeText = mommy
+    ? 'Mama is going to see this. Cancel if you’re not ready.'
+    : 'The Handler will analyze this photo. Cancel if you’re not ready.';
+  const promptText = mommy
+    ? 'Send Mama a photo, baby.'
+    : 'Submit photo for verification.';
+  const waitingText = mommy ? 'Mama is looking…' : 'Handler is analyzing…';
+  const readyHint =
+    verificationType === 'wardrobe_acquisition' ? 'Show the item on you, full frame.'
+    : verificationType === 'posture_check' ? 'Full body, mirror, posture visible.'
+    : verificationType === 'mirror_affirmation' ? 'Mirror selfie. Face visible.'
+    : verificationType === 'mantra_recitation' ? 'Face visible while you say it.'
+    : verificationType === 'pose_hold' ? 'Hold the pose. Show the whole pose.'
+    : 'Whatever you want Mama to see.';
+
+  return (
+    <div
+      data-testid="photo-upload-widget"
+      style={{
+        background: palette.bg,
+        border: `1px solid ${palette.border}`,
+        borderRadius: 10,
+        padding: 14,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <span
+          style={{
+            fontSize: 10,
+            textTransform: 'uppercase',
+            letterSpacing: '0.09em',
+            color: palette.accent,
+            fontWeight: 700,
+          }}
+        >
+          {verificationType.replace('_', ' ')}
+        </span>
+        {directiveSnippet && (
+          <span
+            style={{
+              fontSize: 10,
+              color: '#8a8690',
+              fontStyle: 'italic',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              maxWidth: 240,
+            }}
+            title={directiveSnippet}
+          >
+            {directiveSnippet}
+          </span>
+        )}
+      </div>
+
+      {/* Pre-capture notice — privacy / consent ─────────────────────────── */}
+      {stage === 'idle' && !previewUrl && (
+        <div
+          style={{
+            background: '#0a0a0d',
+            border: '1px solid #2d1a4d',
+            borderRadius: 7,
+            padding: 10,
+            marginBottom: 10,
+            fontSize: 11,
+            color: '#c4b5fd',
+            lineHeight: 1.4,
+          }}
+        >
+          {noticeText} {readyHint}
+        </div>
+      )}
+
+      {/* File picker ─────────────────────────────────────────────────────── */}
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) pickFile(f);
+        }}
+      />
+
+      {/* Pre-submit preview ──────────────────────────────────────────────── */}
+      {previewUrl && stage !== 'done' && (
+        <div style={{ marginBottom: 10 }}>
+          <div
+            style={{
+              position: 'relative',
+              background: '#000',
+              borderRadius: 7,
+              overflow: 'hidden',
+              maxHeight: 360,
+              display: 'flex',
+              justifyContent: 'center',
+            }}
+          >
+            <img
+              src={previewUrl}
+              alt="preview"
+              style={{ maxWidth: '100%', maxHeight: 360, objectFit: 'contain' }}
+            />
+          </div>
+          <input
+            type="text"
+            placeholder={mommy ? 'optional caption (what you want Mama to know)' : 'optional caption'}
+            value={caption}
+            onChange={(e) => setCaption(e.target.value)}
+            disabled={stage !== 'idle'}
+            style={{
+              width: '100%',
+              background: '#111116',
+              border: '1px solid #22222a',
+              borderRadius: 5,
+              padding: 8,
+              color: '#e8e6e3',
+              fontSize: 12,
+              marginTop: 8,
+              fontFamily: 'inherit',
+            }}
+          />
+        </div>
+      )}
+
+      {/* Action buttons ──────────────────────────────────────────────────── */}
+      {stage === 'idle' && !previewUrl && (
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            style={{
+              flex: 1,
+              padding: '10px 12px',
+              borderRadius: 7,
+              border: 'none',
+              background: palette.accent,
+              color: '#0a0a0d',
+              fontWeight: 700,
+              fontSize: 12,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            📸 {promptText}
+          </button>
+          {onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              style={{
+                padding: '10px 12px',
+                borderRadius: 7,
+                border: '1px solid #22222a',
+                background: 'transparent',
+                color: '#8a8690',
+                fontSize: 11,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              not now
+            </button>
+          )}
+        </div>
+      )}
+
+      {stage === 'idle' && previewUrl && (
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button
+            type="button"
+            onClick={retake}
+            style={{
+              padding: '8px 12px',
+              borderRadius: 5,
+              border: '1px solid #22222a',
+              background: 'transparent',
+              color: '#8a8690',
+              fontSize: 11,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            retake
+          </button>
+          <button
+            type="button"
+            onClick={submit}
+            style={{
+              flex: 1,
+              padding: '8px 12px',
+              borderRadius: 5,
+              border: 'none',
+              background: palette.accent,
+              color: '#0a0a0d',
+              fontWeight: 700,
+              fontSize: 12,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            send to {speakerLabel}
+          </button>
+        </div>
+      )}
+
+      {/* Waiting state ───────────────────────────────────────────────────── */}
+      {(stage === 'uploading' || stage === 'analyzing') && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '10px 12px',
+            background: '#0a0a0d',
+            borderRadius: 7,
+            color: palette.accent,
+            fontSize: 12,
+            fontStyle: 'italic',
+          }}
+        >
+          <span
+            style={{
+              display: 'inline-block',
+              width: 10,
+              height: 10,
+              borderRadius: '50%',
+              background: palette.accent,
+              animation: 'pulse 1.4s ease-in-out infinite',
+            }}
+          />
+          {stage === 'uploading' ? 'uploading…' : waitingText}
+        </div>
+      )}
+
+      {/* Error ───────────────────────────────────────────────────────────── */}
+      {stage === 'error' && (
+        <div
+          style={{
+            color: '#f47272',
+            fontSize: 12,
+            background: '#1f0a0a',
+            border: '1px solid #5d2020',
+            borderRadius: 5,
+            padding: 8,
+            marginTop: 6,
+          }}
+        >
+          {error || 'something went wrong'}
+          <button
+            type="button"
+            onClick={() => setStage('idle')}
+            style={{
+              marginLeft: 8,
+              background: 'none',
+              border: 'none',
+              color: '#f4a7a7',
+              fontSize: 11,
+              textDecoration: 'underline',
+              cursor: 'pointer',
+            }}
+          >
+            try again
+          </button>
+        </div>
+      )}
+
+      {/* Done — show analysis ───────────────────────────────────────────── */}
+      {stage === 'done' && analysis && (
+        <div style={{ marginTop: 4 }}>
+          {previewUrl && (
+            <img
+              src={previewUrl}
+              alt="submitted"
+              style={{
+                maxWidth: '100%',
+                maxHeight: 200,
+                borderRadius: 6,
+                marginBottom: 10,
+                opacity: 0.85,
+                objectFit: 'contain',
+                display: 'block',
+              }}
+            />
+          )}
+          <div
+            style={{
+              background: '#0a0a0d',
+              border: `1px solid ${palette.border}`,
+              borderRadius: 7,
+              padding: 12,
+              fontSize: 13,
+              color: '#e8e6e3',
+              lineHeight: 1.5,
+              whiteSpace: 'pre-wrap',
+            }}
+          >
+            {analysis}
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              marginTop: 8,
+              flexWrap: 'wrap',
+            }}
+          >
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                padding: '3px 8px',
+                borderRadius: 4,
+                background:
+                  reviewState === 'approved' ? '#1a3d2a'
+                  : reviewState === 'denied' ? '#3d1a1a'
+                  : reviewState === 'redo_requested' ? '#3d2d1a'
+                  : '#22222a',
+                color:
+                  reviewState === 'approved' ? '#5fc88f'
+                  : reviewState === 'denied' ? '#f47272'
+                  : reviewState === 'redo_requested' ? '#f4c272'
+                  : '#8a8690',
+              }}
+            >
+              {reviewState ?? 'pending'}
+            </span>
+            {/* TTS play — only enabled if voice mode is on */}
+            {voice.enabled && (
+              <button
+                type="button"
+                onClick={() => voice.speak(analysis)}
+                disabled={voice.isPlaying}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: 5,
+                  border: `1px solid ${palette.border}`,
+                  background: 'transparent',
+                  color: palette.accent,
+                  fontSize: 11,
+                  cursor: voice.isPlaying ? 'default' : 'pointer',
+                  fontFamily: 'inherit',
+                  opacity: voice.isPlaying ? 0.5 : 1,
+                }}
+              >
+                {voice.isPlaying ? '▶ playing…' : `▶ hear ${speakerLabel}`}
+              </button>
+            )}
+            {reviewState === 'denied' || reviewState === 'redo_requested' ? (
+              <button
+                type="button"
+                onClick={retake}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: 5,
+                  border: 'none',
+                  background: palette.accent,
+                  color: '#0a0a0d',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                retake & resubmit
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onCancel ?? retake}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: 5,
+                  border: '1px solid #22222a',
+                  background: 'transparent',
+                  color: '#8a8690',
+                  fontSize: 11,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                done
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Inline keyframes for the pulsing dot */}
+      <style>{`
+        @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.35 } }
+      `}</style>
+    </div>
+  );
+}

@@ -4,7 +4,7 @@
  * settings, legacy Today view access, and help.
  */
 
-import { Settings, ChevronRight, HelpCircle, Calendar, Radio, Eye, FileText, Mail, ShieldAlert, PauseCircle, ArrowUpRight, Flame, Shirt, MessageCircle, BarChart3 } from 'lucide-react';
+import { Settings, ChevronRight, HelpCircle, Calendar, Radio, Eye, FileText, Mail, ShieldAlert, PauseCircle, ArrowUpRight, Flame, Shirt, MessageCircle, BarChart3, Camera } from 'lucide-react';
 
 type MenuItemId =
   | 'settings' | 'help'
@@ -17,7 +17,8 @@ type MenuItemId =
   | 'exercise' | 'her-world' | 'vault-swipe' | 'content-dashboard' | 'cam-session' | 'hypno-session'
   | 'progress-page' | 'sealed-page' | 'log-release' | 'social-dashboard'
   | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol'
-  | 'escalation_ladder' | 'force' | 'wardrobe' | 'gina-vibe' | 'trajectory';
+  | 'escalation_ladder' | 'force' | 'wardrobe' | 'gina-vibe' | 'trajectory'
+  | 'verification-vault';
 
 interface MenuViewProps {
   onNavigate: (view: MenuItemId) => void;
@@ -80,6 +81,13 @@ export function MenuView({ onNavigate }: MenuViewProps) {
       label: 'Wardrobe Inventory',
       description: 'What you own. The Handler reads this before naming clothing in any decree.',
       color: '#ec4899',
+    },
+    {
+      id: 'verification-vault' as MenuItemId,
+      icon: Camera,
+      label: 'Verification Vault',
+      description: 'Every photo you sent. Mama-approved, denied, or waiting on a retake.',
+      color: '#f4a7c4',
     },
     {
       id: 'gina-vibe' as MenuItemId,

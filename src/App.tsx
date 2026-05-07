@@ -42,6 +42,7 @@ import { HrtDailyGate } from './components/today-redesign/HrtDailyGate';
 import { GinaSessionRecorder } from './components/today-redesign/GinaSessionRecorder';
 import { MorningMantraGate } from './components/today-redesign/MorningMantraGate';
 import { MommyDossierQuiz } from './components/persona/MommyDossierQuiz';
+import { VerificationVault } from './components/verification/VerificationVault';
 import { GinaKeyHolderPage } from './components/gina/GinaKeyHolderPage';
 import { usePunishmentNotifications } from './hooks/usePunishmentNotifications';
 import { DailyReportCard } from './components/handler/DailyReportCard';
@@ -159,7 +160,7 @@ function LoadingScreen() {
   );
 }
 
-type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | 'hypno-learning' | 'goon-session' | 'progress-page' | 'sealed-page' | 'content-capture' | 'content-queue' | 'content-calendar' | 'content-fans' | 'content-polls' | 'content-revenue' | 'content-settings' | 'vault-browser' | 'log-release' | 'conditioning-library' | 'social-dashboard' | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol' | 'escalation_ladder' | 'force' | 'wardrobe' | 'gina-vibe' | 'trajectory' | 'mommy-dossier' | null;
+type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | 'hypno-learning' | 'goon-session' | 'progress-page' | 'sealed-page' | 'content-capture' | 'content-queue' | 'content-calendar' | 'content-fans' | 'content-polls' | 'content-revenue' | 'content-settings' | 'vault-browser' | 'log-release' | 'conditioning-library' | 'social-dashboard' | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol' | 'escalation_ladder' | 'force' | 'wardrobe' | 'gina-vibe' | 'trajectory' | 'mommy-dossier' | 'verification-vault' | null;
 
 /** Session picker → launches immersive SessionContainer */
 function SessionPickerOrContainer({ onBack }: { onBack: () => void }) {
@@ -733,6 +734,8 @@ function AuthenticatedAppInner() {
             <MommyDossierQuiz onClose={handleBackFromSubView} />
           </div>
         );
+      case 'verification-vault':
+        return <VerificationVault onBack={handleBackFromSubView} />;
       case 'investments':
       case 'wishlist':
         // These are now in ProgressDashboard, redirect there
