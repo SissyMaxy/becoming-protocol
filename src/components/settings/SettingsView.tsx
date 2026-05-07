@@ -26,6 +26,7 @@ import {
   Trash2,
   Loader2,
   Radio,
+  Calendar,
 } from 'lucide-react';
 import { profileStorageV2 } from '../../lib/profile-storage-v2';
 import { supabase } from '../../lib/supabase';
@@ -38,6 +39,7 @@ import { OpacitySelector } from './OpacitySelector';
 import { useReminders } from '../../hooks/useReminders';
 import { LovenseSettings } from './LovenseSettings';
 import { WhoopCard } from './WhoopCard';
+import { CalendarCard } from './CalendarCard';
 import { EquipmentInventory } from './EquipmentInventory';
 import { ProfileView } from './ProfileView';
 import { TimeRatchetsSettings } from './TimeRatchetsSettings';
@@ -302,7 +304,7 @@ interface SettingsViewProps {
   onEditIntake?: () => void;
 }
 
-type SettingsSection = 'main' | 'profile' | 'lovense' | 'whoop' | 'equipment' | 'timeratchets' | 'reminders' | 'privacy' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content' | 'opacity' | 'social-dashboard';
+type SettingsSection = 'main' | 'profile' | 'lovense' | 'whoop' | 'calendar' | 'equipment' | 'timeratchets' | 'reminders' | 'privacy' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content' | 'opacity' | 'social-dashboard';
 
 export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
   const { isBambiMode } = useBambiMode();
@@ -323,6 +325,7 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
   const SECTION_FEATURE: Record<string, string> = {
     lovense: 'settings_basic',        // always visible
     whoop: 'settings_basic',           // always visible
+    calendar: 'settings_basic',        // always visible
     equipment: 'settings_basic',      // always visible — equipment filters tasks
     timeratchets: 'settings_timeratchets',
     reminders: 'settings_reminders',
@@ -347,6 +350,13 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
       label: 'Whoop',
       description: 'Biometric integration',
       color: '#10b981',
+    },
+    {
+      id: 'calendar' as const,
+      icon: Calendar,
+      label: 'Calendar',
+      description: 'Google Calendar — events & busy-aware delivery',
+      color: '#4285F4',
     },
     {
       id: 'equipment' as const,
@@ -1003,6 +1013,9 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
 
         {/* Whoop Settings */}
         {activeSection === 'whoop' && <WhoopCard />}
+
+        {/* Calendar Settings */}
+        {activeSection === 'calendar' && <CalendarCard />}
 
         {/* Equipment Inventory */}
         {activeSection === 'equipment' && <EquipmentInventory />}
