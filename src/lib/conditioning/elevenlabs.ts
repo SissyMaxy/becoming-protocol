@@ -177,11 +177,9 @@ export async function generateConditioningAudio(
     throw new Error(`Failed to upload audio: ${uploadError.message}`);
   }
 
-  const { data: urlData } = supabase.storage
-    .from('audio')
-    .getPublicUrl(fileName);
-
-  const audioUrl = urlData.publicUrl;
+  // audio bucket is private (migration 260) — store the storage path;
+  // consumers sign on render via getSignedAssetUrl('audio', path).
+  const audioUrl = fileName;
 
   // 7. Estimate duration
   const durationSeconds = estimateDuration(scriptText);
