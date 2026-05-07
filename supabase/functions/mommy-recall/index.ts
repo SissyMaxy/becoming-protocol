@@ -28,6 +28,7 @@ import {
   effectiveBand, bandGaslightIntensity,
   type DifficultyBand,
 } from '../_shared/difficulty-band.ts'
+import { shouldAutoArchive } from '../_shared/letters-auto-archive.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -54,10 +55,17 @@ Deno.serve(async (req: Request) => {
 
   const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '')
 
-  const { data: us } = await supabase.from('user_state').select('handler_persona').eq('user_id', userId).maybeSingle()
+  const { data: us } = await supabase.from('user_state').select('handler_persona, current_phase').eq('user_id', userId).maybeSingle()
   if ((us as { handler_persona?: string } | null)?.handler_persona !== 'dommy_mommy') {
     return new Response(JSON.stringify({ ok: true, skipped: 'persona_not_dommy_mommy' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
+  const phaseSnapshot = (us as { current_phase?: number | null } | null)?.current_phase ?? null
+
+  // Today's affect — recorded as snapshot even though the recall path doesn't
+  // bias on it. Letters view filters by affect across all sources.
+  const today = new Date().toISOString().slice(0, 10)
+  const { data: moodToday } = await supabase.from('mommy_mood').select('affect').eq('user_id', userId).eq('mood_date', today).maybeSingle()
+  const affectSnapshot = (moodToday as { affect?: string } | null)?.affect ?? null
 
   // Read effective gaslight intensity (collapses cooldown rule), then
   // gate on the compliance-difficulty band — recovery short-circuits
@@ -190,6 +198,10 @@ Plain text only. No JSON, no markdown, no question marks at the end.`
     message = whiplashWrap(`Mama still thinks about what you wrote.`, { arousalBias: 'medium' })
   }
 
+  // Recall doesn't archive at insert (waits for acknowledgement). The flag
+  // flip happens in the acknowledge path. Snapshot the context so the museum
+  // view stays accurate even if phase/affect change before she sees it.
+  const archive = shouldAutoArchive({ source: 'mommy_recall', affect_snapshot: affectSnapshot, status: 'pending' })
   const { data: outreach, error: outErr } = await supabase.from('handler_outreach_queue').insert({
     user_id: userId,
     message,
@@ -198,6 +210,9 @@ Plain text only. No JSON, no markdown, no question marks at the end.`
     scheduled_for: new Date().toISOString(),
     expires_at: new Date(Date.now() + 18 * 3600000).toISOString(),
     source: 'mommy_recall',
+    phase_snapshot: phaseSnapshot,
+    affect_snapshot: affectSnapshot,
+    is_archived_to_letters: archive,
   }).select('id').single()
   if (outErr) {
     console.error('[mommy-recall] outreach insert failed:', outErr)
