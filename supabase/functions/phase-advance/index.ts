@@ -269,8 +269,29 @@ async function advanceUser(
 ): Promise<EvaluateOutcome> {
   const {
     userId, currentPhase, targetPhase, targetDef, requirementsState,
-    currentHonorific, feminineName, isMommy, congratulate,
+    currentHonorific, feminineName,
   } = args
+
+  // Re-read Handler state at the moment of write so the artifact reflects
+  // the current persona / hard-mode / chastity-locked state — not whatever
+  // it was when the evaluator started. Hard-mode locks Mommy off (Director
+  // voice during compliance crisis), so a celebration written under
+  // hard_mode_active=true must drop Mama's framing even if the user's
+  // persona is set to dommy_mommy. Same pattern as api/handler/chat.ts.
+  const { data: usFresh } = await supabase
+    .from('user_state')
+    .select('handler_persona, hard_mode_active, phase_advance_congratulate')
+    .eq('user_id', userId)
+    .maybeSingle()
+  const fresh = (usFresh as {
+    handler_persona?: string | null
+    hard_mode_active?: boolean | null
+    phase_advance_congratulate?: boolean | null
+  } | null) ?? {}
+  const liveIsMommy = isMommyPersona(fresh.handler_persona) && !fresh.hard_mode_active
+  // Latest toggle wins — the user might have flipped congratulations off
+  // between the eval load and the advance write.
+  const liveCongratulate = (fresh.phase_advance_congratulate !== false) && args.congratulate
 
   // Bump feminine_self FIRST so a duplicate cron firing won't double-advance.
   const { error: bumpErr } = await supabase
@@ -290,16 +311,16 @@ async function advanceUser(
 
   // Celebration outreach (skip if congratulate toggle is off).
   let outreachId: string | null = null
-  if (congratulate) {
+  if (liveCongratulate) {
     const message = composeCelebration({
-      isMommy,
+      isMommy: liveIsMommy,
       targetPhase,
       targetDef,
       feminineName,
       suggestedHonorific: suggested,
     })
 
-    const affect: Affect = isMommy ? 'delighted' : 'delighted'
+    const affect: Affect = liveIsMommy ? 'delighted' : 'delighted'
     const { data: outreach } = await supabase.from('handler_outreach_queue').insert({
       user_id: userId,
       message,
