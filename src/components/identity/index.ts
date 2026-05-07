@@ -1,0 +1,1 @@
+export { IdentitySettingsView } from './IdentitySettingsView';

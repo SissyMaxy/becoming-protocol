@@ -92,6 +92,7 @@ import { VoiceAffirmationGame } from './components/voice-game';
 import { VoiceDrillView } from './components/voice-game/VoiceDrillView';
 import { Dashboard } from './components/dashboard';
 import { WardrobeInventoryView } from './components/wardrobe';
+import { IdentitySettingsView } from './components/identity';
 import { GinaVibeCaptureCard } from './components/gina';
 import { TrajectoryArchiveView } from './components/trajectory';
 import { JournalView } from './components/journal';
@@ -132,6 +133,7 @@ const DEEP_LINK_VIEWS: Record<string, string> = {
   '/dashboard': 'dashboard',
   '/journal': 'journal',
   '/settings': 'settings',
+  '/identity': 'identity',
 };
 
 function parseDeepLinkView(): string | null {
@@ -159,7 +161,7 @@ function LoadingScreen() {
   );
 }
 
-type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | 'hypno-learning' | 'goon-session' | 'progress-page' | 'sealed-page' | 'content-capture' | 'content-queue' | 'content-calendar' | 'content-fans' | 'content-polls' | 'content-revenue' | 'content-settings' | 'vault-browser' | 'log-release' | 'conditioning-library' | 'social-dashboard' | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol' | 'escalation_ladder' | 'force' | 'wardrobe' | 'gina-vibe' | 'trajectory' | 'mommy-dossier' | null;
+type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | 'hypno-learning' | 'goon-session' | 'progress-page' | 'sealed-page' | 'content-capture' | 'content-queue' | 'content-calendar' | 'content-fans' | 'content-polls' | 'content-revenue' | 'content-settings' | 'vault-browser' | 'log-release' | 'conditioning-library' | 'social-dashboard' | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol' | 'escalation_ladder' | 'force' | 'wardrobe' | 'gina-vibe' | 'trajectory' | 'mommy-dossier' | 'identity' | null;
 
 /** Session picker → launches immersive SessionContainer */
 function SessionPickerOrContainer({ onBack }: { onBack: () => void }) {
@@ -452,6 +454,10 @@ function AuthenticatedAppInner() {
       setActiveTab('menu');
       setMenuSubView('hypno-learning');
     };
+    const handleNavigateToIdentity = () => {
+      setActiveTab('menu');
+      setMenuSubView('identity');
+    };
     const handleOpenReleaseLog = () => setShowOrgasmLog(true);
     window.addEventListener('navigate-to-investments', handleNavigateToInvestments);
     window.addEventListener('navigate-to-wishlist', handleNavigateToWishlist);
@@ -461,6 +467,7 @@ function AuthenticatedAppInner() {
     window.addEventListener('navigate-to-cam', handleNavigateToCam);
     window.addEventListener('navigate-to-hypno', handleNavigateToHypno);
     window.addEventListener('navigate-to-hypno-learning', handleNavigateToHypnoLearning);
+    window.addEventListener('navigate-to-identity', handleNavigateToIdentity);
     window.addEventListener('open-release-log', handleOpenReleaseLog);
     return () => {
       window.removeEventListener('navigate-to-investments', handleNavigateToInvestments);
@@ -471,6 +478,7 @@ function AuthenticatedAppInner() {
       window.removeEventListener('navigate-to-cam', handleNavigateToCam);
       window.removeEventListener('navigate-to-hypno', handleNavigateToHypno);
       window.removeEventListener('navigate-to-hypno-learning', handleNavigateToHypnoLearning);
+      window.removeEventListener('navigate-to-identity', handleNavigateToIdentity);
       window.removeEventListener('open-release-log', handleOpenReleaseLog);
     };
   }, []);
@@ -862,6 +870,8 @@ function AuthenticatedAppInner() {
         return <ConditioningLibrary onBack={handleBackFromSubView} />;
       case 'wardrobe':
         return <WardrobeInventoryView onBack={handleBackFromSubView} />;
+      case 'identity':
+        return <IdentitySettingsView onBack={handleBackFromSubView} />;
       case 'gina-vibe':
         return (
           <div>

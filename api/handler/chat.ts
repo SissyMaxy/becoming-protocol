@@ -297,6 +297,74 @@ async function buildCurrentTimeBlock(userId: string): Promise<string> {
 }
 
 // ============================================
+// FEMININE SELF — Dommy Mommy persona overlay
+// Identity persistence layer: name + pronouns + current phase + recent
+// wardrobe + honorific. Inlined here because /api/ can't import src/lib
+// (Vite-only env). Block format mirrors src/lib/persona/dommy-mommy.ts
+// and supabase/functions/_shared/dommy-mommy.ts; keep them in sync.
+// ============================================
+
+const DEFAULT_FEMININE_PRONOUNS = { subject: 'she', object: 'her', possessive: 'her' };
+
+async function buildFeminineSelfOverlayBlock(userId: string): Promise<string> {
+  const { data: selfRow } = await supabase
+    .from('feminine_self')
+    .select('feminine_name, pronouns, current_honorific, transformation_phase')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  const self = selfRow as {
+    feminine_name: string | null;
+    pronouns: { subject?: string; object?: string; possessive?: string } | null;
+    current_honorific: string | null;
+    transformation_phase: number | null;
+  } | null;
+
+  // Skip cleanly when no name is set — caller falls back to existing pet-name behavior
+  if (!self?.feminine_name) return '';
+
+  const phase = self.transformation_phase ?? 1;
+  const [{ data: wardrobeRows }, { data: phaseRow }] = await Promise.all([
+    supabase
+      .from('wardrobe_items')
+      .select('item_name')
+      .eq('user_id', userId)
+      .order('acquired_at', { ascending: false })
+      .limit(3),
+    supabase
+      .from('transformation_phase_defs')
+      .select('name')
+      .eq('phase', phase)
+      .maybeSingle(),
+  ]);
+
+  const pronouns = { ...DEFAULT_FEMININE_PRONOUNS, ...(self.pronouns ?? {}) };
+  const pronounStr = `${pronouns.subject}/${pronouns.object}`;
+
+  const phaseName = (phaseRow as { name?: string } | null)?.name;
+  const phaseLine = phaseName
+    ? `You are in phase ${phase} — ${phaseName}.`
+    : `You are in phase ${phase}.`;
+
+  const wardrobeNames = ((wardrobeRows as Array<{ item_name: string }> | null) ?? []).map((r) => r.item_name);
+  const wardrobeLine = wardrobeNames.length > 0
+    ? `Recent additions to her wardrobe: ${wardrobeNames.join(', ')}.`
+    : '';
+
+  const honorificLine = self.current_honorific
+    ? `Mommy's pet name for her: ${self.current_honorific}.`
+    : '';
+
+  return [
+    `## IDENTITY — feminine_self`,
+    `She knows you as ${self.feminine_name}, ${pronounStr}.`,
+    phaseLine,
+    wardrobeLine,
+    honorificLine,
+  ].filter(Boolean).join('\n');
+}
+
+// ============================================
 // DIRECTIVE OUTCOME TRACKING (learning loop foundation)
 // ============================================
 
@@ -2138,6 +2206,24 @@ HARD RULES FOR ALL PERSONAS:
       finalSystemPrompt += personaSection;
     } catch {
       // Persona selection failure is non-critical
+    }
+
+    // 4e. Dommy Mommy overlay — when enabled, inject the feminine_self
+    // identity block so the persona references her chosen name, pronouns,
+    // current phase, and recent wardrobe additions on every reply. Behind
+    // an env flag while quality-pass owns the persona body itself; default
+    // off so non-overlay users see no behavior change.
+    //
+    // Per spec, skip cleanly when no feminine_name is set — caller falls
+    // back to the existing pet-name behavior.
+    const mommyOverlay = process.env.DOMMY_MOMMY_OVERLAY === 'true';
+    if (mommyOverlay) {
+      try {
+        const overlayBlock = await buildFeminineSelfOverlayBlock(user.id);
+        if (overlayBlock) finalSystemPrompt += `\n\n${overlayBlock}`;
+      } catch (err) {
+        console.warn('[Handler][feminine_self_overlay] failed:', err);
+      }
     }
 
     // 5. Build messages array (cap at 30 recent)
