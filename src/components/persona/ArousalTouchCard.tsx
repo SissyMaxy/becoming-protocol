@@ -16,6 +16,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { PhotoUploadWidget } from '../verification/PhotoUploadWidget';
+import { photoTypeForTouchCategory } from '../../lib/verification/upload';
 
 interface TouchTask {
   id: string;
@@ -36,16 +37,6 @@ const CATEGORY_LABEL: Record<string, string> = {
   panty_check:        'panty check',
   breath_check:       'breath, body anchor',
   public_micro:       'one feminine thing',
-};
-
-// Maps the task category to the verification taxonomy used by the upload
-// widget. Categories not in this map don't get a photo CTA.
-const PHOTO_TYPE_FOR: Record<string, 'mantra_recitation' | 'mirror_affirmation' | 'pose_hold' | 'freeform'> = {
-  mantra_aloud: 'mantra_recitation',
-  mirror_admission: 'mirror_affirmation',
-  pose_hold: 'pose_hold',
-  panty_check: 'freeform',
-  public_micro: 'freeform',
 };
 
 function fmtCountdown(expiresAt: string): string {
@@ -86,7 +77,7 @@ export function ArousalTouchCard() {
 
   if (!task) return null;
 
-  const photoType = PHOTO_TYPE_FOR[task.category];
+  const photoType = photoTypeForTouchCategory(task.category);
 
   const completeIt = async () => {
     if (submitting) return;

@@ -22,35 +22,13 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { usePersona } from '../../hooks/usePersona';
 import { useHandlerVoice } from '../../hooks/useHandlerVoice';
-
-type DirectiveKind =
-  | 'handler_decree'
-  | 'arousal_touch_task'
-  | 'body_feminization_directive'
-  | 'daily_outfit_mandate'
-  | 'wardrobe_item'
-  | 'mommy_mantra'
-  | 'freeform';
-
-type VerificationType =
-  | 'wardrobe_acquisition'
-  | 'posture_check'
-  | 'mirror_affirmation'
-  | 'mantra_recitation'
-  | 'pose_hold'
-  | 'freeform';
-
-// Maps user-facing verification_type → analyze-photo task_type so the existing
-// vision prompt selector picks something reasonable. Keep this narrow — the
-// MOMMY_TASK_PROMPTS in api/handler/analyze-photo.ts is the source of truth.
-const TASK_TYPE_FOR: Record<VerificationType, string> = {
-  wardrobe_acquisition: 'outfit',
-  posture_check: 'mirror_check',
-  mirror_affirmation: 'mirror_check',
-  mantra_recitation: 'mirror_check',
-  pose_hold: 'pose',
-  freeform: 'general',
-};
+import {
+  TASK_TYPE_FOR,
+  buildStoragePath,
+  analyzeAndPersist,
+  type DirectiveKind,
+  type VerificationType,
+} from '../../lib/verification/upload';
 
 interface PhotoUploadWidgetProps {
   verificationType: VerificationType;
@@ -115,9 +93,8 @@ export function PhotoUploadWidget({
     setStage('uploading');
     setError(null);
     try {
-      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-      // RLS on storage.objects requires path's first folder = auth.uid()
-      const path = `${user.id}/verifications/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const ext = file.name.split('.').pop() || 'jpg';
+      const path = buildStoragePath(user.id, ext);
       const { error: upErr, data: upData } = await supabase.storage
         .from('verification-photos')
         .upload(path, file, { contentType: file.type, upsert: false });
@@ -146,38 +123,22 @@ export function PhotoUploadWidget({
       setStage('analyzing');
       const session = await supabase.auth.getSession();
       const token = session.data.session?.access_token;
-      const res = await fetch('/api/handler/analyze-photo', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
+      const { analysis: analysisText, reviewState: finalReview } = await analyzeAndPersist(
+        supabase,
+        {
           photoId: row.id,
           photoUrl,
           taskType,
           caption,
-        }),
-      });
+          userId: user.id,
+          accessToken: token ?? '',
+        },
+      );
 
-      if (!res.ok) {
-        const body = await res.text().catch(() => '');
-        throw new Error(`Analysis failed (${res.status}): ${body.slice(0, 120)}`);
-      }
-      const result = (await res.json()) as { analysis?: string; approved?: boolean };
-      const finalReview = result.approved ? 'approved' : 'denied';
-      // Mirror review_state from analyze-photo's approval verdict so the
-      // vault gallery filter doesn't have to read both columns.
-      await supabase
-        .from('verification_photos')
-        .update({ review_state: finalReview })
-        .eq('id', row.id)
-        .eq('user_id', user.id);
-
-      setAnalysis(result.analysis ?? '');
+      setAnalysis(analysisText);
       setReviewState(finalReview);
       setStage('done');
-      onComplete?.({ photoId: row.id, analysis: result.analysis ?? '', reviewState: finalReview });
+      onComplete?.({ photoId: row.id, analysis: analysisText, reviewState: finalReview });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg);
