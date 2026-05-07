@@ -40,6 +40,7 @@ import { LovenseSettings } from './LovenseSettings';
 import { WhoopCard } from './WhoopCard';
 import { EquipmentInventory } from './EquipmentInventory';
 import { ProfileView } from './ProfileView';
+import { MommyVoiceSettings } from './MommyVoiceSettings';
 import { TimeRatchetsSettings } from './TimeRatchetsSettings';
 import { ReminderSettingsPanel } from '../reminders';
 import { HandlerDashboard } from '../handler-dashboard';
@@ -574,6 +575,9 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
             }`}>
               <OpacitySelector />
             </div>
+
+            {/* Mama voice — only renders for dommy_mommy persona */}
+            <MommyVoiceSettings />
 
             {/* Difficulty — always visible (settings_basic) */}
             <DifficultySection />

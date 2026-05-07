@@ -8,25 +8,28 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { useOutreachAudio } from '../../hooks/useOutreachAudio';
 
 interface Brief {
   id: string;
   message: string;
   scheduled_for: string;
   status: string;
+  audio_url: string | null;
 }
 
 export function MorningBriefCard() {
   const { user } = useAuth();
   const [brief, setBrief] = useState<Brief | null>(null);
   const [acking, setAcking] = useState(false);
+  const { play, playingId } = useOutreachAudio();
 
   const load = useCallback(async () => {
     if (!user?.id) return;
     const todayUtcStart = new Date();
     todayUtcStart.setUTCHours(0, 0, 0, 0);
     const { data } = await supabase.from('handler_outreach_queue')
-      .select('id, message, scheduled_for, status')
+      .select('id, message, scheduled_for, status, audio_url')
       .eq('user_id', user.id)
       .eq('trigger_reason', 'daily_morning_brief')
       .gte('scheduled_for', todayUtcStart.toISOString())
@@ -117,18 +120,35 @@ export function MorningBriefCard() {
         </div>
       )}
 
-      <button
-        onClick={ack}
-        disabled={acking}
-        style={{
-          width: '100%', padding: 10, borderRadius: 6, border: 'none',
-          background: '#f4c272', color: '#1a0f00',
-          fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
-          textTransform: 'uppercase', letterSpacing: '0.05em',
-        }}
-      >
-        {acking ? '…' : 'Got it · start the day'}
-      </button>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          onClick={ack}
+          disabled={acking}
+          style={{
+            flex: 1, padding: 10, borderRadius: 6, border: 'none',
+            background: '#f4c272', color: '#1a0f00',
+            fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+            textTransform: 'uppercase', letterSpacing: '0.05em',
+          }}
+        >
+          {acking ? '…' : 'Got it · start the day'}
+        </button>
+        {brief.audio_url && (
+          <button
+            onClick={() => play(brief.id, brief.audio_url!)}
+            aria-label={playingId === brief.id ? 'Stop Mama' : 'Play Mama'}
+            style={{
+              padding: '10px 14px', borderRadius: 6,
+              background: playingId === brief.id ? '#f4c27240' : 'transparent',
+              color: '#f4c272', border: '1px solid #f4c272',
+              fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+              textTransform: 'uppercase', letterSpacing: '0.05em',
+            }}
+          >
+            {playingId === brief.id ? '◼ Stop' : '▶ Play'}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
