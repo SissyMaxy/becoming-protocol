@@ -24,7 +24,8 @@ export function PhotoVerificationUpload({ taskType = 'general', onComplete }: Ph
     setAnalysis(null);
 
     try {
-      // Upload to Supabase storage
+      // Upload to Supabase storage. Bucket is private (migration 260) —
+      // store the object path; render sites sign on demand.
       const fileExt = file.name.split('.').pop() || 'jpg';
       const fileName = `${user.id}/${Date.now()}.${fileExt}`;
       const { data: uploadData, error: uploadError } = await supabase.storage
@@ -33,19 +34,15 @@ export function PhotoVerificationUpload({ taskType = 'general', onComplete }: Ph
 
       if (uploadError) throw uploadError;
 
-      const { data: urlData } = supabase.storage
-        .from('verification-photos')
-        .getPublicUrl(uploadData.path);
+      const photoPath = uploadData.path;
 
-      const photoUrl = urlData.publicUrl;
-
-      // Insert verification_photos row
+      // Insert verification_photos row (photo_url now holds the path).
       const { data: photoRow, error: insertError } = await supabase
         .from('verification_photos')
         .insert({
           user_id: user.id,
           task_type: taskType,
-          photo_url: photoUrl,
+          photo_url: photoPath,
           caption: caption || null,
         })
         .select()
@@ -56,7 +53,8 @@ export function PhotoVerificationUpload({ taskType = 'general', onComplete }: Ph
       setUploading(false);
       setAnalyzing(true);
 
-      // Call vision analysis endpoint
+      // Call vision analysis endpoint. Send the path; the endpoint
+      // downloads via service-role from the private bucket.
       const session = await supabase.auth.getSession();
       const token = session.data.session?.access_token;
       const res = await fetch('/api/handler/analyze-photo', {
@@ -67,7 +65,7 @@ export function PhotoVerificationUpload({ taskType = 'general', onComplete }: Ph
         },
         body: JSON.stringify({
           photoId: photoRow.id,
-          photoUrl,
+          photoUrl: photoPath,
           taskType,
           caption,
         }),

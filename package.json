@@ -22,7 +22,8 @@
     "mommy:mine-implants": "tsx scripts/mommy/mine-cruising-implants.ts",
     "mommy:build": "tsx scripts/mommy/builder.ts",
     "mommy:drain": "tsx scripts/mommy/builder.ts --ship --drain",
-    "mommy:classify": "tsx scripts/mommy/builder.ts --classify"
+    "mommy:classify": "tsx scripts/mommy/builder.ts --classify",
+    "lint:storage": "node scripts/handler-regression/storage-privacy-lint.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.74.0",

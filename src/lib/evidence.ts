@@ -34,7 +34,9 @@ export async function uploadEvidence(
     const fileExt = file.name.split('.').pop();
     const fileName = `${userId}/${metadata.date}/${Date.now()}.${fileExt}`;
 
-    // Upload to Supabase Storage
+    // Upload to Supabase Storage. Bucket is private (migration 260) —
+    // store the storage path in fileUrl; render code signs on demand
+    // via getSignedAssetUrl('evidence', fileUrl).
     const { error: uploadError } = await supabase.storage
       .from('evidence')
       .upload(fileName, file, {
@@ -47,12 +49,7 @@ export async function uploadEvidence(
       return null;
     }
 
-    // Get public URL
-    const { data: urlData } = supabase.storage
-      .from('evidence')
-      .getPublicUrl(fileName);
-
-    const fileUrl = urlData.publicUrl;
+    const fileUrl = fileName;
 
     // Create evidence record in database
     const evidence: Omit<Evidence, 'id'> = {

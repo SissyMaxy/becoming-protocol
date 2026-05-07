@@ -59,6 +59,9 @@ jobs:
       - name: Migration lint (fails on NEW non-idempotent patterns)
         run: npm run lint:migrations
 
+      - name: Storage privacy lint (no getPublicUrl on private buckets)
+        run: npm run lint:storage
+
   architectural-audits:
     name: Architectural audits (cohesion, centrality, coverage)
     runs-on: ubuntu-latest

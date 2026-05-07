@@ -1,8 +1,27 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 // NOTE: Cannot import from src/lib/ — uses import.meta.env (Vite-only)
 // All logic is self-contained using process.env
+
+// Audio bucket is private (migration 260). Sign object paths for any URL
+// that crosses the wire to the client. Returns null on failure (the audio
+// is treated as "unavailable" client-side rather than throwing).
+const AUDIO_SIGN_TTL_SECONDS = 6 * 3600; // 6h — survives a long sleep session
+async function signAudioPath(
+  supabase: SupabaseClient,
+  pathOrUrl: string | null | undefined,
+  ttlSeconds: number = AUDIO_SIGN_TTL_SECONDS,
+): Promise<string | null> {
+  if (!pathOrUrl) return null;
+  // Strip the legacy public-URL prefix if a row predates the URL→path
+  // backfill in migration 261.
+  const path = pathOrUrl.replace(/^https?:\/\/[^/]+\/storage\/v1\/object\/public\/audio\//, '');
+  if (!path) return null;
+  const { data, error } = await supabase.storage.from('audio').createSignedUrl(path, ttlSeconds);
+  if (error || !data?.signedUrl) return null;
+  return data.signedUrl;
+}
 
 /**
  * Consolidated conditioning router.
@@ -197,7 +216,9 @@ Write naturally in second person ("you"), include [pause] and [breathe in] / [br
 
     const audioBuffer = Buffer.from(await ttsRes.arrayBuffer());
 
-    // 5. Upload to Supabase storage
+    // 5. Upload to Supabase storage. Bucket is private (migration 260) —
+    // store the path; consumer endpoints sign on read with service role
+    // and return signed URLs to the client.
     const fileName = `conditioning/${user.id}/${Date.now()}_phase${phase}.mp3`;
     const { error: uploadErr } = await supabase.storage
       .from('audio')
@@ -207,8 +228,7 @@ Write naturally in second person ("you"), include [pause] and [breathe in] / [br
       return res.status(500).json({ error: `Upload failed: ${uploadErr.message}` });
     }
 
-    const { data: urlData } = supabase.storage.from('audio').getPublicUrl(fileName);
-    const audioUrl = urlData.publicUrl;
+    const audioUrl = fileName;
 
     // 6. Estimate duration (120 words/min)
     const wordCount = scriptText.split(/\s+/).filter((w: string) => w.length > 0).length;
@@ -278,7 +298,7 @@ Write naturally in second person ("you"), include [pause] and [breathe in] / [br
     }
 
     return res.status(200).json({
-      audioUrl,
+      audioUrl: await signAudioPath(supabase, audioUrl),
       scriptText,
       durationSeconds,
       curriculumId: curriculum?.id,
@@ -372,7 +392,8 @@ async function handleTts(req: VercelRequest, res: VercelResponse) {
 
     const audioBuffer = Buffer.from(await ttsRes.arrayBuffer());
 
-    // Upload to Supabase storage
+    // Upload to Supabase storage. Path-only persistence after the bucket
+    // privacy flip (migration 260).
     const fileName = `conditioning/${user.id}/${Date.now()}_phase${phase}.mp3`;
     const { error: uploadErr } = await supabase.storage
       .from('audio')
@@ -382,8 +403,7 @@ async function handleTts(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: `Upload failed: ${uploadErr.message}` });
     }
 
-    const { data: urlData } = supabase.storage.from('audio').getPublicUrl(fileName);
-    const audioUrl = urlData.publicUrl;
+    const audioUrl = fileName;
 
     // Update generated_scripts with audio URL if scriptId provided
     if (scriptId) {
@@ -416,7 +436,7 @@ async function handleTts(req: VercelRequest, res: VercelResponse) {
     }).select('id').single();
 
     return res.status(200).json({
-      audioUrl,
+      audioUrl: await signAudioPath(supabase, audioUrl),
       durationSeconds,
       curriculumId: curriculum?.id,
       audioBytes: audioBuffer.length,
@@ -710,12 +730,18 @@ async function handleSleepPrescription(req: VercelRequest, res: VercelResponse) 
     // 6. Return prescription
     // ============================================
 
-    return res.status(200).json({
-      sessionId: session.id,
-      tier,
-      denialDay,
-      streakDays,
-      playlist: playlist.map(c => ({
+    // Sign each playlist item's audio path before returning to the client.
+    // source_url may be a third-party URL (cap origin) or an audio-bucket
+    // path; only sign the latter. Run in parallel — playlist is bounded
+    // at 8 items so the fan-out is cheap.
+    const signedPlaylist = await Promise.all(playlist.map(async c => {
+      const raw = c.audio_storage_url || c.source_url || null;
+      // Treat only audio-bucket paths (no protocol) as signable;
+      // external https URLs pass through.
+      const isExternal = !!raw && /^https?:\/\//i.test(raw)
+        && !/\/storage\/v1\/object\/public\/audio\//.test(raw);
+      const audioUrl = isExternal ? raw : await signAudioPath(supabase, raw);
+      return {
         id: c.id,
         title: c.title,
         mediaType: c.media_type,
@@ -723,9 +749,17 @@ async function handleSleepPrescription(req: VercelRequest, res: VercelResponse) 
         tier: c.tier,
         intensity: c.intensity,
         durationMinutes: c.duration_minutes,
-        audioUrl: c.audio_storage_url || c.source_url || null,
+        audioUrl,
         sessionContexts: c.session_contexts,
-      })),
+      };
+    }));
+
+    return res.status(200).json({
+      sessionId: session.id,
+      tier,
+      denialDay,
+      streakDays,
+      playlist: signedPlaylist,
     });
   } catch (err: any) {
     console.error('[sleep-prescription]', err);

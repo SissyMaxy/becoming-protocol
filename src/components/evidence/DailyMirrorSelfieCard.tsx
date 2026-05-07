@@ -12,10 +12,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { getSignedAssetUrls } from '../../lib/storage/signed-url';
 
 interface RecentSelfie {
   id: string;
-  photo_url: string;
+  photo_url: string;          // object path (or legacy URL)
+  signed_url: string | null;  // resolved at load time for <img src>
   caption: string | null;
   created_at: string;
 }
@@ -40,7 +42,11 @@ export function DailyMirrorSelfieCard() {
       .eq('task_type', 'daily_mirror_selfie')
       .order('created_at', { ascending: false })
       .limit(14);
-    const rows = (data as RecentSelfie[]) ?? [];
+    const raw = (data as Array<Omit<RecentSelfie, 'signed_url'>>) ?? [];
+    // Selfies upload to the `evidence` bucket; sign each path so the
+    // gallery <img src> works after migration 260 flipped it private.
+    const signed = await getSignedAssetUrls('evidence', raw.map(r => r.photo_url));
+    const rows: RecentSelfie[] = raw.map((r, i) => ({ ...r, signed_url: signed[i] }));
     setRecent(rows);
     const today = new Date().toISOString().slice(0, 10);
     const todayRow = rows.find(r => r.created_at.slice(0, 10) === today);
@@ -76,12 +82,13 @@ export function DailyMirrorSelfieCard() {
         upsert: false,
       });
       if (upErr) throw upErr;
-      const { data: pub } = supabase.storage.from('evidence').getPublicUrl(path);
 
+      // photo_url stores the storage path; the gallery signs on render.
+      // Bucket is private (migration 260).
       const { error: insErr } = await supabase.from('verification_photos').insert({
         user_id: user.id,
         task_type: 'daily_mirror_selfie',
-        photo_url: pub.publicUrl,
+        photo_url: path,
         caption: caption.trim() || null,
         approved: true,  // self-archive — user-submitted evidence, not handler-judged
       });
@@ -211,12 +218,14 @@ export function DailyMirrorSelfieCard() {
                 overflow: 'hidden',
                 position: 'relative',
               }} title={s.caption || date.toLocaleDateString()}>
-                <img
-                  src={s.photo_url}
-                  alt={`selfie ${date.toLocaleDateString()}`}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
+                {s.signed_url && (
+                  <img
+                    src={s.signed_url}
+                    alt={`selfie ${date.toLocaleDateString()}`}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                )}
                 <div style={{
                   position: 'absolute', bottom: 0, left: 0, right: 0,
                   padding: '2px 4px', fontSize: 8.5, color: '#fff',

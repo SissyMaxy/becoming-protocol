@@ -97,7 +97,9 @@ export function ConversationScreenshotsCard() {
 
       if (mode === 'image' && files.length > 0) {
         // Upload all selected screenshots. First becomes screenshot_url,
-        // rest accumulate in additional_screenshot_urls.
+        // rest accumulate in additional_screenshot_urls. Both columns
+        // store object paths after migration 260; the classify edge fn
+        // and any future render code sign via getSignedAssetUrl.
         const uploaded: string[] = [];
         for (const f of files) {
           const ext = f.name.split('.').pop() || 'jpg';
@@ -110,8 +112,7 @@ export function ConversationScreenshotsCard() {
             upsert: false,
           });
           if (upErr) throw upErr;
-          const { data: pub } = supabase.storage.from('evidence').getPublicUrl(path);
-          uploaded.push(pub.publicUrl);
+          uploaded.push(path);
         }
         screenshotUrl = uploaded[0];
         additionalUrls = uploaded.slice(1);
