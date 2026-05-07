@@ -345,6 +345,9 @@ export function useTodayData() {
         .select('id, message, trigger_reason, urgency, created_at, delivered_at')
         .eq('user_id', user.id)
         .is('delivered_at', null)
+        // Calendar busy-window deferral: rows with deliver_after in the future
+        // are queued but suppressed until the busy window ends.
+        .or(`deliver_after.is.null,deliver_after.lte.${new Date().toISOString()}`)
         .order('created_at', { ascending: false })
         .limit(6),
       supabase
