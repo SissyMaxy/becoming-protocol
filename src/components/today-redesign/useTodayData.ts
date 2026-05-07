@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { getSignedAssetUrl } from '../../lib/storage/signed-url';
 
 export type DirectiveAction = 'log_meal' | 'log_measurement' | 'upload_photo' | 'voice_practice' | 'journal_entry' | 'log_workout' | 'log_dose' | null;
 
@@ -558,7 +559,10 @@ export function useTodayData() {
       kg: r.weight_kg,
     }));
 
-    const latestProgressPhotoUrl = (latestPhotoRes.data as { proof_photo_url?: string } | null)?.proof_photo_url || null;
+    // proof_photo_url stores an object path post-migration 260. Sign for
+    // <img src=…> on Today (1h TTL — card refreshes well within that).
+    const latestProgressPhotoPath = (latestPhotoRes.data as { proof_photo_url?: string } | null)?.proof_photo_url || null;
+    const latestProgressPhotoUrl = await getSignedAssetUrl('verification-photos', latestProgressPhotoPath);
 
     // 30-day heatmap — group task_completions by YYYY-MM-DD.
     const dayCounts: Record<string, number> = {};
@@ -923,11 +927,12 @@ export function useTodayData() {
       .from('verification-photos')
       .upload(path, file, { contentType: file.type, upsert: false });
     if (upErr) throw upErr;
-    const { data: pub } = supabase.storage.from('verification-photos').getPublicUrl(path);
+    // proof_photo_url stores the object path; render signs on demand.
+    // Bucket is private after migration 260.
     await supabase
       .from('body_feminization_directives')
       .update({
-        proof_photo_url: pub.publicUrl,
+        proof_photo_url: path,
         status: 'completed',
         completed_at: new Date().toISOString(),
       })

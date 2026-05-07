@@ -435,9 +435,10 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
         contentType: file.type, upsert: false,
       });
       if (upErr) throw upErr;
-      const { data: pub } = supabase.storage.from('verification-photos').getPublicUrl(path);
+      // photo_proof_url stores the object path; render sites sign on read
+      // via getSignedAssetUrl. See migration 260 (bucket flipped private).
       await supabase.from('daily_outfit_mandates').update({
-        photo_proof_url: pub.publicUrl,
+        photo_proof_url: path,
         completed_at: new Date().toISOString(),
       }).eq('id', task.rowId);
       window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'outfit', id: task.rowId } }));

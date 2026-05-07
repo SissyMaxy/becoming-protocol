@@ -101,11 +101,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const systemPrompt = promptSet[taskType] || promptSet.general;
     const voiceLabel = isMommy ? 'Mama' : 'the Handler';
 
-    const imageRes = await fetch(photoUrl);
-    if (!imageRes.ok) throw new Error('Could not fetch image');
-    const imageBuffer = await imageRes.arrayBuffer();
+    // photoUrl may be a storage object path (post-migration 260) or a
+    // legacy public URL. For paths, download via service role from the
+    // verification-photos bucket — bypasses RLS, no signed URL needed.
+    // For URLs, fetch as before (covers legacy rows the backfill missed).
+    let imageBuffer: ArrayBuffer;
+    let mediaType: string;
+    if (/^https?:\/\//i.test(photoUrl)) {
+      const imageRes = await fetch(photoUrl);
+      if (!imageRes.ok) throw new Error(`Could not fetch image: HTTP ${imageRes.status}`);
+      imageBuffer = await imageRes.arrayBuffer();
+      mediaType = imageRes.headers.get('content-type') || 'image/jpeg';
+    } else {
+      const { data: blob, error: dlError } = await supabase.storage
+        .from('verification-photos')
+        .download(photoUrl);
+      if (dlError || !blob) throw new Error(`Could not download image: ${dlError?.message ?? 'unknown'}`);
+      imageBuffer = await blob.arrayBuffer();
+      mediaType = blob.type || 'image/jpeg';
+    }
     const base64 = Buffer.from(imageBuffer).toString('base64');
-    const mediaType = imageRes.headers.get('content-type') || 'image/jpeg';
 
     const userText = caption
       ? `Caption from Maxy: "${caption}"\n\nLook at the photo and speak to her as ${voiceLabel}.`
