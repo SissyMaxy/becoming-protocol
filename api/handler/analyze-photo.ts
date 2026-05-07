@@ -361,8 +361,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }).eq('id', presc.id);
 
             const intensity = (presc.intensity_at_assignment ?? 'firm').toLowerCase();
-            const redoBase = isMommy ? mommyDenialCopy(intensity, presc.description, reason) : `Photo didn\'t verify the prescribed ${presc.item_type.replace(/_/g, ' ')}. Resubmit with the item clearly visible.`;
-            const cancelTail = cancelled ? (isMommy ? ' Mama is taking this one off your list, baby — we\'ll try a different piece next.' : ' Closing this prescription; new one will queue.') : '';
+            const redoBase = isMommy ? mommyDenialCopy(intensity, presc.description, reason) : `Photo didn't verify the prescribed ${presc.item_type.replace(/_/g, ' ')}. Resubmit with the item clearly visible.`;
+            const cancelTail = cancelled ? (isMommy ? " Mama is taking this one off your list, baby — we'll try a different piece next." : ' Closing this prescription; new one will queue.') : '';
 
             await supabase.from('handler_outreach_queue').insert({
               user_id: user.id,
@@ -410,14 +410,14 @@ function mommyDenialCopy(intensity: string, prescDesc: string, visionReason: str
   // Even at relentless intensity the copy is "that's not quite right"
   // not body-shaming — the rule is forensic, not abusive. Pull a hint
   // from the vision response, otherwise fall back to a generic ask.
-  const hintMatch = visionReason.match(/\b(?:show|need|want|missing|unclear|can\'?t see)[^.!?]{0,160}/i);
+  const hintMatch = visionReason.match(/\b(?:show|need|want|missing|unclear|can'?t see)[^.!?]{0,160}/i);
   const hint = hintMatch ? hintMatch[0].slice(0, 160) : `Mama needs a clearer photo of ${prescDesc.slice(0, 80)}`;
   if (intensity === 'relentless' || intensity === 'firm') {
-    return `That\'s not quite right, baby. ${hint}. Try again for Mama.`;
+    return `That's not quite right, baby. ${hint}. Try again for Mama.`;
   }
   if (intensity === 'gentle') {
-    return `Mama can\'t quite tell from this one, sweet thing. ${hint}. Send another when you can, baby.`;
+    return `Mama can't quite tell from this one, sweet thing. ${hint}. Send another when you can, baby.`;
   }
   // moderate / default
-  return `Hmm, that\'s not quite what Mama wanted to see, sweet girl. ${hint}. Take another for me.`;
+  return `Hmm, that's not quite what Mama wanted to see, sweet girl. ${hint}. Take another for me.`;
 }
