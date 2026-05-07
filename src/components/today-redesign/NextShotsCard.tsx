@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { useSurfaceRenderTracking } from '../../lib/surface-render-hooks';
 
 interface Shot {
   id: string;
@@ -69,6 +70,9 @@ export function NextShotsCard() {
     const t = setInterval(load, 60_000);
     return () => clearInterval(t);
   }, [load]);
+
+  // visible-before-penalized invariant: stamp surfaced_at on each shot
+  useSurfaceRenderTracking('handler_decrees', shots.map(s => s.id));
 
   const copy = async (id: string, text: string) => {
     try {

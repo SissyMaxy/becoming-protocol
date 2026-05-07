@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { useSurfaceRenderTracking } from '../../lib/surface-render-hooks';
 
 interface TouchTask {
   id: string;
@@ -64,6 +65,9 @@ export function ArousalTouchCard() {
     window.addEventListener('td-task-changed', handler);
     return () => window.removeEventListener('td-task-changed', handler);
   }, [load]);
+
+  // visible-before-penalized invariant: stamp surfaced_at when the task first appears
+  useSurfaceRenderTracking('arousal_touch_tasks', task ? [task.id] : []);
 
   if (!task) return null;
 

@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { usePersona } from '../../hooks/usePersona';
+import { useSurfaceRenderTracking } from '../../lib/surface-render-hooks';
 
 interface Outreach {
   id: string;
@@ -73,6 +74,9 @@ export function OutreachQueueCard() {
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { const t = setInterval(load, 60000); return () => clearInterval(t); }, [load]);
+
+  // visible-before-penalized invariant: stamp surfaced_at when each row first appears
+  useSurfaceRenderTracking('handler_outreach_queue', [...pending.map(o => o.id), ...recent.map(o => o.id)]);
 
   if (pending.length === 0 && recent.length === 0) return null;
 

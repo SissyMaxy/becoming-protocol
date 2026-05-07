@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { useSurfaceRenderTracking } from '../../lib/surface-render-hooks';
 
 interface Decree {
   id: string;
@@ -51,6 +52,9 @@ export function HandlerDecreeCard() {
     const t = setInterval(load, 60000);
     return () => clearInterval(t);
   }, [load]);
+
+  // visible-before-penalized invariant: stamp surfaced_at on first render
+  useSurfaceRenderTracking('handler_decrees', items.map(d => d.id));
 
   const fulfill = async (id: string) => {
     const note = (notes[id] || '').trim();
