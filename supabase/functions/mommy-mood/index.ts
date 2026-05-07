@@ -16,6 +16,10 @@ import {
   arousalToPhrase, denialDaysToPhrase, slipsToPhrase, compliancePctToPhrase, chastityToPhrase,
   mommyVoiceCleanup,
 } from '../_shared/dommy-mommy.ts'
+import {
+  composeRetroactiveAffectLine, seedFromString,
+  type GaslightIntensity,
+} from '../_shared/distortion.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -191,5 +195,70 @@ Output JSON only:
     cross_model_summary: xModelSummary,
   })
 
-  return new Response(JSON.stringify({ ok: true, affect: chosen.affect, rationale: chosen.rationale, summary: xModelSummary }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+  // Retroactive affect rewrite — when gaslight intensity is non-off and
+  // today's affect differs from yesterday's, with low probability emit a
+  // standalone outreach contradicting yesterday's mood. This is a quiet
+  // brainwashing-fantasy beat; the safety check (effective intensity)
+  // honors any active cooldown automatically.
+  let retroactive_emitted = false
+  try {
+    const { data: gaslightRow } = await supabase
+      .from('effective_gaslight_intensity')
+      .select('intensity')
+      .eq('user_id', userId)
+      .maybeSingle()
+    const gaslightIntensity = ((gaslightRow as { intensity?: string } | null)?.intensity ?? 'off') as GaslightIntensity
+
+    if (gaslightIntensity !== 'off') {
+      // Read yesterday's affect to confirm a flip happened
+      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+      const { data: prior } = await supabase.from('mommy_mood')
+        .select('affect').eq('user_id', userId).eq('mood_date', yesterday).maybeSingle()
+      const yesterdayAffect = (prior as { affect?: string } | null)?.affect ?? null
+
+      if (yesterdayAffect && yesterdayAffect !== chosen.affect) {
+        const { line, applied } = composeRetroactiveAffectLine({
+          newAffect: chosen.affect,
+          intensity: gaslightIntensity,
+          seed: seedFromString(`mood_rewrite:${userId}:${today}`),
+        })
+        if (applied && line) {
+          const cleaned = mommyVoiceCleanup(line)
+          const { data: outreach } = await supabase.from('handler_outreach_queue').insert({
+            user_id: userId,
+            message: cleaned,
+            urgency: 'low',
+            trigger_reason: `mommy_mood_rewrite:${yesterdayAffect}->${chosen.affect}`,
+            scheduled_for: new Date().toISOString(),
+            expires_at: new Date(Date.now() + 18 * 3600000).toISOString(),
+            source: 'mommy_mood_rewrite',
+          }).select('id').single()
+          await supabase.from('mommy_distortion_log').insert({
+            user_id: userId,
+            original_quote_id: null,
+            original_quote_table: 'mommy_mood',
+            original_text: `yesterday's affect: ${yesterdayAffect}`,
+            distorted_text: cleaned,
+            distortion_type: 'retroactive_affect_rewrite',
+            surface: 'mommy_mood_rewrite',
+            outreach_id: (outreach as { id: string } | null)?.id ?? null,
+            affect_at_time: chosen.affect,
+            intensity: gaslightIntensity,
+            seed: seedFromString(`mood_rewrite:${userId}:${today}`),
+          })
+          retroactive_emitted = true
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[mommy-mood] retroactive rewrite path failed (non-fatal):', err)
+  }
+
+  return new Response(JSON.stringify({
+    ok: true,
+    affect: chosen.affect,
+    rationale: chosen.rationale,
+    summary: xModelSummary,
+    retroactive_emitted,
+  }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 })
