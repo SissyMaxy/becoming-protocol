@@ -176,7 +176,13 @@ const updateBaseline = process.argv.includes('--update-baseline');
 
 // Normalize paths to forward slashes — same Windows/Linux bug as pattern-lint.
 const norm = (p) => p.replace(/\\/g, '/');
-const currentKeys = new Set(allHits.map(h => `${norm(h.file)}:${h.line}:${h.rule}`));
+// 2026-05-07: dropped line number from match key (same fix as pattern-lint).
+// Insertions in earlier lines shift every subsequent baselined hit's line
+// number → previously-baselined hits read as NEW. Content-addressable
+// matching on file + rule + snippet is robust to that.
+const trimSnippet = (s) => (s || '').replace(/\s+/g, ' ').trim();
+const keyFor = (h) => `${norm(h.file)}::${h.rule}::${trimSnippet(h.snippet)}`;
+const currentKeys = new Set(allHits.map(keyFor));
 
 if (updateBaseline) {
   writeFileSync(baselinePath, JSON.stringify([...currentKeys].sort(), null, 2) + '\n');
@@ -189,7 +195,30 @@ if (existsSync(baselinePath)) {
   try { baseline = new Set(JSON.parse(readFileSync(baselinePath, 'utf8'))); } catch { baseline = new Set(); }
 }
 
-const newHits = allHits.filter(h => !baseline.has(`${norm(h.file)}:${h.line}:${h.rule}`));
+// Migrate legacy file:NN:rule baseline keys → file::rule::(no snippet)
+// on read. Existing baselines keep matching — but only the first rule
+// instance per file, since legacy keys lack snippet. Acceptable for the
+// transition window; next --update-baseline writes the new format.
+const stripLegacyKey = (k) => {
+  if (k.includes('::')) return k; // already new format
+  // Old format: "path:NN:rule-name" — strip ":NN:"
+  // Path won't contain `:` (norm() removed Windows backslashes).
+  const m = k.match(/^([^:]+):(\d+):(.+)$/);
+  if (!m) return k;
+  return `${m[1]}::${m[3]}::`;
+};
+const baselineMigrated = new Set([...baseline].map(stripLegacyKey));
+// For matching, also consider the no-snippet variant of each current key
+// so legacy file::rule:: entries (without snippet) still cover any hit of
+// that rule in that file.
+const matches = (k) => {
+  if (baselineMigrated.has(k)) return true;
+  // Strip snippet portion: "file::rule::..." → "file::rule::"
+  const noSnippet = k.replace(/(::[^:]+::).*$/, '$1');
+  return baselineMigrated.has(noSnippet);
+};
+
+const newHits = allHits.filter(h => !matches(keyFor(h)));
 
 if (allHits.length === 0) {
   console.log('[migration-lint] CLEAN — all migrations are idempotent.');
