@@ -1,0 +1,61 @@
+name: Mommy deploy on merge
+
+# When a mommy-built PR merges to main, apply the migrations and deploy
+# any new edge functions automatically. This is the second half of full
+# autonomy — without auto-deploy, shipped code sits on main but production
+# never sees it.
+#
+# REQUIRED SECRETS:
+#   SUPABASE_ACCESS_TOKEN   — `supabase login --token`
+#   SUPABASE_PROJECT_REF    — for `--project-ref`
+#   SUPABASE_DB_PASSWORD    — for `supabase db push`
+#
+# This workflow only deploys on:
+#   - Push to main
+#   - That changed files in supabase/migrations/ or supabase/functions/
+# It does NOT deploy on PR open — only on merge.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/functions/**'
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Apply migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          supabase link --project-ref "$PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+          supabase db push --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Deploy edge functions
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          # Deploy every function under supabase/functions/ except _shared
+          for fn in supabase/functions/*/; do
+            name=$(basename "$fn")
+            if [[ "$name" == "_shared" ]]; then continue; fi
+            echo "Deploying $name…"
+            supabase functions deploy "$name" --project-ref "$PROJECT_REF" --no-verify-jwt || true
+          done

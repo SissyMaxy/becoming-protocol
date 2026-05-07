@@ -1,0 +1,128 @@
+name: Mommy autonomous builder
+
+# Drives Mommy's builder runner. THREE trigger paths:
+#
+#   1. repository_dispatch (event_type=mommy-build-trigger) — fires within
+#      seconds of a new auto_ship_eligible wish being inserted or marked
+#      eligible. Postgres trigger → kick-builder edge fn → this workflow.
+#      THIS IS THE PRIMARY PATH.
+#
+#   2. Backstop cron — every 30 min in case (1) fails for any reason
+#      (PAT rotated, GH dispatch rate-limited, edge fn cold-start).
+#
+#   3. workflow_dispatch — manual button in the GH UI. Mode selector for
+#      dry/draft/ship/classify/drain.
+#
+# REQUIRED SECRETS:
+#   ANTHROPIC_API_KEY       — drafter + classifier (Sonnet 4.6 / Haiku 4.5)
+#   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — wish queue I/O
+#   For deploy on merge: see mommy-deploy.yml.
+#
+# AUTHORITY BOUNDARIES (enforced by scripts/mommy/builder.ts):
+#   - Only ships wishes with complexity_tier IN ('trivial', 'small') AND auto_ship_eligible
+#   - Refuses forbidden paths (auth, payment, handler-regression, .github/workflows, RLS)
+#   - Drafter can self-flag REQUIRES_REVIEW
+
+on:
+  repository_dispatch:
+    types: [mommy-build-trigger]
+  schedule:
+    - cron: '*/30 * * * *'   # every 30 min backstop
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Mode'
+        required: true
+        default: 'drain'
+        type: choice
+        options:
+          - dry
+          - draft
+          - ship
+          - classify
+          - drain
+
+permissions:
+  contents: write
+  pull-requests: write
+
+# Avoid stacking concurrent builds — newer trigger cancels older
+concurrency:
+  group: mommy-builder
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75   # accommodates --drain with up to 20 ships
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Configure git
+        run: |
+          git config user.name "mommy-builder[bot]"
+          git config user.email "mommy-builder@becoming-protocol"
+
+      - name: Classify any unclassified wishes
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npm run mommy:classify
+
+      - name: Determine mode
+        id: mode
+        run: |
+          # Default to drain (drains queue in one run). manual dispatch can override.
+          MODE="${{ github.event.inputs.mode || 'drain' }}"
+          # repository_dispatch and schedule both default to drain
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+
+      - name: Run builder
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          MODE="${{ steps.mode.outputs.mode }}"
+          if [[ "$MODE" == "drain" ]]; then
+            npm run mommy:drain
+          elif [[ "$MODE" == "classify" ]]; then
+            echo "classify already ran above; nothing more to do"
+          else
+            npm run mommy:build -- --$MODE
+          fi
+
+      - name: Open PRs for any mommy/* branches that were created
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # In drain mode there can be multiple new branches — open PR for each
+          for branch in $(git branch -r | grep 'origin/mommy/' | sed 's|.*origin/||'); do
+            # Skip if PR already exists
+            if gh pr view "$branch" --json number > /dev/null 2>&1; then
+              echo "PR already exists for $branch"
+              continue
+            fi
+            git checkout "$branch"
+            TITLE=$(git log -1 --format=%s)
+            BODY=$(git log -1 --format=%b)
+            gh pr create --base main --head "$branch" \
+              --title "$TITLE" \
+              --body "$BODY" \
+              --label "mommy-auto-ship" || true
+            gh pr merge "$branch" --auto --squash || true
+          done
