@@ -13,6 +13,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { estimatePitchHz } from '../../lib/voice-pitch';
+import { getSignedAssetUrls } from '../../lib/storage/signed-url';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 
@@ -29,7 +30,8 @@ const PROMPTS = [
 interface RecentEntry {
   id: string;
   prompt_used: string;
-  audio_url: string | null;
+  audio_url: string | null;          // object path (or legacy URL)
+  signed_audio_url: string | null;   // resolved at load time for <audio src>
   transcript: string | null;
   duration_seconds: number | null;
   created_at: string;
@@ -63,7 +65,12 @@ export function VoiceJournalCard() {
       .eq('entry_type', 'voice_journal')
       .order('created_at', { ascending: false })
       .limit(7);
-    const rows = (data as RecentEntry[]) ?? [];
+    const raw = (data as Array<Omit<RecentEntry, 'signed_audio_url'>>) ?? [];
+    // audio_url is an object path post-migration 260; sign each for the
+    // <audio src> player. 1h TTL — entries are expanded one at a time
+    // and the user re-renders the card if it goes stale.
+    const signed = await getSignedAssetUrls('evidence', raw.map(r => r.audio_url));
+    const rows: RecentEntry[] = raw.map((r, i) => ({ ...r, signed_audio_url: signed[i] }));
     setRecent(rows);
     const today = new Date().toISOString().slice(0, 10);
     setDoneToday(rows.some(r => r.created_at.slice(0, 10) === today));
@@ -165,7 +172,6 @@ export function VoiceJournalCard() {
             upsert: false,
           });
           if (upErr) throw upErr;
-          const { data: pub } = supabase.storage.from('evidence').getPublicUrl(path);
 
           // Transcribe via Whisper
           setTranscribing(true);
@@ -186,12 +192,13 @@ export function VoiceJournalCard() {
           }
           setTranscribing(false);
 
-          // Insert journal entry
+          // Insert journal entry. audio_url stores the storage path; the
+          // playback <audio> tag uses signed URL resolved at load time.
           await supabase.from('journal_entries').insert({
             user_id: user.id,
             entry_type: 'voice_journal',
             prompt_used: todaysPrompt,
-            audio_url: pub.publicUrl,
+            audio_url: path,
             transcript: transcript || null,
             duration_seconds: finalSeconds,
           });
@@ -363,8 +370,8 @@ export function VoiceJournalCard() {
                         (no transcript captured)
                       </div>
                     )}
-                    {e.audio_url && (
-                      <audio src={e.audio_url} controls style={{ marginTop: 8, width: '100%', height: 30 }} />
+                    {e.signed_audio_url && (
+                      <audio src={e.signed_audio_url} controls style={{ marginTop: 8, width: '100%', height: 30 }} />
                     )}
                   </div>
                 )}
