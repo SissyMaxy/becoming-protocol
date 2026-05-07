@@ -17,7 +17,8 @@
     "cohesion": "node scripts/handler-regression/cohesion-audit.mjs",
     "centrality": "node scripts/handler-regression/centrality-audit.mjs",
     "lint:patterns": "node scripts/handler-regression/pattern-lint.mjs",
-    "lint:migrations": "node scripts/handler-regression/migration-lint.mjs"
+    "lint:migrations": "node scripts/handler-regression/migration-lint.mjs",
+    "lint:storage": "node scripts/handler-regression/storage-privacy-lint.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.74.0",
