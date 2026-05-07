@@ -88,8 +88,10 @@ export function VerificationVault({ onBack }: VerificationVaultProps) {
     setLoading(false);
   }, [user?.id, page, filter]);
 
-  useEffect(() => { load(true); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [user?.id, filter]);
-  useEffect(() => { load(false); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [page]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(true); }, [user?.id, filter]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(false); }, [page]);
 
   // Filter chips: build from what's actually present
   const chips = useMemo(() => {
