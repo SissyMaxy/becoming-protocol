@@ -47,6 +47,7 @@ import { TaskUploadSettings } from './TaskUploadSettings';
 import { DataExportView } from './DataExportView';
 import { AppearanceSettings } from './AppearanceSettings';
 import { PrivacySettings } from './PrivacySettings';
+import { WardrobePrescriptionSettings } from './WardrobePrescriptionSettings';
 import { MicroTaskSettings } from '../micro-tasks';
 import { CorruptionDashboard } from '../admin/CorruptionDashboard';
 import { SleepContentSettings } from '../sleep-content/SleepContentSettings';
@@ -577,6 +578,9 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
 
             {/* Difficulty — always visible (settings_basic) */}
             <DifficultySection />
+
+            {/* Wardrobe prescriptions — Mommy persona feature */}
+            <WardrobePrescriptionSettings />
 
             {/* Features Section */}
             <div>

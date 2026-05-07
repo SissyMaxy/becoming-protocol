@@ -7,3 +7,4 @@ export { AppearanceSettings } from './AppearanceSettings';
 export { PrivacySettings } from './PrivacySettings';
 export { EquipmentInventory } from './EquipmentInventory';
 export { SystemAuditView } from './SystemAuditView';
+export { WardrobePrescriptionSettings } from './WardrobePrescriptionSettings';
