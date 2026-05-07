@@ -13,6 +13,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { neutralizePayload } from '../_shared/stealth.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -204,6 +205,17 @@ serve(async (req) => {
       subsByUser.set(s.user_id, arr)
     }
 
+    // Pull stealth settings for affected users in one query so we know
+    // which payloads to neutralize before encryption.
+    const { data: stealthRows } = await supabase
+      .from('user_state')
+      .select('user_id, stealth_settings')
+      .in('user_id', userIds)
+    const stealthByUser = new Map<string, boolean>()
+    for (const r of (stealthRows || []) as Array<{ user_id: string; stealth_settings: { neutral_notifications?: boolean } | null }>) {
+      stealthByUser.set(r.user_id, Boolean(r.stealth_settings?.neutral_notifications))
+    }
+
     let sent = 0
     let failed = 0
     let expired = 0
@@ -219,10 +231,24 @@ serve(async (req) => {
         // No subscription yet — don't fail the row, just skip for now
         continue
       }
+      const stealthOn = stealthByUser.get(row.user_id) === true
+      const neutralized = neutralizePayload(
+        {
+          title: row.payload?.title as string | undefined,
+          body: row.payload?.body as string | undefined,
+          data: { notification_id: row.id, ...(row.payload?.data as Record<string, unknown> || {}) },
+        },
+        stealthOn,
+      )
+      // Under stealth: data is allowlist-filtered to {stealth, notification_id}.
+      // Plain mode: include the full type so client routing still works.
+      const data = stealthOn
+        ? neutralized.data
+        : { notification_id: row.id, type: row.notification_type, ...neutralized.data }
       const payload = JSON.stringify({
-        title: row.payload?.title || 'Handler',
-        body: row.payload?.body || '',
-        data: { notification_id: row.id, type: row.notification_type, ...(row.payload?.data as Record<string, unknown> || {}) },
+        title: neutralized.title,
+        body: neutralized.body,
+        data,
       })
 
       let anySuccess = false

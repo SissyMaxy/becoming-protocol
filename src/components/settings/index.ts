@@ -5,5 +5,6 @@ export { ProfileView } from './ProfileView';
 export { DataExportView } from './DataExportView';
 export { AppearanceSettings } from './AppearanceSettings';
 export { PrivacySettings } from './PrivacySettings';
+export { StealthSettings } from './StealthSettings';
 export { EquipmentInventory } from './EquipmentInventory';
 export { SystemAuditView } from './SystemAuditView';

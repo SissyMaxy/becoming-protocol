@@ -17,6 +17,7 @@ import { useDisassociationRecovery } from './hooks/useDisassociationRecovery';
 import { useCompulsoryGate } from './hooks/useCompulsoryGate';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Auth } from './components/Auth';
+import { StealthShell } from './components/stealth';
 import { MorningBriefing } from './components/MorningBriefing';
 import { CompulsoryGateScreen } from './components/CompulsoryGateScreen';
 import { VoiceGate } from './components/gates/VoiceGate';
@@ -1289,9 +1290,11 @@ function AppInner() {
 
   return (
     <ErrorBoundary componentName="App">
-      <ProtocolProvider>
-        <AuthenticatedApp />
-      </ProtocolProvider>
+      <StealthShell>
+        <ProtocolProvider>
+          <AuthenticatedApp />
+        </ProtocolProvider>
+      </StealthShell>
     </ErrorBoundary>
   );
 }

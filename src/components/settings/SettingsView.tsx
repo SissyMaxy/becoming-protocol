@@ -47,6 +47,7 @@ import { TaskUploadSettings } from './TaskUploadSettings';
 import { DataExportView } from './DataExportView';
 import { AppearanceSettings } from './AppearanceSettings';
 import { PrivacySettings } from './PrivacySettings';
+import { StealthSettings } from './StealthSettings';
 import { MicroTaskSettings } from '../micro-tasks';
 import { CorruptionDashboard } from '../admin/CorruptionDashboard';
 import { SleepContentSettings } from '../sleep-content/SleepContentSettings';
@@ -302,7 +303,7 @@ interface SettingsViewProps {
   onEditIntake?: () => void;
 }
 
-type SettingsSection = 'main' | 'profile' | 'lovense' | 'whoop' | 'equipment' | 'timeratchets' | 'reminders' | 'privacy' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content' | 'opacity' | 'social-dashboard';
+type SettingsSection = 'main' | 'profile' | 'lovense' | 'whoop' | 'equipment' | 'timeratchets' | 'reminders' | 'privacy' | 'stealth' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content' | 'opacity' | 'social-dashboard';
 
 export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
   const { isBambiMode } = useBambiMode();
@@ -329,6 +330,7 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
     microtasks: 'settings_microtasks',
     'sleep-content': 'settings_sleep',
     privacy: 'settings_privacy',
+    stealth: 'settings_basic',
     appearance: 'settings_appearance',
     data: 'settings_data',
   };
@@ -391,6 +393,13 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
       color: '#22c55e',
     },
     {
+      id: 'stealth' as const,
+      icon: Shield,
+      label: 'Stealth',
+      description: 'Disguise icon, hide previews, PIN',
+      color: '#8b5cf6',
+    },
+    {
       id: 'appearance' as const,
       icon: Palette,
       label: 'Appearance',
@@ -430,6 +439,7 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
     if (activeSection === 'taskupload') return 'Task Upload';
     if (activeSection === 'microtasks') return 'Micro-Tasks';
     if (activeSection === 'privacy') return 'Privacy & Security';
+    if (activeSection === 'stealth') return 'Stealth & Discretion';
     if (activeSection === 'appearance') return 'Appearance';
     if (activeSection === 'data') return 'Data Export';
     if (activeSection === 'opacity') return 'Visibility';
@@ -1049,6 +1059,9 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
 
         {/* Privacy & Security */}
         {activeSection === 'privacy' && <PrivacySettings />}
+
+        {/* Stealth & Discretion */}
+        {activeSection === 'stealth' && <StealthSettings />}
 
         {/* Appearance */}
         {activeSection === 'appearance' && <AppearanceSettings />}

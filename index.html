@@ -9,8 +9,32 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Protocol" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <link rel="manifest" href="/manifest.json" />
+    <link rel="manifest" href="/manifest.json" id="app-manifest" />
     <title>BP</title>
+    <script>
+      // Stealth icon-variant swap. Reads localStorage 'bp-stealth-icon'
+      // (mirrored from user_state.stealth_settings.icon_variant on
+      // every settings save) and swaps the manifest + icons before
+      // paint so the PWA install + home-screen icon use the alternate.
+      (function () {
+        try {
+          var v = localStorage.getItem('bp-stealth-icon');
+          if (v === 'calculator' || v === 'notes') {
+            var manifest = document.getElementById('app-manifest');
+            if (manifest) manifest.setAttribute('href', '/manifest-' + v + '.webmanifest');
+            var apple = document.querySelector('link[rel="apple-touch-icon"]');
+            if (apple) apple.setAttribute('href', '/icons/' + v + '-192.png');
+            var icon = document.querySelector('link[rel="icon"]');
+            if (icon) { icon.setAttribute('type', 'image/png'); icon.setAttribute('href', '/icons/' + v + '-192.png'); }
+            var titleEl = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+            if (titleEl) titleEl.setAttribute('content', v === 'calculator' ? 'Calculator' : 'Notes');
+            document.title = v === 'calculator' ? 'Calculator' : 'Notes';
+          }
+        } catch (e) {
+          // sandboxed contexts may block localStorage — ignore
+        }
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600;700&family=Nunito:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet">
