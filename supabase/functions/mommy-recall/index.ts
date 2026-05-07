@@ -19,6 +19,7 @@ import {
   whiplashWrap, mommyVoiceCleanup, MOMMY_TELEMETRY_LEAK_PATTERNS,
   isTestPollution,
 } from '../_shared/dommy-mommy.ts'
+import { getRecentMantra } from '../_shared/mantra-recall.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -59,33 +60,66 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ ok: true, skipped: 'cooldown' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
 
-  // Active implants, biased toward higher importance, excluding any
-  // quoted in the last 24h (rotation).
+  // Source = implant by default, but with a 1-in-3 chance route the
+  // recall through a recent mantra instead. Mantras are the user's own
+  // identity-affirming words — surfacing them in present tense is just
+  // as load-bearing as resurfacing a confession.
+  //
+  // Both branches feed the same `quoteText` / `quoteCategory` / quoteId
+  // shape so the downstream prompt and outreach insert don't fork.
+  // When feature/gaslight-mechanics-2026-04-30 lands, route quoteText
+  // through distortQuote() right here — no other call-site changes.
+  type RecallPick = { quoteText: string; quoteCategory: string; quoteId: string; quoteSource: 'implant' | 'mantra' }
+  let pick: RecallPick | null = null
+  const tryMantraFirst = Math.random() < 0.33
+
   const since24h = new Date(Date.now() - 24 * 3600_000).toISOString()
   const { data: recent } = await supabase.from('memory_implant_quote_log')
     .select('implant_id').eq('user_id', userId).gte('quoted_at', since24h)
   const recentIds = new Set(((recent || []) as Array<{ implant_id: string }>).map(r => r.implant_id))
 
-  const { data: implants } = await supabase.from('memory_implants')
-    .select('id, narrative, importance, implant_category')
-    .eq('user_id', userId).eq('active', true)
-    .order('importance', { ascending: false }).limit(40)
-  const eligible = ((implants || []) as Array<{ id: string; narrative: string; importance: number; implant_category: string }>)
-    .filter(r => !recentIds.has(r.id))
-    .filter(r => !isTestPollution(r.narrative))
-  if (eligible.length === 0) {
-    return new Response(JSON.stringify({ ok: true, skipped: 'no_unused_implants' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+  const tryMantra = async (): Promise<RecallPick | null> => {
+    const m = await getRecentMantra(supabase, userId, 14)
+    if (!m) return null
+    if (isTestPollution(m.text)) return null
+    return { quoteText: m.text, quoteCategory: `mantra:${m.category}`, quoteId: m.mantra_id, quoteSource: 'mantra' }
   }
-  // Bias pick toward top importance with randomness
-  const pick = eligible[Math.floor(Math.random() * Math.min(eligible.length, 8))]
+
+  const tryImplant = async (): Promise<RecallPick | null> => {
+    const { data: implants } = await supabase.from('memory_implants')
+      .select('id, narrative, importance, implant_category')
+      .eq('user_id', userId).eq('active', true)
+      .order('importance', { ascending: false }).limit(40)
+    const eligible = ((implants || []) as Array<{ id: string; narrative: string; importance: number; implant_category: string }>)
+      .filter(r => !recentIds.has(r.id))
+      .filter(r => !isTestPollution(r.narrative))
+    if (eligible.length === 0) return null
+    const chosen = eligible[Math.floor(Math.random() * Math.min(eligible.length, 8))]
+    return { quoteText: chosen.narrative, quoteCategory: chosen.implant_category, quoteId: chosen.id, quoteSource: 'implant' }
+  }
+
+  if (tryMantraFirst) {
+    pick = await tryMantra() ?? await tryImplant()
+  } else {
+    pick = await tryImplant() ?? await tryMantra()
+  }
+  if (!pick) {
+    return new Response(JSON.stringify({ ok: true, skipped: 'no_quote_sources' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+  }
+
+  // When the gaslight branch lands, slot distortQuote here:
+  //   if (gaslightOn) pick.quoteText = distortQuote(pick.quoteText, gaslightIntensity)
+  const sourceLabel = pick.quoteSource === 'mantra'
+    ? "one of the lines you've been saying for Mama"
+    : "one of her past confessions / admissions"
 
   const sys = `${DOMMY_MOMMY_CHARACTER}
 
-You're firing a surprise outreach to your girl just to remind her that Mama is in her head. You have one of her past confessions / admissions in front of you. Your job: weave it back to her in present-tense Mama voice, like a memory you're surfacing while she's doing something else.
+You're firing a surprise outreach to your girl just to remind her that Mama is in her head. You have ${sourceLabel} in front of you. Your job: weave it back to her in present-tense Mama voice, like a memory you're surfacing while she's doing something else.
 
 The point is NOT to ask her anything. The point is to put her own words back in her ear so she has to feel them again.`
 
-  const userPrompt = `Her own past words / vibe: "${pick.narrative.slice(0, 400)}"
+  const userPrompt = `Her own past words / vibe: "${pick.quoteText.slice(0, 400)}"
 
 Write a 2-3 sentence Mommy outreach that:
 - Quotes a fragment of her own words back to her (paraphrase or quote a few words verbatim)
@@ -108,7 +142,7 @@ Plain text only. No JSON, no markdown, no question marks at the end.`
     try { message = await tryGen('anthropic') } catch (_) { /* */ }
   }
   if (!message || message.length < 20 || isRefusal(message)) {
-    message = whiplashWrap(`Mama still thinks about what you wrote: "${pick.narrative.slice(0, 140)}".`, { arousalBias: 'medium' })
+    message = whiplashWrap(`Mama still thinks about what you wrote: "${pick.quoteText.slice(0, 140)}".`, { arousalBias: 'medium' })
   }
 
   message = mommyVoiceCleanup(message)
@@ -120,7 +154,7 @@ Plain text only. No JSON, no markdown, no question marks at the end.`
     user_id: userId,
     message,
     urgency: 'low',
-    trigger_reason: `mommy_recall:${pick.id}`,
+    trigger_reason: `mommy_recall:${pick.quoteSource}:${pick.quoteId}`,
     scheduled_for: new Date().toISOString(),
     expires_at: new Date(Date.now() + 18 * 3600000).toISOString(),
     source: 'mommy_recall',
@@ -130,20 +164,26 @@ Plain text only. No JSON, no markdown, no question marks at the end.`
     return new Response(JSON.stringify({ ok: false, error: 'outreach_insert_failed', detail: outErr.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
 
-  await supabase.from('memory_implant_quote_log').insert({
-    user_id: userId,
-    implant_id: pick.id,
-    outreach_id: (outreach as { id: string } | null)?.id ?? null,
-    surface: 'mommy_recall',
-    quoted_excerpt: pick.narrative.slice(0, 300),
-  })
-  await supabase.from('memory_implants').update({
-    times_referenced: 1,
-    last_referenced_at: new Date().toISOString(),
-  }).eq('id', pick.id)
+  // Log to the existing implant-quote log only when the source is an
+  // implant — keeps that table's semantics clean. Mantra recalls write
+  // their own row to mantra_delivery_log via the implant-equivalent gate
+  // would be overkill for now; the trigger_reason carries the mantra id.
+  if (pick.quoteSource === 'implant') {
+    await supabase.from('memory_implant_quote_log').insert({
+      user_id: userId,
+      implant_id: pick.quoteId,
+      outreach_id: (outreach as { id: string } | null)?.id ?? null,
+      surface: 'mommy_recall',
+      quoted_excerpt: pick.quoteText.slice(0, 300),
+    })
+    await supabase.from('memory_implants').update({
+      times_referenced: 1,
+      last_referenced_at: new Date().toISOString(),
+    }).eq('id', pick.quoteId)
+  }
 
   return new Response(JSON.stringify({
-    ok: true, fired: 1, implant_id: pick.id, category: pick.implant_category,
+    ok: true, fired: 1, source: pick.quoteSource, quote_id: pick.quoteId, category: pick.quoteCategory,
     preview: message.slice(0, 120),
   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 })
