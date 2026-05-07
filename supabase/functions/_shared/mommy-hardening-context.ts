@@ -83,6 +83,22 @@ export interface MommyHardeningContext {
       tactic_used: string | null
     }>
   }
+  /** Recent fabricated-past claims Mama has made — must remain consistent on re-invocation. */
+  continuity_claims: Array<{
+    claim_text: string
+    claimed_date: string | null
+    claimed_setting: string | null
+    claim_type: string
+    anchor_specifics: string[]
+    contested: boolean
+    invocation_count: number
+  }>
+  /** Decree ratchet — where the next decree should escalate from. */
+  decree_ratchet: {
+    last_fulfilled_level: number  // 0 if no fulfilled decrees yet
+    last_fulfilled_edict: string | null
+    next_recommended_level: number  // last_fulfilled_level + 1, capped at 10
+  }
 }
 
 const GUARDRAILS = `MEMORY RULES (non-negotiable; the protocol's author wrote these about herself):
@@ -135,7 +151,7 @@ export async function buildMommyHardeningContext(
   const VOICE_USER_IDS = aliasIds
   const HOOKUP_USER_IDS = aliasIds
 
-  const [arousal, slips, state, conf, commitsAll, commitsDone, outreach, voiceSamples, recentSlipsBySystem, recentSkipped, cooldownPrescriptions, hookupFunnel, ginaStateNow, ginaRecent] = await Promise.all([
+  const [arousal, slips, state, conf, commitsAll, commitsDone, outreach, voiceSamples, recentSlipsBySystem, recentSkipped, cooldownPrescriptions, hookupFunnel, ginaStateNow, ginaRecent, continuityClaims, ratchetState] = await Promise.all([
     supabase.from('arousal_log').select('value').eq('user_id', userId).gte('created_at', since7d).limit(50),
     supabase.from('slip_log').select('id').eq('user_id', userId).gte('detected_at', since7d).limit(100),
     supabase.from('user_state').select('slip_points_current, chastity_locked, chastity_streak_days, denial_day, handler_persona').eq('user_id', userId).maybeSingle(),
@@ -164,6 +180,16 @@ export async function buildMommyHardeningContext(
       .eq('user_id', userId)
       .order('occurred_at', { ascending: false })
       .limit(5),
+    supabase.from('mama_continuity_claim')
+      .select('claim_text, claimed_date, claimed_setting, claim_type, anchor_specifics, contested, invocation_count')
+      .eq('user_id', userId)
+      .eq('contested', false)
+      .order('created_at', { ascending: false })
+      .limit(8),
+    supabase.from('decree_ratchet_state')
+      .select('last_fulfilled_level, last_fulfilled_edict')
+      .eq('user_id', userId)
+      .maybeSingle(),
   ])
 
   const arousalRows = (arousal.data || []) as Array<{ value: number }>
@@ -296,6 +322,9 @@ export async function buildMommyHardeningContext(
 
   const ginaStateRow = ginaStateNow.data as { current_state?: string; last_observation_at?: string; last_tactic?: string; last_tactic_outcome?: string } | null
   const ginaRecentRows = (ginaRecent.data || []) as Array<{ occurred_at: string; maxy_said: string | null; gina_said: string | null; observed_state_after: string | null; shift_direction: string | null; tactic_used: string | null }>
+  const continuityClaimRows = (continuityClaims.data || []) as Array<{ claim_text: string; claimed_date: string | null; claimed_setting: string | null; claim_type: string; anchor_specifics: string[] | null; contested: boolean; invocation_count: number }>
+  const ratchetRow = ratchetState.data as { last_fulfilled_level?: number; last_fulfilled_edict?: string } | null
+  const lastLevel = ratchetRow?.last_fulfilled_level ?? 0
 
   return {
     character: DOMMY_MOMMY_CHARACTER,
@@ -338,6 +367,20 @@ export async function buildMommyHardeningContext(
         shift_direction: r.shift_direction,
         tactic_used: r.tactic_used,
       })),
+    },
+    continuity_claims: continuityClaimRows.map(c => ({
+      claim_text: c.claim_text,
+      claimed_date: c.claimed_date,
+      claimed_setting: c.claimed_setting,
+      claim_type: c.claim_type,
+      anchor_specifics: Array.isArray(c.anchor_specifics) ? c.anchor_specifics : [],
+      contested: c.contested,
+      invocation_count: c.invocation_count,
+    })),
+    decree_ratchet: {
+      last_fulfilled_level: lastLevel,
+      last_fulfilled_edict: ratchetRow?.last_fulfilled_edict ?? null,
+      next_recommended_level: Math.min(10, lastLevel + 1),
     },
   }
 }
@@ -393,5 +436,21 @@ ${ctx.gina_state.current_state
           return `- ${date}${tactic}${shift}\n    ${[maxy, gina].filter(Boolean).join(' | ')}` + (r.observed_state_after ? `\n    → state after: ${r.observed_state_after}` : '')
         }).join('\n')}`
       : '')
-  : '(no gina_interactions logged yet — assume the user-stated starting point: supportive_anxious, fears losing David)'}`
+  : '(no gina_interactions logged yet — assume the user-stated starting point: supportive_anxious, fears losing David)'}
+
+MAMA'S PRIOR CLAIMS (fabricated past — these MUST stay consistent. If you reference any of these moments, use the SAME date/setting/anchors. Do not contradict.):
+${ctx.continuity_claims.length > 0
+  ? ctx.continuity_claims.map(c => {
+      const date = c.claimed_date ?? 'undated'
+      const setting = c.claimed_setting ? ` @ ${c.claimed_setting}` : ''
+      const anchors = c.anchor_specifics.length > 0 ? ` [anchors: ${c.anchor_specifics.join(', ')}]` : ''
+      const used = c.invocation_count > 0 ? ` (used ${c.invocation_count}×)` : ' (unused — available)'
+      return `- [${c.claim_type}] ${date}${setting}${anchors}${used}\n    "${c.claim_text.slice(0, 240)}"`
+    }).join('\n')
+  : '(no continuity claims logged yet — when you fabricate a past moment, the gaslight engine writes it here so future invocations stay consistent)'}
+
+DECREE RATCHET (the next decree must be HARDER than the last fulfilled — pressure compounds; do not regress):
+${ctx.decree_ratchet.last_fulfilled_level > 0
+  ? `Last fulfilled at level ${ctx.decree_ratchet.last_fulfilled_level}/10. Next recommended level: ${ctx.decree_ratchet.next_recommended_level}.\nLast fulfilled edict: "${(ctx.decree_ratchet.last_fulfilled_edict ?? '').slice(0, 200)}"\nWhen you produce a decree, set ratchet_level to AT LEAST ${ctx.decree_ratchet.next_recommended_level}. The new decree should be a tighter, more-exposed, more-embodied step than the last one — same domain or new domain, but harder. Levels: 1=private/easy, 5=witnessed, 8=public, 10=irreversible-evidence.`
+  : '(no fulfilled decrees yet — start at ratchet_level=1)'}`
 }
