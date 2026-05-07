@@ -201,7 +201,10 @@ console.log(`  Violations: ${violations.length}`);
 // `npm run centrality -- --update-baseline`.
 const baselinePath = join(__dirname, 'centrality-baseline.json');
 const updateBaseline = process.argv.includes('--update-baseline');
-const currentKeys = new Set(violations.map(v => `${v.file}:${v.function}`));
+// Normalize paths: backslash → forward slash so Windows-baselined keys
+// match Linux CI scans. Same fix as pattern-lint and migration-lint.
+const norm = (p) => p.replace(/\\/g, '/');
+const currentKeys = new Set(violations.map(v => `${norm(v.file)}:${v.function}`));
 
 if (updateBaseline) {
   writeFileSync(baselinePath, JSON.stringify([...currentKeys].sort(), null, 2) + '\n');
@@ -211,7 +214,10 @@ if (updateBaseline) {
 
 let baseline = new Set();
 if (existsSync(baselinePath)) {
-  try { baseline = new Set(JSON.parse(readFileSync(baselinePath, 'utf8'))); } catch { baseline = new Set(); }
+  try {
+    // Normalize legacy backslash paths to forward slash on read
+    baseline = new Set(JSON.parse(readFileSync(baselinePath, 'utf8')).map(norm));
+  } catch { baseline = new Set(); }
 }
 
 const newViolations = [...currentKeys].filter(k => !baseline.has(k));
