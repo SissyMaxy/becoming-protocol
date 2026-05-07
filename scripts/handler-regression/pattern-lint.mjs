@@ -179,20 +179,57 @@ for (const file of files) {
 const baselinePath = join(__dirname, 'pattern-lint-baseline.json');
 const updateBaseline = process.argv.includes('--update-baseline');
 
-// Build the current-run hit set as { pattern: Set<"file:line:trimmed-snippet"> }
-// Normalize file paths to forward slashes so the baseline is portable across
-// Windows (\\) and Linux CI (/). Without this, every CI run on Linux fails
-// because the baseline written from Windows uses backslashes that never
-// match the Linux scan.
+// Build the current-run hit set as { pattern: Set<"file::trimmed-snippet"> }
+// 2026-05-07: dropped line number from the matching key. Line numbers
+// shift every time a baselined file is edited — even insertions far from
+// the hit cause every subsequent hit's line to increment, and the old
+// `file:line::snippet` key system flagged all of those as NEW hits even
+// though the content is unchanged. CI then fails on every push that
+// touches a baselined file.
+//
+// Content-only matching (file + snippet, no line) is robust to insertions/
+// deletions anywhere in the file. Trade-off: identical snippets at
+// multiple lines collapse to one hit. In practice the regex+pred-emitted
+// snippets are 140-char trimmed strings — collisions are rare. When they
+// do occur, the baseline simply stores one entry per unique snippet.
+//
+// Normalize file paths to forward slashes for Windows/Linux portability.
 const norm = (p) => p.replace(/\\/g, '/');
+const trimSnippet = (s) => s.replace(/\s+/g, ' ').trim();
+const keyFor = (h) => `${norm(h.file)}::${trimSnippet(h.snippet)}`;
+
 const currentHitKeys = new Map();
+const currentHitDetails = new Map(); // key → first-occurrence line for human-readable baseline output
 for (const [name, hits] of byPattern) {
   const set = new Set();
+  const details = new Map();
   for (const h of hits) {
-    set.add(`${norm(h.file)}:${h.line}::${h.snippet.replace(/\s+/g, ' ').trim()}`);
+    const k = keyFor(h);
+    set.add(k);
+    if (!details.has(k)) details.set(k, { line: h.line, file: norm(h.file), snippet: trimSnippet(h.snippet) });
   }
   currentHitKeys.set(name, set);
+  currentHitDetails.set(name, details);
 }
+
+// Migrate legacy baseline keys (file:line::snippet) → content-only on read.
+// One-shot — once a baseline is written under the new format the old
+// keys stop appearing in baseline JSON entirely.
+const stripLineFromLegacyKey = (k) => {
+  // Match `path:NN::rest` — extract path and rest, drop NN.
+  // path may contain colons inside (rare), so anchor on `::` separator
+  // and back up to find the last `:` before it.
+  const sepIdx = k.indexOf('::');
+  if (sepIdx < 0) return k;
+  const pathPart = k.slice(0, sepIdx);
+  const snippet = k.slice(sepIdx + 2);
+  const lastColon = pathPart.lastIndexOf(':');
+  if (lastColon < 0) return k;
+  // Verify the segment after lastColon is purely digits — that's a line number.
+  const maybeLine = pathPart.slice(lastColon + 1);
+  if (!/^\d+$/.test(maybeLine)) return k;
+  return `${pathPart.slice(0, lastColon)}::${snippet}`;
+};
 
 if (updateBaseline) {
   const out = {};
@@ -208,12 +245,14 @@ if (existsSync(baselinePath)) {
 }
 
 // Diff: anything in current that's not in baseline = NEW (build-failing).
+// Migrate any legacy file:line::snippet baseline entries to content-only
+// keys before comparing — old baselines remain valid until next refresh.
 const newHits = new Map();
 const baselinedHits = new Map();
 let totalNewHits = 0;
 let totalBaselined = 0;
 for (const [name, currentSet] of currentHitKeys) {
-  const base = new Set(baseline[name] || []);
+  const base = new Set((baseline[name] || []).map(stripLineFromLegacyKey));
   const newSet = [...currentSet].filter(k => !base.has(k));
   const oldSet = [...currentSet].filter(k => base.has(k));
   if (newSet.length) {
