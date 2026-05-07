@@ -113,36 +113,32 @@ export function UnifiedSessionView({
   const textTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load videos from public/videos/sessions/{sessionType}/ folder
-  // Videos are configured in public/videos/manifest.json
+  // Videos are configured in public/videos/manifest.json. Empty array
+  // triggers the gradient fallback in render.
   useEffect(() => {
     async function loadVideos() {
       setIsLoading(true);
       try {
-        // Try to load from manifest
         const response = await fetch('/videos/manifest.json');
         if (response.ok) {
           const manifest = await response.json();
           const sessionVideos = manifest.sessions?.[sessionType] || [];
 
           if (sessionVideos.length > 0) {
-            // Build full paths from manifest
             const videoPaths = sessionVideos.map(
               (filename: string) => `/videos/sessions/${sessionType}/${filename}`
             );
-            // Shuffle and set
             const shuffled = [...videoPaths].sort(() => Math.random() - 0.5);
             setVideos(shuffled);
           } else {
-            // Fallback to legacy video if no session-specific videos
-            setVideos(['/videos/68c137bce1ba3.mp4']);
+            setVideos([]);
           }
         } else {
-          // Manifest not found, use fallback
-          setVideos(['/videos/68c137bce1ba3.mp4']);
+          setVideos([]);
         }
       } catch (err) {
-        console.warn('Failed to load video manifest, using fallback:', err);
-        setVideos(['/videos/68c137bce1ba3.mp4']);
+        console.warn('Failed to load video manifest:', err);
+        setVideos([]);
       } finally {
         setIsLoading(false);
       }
