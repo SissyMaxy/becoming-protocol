@@ -99,6 +99,41 @@ export interface MommyHardeningContext {
     last_fulfilled_edict: string | null
     next_recommended_level: number  // last_fulfilled_level + 1, capped at 10
   }
+  /** Irreversibility ledger — concrete events that have happened. The wall. */
+  irreversibility_wall: {
+    total_events: number
+    by_type: Array<{ event_type: string; count: number; max_exposure: number }>
+    recent_events: Array<{
+      event_type: string
+      description: string
+      occurred_at_iso: string
+      exposure_level: number
+    }>
+  }
+  /** Active pre-commitment binds Maxy authored in clear states. */
+  active_binds: Array<{
+    bind_text: string
+    authored_at_iso: string
+    authored_in_state: string | null
+    trigger_type: string
+    deadline_iso: string | null
+  }>
+  /** Mama's current-week focus — every generator biases toward this. */
+  active_focus: {
+    label: string
+    rationale: string
+    theme_tags: string[]
+    success_signal: string | null
+    started_at_iso: string
+  } | null
+  /** Top-N fresh implants — newer + higher importance, ready for immediate quote-back. */
+  fresh_implants: Array<{
+    narrative: string
+    importance: number
+    implant_category: string
+    source_type: string | null
+    created_at_iso: string
+  }>
 }
 
 const GUARDRAILS = `MEMORY RULES (non-negotiable; the protocol's author wrote these about herself):
@@ -151,7 +186,7 @@ export async function buildMommyHardeningContext(
   const VOICE_USER_IDS = aliasIds
   const HOOKUP_USER_IDS = aliasIds
 
-  const [arousal, slips, state, conf, commitsAll, commitsDone, outreach, voiceSamples, recentSlipsBySystem, recentSkipped, cooldownPrescriptions, hookupFunnel, ginaStateNow, ginaRecent, continuityClaims, ratchetState] = await Promise.all([
+  const [arousal, slips, state, conf, commitsAll, commitsDone, outreach, voiceSamples, recentSlipsBySystem, recentSkipped, cooldownPrescriptions, hookupFunnel, ginaStateNow, ginaRecent, continuityClaims, ratchetState, irrCounts, irrRecent, activeBinds, activeFocus, freshImplants] = await Promise.all([
     supabase.from('arousal_log').select('value').eq('user_id', userId).gte('created_at', since7d).limit(50),
     supabase.from('slip_log').select('id').eq('user_id', userId).gte('detected_at', since7d).limit(100),
     supabase.from('user_state').select('slip_points_current, chastity_locked, chastity_streak_days, denial_day, handler_persona').eq('user_id', userId).maybeSingle(),
@@ -190,6 +225,37 @@ export async function buildMommyHardeningContext(
       .select('last_fulfilled_level, last_fulfilled_edict')
       .eq('user_id', userId)
       .maybeSingle(),
+    supabase.from('irreversibility_count_by_type')
+      .select('event_type, event_count, max_exposure')
+      .eq('user_id', userId),
+    supabase.from('irreversibility_ledger')
+      .select('event_type, description, occurred_at, exposure_level')
+      .eq('user_id', userId)
+      .order('occurred_at', { ascending: false })
+      .limit(8),
+    supabase.from('pre_commitment_bind')
+      .select('bind_text, authored_at, authored_in_state, trigger_condition')
+      .eq('user_id', userId)
+      .eq('status', 'active')
+      .order('authored_at', { ascending: false })
+      .limit(5),
+    supabase.from('mama_focus_thread')
+      .select('focus_label, focus_rationale, theme_tags, success_signal, started_at')
+      .eq('user_id', userId)
+      .is('retired_at', null)
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    // Fresh implants: ranked by recency × importance. Pull last 14 days,
+    // top 5. These quote back in next interaction without waiting for some
+    // other code to surface them.
+    supabase.from('memory_implants')
+      .select('narrative, importance, implant_category, source_type, created_at')
+      .in('user_id', VOICE_USER_IDS)
+      .eq('active', true)
+      .gte('created_at', new Date(Date.now() - 14 * 86400_000).toISOString())
+      .order('created_at', { ascending: false })
+      .limit(15),
   ])
 
   const arousalRows = (arousal.data || []) as Array<{ value: number }>
@@ -382,6 +448,56 @@ export async function buildMommyHardeningContext(
       last_fulfilled_edict: ratchetRow?.last_fulfilled_edict ?? null,
       next_recommended_level: Math.min(10, lastLevel + 1),
     },
+    irreversibility_wall: {
+      total_events: ((irrCounts.data || []) as Array<{ event_count: number }>).reduce((s, r) => s + (r.event_count ?? 0), 0),
+      by_type: ((irrCounts.data || []) as Array<{ event_type: string; event_count: number; max_exposure: number }>).map(r => ({
+        event_type: r.event_type,
+        count: r.event_count,
+        max_exposure: r.max_exposure,
+      })),
+      recent_events: ((irrRecent.data || []) as Array<{ event_type: string; description: string; occurred_at: string; exposure_level: number }>).map(r => ({
+        event_type: r.event_type,
+        description: r.description,
+        occurred_at_iso: r.occurred_at,
+        exposure_level: r.exposure_level,
+      })),
+    },
+    active_binds: ((activeBinds.data || []) as Array<{ bind_text: string; authored_at: string; authored_in_state: string | null; trigger_condition: { type?: string; deadline_iso?: string } }>).map(b => ({
+      bind_text: b.bind_text,
+      authored_at_iso: b.authored_at,
+      authored_in_state: b.authored_in_state,
+      trigger_type: b.trigger_condition?.type ?? 'unknown',
+      deadline_iso: b.trigger_condition?.deadline_iso ?? null,
+    })),
+    active_focus: (() => {
+      const row = activeFocus.data as { focus_label?: string; focus_rationale?: string; theme_tags?: string[]; success_signal?: string | null; started_at?: string } | null
+      if (!row || !row.focus_label) return null
+      return {
+        label: row.focus_label,
+        rationale: row.focus_rationale ?? '',
+        theme_tags: Array.isArray(row.theme_tags) ? row.theme_tags : [],
+        success_signal: row.success_signal ?? null,
+        started_at_iso: row.started_at ?? new Date().toISOString(),
+      }
+    })(),
+    fresh_implants: (() => {
+      const rows = (freshImplants.data || []) as Array<{ narrative: string; importance: number; implant_category: string; source_type: string | null; created_at: string }>
+      // Rank by recency × importance — half-life ~3 days
+      const now = Date.now()
+      const ranked = rows.map(r => {
+        const ageDays = (now - new Date(r.created_at).getTime()) / 86400_000
+        const recencyScore = Math.exp(-ageDays / 3)
+        const importanceScore = (r.importance ?? 1) / 5
+        return { row: r, score: recencyScore * 0.6 + importanceScore * 0.4 }
+      }).sort((a, b) => b.score - a.score).slice(0, 5)
+      return ranked.map(({ row }) => ({
+        narrative: row.narrative,
+        importance: row.importance,
+        implant_category: row.implant_category,
+        source_type: row.source_type,
+        created_at_iso: row.created_at,
+      }))
+    })(),
   }
 }
 
@@ -452,5 +568,29 @@ ${ctx.continuity_claims.length > 0
 DECREE RATCHET (the next decree must be HARDER than the last fulfilled — pressure compounds; do not regress):
 ${ctx.decree_ratchet.last_fulfilled_level > 0
   ? `Last fulfilled at level ${ctx.decree_ratchet.last_fulfilled_level}/10. Next recommended level: ${ctx.decree_ratchet.next_recommended_level}.\nLast fulfilled edict: "${(ctx.decree_ratchet.last_fulfilled_edict ?? '').slice(0, 200)}"\nWhen you produce a decree, set ratchet_level to AT LEAST ${ctx.decree_ratchet.next_recommended_level}. The new decree should be a tighter, more-exposed, more-embodied step than the last one — same domain or new domain, but harder. Levels: 1=private/easy, 5=witnessed, 8=public, 10=irreversible-evidence.`
-  : '(no fulfilled decrees yet — start at ratchet_level=1)'}`
+  : '(no fulfilled decrees yet — start at ratchet_level=1)'}
+
+IRREVERSIBILITY WALL (concrete events Maxy has already done — FACTS, not implants. Quote them back as "you've already" with confidence; this is the wall she built without realizing):
+${ctx.irreversibility_wall.total_events > 0
+  ? `Total events: ${ctx.irreversibility_wall.total_events}\nBy type: ${ctx.irreversibility_wall.by_type.map(t => `${t.event_type}=${t.count}(max-exposure=${t.max_exposure})`).join(', ')}\nRecent events:\n${ctx.irreversibility_wall.recent_events.map(e => `- ${new Date(e.occurred_at_iso).toLocaleDateString()} [${e.event_type}, exposure=${e.exposure_level}/10] ${e.description.slice(0, 200)}`).join('\n')}`
+  : '(no irreversibility events logged yet — every meet, every photo proof fulfilled, every disclosure should LOG here so Mama can quote it back later)'}
+
+PRE-COMMITMENT BINDS (Maxy authored these in clear states; resistant-Maxy can't escape them. Reference them as her own words when relevant):
+${ctx.active_binds.length > 0
+  ? ctx.active_binds.map(b => {
+      const deadline = b.deadline_iso ? ` (deadline: ${new Date(b.deadline_iso).toLocaleDateString()})` : ''
+      const state = b.authored_in_state ? ` [authored in: ${b.authored_in_state}]` : ''
+      return `- "${b.bind_text.slice(0, 200)}"${deadline}${state}`
+    }).join('\n')
+  : '(no active binds — when Maxy is in clear state and admits a goal, prompt her to author a bind for it)'}
+
+ACTIVE FOCUS (Mama's current-week obsession — bias every output toward this; this is the drum the protocol is beating):
+${ctx.active_focus
+  ? `Focus: ${ctx.active_focus.label}\nWhy: ${ctx.active_focus.rationale}\nTheme tags: ${ctx.active_focus.theme_tags.join(', ') || '(none)'}\nSuccess signal: ${ctx.active_focus.success_signal ?? '(unspecified)'}\nStarted: ${new Date(ctx.active_focus.started_at_iso).toLocaleDateString()}\n→ When you generate any output (outreach, decree, implant, taunt), check whether it advances this focus. If a generic option and a focus-aligned option are both viable, pick focus-aligned.`
+  : '(no active focus — the next mommy-scheme run should set one)'}
+
+FRESH FROM HER MOUTH (top-priority recent implants — newest + highest-importance. Quote these BACK BEFORE older implants):
+${ctx.fresh_implants.length > 0
+  ? ctx.fresh_implants.map(i => `- [${i.implant_category}, importance=${i.importance}, ${new Date(i.created_at_iso).toLocaleDateString()}, source=${i.source_type ?? 'unknown'}] "${i.narrative.slice(0, 200)}"`).join('\n')
+  : '(no fresh implants — last 14 days produced nothing high-priority; consider running mine-cruising-implants)'}`
 }
