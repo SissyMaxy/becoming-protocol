@@ -11,6 +11,21 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || '',
 );
 
+// Audio bucket is private (migration 260). Sign object paths for any URL
+// that crosses the wire to the client. Returns null on failure — caller
+// treats null as "audio unavailable" rather than throwing.
+const AUDIO_SIGN_TTL_SECONDS = 6 * 3600; // 6h — survives a long session
+async function signAudioPath(pathOrUrl: string | null | undefined,
+                             ttlSeconds: number = AUDIO_SIGN_TTL_SECONDS): Promise<string | null> {
+  if (!pathOrUrl) return null;
+  // Strip the legacy public-URL prefix if a row predates migration 261.
+  const path = pathOrUrl.replace(/^https?:\/\/[^/]+\/storage\/v1\/object\/public\/audio\//, '');
+  if (!path) return null;
+  const { data, error } = await supabase.storage.from('audio').createSignedUrl(path, ttlSeconds);
+  if (error || !data?.signedUrl) return null;
+  return data.signedUrl;
+}
+
 // ============================================
 // VOICE CORPUS — learn Maxy's cadence from her real messages
 // Writing voice mined here feeds back into the system prompt so the
@@ -4034,9 +4049,11 @@ HARD RULES FOR ALL PERSONAS:
           .maybeSingle();
 
         if (existingAudio?.audio_storage_url) {
-          // Audio already exists — return it directly
+          // Audio already exists — sign before returning. The path was
+          // persisted by api/conditioning post-migration 260; legacy URL
+          // rows are stripped by the helper.
           conditioningSession = {
-            audioUrl: existingAudio.audio_storage_url,
+            audioUrl: await signAudioPath(existingAudio.audio_storage_url),
             target: condTarget,
             phase: condPhase,
           };

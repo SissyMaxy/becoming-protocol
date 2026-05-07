@@ -8,6 +8,7 @@
  */
 
 import { supabase } from '../supabase';
+import { getSignedAssetUrl } from '../storage/signed-url';
 
 // ============================================
 // TYPES
@@ -112,9 +113,12 @@ export async function deliverMicroPulse(userId: string): Promise<MicroPulseDeliv
       .limit(10);
 
     if (cachedAudio && cachedAudio.length > 0) {
-      // Pick a random cached audio
+      // Pick a random cached audio. After migration 260 the audio bucket
+      // is private and audio_storage_url holds an object path — sign for
+      // the inline player. 10-min TTL: micro-pulses are short and the
+      // audio plays immediately on delivery.
       const pick = cachedAudio[Math.floor(Math.random() * cachedAudio.length)];
-      audioUrl = pick.audio_storage_url || undefined;
+      audioUrl = (await getSignedAssetUrl('audio', pick.audio_storage_url, 600)) || undefined;
     }
 
     // 2. Activate Lovense with gentle_wave(3) for 10 seconds — fire-and-forget

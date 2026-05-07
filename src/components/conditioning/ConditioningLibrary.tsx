@@ -10,6 +10,7 @@ import { ArrowLeft, Play, Loader2, FileText, AudioLines, Clock } from 'lucide-re
 import { useBambiMode } from '../../context/BambiModeContext';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { getSignedAssetUrl } from '../../lib/storage/signed-url';
 import { ConditioningPlayer } from './ConditioningPlayer';
 import type { DbContentCurriculum } from '../../types/conditioning';
 
@@ -23,6 +24,10 @@ export function ConditioningLibrary({ onBack }: ConditioningLibraryProps) {
   const [items, setItems] = useState<DbContentCurriculum[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeItem, setActiveItem] = useState<DbContentCurriculum | null>(null);
+  // Per-tap signed URL — bucket is private (migration 260), so we sign on
+  // play rather than pre-signing every list item. Refreshed each tap so
+  // the URL is fresh whenever the player mounts.
+  const [activeAudioUrl, setActiveAudioUrl] = useState<string | null>(null);
 
   // Fetch handler-generated conditioning scripts
   useEffect(() => {
@@ -47,16 +52,24 @@ export function ConditioningLibrary({ onBack }: ConditioningLibraryProps) {
     load();
   }, [user?.id]);
 
-  const handlePlay = useCallback((item: DbContentCurriculum) => {
+  const handlePlay = useCallback(async (item: DbContentCurriculum) => {
+    if (!item.audio_storage_url) return;
+    // 6h TTL — long enough for the longest sleep playlist; the player
+    // mounts fresh per tap so we don't need to refresh in-place.
+    const signed = await getSignedAssetUrl('audio', item.audio_storage_url, 6 * 3600);
+    if (!signed) return;
+    setActiveAudioUrl(signed);
     setActiveItem(item);
   }, []);
 
   const handleComplete = useCallback(() => {
     setActiveItem(null);
+    setActiveAudioUrl(null);
   }, []);
 
   const handleClosePlayer = useCallback(() => {
     setActiveItem(null);
+    setActiveAudioUrl(null);
   }, []);
 
   const formatDate = (iso: string) => {
@@ -110,9 +123,9 @@ export function ConditioningLibrary({ onBack }: ConditioningLibraryProps) {
       </div>
 
       {/* Active player */}
-      {activeItem && activeItem.audio_storage_url && (
+      {activeItem && activeAudioUrl && (
         <ConditioningPlayer
-          audioUrl={activeItem.audio_storage_url}
+          audioUrl={activeAudioUrl}
           title={activeItem.title}
           duration={(activeItem.duration_minutes ?? 5) * 60}
           onComplete={handleComplete}
