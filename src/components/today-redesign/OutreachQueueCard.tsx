@@ -8,6 +8,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { usePersona } from '../../hooks/usePersona';
+import { useOnboardingComplete } from '../../hooks/useOnboardingComplete';
+import { applyPersonaGate } from '../../lib/onboarding/persona-gate';
 import { useSurfaceRenderTracking } from '../../lib/surface-render-hooks';
 import { useOutreachAudio } from '../../hooks/useOutreachAudio';
 
@@ -25,6 +27,7 @@ interface Outreach {
 
 export function OutreachQueueCard() {
   const { mommy } = usePersona();
+  const { complete: onboardingComplete } = useOnboardingComplete();
   const { user } = useAuth();
   const [pending, setPending] = useState<Outreach[]>([]);
   const [recent, setRecent] = useState<Outreach[]>([]);
@@ -92,19 +95,24 @@ export function OutreachQueueCard() {
         .order('delivered_at', { ascending: false })
         .limit(3),
     ]);
+    // Persona gate: if onboarding isn't complete, drop mommy-* rows
+    // before any further filtering. The wizard at /welcome must run
+    // first so the user has consented to the persona content.
+    const gatedPending = applyPersonaGate((pRes.data || []) as Outreach[], { onboardingComplete });
+    const gatedRecent = applyPersonaGate((rRes.data || []) as Outreach[], { onboardingComplete });
     // De-dupe pending by trigger_reason — keep most recent per reason.
     // Same nudge re-fired hourly (slip-warning, silence-check) shouldn't
     // visibly pile up.
     const seenReason = new Set<string>();
-    const dedupedPending = ((pRes.data || []) as Outreach[]).filter(o => {
+    const dedupedPending = gatedPending.filter(o => {
       const key = o.trigger_reason || o.source;
       if (seenReason.has(key)) return false;
       seenReason.add(key);
       return true;
     }).slice(0, 3);
     setPending(dedupedPending);
-    setRecent((rRes.data || []) as Outreach[]);
-  }, [user?.id]);
+    setRecent(gatedRecent);
+  }, [user?.id, onboardingComplete]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { const t = setInterval(load, 60000); return () => clearInterval(t); }, [load]);

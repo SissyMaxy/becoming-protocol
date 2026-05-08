@@ -9,6 +9,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useOutreachAudio } from '../../hooks/useOutreachAudio';
+import { useOnboardingComplete } from '../../hooks/useOnboardingComplete';
+import { isMommyOutreachRow } from '../../lib/onboarding/persona-gate';
 
 interface Brief {
   id: string;
@@ -16,10 +18,13 @@ interface Brief {
   scheduled_for: string;
   status: string;
   audio_url: string | null;
+  trigger_reason: string | null;
+  source: string | null;
 }
 
 export function MorningBriefCard() {
   const { user } = useAuth();
+  const { complete: onboardingComplete } = useOnboardingComplete();
   const [brief, setBrief] = useState<Brief | null>(null);
   const [acking, setAcking] = useState(false);
   const { play, playingId } = useOutreachAudio();
@@ -29,7 +34,7 @@ export function MorningBriefCard() {
     const todayUtcStart = new Date();
     todayUtcStart.setUTCHours(0, 0, 0, 0);
     const { data } = await supabase.from('handler_outreach_queue')
-      .select('id, message, scheduled_for, status, audio_url')
+      .select('id, message, scheduled_for, status, audio_url, trigger_reason, source')
       .eq('user_id', user.id)
       .eq('trigger_reason', 'daily_morning_brief')
       .gte('scheduled_for', todayUtcStart.toISOString())
@@ -37,8 +42,15 @@ export function MorningBriefCard() {
       .order('scheduled_for', { ascending: false })
       .limit(1)
       .maybeSingle();
-    setBrief((data as Brief | null) ?? null);
-  }, [user?.id]);
+    const row = (data as Brief | null) ?? null;
+    // Persona gate: hide the morning brief if it carries mommy/mama tone
+    // and onboarding hasn't been completed.
+    if (row && !onboardingComplete && isMommyOutreachRow(row)) {
+      setBrief(null);
+      return;
+    }
+    setBrief(row);
+  }, [user?.id, onboardingComplete]);
 
   useEffect(() => { load(); }, [load]);
 
