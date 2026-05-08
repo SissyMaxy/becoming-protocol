@@ -99,8 +99,9 @@ export function PhotoUploadWidget({
         .from('verification-photos')
         .upload(path, file, { contentType: file.type, upsert: false });
       if (upErr) throw upErr;
-      const { data: pub } = supabase.storage.from('verification-photos').getPublicUrl(upData.path);
-      const photoUrl = pub.publicUrl;
+      // Persist the storage path; verification-photos is private post-301,
+      // signed at render via getSignedAssetUrl.
+      const photoPath = upData.path;
 
       const taskType = TASK_TYPE_FOR[verificationType];
       const { data: row, error: insErr } = await supabase
@@ -112,7 +113,7 @@ export function PhotoUploadWidget({
           directive_id: directiveId ?? null,
           directive_kind: directiveKind ?? null,
           directive_snippet: directiveSnippet ?? null,
-          photo_url: photoUrl,
+          photo_url: photoPath,
           caption: caption.trim() || null,
           review_state: 'pending',
         })
@@ -127,7 +128,7 @@ export function PhotoUploadWidget({
         supabase,
         {
           photoId: row.id,
-          photoUrl,
+          photoUrl: photoPath,
           taskType,
           caption,
           userId: user.id,
