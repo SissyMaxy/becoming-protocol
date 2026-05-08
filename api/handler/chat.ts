@@ -4139,7 +4139,7 @@ HARD RULES FOR ALL PERSONAS:
           // persisted by api/conditioning post-migration 260; legacy URL
           // rows are stripped by the helper.
           conditioningSession = {
-            audioUrl: await signAudioPath(existingAudio.audio_storage_url),
+            audioUrl: (await signAudioPath(existingAudio.audio_storage_url)) ?? undefined,
             target: condTarget,
             phase: condPhase,
           };
