@@ -7,24 +7,30 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { useOutreachAudio } from '../../hooks/useOutreachAudio';
 
 export function HandlerDreamCard() {
   const { user } = useAuth();
+  const [dreamId, setDreamId] = useState<string | null>(null);
   const [dream, setDream] = useState<string | null>(null);
   const [dreamDate, setDreamDate] = useState<string | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const { play, playingId } = useOutreachAudio();
 
   const load = useCallback(async () => {
     if (!user?.id) return;
     const { data } = await supabase.from('handler_outreach_queue')
-      .select('message, created_at')
+      .select('id, message, created_at, audio_url')
       .eq('user_id', user.id)
       .eq('source', 'handler_dream')
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
-    const row = data as { message?: string; created_at?: string } | null;
+    const row = data as { id?: string; message?: string; created_at?: string; audio_url?: string | null } | null;
+    setDreamId(row?.id ?? null);
     setDream(row?.message ?? null);
     setDreamDate(row?.created_at ?? null);
+    setAudioUrl(row?.audio_url ?? null);
   }, [user?.id]);
 
   useEffect(() => { load(); }, [load]);
@@ -58,6 +64,23 @@ export function HandlerDreamCard() {
       }}>
         {dream}
       </div>
+
+      {audioUrl && dreamId && (
+        <button
+          onClick={() => play(dreamId, audioUrl)}
+          aria-label={playingId === dreamId ? 'Stop Mama' : 'Play Mama'}
+          style={{
+            marginTop: 12,
+            padding: '6px 12px', borderRadius: 5,
+            background: playingId === dreamId ? '#7c3aed40' : 'transparent',
+            color: '#c4b5fd', border: '1px solid #7c3aed',
+            fontWeight: 700, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+            textTransform: 'uppercase', letterSpacing: '0.05em',
+          }}
+        >
+          {playingId === dreamId ? '◼ Stop' : '▶ Play in her voice'}
+        </button>
+      )}
     </div>
   );
 }

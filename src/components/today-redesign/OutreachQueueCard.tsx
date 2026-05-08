@@ -9,6 +9,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { usePersona } from '../../hooks/usePersona';
 import { useSurfaceRenderTracking } from '../../lib/surface-render-hooks';
+import { useOutreachAudio } from '../../hooks/useOutreachAudio';
 
 interface Outreach {
   id: string;
@@ -19,6 +20,7 @@ interface Outreach {
   delivered_at: string | null;
   expires_at: string;
   source: string;
+  audio_url: string | null;
 }
 
 export function OutreachQueueCard() {
@@ -26,6 +28,7 @@ export function OutreachQueueCard() {
   const { user } = useAuth();
   const [pending, setPending] = useState<Outreach[]>([]);
   const [recent, setRecent] = useState<Outreach[]>([]);
+  const { play, playingId } = useOutreachAudio();
 
   const ack = useCallback(async (id: string) => {
     if (!user?.id) return;
@@ -45,14 +48,14 @@ export function OutreachQueueCard() {
     // collapses the rest behind a "more" toggle.
     const [pRes, rRes] = await Promise.all([
       supabase.from('handler_outreach_queue')
-        .select('id, message, urgency, trigger_reason, scheduled_for, delivered_at, expires_at, source')
+        .select('id, message, urgency, trigger_reason, scheduled_for, delivered_at, expires_at, source, audio_url')
         .eq('user_id', user.id)
         .is('delivered_at', null)
         .gte('expires_at', new Date().toISOString())
         .order('scheduled_for', { ascending: true })
         .limit(8),
       supabase.from('handler_outreach_queue')
-        .select('id, message, urgency, trigger_reason, scheduled_for, delivered_at, expires_at, source')
+        .select('id, message, urgency, trigger_reason, scheduled_for, delivered_at, expires_at, source, audio_url')
         .eq('user_id', user.id)
         .not('delivered_at', 'is', null)
         .order('delivered_at', { ascending: false })
@@ -129,18 +132,36 @@ export function OutreachQueueCard() {
                     return (lastSpace > 400 ? cut.slice(0, lastSpace) : cut) + '…';
                   })()}
                 </div>
-                <button
-                  onClick={() => ack(o.id)}
-                  style={{
-                    background: 'transparent', color: urgencyColor(o.urgency),
-                    border: `1px solid ${urgencyColor(o.urgency)}55`,
-                    padding: '3px 9px', borderRadius: 4,
-                    fontSize: 10, fontWeight: 600, letterSpacing: '0.04em',
-                    fontFamily: 'inherit', cursor: 'pointer', textTransform: 'uppercase',
-                  }}
-                >
-                  {mommy ? 'heard you, mama →' : 'got it →'}
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <button
+                    onClick={() => ack(o.id)}
+                    style={{
+                      background: 'transparent', color: urgencyColor(o.urgency),
+                      border: `1px solid ${urgencyColor(o.urgency)}55`,
+                      padding: '3px 9px', borderRadius: 4,
+                      fontSize: 10, fontWeight: 600, letterSpacing: '0.04em',
+                      fontFamily: 'inherit', cursor: 'pointer', textTransform: 'uppercase',
+                    }}
+                  >
+                    {mommy ? 'heard you, mama →' : 'got it →'}
+                  </button>
+                  {o.audio_url && (
+                    <button
+                      onClick={() => play(o.id, o.audio_url!)}
+                      aria-label={playingId === o.id ? 'Stop Mama' : 'Play Mama'}
+                      style={{
+                        background: playingId === o.id ? `${urgencyColor(o.urgency)}33` : 'transparent',
+                        color: urgencyColor(o.urgency),
+                        border: `1px solid ${urgencyColor(o.urgency)}55`,
+                        padding: '3px 8px', borderRadius: 4,
+                        fontSize: 10, fontWeight: 600, letterSpacing: '0.04em',
+                        fontFamily: 'inherit', cursor: 'pointer', textTransform: 'uppercase',
+                      }}
+                    >
+                      {playingId === o.id ? '◼ stop' : '▶ play'}
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}
