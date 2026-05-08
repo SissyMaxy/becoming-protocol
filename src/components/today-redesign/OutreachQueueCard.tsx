@@ -23,6 +23,7 @@ interface Outreach {
   expires_at: string;
   source: string;
   audio_url: string | null;
+  kind: string | null;
 }
 
 export function OutreachQueueCard() {
@@ -82,9 +83,11 @@ export function OutreachQueueCard() {
     // collapses the rest behind a "more" toggle.
     // dossier_question outreach is rendered by DossierDripCard with the
     // inline answer UI; exclude it here so the same row isn't shown twice.
+    // Skip kind='weekly_recap' — those render via the dedicated WeeklyRecapCard
+    // so the recap doesn't appear twice on Today.
     const [pRes, rRes] = await Promise.all([
       supabase.from('handler_outreach_queue')
-        .select('id, message, urgency, trigger_reason, scheduled_for, delivered_at, expires_at, source, audio_url')
+        .select('id, message, urgency, trigger_reason, scheduled_for, delivered_at, expires_at, source, audio_url, kind')
         .eq('user_id', user.id)
         .is('delivered_at', null)
         .neq('source', 'dossier_question')
@@ -92,7 +95,7 @@ export function OutreachQueueCard() {
         .order('scheduled_for', { ascending: true })
         .limit(8),
       supabase.from('handler_outreach_queue')
-        .select('id, message, urgency, trigger_reason, scheduled_for, delivered_at, expires_at, source, audio_url')
+        .select('id, message, urgency, trigger_reason, scheduled_for, delivered_at, expires_at, source, audio_url, kind')
         .eq('user_id', user.id)
         .not('delivered_at', 'is', null)
         .neq('source', 'dossier_question')
@@ -108,14 +111,16 @@ export function OutreachQueueCard() {
     // Same nudge re-fired hourly (slip-warning, silence-check) shouldn't
     // visibly pile up.
     const seenReason = new Set<string>();
-    const dedupedPending = gatedPending.filter(o => {
-      const key = o.trigger_reason || o.source;
-      if (seenReason.has(key)) return false;
-      seenReason.add(key);
-      return true;
-    }).slice(0, 3);
+    const dedupedPending = gatedPending
+      .filter(o => o.kind !== 'weekly_recap')
+      .filter(o => {
+        const key = o.trigger_reason || o.source;
+        if (seenReason.has(key)) return false;
+        seenReason.add(key);
+        return true;
+      }).slice(0, 3);
     setPending(dedupedPending);
-    setRecent(gatedRecent);
+    setRecent(gatedRecent.filter(o => o.kind !== 'weekly_recap'));
   }, [user?.id, onboardingComplete]);
 
   useEffect(() => { load(); }, [load]);
