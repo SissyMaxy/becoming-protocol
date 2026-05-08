@@ -653,18 +653,18 @@ function ReleaseCheckIn({
   // Already answered — don't show
   if (releaseChecked) return null;
 
-  // Format last release as actual date, not vague "yesterday"
+  // Format last release as actual date, not vague "yesterday".
+  // Compare CALENDAR days, not 24-hour windows — a release at 9pm yesterday
+  // is "yesterday" at 8am today, not "today (yesterday's date)".
   const formatReleaseDate = (date: Date): string => {
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const diffDays = Math.round((startOfDay(new Date()) - startOfDay(date)) / 86_400_000);
 
-    // Show the actual date with day of week
     const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
     const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
-    if (diffDays === 0) return `today (${dateStr})`;
-    if (diffDays === 1) return `${dayName} (${dateStr})`;
+    if (diffDays <= 0) return `today (${dateStr})`;
+    if (diffDays === 1) return `yesterday — ${dayName} (${dateStr})`;
     return `${dayName} ${dateStr} — ${diffDays} days ago`;
   };
 
