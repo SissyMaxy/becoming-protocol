@@ -137,6 +137,98 @@ Deno.serve(async (req: Request) => {
     fixes.push({ kind: 'stale_trigger_resolved', user_id: t.user_id, detail: `${t.trigger_type} from ${t.fired_at}` })
   }
 
+  // FIX 6: github_actions auto-close. For each open github_actions row,
+  // ask GitHub if a later run on the same head_sha + workflow name
+  // succeeded. If yes, close the open row as 'resolved' — the failure
+  // self-healed via a re-run. Batched per SHA to keep API calls minimal.
+  // Implements the auto-close TODO from deploy-health-monitor.
+  const githubToken = Deno.env.get('GITHUB_TOKEN') ?? ''
+  if (githubToken) {
+    const { data: openGh } = await supabase
+      .from('deploy_health_log')
+      .select('id, user_id, raw, title')
+      .eq('status', 'open')
+      .eq('source', 'github_actions')
+      .limit(100)
+    type GhRow = { id: string; user_id: string; raw: { sha?: string; name?: string; run_id?: number } | null; title: string }
+    const bySha: Record<string, GhRow[]> = {}
+    for (const row of (openGh ?? []) as GhRow[]) {
+      const sha = row.raw?.sha
+      if (!sha || !row.raw?.name) continue
+      ;(bySha[sha] ??= []).push(row)
+    }
+    for (const [sha, rows] of Object.entries(bySha)) {
+      try {
+        const r = await fetch(
+          `https://api.github.com/repos/SissyMaxy/becoming-protocol/actions/runs?head_sha=${sha}&per_page=50`,
+          { headers: { 'Authorization': `Bearer ${githubToken}`, 'Accept': 'application/vnd.github+json' } },
+        )
+        if (!r.ok) continue
+        const data = await r.json() as { workflow_runs?: Array<{ id: number; name: string; conclusion: string }> }
+        const runs = data.workflow_runs ?? []
+        for (const row of rows) {
+          const name = row.raw!.name!
+          const failedRunId = row.raw!.run_id ?? 0
+          const successor = runs.find(rr => rr.name === name && rr.conclusion === 'success' && rr.id > failedRunId)
+          if (!successor) continue
+          await supabase.from('deploy_health_log').update({
+            status: 'resolved',
+            resolved_at: new Date().toISOString(),
+          }).eq('id', row.id)
+          fixes.push({ kind: 'github_run_auto_closed', user_id: row.user_id, detail: `${name} on ${sha.slice(0, 7)} re-ran green (run ${successor.id})` })
+        }
+      } catch (_) { /* skip on transient API failure */ }
+    }
+  }
+
+  // FIX 7: escalation. Open deploy_health rows older than 2h that didn't
+  // auto-close get one summary autonomous_escalation_log row per source so
+  // the morning brief / Today surface picks them up. Deduped per
+  // (user, source) via a 6h backoff so cron-firing every 10min doesn't
+  // spam the log.
+  const twoHoursAgo = new Date(Date.now() - 2 * 3600_000).toISOString()
+  const sixHoursAgo = new Date(Date.now() - 6 * 3600_000).toISOString()
+  const { data: stuckOpen } = await supabase
+    .from('deploy_health_log')
+    .select('id, user_id, source, title, severity')
+    .eq('status', 'open')
+    .lt('detected_at', twoHoursAgo)
+    .limit(200)
+  type StuckRow = { id: string; user_id: string; source: string; title: string; severity: string }
+  const stuckByKey: Record<string, StuckRow[]> = {}
+  for (const r of (stuckOpen ?? []) as StuckRow[]) {
+    const key = `${r.user_id}|${r.source}`
+    ;(stuckByKey[key] ??= []).push(r)
+  }
+  for (const [key, rows] of Object.entries(stuckByKey)) {
+    if (rows.length === 0) continue
+    const [userId, source] = key.split('|')
+    const { data: prior } = await supabase
+      .from('autonomous_escalation_log')
+      .select('id')
+      .eq('engine', 'auto_healer')
+      .eq('action', 'escalated')
+      .eq('user_id', userId)
+      .gte('occurred_at', sixHoursAgo)
+      .ilike('rationale', `%${source}%`)
+      .limit(1)
+      .maybeSingle()
+    if (prior) continue
+    const sample = rows.slice(0, 5).map(r => r.title).join('; ')
+    const maxSeverity = rows.some(r => r.severity === 'critical') ? 'critical'
+                      : rows.some(r => r.severity === 'high') ? 'high'
+                      : rows[0].severity
+    await supabase.from('autonomous_escalation_log').insert({
+      user_id: userId,
+      engine: 'auto_healer',
+      action: 'escalated',
+      after_state: { count: rows.length, source, severity: maxSeverity, sample_ids: rows.slice(0, 10).map(r => r.id) },
+      rationale: `${rows.length} ${source} failure(s) unresolved >2h: ${sample}`,
+      decided_by: 'auto_healer',
+    })
+    fixes.push({ kind: 'deploy_health_escalated', user_id: userId, detail: `${rows.length} ${source} failures escalated (${maxSeverity})` })
+  }
+
   // FIX 4: deploy_health_log entries older than 24h that are still 'open' →
   // mark 'auto_resolved' (assume they self-resolved; CI re-runs would have
   // made fresh entries if still failing).
