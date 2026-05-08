@@ -206,7 +206,7 @@ async function handleStatus(req: VercelRequest, res: VercelResponse) {
     .maybeSingle();
 
   if (!data) return res.status(200).json({ connected: false });
-  return res.status(200).json({ connected: true, ...data });
+  return res.status(200).json({ connected: true, ...(data as unknown as Record<string, unknown>) });
 }
 
 // ── settings ───────────────────────────────────────────────────────────────

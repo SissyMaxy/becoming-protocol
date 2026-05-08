@@ -2208,7 +2208,7 @@ HARD RULES FOR ALL PERSONAS:
       // Persona selection failure is non-critical
     }
 
-    // 4e. Dommy Mommy overlay — when enabled, inject the feminine_self
+    // 4e. Feminine-self overlay — when enabled, inject the feminine_self
     // identity block so the persona references her chosen name, pronouns,
     // current phase, and recent wardrobe additions on every reply. Behind
     // an env flag while quality-pass owns the persona body itself; default
@@ -2216,8 +2216,8 @@ HARD RULES FOR ALL PERSONAS:
     //
     // Per spec, skip cleanly when no feminine_name is set — caller falls
     // back to the existing pet-name behavior.
-    const mommyOverlay = process.env.DOMMY_MOMMY_OVERLAY === 'true';
-    if (mommyOverlay) {
+    const feminineSelfOverlay = process.env.DOMMY_MOMMY_OVERLAY === 'true';
+    if (feminineSelfOverlay) {
       try {
         const overlayBlock = await buildFeminineSelfOverlayBlock(user.id);
         if (overlayBlock) finalSystemPrompt += `\n\n${overlayBlock}`;
