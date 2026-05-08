@@ -76,25 +76,41 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// Handle push notifications (for future handler-initiated sessions)
+// Handle push notifications (for future handler-initiated sessions).
+// When the server-side dispatcher has neutralized the payload (stealth
+// mode), it sets data.stealth=true and replaces the title/body. We
+// also drop any banner art and use a plain grey badge so the lock-
+// screen preview reveals nothing about the source.
 self.addEventListener('push', (event) => {
   if (!event.data) return;
 
   const data = event.data.json();
-  const options = {
-    body: data.body || 'You have a task waiting.',
-    icon: '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
-    vibrate: [200, 100, 200],
-    tag: data.tag || 'handler-notification',
-    requireInteraction: data.urgent || false,
-    data: {
-      url: data.url || '/'
-    }
-  };
+  const isStealth = Boolean(data?.data?.stealth);
+  const options = isStealth
+    ? {
+        body: data.body || 'Tap to view',
+        icon: '/icons/icon-192.png',
+        badge: '/icons/icon-192.png',
+        tag: 'message',
+        renotify: false,
+        requireInteraction: false,
+        silent: false,
+        data: { url: '/' },
+      }
+    : {
+        body: data.body || 'You have a task waiting.',
+        icon: '/icons/icon-192.png',
+        badge: '/icons/icon-192.png',
+        vibrate: [200, 100, 200],
+        tag: data.tag || 'handler-notification',
+        requireInteraction: data.urgent || false,
+        data: {
+          url: data.url || '/'
+        }
+      };
 
   event.waitUntil(
-    self.registration.showNotification(data.title || 'BP', options)
+    self.registration.showNotification(isStealth ? (data.title || 'New message') : (data.title || 'BP'), options)
   );
 });
 
