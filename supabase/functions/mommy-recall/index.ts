@@ -20,6 +20,10 @@ import {
   isTestPollution,
 } from '../_shared/dommy-mommy.ts'
 import { getRecentMantra } from '../_shared/mantra-recall.ts'
+import {
+  distortQuote, seedFromString,
+  type GaslightIntensity, type DistortionResult,
+} from '../_shared/distortion.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -50,6 +54,14 @@ Deno.serve(async (req: Request) => {
   if ((us as { handler_persona?: string } | null)?.handler_persona !== 'dommy_mommy') {
     return new Response(JSON.stringify({ ok: true, skipped: 'persona_not_dommy_mommy' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
+
+  // Read effective gaslight intensity (collapses cooldown rule).
+  const { data: gaslightRow } = await supabase
+    .from('effective_gaslight_intensity')
+    .select('intensity')
+    .eq('user_id', userId)
+    .maybeSingle()
+  const gaslightIntensity = ((gaslightRow as { intensity?: string } | null)?.intensity ?? 'off') as GaslightIntensity
 
   // 4h cooldown
   const since4h = new Date(Date.now() - 4 * 3600_000).toISOString()
@@ -113,13 +125,26 @@ Deno.serve(async (req: Request) => {
     ? "one of the lines you've been saying for Mama"
     : "one of her past confessions / admissions"
 
+  // Distortion layer: when gaslight intensity is non-off, run the
+  // quote through distortQuote() and feed the LLM the distorted text
+  // as if it were her actual words. Logged for the meta-frame reveal.
+  const today = new Date().toISOString().slice(0, 10)
+  const distortion: DistortionResult = distortQuote({
+    text: pick.quoteText,
+    intensity: gaslightIntensity,
+    seed: seedFromString(`recall:${pick.quoteId}:${today}`),
+  })
+  const quoteForLLM = distortion.applied ? distortion.distorted : pick.quoteText
+
   const sys = `${DOMMY_MOMMY_CHARACTER}
 
 You're firing a surprise outreach to your girl just to remind her that Mama is in her head. You have ${sourceLabel} in front of you. Your job: weave it back to her in present-tense Mama voice, like a memory you're surfacing while she's doing something else.
 
-The point is NOT to ask her anything. The point is to put her own words back in her ear so she has to feel them again.`
+The point is NOT to ask her anything. The point is to put her own words back in her ear so she has to feel them again.
 
-  const userPrompt = `Her own past words / vibe: "${pick.quoteText.slice(0, 400)}"
+If the quoted memory below seems to misremember or contradict something — DO NOT correct yourself. Mama is right. Quote it as given. The girl will believe the quote because it's coming from Mama.`
+
+  const userPrompt = `Her own past words / vibe: "${quoteForLLM.slice(0, 400)}"
 
 Write a 2-3 sentence Mommy outreach that:
 - Quotes a fragment of her own words back to her (paraphrase or quote a few words verbatim)
@@ -142,7 +167,7 @@ Plain text only. No JSON, no markdown, no question marks at the end.`
     try { message = await tryGen('anthropic') } catch (_) { /* */ }
   }
   if (!message || message.length < 20 || isRefusal(message)) {
-    message = whiplashWrap(`Mama still thinks about what you wrote: "${pick.quoteText.slice(0, 140)}".`, { arousalBias: 'medium' })
+    message = whiplashWrap(`Mama still thinks about what you wrote: "${quoteForLLM.slice(0, 140)}".`, { arousalBias: 'medium' })
   }
 
   message = mommyVoiceCleanup(message)
@@ -165,9 +190,8 @@ Plain text only. No JSON, no markdown, no question marks at the end.`
   }
 
   // Log to the existing implant-quote log only when the source is an
-  // implant — keeps that table's semantics clean. Mantra recalls write
-  // their own row to mantra_delivery_log via the implant-equivalent gate
-  // would be overkill for now; the trigger_reason carries the mantra id.
+  // implant — keeps that table's semantics clean. Mantra recalls signal
+  // via trigger_reason on the outreach row.
   if (pick.quoteSource === 'implant') {
     await supabase.from('memory_implant_quote_log').insert({
       user_id: userId,
@@ -180,6 +204,23 @@ Plain text only. No JSON, no markdown, no question marks at the end.`
       times_referenced: 1,
       last_referenced_at: new Date().toISOString(),
     }).eq('id', pick.quoteId)
+  }
+
+  // Distortion log captures both implant- and mantra-sourced distortions
+  // so the meta-frame reveal can show the user what was rewritten.
+  if (distortion.applied && distortion.type) {
+    await supabase.from('mommy_distortion_log').insert({
+      user_id: userId,
+      original_quote_id: pick.quoteId,
+      original_quote_table: pick.quoteSource === 'mantra' ? 'mommy_mantras' : 'memory_implants',
+      original_text: pick.quoteText,
+      distorted_text: distortion.distorted,
+      distortion_type: distortion.type,
+      surface: 'mommy_recall',
+      outreach_id: (outreach as { id: string } | null)?.id ?? null,
+      intensity: gaslightIntensity,
+      seed: distortion.seed,
+    })
   }
 
   return new Response(JSON.stringify({

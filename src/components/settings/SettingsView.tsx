@@ -52,6 +52,7 @@ import { MicroTaskSettings } from '../micro-tasks';
 import { CorruptionDashboard } from '../admin/CorruptionDashboard';
 import { SleepContentSettings } from '../sleep-content/SleepContentSettings';
 import { SocialMediaDashboard } from '../social/SocialMediaDashboard';
+import { PersonaSettings } from './PersonaSettings';
 
 const DIFFICULTY_LEVELS = [
   { id: 'gentle', label: 'Gentle', desc: 'Lighter load, longer timers' },
@@ -303,7 +304,7 @@ interface SettingsViewProps {
   onEditIntake?: () => void;
 }
 
-type SettingsSection = 'main' | 'profile' | 'lovense' | 'whoop' | 'equipment' | 'timeratchets' | 'reminders' | 'privacy' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content' | 'opacity' | 'social-dashboard';
+type SettingsSection = 'main' | 'profile' | 'lovense' | 'whoop' | 'equipment' | 'timeratchets' | 'reminders' | 'privacy' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content' | 'opacity' | 'social-dashboard' | 'persona';
 
 export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
   const { isBambiMode } = useBambiMode();
@@ -405,6 +406,13 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
       description: 'Export and backup',
       color: '#3b82f6',
     },
+    {
+      id: 'persona' as const,
+      icon: Brain,
+      label: 'Persona',
+      description: "Mama's memory & in-fantasy distortion",
+      color: '#9F1F4F',
+    },
   ];
 
   // Filter sections by opacity level
@@ -435,6 +443,7 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
     if (activeSection === 'data') return 'Data Export';
     if (activeSection === 'opacity') return 'Visibility';
     if (activeSection === 'social-dashboard') return 'Socials';
+    if (activeSection === 'persona') return 'Persona';
     const section = sections.find(s => s.id === activeSection);
     return section?.label || 'Settings';
   };
@@ -1100,6 +1109,9 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
 
         {/* Data Export */}
         {activeSection === 'data' && <DataExportView />}
+
+        {/* Persona */}
+        {activeSection === 'persona' && <PersonaSettings />}
       </div>
     </div>
   );

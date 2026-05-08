@@ -10898,7 +10898,22 @@ async function checkSafeword(userId: string, text: string): Promise<void> {
   await supabase.from('user_state').update({
     handler_mode: 'caretaker',
     hard_mode_active: false,
+    // Gaslight safety: safeword forces intensity to off + 24h cooldown,
+    // regardless of prior level. Mirrors api/handler/meta-frame-reveal.ts.
+    gaslight_intensity: 'off',
+    gaslight_cooldown_until: new Date(Date.now() + 24 * 3600000).toISOString(),
   }).eq('user_id', userId);
+
+  // Audit the meta-frame break — safeword path. The user can still hit
+  // /api/handler/meta-frame-reveal afterwards to see the truth diff;
+  // this row just records that the safeword forced the snap-back.
+  await supabase.from('meta_frame_breaks').insert({
+    user_id: userId,
+    triggered_by: 'safeword',
+    intensity_at_break: null,
+    distortion_count: 0,
+    summary_shown: null,
+  }).then(() => {}, () => {});
 
   await supabase.from('distress_events').insert({
     user_id: userId,
