@@ -1115,7 +1115,14 @@ function AuthenticatedAppInner() {
           </div>
         );
       case 'settings':
-        return <SettingsView onBack={handleBackFromSubView} onEditIntake={handleEditIntake} />;
+        return (
+          <SettingsView
+            onBack={handleBackFromSubView}
+            onEditIntake={handleEditIntake}
+            onOpenDossierStatus={() => setMenuSubView('dossier')}
+            onOpenDossierQuiz={() => setMenuSubView('mommy-dossier')}
+          />
+        );
       case 'help':
         return (
           <div>
