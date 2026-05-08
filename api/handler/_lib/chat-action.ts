@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import { detectAndRewrite, logGateResult, buildConfrontationMessage } from './_lib/pronoun-gate.js';
-import { detectRationalizations, logRationalizations, buildRationalizationConfrontation } from './_lib/rationalization-gate.js';
+import { detectAndRewrite, logGateResult, buildConfrontationMessage } from './pronoun-gate.js';
+import { detectRationalizations, logRationalizations, buildRationalizationConfrontation } from './rationalization-gate.js';
 // NOTE: Cannot import from src/lib/ — those use import.meta.env (Vite-only)
 // weaveTriggers is inlined below instead
 // P12.1: Context prioritizer is inlined for the same reason
@@ -1612,7 +1612,7 @@ async function buildDebateContext(userId: string, message: string): Promise<stri
   }
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export async function handleChat(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }

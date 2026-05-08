@@ -19,7 +19,7 @@ vi.mock('@supabase/supabase-js', () => ({
   createClient: () => mockClient,
 }));
 
-import handler from '../../../api/handler/meta-frame-reveal';
+import { handleMetaFrameReveal as handler } from '../../../api/handler/_lib/meta-frame-reveal-action';
 
 interface MockReq {
   method: string;

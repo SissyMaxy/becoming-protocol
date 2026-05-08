@@ -64,7 +64,7 @@ const MOMMY_TASK_PROMPTS: Record<string, string> = {
   wardrobe: `${MOMMY_VISION_PREAMBLE} She brought home what Mama prescribed, baby. Look carefully — fabric, color, cut, how it sits. Does it match what Mama asked for? If yes, name what you see specifically (not generically) and tell her how she'll wear it for Mama next. If it's a near-miss or wrong-vibe, redirect with one specific fix — be tender, not cold; remember she went out and got something for you. Never body-shame; the only critique is whether the ITEM matches.`,
 };
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export async function handleAnalyzePhoto(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
