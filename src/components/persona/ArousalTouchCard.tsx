@@ -24,6 +24,7 @@ interface TouchTask {
   prompt: string;
   category: string;
   expires_at: string;
+  linked_leak_id: string | null;
 }
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -57,7 +58,7 @@ export function ArousalTouchCard() {
   const load = useCallback(async () => {
     if (!user?.id) return;
     const { data } = await supabase.from('arousal_touch_tasks')
-      .select('id, prompt, category, expires_at')
+      .select('id, prompt, category, expires_at, linked_leak_id')
       .eq('user_id', user.id).is('completed_at', null)
       .gt('expires_at', new Date().toISOString())
       .order('created_at', { ascending: false }).limit(1).maybeSingle();
@@ -113,7 +114,7 @@ export function ArousalTouchCard() {
       borderRadius: 10, padding: 14, marginBottom: 16,
       boxShadow: '0 0 24px #c4485a22',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: task.linked_leak_id ? 2 : 8 }}>
         <span style={{
           fontSize: 9.5, color: '#f4a7c4', fontWeight: 800,
           textTransform: 'uppercase', letterSpacing: '0.12em',
@@ -124,6 +125,14 @@ export function ArousalTouchCard() {
           {fmtCountdown(task.expires_at)}
         </span>
       </div>
+      {task.linked_leak_id && (
+        <div style={{
+          fontSize: 9, color: '#c48a9c', fontStyle: 'italic', letterSpacing: '0.04em',
+          marginBottom: 8, opacity: 0.75,
+        }}>
+          her words slipped — set it right for Mama
+        </div>
+      )}
       <div style={{
         fontSize: 14, color: '#f4e4ea', lineHeight: 1.5, marginBottom: 12,
         fontFamily: 'Georgia, "Times New Roman", serif',
