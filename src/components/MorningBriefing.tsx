@@ -20,7 +20,6 @@ import { supabase } from '../lib/supabase';
 import { Flame, Sparkles, Leaf, ArrowRight, Loader2, AlertTriangle, Heart, Star, TrendingUp, Lock } from 'lucide-react';
 import { StreakBreakModal } from './SkipConfirmModal';
 import { getMorningPersonalization, type MorningPersonalization } from '../lib/morning-personalization';
-import { HandlerStatusBriefing } from './handler/HandlerStatusBriefing';
 import { QuickStateStrip } from './today/QuickStateStrip';
 import { useFeminizationScore } from '../hooks/useFeminizationScore';
 
@@ -359,8 +358,14 @@ export function MorningBriefing({ onComplete }: MorningBriefingProps) {
           onConfirmRelease={handleRecordRelease}
         />
 
-        {/* Handler Status Briefing — 5 sections */}
-        <HandlerStatusBriefing />
+        {/* HandlerStatusBriefing intentionally NOT embedded here.
+            2026-05-08: stacking it under the morning greeting produced
+            duplicate Mama-voice copy ("Good morning, baby" + denial
+            phrase from the greeting + "Mama wants you closer today" +
+            denial phrase again from todayLine). The MorningBriefing
+            owns the greeting; HandlerStatusBriefing is rendered by
+            Today screens for ongoing-day status. They're disjoint
+            surfaces by design. */}
 
         {/* QuickStateStrip — state check-in */}
         {userState && (

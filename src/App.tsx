@@ -513,8 +513,20 @@ function AuthenticatedAppInner() {
       const today = getTodayDate();
       const hasEntryToday = currentEntry?.date === today;
       const morningDoneToday = localStorage.getItem('morning_done_date') === today;
-      if (!hasEntryToday && !morningDoneToday) {
+      // Time-of-day gate (2026-05-08 user feedback): a "morning intro"
+      // screen at 11am+ feels stale and the content reads as a
+      // double-greeting on top of the regular Today briefing. After the
+      // morning window, skip the dedicated MorningBriefing flow and just
+      // render Today directly. User can still access the long briefing
+      // via the menu if she wants the deeper reflection prompts.
+      const currentHour = new Date().getHours();
+      const inMorningWindow = currentHour < 10; // local hour < 10am
+      if (!hasEntryToday && !morningDoneToday && inMorningWindow) {
         setShowMorningFlow(true);
+      } else if (!hasEntryToday && !morningDoneToday && !inMorningWindow) {
+        // Past morning window: auto-mark done so future opens today don't
+        // bring it back. The user can still trigger it via the menu.
+        localStorage.setItem('morning_done_date', today);
       }
     }
   }, [isLoading, currentEntry, showOnboarding]);
