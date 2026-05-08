@@ -61,6 +61,7 @@ import { ProtocolHealthCard } from './ProtocolHealthCard';
 import { MommyIdeationCard } from './MommyIdeationCard';
 import { DeployFixerStatusCard } from './DeployFixerStatusCard';
 import { SystemGrowthCard } from './SystemGrowthCard';
+import { SupabaseHealthCard } from './SupabaseHealthCard';
 import { PunishmentQueueCard } from './PunishmentQueueCard';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
@@ -319,6 +320,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             <MommyIdeationCard />
             <DeployFixerStatusCard />
             <SystemGrowthCard />
+            <SupabaseHealthCard />
             <DailyBriefingCard />
             <StrategicPlanCard />
             <CodeAuditCard />
