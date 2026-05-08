@@ -8,7 +8,7 @@ const supabase = createClient(
 
 // Cron-callable endpoint. Refreshes voice profiles for every user
 // who has any corpus samples. Call once daily via Vercel Cron or external trigger.
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export async function handleRefreshProfile(req: VercelRequest, res: VercelResponse) {
   // Simple shared-secret guard for cron calls
   const secret = req.headers['x-cron-secret'];
   if (process.env.CRON_SECRET && secret !== process.env.CRON_SECRET) {

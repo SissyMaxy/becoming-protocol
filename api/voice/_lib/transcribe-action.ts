@@ -5,13 +5,11 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 // and returns a cleaned transcript. Vastly more accurate than the browser's
 // Web Speech API — especially for soft, trans, or non-standard voices.
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
+// NOTE: Whisper needs raw-stream body. The bodyParser:false config now lives
+// on api/voice/[action].ts (the dispatcher) since Vercel only reads function
+// config from the route file itself.
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export async function handleTranscribe(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const apiKey = process.env.OPENAI_API_KEY;

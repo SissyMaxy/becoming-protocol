@@ -44,7 +44,7 @@ function pickMimeType(): string {
 }
 
 export function useWhisperTranscription(options: WhisperOptions = {}): UseWhisperTranscriptionReturn {
-  const { endpoint = '/api/transcribe', onResult, onError, maxDurationMs = 60_000 } = options;
+  const { endpoint = '/api/voice/transcribe', onResult, onError, maxDurationMs = 60_000 } = options;
 
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);

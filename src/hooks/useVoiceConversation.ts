@@ -4,7 +4,7 @@
  * Speech-to-text via OpenAI Whisper (replacing the Web Speech API, which
  * produced the "test testing 1 2 3" partial-result spam and was wildly
  * inaccurate for soft/trans voices). Records with MediaRecorder, POSTs
- * the audio blob to /api/transcribe on stop, returns a clean transcript.
+ * the audio blob to /api/voice/transcribe on stop, returns a clean transcript.
  *
  * Pitch is sampled in parallel via YIN detection on the same mic stream
  * and written to voice_pitch_samples with context='conversation'.
@@ -179,7 +179,7 @@ export function useVoiceConversation(): UseVoiceConversationReturn {
 
         setIsTranscribing(true);
         try {
-          const resp = await fetch('/api/transcribe', {
+          const resp = await fetch('/api/voice/transcribe', {
             method: 'POST',
             headers: { 'Content-Type': blob.type || 'audio/webm' },
             body: blob,
