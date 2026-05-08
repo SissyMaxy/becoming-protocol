@@ -68,6 +68,7 @@ import { SocialMediaDashboard } from '../social/SocialMediaDashboard';
 import { PersonaSettings } from './PersonaSettings';
 import { SniffiesSettings } from './SniffiesSettings';
 import { PhaseProgressPanel } from '../identity/PhaseProgressPanel';
+import { WeeklyRecapSettings } from './WeeklyRecapSettings';
 
 const DIFFICULTY_LEVELS = [
   { id: 'gentle', label: 'Gentle', desc: 'Lighter load, longer timers' },
@@ -321,7 +322,7 @@ interface SettingsViewProps {
   onOpenDossierStatus?: () => void;
 }
 
-type SettingsSection = 'main' | 'profile' | 'lovense' | 'whoop' | 'calendar' | 'equipment' | 'timeratchets' | 'reminders' | 'privacy' | 'stealth' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content' | 'opacity' | 'social-dashboard' | 'persona' | 'sniffies' | 'letters' | 'identity';
+type SettingsSection = 'main' | 'profile' | 'lovense' | 'whoop' | 'calendar' | 'equipment' | 'timeratchets' | 'reminders' | 'privacy' | 'stealth' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content' | 'opacity' | 'social-dashboard' | 'persona' | 'sniffies' | 'letters' | 'identity' | 'weekly-recap';
 
 export function SettingsView({ onBack, onEditIntake, onOpenDossierQuiz, onOpenDossierStatus }: SettingsViewProps) {
   const { isBambiMode } = useBambiMode();
@@ -440,6 +441,13 @@ export function SettingsView({ onBack, onEditIntake, onOpenDossierQuiz, onOpenDo
       color: '#c4956a',
     },
     {
+      id: 'weekly-recap' as const,
+      icon: ClipboardEdit,
+      label: 'Weekly Recap',
+      description: 'Sunday-night week-in-review from Mama',
+      color: '#c4847a',
+    },
+    {
       id: 'privacy' as const,
       icon: Shield,
       label: 'Privacy',
@@ -516,6 +524,7 @@ export function SettingsView({ onBack, onEditIntake, onOpenDossierQuiz, onOpenDo
     if (activeSection === 'persona') return 'Persona';
     if (activeSection === 'sniffies') return 'Sniffies imports';
     if (activeSection === 'identity') return 'Identity';
+    if (activeSection === 'weekly-recap') return 'Weekly Recap';
     const section = sections.find(s => s.id === activeSection);
     return section?.label || 'Settings';
   };
@@ -1324,6 +1333,9 @@ export function SettingsView({ onBack, onEditIntake, onOpenDossierQuiz, onOpenDo
 
         {/* Sleep Content */}
         {activeSection === 'sleep-content' && <SleepContentSettings />}
+
+        {/* Weekly Recap */}
+        {activeSection === 'weekly-recap' && <WeeklyRecapSettings />}
 
         {/* Social Media Dashboard */}
         {activeSection === 'social-dashboard' && (
