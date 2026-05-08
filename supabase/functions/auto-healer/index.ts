@@ -272,6 +272,167 @@ Deno.serve(async (req: Request) => {
     fixes.push({ kind: 'deploy_health_escalated', user_id: userId, detail: `${rows.length} ${source} failures escalated (${maxSeverity})` })
   }
 
+  // FIX 8: pg_cron auth failure escalation. Migration 315's
+  // pollPgCronFailures writes deploy_health_log rows with source='pg_cron'
+  // whenever a scheduled cron run errors. If the underlying error is an
+  // auth failure on a known cron-invoked function, the cron command itself
+  // is embedding a stale service-role key (the pattern that produced
+  // today's outage). Auto-healer can't safely rewrite cron.job — that
+  // belongs to a migration — but it CAN escalate with a structured
+  // remediation suggestion so the engineer (or builder pipeline) picks
+  // it up immediately.
+  const KNOWN_CRON_FN_PATTERNS = [
+    'auto-healer', 'deploy-health-monitor', 'handler-task-processor',
+    'handler-autonomous', 'handler-platform', 'handler-enforcement',
+    'wish-classifier', 'mommy-builder', 'mommy-deployer',
+    'capability-digest', 'self-improvement',
+  ]
+  const { data: pgCronOpen } = await supabase
+    .from('deploy_health_log')
+    .select('id, user_id, title, detail, raw, severity')
+    .eq('status', 'open')
+    .eq('source', 'pg_cron')
+    .gte('detected_at', new Date(Date.now() - 6 * 3600_000).toISOString())
+    .limit(50)
+  type PgCronRow = { id: string; user_id: string; title: string; detail: string | null; raw: { jobname?: string } | null; severity: string }
+  for (const row of (pgCronOpen ?? []) as PgCronRow[]) {
+    const blob = `${row.title} ${row.detail ?? ''}`.toLowerCase()
+    const isAuth = blob.includes('401') || blob.includes('403') || blob.includes('unauthorized') || blob.includes('forbidden')
+    if (!isAuth) continue
+    const jobname = row.raw?.jobname ?? ''
+    const matched = KNOWN_CRON_FN_PATTERNS.find(p => jobname.includes(p))
+    if (!matched) continue
+
+    // Backoff per (user, jobname) — once every 6h.
+    const sixHoursAgoIso = new Date(Date.now() - 6 * 3600_000).toISOString()
+    const { data: prior } = await supabase
+      .from('autonomous_escalation_log')
+      .select('id')
+      .eq('engine', 'auto_healer')
+      .eq('action', 'pg_cron_auth_failure')
+      .eq('user_id', row.user_id)
+      .gte('occurred_at', sixHoursAgoIso)
+      .ilike('rationale', `%${jobname}%`)
+      .limit(1)
+      .maybeSingle()
+    if (prior) continue
+
+    const remediation = [
+      `-- Proposed remediation migration:`,
+      `-- 1. cron.unschedule('${jobname}');`,
+      `-- 2. cron.schedule('${jobname}', '<existing schedule>',`,
+      `--      $cron$SELECT invoke_edge_function('${matched}', '{}'::jsonb)$cron$);`,
+      `-- The invoke_edge_function helper reads the current service role key`,
+      `-- from app.settings.service_role_key — re-registering the cron picks`,
+      `-- up the rotated key and stops the auth loop.`,
+    ].join('\n')
+
+    await supabase.from('autonomous_escalation_log').insert({
+      user_id: row.user_id,
+      engine: 'auto_healer',
+      action: 'pg_cron_auth_failure',
+      after_state: { jobname, function: matched, deploy_health_log_id: row.id, severity: row.severity },
+      rationale: `pg_cron job '${jobname}' is auth-failing against edge function '${matched}'. Stale service_role key in cron command suspected. Remediation:\n${remediation}`,
+      decided_by: 'auto_healer',
+    })
+    fixes.push({ kind: 'pg_cron_auth_failure_escalated', user_id: row.user_id, detail: `${jobname} → ${matched} (auth)` })
+  }
+
+  // FIX 9: function timeout / slow_response escalation. Edge function
+  // timeouts are a judgment call (might be a slow query, an upstream API
+  // hanging, or genuine hot loop) — auto-healer logs and escalates, never
+  // auto-patches. One escalation per (user, function_id) per 6h to dedupe.
+  const { data: timeoutOpen } = await supabase
+    .from('deploy_health_log')
+    .select('id, user_id, title, detail, raw, function_execution_time_ms')
+    .eq('status', 'open')
+    .eq('source', 'supabase_edge')
+    .gte('detected_at', new Date(Date.now() - 6 * 3600_000).toISOString())
+    .limit(100)
+  type EdgeRow = { id: string; user_id: string; title: string; detail: string | null; raw: { function_id?: string; signature?: string } | null; function_execution_time_ms: number | null }
+  const seenTimeoutKey = new Set<string>()
+  for (const row of (timeoutOpen ?? []) as EdgeRow[]) {
+    const sig = row.raw?.signature
+    if (sig !== 'timeout' && sig !== 'slow_response') continue
+    const fnId = row.raw?.function_id ?? 'unknown'
+    const key = `${row.user_id}|${fnId}|${sig}`
+    if (seenTimeoutKey.has(key)) continue
+    seenTimeoutKey.add(key)
+
+    const sixHoursAgoIso = new Date(Date.now() - 6 * 3600_000).toISOString()
+    const { data: prior } = await supabase
+      .from('autonomous_escalation_log')
+      .select('id')
+      .eq('engine', 'auto_healer')
+      .eq('action', 'function_timeout')
+      .eq('user_id', row.user_id)
+      .gte('occurred_at', sixHoursAgoIso)
+      .ilike('rationale', `%${fnId}%`)
+      .limit(1)
+      .maybeSingle()
+    if (prior) continue
+
+    await supabase.from('autonomous_escalation_log').insert({
+      user_id: row.user_id,
+      engine: 'auto_healer',
+      action: 'function_timeout',
+      after_state: { function_id: fnId, signature: sig, execution_time_ms: row.function_execution_time_ms, deploy_health_log_id: row.id },
+      rationale: `Edge function '${fnId}' ${sig} (${row.function_execution_time_ms ?? '?'}ms). Manual review required — auto-healer does not auto-patch timeouts.`,
+      decided_by: 'auto_healer',
+    })
+    fixes.push({ kind: 'function_timeout_escalated', user_id: row.user_id, detail: `${fnId} ${sig} ${row.function_execution_time_ms ?? '?'}ms` })
+  }
+
+  // FIX 10: postgres connection saturation. If a 'postgres' row signals
+  // connection_pct >= 90, terminate idle connections older than 5 min via
+  // the migration-315 RPC. Bounded — at most 50 pids per call, only kills
+  // 'idle' state, never touches supabase_admin/postgres roles. Logs every
+  // termination so we can audit.
+  const { data: pgSatOpen } = await supabase
+    .from('deploy_health_log')
+    .select('id, user_id, title, raw, health_threshold_breached')
+    .eq('status', 'open')
+    .eq('source', 'postgres')
+    .gte('detected_at', new Date(Date.now() - 30 * 60_000).toISOString())
+    .limit(20)
+  type PgSatRow = { id: string; user_id: string; title: string; raw: Record<string, unknown> | null; health_threshold_breached: { metric?: string; observed?: number } | null }
+  const handledUsers = new Set<string>()
+  for (const row of (pgSatOpen ?? []) as PgSatRow[]) {
+    if (handledUsers.has(row.user_id)) continue
+    const tb = row.health_threshold_breached
+    if (tb?.metric !== 'connection_pct') continue
+    if ((tb.observed ?? 0) < 90) continue
+
+    const { data: terminated, error: termErr } = await supabase.rpc('health_terminate_idle_connections', { p_min_idle_seconds: 300 })
+    if (termErr) {
+      console.warn('[auto-healer] terminate_idle rpc failed:', termErr.message)
+      continue
+    }
+    type TermRow = { terminated_pid: number; terminated: boolean }
+    const termRows = (terminated ?? []) as TermRow[]
+    const succeeded = termRows.filter(r => r.terminated).map(r => r.terminated_pid)
+
+    handledUsers.add(row.user_id)
+
+    await supabase.from('autonomous_escalation_log').insert({
+      user_id: row.user_id,
+      engine: 'auto_healer',
+      action: 'pg_idle_terminated',
+      after_state: { connection_pct: tb.observed, terminated_pids: succeeded, total_attempted: termRows.length },
+      rationale: `Postgres connection saturation ${tb.observed}% — terminated ${succeeded.length} idle connection(s) older than 5min`,
+      decided_by: 'auto_healer',
+    })
+    fixes.push({ kind: 'pg_idle_terminated', user_id: row.user_id, detail: `${tb.observed}% → killed ${succeeded.length} idle pid(s)` })
+
+    // If we made room (>0 terminated), close the deploy_health_log row so
+    // the next watcher tick re-evaluates instead of re-firing on stale data.
+    if (succeeded.length > 0) {
+      await supabase.from('deploy_health_log').update({
+        status: 'autopatched', resolved_at: new Date().toISOString(),
+      }).eq('id', row.id)
+    }
+  }
+
   // FIX 4: deploy_health_log entries older than 24h that are still 'open' →
   // mark 'auto_resolved' (assume they self-resolved; CI re-runs would have
   // made fresh entries if still failing).
