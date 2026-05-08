@@ -99,10 +99,11 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
 
   const TONE_STYLES = isMommyPersona(persona) ? TONE_STYLES_MOMMY : TONE_STYLES_HANDLER;
 
-  const pickNext = useCallback(async () => {
+  // pickNext supports silent mode (auto-refresh ticks) so it doesn't clobber
+  // an in-flight textarea draft. Only the initial load shows the loader.
+  const pickNext = useCallback(async (silent = false) => {
     if (!user?.id) return;
-    setLoading(true);
-    setConfessText('');
+    if (!silent) setLoading(true);
     const now = Date.now();
     const todayEndIso = new Date(new Date().setHours(23, 59, 59, 999)).toISOString();
     const nowIso = new Date().toISOString();
@@ -199,7 +200,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
       chosen = {
         kind: 'overdue_confession', rowId: c.id,
         title: c.prompt,
-        detail: `Past deadline by ${fmtCountdown(hours * 3600_000)}. Penalty escalates.`,
+        detail: `Past deadline by ${fmtCountdown(hours * 3600_000)}. Answer it whenever — the Handler still wants it.`,
         surface: 'confess', tone: 'critical',
       };
     } else if (overduePuns.data?.[0]) {
@@ -294,14 +295,41 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
       };
     }
 
-    setTask(chosen);
-    setLoading(false);
+    setTask(prev => {
+      // Same row — keep the existing object so React doesn't re-key the textarea.
+      if (prev?.rowId && chosen?.rowId && prev.rowId === chosen.rowId) return prev;
+      // Mid-typing on the prior task → don't preempt on a silent tick.
+      // Read draft from localStorage to avoid stale-closure on confessText.
+      if (silent && prev?.rowId && chosen?.rowId !== prev.rowId) {
+        const draft = localStorage.getItem(`focus_draft:${prev.rowId}`);
+        if (draft && draft.trim().length >= 20) return prev;
+      }
+      return chosen;
+    });
+    if (!silent) setLoading(false);
   }, [user?.id]);
 
-  // Initial pick
-  useEffect(() => { pickNext(); }, [pickNext]);
-  // Light auto-refresh (every 90s) so a freshly-fired item lands without manual refresh
-  useEffect(() => { const t = setInterval(pickNext, 90_000); return () => clearInterval(t); }, [pickNext]);
+  // Hydrate draft when the task row changes (incl. fresh page load).
+  useEffect(() => {
+    if (!task?.rowId) { setConfessText(''); return; }
+    const saved = localStorage.getItem(`focus_draft:${task.rowId}`);
+    setConfessText(saved ?? '');
+  }, [task?.rowId]);
+
+  // Persist draft on every keystroke so a reload / poll-induced unmount can't lose it.
+  useEffect(() => {
+    if (!task?.rowId) return;
+    if (confessText.trim().length === 0) {
+      localStorage.removeItem(`focus_draft:${task.rowId}`);
+    } else {
+      localStorage.setItem(`focus_draft:${task.rowId}`, confessText);
+    }
+  }, [confessText, task?.rowId]);
+
+  // Initial pick (with loader)
+  useEffect(() => { pickNext(false); }, [pickNext]);
+  // Silent auto-refresh (every 90s) — never blank the textarea.
+  useEffect(() => { const t = setInterval(() => pickNext(true), 90_000); return () => clearInterval(t); }, [pickNext]);
 
   // Today's completion counter — small motivator. Reads activity log scoped to today.
   useEffect(() => {
@@ -361,6 +389,8 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
           throw confErr;
         }
       }
+      // Clear the persisted draft now that it's submitted.
+      if (task.rowId) localStorage.removeItem(`focus_draft:${task.rowId}`);
       window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: task.kind, id: task.rowId } }));
       await advance();
     } finally {
