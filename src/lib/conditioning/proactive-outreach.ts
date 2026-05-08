@@ -10,6 +10,7 @@
  */
 
 import { supabase } from '../supabase';
+import { computeDeliverAfter } from '../calendar/delivery-gate';
 
 // ============================================
 // TYPES
@@ -58,6 +59,36 @@ export async function queueOutreachMessage(
   source: OutreachSource = 'system',
 ): Promise<string | null> {
   try {
+    const scheduleDate = scheduledFor || new Date();
+
+    // Defer delivery if the user is in a calendar busy window (and they have
+    // busy-aware delivery on). The insert still happens immediately; only
+    // delivery is gated via deliver_after.
+    let deliverAfter: Date | null = null;
+    try {
+      const { data: cred } = await supabase
+        .from('calendar_credentials')
+        .select('busy_aware_delivery')
+        .eq('user_id', userId)
+        .eq('provider', 'google')
+        .is('disconnected_at', null)
+        .maybeSingle();
+
+      if (cred?.busy_aware_delivery) {
+        const { data: windows } = await supabase
+          .from('freebusy_cache')
+          .select('window_start, window_end')
+          .eq('user_id', userId)
+          .lte('window_start', new Date(scheduleDate.getTime() + 60_000).toISOString())
+          .gte('window_end', scheduleDate.toISOString());
+
+        deliverAfter = computeDeliverAfter(windows || [], scheduleDate.getTime());
+      }
+    } catch (err) {
+      // Calendar tables may not exist yet (pre-migration); never block insert.
+      console.warn('[ProactiveOutreach] freebusy lookup failed:', (err as Error).message);
+    }
+
     const { data, error } = await supabase
       .from('handler_outreach_queue')
       .insert({
@@ -65,9 +96,10 @@ export async function queueOutreachMessage(
         message,
         urgency,
         trigger_reason: triggerReason || null,
-        scheduled_for: (scheduledFor || new Date()).toISOString(),
+        scheduled_for: scheduleDate.toISOString(),
         expires_at: expiresAt ? expiresAt.toISOString() : null,
         source,
+        deliver_after: deliverAfter ? deliverAfter.toISOString() : null,
       })
       .select('id')
       .single();
@@ -100,13 +132,15 @@ export async function getPendingOutreach(userId: string): Promise<OutreachMessag
       .eq('status', 'pending')
       .lt('expires_at', now);
 
-    // Get oldest pending that's ready
+    // Get oldest pending that's ready. `deliver_after` defers calendar-busy
+    // outreach without blocking the insert path.
     const { data, error } = await supabase
       .from('handler_outreach_queue')
       .select('*')
       .eq('user_id', userId)
       .eq('status', 'pending')
       .lte('scheduled_for', now)
+      .or(`deliver_after.is.null,deliver_after.lte.${now}`)
       .order('scheduled_for', { ascending: true })
       .limit(1)
       .maybeSingle();
