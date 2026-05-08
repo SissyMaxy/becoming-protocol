@@ -80,11 +80,14 @@ export function OutreachQueueCard() {
     // Repeated cron firings of "X hours silent" were stacking up, making the
     // feed read like card spam. Today shows the most-recent-per-trigger and
     // collapses the rest behind a "more" toggle.
+    // dossier_question outreach is rendered by DossierDripCard with the
+    // inline answer UI; exclude it here so the same row isn't shown twice.
     const [pRes, rRes] = await Promise.all([
       supabase.from('handler_outreach_queue')
         .select('id, message, urgency, trigger_reason, scheduled_for, delivered_at, expires_at, source, audio_url')
         .eq('user_id', user.id)
         .is('delivered_at', null)
+        .neq('source', 'dossier_question')
         .gte('expires_at', new Date().toISOString())
         .order('scheduled_for', { ascending: true })
         .limit(8),
@@ -92,6 +95,7 @@ export function OutreachQueueCard() {
         .select('id, message, urgency, trigger_reason, scheduled_for, delivered_at, expires_at, source, audio_url')
         .eq('user_id', user.id)
         .not('delivered_at', 'is', null)
+        .neq('source', 'dossier_question')
         .order('delivered_at', { ascending: false })
         .limit(3),
     ]);

@@ -64,6 +64,7 @@ import { SystemGrowthCard } from './SystemGrowthCard';
 import { PunishmentQueueCard } from './PunishmentQueueCard';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
+import { DossierDripCard } from './DossierDripCard';
 import { SlipLogCard } from './SlipLogCard';
 import { GinaSessionsCard } from './GinaSessionsCard';
 import { RationalizationPatternCard } from './RationalizationPatternCard';
@@ -187,6 +188,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
       <>
         <div style={{ padding: '8px 12px 0' }}>
           <MommyDossierBanner />
+          <DossierDripCard />
         </div>
         <FocusMode onSwitchToCalendar={() => setViewMode('calendar')} />
       </>
@@ -334,6 +336,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             <HandlerDreamCard />
             <HandlerKnowCard />
             <HandlerRunningCard />
+            <DossierDripCard />
             <OutreachQueueCard />
             <DeviceScheduleCard />
             <SlipLogCard />
