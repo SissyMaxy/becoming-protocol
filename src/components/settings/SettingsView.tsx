@@ -26,7 +26,9 @@ import {
   Trash2,
   Loader2,
   Radio,
+  Heart,
 } from 'lucide-react';
+import { useAftercareOptional } from '../../context/AftercareContext';
 import { profileStorageV2 } from '../../lib/profile-storage-v2';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
@@ -320,6 +322,18 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
   } = useReminders();
   const [activeSection, setActiveSection] = useState<SettingsSection>('main');
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const aftercare = useAftercareOptional();
+  const [aftercarePending, setAftercarePending] = useState(false);
+  const [aftercareError, setAftercareError] = useState<string | null>(null);
+
+  const handleBeginAftercare = async () => {
+    if (!aftercare || aftercarePending || aftercare.isActive) return;
+    setAftercarePending(true);
+    setAftercareError(null);
+    const result = await aftercare.begin({ trigger: 'manual' });
+    setAftercarePending(false);
+    if (!result.ok) setAftercareError(result.error || 'unable to start');
+  };
 
   // Map section IDs to opacity feature keys
   const SECTION_FEATURE: Record<string, string> = {
@@ -631,6 +645,55 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
 
             {/* Difficulty — always visible (settings_basic) */}
             <DifficultySection />
+
+            {/* Aftercare — always visible, no preconditions, no opacity gate.
+                Aftercare is the OFF switch and must be reachable at any
+                time. Neutral palette + plain copy intentionally — this
+                control NEVER reads in persona voice. */}
+            <div>
+              <h2
+                className={`text-sm font-medium mb-3 ${
+                  isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'
+                }`}
+              >
+                Aftercare
+              </h2>
+              <button
+                onClick={handleBeginAftercare}
+                disabled={aftercarePending || (aftercare?.isActive ?? false)}
+                className={`w-full p-4 rounded-xl border flex items-center gap-4 text-left transition-all ${
+                  isBambiMode
+                    ? 'bg-pink-50 border-pink-200 hover:border-pink-300 disabled:opacity-50'
+                    : 'bg-protocol-surface border-protocol-border hover:border-protocol-accent/30 disabled:opacity-50'
+                }`}
+              >
+                <div
+                  className="p-3 rounded-xl"
+                  style={{ backgroundColor: '#7a8a6e20' }}
+                >
+                  <Heart className="w-5 h-5" style={{ color: '#7a8a6e' }} />
+                </div>
+                <div className="flex-1">
+                  <p
+                    className={`font-medium ${
+                      isBambiMode ? 'text-pink-700' : 'text-protocol-text'
+                    }`}
+                  >
+                    {aftercarePending ? 'Starting…' : 'Begin aftercare'}
+                  </p>
+                  <p
+                    className={`text-sm ${
+                      isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'
+                    }`}
+                  >
+                    A quiet, neutral space. Available any time.
+                  </p>
+                  {aftercareError && (
+                    <p className="text-xs text-red-400 mt-1">{aftercareError}</p>
+                  )}
+                </div>
+              </button>
+            </div>
 
             {/* Features Section */}
             <div>

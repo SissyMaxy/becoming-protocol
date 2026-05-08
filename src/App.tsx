@@ -12,6 +12,7 @@ import { OpacityProvider, useOpacity } from './context/OpacityContext';
 import { HandlerProvider, useHandlerContext } from './context/HandlerContext';
 import { AmbushProvider } from './components/ambush';
 import { ModalOrchestratorProvider } from './context/ModalOrchestrator';
+import { AftercareProvider } from './context/AftercareContext';
 import { useOrchestratedModals } from './hooks/useOrchestratedModals';
 import { useDisassociationRecovery } from './hooks/useDisassociationRecovery';
 import { useCompulsoryGate } from './hooks/useCompulsoryGate';
@@ -1235,9 +1236,11 @@ function AuthenticatedApp() {
               enableBackgroundChecks={true}
             >
               <ModalOrchestratorProvider>
-                <AmbushProvider enabled={false}>
-                  <AuthenticatedAppInner />
-                </AmbushProvider>
+                <AftercareProvider>
+                  <AmbushProvider enabled={false}>
+                    <AuthenticatedAppInner />
+                  </AmbushProvider>
+                </AftercareProvider>
               </ModalOrchestratorProvider>
             </HandlerProvider>
           </RewardProvider>
