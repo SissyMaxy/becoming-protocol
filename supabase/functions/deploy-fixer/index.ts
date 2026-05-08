@@ -51,6 +51,7 @@ import {
   countChangedLines,
   shortSha,
 } from './github-api.ts'
+import { maybeRollback } from './rollback.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -537,15 +538,81 @@ Deno.serve(async (req: Request) => {
   }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 })
 
-// Stubbed in the skeleton commit; implemented in the rollback commit.
+// Cross-deploy rollback. Runs once per orchestrator tick — reads the
+// recent failure history and, if the streak crosses the threshold AND
+// none of those failures were auto-merged by us, opens a draft rollback
+// PR. The rollback module never auto-merges; operator review is the gate.
 async function maybeOpenRollbackPr(
-  _supabase: ReturnType<typeof createClient>,
-  _rows: DeployHealthRow[],
-  _vercelToken: string,
-  _githubToken: string,
+  supabase: ReturnType<typeof createClient>,
+  _currentRows: DeployHealthRow[],
+  vercelToken: string,
+  githubToken: string,
 ): Promise<void> {
-  // Implemented in commit 5 (rollback automation).
-  return
+  if (!githubToken || !vercelToken) return  // Both required for a rollback decision
+
+  // Pull the last 10 vercel health rows (open OR resolved) so the
+  // decision can see streak structure.
+  const { data: recentRows } = await supabase
+    .from('deploy_health_log')
+    .select('id, source, status, detected_at, raw')
+    .eq('source', 'vercel')
+    .order('detected_at', { ascending: false })
+    .limit(10)
+
+  // Pull the last 24h of fixer attempts to detect streak breaks via our
+  // own auto-merges.
+  const since24h = new Date(Date.now() - 24 * 3600_000).toISOString()
+  const { data: recentAttempts } = await supabase
+    .from('deploy_fixer_attempts')
+    .select('outcome, health_log_id, pattern_matched')
+    .gte('created_at', since24h)
+
+  // Loop guard: don't open another rollback PR if one was opened in the
+  // last 6h (operator hasn't had time to review). Same backoff pattern
+  // auto-healer uses for escalations.
+  const sixHoursAgo = new Date(Date.now() - 6 * 3600_000).toISOString()
+  const { data: recentRollbackAttempt } = await supabase
+    .from('deploy_fixer_attempts')
+    .select('id')
+    .eq('outcome', 'rollback_pr_opened')
+    .gte('created_at', sixHoursAgo)
+    .limit(1)
+    .maybeSingle()
+  if (recentRollbackAttempt) return
+
+  const result = await maybeRollback({
+    recentVercelHealthRows: (recentRows ?? []) as Array<{ id: string; source: string; status: string; detected_at: string; raw: Record<string, unknown> | null }>,
+    recentFixerAttempts: (recentAttempts ?? []) as Array<{ outcome: string; health_log_id: string | null; pattern_matched: string | null }>,
+    vercelToken,
+    githubToken,
+  })
+
+  if (!result || !result.decision.shouldRollback) return
+
+  // Record the rollback action in the audit ledger AND escalate at
+  // critical severity so the morning brief picks it up.
+  await supabase.from('deploy_fixer_attempts').insert({
+    user_id: HANDLER_USER_ID,
+    health_log_id: null,  // rollback isn't tied to a single health row
+    pattern_matched: 'rollback_streak',
+    pushed_branch: result.branch ?? null,
+    pr_number: result.prNumber ?? null,
+    merged_to_main: false,
+    outcome: 'rollback_pr_opened',
+    fix_diff_summary: `auto-rollback to ${result.decision.lastGreenSha?.slice(0, 7)} after ${result.decision.consecutiveFailures} consecutive failures`,
+    files_touched: null,
+    failure_reason: result.ok ? null : (result.error ?? 'rollback failed'),
+    build_verified_green: null,
+    attempt_number: 1,
+  })
+
+  await escalate(supabase, `auto-rollback PR opened: ${result.decision.consecutiveFailures} consecutive vercel failures since ${result.decision.lastGreenSha?.slice(0, 7)}; PR #${result.prNumber ?? '?'} on branch ${result.branch ?? '?'}`, {
+    branch: result.branch,
+    pr_number: result.prNumber,
+    last_green_sha: result.decision.lastGreenSha,
+    consecutive_failures: result.decision.consecutiveFailures,
+    suspected_shas: result.decision.suspectedBreakingShas,
+  }, 'critical')
 }
 
 // Re-exports so the (Vercel-shaped) deployment type and the
