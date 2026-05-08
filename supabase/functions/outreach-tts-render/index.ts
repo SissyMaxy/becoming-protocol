@@ -176,11 +176,10 @@ Deno.serve(async (req: Request) => {
       })
     }
 
-    const { data: urlData } = supabase.storage.from('audio').getPublicUrl(fileName)
-    const audioUrl = urlData.publicUrl
-
+    // Persist the storage object path; client signs at playback time
+    // (audio bucket is private post-migration 301). useOutreachAudio handles signing.
     await supabase.from('handler_outreach_queue').update({
-      audio_url: audioUrl,
+      audio_url: fileName,
       voice_settings_used: { affect, voice_id: voiceId, ...voiceSettings },
       tts_status: 'ready',
       tts_error: null,
@@ -189,7 +188,7 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({
       ok: true,
       outreach_id: row.id,
-      audio_url: audioUrl,
+      audio_url: fileName,
       affect,
       voice_settings: voiceSettings,
       audio_bytes: audioBuffer.length,

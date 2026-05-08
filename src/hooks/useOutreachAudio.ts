@@ -1,15 +1,14 @@
 /**
  * useOutreachAudio — single audio element shared across outreach cards.
  *
- * One element per surface (each card list mounts the hook once). Tap a
- * card's play button → the previous one stops, this one starts. Tap stop →
- * it pauses and resets. Designed to be cheap: no preloading, no streaming,
- * just plays the cached audio_url that the render edge function uploaded.
- *
- * Caller passes the row id that's playing so the UI can highlight it.
+ * Receives the storage object path (or legacy public URL) from the row's
+ * audio_url column and signs it on demand (audio bucket is private
+ * post-migration 301). One element per surface (each card list mounts the
+ * hook once). Tap play → previous stops, this one signs + starts.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { getSignedAssetUrl } from '../lib/storage/signed-url';
 
 export function useOutreachAudio() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -25,7 +24,7 @@ export function useOutreachAudio() {
     return audioRef.current;
   }, []);
 
-  const play = useCallback((id: string, url: string) => {
+  const play = useCallback(async (id: string, pathOrUrl: string) => {
     const a = ensureAudio();
     if (playingId === id) {
       a.pause();
@@ -34,6 +33,11 @@ export function useOutreachAudio() {
       return;
     }
     a.pause();
+    const url = await getSignedAssetUrl('audio', pathOrUrl, 3600);
+    if (!url) {
+      setPlayingId(null);
+      return;
+    }
     a.src = url;
     a.currentTime = 0;
     setPlayingId(id);
