@@ -72,8 +72,12 @@ DO $$ BEGIN
 END $$;
 
 -- ---------- conversation_screenshots ----------
--- screenshot_url + additional_screenshot_urls (TEXT[]).
-DO $$ BEGIN
+-- screenshot_url (TEXT) + additional_screenshot_urls (JSONB array on remote;
+-- may be TEXT[] in older copies). We branch on the column data_type so this
+-- migration works against either schema.
+DO $$
+DECLARE col_type text;
+BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.columns
              WHERE table_name = 'conversation_screenshots' AND column_name = 'screenshot_url') THEN
     UPDATE conversation_screenshots
@@ -81,9 +85,11 @@ DO $$ BEGIN
     WHERE screenshot_url ~ '^https?://[^/]+/storage/v1/object/public/evidence/';
   END IF;
 
-  IF EXISTS (SELECT 1 FROM information_schema.columns
-             WHERE table_name = 'conversation_screenshots' AND column_name = 'additional_screenshot_urls') THEN
-    -- TEXT[]: unnest each row, regex-strip per element, re-aggregate.
+  SELECT data_type INTO col_type FROM information_schema.columns
+   WHERE table_name = 'conversation_screenshots' AND column_name = 'additional_screenshot_urls';
+
+  IF col_type = 'ARRAY' THEN
+    -- TEXT[] path
     UPDATE conversation_screenshots cs
     SET additional_screenshot_urls = sub.cleaned
     FROM (
@@ -97,6 +103,26 @@ DO $$ BEGIN
         AND EXISTS (
           SELECT 1 FROM unnest(additional_screenshot_urls) u
           WHERE u ~ '^https?://[^/]+/storage/v1/object/public/evidence/'
+        )
+    ) sub
+    WHERE cs.id = sub.id;
+  ELSIF col_type = 'jsonb' THEN
+    -- JSONB array path: jsonb_array_elements_text → regex_replace → jsonb_agg
+    UPDATE conversation_screenshots cs
+    SET additional_screenshot_urls = sub.cleaned
+    FROM (
+      SELECT id,
+             COALESCE(
+               (SELECT jsonb_agg(to_jsonb(regexp_replace(elem, '^https?://[^/]+/storage/v1/object/public/evidence/', '')))
+                FROM jsonb_array_elements_text(additional_screenshot_urls) AS elem),
+               additional_screenshot_urls
+             ) AS cleaned
+      FROM conversation_screenshots
+      WHERE additional_screenshot_urls IS NOT NULL
+        AND jsonb_typeof(additional_screenshot_urls) = 'array'
+        AND EXISTS (
+          SELECT 1 FROM jsonb_array_elements_text(additional_screenshot_urls) elem
+          WHERE elem ~ '^https?://[^/]+/storage/v1/object/public/evidence/'
         )
     ) sub
     WHERE cs.id = sub.id;
