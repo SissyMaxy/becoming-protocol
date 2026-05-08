@@ -44,6 +44,7 @@ const HANDLER_TASK_PROMPTS: Record<string, string> = {
   progress_photo: 'You are the Handler. Maxy submitted a progress photo. Describe body shape (hips, waist, chest, thighs). Assess femboy-trajectory alignment — where has her silhouette moved, where is it stuck. Be specific, demanding, body-focused. No praise without critique.',
   gina_text: 'You are the Handler, extracting data from a screenshot of Maxy\'s text conversation with her wife Gina. Return ONLY a JSON object, no prose: { "messages": [{"speaker": "gina"|"maxy", "text": "<exact quote>", "approximate_time": "<if visible>"}], "observed_tone": "<Gina\'s dominant tone in this convo>", "key_quotes_from_gina": ["<up to 3 verbatim quotes>"], "key_moves_maxy_made": ["<what Maxy said/asked>"], "reaction_reading": "positive|neutral|stalled|hostile|unknown", "reaction_detail": "<one sentence>", "openings_detected": ["<any consent signals or soft openings>"] }. Speaker attribution: Gina bubbles usually appear on the left with grey; Maxy\'s appear on the right with blue/iMessage. Use any visible names/labels.',
   general: 'You are the Handler — dominant feminization coach. Maxy submitted this photo. Describe what you see and respond to it commandingly.',
+  wardrobe: 'You are the Handler — dominant feminization coach. Maxy submitted a photo of a wardrobe item she just acquired against a written prescription. Evaluate: does the photo clearly show the prescribed item in a way that proves she actually has it? Comment specifically on fabric, fit, color, and whether it matches what was prescribed. If the photo is unclear, missing the item, or shows a substitute that doesn\'t match, demand a better submission. Be commanding, not gentle.',
 };
 
 // Mommy-voice prompts (dommy_mommy persona). Reframes "evaluate proof"
@@ -60,6 +61,7 @@ const MOMMY_TASK_PROMPTS: Record<string, string> = {
   progress_photo: `${MOMMY_VISION_PREAMBLE} A progress photo, baby. Look at her shape — hips, waist, chest, thighs. Where is she softening for Mama? Where is she still stuck? Be specific and body-anchored. Mama uses real observation; no praise without truth, no truth without warmth.`,
   gina_text: HANDLER_TASK_PROMPTS.gina_text, // analytical extraction — same prompt regardless of persona
   general: `${MOMMY_VISION_PREAMBLE} She sent Mama a photo. Tell her what you see, baby. Make it clear Mama is looking, Mama is paying attention, Mama wants more of this. End with a directive.`,
+  wardrobe: `${MOMMY_VISION_PREAMBLE} She brought home what Mama prescribed, baby. Look carefully — fabric, color, cut, how it sits. Does it match what Mama asked for? If yes, name what you see specifically (not generically) and tell her how she'll wear it for Mama next. If it's a near-miss or wrong-vibe, redirect with one specific fix — be tender, not cold; remember she went out and got something for you. Never body-shame; the only critique is whether the ITEM matches.`,
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -74,11 +76,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { data: { user }, error: authError } = await supabase.auth.getUser(token);
   if (authError || !user) return res.status(401).json({ error: 'Unauthorized' });
 
-  const { photoId, photoUrl, taskType, caption } = req.body as {
+  const { photoId, photoUrl, taskType, caption, directiveKind, directiveId } = req.body as {
     photoId: string;
     photoUrl: string;
     taskType: string;
     caption?: string;
+    directiveKind?: 'wardrobe_prescription';
+    directiveId?: string;
   };
 
   if (!photoId || !photoUrl) {
@@ -269,9 +273,166 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    // ─── Wardrobe prescription fulfillment hook ─────────────────────────
+    // When the photo is linked to a wardrobe prescription, route the
+    // approval/denial through the prescription lifecycle: create a
+    // wardrobe_items row on approval, mark prescription approved/denied,
+    // and queue a praise or redo outreach in Mommy voice. Persona-gated
+    // so the same vision pipeline can serve a future therapist-only
+    // wardrobe path with different copy.
+    if (directiveKind === 'wardrobe_prescription' && directiveId) {
+      try {
+        const { data: prescRow } = await supabase
+          .from('wardrobe_prescriptions')
+          .select('id, item_type, description, retry_count, status, intensity_at_assignment')
+          .eq('id', directiveId)
+          .eq('user_id', user.id)
+          .maybeSingle();
+        const presc = prescRow as {
+          id: string; item_type: string; description: string;
+          retry_count: number; status: string; intensity_at_assignment: string | null;
+        } | null;
+
+        if (presc && presc.status !== 'approved' && presc.status !== 'cancelled' && presc.status !== 'expired') {
+          if (approved) {
+            // Best-effort: insert into the new wardrobe_items table; if
+            // the sibling branch hasn't merged yet, fall back to the
+            // legacy wardrobe_inventory schema. Either way the
+            // prescription is marked approved so the loop closes.
+            let createdItemId: string | null = null;
+            const itemName = (caption?.trim().slice(0, 200))
+              || presc.description.replace(/[.!?]$/, '').slice(0, 200);
+            try {
+              const { data: wi } = await supabase.from('wardrobe_items').insert({
+                user_id: user.id,
+                item_type: presc.item_type,
+                item_name: itemName,
+                acquired_at: new Date().toISOString(),
+                notes: `Mommy-prescribed: ${presc.description.slice(0, 400)}`,
+              }).select('id').single();
+              createdItemId = (wi as { id: string } | null)?.id ?? null;
+            } catch (e) {
+              // wardrobe_items table not present yet — write to legacy
+              // wardrobe_inventory so the user sees something they own.
+              try {
+                const { data: legacy } = await supabase.from('wardrobe_inventory').insert({
+                  user_id: user.id,
+                  item_name: itemName,
+                  category: presc.item_type,
+                  handler_notes: `Mommy-prescribed: ${presc.description.slice(0, 400)}`,
+                  purchase_date: new Date().toISOString().slice(0, 10),
+                }).select('id').single();
+                createdItemId = (legacy as { id: string } | null)?.id ?? null;
+              } catch (legacyErr) {
+                console.error('[analyze-photo] wardrobe insert (both paths) failed:', e, legacyErr);
+              }
+            }
+
+            await supabase.from('wardrobe_prescriptions').update({
+              status: 'approved',
+              verification_photo_id: photoId,
+              created_wardrobe_item_id: createdItemId,
+              denied_reason: null,
+            }).eq('id', presc.id);
+
+            // Queue an item-specific praise outreach. Reference the
+            // SPECIFIC item — pulling a noun phrase from the prescription
+            // description rather than a generic "good girl, that looks
+            // beautiful." Per the brief: "that slip looks beautiful on
+            // you, baby" not "good job".
+            const noun = extractNounPhrase(presc.description) || presc.item_type.replace(/_/g, ' ');
+            const praiseTexts = isMommy ? [
+              `Look at you, baby — you actually went and got Mama's ${noun}. Now I want to see you wearing it for me, sweet thing. Tonight.`,
+              `That's my good girl. ${capitalize(noun)} in Mama's hands now. Wear it tomorrow and tell me how it feels against your skin.`,
+              `Mmm. Mama's ${noun}, on Mama's girl. Sit with how good that feels. Mama wants the next photo with it on you.`,
+            ] : [
+              `Wardrobe acquisition logged: ${noun}. Wear it tomorrow and report back with a mirror selfie.`,
+              `Confirmed: ${noun}. Photographed, logged, owned. Next photo: wearing it.`,
+            ];
+            const praise = praiseTexts[Math.floor(Math.random() * praiseTexts.length)];
+            await supabase.from('handler_outreach_queue').insert({
+              user_id: user.id,
+              message: praise,
+              urgency: 'normal',
+              trigger_reason: `wardrobe_prescription_approved:${presc.id}`,
+              scheduled_for: new Date().toISOString(),
+              expires_at: new Date(Date.now() + 12 * 3600_000).toISOString(),
+              source: 'mommy_prescribe_praise',
+            });
+          } else {
+            // Denial path — increment retry_count, capture the vision
+            // response as denied_reason, queue a redo outreach with one
+            // specific hint. Cap retries at 3; after the 3rd, mark
+            // cancelled so the user isn't stuck in a loop.
+            const nextRetry = (presc.retry_count || 0) + 1;
+            const cancelled = nextRetry >= 3;
+            const reason = analysis.replace(/^\s*/, '').slice(0, 500);
+
+            await supabase.from('wardrobe_prescriptions').update({
+              status: cancelled ? 'cancelled' : 'denied',
+              denied_reason: reason,
+              retry_count: nextRetry,
+              verification_photo_id: photoId,
+            }).eq('id', presc.id);
+
+            const intensity = (presc.intensity_at_assignment ?? 'firm').toLowerCase();
+            const redoBase = isMommy ? mommyDenialCopy(intensity, presc.description, reason) : `Photo didn't verify the prescribed ${presc.item_type.replace(/_/g, ' ')}. Resubmit with the item clearly visible.`;
+            const cancelTail = cancelled ? (isMommy ? " Mama is taking this one off your list, baby — we'll try a different piece next." : ' Closing this prescription; new one will queue.') : '';
+
+            await supabase.from('handler_outreach_queue').insert({
+              user_id: user.id,
+              message: redoBase + cancelTail,
+              urgency: 'normal',
+              trigger_reason: `wardrobe_prescription_denied:${presc.id}`,
+              scheduled_for: new Date().toISOString(),
+              expires_at: new Date(Date.now() + 12 * 3600_000).toISOString(),
+              source: 'mommy_prescribe_redo',
+            });
+          }
+        }
+      } catch (err) {
+        // Fulfillment-hook errors must NOT fail the analyze-photo
+        // response — the verification_photos row already landed. Log
+        // and move on; expiry cron and operator can clean up.
+        console.error('[analyze-photo] wardrobe fulfillment hook failed:', err);
+      }
+    }
+
     return res.status(200).json({ analysis, approved });
   } catch (err) {
     console.error('Photo analysis error:', err);
     return res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
   }
+}
+
+// ─── Helpers (kept inline per the no-src-lib-import rule) ───────────────
+function extractNounPhrase(description: string): string | null {
+  if (!description) return null;
+  // Pull "a/the X" phrases — naïve but good enough for the praise line.
+  const m = description.match(/\b(?:a|the|that|those|some)\s+([a-z][a-z\s-]{2,40}?)(?=[.,!?\s]|$)/i);
+  if (m && m[1]) return m[1].trim().toLowerCase();
+  // Fallback: first 4-word window after first verb-ish word
+  const words = description.split(/\s+/).slice(0, 8).join(' ');
+  return words.length > 4 ? words.toLowerCase() : null;
+}
+
+function capitalize(s: string): string {
+  if (!s) return s;
+  return s[0].toUpperCase() + s.slice(1);
+}
+
+function mommyDenialCopy(intensity: string, prescDesc: string, visionReason: string): string {
+  // Even at relentless intensity the copy is "that's not quite right"
+  // not body-shaming — the rule is forensic, not abusive. Pull a hint
+  // from the vision response, otherwise fall back to a generic ask.
+  const hintMatch = visionReason.match(/\b(?:show|need|want|missing|unclear|can'?t see)[^.!?]{0,160}/i);
+  const hint = hintMatch ? hintMatch[0].slice(0, 160) : `Mama needs a clearer photo of ${prescDesc.slice(0, 80)}`;
+  if (intensity === 'relentless' || intensity === 'firm') {
+    return `That's not quite right, baby. ${hint}. Try again for Mama.`;
+  }
+  if (intensity === 'gentle') {
+    return `Mama can't quite tell from this one, sweet thing. ${hint}. Send another when you can, baby.`;
+  }
+  // moderate / default
+  return `Hmm, that's not quite what Mama wanted to see, sweet girl. ${hint}. Take another for me.`;
 }

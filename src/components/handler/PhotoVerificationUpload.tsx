@@ -4,11 +4,19 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 
 interface PhotoVerificationUploadProps {
-  taskType?: 'outfit' | 'mirror_check' | 'pose' | 'makeup' | 'nails' | 'general' | 'progress_photo' | 'gina_text';
+  taskType?: 'outfit' | 'mirror_check' | 'pose' | 'makeup' | 'nails' | 'general' | 'progress_photo' | 'gina_text' | 'wardrobe';
+  /**
+   * Optional directive linkage. When the upload originates from a
+   * specific Mommy-issued task (e.g. a wardrobe prescription), pass
+   * the kind + row id so the verification photo can be linked back
+   * to it and analyze-photo can route through a directive-aware path.
+   */
+  directiveKind?: 'wardrobe_prescription';
+  directiveId?: string;
   onComplete?: () => void;
 }
 
-export function PhotoVerificationUpload({ taskType = 'general', onComplete }: PhotoVerificationUploadProps) {
+export function PhotoVerificationUpload({ taskType = 'general', directiveKind, directiveId, onComplete }: PhotoVerificationUploadProps) {
   const { user } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
@@ -36,7 +44,10 @@ export function PhotoVerificationUpload({ taskType = 'general', onComplete }: Ph
 
       const photoPath = uploadData.path;
 
-      // Insert verification_photos row (photo_url now holds the path).
+      // Insert verification_photos row (photo_url now holds the storage path,
+      // signed on render). When this upload is linked to a wardrobe
+      // prescription, persist the prescription_id on the photo row so the
+      // fulfillment hook can find both halves.
       const { data: photoRow, error: insertError } = await supabase
         .from('verification_photos')
         .insert({
@@ -44,6 +55,7 @@ export function PhotoVerificationUpload({ taskType = 'general', onComplete }: Ph
           task_type: taskType,
           photo_url: photoPath,
           caption: caption || null,
+          prescription_id: directiveKind === 'wardrobe_prescription' ? (directiveId ?? null) : null,
         })
         .select()
         .single();
@@ -68,6 +80,8 @@ export function PhotoVerificationUpload({ taskType = 'general', onComplete }: Ph
           photoUrl: photoPath,
           taskType,
           caption,
+          directiveKind,
+          directiveId,
         }),
       });
 

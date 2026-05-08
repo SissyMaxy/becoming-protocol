@@ -8,3 +8,4 @@ export { PrivacySettings } from './PrivacySettings';
 export { StealthSettings } from './StealthSettings';
 export { EquipmentInventory } from './EquipmentInventory';
 export { SystemAuditView } from './SystemAuditView';
+export { WardrobePrescriptionSettings } from './WardrobePrescriptionSettings';

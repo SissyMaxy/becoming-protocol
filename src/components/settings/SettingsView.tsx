@@ -53,6 +53,7 @@ import { DataExportView } from './DataExportView';
 import { AppearanceSettings } from './AppearanceSettings';
 import { PrivacySettings } from './PrivacySettings';
 import { StealthSettings } from './StealthSettings';
+import { WardrobePrescriptionSettings } from './WardrobePrescriptionSettings';
 import { MicroTaskSettings } from '../micro-tasks';
 import { CorruptionDashboard } from '../admin/CorruptionDashboard';
 import { SleepContentSettings } from '../sleep-content/SleepContentSettings';
@@ -670,6 +671,7 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
             {/* Difficulty — always visible (settings_basic) */}
             <DifficultySection />
 
+<<<<<<< HEAD
             {/* Aftercare — always visible, no preconditions, no opacity gate.
                 Aftercare is the OFF switch and must be reachable at any
                 time. Neutral palette + plain copy intentionally — this
@@ -718,6 +720,10 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
                 </div>
               </button>
             </div>
+=======
+            {/* Wardrobe prescriptions — Mommy persona feature */}
+            <WardrobePrescriptionSettings />
+>>>>>>> feature/wardrobe-prescription-2026-04-30
 
             {/* Features Section */}
             <div>
