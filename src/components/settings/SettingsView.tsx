@@ -59,6 +59,7 @@ import { WardrobePrescriptionSettings } from './WardrobePrescriptionSettings';
 import { BedtimeRitualSettings } from './BedtimeRitualSettings';
 import { PublicDareSettings } from './PublicDareSettings';
 import { LettersSettings } from './LettersSettings';
+import { MommyPersonaSettings } from './MommyPersonaSettings';
 import { MicroTaskSettings } from '../micro-tasks';
 import { CorruptionDashboard } from '../admin/CorruptionDashboard';
 import { SleepContentSettings } from '../sleep-content/SleepContentSettings';
@@ -748,6 +749,9 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
 
             {/* Public dares — opt-in only, default off, Mommy persona feature */}
             <PublicDareSettings />
+
+            {/* Mommy persona — only visible when handler_persona='dommy_mommy' */}
+            <MommyPersonaSettings />
 
             {/* Features Section */}
             <div>
