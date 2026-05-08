@@ -32,13 +32,30 @@ export function OutreachQueueCard() {
 
   const ack = useCallback(async (id: string) => {
     if (!user?.id) return;
+    // Mantra outreach has a paired mantra_delivery_log row that needs
+    // status=spoken when the user acks. Look it up before updating the
+    // queue row so we still know its source.
+    const target = pending.find(o => o.id === id);
     await supabase.from('handler_outreach_queue')
       .update({ delivered_at: new Date().toISOString(), status: 'delivered' })
       .eq('id', id);
+    if (target?.source === 'mommy_mantra') {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const tok = session?.access_token;
+        if (tok) {
+          await fetch('/api/mantra/acknowledge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tok}` },
+            body: JSON.stringify({ outreach_id: id, status: 'spoken' }),
+          });
+        }
+      } catch { /* best-effort; queue ack already succeeded */ }
+    }
     // Refresh the lists so the row jumps from pending → recent
     setPending(p => p.filter(o => o.id !== id));
     window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'outreach_ack', id } }));
-  }, [user?.id]);
+  }, [user?.id, pending]);
 
   const load = useCallback(async () => {
     if (!user?.id) return;
