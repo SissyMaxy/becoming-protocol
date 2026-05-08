@@ -310,11 +310,7 @@ interface SettingsViewProps {
   onEditIntake?: () => void;
 }
 
-<<<<<<< HEAD
-type SettingsSection = 'main' | 'profile' | 'lovense' | 'whoop' | 'equipment' | 'timeratchets' | 'reminders' | 'privacy' | 'stealth' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content' | 'opacity' | 'social-dashboard' | 'persona';
-=======
-type SettingsSection = 'main' | 'profile' | 'lovense' | 'whoop' | 'calendar' | 'equipment' | 'timeratchets' | 'reminders' | 'privacy' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content' | 'opacity' | 'social-dashboard';
->>>>>>> feature/calendar-integration-2026-04-30
+type SettingsSection = 'main' | 'profile' | 'lovense' | 'whoop' | 'calendar' | 'equipment' | 'timeratchets' | 'reminders' | 'privacy' | 'stealth' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content' | 'opacity' | 'social-dashboard' | 'persona';
 
 export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
   const { isBambiMode } = useBambiMode();
@@ -671,7 +667,6 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
             {/* Difficulty — always visible (settings_basic) */}
             <DifficultySection />
 
-<<<<<<< HEAD
             {/* Aftercare — always visible, no preconditions, no opacity gate.
                 Aftercare is the OFF switch and must be reachable at any
                 time. Neutral palette + plain copy intentionally — this
@@ -720,10 +715,9 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
                 </div>
               </button>
             </div>
-=======
+
             {/* Wardrobe prescriptions — Mommy persona feature */}
             <WardrobePrescriptionSettings />
->>>>>>> feature/wardrobe-prescription-2026-04-30
 
             {/* Features Section */}
             <div>
