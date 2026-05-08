@@ -5,6 +5,9 @@
  * Rules:
  *  - Shows only the most-recent OPEN task (not yet completed, not expired).
  *  - Single CTA: "Did it →" marks completed_at.
+ *  - Photo-evidence categories (mantra_aloud, mirror_admission, pose_hold,
+ *    panty_check, public_micro) get a second CTA that opens the
+ *    PhotoUploadWidget inline. Submitting verifies + completes in one move.
  *  - Auto-refreshes on td-task-changed event.
  *  - Card hides itself when no open task.
  */
@@ -13,6 +16,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useSurfaceRenderTracking } from '../../lib/surface-render-hooks';
+import { PhotoUploadWidget } from '../verification/PhotoUploadWidget';
+import { photoTypeForTouchCategory } from '../../lib/verification/upload';
 
 interface TouchTask {
   id: string;
@@ -30,6 +35,9 @@ const CATEGORY_LABEL: Record<string, string> = {
   mirror_admission:   'mirror, present tense',
   pose_hold:          'hold the pose',
   whisper_for_mommy:  'whisper for Mama',
+  panty_check:        'panty check',
+  breath_check:       'breath, body anchor',
+  public_micro:       'one feminine thing',
 };
 
 function fmtCountdown(expiresAt: string): string {
@@ -44,6 +52,7 @@ export function ArousalTouchCard() {
   const { user } = useAuth();
   const [task, setTask] = useState<TouchTask | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -53,6 +62,7 @@ export function ArousalTouchCard() {
       .gt('expires_at', new Date().toISOString())
       .order('created_at', { ascending: false }).limit(1).maybeSingle();
     setTask((data as TouchTask) ?? null);
+    setShowUpload(false);
   }, [user?.id]);
 
   useEffect(() => { load(); }, [load]);
@@ -70,6 +80,8 @@ export function ArousalTouchCard() {
   useSurfaceRenderTracking('arousal_touch_tasks', task ? [task.id] : []);
 
   if (!task) return null;
+
+  const photoType = photoTypeForTouchCategory(task.category);
 
   const completeIt = async () => {
     if (submitting) return;
@@ -106,7 +118,7 @@ export function ArousalTouchCard() {
           fontSize: 9.5, color: '#f4a7c4', fontWeight: 800,
           textTransform: 'uppercase', letterSpacing: '0.12em',
         }}>
-          ▸ Mama's whisper · {CATEGORY_LABEL[task.category] ?? task.category}
+          ▸ Mama&apos;s whisper · {CATEGORY_LABEL[task.category] ?? task.category}
         </span>
         <span style={{ fontSize: 10, color: '#c48a9c', marginLeft: 'auto', fontStyle: 'italic' }}>
           {fmtCountdown(task.expires_at)}
@@ -118,32 +130,67 @@ export function ArousalTouchCard() {
       }}>
         {task.prompt}
       </div>
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button
-          onClick={completeIt}
-          disabled={submitting}
-          style={{
-            background: '#c4485a', color: '#fff', border: 'none',
-            padding: '8px 14px', borderRadius: 6,
-            fontSize: 12, fontWeight: 700, letterSpacing: '0.04em',
-            cursor: submitting ? 'wait' : 'pointer',
-            fontFamily: 'inherit', textTransform: 'uppercase',
+
+      {/* Inline upload — replaces the action row when active */}
+      {showUpload && photoType ? (
+        <PhotoUploadWidget
+          verificationType={photoType}
+          directiveId={task.id}
+          directiveKind="arousal_touch_task"
+          directiveSnippet={task.prompt}
+          onComplete={async () => {
+            // Submitting proof completes the task automatically — Mama saw it.
+            await supabase.from('arousal_touch_tasks')
+              .update({ completed_at: new Date().toISOString() })
+              .eq('id', task.id);
+            window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'arousal_touch_photo', id: task.id } }));
+            setTask(null);
+            setShowUpload(false);
           }}
-        >
-          Did it for Mama →
-        </button>
-        <button
-          onClick={dismissIt}
-          disabled={submitting}
-          style={{
-            background: 'transparent', color: '#8a6a78',
-            border: '1px solid #4a2a38', padding: '8px 12px', borderRadius: 6,
-            fontSize: 11, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
-          }}
-        >
-          skip this whisper
-        </button>
-      </div>
+          onCancel={() => setShowUpload(false)}
+        />
+      ) : (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            onClick={completeIt}
+            disabled={submitting}
+            style={{
+              background: '#c4485a', color: '#fff', border: 'none',
+              padding: '8px 14px', borderRadius: 6,
+              fontSize: 12, fontWeight: 700, letterSpacing: '0.04em',
+              cursor: submitting ? 'wait' : 'pointer',
+              fontFamily: 'inherit', textTransform: 'uppercase',
+            }}
+          >
+            Did it for Mama →
+          </button>
+          {photoType && (
+            <button
+              onClick={() => setShowUpload(true)}
+              disabled={submitting}
+              style={{
+                background: 'transparent', color: '#f4a7c4',
+                border: '1px solid #c4485a', padding: '8px 12px', borderRadius: 6,
+                fontSize: 11, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
+                textTransform: 'uppercase', letterSpacing: '0.04em',
+              }}
+            >
+              📸 send Mama proof
+            </button>
+          )}
+          <button
+            onClick={dismissIt}
+            disabled={submitting}
+            style={{
+              background: 'transparent', color: '#8a6a78',
+              border: '1px solid #4a2a38', padding: '8px 12px', borderRadius: 6,
+              fontSize: 11, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
+            }}
+          >
+            skip this whisper
+          </button>
+        </div>
+      )}
     </div>
   );
 }

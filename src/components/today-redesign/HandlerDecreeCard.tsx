@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useSurfaceRenderTracking } from '../../lib/surface-render-hooks';
+import { PhotoUploadWidget } from '../verification/PhotoUploadWidget';
 
 interface Decree {
   id: string;
@@ -35,6 +36,8 @@ export function HandlerDecreeCard() {
   const [items, setItems] = useState<Decree[]>([]);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [submittingId, setSubmittingId] = useState<string | null>(null);
+  // Tracks which decree row is currently showing the inline photo widget
+  const [photoOpenId, setPhotoOpenId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -118,33 +121,64 @@ export function HandlerDecreeCard() {
             <div style={{ fontSize: 10, color: '#f47272', marginBottom: 8 }}>
               Miss → {d.consequence}
             </div>
-            <textarea
-              value={note}
-              onChange={e => setNotes(n => ({ ...n, [d.id]: e.target.value }))}
-              placeholder="proof link / brief note (photo + audio upload via Unified Capture)"
-              rows={2}
-              style={{
-                width: '100%', background: '#050507', border: '1px solid #22222a',
-                borderRadius: 5, padding: '7px 9px', fontSize: 11.5, color: '#e8e6e3',
-                fontFamily: 'inherit', resize: 'vertical',
-              }}
-            />
-            <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-              <button
-                onClick={() => fulfill(d.id)}
-                disabled={submittingId === d.id}
-                style={{
-                  padding: '6px 14px', borderRadius: 5, border: 'none',
-                  background: '#f4c272', color: '#1f1008', fontWeight: 600,
-                  fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+            {photoOpenId === d.id && d.proof_type === 'photo' ? (
+              <PhotoUploadWidget
+                verificationType="freeform"
+                directiveId={d.id}
+                directiveKind="handler_decree"
+                directiveSnippet={d.edict}
+                onComplete={async () => {
+                  // Photo submission counts as decree fulfillment.
+                  await supabase.from('handler_decrees').update({
+                    status: 'fulfilled',
+                    fulfilled_at: new Date().toISOString(),
+                  }).eq('id', d.id);
+                  setPhotoOpenId(null);
+                  load();
+                  window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'decree_photo', id: d.id } }));
                 }}
-              >
-                {submittingId === d.id ? '…' : 'Fulfilled'}
-              </button>
-              <span style={{ fontSize: 10, color: '#5a5560', alignSelf: 'center' }}>
-                Upload proof via Unified Capture — Handler reviews next turn.
-              </span>
-            </div>
+                onCancel={() => setPhotoOpenId(null)}
+              />
+            ) : (
+              <>
+                <textarea
+                  value={note}
+                  onChange={e => setNotes(n => ({ ...n, [d.id]: e.target.value }))}
+                  placeholder={d.proof_type === 'photo' ? 'or add a note (use 📸 button to send a photo)' : 'proof link / brief note'}
+                  rows={2}
+                  style={{
+                    width: '100%', background: '#050507', border: '1px solid #22222a',
+                    borderRadius: 5, padding: '7px 9px', fontSize: 11.5, color: '#e8e6e3',
+                    fontFamily: 'inherit', resize: 'vertical',
+                  }}
+                />
+                <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => fulfill(d.id)}
+                    disabled={submittingId === d.id}
+                    style={{
+                      padding: '6px 14px', borderRadius: 5, border: 'none',
+                      background: '#f4c272', color: '#1f1008', fontWeight: 600,
+                      fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                    }}
+                  >
+                    {submittingId === d.id ? '…' : 'Fulfilled'}
+                  </button>
+                  {d.proof_type === 'photo' && (
+                    <button
+                      onClick={() => setPhotoOpenId(d.id)}
+                      style={{
+                        padding: '6px 12px', borderRadius: 5, border: '1px solid #f4c272',
+                        background: 'transparent', color: '#f4c272', fontWeight: 700,
+                        fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                      }}
+                    >
+                      📸 send photo
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         );
       })}
