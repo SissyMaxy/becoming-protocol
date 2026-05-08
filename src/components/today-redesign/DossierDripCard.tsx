@@ -85,24 +85,38 @@ export function DossierDripCard() {
         input_length: 'short' | 'long';
       };
     };
-    const r = (rows ?? [])[0] as Row | undefined;
-    if (!r) {
+    // PostgREST embeds the related row(s) at `dossier_questions`; an
+    // !inner join with a one-to-many relationship can be typed as either
+    // an object or array. Normalize via unknown.
+    const raw = (rows ?? [])[0] as unknown as
+      | (Omit<Row, 'dossier_questions'> & {
+          dossier_questions: Row['dossier_questions'] | Row['dossier_questions'][];
+        })
+      | undefined;
+    if (!raw) {
+      setPending(null);
+      return;
+    }
+    const dq = Array.isArray(raw.dossier_questions)
+      ? raw.dossier_questions[0]
+      : raw.dossier_questions;
+    if (!dq) {
       setPending(null);
       return;
     }
     setPending({
-      outreachId: r.outreach_id,
-      responseId: r.id,
-      questionId: r.question_id,
-      questionKey: r.question_key,
-      category: r.dossier_questions.category,
-      questionText: r.dossier_questions.question_text,
-      placeholder: r.dossier_questions.placeholder,
-      responseKind: r.dossier_questions.expected_response_kind,
-      choices: r.dossier_questions.choices,
-      importance: r.dossier_questions.importance,
-      tone: r.dossier_questions.tone,
-      inputLength: r.dossier_questions.input_length,
+      outreachId: raw.outreach_id,
+      responseId: raw.id,
+      questionId: raw.question_id,
+      questionKey: raw.question_key,
+      category: dq.category,
+      questionText: dq.question_text,
+      placeholder: dq.placeholder,
+      responseKind: dq.expected_response_kind,
+      choices: dq.choices,
+      importance: dq.importance,
+      tone: dq.tone,
+      inputLength: dq.input_length,
     });
     setDraft('');
     setChoiceDraft([]);
