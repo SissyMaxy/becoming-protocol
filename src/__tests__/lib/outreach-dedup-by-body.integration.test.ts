@@ -1,5 +1,5 @@
 /**
- * outreach-dedup-by-body integration — verifies migration 314.
+ * outreach-dedup-by-body integration — verifies migration 338.
  *
  * The bug: trg_mommy_immediate_response_to_slip (migration 257) emits one
  * outreach row per slip_log INSERT. Every slip gets a unique trigger_reason
@@ -10,7 +10,7 @@
  * the same fallback message ("Mama saw that, baby. We'll talk about it...")
  * 3 times in chat over 3 polling cycles.
  *
- * Migration 314 fixes this two ways:
+ * Migration 338 fixes this two ways:
  *   - Generation-site gate inside the slip→Mama trigger: skip the INSERT
  *     when an identical body is already pending in the last 5 min.
  *   - Architectural backstop: BEFORE INSERT trigger that supersedes
@@ -88,7 +88,7 @@ afterAll(async () => {
   }
 });
 
-describeIntegration('handler_outreach_queue — body-hash dedup (migration 314)', () => {
+describeIntegration('handler_outreach_queue — body-hash dedup (migration 338)', () => {
   it('three rapid slip_log inserts of slip_type=other land only one Mama outreach row', async () => {
     // Insert 3 slip rows in close succession — same shape that
     // handler-autonomous produces for batched missed-decree sweeps.

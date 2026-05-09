@@ -1,4 +1,4 @@
--- 314 — Body-hash dedup for handler_outreach_queue.
+-- 338 — Body-hash dedup for handler_outreach_queue.
 --
 -- Bug (2026-04-30 incident): live chat showed the same Mama line three times
 -- in a row:

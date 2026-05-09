@@ -1,0 +1,62 @@
+name: Weekly (content-generator / witness-fabrication-scheduler / cross-platform-consistency / loophole-hunter / mommy-disclosure-rehearsal)
+on:
+  schedule:
+    - cron: '0 3 * * 1'    # Mon — content-generator
+    - cron: '11 6 * * 1'   # Mon — witness-fabrication-scheduler
+    - cron: '11 7 * * 1'   # Mon — cross-platform-consistency
+    - cron: '23 11 * * 1'  # Mon — loophole-hunter
+    - cron: '5 9 * * 0'    # Sun — mommy-disclosure-rehearsal
+  workflow_dispatch: {}
+concurrency:
+  group: cron-weekly
+  cancel-in-progress: false
+jobs:
+  fire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: content-generator
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 3 * * 1'
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/content-generator" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "content-generator failed (non-fatal)"
+      - name: witness-fabrication-scheduler
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '11 6 * * 1'
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/witness-fabrication-scheduler" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "witness-fabrication-scheduler failed (non-fatal)"
+      - name: cross-platform-consistency
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '11 7 * * 1'
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/cross-platform-consistency" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "cross-platform-consistency failed (non-fatal)"
+      - name: loophole-hunter
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '23 11 * * 1'
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/loophole-hunter" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "loophole-hunter failed (non-fatal)"
+      - name: mommy-disclosure-rehearsal
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '5 9 * * 0'
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/mommy-disclosure-rehearsal" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "mommy-disclosure-rehearsal failed (non-fatal)"
