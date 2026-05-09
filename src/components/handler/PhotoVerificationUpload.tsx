@@ -4,16 +4,17 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 
 interface PhotoVerificationUploadProps {
-  taskType?: 'outfit' | 'mirror_check' | 'pose' | 'makeup' | 'nails' | 'general' | 'progress_photo' | 'gina_text' | 'wardrobe';
+  taskType?: 'outfit' | 'mirror_check' | 'pose' | 'makeup' | 'nails' | 'general' | 'progress_photo' | 'gina_text' | 'wardrobe' | 'public_dare';
   /**
    * Optional directive linkage. When the upload originates from a
-   * specific Mommy-issued task (e.g. a wardrobe prescription), pass
-   * the kind + row id so the verification photo can be linked back
-   * to it and analyze-photo can route through a directive-aware path.
+   * specific Mommy-issued task (e.g. a wardrobe prescription, a
+   * public dare with verification_kind='photo'), pass the kind + row
+   * id so the verification photo can be linked back to it and
+   * analyze-photo can route through a directive-aware path.
    */
-  directiveKind?: 'wardrobe_prescription';
+  directiveKind?: 'wardrobe_prescription' | 'public_dare';
   directiveId?: string;
-  onComplete?: () => void;
+  onComplete?: (photoId?: string) => void;
 }
 
 export function PhotoVerificationUpload({ taskType = 'general', directiveKind, directiveId, onComplete }: PhotoVerificationUploadProps) {
@@ -89,7 +90,7 @@ export function PhotoVerificationUpload({ taskType = 'general', directiveKind, d
       const result = await res.json();
       setAnalysis(result.analysis);
       setAnalyzing(false);
-      onComplete?.();
+      onComplete?.(photoRow.id as string | undefined);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Upload failed';
       setError(msg);

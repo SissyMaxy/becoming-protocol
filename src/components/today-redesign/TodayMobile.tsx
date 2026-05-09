@@ -55,8 +55,10 @@ import { FocusMode } from './FocusMode';
 import { MommyMoodIndicator } from '../persona/MommyMoodIndicator';
 import { ArousalTouchCard } from '../persona/ArousalTouchCard';
 import { WardrobePrescriptionCard } from './WardrobePrescriptionCard';
+import { PublicDareCard } from './PublicDareCard';
 import { GoodGirlPointsCard } from '../persona/GoodGirlPointsCard';
 import { ProtocolHealthCard } from './ProtocolHealthCard';
+import { MommyIdeationCard } from './MommyIdeationCard';
 import { PunishmentQueueCard } from './PunishmentQueueCard';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
@@ -275,6 +277,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           <GoodGirlPointsCard />
           <ArousalTouchCard />
           <WardrobePrescriptionCard />
+          <PublicDareCard />
           <RightNowCard />
           <ProtocolDayCard />
           <HandlerPlanCalendar />
@@ -311,6 +314,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           {/* STRATEGY & BRIEFINGS — meta-layer, lower priority. */}
           <CollapsibleGroup id="strategy_briefings" label="Strategy & Briefings" tone="#a78bfa" hint="health · daily brief · strategist · code audit">
             <ProtocolHealthCard />
+            <MommyIdeationCard />
             <DailyBriefingCard />
             <StrategicPlanCard />
             <CodeAuditCard />

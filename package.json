@@ -19,6 +19,7 @@
     "lint:patterns": "node scripts/handler-regression/pattern-lint.mjs",
     "lint:migrations": "node scripts/handler-regression/migration-lint.mjs",
     "mommy:wishes": "tsx scripts/mommy/process-wishes.ts",
+    "mommy:queue-audio": "tsx scripts/mommy/queue-audio-session.ts",
     "mommy:mine-implants": "tsx scripts/mommy/mine-cruising-implants.ts",
     "mommy:build": "tsx scripts/mommy/builder.ts",
     "mommy:drain": "tsx scripts/mommy/builder.ts --ship --drain",

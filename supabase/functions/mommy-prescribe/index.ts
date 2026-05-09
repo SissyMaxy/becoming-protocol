@@ -38,6 +38,10 @@ import {
   PHASE_VOCAB, pickItemType, formatBudgetHint, INTENSITY_RANK,
   type Phase, type ItemType,
 } from './selector.ts'
+import {
+  effectiveBand, bandPrescriptionCadenceCeiling,
+  type DifficultyBand,
+} from '../_shared/difficulty-band.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -110,7 +114,21 @@ Deno.serve(async (req: Request) => {
   }
 
   // ─── Gate 5: cadence time-gate ──────────────────────────────────────────
-  const cadence = settings?.cadence ?? 'occasional'
+  // Difficulty band can ceiling the user-configured cadence — recovery
+  // forces 'occasional' even if the user has 'weekly' configured. The
+  // user's stored cadence is never overwritten; we just respect the
+  // ceiling at fire time so the recovery hold doesn't fire weekly.
+  const { data: diff } = await supabase
+    .from('compliance_difficulty_state')
+    .select('current_difficulty_band, override_band')
+    .eq('user_id', userId)
+    .maybeSingle()
+  const band = effectiveBand(diff as { current_difficulty_band: DifficultyBand; override_band: DifficultyBand | null } | null)
+  const cadenceCeiling = bandPrescriptionCadenceCeiling(band)
+  let cadence = settings?.cadence ?? 'occasional'
+  if (cadenceCeiling === 'occasional' && cadence === 'weekly') {
+    cadence = 'occasional'
+  }
   const cadenceDays = cadence === 'weekly' ? 7 : 5
   const since = new Date(Date.now() - cadenceDays * 86400_000).toISOString()
   const { data: recentAssigned } = await supabase.from('wardrobe_prescriptions')

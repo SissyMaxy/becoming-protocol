@@ -55,6 +55,8 @@ import { AppearanceSettings } from './AppearanceSettings';
 import { PrivacySettings } from './PrivacySettings';
 import { StealthSettings } from './StealthSettings';
 import { WardrobePrescriptionSettings } from './WardrobePrescriptionSettings';
+import { BedtimeRitualSettings } from './BedtimeRitualSettings';
+import { PublicDareSettings } from './PublicDareSettings';
 import { MicroTaskSettings } from '../micro-tasks';
 import { CorruptionDashboard } from '../admin/CorruptionDashboard';
 import { SleepContentSettings } from '../sleep-content/SleepContentSettings';
@@ -729,6 +731,12 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
 
             {/* Wardrobe prescriptions — Mommy persona feature */}
             <WardrobePrescriptionSettings />
+
+            {/* Bedtime ritual — soft goodnight sequence */}
+            <BedtimeRitualSettings />
+
+            {/* Public dares — opt-in only, default off, Mommy persona feature */}
+            <PublicDareSettings />
 
             {/* Features Section */}
             <div>

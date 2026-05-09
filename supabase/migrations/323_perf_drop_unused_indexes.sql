@@ -1,0 +1,20 @@
+-- Migration 319: drop unused indexes — DEFERRED.
+--
+-- pg_stat_user_indexes.idx_scan is reset to 0 across the board because
+-- the Postgres stats collector was wiped by the database restarts
+-- caused by the cron worker pool exhaustion (the reason migration 314,
+-- cron-auth-repair, is also in flight).
+--
+-- Without scan counters we cannot identify unused indexes safely.
+-- This migration intentionally ships empty so the numbering aligns
+-- with the audit doc; rerun the diagnostic ≥7 days post-stabilization
+-- to populate counters and then drop.
+--
+-- Suspect-list pulled from pg_indexes alone (NOT confirmed unused —
+-- do not drop without scan stats):
+--   public.task_bank — 8 single-column indexes (active, category,
+--     domain, intensity, is_core, level, requires_privacy, time_window).
+--     Likely many are redundant.
+--
+-- See design_assets/perf-audit-2026-04-30.md §G.
+SELECT 'migration 319 deferred — re-audit after stats accumulate' AS status;

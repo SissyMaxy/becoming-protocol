@@ -7,7 +7,14 @@
       "maxDuration": 60
     }
   },
-  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }],
+  "rewrites": [
+    { "source": "/api/handler/:action", "destination": "/api/handler/[action]?action=:action" },
+    { "source": "/api/voice/:action", "destination": "/api/voice/[action]?action=:action" },
+    { "source": "/api/calendar/:action", "destination": "/api/calendar/[action]?action=:action" },
+    { "source": "/api/hypno/:action", "destination": "/api/hypno/[action]?action=:action" },
+    { "source": "/api/whoop/:action", "destination": "/api/whoop/[action]?action=:action" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
   "crons": [
     { "path": "/api/voice/refresh-profile", "schedule": "0 7 * * *" }
   ]

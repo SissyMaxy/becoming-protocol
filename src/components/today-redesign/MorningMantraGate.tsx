@@ -79,6 +79,7 @@ export function MorningMantraGate() {
   // Apply step
   const [applyText, setApplyText] = useState('');
   const [suggestedTask, setSuggestedTask] = useState<SuggestedTask | null>(null);
+  const [persona, setPersona] = useState<string | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,7 +92,7 @@ export function MorningMantraGate() {
   const load = useCallback(async () => {
     if (!user?.id) return;
     const today = new Date().toISOString().slice(0, 10);
-    const [wRes, sRes, taskRes] = await Promise.all([
+    const [wRes, sRes, taskRes, stateRes] = await Promise.all([
       supabase.from('morning_mantra_windows').select('*').eq('user_id', user.id).maybeSingle(),
       supabase.from('morning_mantra_submissions').select('id').eq('user_id', user.id).eq('submission_date', today).maybeSingle(),
       // Pull the highest-priority open task to auto-suggest in the apply step
@@ -99,12 +100,18 @@ export function MorningMantraGate() {
         .select('what')
         .eq('user_id', user.id).eq('status', 'pending')
         .order('by_when', { ascending: true }).limit(1).maybeSingle(),
+      supabase.from('user_state').select('handler_persona').eq('user_id', user.id).maybeSingle(),
     ]);
     setConfig((wRes.data as Window | null) ?? null);
     setAlreadySubmitted(!!sRes.data);
+    setPersona((stateRes.data as { handler_persona?: string } | null)?.handler_persona ?? null);
     const task = taskRes.data as { what: string } | null;
     if (task?.what) {
-      setSuggestedTask({ source: 'commitment', label: task.what.slice(0, 100) });
+      // First sentence only — drops dev-facing trailing pointers like
+      // "Add via GinaCaptureCard on Today." Keeps the label tight in the
+      // small box. Fall back to the (clipped) full string if no period.
+      const first = task.what.split(/(?<=[.!?])\s+/)[0]?.trim() || task.what;
+      setSuggestedTask({ source: 'commitment', label: first.slice(0, 160) });
     }
   }, [user?.id]);
 
@@ -428,40 +435,72 @@ export function MorningMantraGate() {
 
         {step === 'apply' && (
           <>
-            <div style={{ fontSize: 13, color: '#e8e6e3', lineHeight: 1.5, marginBottom: 14 }}>
-              The mantra was: <span style={{ color: '#f4c272', fontStyle: 'italic' }}>&ldquo;{targetMantra}&rdquo;</span>
-              <br /><br />
-              One sentence — how does this apply to your first concrete action today? Specific thing you&apos;ll do, not a feeling.
-            </div>
+            {(() => {
+              const isMommy = persona === 'dommy_mommy';
+              const speaker = isMommy ? 'Mama' : 'Handler';
+              const petName = isMommy ? ', baby' : '';
+              const lead = isMommy
+                ? `Carry it into the day${petName}. ${speaker} said:`
+                : `${speaker} said:`;
+              const promptWithTask = isMommy
+                ? `One sentence${petName} — when, where, how. Open with ${speaker}'s line.`
+                : `One sentence — when, where, how you'll do it. Open with the line above.`;
+              const promptNoTask = isMommy
+                ? `Pick the first thing you're doing${petName}. One sentence — when, where, how. Open with ${speaker}'s line.`
+                : `Pick the first thing you're doing today. One sentence — when, where, how. Open with the line above.`;
+              const queueLabel = isMommy ? 'on your plate' : 'top open commitment';
+              const useAsOpener = isMommy ? 'use as opener →' : 'use this as opener →';
 
-            {suggestedTask && applyText.length === 0 && (
-              <div style={{
-                background: '#0a0a0d', border: '1px solid #2d1a4d', borderRadius: 6,
-                padding: '7px 10px', marginBottom: 8,
-              }}>
-                <div style={{ fontSize: 9.5, color: '#c4b5fd', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>
-                  top open {suggestedTask.source} on your queue
-                </div>
-                <div style={{ fontSize: 12, color: '#e8e6e3', lineHeight: 1.4, marginBottom: 6 }}>
-                  {suggestedTask.label}
-                </div>
-                <button
-                  onClick={() => setApplyText('Today this means I will: ' + suggestedTask.label.slice(0, 80))}
-                  style={{
-                    padding: '5px 10px', borderRadius: 4, border: '1px solid #2d1a4d',
-                    background: 'transparent', color: '#c4b5fd',
-                    fontSize: 10.5, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
-                  }}
-                >
-                  use this as the starting line
-                </button>
-              </div>
-            )}
+              return (
+                <>
+                  <div style={{ fontSize: 13, color: '#e8e6e3', lineHeight: 1.5, marginBottom: 10 }}>
+                    {lead}
+                  </div>
+                  <div style={{
+                    fontSize: 16, color: '#f4c272', fontStyle: 'italic',
+                    background: '#050507', border: '1px solid #2d1a4d', borderRadius: 8,
+                    padding: '14px 14px', marginBottom: 14, lineHeight: 1.55,
+                  }}>
+                    &ldquo;{targetMantra}&rdquo;
+                  </div>
+
+                  {suggestedTask && (
+                    <div style={{
+                      background: '#0a0a0d', border: '1px solid #2d1a4d', borderRadius: 6,
+                      padding: '8px 10px', marginBottom: 10,
+                    }}>
+                      <div style={{ fontSize: 9.5, color: '#c4b5fd', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                        {queueLabel}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#e8e6e3', lineHeight: 1.45, marginBottom: applyText.length === 0 ? 6 : 0 }}>
+                        {suggestedTask.label}
+                      </div>
+                      {applyText.length === 0 && (
+                        <button
+                          onClick={() => setApplyText(`"${targetMantra}" — so today I'll `)}
+                          style={{
+                            padding: '5px 10px', borderRadius: 4, border: '1px solid #2d1a4d',
+                            background: 'transparent', color: '#c4b5fd',
+                            fontSize: 10.5, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
+                          }}
+                        >
+                          {useAsOpener}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  <div style={{ fontSize: 12.5, color: '#c8c4cc', lineHeight: 1.5, marginBottom: 8 }}>
+                    {suggestedTask ? promptWithTask : promptNoTask}
+                  </div>
+                </>
+              );
+            })()}
 
             <textarea
               value={applyText}
               onChange={e => setApplyText(e.target.value)}
-              placeholder="Today this means I will…"
+              placeholder="Today I’ll…"
               autoFocus
               rows={3}
               style={{
@@ -472,7 +511,7 @@ export function MorningMantraGate() {
               }}
             />
             <div style={{ fontSize: 11, color: applyValid ? '#5fc88f' : '#8a8690', marginBottom: 12 }}>
-              {applyText.length} / 25+ chars · name a specific action
+              {applyText.length} / 25+ chars
             </div>
             {error && <div style={{ fontSize: 11, color: '#f47272', marginBottom: 8 }}>{error}</div>}
             <div style={{ display: 'flex', gap: 8 }}>
@@ -497,7 +536,7 @@ export function MorningMantraGate() {
                   cursor: canSubmit ? 'pointer' : 'not-allowed', fontFamily: 'inherit',
                 }}
               >
-                {submitting ? 'submitting…' : 'Release the day'}
+                {submitting ? 'submitting…' : persona === 'dommy_mommy' ? 'Lock it in' : 'Release the day'}
               </button>
             </div>
           </>

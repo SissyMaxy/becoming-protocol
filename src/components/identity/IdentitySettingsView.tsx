@@ -34,6 +34,7 @@ import {
   type Pronouns,
   DEFAULT_PRONOUNS,
 } from '../../types/identity';
+import { DifficultyBandCard } from './DifficultyBandCard';
 
 const PALETTE = {
   bg: 'linear-gradient(140deg, #1a0f2e 0%, #0f0820 100%)',
@@ -241,6 +242,9 @@ export function IdentitySettingsView({ onBack }: Props) {
         </div>
       ) : (
         <>
+          {/* Compliance-aware difficulty band */}
+          <DifficultyBandCard />
+
           {/* Phase advancement suggestion banner */}
           {phaseSuggestion && (
             <div style={{

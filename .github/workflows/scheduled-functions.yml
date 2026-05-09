@@ -262,6 +262,29 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{}'
 
+  # Compliance difficulty evaluator: rolling-14d band recompute
+  compliance-difficulty-evaluator:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if 5 AM window
+        id: should_run
+        run: |
+          HOUR=$(date -u +%H)
+          MINUTE=$(date -u +%M)
+          if [ "$HOUR" = "05" ] && [ "$MINUTE" -lt "10" ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Trigger compliance-difficulty-evaluator
+        if: steps.should_run.outputs.run == 'true'
+        run: |
+          curl -sS -X POST "${{ env.SUPABASE_URL }}/functions/v1/compliance-difficulty-evaluator" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}'
+
   # Conditioning engine: increment hidden parameters, generate scripts
   conditioning-engine:
     runs-on: ubuntu-latest
