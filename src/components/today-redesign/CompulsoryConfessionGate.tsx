@@ -200,7 +200,7 @@ export function CompulsoryConfessionGate() {
   // the card centers when it fits and grows from the top when it overflows. The
   // old `display: flex; alignItems: center` on the overlay clipped the submit
   // button below the fold once the textarea pushed total height past the
-  // viewport — and the keyboard made it worse. (See pattern-lint: ban-100vh.)
+  // viewport — and the keyboard made it worse.
   return (
     <div
       style={{

@@ -24,6 +24,9 @@ const SOURCE_ROOTS = [
   join(ROOT, 'api'),
   join(ROOT, 'supabase', 'functions'),
   join(ROOT, 'src', 'lib'),
+  // Component & style roots — 100vh-style mobile-layout bugs surface here.
+  join(ROOT, 'src', 'components'),
+  join(ROOT, 'src', 'styles'),
 ];
 
 // Patterns: each is { name, doc, regex, why }
@@ -121,6 +124,14 @@ const PATTERNS = [
     regex: /≥\s*\d+\s*Hz|>=\s*1[5-9]\d\s*Hz|>=\s*[2-9]\d\d\s*Hz|"avg pitch must clear/i,
   },
   {
+    name: 'mobile-100vh-instead-of-100dvh',
+    doc: 'feedback_mobile_use_100dvh.md',
+    why: '100vh on mobile Safari extends past the visible viewport when chrome is showing — fixed-bottom content (submit buttons, safe-area zones) ends up off-screen. Use 100dvh, with safe-area-inset padding for any fixed-bottom UI. (Bug: confession submit hidden on iPhone, 2026-04-30.)',
+    // Match `100vh` as a token: standalone CSS value or in a calc(). Hits in
+    // both .tsx (inline styles, Tailwind arbitrary values) and .css.
+    regex: /\b100vh\b/,
+  },
+  {
     name: 'david-identity-leak',
     doc: 'feedback_handler_is_singular_authority.md',
     why: 'David is never an output anywhere. Every user-facing surface speaks in Maxy-frame. References to past-self use "the costume," "the older version," "before Maxy" — never the literal name.',
@@ -141,7 +152,7 @@ function walk(dir, out = []) {
     let s;
     try { s = statSync(full); } catch { continue; }
     if (s.isDirectory()) walk(full, out);
-    else if (/\.(ts|mjs|js|tsx)$/.test(e)) out.push(full);
+    else if (/\.(ts|mjs|js|tsx|css)$/.test(e)) out.push(full);
   }
   return out;
 }
