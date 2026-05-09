@@ -346,6 +346,115 @@ async function pollPostgresHealth(supabase: SupabaseClient): Promise<Failure[]> 
   return out
 }
 
+// pollResourceExhaustion — composite signal for the external watchdog.
+//
+// Aggregates four resource-pressure indicators into a single
+// 'resource_exhaustion_detected' row that the supabase-watchdog GitHub
+// workflow keys off. Cooldown: at most one such row every 30 min so the
+// watchdog never sees a runaway. Consecutive-check requirement (>=2
+// signals before restart) is enforced on the watchdog side.
+//
+// Triggers any of:
+//   - >=5 distinct pg_cron jobs failed in this 10-min window
+//   - connection_pct >= 90 sustained across this tick + >=2 prior postgres
+//     rows in the last ~40 min
+//   - >5 WAL archive failure rows in the last 1h
+//   - PostgREST probe returns 503 (we still write — at 503 PostgREST
+//     itself is degraded but supabase-js inserts often still succeed
+//     because edge fns talk to PostgREST through a separate path)
+async function pollResourceExhaustion(
+  supabase: SupabaseClient,
+  current: { pgCron: Failure[]; postgres: Failure[] },
+): Promise<Failure[]> {
+  // Cooldown — skip if we already wrote one in the last 30 min.
+  const thirtyMinAgo = new Date(Date.now() - 30 * 60_000).toISOString()
+  const { data: recent } = await supabase
+    .from('deploy_health_log')
+    .select('id')
+    .eq('error_signature', 'resource_exhaustion_detected')
+    .gte('detected_at', thirtyMinAgo)
+    .limit(1)
+    .maybeSingle()
+  if (recent) return []
+
+  // Trigger 1: distinct cron job failures this tick
+  const cronJobs = new Set<string>()
+  for (const r of current.pgCron) {
+    const j = (r.raw as { jobname?: string } | null)?.jobname
+    if (j) cronJobs.add(j)
+  }
+  const cronFailures = cronJobs.size
+
+  // Trigger 2: connection pool >= 90 sustained
+  const fortyMinAgo = new Date(Date.now() - 40 * 60_000).toISOString()
+  const { data: connHistory } = await supabase
+    .from('deploy_health_log')
+    .select('id, health_threshold_breached')
+    .eq('source', 'postgres')
+    .gte('detected_at', fortyMinAgo)
+    .limit(20)
+  type HtbRow = { id: string; health_threshold_breached: { metric?: string; observed?: number } | null }
+  const priorSaturated = ((connHistory ?? []) as HtbRow[]).filter(r =>
+    r.health_threshold_breached?.metric === 'connection_pct' &&
+    (r.health_threshold_breached.observed ?? 0) >= 90,
+  ).length
+  const currentSaturated = current.postgres.some(p =>
+    p.health_threshold_breached?.metric === 'connection_pct' &&
+    Number(p.health_threshold_breached.observed ?? 0) >= 90,
+  )
+  const consecutiveSaturation = priorSaturated + (currentSaturated ? 1 : 0)
+
+  // Trigger 3: WAL archive failure rows in last hour
+  const oneHourAgo = new Date(Date.now() - 60 * 60_000).toISOString()
+  const { count: walFailures } = await supabase
+    .from('deploy_health_log')
+    .select('id', { count: 'exact', head: true })
+    .eq('source', 'postgres')
+    .eq('error_signature', 'wal_archive_failure')
+    .gte('detected_at', oneHourAgo)
+
+  // Trigger 4: PostgREST probe
+  let postgrestStatus = 0
+  try {
+    const url = `${Deno.env.get('SUPABASE_URL') ?? ''}/rest/v1/`
+    const apikey = Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    const probe = await fetch(url, { headers: { apikey }, method: 'GET' })
+    postgrestStatus = probe.status
+  } catch {
+    postgrestStatus = -1
+  }
+  const postgrestDown = postgrestStatus === 503
+
+  const triggers: string[] = []
+  if (cronFailures >= 5) triggers.push(`cron_timeouts=${cronFailures}`)
+  if (consecutiveSaturation >= 3) triggers.push(`pool_saturated_consecutive=${consecutiveSaturation}`)
+  if ((walFailures ?? 0) > 5) triggers.push(`wal_failures_1h=${walFailures}`)
+  if (postgrestDown) triggers.push(`postgrest_503`)
+
+  if (triggers.length === 0) return []
+
+  const metadata = {
+    cron_timeouts: cronFailures,
+    pool_pct_consecutive: consecutiveSaturation,
+    wal_failures_1h: walFailures ?? 0,
+    postgrest_status: postgrestStatus,
+    triggers,
+  }
+
+  return [{
+    source: 'self',
+    severity: 'high',
+    ref_id: `resource-exhaustion-${new Date().toISOString().slice(0, 16)}`,
+    ref_url: `https://supabase.com/dashboard/project/${SUPABASE_PROJECT_REF}/database/connections`,
+    title: `Resource exhaustion detected: ${triggers.join(', ')}`,
+    detail: `Triggers: ${triggers.join('; ')}. The external watchdog will consider a restart if it sees 2+ of these signals.`,
+    detected_at: new Date().toISOString(),
+    raw: { signature: 'resource_exhaustion_detected', metadata },
+    error_signature: 'resource_exhaustion_detected',
+    health_threshold_breached: metadata,
+  }]
+}
+
 // pollSelfHealth — runs FIRST so the watcher checks its own last invocation
 // before doing anything else. If the most recent cron-fired run failed
 // (e.g. 401 from invoke_edge_function carrying a stale service-role key),
@@ -418,7 +527,12 @@ Deno.serve(async (req: Request) => {
     pollPgCronFailures(supabase),
     pollPostgresHealth(supabase),
   ])
-  const all = [...self, ...github, ...vercel, ...supabaseEdge, ...pgCron, ...postgres]
+
+  // Composite resource-exhaustion signal — must run after pgCron + postgres
+  // because it aggregates their results plus recent history.
+  const exhaustion = await pollResourceExhaustion(supabase, { pgCron, postgres })
+
+  const all = [...self, ...github, ...vercel, ...supabaseEdge, ...pgCron, ...postgres, ...exhaustion]
 
   let inserted = 0
   let skipped = 0
@@ -445,6 +559,7 @@ Deno.serve(async (req: Request) => {
       raw: f.raw ?? null,
       function_execution_time_ms: f.function_execution_time_ms ?? null,
       health_threshold_breached: f.health_threshold_breached ?? null,
+      error_signature: f.error_signature ?? null,
     })
     if (!error) inserted++
   }
@@ -458,6 +573,7 @@ Deno.serve(async (req: Request) => {
       supabase_edge: supabaseEdge.length,
       pg_cron: pgCron.length,
       postgres: postgres.length,
+      resource_exhaustion: exhaustion.length,
     },
     inserted,
     skipped_dedup: skipped,
