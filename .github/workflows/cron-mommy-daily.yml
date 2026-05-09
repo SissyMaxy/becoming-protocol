@@ -1,0 +1,52 @@
+name: Mommy Daily (handler-self-audit / mommy-mood / mommy-mantra / mommy-bedtime)
+on:
+  schedule:
+    - cron: '5 6 * * *'    # handler-self-audit
+    - cron: '5 11 * * *'   # mommy-mood
+    - cron: '5 13 * * *'   # mommy-mantra
+    - cron: '10 22 * * *'  # mommy-bedtime
+  workflow_dispatch: {}
+concurrency:
+  group: cron-mommy-daily
+  cancel-in-progress: false
+jobs:
+  fire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: handler-self-audit
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '5 6 * * *'
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/handler-self-audit" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "handler-self-audit failed (non-fatal)"
+      - name: mommy-mood
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '5 11 * * *'
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/mommy-mood" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "mommy-mood failed (non-fatal)"
+      - name: mommy-mantra
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '5 13 * * *'
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/mommy-mantra" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "mommy-mantra failed (non-fatal)"
+      - name: mommy-bedtime
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '10 22 * * *'
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/mommy-bedtime" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "mommy-bedtime failed (non-fatal)"
