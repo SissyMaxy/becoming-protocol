@@ -1,0 +1,21 @@
+name: Mommy Touch (every 3 hours)
+on:
+  schedule:
+    - cron: '17 */3 * * *'  # every 3 hours, UTC
+  workflow_dispatch: {}
+concurrency:
+  group: cron-mommy-touch
+  cancel-in-progress: false
+jobs:
+  fire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: mommy-touch
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/mommy-touch" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "mommy-touch failed (non-fatal)"
