@@ -1,15 +1,8 @@
-// Device Control Engine — Edge Function
-// Autonomous Lovense scheduling: 5-minute check loop via pg_cron.
-// Generates daily schedules (morning anchor, ambient pulses, denial scaling).
-// Executes due commands via Lovense Cloud API.
-
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+// Device Control Engine — job handler. Used to be the device-control edge
+// function. Lovense scheduling: generates daily schedules (morning anchor,
+// ambient pulses, denial scaling) and fires due commands via the Lovense
+// Cloud API. Single action — `device-control:run` — kicks the whole tick.
+import { type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 // ── Lovense Cloud API ────────────────────────────────────────────────
 
@@ -398,52 +391,35 @@ async function checkEnforcement(
   return triggered
 }
 
-// ── Edge function handler ────────────────────────────────────────────
+// ── Job-handler entrypoint ───────────────────────────────────────────
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+export async function runDeviceControl(
+  supabase: SupabaseClient,
+): Promise<Record<string, unknown>> {
+  // 1. Generate daily schedule for each user (if not yet done)
+  const { data: users } = await supabase
+    .from('lovense_connections')
+    .select('user_id')
+    .eq('status', 'connected')
 
-  try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    const supabase = createClient(supabaseUrl, supabaseKey)
-
-    // 1. Generate daily schedule for each user (if not yet done)
-    const { data: users } = await supabase
-      .from('lovense_connections')
-      .select('user_id')
-      .eq('status', 'connected')
-
-    let scheduled = 0
-    if (users) {
-      for (const { user_id } of users) {
-        scheduled += await generateDailySchedule(supabase, user_id)
-      }
+  let scheduled = 0
+  if (users) {
+    for (const { user_id } of users) {
+      scheduled += await generateDailySchedule(supabase, user_id)
     }
-
-    // 2. Execute due schedules
-    const execution = await executeDueSchedules(supabase)
-
-    // 3. Check enforcement triggers
-    const enforcement = await checkEnforcement(supabase)
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        scheduled,
-        executed: execution.executed,
-        failed: execution.failed,
-        enforcement,
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    )
-  } catch (error) {
-    console.error('Device control error:', error)
-    return new Response(
-      JSON.stringify({ success: false, error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    )
   }
-})
+
+  // 2. Execute due schedules
+  const execution = await executeDueSchedules(supabase)
+
+  // 3. Check enforcement triggers
+  const enforcement = await checkEnforcement(supabase)
+
+  return {
+    success: true,
+    scheduled,
+    executed: execution.executed,
+    failed: execution.failed,
+    enforcement,
+  }
+}
