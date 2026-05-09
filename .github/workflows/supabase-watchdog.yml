@@ -1,0 +1,227 @@
+# supabase-watchdog — external resource-exhaustion watchdog with restart authority.
+#
+# Why: when the Supabase project itself is sick (cron pile-up, connection
+# saturation, WAL stall, PostgREST 503), auto-healer can't restart its own
+# host. This workflow runs OUTSIDE the project (GitHub Actions infra) on a
+# 15-min cadence, reads the deploy_health_log signal that
+# pollResourceExhaustion writes, and calls the Supabase Management API
+# /restart endpoint when sustained exhaustion is detected.
+#
+# Authority bounds:
+#   - Max 2 restarts per 24h (tracked in supabase_restart_log)
+#   - Skip if last restart < 30min ago (still recovering)
+#   - Require >=2 resource_exhaustion_detected signals in last 90min
+#     (since the watcher's own cooldown is 30min, two signals = sustained)
+#   - If cap is hit, write a high-severity escalation row instead of restart
+#
+# Operator setup: requires SUPABASE_PAT GitHub secret with
+# "Project: Restart" scope. Until set, the workflow runs in dry-run mode —
+# it queries the signal and logs intent but does NOT restart.
+
+name: supabase-watchdog
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch: {}
+
+# One-at-a-time so two ticks can't race the 24h cap check.
+concurrency:
+  group: supabase-watchdog
+  cancel-in-progress: false
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      PROJECT_REF: atevwvexapiykchvqvhm
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_PAT: ${{ secrets.SUPABASE_PAT }}
+      OPERATOR_USER_ID: 8c69b9c8-34eb-4147-9fec-3c1a5bc74b6f
+      MIN_SIGNALS: '2'
+      RECOVERY_WINDOW_MIN: '30'
+      DAILY_CAP: '2'
+    steps:
+      - name: Sanity check secrets
+        run: |
+          set -e
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::error::SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing — watchdog cannot read signals"
+            exit 1
+          fi
+          if [ -z "$SUPABASE_PAT" ]; then
+            echo "::warning::SUPABASE_PAT not set — running in DRY-RUN mode (will log intent, will not restart)"
+          fi
+
+      - name: Read resource-exhaustion signals + restart history
+        id: read
+        run: |
+          set -e
+          WINDOW_AGO=$(date -u -d "90 minutes ago" +%Y-%m-%dT%H:%M:%S.000Z)
+          DAY_AGO=$(date -u -d "24 hours ago" +%Y-%m-%dT%H:%M:%S.000Z)
+          RECOVERY_AGO=$(date -u -d "${RECOVERY_WINDOW_MIN} minutes ago" +%Y-%m-%dT%H:%M:%S.000Z)
+
+          # Count exhaustion signals in window
+          SIGNALS_JSON=$(curl -fsS -G "${SUPABASE_URL}/rest/v1/deploy_health_log" \
+            --data-urlencode "select=id,detected_at,health_threshold_breached" \
+            --data-urlencode "error_signature=eq.resource_exhaustion_detected" \
+            --data-urlencode "detected_at=gte.${WINDOW_AGO}" \
+            --data-urlencode "order=detected_at.desc" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}")
+          SIGNAL_COUNT=$(echo "$SIGNALS_JSON" | jq 'length')
+          LATEST_SIGNAL=$(echo "$SIGNALS_JSON" | jq -r '.[0].detected_at // ""')
+          LATEST_REASON=$(echo "$SIGNALS_JSON" | jq -c '.[0].health_threshold_breached // {}')
+
+          # Restart history
+          RESTARTS_24H=$(curl -fsS -G "${SUPABASE_URL}/rest/v1/supabase_restart_log" \
+            --data-urlencode "select=id" \
+            --data-urlencode "triggered_at=gte.${DAY_AGO}" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" | jq 'length')
+          RECENT_RESTARTS=$(curl -fsS -G "${SUPABASE_URL}/rest/v1/supabase_restart_log" \
+            --data-urlencode "select=id" \
+            --data-urlencode "triggered_at=gte.${RECOVERY_AGO}" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" | jq 'length')
+
+          {
+            echo "signal_count=${SIGNAL_COUNT}"
+            echo "latest_signal=${LATEST_SIGNAL}"
+            echo "restarts_24h=${RESTARTS_24H}"
+            echo "recent_restarts=${RECENT_RESTARTS}"
+            echo "latest_reason<<EOF"
+            echo "${LATEST_REASON}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Signals (90min): ${SIGNAL_COUNT} | Restarts (24h): ${RESTARTS_24H} | Within recovery: ${RECENT_RESTARTS}"
+
+      - name: Decide
+        id: decide
+        env:
+          SIGNAL_COUNT: ${{ steps.read.outputs.signal_count }}
+          RESTARTS_24H: ${{ steps.read.outputs.restarts_24h }}
+          RECENT_RESTARTS: ${{ steps.read.outputs.recent_restarts }}
+        run: |
+          set -e
+          ACTION=skip
+          REASON=""
+
+          if [ "$SIGNAL_COUNT" -lt "$MIN_SIGNALS" ]; then
+            ACTION=skip
+            REASON="only ${SIGNAL_COUNT} exhaustion signal(s); need ${MIN_SIGNALS}"
+          elif [ "$RECENT_RESTARTS" -gt 0 ]; then
+            ACTION=skip
+            REASON="restart within last ${RECOVERY_WINDOW_MIN}min — letting it recover"
+          elif [ "$RESTARTS_24H" -ge "$DAILY_CAP" ]; then
+            ACTION=cap_hit
+            REASON="${RESTARTS_24H} restart(s) in 24h hit cap of ${DAILY_CAP}; manual investigation required"
+          elif [ -z "$SUPABASE_PAT" ]; then
+            ACTION=dry_run
+            REASON="${SIGNAL_COUNT} signals would trigger restart, but SUPABASE_PAT secret not set"
+          else
+            ACTION=restart
+            REASON="${SIGNAL_COUNT} resource_exhaustion_detected signals in 90min, ${RESTARTS_24H}/${DAILY_CAP} restarts used today"
+          fi
+
+          {
+            echo "action=${ACTION}"
+            echo "reason<<EOF"
+            echo "${REASON}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "Decision: ${ACTION} — ${REASON}"
+
+      - name: Restart project
+        if: steps.decide.outputs.action == 'restart'
+        id: restart
+        env:
+          SIGNAL_COUNT: ${{ steps.read.outputs.signal_count }}
+          REASON: ${{ steps.decide.outputs.reason }}
+          LATEST_REASON: ${{ steps.read.outputs.latest_reason }}
+        run: |
+          set -e
+          echo "Calling POST /v1/projects/${PROJECT_REF}/restart"
+          API_RESPONSE_FILE=$(mktemp)
+          HTTP_STATUS=$(curl -sS -o "$API_RESPONSE_FILE" -w "%{http_code}" -X POST \
+            "https://api.supabase.com/v1/projects/${PROJECT_REF}/restart" \
+            -H "Authorization: Bearer ${SUPABASE_PAT}" \
+            -H "Content-Type: application/json")
+          API_BODY=$(cat "$API_RESPONSE_FILE")
+          echo "Restart API status: ${HTTP_STATUS}"
+          echo "Body: ${API_BODY}"
+
+          # Build api_response jsonb payload
+          API_RESPONSE_JSON=$(jq -nc \
+            --arg status "$HTTP_STATUS" \
+            --arg body "$API_BODY" \
+            '{ http_status: ($status|tonumber), body: $body }')
+          REASON_PAYLOAD=$(jq -nc --arg r "$REASON" '{ reason: $r }')
+
+          # Insert supabase_restart_log row
+          curl -fsS -X POST "${SUPABASE_URL}/rest/v1/supabase_restart_log" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=minimal" \
+            --data "$(jq -nc \
+              --arg by 'watchdog' \
+              --arg reason "$REASON" \
+              --argjson signals "$SIGNAL_COUNT" \
+              --argjson resp "$API_RESPONSE_JSON" \
+              '{ triggered_by: $by, reason: $reason, signal_count: $signals, api_response: $resp }')"
+
+          # Mirror into autonomous_escalation_log so operator dashboards see it.
+          # engine='watchdog' is the marker the user-facing surfaces filter on.
+          curl -fsS -X POST "${SUPABASE_URL}/rest/v1/autonomous_escalation_log" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=minimal" \
+            --data "$(jq -nc \
+              --arg user_id "$OPERATOR_USER_ID" \
+              --arg rationale "Auto-restart: ${REASON}" \
+              --argjson after "$API_RESPONSE_JSON" \
+              '{ user_id: $user_id, engine: "watchdog", action: "project_restart", rationale: $rationale, after_state: $after, decided_by: "watchdog" }')"
+
+          if [ "$HTTP_STATUS" -ge 400 ]; then
+            echo "::error::Restart API returned ${HTTP_STATUS} — body: ${API_BODY}"
+            exit 1
+          fi
+
+      - name: Escalate (cap hit)
+        if: steps.decide.outputs.action == 'cap_hit'
+        env:
+          REASON: ${{ steps.decide.outputs.reason }}
+          SIGNAL_COUNT: ${{ steps.read.outputs.signal_count }}
+        run: |
+          set -e
+          curl -fsS -X POST "${SUPABASE_URL}/rest/v1/autonomous_escalation_log" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=minimal" \
+            --data "$(jq -nc \
+              --arg user_id "$OPERATOR_USER_ID" \
+              --arg rationale "Watchdog tried to auto-restart Supabase but hit 24h cap. ${REASON}. Manual investigation required." \
+              --argjson signals "$SIGNAL_COUNT" \
+              '{ user_id: $user_id, engine: "watchdog", action: "restart_cap_hit", rationale: $rationale, after_state: { signal_count: $signals }, decided_by: "watchdog" }')"
+          echo "::warning::Restart cap reached — escalation row written"
+
+      - name: Dry-run note
+        if: steps.decide.outputs.action == 'dry_run'
+        env:
+          REASON: ${{ steps.decide.outputs.reason }}
+        run: |
+          echo "::notice::Dry-run: ${REASON}"
+
+      - name: Skip note
+        if: steps.decide.outputs.action == 'skip'
+        env:
+          REASON: ${{ steps.decide.outputs.reason }}
+        run: |
+          echo "Skipped: ${REASON}"
