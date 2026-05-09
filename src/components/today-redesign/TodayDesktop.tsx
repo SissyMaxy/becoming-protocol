@@ -55,6 +55,7 @@ import { FocusMode } from './FocusMode';
 import { MommyMoodIndicator } from '../persona/MommyMoodIndicator';
 import { ArousalTouchCard } from '../persona/ArousalTouchCard';
 import { WardrobePrescriptionCard } from './WardrobePrescriptionCard';
+import { PublicDareCard } from './PublicDareCard';
 import { GoodGirlPointsCard } from '../persona/GoodGirlPointsCard';
 import { ProtocolHealthCard } from './ProtocolHealthCard';
 import { PunishmentQueueCard } from './PunishmentQueueCard';
@@ -324,6 +325,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         <GoodGirlPointsCard />
         <ArousalTouchCard />
         <WardrobePrescriptionCard />
+        <PublicDareCard />
         <RightNowCard />
         <ProtocolDayCard />
         <HandlerPlanCalendar />
