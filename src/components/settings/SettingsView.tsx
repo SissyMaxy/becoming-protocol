@@ -28,6 +28,7 @@ import {
   Radio,
   Heart,
   Calendar,
+  Lock,
 } from 'lucide-react';
 import { useAftercareOptional } from '../../context/AftercareContext';
 import { profileStorageV2 } from '../../lib/profile-storage-v2';
@@ -59,6 +60,7 @@ import { CorruptionDashboard } from '../admin/CorruptionDashboard';
 import { SleepContentSettings } from '../sleep-content/SleepContentSettings';
 import { SocialMediaDashboard } from '../social/SocialMediaDashboard';
 import { PersonaSettings } from './PersonaSettings';
+import { SniffiesSettings } from './SniffiesSettings';
 
 const DIFFICULTY_LEVELS = [
   { id: 'gentle', label: 'Gentle', desc: 'Lighter load, longer timers' },
@@ -310,7 +312,7 @@ interface SettingsViewProps {
   onEditIntake?: () => void;
 }
 
-type SettingsSection = 'main' | 'profile' | 'lovense' | 'whoop' | 'calendar' | 'equipment' | 'timeratchets' | 'reminders' | 'privacy' | 'stealth' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content' | 'opacity' | 'social-dashboard' | 'persona';
+type SettingsSection = 'main' | 'profile' | 'lovense' | 'whoop' | 'calendar' | 'equipment' | 'timeratchets' | 'reminders' | 'privacy' | 'stealth' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content' | 'opacity' | 'social-dashboard' | 'persona' | 'sniffies';
 
 export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
   const { isBambiMode } = useBambiMode();
@@ -353,6 +355,7 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
     stealth: 'settings_basic',
     appearance: 'settings_appearance',
     data: 'settings_data',
+    sniffies: 'settings_privacy',
   };
 
   const allSections = [
@@ -447,6 +450,13 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
       description: "Mama's memory & in-fantasy distortion",
       color: '#9F1F4F',
     },
+    {
+      id: 'sniffies' as const,
+      icon: Lock,
+      label: 'Sniffies imports',
+      description: 'Hookup-chat ingestion (default off, owner-only)',
+      color: '#D946EF',
+    },
   ];
 
   // Filter sections by opacity level
@@ -479,6 +489,7 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
     if (activeSection === 'opacity') return 'Visibility';
     if (activeSection === 'social-dashboard') return 'Socials';
     if (activeSection === 'persona') return 'Persona';
+    if (activeSection === 'sniffies') return 'Sniffies imports';
     const section = sections.find(s => s.id === activeSection);
     return section?.label || 'Settings';
   };
@@ -1205,6 +1216,9 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
 
         {/* Persona */}
         {activeSection === 'persona' && <PersonaSettings />}
+
+        {/* Sniffies imports */}
+        {activeSection === 'sniffies' && <SniffiesSettings />}
       </div>
     </div>
   );
