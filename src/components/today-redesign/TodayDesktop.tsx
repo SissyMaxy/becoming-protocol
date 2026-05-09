@@ -57,6 +57,7 @@ import { ArousalTouchCard } from '../persona/ArousalTouchCard';
 import { WardrobePrescriptionCard } from './WardrobePrescriptionCard';
 import { GoodGirlPointsCard } from '../persona/GoodGirlPointsCard';
 import { ProtocolHealthCard } from './ProtocolHealthCard';
+import { MommyIdeationCard } from './MommyIdeationCard';
 import { PunishmentQueueCard } from './PunishmentQueueCard';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
@@ -360,6 +361,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         {/* STRATEGY & BRIEFINGS — meta-layer, lower priority. */}
         <CollapsibleGroup id="strategy_briefings" label="Strategy & Briefings" tone="#a78bfa" hint="health · daily brief · strategist · code audit">
           <ProtocolHealthCard />
+          <MommyIdeationCard />
           <DailyBriefingCard />
           <StrategicPlanCard />
           <CodeAuditCard />

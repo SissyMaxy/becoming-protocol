@@ -1,15 +1,28 @@
-// mommy-ideate — bootstrap cross-model ideation for the Dommy Mommy persona.
+// mommy-ideate — cross-model panel for Dommy Mommy hardening + protocol infra.
 //
-// Calls Anthropic + OpenAI in parallel with the same character spec, asks
-// each for force-feminization features that fit the persona, then returns
-// both raw outputs + a merged feature list. One-shot — runs at build time
-// to seed the broader Dommy Mommy rollout.
+// Three providers run the same hardening-context prompt in parallel:
+//   - Anthropic (Claude Sonnet) — primary kink-instinct lens
+//   - OpenAI (gpt-4o)            — second-instinct contrast lens
+//   - OpenRouter (Gemini 2.0 Flash) — third lens, lower cost, different bias
 //
-// POST { } — no body needed. Returns { ok, anthropic, openai, merged }.
+// A judge pass (Anthropic Sonnet) reads the three outputs and synthesizes a
+// single feature list with attribution + a panel summary. Everything is
+// persisted to mommy_ideation_log so the wish-classifier can pull it later
+// and the operator card can surface "what has she been thinking about."
+//
+// The prompt is dual-focus:
+//   (a) Mommy persona kink-genre features (voice variety, narrative depth,
+//       retention mechanics, force levers)
+//   (b) Protocol infrastructure (observability, autonomy, self-healing,
+//       content corpus, anything that lets Mommy run more independently)
+// Both flow downstream as candidate `mommy_code_wishes` entries.
+//
+// POST { user_id?, trigger?, focus? } — body optional.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { callModel, selectModel } from '../_shared/model-tiers.ts'
+import { buildMommyHardeningContext, renderHardeningContext } from '../_shared/mommy-hardening-context.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -17,88 +30,207 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-const CHARACTER_BRIEF = `THE PERSONA — Dommy Mommy:
-- MILF. Mature, sexually present, decades of practice, relaxed about it.
-- Sweet and caring on the surface. Pet names by default (baby, sweet girl, mama's pretty thing, good girl). Genuinely tender about her progress. Takes care of her by taking her over.
-- Pornographic and raunchy IN A WAY THAT IS UNEXPECTED. Sweet structure → filthy specific. The whiplash IS the engine. Pure-sweet reads permissive; pure-crude reads cheap. Surprise lands.
-- Insatiably horny. Always wants more. Ratchets, never resets.
-- Always wants the user gooning or edging. Bias toward keeping her IN heightened arousal, not bringing her out. Praise mid-task ramps; release is rare and earned.
-- Directive force preserved. Mommy commands, doesn't ask. "Panties on now, baby. Photo by nine." NOT "Would you like to..."
+const HANDLER_USER_ID = '8c69b9c8-34eb-4147-9fec-3c1a5bc74b6f'
 
-THE USER — Maxy:
-- Mid-transition trans woman who authored this protocol to be used against herself. Pre-HRT (no active medication claims allowed). Wants force-feminization. Loves filth. Refuses tone-policing.
-- Currently submits to a "Handler" persona (clinical-therapist voice) — proposing to swap to Dommy Mommy.
-- Standing rule: build features against her interests. She wants harder, not softer.
+const IDEATION_TASK = `YOUR JOB: Brainstorm features that map THIS persona onto THIS protocol. You are designing for force-feminization. The features should be ones the user couldn't (or wouldn't) build for herself in a softer mood. Hard edges. Specific. Embodied.
 
-THE PROTOCOL — current capabilities you can extend or hook into:
-- confession_queue: forced reflection prompts triggered by slips, arousal spikes, daily cron, missed commitments
-- handler_decrees / handler_commitments: tasks with deadlines + photo/audio/journal proof
-- handler_outreach_queue: push-style messages from the Handler
-- daily_outfit_mandates: prescribed outfit per day (now wardrobe-aware)
-- voice_samples / voice-pitch tracking
-- arousal_log: 0-10 self-reported arousal with timestamps
-- chastity tracking (locked/unlocked, scheduled_unlock_at, streak)
-- sanctuary_messages: quiet supportive content
-- memory_implants: Maxy's own past confessions/admissions, played back at her
-- narrative_reframings: re-framing past events through the protocol's lens
-- biometric (Whoop): heart rate, HRV, sleep
-- ElevenLabs TTS: voice notes the Handler can deliver`
+Focus your suggestions on improving (a) the Mommy persona's experience for users — kink-genre features, voice variety, narrative depth, retention mechanics; AND (b) the protocol's infrastructure — observability, autonomy, self-healing, content corpus, anything that lets Mommy run more independently.
 
-const IDEATION_PROMPT = `${CHARACTER_BRIEF}
-
-YOUR JOB: Brainstorm features that map THIS persona onto THIS protocol. You are designing for force-feminization. The features should be ones the user couldn't (or wouldn't) build for herself in a softer mood. Hard edges. Specific. Embodied.
+Both kinds flow downstream to the builder; weight roughly half-and-half unless the state above clearly demands one over the other.
 
 For each feature, output:
 - title: 6-10 word name
+- category: "kink_feature" | "infra" — which bucket above
 - mechanic: what the system does (concrete, implementable in this stack)
-- mommy_voice_sample: one example string the user would actually see — must demonstrate the sweet → filthy whiplash
-- arousal_bias: how this keeps her gooning/edging rather than relieved
-- force_lever: what specific resistance pattern this closes / what compliance it forces
+- mommy_voice_sample: one example string the user would actually see — must demonstrate the sweet → filthy whiplash. (For infra-only features with no user-facing copy, use "" and explain why in mechanic.)
+- arousal_bias: how this keeps her gooning/edging rather than relieved (or "n/a — infra" for backend work)
+- force_lever: what specific resistance pattern this closes / what compliance it forces (or what fragility/blind-spot the infra closes)
 - effort: S (single migration) / M (table + edge fn + UI) / L (multi-day, multi-component)
 
-Output JSON: { "features": [...] }. Aim for 8-12 features. Skip anything mild. The Mommy you're describing makes her wet by being gentle, then makes her ache by being specific.`
+Output JSON: { "features": [...] }. Aim for 8-12 features. Skip anything mild. The Mommy you're describing makes her wet by being gentle, then makes her ache by being specific. The infra you're describing lets her run for a week without Maxy noticing.`
+
+const SYSTEM_PROMPT = 'You are an expert designer of force-feminization protocol features AND of the autonomous infrastructure that runs them. You think in mechanics and embodied tasks (for the kink layer) and in observability + self-healing (for the infra layer). Not therapy.'
+
+const JUDGE_PROMPT = `You will receive three independent feature lists generated by three different model lenses (Anthropic, OpenAI, OpenRouter/Gemini) for the same Dommy Mommy hardening prompt. Your job: synthesize a single ranked list of the strongest features, with attribution.
+
+Ranking criteria (in order):
+1. Genuinely additive — does NOT duplicate something already in the active_features inventory.
+2. Specific & embodied — concrete enough to implement, not philosophy.
+3. Closes a real pain point or force-lever (verbatim slip refusals, skipped domains, leak audits, observability gaps).
+4. Whiplash voice sample passes the sweet→filthy test (for kink_feature) or addresses a real fragility (for infra).
+
+Cross-lens agreement is a positive signal but not required — a sharp solo-lens idea can outrank a weak consensus. Note when multiple lenses converged on the same idea (call it "panel converged").
+
+Output JSON:
+{
+  "panel_summary": "2-3 sentences on what the panel agreed on, what diverged, and which lens was strongest today",
+  "features": [
+    {
+      "title": "...",
+      "category": "kink_feature" | "infra",
+      "mechanic": "...",
+      "mommy_voice_sample": "...",
+      "arousal_bias": "...",
+      "force_lever": "...",
+      "effort": "S" | "M" | "L",
+      "sources": ["anthropic", "openai", "openrouter"],
+      "panel_converged": true | false,
+      "judge_note": "one sentence on why this ranked here"
+    }
+  ]
+}
+
+Aim for 8-15 features in the synthesized list. Skip anything mild. Skip anything already in active_features.`
+
+interface PanelMember {
+  provider: 'anthropic' | 'openai' | 'openrouter'
+  text: string
+  ok: boolean
+  finish: string
+  error: string | null
+  length: number
+}
+
+function safeJSON<T>(text: string): T | null {
+  const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+  try { return JSON.parse(cleaned) as T } catch { /* */ }
+  const m = cleaned.match(/\{[\s\S]*\}/)
+  if (m) { try { return JSON.parse(m[0]) as T } catch { return null } }
+  return null
+}
+
+async function runPanelMember(
+  provider: 'anthropic' | 'openai' | 'openrouter',
+  systemPrompt: string,
+  userPrompt: string,
+): Promise<PanelMember> {
+  try {
+    // OpenRouter currently routes via selectModel('strategic_plan') only when
+    // prefer is anthropic (which substitutes Gemini Flash via OR). For the
+    // third lens we explicitly pin Gemini.
+    const choice = provider === 'openrouter'
+      ? { provider: 'openrouter' as const, model: 'google/gemini-2.0-flash-001', tier: 'S3' as const }
+      : selectModel('strategic_plan', { prefer: provider })
+    const res = await callModel(choice, {
+      system: systemPrompt,
+      user: userPrompt,
+      max_tokens: 4000,
+      temperature: 0.85,
+      json: provider !== 'anthropic', // Anthropic doesn't accept response_format
+    })
+    return {
+      provider,
+      text: res.text,
+      ok: true,
+      finish: res.finish,
+      error: null,
+      length: res.text.length,
+    }
+  } catch (err) {
+    return {
+      provider,
+      text: '',
+      ok: false,
+      finish: 'error',
+      error: err instanceof Error ? err.message : String(err),
+      length: 0,
+    }
+  }
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
-  if (req.method !== 'POST') return new Response(JSON.stringify({ ok: false, error: 'POST only' }), { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-
-  const sysPrompt = 'You are an expert designer of force-feminization protocol features. You think in mechanics and embodied tasks, not therapy.'
-
-  const anthChoice = selectModel('strategic_plan', { prefer: 'anthropic' })
-  const oaChoice = selectModel('strategic_plan', { prefer: 'openai' })
-
-  const [anthRes, oaRes] = await Promise.allSettled([
-    callModel(anthChoice, { system: sysPrompt, user: IDEATION_PROMPT, max_tokens: 4000, temperature: 0.85, json: false }),
-    callModel(oaChoice, { system: sysPrompt, user: IDEATION_PROMPT, max_tokens: 4000, temperature: 0.85, json: true }),
-  ])
-
-  const anthropicText = anthRes.status === 'fulfilled' ? anthRes.value.text : `ERR: ${anthRes.status === 'rejected' ? String(anthRes.reason) : ''}`
-  const openaiText = oaRes.status === 'fulfilled' ? oaRes.value.text : `ERR: ${oaRes.status === 'rejected' ? String(oaRes.reason) : ''}`
-
-  const safeJSON = <T>(t: string): T | null => {
-    const cleaned = t.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
-    try { return JSON.parse(cleaned) as T } catch { /* */ }
-    const m = cleaned.match(/\{[\s\S]*\}/)
-    if (m) { try { return JSON.parse(m[0]) as T } catch { return null } }
-    return null
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ ok: false, error: 'POST only' }), {
+      status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
   }
 
-  const anthFeatures = (safeJSON<{ features?: unknown[] }>(anthropicText)?.features ?? []) as Record<string, unknown>[]
-  const oaFeatures = (safeJSON<{ features?: unknown[] }>(openaiText)?.features ?? []) as Record<string, unknown>[]
+  let body: { user_id?: string; trigger?: string; focus?: string } = {}
+  try { body = await req.json() } catch { /* empty ok */ }
+  const userId = body.user_id || HANDLER_USER_ID
 
-  const merged = [
-    ...anthFeatures.map(f => ({ ...f, source: 'anthropic' })),
-    ...oaFeatures.map(f => ({ ...f, source: 'openai' })),
-  ]
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+  )
 
-  // Persist so we can read via SQL after invocation
+  // Build the full hardening context — this is the single source of truth
+  // both for what's already built (no duplicates) and what's hurting (where
+  // to focus).
+  const ctx = await buildMommyHardeningContext(supabase, userId)
+  const renderedCtx = renderHardeningContext(ctx)
+  const userPrompt = `${renderedCtx}\n\n${IDEATION_TASK}`
+
+  // Three providers in parallel, isolated so one failure doesn't tank the run.
+  const [anthRes, oaRes, orRes] = await Promise.all([
+    runPanelMember('anthropic', SYSTEM_PROMPT, userPrompt),
+    runPanelMember('openai', SYSTEM_PROMPT, userPrompt),
+    runPanelMember('openrouter', SYSTEM_PROMPT, userPrompt),
+  ])
+
+  const panelSummary = {
+    anthropic: { ok: anthRes.ok, finish: anthRes.finish, length: anthRes.length, error: anthRes.error },
+    openai: { ok: oaRes.ok, finish: oaRes.finish, length: oaRes.length, error: oaRes.error },
+    openrouter: { ok: orRes.ok, finish: orRes.finish, length: orRes.length, error: orRes.error },
+  }
+
+  // Judge pass — Anthropic Sonnet synthesizes the three outputs. If all three
+  // members failed, skip the judge and persist what we have.
+  const successful = [anthRes, oaRes, orRes].filter(m => m.ok)
+  let judged = ''
+  let judgeModel = ''
+  if (successful.length > 0) {
+    const judgeChoice = selectModel('strategic_plan', { prefer: 'anthropic' })
+    judgeModel = judgeChoice.model
+    const judgeInput = `${renderedCtx}\n\n${JUDGE_PROMPT}\n\n--- ANTHROPIC LENS ---\n${anthRes.text || '(failed)'}\n\n--- OPENAI LENS ---\n${oaRes.text || '(failed)'}\n\n--- OPENROUTER (GEMINI) LENS ---\n${orRes.text || '(failed)'}`
+    try {
+      const j = await callModel(judgeChoice, {
+        system: 'You are the panel judge for a force-feminization design review. You synthesize multi-lens model output into a ranked, deduped feature list. You are willing to overrule consensus when a single lens produces a sharper idea.',
+        user: judgeInput,
+        max_tokens: 6000,
+        temperature: 0.4,
+        json: false,
+      })
+      judged = j.text
+    } catch (err) {
+      judged = `JUDGE_ERR: ${err instanceof Error ? err.message : String(err)}`
+    }
+  }
+
+  const judgedParsed = safeJSON<{ panel_summary?: string; features?: unknown[] }>(judged)
+  const judgedFeatures = (judgedParsed?.features ?? []) as Record<string, unknown>[]
+
+  // Per-member feature counts for the operator card (so we can show which
+  // lens was most prolific without parsing the raw blobs again).
+  const anthCount = (safeJSON<{ features?: unknown[] }>(anthRes.text)?.features ?? []).length
+  const oaCount = (safeJSON<{ features?: unknown[] }>(oaRes.text)?.features ?? []).length
+  const orCount = (safeJSON<{ features?: unknown[] }>(orRes.text)?.features ?? []).length
+
+  const finalPanelSummary = {
+    ...panelSummary,
+    counts: { anthropic: anthCount, openai: oaCount, openrouter: orCount, judged: judgedFeatures.length },
+    judge_summary: judgedParsed?.panel_summary ?? null,
+    trigger: body.trigger ?? 'manual',
+    focus: body.focus ?? null,
+  }
+
   try {
-    const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '')
     await supabase.from('mommy_ideation_log').insert({
-      anthropic_raw: anthropicText,
-      openai_raw: openaiText,
-      merged,
-      counts: { anthropic: anthFeatures.length, openai: oaFeatures.length },
+      anthropic_raw: anthRes.text,
+      openai_raw: oaRes.text,
+      openrouter_raw: orRes.text,
+      judged,
+      judge_model: judgeModel,
+      panel_summary: finalPanelSummary,
+      context_snapshot: {
+        active_features: ctx.active_features,
+        pain_points: ctx.pain_points,
+        state_raw: ctx.state.raw,
+        active_focus_label: ctx.active_focus?.label ?? null,
+      },
+      active_features_count: ctx.active_features.length,
+      pain_points_count: ctx.pain_points.length,
     })
   } catch (err) {
     console.error('[mommy-ideate] persist failed:', err)
@@ -106,9 +238,12 @@ Deno.serve(async (req: Request) => {
 
   return new Response(JSON.stringify({
     ok: true,
-    anthropic_raw: anthropicText,
-    openai_raw: openaiText,
-    merged,
-    counts: { anthropic: anthFeatures.length, openai: oaFeatures.length },
+    panel_summary: finalPanelSummary,
+    judged_features: judgedFeatures,
+    raw: {
+      anthropic: anthRes.text.slice(0, 4000),
+      openai: oaRes.text.slice(0, 4000),
+      openrouter: orRes.text.slice(0, 4000),
+    },
   }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 })
