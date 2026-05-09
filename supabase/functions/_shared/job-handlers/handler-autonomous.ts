@@ -1,6 +1,13 @@
-// Handler Autonomous Orchestrator — Edge Function
-// Main cron-driven function that coordinates the autonomous Handler system.
-// Called by pg_cron at different intervals for different actions:
+// Handler Autonomous Orchestrator — job handler
+// Used to be the handler-autonomous edge function entrypoint; relocated so the
+// thin entrypoint can enqueue background_jobs rows and return 202 within ~50ms,
+// and the job-worker drains the queue with a 25s per-handler cap.
+//
+// Action contract preserved. Public URL still accepts the same JSON body shape:
+//   { action: 'compliance_check' | 'daily_cycle' | 'quick_task_check'
+//           | 'bleeding_process' | 'weekly_adaptation' | 'hourly_analytics',
+//     user_id?: string }
+// Cron schedules:
 //   - every 5 min:  compliance_check (engagement tracking, escalation)
 //   - every 5 min:  execute_posts (via handler-platform)
 //   - every 15 min: quick_task_check (generate if user is idle)
@@ -8,9 +15,8 @@
 //   - hourly:       bleeding_process (financial bleeding for noncompliance)
 //   - weekly Sun:   weekly_adaptation (pattern analysis, strategy update)
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { isTestPollution } from '../_shared/dommy-mommy.ts'
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { isTestPollution } from '../dommy-mommy.ts'
 
 // Per-invocation persona cache. Each compliance/autonomous run resolves
 // persona once per user and reuses across the dozens of outreach sites
@@ -38,11 +44,6 @@ async function isMommyUser(
   }
 }
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-
 type Action =
   | 'compliance_check'
   | 'daily_cycle'
@@ -51,84 +52,77 @@ type Action =
   | 'weekly_adaptation'
   | 'hourly_analytics'
 
-interface OrchestratorRequest {
+export interface HandlerAutonomousPayload {
   action: Action
   user_id?: string
 }
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+const VALID_ACTIONS: ReadonlySet<Action> = new Set([
+  'compliance_check',
+  'daily_cycle',
+  'quick_task_check',
+  'bleeding_process',
+  'weekly_adaptation',
+  'hourly_analytics',
+])
+
+export function isValidHandlerAutonomousAction(s: unknown): s is Action {
+  return typeof s === 'string' && VALID_ACTIONS.has(s as Action)
+}
+
+export async function runHandlerAutonomous(
+  supabase: SupabaseClient,
+  payload: HandlerAutonomousPayload,
+): Promise<Record<string, unknown>> {
+  // Reset per-invocation persona cache so a stale handler_persona from a
+  // prior run doesn't leak voice into this one. Module-level cache is shared
+  // across job-worker invocations of this handler.
+  mommyByUser.clear()
+
+  let result: Record<string, unknown>
+
+  switch (payload.action) {
+    case 'compliance_check':
+      result = await complianceCheck(supabase, payload.user_id)
+      break
+    case 'daily_cycle':
+      result = await dailyCycle(supabase, payload.user_id)
+      break
+    case 'quick_task_check':
+      result = await quickTaskCheck(supabase, payload.user_id)
+      break
+    case 'bleeding_process':
+      result = await bleedingProcess(supabase, payload.user_id)
+      break
+    case 'weekly_adaptation':
+      result = await weeklyAdaptation(supabase, payload.user_id)
+      break
+    case 'hourly_analytics':
+      result = await hourlyAnalytics(supabase, payload.user_id)
+      break
+    default:
+      result = { error: `Unknown action: ${payload.action}` }
   }
 
-  try {
-    // Reset per-invocation persona cache so a stale handler_persona from a
-    // prior run doesn't leak voice into this one.
-    mommyByUser.clear()
-
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
-
-    const body: OrchestratorRequest = await req.json().catch(() => ({ action: 'compliance_check' }))
-
-    let result: Record<string, unknown>
-
-    switch (body.action) {
-      case 'compliance_check':
-        result = await complianceCheck(supabase, body.user_id)
-        break
-      case 'daily_cycle':
-        result = await dailyCycle(supabase, body.user_id)
-        break
-      case 'quick_task_check':
-        result = await quickTaskCheck(supabase, body.user_id)
-        break
-      case 'bleeding_process':
-        result = await bleedingProcess(supabase, body.user_id)
-        break
-      case 'weekly_adaptation':
-        result = await weeklyAdaptation(supabase, body.user_id)
-        break
-      case 'hourly_analytics':
-        result = await hourlyAnalytics(supabase, body.user_id)
-        break
-      default:
-        result = { error: `Unknown action: ${body.action}` }
-    }
-
-    // Log the orchestrator run (non-critical). handler_decisions.user_id is
-    // a uuid column — the previous fallback to literal 'system' string was
-    // throwing `invalid input syntax for type uuid: "system"` every cron tick.
-    // Skip the log entirely when no user_id is present rather than insert a
-    // bogus value.
-    if (body.user_id) {
-      try {
-        await supabase.from('handler_decisions').insert({
-          user_id: body.user_id,
-          decision_type: `orchestrator_${body.action}`,
-          decision_data: result,
-          reasoning: `Cron-triggered ${body.action}`,
-          executed: true,
-          executed_at: new Date().toISOString(),
-          outcome: { success: !result.error },
-        })
-      } catch (_) { /* non-critical logging */ }
-    }
-
-    return new Response(
-      JSON.stringify(result),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
-  } catch (error) {
-    console.error('Orchestrator error:', error)
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+  // Log the orchestrator run (non-critical). handler_decisions.user_id is a
+  // uuid column — skip the log when no user_id is present rather than insert
+  // a bogus value.
+  if (payload.user_id) {
+    try {
+      await supabase.from('handler_decisions').insert({
+        user_id: payload.user_id,
+        decision_type: `orchestrator_${payload.action}`,
+        decision_data: result,
+        reasoning: `Cron-triggered ${payload.action}`,
+        executed: true,
+        executed_at: new Date().toISOString(),
+        outcome: { success: !result.error },
+      })
+    } catch (_) { /* non-critical logging */ }
   }
-})
+
+  return result
+}
 
 // ============================================
 // COMPLIANCE CHECK (every 5 minutes)
