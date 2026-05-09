@@ -12,16 +12,22 @@
 -- This migration:
 --   1. Documents the extended source vocabulary (no CHECK exists, so this is
 --      a comment / convention update — runtime enforcement is in the edge fn).
---   2. Adds function_execution_time_ms + health_threshold_breached columns
---      so timeouts and threshold breaches carry structured telemetry.
---   3. Adds (source, status, detected_at desc) index for the new
---      SupabaseHealthCard dashboard query that filters by source.
+--   2. Adds function_execution_time_ms + health_threshold_breached +
+--      error_signature columns so timeouts and threshold breaches carry
+--      structured telemetry the watcher and watchdog can filter on.
+--   3. Adds (source, status, detected_at desc) + (error_signature,
+--      detected_at desc) indexes for the SupabaseHealthCard dashboard query
+--      and the external watchdog's signal lookup.
 --   4. Grants the service_role read access to cron.job_run_details so the
 --      watcher can poll pg_cron failures from inside the edge function.
+--   5. Creates supabase_restart_log so the external watchdog
+--      (.github/workflows/supabase-watchdog.yml) can enforce the 24h cap
+--      and the 30min recovery window without trusting CI logs alone.
 
 ALTER TABLE public.deploy_health_log
   ADD COLUMN IF NOT EXISTS function_execution_time_ms integer,
-  ADD COLUMN IF NOT EXISTS health_threshold_breached jsonb;
+  ADD COLUMN IF NOT EXISTS health_threshold_breached jsonb,
+  ADD COLUMN IF NOT EXISTS error_signature text;
 
 COMMENT ON COLUMN public.deploy_health_log.source IS
   'github_actions | vercel | supabase_edge | pg_cron | postgres | self';
@@ -29,9 +35,45 @@ COMMENT ON COLUMN public.deploy_health_log.function_execution_time_ms IS
   'For supabase_edge timeouts / slow_response: observed execution time in ms.';
 COMMENT ON COLUMN public.deploy_health_log.health_threshold_breached IS
   'For postgres / pg_cron threshold checks: { metric, observed, threshold, ... }.';
+COMMENT ON COLUMN public.deploy_health_log.error_signature IS
+  'Sub-classifier within source: e.g. auth_failure | timeout | slow_response | http_5xx | connection_saturation | wal_archive_failure | resource_exhaustion_detected | self_auth_failure.';
 
 CREATE INDEX IF NOT EXISTS idx_deploy_health_log_source_status_detected
   ON public.deploy_health_log(source, status, detected_at DESC);
+
+-- Watchdog query: filter by error_signature + window. Partial index on the
+-- exhaustion signature keeps the index tiny — only signal rows are present.
+CREATE INDEX IF NOT EXISTS idx_deploy_health_log_signature_detected
+  ON public.deploy_health_log(error_signature, detected_at DESC)
+  WHERE error_signature IS NOT NULL;
+
+-- ---------- supabase_restart_log ----------
+-- The external watchdog (.github/workflows/supabase-watchdog.yml) inserts
+-- one row here per restart attempt so the 24h cap and 30min recovery
+-- window can be enforced without trusting GitHub Actions logs alone.
+-- 'operator' = manual API call; 'manual' = dashboard click documented after
+-- the fact; 'watchdog' = automated. Kept separate from
+-- autonomous_escalation_log because restarts are a distinct lifecycle event
+-- that needs its own audit table.
+CREATE TABLE IF NOT EXISTS public.supabase_restart_log (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  triggered_at timestamptz NOT NULL DEFAULT now(),
+  triggered_by text NOT NULL CHECK (triggered_by IN ('watchdog','operator','manual')),
+  reason text,
+  signal_count int,
+  api_response jsonb
+);
+
+CREATE INDEX IF NOT EXISTS idx_supabase_restart_log_triggered_at
+  ON public.supabase_restart_log(triggered_at DESC);
+
+ALTER TABLE public.supabase_restart_log ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Service writes restart log" ON public.supabase_restart_log;
+CREATE POLICY "Service writes restart log" ON public.supabase_restart_log
+  FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "Authed users see restart log" ON public.supabase_restart_log;
+CREATE POLICY "Authed users see restart log" ON public.supabase_restart_log
+  FOR SELECT USING (auth.uid() IS NOT NULL);
 
 -- pg_cron lives in the cron schema; the service_role used by edge functions
 -- needs read access to job_run_details so pollPgCronFailures() can see job
