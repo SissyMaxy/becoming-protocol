@@ -196,14 +196,27 @@ export function CompulsoryConfessionGate() {
 
   if (!gateOpen || !prompt || !cfg) return null;
 
+  // Mobile-safe overlay: outer scrolls, inner wrapper holds min-height: 100% so
+  // the card centers when it fits and grows from the top when it overflows. The
+  // old `display: flex; alignItems: center` on the overlay clipped the submit
+  // button below the fold once the textarea pushed total height past the
+  // viewport — and the keyboard made it worse. (See pattern-lint: ban-100vh.)
   return (
     <div
       style={{
         position: 'fixed', inset: 0, background: 'rgba(5, 3, 10, 0.96)', zIndex: 350,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+        overflowY: 'auto', WebkitOverflowScrolling: 'touch',
         backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
       }}
     >
+      <div style={{
+        minHeight: '100%',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '20px 16px',
+        paddingTop: 'max(20px, env(safe-area-inset-top))',
+        paddingBottom: 'max(20px, env(safe-area-inset-bottom))',
+        boxSizing: 'border-box',
+      }}>
       <div style={{
         maxWidth: 560, width: '100%',
         background: '#111116', border: '1px solid #2d1a4d', borderRadius: 14, padding: 24,
@@ -255,6 +268,7 @@ export function CompulsoryConfessionGate() {
         <div style={{ fontSize: 10.5, color: '#5a5560', marginTop: 10, textAlign: 'center' }}>
           You can't skip this. The app stays locked until you finish. No safeword for this gate — the whole point is to finish.
         </div>
+      </div>
       </div>
     </div>
   );
