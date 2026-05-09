@@ -1,10 +1,7 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+// Conditioning engine — job handler. Used to be the conditioning-engine edge
+// function entrypoint. Relocated so the entrypoint can enqueue and return 202;
+// the job-worker drains and runs each action with a 25s cap.
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 // =============================================
 // Parameter caps for hidden_operations
@@ -79,97 +76,75 @@ STYLE RULES:
 OUTPUT: Just the script text. No metadata, no headers, no stage directions.`
 }
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+export interface ConditioningEnginePayload {
+  action: string
+}
 
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-  )
+const VALID_CONDITIONING_ACTIONS: ReadonlySet<string> = new Set([
+  'increment_hidden_parameters',
+  'generate_weekly_scripts',
+  'prescribe_sleep_content',
+  'check_posthypnotic_activations',
+  'execute_directives',
+  'generate_weekly_reflection',
+  'generate_daily_cycle',
+  'execute_daily_cycle_morning',
+  'execute_daily_cycle_midday',
+  'execute_daily_cycle_afternoon',
+  'execute_daily_cycle_evening',
+  'execute_daily_cycle_night',
+  'check_obligation_compliance',
+  'execute_consequences',
+  'process_device_schedule',
+])
 
-  let action: string
-  try {
-    const body = await req.json()
-    action = body.action
-  } catch {
-    return new Response(
-      JSON.stringify({ error: 'Invalid JSON body' }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    )
-  }
+export function isValidConditioningEngineAction(s: unknown): s is string {
+  return typeof s === 'string' && VALID_CONDITIONING_ACTIONS.has(s)
+}
 
-  if (!action) {
-    return new Response(
-      JSON.stringify({ error: 'Missing action parameter' }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    )
-  }
-
+export async function runConditioningEngine(
+  supabase: SupabaseClient,
+  payload: ConditioningEnginePayload,
+): Promise<Record<string, unknown>> {
+  const { action } = payload
+  if (!action) throw new Error('Missing action parameter')
   console.log(`[conditioning-engine] Action: ${action} at ${new Date().toISOString()}`)
 
-  try {
-    switch (action) {
-      case 'increment_hidden_parameters':
-        return await handleIncrementHiddenParameters(supabase)
-
-      case 'generate_weekly_scripts':
-        return await handleGenerateWeeklyScripts(supabase)
-
-      case 'prescribe_sleep_content':
-        return await handlePrescribeSleepContent(supabase)
-
-      case 'check_posthypnotic_activations':
-        return await handleCheckPosthypnoticActivations(supabase)
-
-      case 'execute_directives':
-        return await handleExecuteDirectives(supabase)
-
-      case 'generate_weekly_reflection':
-        return await handleGenerateWeeklyReflection(supabase)
-
-      case 'generate_daily_cycle':
-        return await handleGenerateDailyCycle(supabase)
-
-      case 'execute_daily_cycle_morning':
-        return await handleExecuteCycleBlock(supabase, 'morning')
-
-      case 'execute_daily_cycle_midday':
-        return await handleExecuteCycleBlock(supabase, 'midday')
-
-      case 'execute_daily_cycle_afternoon':
-        return await handleExecuteCycleBlock(supabase, 'afternoon')
-
-      case 'execute_daily_cycle_evening':
-        return await handleExecuteCycleBlock(supabase, 'evening')
-
-      case 'execute_daily_cycle_night':
-        return await handleExecuteCycleBlock(supabase, 'night')
-
-      case 'check_obligation_compliance':
-        return await handleCheckObligationCompliance(supabase)
-
-      case 'execute_consequences':
-        return await handleExecuteConsequences(supabase)
-
-      case 'process_device_schedule':
-        return await handleProcessDeviceSchedule(supabase)
-
-      default:
-        return new Response(
-          JSON.stringify({ error: `Unknown action: ${action}` }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-        )
-    }
-  } catch (err) {
-    console.error(`[conditioning-engine] Fatal error in ${action}:`, err)
-    return new Response(
-      JSON.stringify({ error: 'Internal error', detail: String(err) }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    )
+  switch (action) {
+    case 'increment_hidden_parameters':
+      return await handleIncrementHiddenParameters(supabase)
+    case 'generate_weekly_scripts':
+      return await handleGenerateWeeklyScripts(supabase)
+    case 'prescribe_sleep_content':
+      return await handlePrescribeSleepContent(supabase)
+    case 'check_posthypnotic_activations':
+      return await handleCheckPosthypnoticActivations(supabase)
+    case 'execute_directives':
+      return await handleExecuteDirectives(supabase)
+    case 'generate_weekly_reflection':
+      return await handleGenerateWeeklyReflection(supabase)
+    case 'generate_daily_cycle':
+      return await handleGenerateDailyCycle(supabase)
+    case 'execute_daily_cycle_morning':
+      return await handleExecuteCycleBlock(supabase, 'morning')
+    case 'execute_daily_cycle_midday':
+      return await handleExecuteCycleBlock(supabase, 'midday')
+    case 'execute_daily_cycle_afternoon':
+      return await handleExecuteCycleBlock(supabase, 'afternoon')
+    case 'execute_daily_cycle_evening':
+      return await handleExecuteCycleBlock(supabase, 'evening')
+    case 'execute_daily_cycle_night':
+      return await handleExecuteCycleBlock(supabase, 'night')
+    case 'check_obligation_compliance':
+      return await handleCheckObligationCompliance(supabase)
+    case 'execute_consequences':
+      return await handleExecuteConsequences(supabase)
+    case 'process_device_schedule':
+      return await handleProcessDeviceSchedule(supabase)
+    default:
+      throw new Error(`Unknown action: ${action}`)
   }
-})
+}
 
 // =============================================
 // ACTION 1: increment_hidden_parameters
@@ -1387,9 +1362,14 @@ async function handleExecuteConsequences(_supabase: ReturnType<typeof createClie
   return jsonResponse({ action: 'execute_consequences', implemented: false, note: 'handler not yet implemented — cron firing into stub' })
 }
 
-function jsonResponse(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  })
+// In the worker, handlers return plain data — the worker JSON-stringifies it
+// into background_jobs.result. Keep the historical name so the dozens of call
+// sites in this file are unchanged. Non-2xx now throws so the worker catches
+// it as a job failure.
+function jsonResponse(body: Record<string, unknown>, status = 200): Record<string, unknown> {
+  if (status >= 400) {
+    const err = typeof body.error === 'string' ? body.error : 'handler_error'
+    throw new Error(`${err}${body.detail ? ': ' + String(body.detail) : ''}`)
+  }
+  return body
 }
