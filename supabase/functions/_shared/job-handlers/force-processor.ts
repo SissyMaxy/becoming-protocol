@@ -1,20 +1,12 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+// Force processor — job handler. Used to be the force-processor edge function.
+// Single tick that catches missed doses, dodged punishments, missed Gina
+// disclosures, hard-mode exits, chastity expiries, content_calendar promotion,
+// and workout streak bookkeeping. Single action — `force-processor:run`.
+import { type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-
-serve(async req => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
-
-  const supa = createClient(
-    Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-  )
-
-  try {
+export async function runForceProcessor(
+  supa: SupabaseClient,
+): Promise<Record<string, unknown>> {
     const now = new Date()
     const nowIso = now.toISOString()
     const graceCutoff = new Date(now.getTime() - 2 * 3600000).toISOString()
@@ -586,22 +578,13 @@ serve(async req => {
       await supa.from('user_state').update({ workout_streak_days: 0 }).eq('user_id', (w as any).user_id)
     }
 
-    return new Response(
-      JSON.stringify({
-        ok: true,
-        missed_doses: (missedDoses || []).length,
-        dodged_punishments: (dodged || []).length,
-        missed_disclosures: (missedDisclosures || []).length,
-        expired_locks: (expiredLocks || []).length,
-        content_queued: contentQueued,
-        skipped_workouts: (skippedWorkouts || []).length,
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    )
-  } catch (err) {
-    return new Response(JSON.stringify({ error: String(err) }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+  return {
+    ok: true,
+    missed_doses: (missedDoses || []).length,
+    dodged_punishments: (dodged || []).length,
+    missed_disclosures: (missedDisclosures || []).length,
+    expired_locks: (expiredLocks || []).length,
+    content_queued: contentQueued,
+    skipped_workouts: (skippedWorkouts || []).length,
   }
-})
+}
