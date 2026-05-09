@@ -9,3 +9,4 @@ export { StealthSettings } from './StealthSettings';
 export { EquipmentInventory } from './EquipmentInventory';
 export { SystemAuditView } from './SystemAuditView';
 export { WardrobePrescriptionSettings } from './WardrobePrescriptionSettings';
+export { BedtimeRitualSettings } from './BedtimeRitualSettings';

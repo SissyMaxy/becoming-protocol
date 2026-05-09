@@ -13,6 +13,7 @@ import { HandlerProvider, useHandlerContext } from './context/HandlerContext';
 import { AmbushProvider } from './components/ambush';
 import { ModalOrchestratorProvider } from './context/ModalOrchestrator';
 import { AftercareProvider } from './context/AftercareContext';
+import { BedtimeRitualProvider } from './context/BedtimeRitualContext';
 import { useOrchestratedModals } from './hooks/useOrchestratedModals';
 import { useDisassociationRecovery } from './hooks/useDisassociationRecovery';
 import { useCompulsoryGate } from './hooks/useCompulsoryGate';
@@ -1253,9 +1254,11 @@ function AuthenticatedApp() {
             >
               <ModalOrchestratorProvider>
                 <AftercareProvider>
-                  <AmbushProvider enabled={false}>
-                    <AuthenticatedAppInner />
-                  </AmbushProvider>
+                  <BedtimeRitualProvider>
+                    <AmbushProvider enabled={false}>
+                      <AuthenticatedAppInner />
+                    </AmbushProvider>
+                  </BedtimeRitualProvider>
                 </AftercareProvider>
               </ModalOrchestratorProvider>
             </HandlerProvider>
