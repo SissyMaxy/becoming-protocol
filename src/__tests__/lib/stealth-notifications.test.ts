@@ -55,4 +55,67 @@ describe('stealth/notifications neutralizePayload', () => {
     expect(wire).toContain(NEUTRAL_TITLE);
     expect(wire).toContain(NEUTRAL_BODY);
   });
+
+  // ─── Confession audio link sanitization ──────────────────────────────
+  // Spec: confession audio (and any private storage URL) NEVER appears
+  // in a push preview. Test both stealth on and off — the strip happens
+  // in plain mode too, because previews are visible on lock screens.
+
+  it('strips a Supabase signed-URL from the body in plain mode', () => {
+    const out = neutralizePayload({
+      title: 'Mama',
+      body: 'listen to yourself say it https://atevwvexapiykchvqvhm.supabase.co/storage/v1/object/sign/audio/confessions/abc/123.webm?token=xyz',
+      data: {},
+    }, false);
+    expect(out.body).not.toMatch(/storage\/v1\/object/);
+    expect(out.body).not.toMatch(/audio\/confessions/);
+    expect(out.body).toContain('listen to yourself say it');
+  });
+
+  it('strips bucket-prefixed object paths from the body', () => {
+    // Realistic leak shape: the bucket name appears in the prefix because
+    // most code that accidentally serializes a path includes the bucket
+    // (it's how getPublicUrl + storage.from() output looked pre-mig 260).
+    const out = neutralizePayload({
+      title: 'Mama',
+      body: 'press play baby — audio/confessions/abc/xyz.webm — Mama wants to hear it',
+      data: {},
+    }, false);
+    expect(out.body).not.toMatch(/audio\/confessions\/abc\/xyz\.webm/);
+    expect(out.body).toContain('press play');
+  });
+
+  it('drops URL-shaped values from the data dict in plain mode', () => {
+    const out = neutralizePayload({
+      title: 'Mama',
+      body: 'message',
+      data: {
+        notification_id: 'abc',
+        audio_url: 'https://atevwvexapiykchvqvhm.supabase.co/storage/v1/object/sign/audio/confessions/abc/123.webm',
+        recall_confession_id: 'd5b9f1a2-1234-1234-1234-123456789abc',
+      },
+    }, false);
+    expect(out.data.notification_id).toBe('abc');
+    expect(out.data.audio_url).toBeUndefined();
+    // Non-URL keys (UUIDs) survive — only URL-shaped strings are dropped
+    expect(out.data.recall_confession_id).toBe('d5b9f1a2-1234-1234-1234-123456789abc');
+  });
+
+  it('under stealth, audio links are doubly-blocked: title+body neutral, data allowlisted', () => {
+    const out = neutralizePayload({
+      title: 'Listen to yourself say it',
+      body: 'audio/confessions/abc/123.webm',
+      data: {
+        notification_id: 'n1',
+        audio_url: 'https://x/storage/v1/object/sign/audio/confessions/abc/123.webm',
+        kind: 'mommy_recall_audio',
+      },
+    }, true);
+    expect(out.title).toBe(NEUTRAL_TITLE);
+    expect(out.body).toBe(NEUTRAL_BODY);
+    expect(JSON.stringify(out)).not.toMatch(/storage|webm|audio\/confessions|recall_audio/);
+    // Allowlist preserved
+    expect(out.data.notification_id).toBe('n1');
+    expect(out.data.audio_url).toBeUndefined();
+  });
 });

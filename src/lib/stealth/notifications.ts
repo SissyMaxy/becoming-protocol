@@ -46,6 +46,26 @@ function hasForceNeutralSource(data: Record<string, unknown> | undefined): boole
   return false;
 }
 
+// Storage-link patterns. We strip these from push body text in BOTH
+// stealth and plain mode — confession audio (and any other private
+// asset URL) never belongs in a notification preview. Even outside
+// stealth, push previews are visible on lock screens and over a
+// shared shoulder.
+//   - Supabase storage URLs (signed or public)
+//   - Bare object paths into private buckets we own
+//   - data:audio URIs (paranoia)
+const STORAGE_URL_PATTERNS: ReadonlyArray<RegExp> = [
+  /https?:\/\/[^\s]*\/storage\/v1\/object\/[^\s]*/gi,
+  /\b(?:audio|evidence|verification-photos|voice-recordings|progress-photos)\/[^\s]+\.(?:webm|ogg|wav|mp3|m4a|mp4|jpg|jpeg|png|webp)\b/gi,
+  /data:audio\/[^\s]+/gi,
+];
+
+function stripStorageRefs(text: string): string {
+  let out = text;
+  for (const re of STORAGE_URL_PATTERNS) out = out.replace(re, '');
+  return out.replace(/\s{2,}/g, ' ').trim();
+}
+
 export function neutralizePayload(input: PushPayloadInput, isStealthOn: boolean): PushPayloadOutput {
   const forceNeutral = hasForceNeutralSource(input.data);
   if (isStealthOn || forceNeutral) {
@@ -61,9 +81,20 @@ export function neutralizePayload(input: PushPayloadInput, isStealthOn: boolean)
       data: filtered,
     };
   }
+  // Plain mode — still strip storage refs from the body and drop
+  // any audio-link-shaped keys from the data dict. The signed URL
+  // for confession audio NEVER appears in a push payload.
+  const cleanedBody = stripStorageRefs(input.body || '');
+  const cleanedData: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(input.data || {})) {
+    if (typeof v === 'string' && STORAGE_URL_PATTERNS.some(re => { re.lastIndex = 0; return re.test(v); })) {
+      continue; // drop URL-shaped values
+    }
+    cleanedData[k] = v;
+  }
   return {
-    title: input.title || 'Handler',
-    body: input.body || '',
-    data: { ...(input.data || {}) },
+    title: stripStorageRefs(input.title || '') || 'Handler',
+    body: cleanedBody,
+    data: cleanedData,
   };
 }

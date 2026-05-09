@@ -12,6 +12,7 @@ import { useOnboardingComplete } from '../../hooks/useOnboardingComplete';
 import { applyPersonaGate } from '../../lib/onboarding/persona-gate';
 import { useSurfaceRenderTracking } from '../../lib/surface-render-hooks';
 import { useOutreachAudio } from '../../hooks/useOutreachAudio';
+import { ConfessionAudioPlayer } from './ConfessionAudioPlayer';
 
 interface Outreach {
   id: string;
@@ -24,6 +25,10 @@ interface Outreach {
   source: string;
   audio_url: string | null;
   kind: string | null;
+  recall_confession_id: string | null;
+  // Hydrated from a follow-up query — keeps the embed contract simple.
+  recall_audio_path?: string | null;
+  recall_audio_duration_sec?: number | null;
 }
 
 export function OutreachQueueCard() {
@@ -87,7 +92,7 @@ export function OutreachQueueCard() {
     // so the recap doesn't appear twice on Today.
     const [pRes, rRes] = await Promise.all([
       supabase.from('handler_outreach_queue')
-        .select('id, message, urgency, trigger_reason, scheduled_for, delivered_at, expires_at, source, audio_url, kind')
+        .select('id, message, urgency, trigger_reason, scheduled_for, delivered_at, expires_at, source, audio_url, kind, recall_confession_id')
         .eq('user_id', user.id)
         .is('delivered_at', null)
         .neq('source', 'dossier_question')
@@ -95,7 +100,7 @@ export function OutreachQueueCard() {
         .order('scheduled_for', { ascending: true })
         .limit(8),
       supabase.from('handler_outreach_queue')
-        .select('id, message, urgency, trigger_reason, scheduled_for, delivered_at, expires_at, source, audio_url, kind')
+        .select('id, message, urgency, trigger_reason, scheduled_for, delivered_at, expires_at, source, audio_url, kind, recall_confession_id')
         .eq('user_id', user.id)
         .not('delivered_at', 'is', null)
         .neq('source', 'dossier_question')
@@ -119,8 +124,36 @@ export function OutreachQueueCard() {
         seenReason.add(key);
         return true;
       }).slice(0, 3);
+    const finalRecent = gatedRecent.filter(o => o.kind !== 'weekly_recap');
+    const allRows = [...dedupedPending, ...finalRecent];
+
+    // Hydrate audio-implant playback paths for any outreach carrying a
+    // recall_confession_id (mommy_recall_audio / mommy_tease_audio).
+    // We fetch with a service-role-aware single query (RLS allows the
+    // user to read their own confession_queue rows).
+    const recallIds = Array.from(new Set(
+      allRows.map(r => r.recall_confession_id).filter((v): v is string => !!v),
+    ));
+    if (recallIds.length > 0) {
+      const { data: rows } = await supabase
+        .from('confession_queue')
+        .select('id, audio_storage_path, audio_duration_sec')
+        .in('id', recallIds);
+      const byId = new Map<string, { audio_storage_path: string | null; audio_duration_sec: number | null }>();
+      for (const r of (rows || []) as Array<{ id: string; audio_storage_path: string | null; audio_duration_sec: number | null }>) {
+        byId.set(r.id, { audio_storage_path: r.audio_storage_path, audio_duration_sec: r.audio_duration_sec });
+      }
+      for (const r of allRows) {
+        if (!r.recall_confession_id) continue;
+        const c = byId.get(r.recall_confession_id);
+        if (c) {
+          r.recall_audio_path = c.audio_storage_path;
+          r.recall_audio_duration_sec = c.audio_duration_sec;
+        }
+      }
+    }
     setPending(dedupedPending);
-    setRecent(gatedRecent.filter(o => o.kind !== 'weekly_recap'));
+    setRecent(finalRecent);
   }, [user?.id, onboardingComplete]);
 
   useEffect(() => { load(); }, [load]);
@@ -180,6 +213,20 @@ export function OutreachQueueCard() {
                     return (lastSpace > 400 ? cut.slice(0, lastSpace) : cut) + '…';
                   })()}
                 </div>
+                {/*
+                  Audio implant — Mama framed it; the actual audio is
+                  the user's own past confession. Pure (no distortion):
+                  distorting recorded audio is a different consent shape.
+                */}
+                {o.recall_audio_path && (
+                  <div style={{ marginBottom: 6 }}>
+                    <ConfessionAudioPlayer
+                      audioPath={o.recall_audio_path}
+                      label="listen to yourself"
+                      durationSec={o.recall_audio_duration_sec}
+                    />
+                  </div>
+                )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <button
                     onClick={() => ack(o.id)}
@@ -255,6 +302,15 @@ export function OutreachQueueCard() {
                   >
                     {saved ? 'in letters' : 'save to letters'}
                   </button>
+                )}
+                {o.recall_audio_path && (
+                  <div style={{ marginTop: 4 }}>
+                    <ConfessionAudioPlayer
+                      audioPath={o.recall_audio_path}
+                      durationSec={o.recall_audio_duration_sec}
+                      compact
+                    />
+                  </div>
                 )}
               </div>
             );
