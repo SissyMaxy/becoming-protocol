@@ -7,8 +7,21 @@ name: cron-job-worker
 # claim RPC ensures no double-claim).
 
 on:
-  schedule:
-    - cron: '*/1 * * * *'
+  # TEMPORARILY DISABLED 2026-05-09 — the long-running-fn refactor branch
+  # (which deploys the `job-worker` edge function and creates the
+  # `background_jobs` table) has not landed in main yet, so every scheduled
+  # run 404s and writes a deploy_health_log failure row.
+  #
+  # TO RE-ENABLE:
+  #   1. Confirm `job-worker` is listed:
+  #        npx supabase functions list --project-ref atevwvexapiykchvqvhm
+  #   2. Confirm the table exists:
+  #        SELECT 1 FROM information_schema.tables WHERE table_name='background_jobs';
+  #   3. Restore:  schedule: [{ cron: '*/1 * * * *' }]
+  #
+  # workflow_dispatch is preserved so the worker can still be smoke-tested
+  # manually (it'll 404 until step 1 is true; that's expected).
+  schedule: []
   workflow_dispatch: {}
 
 # IMPORTANT: never cancel a running worker. We'd rather have two overlapping
