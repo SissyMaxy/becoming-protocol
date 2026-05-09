@@ -136,8 +136,13 @@ export function ImmersiveTaskModal({
         </div>
       )}
 
-      {/* Scrollable content */}
-      <div className="h-[calc(100vh-12rem-5rem)] overflow-y-auto">
+      {/* Scrollable content. 100dvh follows the visible viewport on mobile;
+          subtracting safe-area-inset-bottom prevents the home indicator from
+          eating the last bit of scroll. */}
+      <div
+        className="overflow-y-auto"
+        style={{ height: 'calc(100dvh - 12rem - 5rem - env(safe-area-inset-bottom))' }}
+      >
         <div className="p-4 space-y-4">
 
           {/* Overview */}
@@ -292,8 +297,12 @@ export function ImmersiveTaskModal({
         </div>
       </div>
 
-      {/* Fixed bottom action */}
-      <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black via-black to-transparent pt-8">
+      {/* Fixed bottom action. Safe-area-inset-bottom keeps the Complete button
+          clear of the home indicator on iPhone X+. */}
+      <div
+        className="absolute bottom-0 left-0 right-0 px-4 pt-8 bg-gradient-to-t from-black via-black to-transparent"
+        style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 1rem)' }}
+      >
         <button
           onClick={handleComplete}
           disabled={isCompleted}
