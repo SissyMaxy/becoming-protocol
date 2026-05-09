@@ -73,8 +73,10 @@ const MASCULINE_REF_PATTERNS: Array<{ pattern: RegExp; points: number; type: Sli
   { pattern: /\bmasculine\s*(self|side|identity)\b/i, points: 3, type: 'masculine_self_reference' },
   { pattern: /\bdavid\b/i, points: 4, type: 'david_name_use' },
   { pattern: /\bmy\s*(cock|dick|penis|balls)\b/i, points: 2, type: 'masculine_self_reference' },
-  { pattern: /\bguy\b/i, points: 1, type: 'masculine_self_reference' },
-  { pattern: /\bdude\b/i, points: 1, type: 'masculine_self_reference' },
+  // Anchored to first-person self-reference. Bare /\bguy\b/ flooded slip_log
+  // with third-party hits ("the guy at the gym", "this guy DM'd me").
+  { pattern: /\b(?:i'?m\s+(?:just\s+|still\s+)?a|i\s+am\s+(?:just\s+|still\s+)?a|as\s+a|being\s+a)\s+guy\b/i, points: 1, type: 'masculine_self_reference' },
+  { pattern: /\b(?:i'?m\s+(?:just\s+|still\s+)?a|i\s+am\s+(?:just\s+|still\s+)?a|as\s+a|being\s+a)\s+dude\b/i, points: 1, type: 'masculine_self_reference' },
   { pattern: /\bhe\/him\b/i, points: 3, type: 'masculine_self_reference' },
 ];
 
