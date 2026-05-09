@@ -104,7 +104,11 @@ export function MorningMantraGate() {
     setAlreadySubmitted(!!sRes.data);
     const task = taskRes.data as { what: string } | null;
     if (task?.what) {
-      setSuggestedTask({ source: 'commitment', label: task.what.slice(0, 100) });
+      // First sentence only — drops dev-facing trailing pointers like
+      // "Add via GinaCaptureCard on Today." that bleed into the framing
+      // box. Falls back to the (clipped) full string if no sentence break.
+      const first = task.what.split(/(?<=[.!?])\s+/)[0]?.trim() || task.what;
+      setSuggestedTask({ source: 'commitment', label: first.slice(0, 160) });
     }
   }, [user?.id]);
 

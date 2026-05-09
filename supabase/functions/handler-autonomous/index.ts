@@ -1215,7 +1215,7 @@ async function runGapAnalysis(
         const byWhen = new Date(now + 72 * 3600000).toISOString()
         const { data } = await supabase.from('handler_commitments').insert({
           user_id: userId,
-          what: 'Capture a Gina quote (any source: text screenshot, remembered quote, recorded conversation). Add via GinaCaptureCard on Today.',
+          what: 'Capture a Gina quote — text screenshot, memory, or audio. Log it on the Gina card on Today.',
           category: 'disclosure', evidence_required: 'gina_voice_samples row',
           by_when: byWhen,
           consequence: 'slip +2',
