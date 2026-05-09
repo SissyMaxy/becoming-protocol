@@ -1,6 +1,6 @@
 # Handler-Centrality Audit
 
-Generated: 2026-05-09T14:58:38.428Z
+Generated: 2026-05-09T19:17:52.886Z
 
 Each function below writes a user-facing artifact (decree, commitment, outreach, confession prompt, etc.) **without first reading any Handler-state table**. The artifact is therefore generated without reference to the current persona, phase, mode, slip count, or recent directives — it cannot speak with Handler authority.
 
@@ -20,7 +20,7 @@ Memory rule: `feedback_handler_is_singular_authority.md`. Refactor each entry to
 | `supabase\functions\bind-enforcer-cron\index.ts:97` | `fireConsequence` | `handler_decrees` |
 | `supabase\functions\capability-digest-cron\index.ts:77` | `digestForCanonicalUser` | `handler_outreach_queue` |
 | `supabase\functions\handler-evolve\index.ts:95` | `evolveForUser` | `narrative_reframings`, `witness_fabrications`, `memory_implants` |
-| `supabase\functions\mommy-mood\index.ts:95` | `safeJSON` | `handler_outreach_queue` |
+| `supabase\functions\mommy-mood\index.ts:118` | `safeJSON` | `handler_outreach_queue` |
 | `supabase\functions\sponsor-page\index.ts:26` | `escapeHtml` | `handler_outreach_queue` |
 | `supabase\functions\trajectory-predictor\index.ts:48` | `safeJSON` | `punishment_queue` |
 | `supabase\functions\_shared\job-handlers\handler-autonomous.ts:177` | `spontaneousOutreach` | `handler_outreach_queue` |
