@@ -93,16 +93,6 @@ export function evaluateBand(
   current: DifficultyBand,
   signals: ComplianceSignals,
 ): BandEvaluation {
-  if (signals.compliancePct14d >= 85 && signals.streakDays >= 7) {
-    const next = bumpBand(current)
-    return {
-      next,
-      reason: next === current
-        ? 'stable:already_at_ceiling'
-        : 'bumped:high_compliance',
-      changed: next !== current,
-    }
-  }
   if (signals.compliancePct14d <= 50 || signals.slipCount14d >= 4) {
     const next = dropBand(current)
     return {
@@ -112,6 +102,16 @@ export function evaluateBand(
         : signals.slipCount14d >= 4
           ? 'dropped:slip_spike'
           : 'dropped:low_compliance',
+      changed: next !== current,
+    }
+  }
+  if (signals.compliancePct14d >= 85 && signals.streakDays >= 7) {
+    const next = bumpBand(current)
+    return {
+      next,
+      reason: next === current
+        ? 'stable:already_at_ceiling'
+        : 'bumped:high_compliance',
       changed: next !== current,
     }
   }

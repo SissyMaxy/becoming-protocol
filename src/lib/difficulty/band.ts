@@ -180,18 +180,9 @@ export function evaluateBand(
   current: DifficultyBand,
   signals: ComplianceSignals,
 ): BandEvaluation {
-  // High-compliance bump
-  if (signals.compliancePct14d >= 85 && signals.streakDays >= 7) {
-    const next = bumpBand(current);
-    return {
-      next,
-      reason: next === current
-        ? 'stable:already_at_ceiling'
-        : 'bumped:high_compliance',
-      changed: next !== current,
-    };
-  }
-  // Slip / low-compliance drop
+  // Drop checks fire FIRST. A slip spike or low compliance overrides
+  // any concurrent high-streak signal — overcompensation followed by
+  // relapse is the bug pattern we're guarding against.
   if (signals.compliancePct14d <= 50 || signals.slipCount14d >= 4) {
     const next = dropBand(current);
     return {
@@ -201,6 +192,17 @@ export function evaluateBand(
         : signals.slipCount14d >= 4
           ? 'dropped:slip_spike'
           : 'dropped:low_compliance',
+      changed: next !== current,
+    };
+  }
+  // High-compliance bump (only if no drop triggered)
+  if (signals.compliancePct14d >= 85 && signals.streakDays >= 7) {
+    const next = bumpBand(current);
+    return {
+      next,
+      reason: next === current
+        ? 'stable:already_at_ceiling'
+        : 'bumped:high_compliance',
       changed: next !== current,
     };
   }
