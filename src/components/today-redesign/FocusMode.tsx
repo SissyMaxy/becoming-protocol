@@ -23,16 +23,27 @@
  *  - Tracking is the Handler's job, not Maxy's.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { isMommyPersona } from '../../lib/persona/dommy-mommy';
+import {
+  markOfferAccepted,
+  markOfferCompleted,
+  markRenderPlayed,
+  renderAudioSession,
+} from '../../lib/audio-sessions/client';
+import type {
+  AudioSessionIntensity,
+  AudioSessionKind,
+} from '../../lib/audio-sessions/template-selector';
 
 type TaskKind =
   | 'overdue_dose' | 'overdue_confession' | 'overdue_punishment' | 'overdue_decree'
   | 'due_today_confession' | 'due_today_decree' | 'due_today_dose' | 'due_today_commitment'
   | 'commitment_pending' | 'workout_today' | 'outfit_today' | 'voice_drill_today'
   | 'mommy_touch'
+  | 'audio_session'
   | 'clean';
 
 interface FocusTask {
@@ -41,12 +52,17 @@ interface FocusTask {
   title: string;
   detail?: string;
   due?: string;
-  /** Inline action surface: 'confess' = textarea, 'dose' = buttons, 'mark_done' = single button, 'photo' = upload, 'message' = no inline action */
-  surface: 'confess' | 'dose' | 'mark_done' | 'photo' | 'message';
+  /** Inline action surface: 'confess' = textarea, 'dose' = buttons, 'mark_done' = single button, 'photo' = upload, 'message' = no inline action, 'audio_session' = play button + audio element */
+  surface: 'confess' | 'dose' | 'mark_done' | 'photo' | 'message' | 'audio_session';
   /** Carried metadata for surface handlers */
   meta?: Record<string, unknown>;
   /** Severity tone for visual weight */
   tone: 'critical' | 'high' | 'medium' | 'calm';
+}
+
+interface AudioSessionMeta {
+  kind: AudioSessionKind;
+  intensity: AudioSessionIntensity;
 }
 
 const TONE_STYLES_HANDLER: Record<FocusTask['tone'], { bg: string; border: string; accent: string; label: string }> = {
@@ -86,6 +102,13 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
   const [doneFlash, setDoneFlash] = useState(false);
   const [completedToday, setCompletedToday] = useState(0);
   const [persona, setPersona] = useState<string | null>(null);
+  const [audioState, setAudioState] = useState<
+    | { phase: 'idle' }
+    | { phase: 'rendering' }
+    | { phase: 'ready'; url: string; renderId: string; durationSeconds: number }
+    | { phase: 'error'; message: string }
+  >({ phase: 'idle' });
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -110,7 +133,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
     const todayStr = new Date().toISOString().slice(0, 10);
 
     const [overdueConfs, overduePuns, overdueDecrees, todayConfs, todayDecrees,
-           pendingCommits, regs, doseLog, outfit, workout, mommyTouch] = await Promise.all([
+           pendingCommits, regs, doseLog, outfit, workout, mommyTouch, audioOffer] = await Promise.all([
       // Include missed-but-unconfessed rows. The compliance check marks
       // overdue rows missed=true (slip already fired); we still want the
       // user able to answer them late from FocusMode. Locking her out
@@ -155,6 +178,13 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
       // heightened state, so it should interrupt the lower-urgency stream.
       supabase.from('arousal_touch_tasks')
         .select('id, prompt, category, expires_at')
+        .eq('user_id', user.id).is('completed_at', null)
+        .gt('expires_at', nowIso).order('created_at', { ascending: false }).limit(1),
+      // Mommy's audio session offer — surfaces as a play-button task. Slots
+      // alongside mommy_touch (high tone) but lower priority — a touch task
+      // is 30s, a session is 5-10min.
+      supabase.from('audio_session_offers')
+        .select('id, kind, intensity_tier, teaser, expires_at')
         .eq('user_id', user.id).is('completed_at', null)
         .gt('expires_at', nowIso).order('created_at', { ascending: false }).limit(1),
     ]);
@@ -233,6 +263,23 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
         title: t.prompt,
         detail: `Mama's whisper · ${t.category.replace(/_/g, ' ')} · ${minsLeft}m`,
         surface: 'mark_done', tone: 'high',
+      };
+    } else if (audioOffer.data?.[0]) {
+      // Audio session offer (Mommy queued a voiced session). High tone.
+      // The "Begin session" button fires the render edge fn; until pressed,
+      // no Anthropic / ElevenLabs spend.
+      const o = audioOffer.data[0] as {
+        id: string; kind: AudioSessionKind; intensity_tier: AudioSessionIntensity;
+        teaser: string; expires_at: string;
+      };
+      const minsLeft = Math.max(1, Math.round((new Date(o.expires_at).getTime() - now) / 60_000));
+      const kindLabel = o.kind.replace(/^session_/, '').replace(/^primer_/, 'primer · ').replace(/_/g, ' ');
+      chosen = {
+        kind: 'audio_session', rowId: o.id,
+        title: o.teaser,
+        detail: `Mama queued an audio session · ${kindLabel} · ${minsLeft}m`,
+        surface: 'audio_session', tone: 'high',
+        meta: { kind: o.kind, intensity: o.intensity_tier } satisfies AudioSessionMeta,
       };
     } else if (todayConfs.data?.[0]) {
       const c = todayConfs.data[0] as { id: string; prompt: string; deadline: string };
@@ -314,6 +361,12 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
     if (!task?.rowId) { setConfessText(''); return; }
     const saved = localStorage.getItem(`focus_draft:${task.rowId}`);
     setConfessText(saved ?? '');
+  }, [task?.rowId]);
+
+  // Reset audio state when the task changes — never keep a stale signed URL
+  // pointed at a different session's offer.
+  useEffect(() => {
+    setAudioState({ phase: 'idle' });
   }, [task?.rowId]);
 
   // Persist draft on every keystroke so a reload / poll-induced unmount can't lose it.
@@ -472,6 +525,53 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
         completed_at: new Date().toISOString(),
       }).eq('id', task.rowId);
       window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'outfit', id: task.rowId } }));
+      await advance();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleBeginSession = async () => {
+    if (!task?.rowId || !user?.id || task.kind !== 'audio_session') return;
+    const meta = task.meta as AudioSessionMeta | undefined;
+    if (!meta) return;
+    setAudioState({ phase: 'rendering' });
+    const result = await renderAudioSession({
+      userId: user.id,
+      kind: meta.kind,
+      intensityTier: meta.intensity,
+    });
+    if (!result.ok) {
+      setAudioState({ phase: 'error', message: result.error });
+      return;
+    }
+    await markOfferAccepted(task.rowId, result.renderId);
+    setAudioState({
+      phase: 'ready',
+      url: result.audioUrl,
+      renderId: result.renderId,
+      durationSeconds: result.durationSeconds,
+    });
+  };
+
+  const handleAudioEnded = async () => {
+    if (!task?.rowId || audioState.phase !== 'ready') return;
+    await Promise.all([
+      markOfferCompleted(task.rowId),
+      markRenderPlayed(audioState.renderId),
+    ]);
+    window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'audio_session', id: task.rowId } }));
+    await advance();
+  };
+
+  const handleSkipSession = async () => {
+    if (!task?.rowId) return;
+    setSubmitting(true);
+    try {
+      // Skipping marks the offer completed without playback — the user can
+      // request a fresh one later. Skipping during playback also lands here.
+      await markOfferCompleted(task.rowId);
+      window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'audio_session', id: task.rowId } }));
       await advance();
     } finally {
       setSubmitting(false);
@@ -707,6 +807,89 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
             >
               View plan
             </button>
+          )}
+
+          {task.surface === 'audio_session' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {audioState.phase === 'idle' && (
+                <>
+                  <button
+                    onClick={handleBeginSession}
+                    style={{
+                      width: '100%', padding: '14px',
+                      background: tone.border, color: '#fff',
+                      border: 'none', borderRadius: 7,
+                      fontSize: 13, fontWeight: 700, letterSpacing: '0.04em',
+                      textTransform: 'uppercase', fontFamily: 'inherit',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Begin session
+                  </button>
+                  <button
+                    onClick={handleSkipSession}
+                    disabled={submitting}
+                    style={{
+                      padding: '8px', background: 'transparent', color: '#8a8690',
+                      border: '1px solid #22222a', borderRadius: 6,
+                      fontSize: 11, fontFamily: 'inherit',
+                      cursor: submitting ? 'wait' : 'pointer',
+                    }}
+                  >
+                    skip — Mama will queue another
+                  </button>
+                </>
+              )}
+              {audioState.phase === 'rendering' && (
+                <div style={{
+                  padding: 14, textAlign: 'center', color: tone.accent, fontSize: 12,
+                }}>
+                  Mama is recording your session…
+                </div>
+              )}
+              {audioState.phase === 'ready' && (
+                <>
+                  <audio
+                    ref={audioRef}
+                    src={audioState.url}
+                    controls
+                    autoPlay
+                    onEnded={handleAudioEnded}
+                    style={{ width: '100%' }}
+                  />
+                  <button
+                    onClick={handleAudioEnded}
+                    style={{
+                      padding: '8px', background: 'transparent', color: tone.accent,
+                      border: `1px solid ${tone.border}`, borderRadius: 6,
+                      fontSize: 11, fontFamily: 'inherit', cursor: 'pointer',
+                    }}
+                  >
+                    mark complete
+                  </button>
+                </>
+              )}
+              {audioState.phase === 'error' && (
+                <>
+                  <div style={{
+                    padding: 12, color: '#fca5a5', fontSize: 11,
+                    background: '#1a0a0a', borderRadius: 6,
+                  }}>
+                    Couldn't render: {audioState.message}
+                  </div>
+                  <button
+                    onClick={handleBeginSession}
+                    style={{
+                      padding: '10px', background: 'transparent', color: tone.accent,
+                      border: `1px solid ${tone.border}`, borderRadius: 6,
+                      fontSize: 12, fontFamily: 'inherit', cursor: 'pointer',
+                    }}
+                  >
+                    try again
+                  </button>
+                </>
+              )}
+            </div>
           )}
         </div>
       )}

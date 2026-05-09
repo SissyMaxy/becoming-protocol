@@ -1,5 +1,12 @@
 // auto-healer — autonomous error-fix engine.
 //
+// SEE ALSO: docs/architectural-principles.md
+// Before adding a new known-pattern fix here, check whether the pattern is
+// already a recurring theme. If you're about to write the third fix on
+// the same theme, the right move is a redesign wish (see
+// self-improvement-detector → recurring_tactical_patch_loop), not a fourth
+// auto-healer entry. Zoom out at iteration 2.
+//
 // User: "anytime errors are found they need to be fixed automatically — I
 // should never have to explain to fix an error."
 //

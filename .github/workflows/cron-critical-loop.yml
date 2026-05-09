@@ -1,0 +1,37 @@
+name: Critical Loop (auto-healer / deploy-health-monitor / mommy-praise)
+on:
+  schedule:
+    - cron: '*/10 * * * *'  # every 10 min, UTC
+  workflow_dispatch: {}
+concurrency:
+  group: cron-critical-loop
+  cancel-in-progress: false
+jobs:
+  fire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: auto-healer
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/auto-healer" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "auto-healer failed (non-fatal)"
+      - name: deploy-health-monitor
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/deploy-health-monitor" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "deploy-health-monitor failed (non-fatal)"
+      - name: mommy-praise
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/mommy-praise" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "mommy-praise failed (non-fatal)"

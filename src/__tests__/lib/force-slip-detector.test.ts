@@ -33,13 +33,23 @@ describe('slip detector — masculine self-reference', () => {
     expect(hit.points).toBe(3);
   });
 
-  it('flags low-severity "guy" and "dude"', () => {
-    const guy = scanText('just a guy talking');
-    const dude = scanText('dude that was weird');
-    expect(guy.length).toBeGreaterThan(0);
-    expect(dude.length).toBeGreaterThan(0);
-    expect(guy[0].points).toBe(1);
-    expect(dude[0].points).toBe(1);
+  it('flags self-anchored "guy" and "dude" at low severity', () => {
+    expect(scanText("I'm a guy")[0]?.points).toBe(1);
+    expect(scanText('as a guy I notice this')[0]?.points).toBe(1);
+    expect(scanText('being a guy is exhausting')[0]?.points).toBe(1);
+    expect(scanText("I'm just a guy")[0]?.points).toBe(1);
+    expect(scanText("I'm a dude")[0]?.points).toBe(1);
+    expect(scanText('as a dude I get it')[0]?.points).toBe(1);
+  });
+
+  it('does NOT flag third-party "guy" / "dude" references', () => {
+    expect(scanText('the guy at the gym was rude')).toEqual([]);
+    expect(scanText('depends on the guy')).toEqual([]);
+    expect(scanText("this guy DM'd me")).toEqual([]);
+    expect(scanText('some guy on Sniffies')).toEqual([]);
+    expect(scanText('that guy I told you about')).toEqual([]);
+    expect(scanText('dude that was weird')).toEqual([]);
+    expect(scanText('the dude bailed on me')).toEqual([]);
   });
 
   it('does NOT flag feminine self-reference', () => {
