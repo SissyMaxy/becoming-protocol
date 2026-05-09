@@ -12,8 +12,25 @@ Generated 2026-05-09 against project `atevwvexapiykchvqvhm` after Pass 1 migrati
 | `auth_rls_initplan`               |   1085 |     0 |
 | `function_search_path_mutable`    |    142 |     0 |
 
-Pass 2 lints below need a human call. Each has the source data plus a recommendation —
-nothing in this section was applied.
+**Pass 2 summary (shipped 2026-05-09 in migrations 343–347, this PR):**
+
+| Lint                                                | Before |  After | Notes |
+| --------------------------------------------------- | -----: | -----: | ----- |
+| `security_definer_view`                             |     16 |      0 | All flipped to `security_invoker = true` (mig 344) |
+| `rls_disabled_in_public`                            |     20 |      0 | RLS + owner/reference/service policies (mig 343) |
+| `rls_policy_always_true`                            |     22 |      0 | task_bank + affiliate_events bugs fixed; service-role bypasses scoped (mig 346) |
+| `anon_security_definer_function_executable`         |    139 |      2 | Remaining 2 are intentional (`get_shared_wishlist`, `claim_wishlist_item`) — public token flow |
+| `authenticated_security_definer_function_executable`|    139 |     23 | Remaining 23 are intentional re-grants for frontend `supabase.rpc()` callers (mig 347) |
+| `multiple_permissive_policies`                      |   1654 |    706 | Top 33 tables consolidated (mig 345); ~95 long-tail tables deferred for re-audit |
+
+**Outstanding (operator decisions, not code changes):**
+- `extension_in_public` — `vector` extension still in `public` schema. Move to `extensions` schema requires deploy-window check; not bundled here.
+- `auth_leaked_password_protection` — Studio → Authentication → Settings → "Leaked Password Protection". Dashboard toggle.
+- `auth_db_connections_absolute` — Studio Auth setting; defer until traffic forces it.
+- `unused_index` — re-audit on 2026-05-16 once stats refresh.
+
+The historical pass-2 review notes below are kept for traceability of how the
+migrations were reasoned about; the lints they describe are now resolved.
 
 ---
 
