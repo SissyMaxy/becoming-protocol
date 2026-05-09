@@ -59,6 +59,16 @@ ANALYZE net._http_response;
 -- ============================================================
 -- 4) Reset pg_stat_statements so post-apply hot-query verification reflects
 --    only the post-relief workload.
+--
+-- 2026-04-30 patch (perf-data-driven branch, while reconciling against
+-- upstream 316): pg_stat_statements_reset() raises 42883 when applied
+-- via the Supabase Management API's temporary login role, blocking
+-- the migration. Wrap so failure is non-fatal.
 -- ============================================================
 
-SELECT pg_stat_statements_reset();
+DO $$
+BEGIN
+  PERFORM pg_stat_statements_reset();
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'pg_stat_statements_reset() skipped: %', SQLERRM;
+END $$;
