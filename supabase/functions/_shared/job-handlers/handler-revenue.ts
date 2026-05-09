@@ -1,23 +1,17 @@
-// Handler Revenue Engine — Edge Function
-// Autonomous revenue generation orchestrator.
-// Called by pg_cron at different intervals:
-//   - every 15 min: process_ai_queue (post scheduled AI content)
-//   - every 3 hours: engagement_cycle (reply to targets)
-//   - daily midnight: daily_batch (content calendar, vault multiplication, GFE reset)
-//   - daily 7 AM: gfe_morning (send GFE morning messages)
-//   - daily 9 PM: gfe_evening (send GFE evening messages)
-//   - weekly Sunday: weekly_batch (revenue review, erotica, affiliate content)
-
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+// Handler Revenue Engine — job handler. Used to be the handler-revenue edge
+// function. Public action contract preserved: callers POST { action, user_id?,
+// data? } and the entrypoint enqueues a `handler-revenue:<action>` job.
+// Cron schedules:
+//   - every 15 min:    process_ai_queue
+//   - every 3 hours:   engagement_cycle
+//   - daily midnight:  daily_batch
+//   - daily 7 AM:      gfe_morning
+//   - daily 9 PM:      gfe_evening
+//   - weekly Sunday:   weekly_batch
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.74.0'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-
-type RevenueAction =
+export type RevenueAction =
   | 'process_ai_queue'
   | 'engagement_cycle'
   | 'daily_batch'
@@ -29,106 +23,93 @@ type RevenueAction =
   | 'generate_post'
   | 'regenerate_drafts'
 
-interface RevenueRequest {
+const VALID_REVENUE_ACTIONS: ReadonlySet<RevenueAction> = new Set([
+  'process_ai_queue',
+  'engagement_cycle',
+  'daily_batch',
+  'gfe_morning',
+  'gfe_evening',
+  'weekly_batch',
+  'multiply_content',
+  'respond_dm',
+  'generate_post',
+  'regenerate_drafts',
+])
+
+export function isValidRevenueAction(s: unknown): s is RevenueAction {
+  return typeof s === 'string' && VALID_REVENUE_ACTIONS.has(s as RevenueAction)
+}
+
+export interface HandlerRevenuePayload {
   action: RevenueAction
   user_id?: string
   data?: Record<string, unknown>
 }
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+export async function runHandlerRevenue(
+  supabase: SupabaseClient,
+  payload: HandlerRevenuePayload,
+): Promise<Record<string, unknown>> {
+  const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY') ?? ''
+  const anthropic = new Anthropic({ apiKey: anthropicKey })
+  const userId = payload.user_id
+
+  let result: Record<string, unknown> = {}
+
+  switch (payload.action) {
+    case 'process_ai_queue':
+      result = await processAIQueue(supabase)
+      break
+    case 'engagement_cycle':
+      if (!userId) throw new Error('user_id required for engagement_cycle')
+      result = await engagementCycle(supabase, anthropic, userId)
+      break
+    case 'daily_batch':
+      if (!userId) throw new Error('user_id required for daily_batch')
+      result = await dailyBatch(supabase, anthropic, userId)
+      break
+    case 'gfe_morning':
+      if (!userId) throw new Error('user_id required for gfe_morning')
+      result = await gfeMessages(supabase, anthropic, userId, 'morning')
+      break
+    case 'gfe_evening':
+      if (!userId) throw new Error('user_id required for gfe_evening')
+      result = await gfeMessages(supabase, anthropic, userId, 'evening')
+      break
+    case 'weekly_batch':
+      if (!userId) throw new Error('user_id required for weekly_batch')
+      result = await weeklyBatch(supabase, anthropic, userId)
+      break
+    case 'multiply_content':
+      if (!userId) throw new Error('user_id required for multiply_content')
+      result = await multiplyNewContent(supabase, anthropic, userId)
+      break
+    case 'respond_dm':
+      if (!userId) throw new Error('user_id and data required for respond_dm')
+      result = await respondToDM(supabase, anthropic, userId, payload.data || {})
+      break
+    case 'generate_post':
+      if (!userId) throw new Error('user_id required for generate_post')
+      result = await generatePost(supabase, anthropic, userId, payload.data || {})
+      break
+    case 'regenerate_drafts':
+      result = await regenerateSlopDrafts(supabase, anthropic, userId)
+      break
+    default:
+      throw new Error(`Unknown revenue action: ${(payload as { action?: string }).action}`)
   }
 
-  try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY') ?? ''
-
-    const supabase = createClient(supabaseUrl, supabaseKey)
-    const anthropic = new Anthropic({ apiKey: anthropicKey })
-
-    const body: RevenueRequest = await req.json().catch(() => ({ action: 'process_ai_queue' }))
-    const userId = body.user_id
-
-    let result: Record<string, unknown> = {}
-
-    switch (body.action) {
-      case 'process_ai_queue':
-        result = await processAIQueue(supabase)
-        break
-
-      case 'engagement_cycle':
-        if (!userId) throw new Error('user_id required for engagement_cycle')
-        result = await engagementCycle(supabase, anthropic, userId)
-        break
-
-      case 'daily_batch':
-        if (!userId) throw new Error('user_id required for daily_batch')
-        result = await dailyBatch(supabase, anthropic, userId)
-        break
-
-      case 'gfe_morning':
-        if (!userId) throw new Error('user_id required for gfe_morning')
-        result = await gfeMessages(supabase, anthropic, userId, 'morning')
-        break
-
-      case 'gfe_evening':
-        if (!userId) throw new Error('user_id required for gfe_evening')
-        result = await gfeMessages(supabase, anthropic, userId, 'evening')
-        break
-
-      case 'weekly_batch':
-        if (!userId) throw new Error('user_id required for weekly_batch')
-        result = await weeklyBatch(supabase, anthropic, userId)
-        break
-
-      case 'multiply_content':
-        if (!userId) throw new Error('user_id required for multiply_content')
-        result = await multiplyNewContent(supabase, anthropic, userId)
-        break
-
-      case 'respond_dm':
-        if (!userId) throw new Error('user_id and data required for respond_dm')
-        result = await respondToDM(supabase, anthropic, userId, body.data || {})
-        break
-
-      case 'generate_post':
-        if (!userId) throw new Error('user_id required for generate_post')
-        result = await generatePost(supabase, anthropic, userId, body.data || {})
-        break
-
-      case 'regenerate_drafts':
-        result = await regenerateSlopDrafts(supabase, anthropic, userId)
-        break
-
-      default:
-        result = { ok: false, error: `Unknown action: ${body.action}`, available: ['process_ai_queue','engagement_cycle','daily_batch','gfe_morning','gfe_evening','weekly_batch','multiply_content','respond_dm','generate_post','regenerate_drafts'] }
-    }
-
-    // Log the operation
-    if (userId) {
-      await supabase.from('handler_autonomous_actions').insert({
-        user_id: userId,
-        action_type: `revenue:${body.action}`,
-        action_data: result,
-        status: 'completed',
-      }).then(() => {})
-    }
-
-    return new Response(
-      JSON.stringify({ ok: true, action: body.action, ...result }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
-    )
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    console.error('[handler-revenue] Error:', message)
-    return new Response(
-      JSON.stringify({ ok: false, error: message }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-    )
+  if (userId) {
+    await supabase.from('handler_autonomous_actions').insert({
+      user_id: userId,
+      action_type: `revenue:${payload.action}`,
+      action_data: result,
+      status: 'completed',
+    }).then(() => {})
   }
-})
+
+  return { action: payload.action, ...result }
+}
 
 // ── Maxy voice prompt ───────────────────────────────────────────────
 
