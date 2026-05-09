@@ -386,14 +386,29 @@ export function ConditioningLockdown() {
   const secs = secondsRemaining % 60;
   const progressPct = Math.min(100, Math.max(0, ((activeWindow.duration_minutes * 60 - secondsRemaining) / (activeWindow.duration_minutes * 60)) * 100));
 
+  // Mobile-safe lockdown: outer overlay scrolls so the safeword input stays
+  // reachable when the timer + segment text + keyboard combine to overflow
+  // the viewport. Safe-area top/bottom padding keep notch / home indicator
+  // clear; min-height: 100% on the inner column preserves the centered
+  // layout when content fits.
   return (
     <div
       style={{
         position: 'fixed', inset: 0, zIndex: 9999,
         background: 'radial-gradient(ellipse at center, #1a0533 0%, #000000 80%)',
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        padding: 24, color: '#e8dcff',
+        overflowY: 'auto', WebkitOverflowScrolling: 'touch',
+        color: '#e8dcff',
         fontFamily: 'Inter, "SF Pro Text", system-ui, sans-serif',
+      }}
+    >
+    <div
+      style={{
+        minHeight: '100%',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        padding: '24px',
+        paddingTop: 'max(24px, env(safe-area-inset-top))',
+        paddingBottom: 'max(24px, env(safe-area-inset-bottom))',
+        boxSizing: 'border-box',
       }}
     >
       <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.15em', color: '#c4b5fd', fontWeight: 700, marginBottom: 12 }}>
@@ -465,6 +480,7 @@ export function ConditioningLockdown() {
           }}
         />
       </div>
+    </div>
     </div>
   );
 }
