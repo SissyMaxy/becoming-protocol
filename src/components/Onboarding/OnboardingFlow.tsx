@@ -157,7 +157,7 @@ export function OnboardingFlow({ onComplete, initialProfile, isEditMode = false,
   };
 
   return (
-    <div className="min-h-screen bg-protocol-bg flex flex-col">
+    <div className="min-h-[100dvh] bg-protocol-bg flex flex-col">
       {/* Progress bar */}
       {currentStep !== 'welcome' && currentStep !== 'complete' && (
         <div className="fixed top-0 left-0 right-0 z-50">
@@ -197,7 +197,10 @@ interface StepNavProps {
 
 export function StepNav({ onNext, onBack, nextLabel = 'Continue', nextDisabled = false, showBack = true }: StepNavProps) {
   return (
-    <div className="fixed bottom-0 left-0 right-0 p-4 bg-protocol-bg/80 backdrop-blur-sm border-t border-protocol-border">
+    <div
+      className="fixed bottom-0 left-0 right-0 px-4 pt-4 bg-protocol-bg/80 backdrop-blur-sm border-t border-protocol-border"
+      style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 1rem)' }}
+    >
       <div className="max-w-md mx-auto flex gap-3">
         {showBack && onBack && (
           <button
