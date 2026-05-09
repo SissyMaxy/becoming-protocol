@@ -14,6 +14,10 @@ import {
   DOMMY_MOMMY_CHARACTER, AFFECT_BIAS, type Affect,
   mommyVoiceCleanup, MOMMY_TELEMETRY_LEAK_PATTERNS,
 } from '../_shared/dommy-mommy.ts'
+import {
+  effectiveBand, bandTouchCapMultiplier, bandPublicDareWeight,
+  type DifficultyBand,
+} from '../_shared/difficulty-band.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -63,8 +67,20 @@ Deno.serve(async (req: Request) => {
   const today = new Date().toISOString().slice(0, 10)
   const { data: mood } = await supabase.from('mommy_mood').select('affect, arousal_bias_hint').eq('user_id', userId).eq('mood_date', today).maybeSingle()
   const affect = (mood as { affect?: string } | null)?.affect ?? 'hungry'
-  const cap = AFFECT_BIAS[affect as Affect]?.arousal_touch_per_day ?? 2
+  const baseCap = AFFECT_BIAS[affect as Affect]?.arousal_touch_per_day ?? 2
   const taskSkew = AFFECT_BIAS[affect as Affect]?.task_skew ?? ''
+
+  // Difficulty band gates daily cap and public-dare bias.
+  // Recovery halves the cap; cruel adds slots. Public_micro weight is
+  // baked into the category picker below.
+  const { data: diff } = await supabase
+    .from('compliance_difficulty_state')
+    .select('current_difficulty_band, override_band')
+    .eq('user_id', userId)
+    .maybeSingle()
+  const band = effectiveBand(diff as { current_difficulty_band: DifficultyBand; override_band: DifficultyBand | null } | null)
+  const cap = Math.max(1, Math.round(baseCap * bandTouchCapMultiplier(band)))
+  const publicWeight = bandPublicDareWeight(band)
 
   // Daily cap: count rows generated today (not just open)
   const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0)
@@ -90,7 +106,21 @@ Deno.serve(async (req: Request) => {
   const recentCats = new Set(((recent || []) as Array<{ category: string }>).map(r => r.category))
   const eligible = VALID_CATEGORIES.filter(c => !recentCats.has(c))
   const pool = eligible.length > 0 ? eligible : [...VALID_CATEGORIES]
-  const category = pool[Math.floor(Math.random() * pool.length)] as Category
+  // Weighted pick — public_micro bias scales with difficulty band.
+  // Recovery (publicWeight=0) drops public_micro entirely.
+  const weighted: Array<{ c: Category; w: number }> = pool
+    .map(c => ({
+      c: c as Category,
+      w: c === 'public_micro' ? publicWeight : 1,
+    }))
+    .filter(x => x.w > 0)
+  const totalW = weighted.reduce((s, x) => s + x.w, 0)
+  let r = Math.random() * totalW
+  let category: Category = weighted[0]?.c ?? 'mantra_aloud'
+  for (const x of weighted) {
+    r -= x.w
+    if (r <= 0) { category = x.c; break }
+  }
   const hint = CATEGORY_HINTS[category]
 
   // LLM writes the actual prompt in Mommy voice, biased by affect

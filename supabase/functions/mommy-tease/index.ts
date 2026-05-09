@@ -22,6 +22,10 @@ import {
   distortQuote, seedFromString,
   type GaslightIntensity, type DistortionResult,
 } from '../_shared/distortion.ts'
+import {
+  effectiveBand, bandGaslightIntensity,
+  type DifficultyBand,
+} from '../_shared/difficulty-band.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -68,13 +72,24 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ ok: true, skipped: 'persona_not_dommy_mommy' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
 
-  // Read effective gaslight intensity (cooldown-aware view).
-  const { data: gaslightRow } = await supabase
-    .from('effective_gaslight_intensity')
-    .select('intensity')
-    .eq('user_id', userId)
-    .maybeSingle()
-  const gaslightIntensity = ((gaslightRow as { intensity?: string } | null)?.intensity ?? 'off') as GaslightIntensity
+  // Read effective gaslight intensity (cooldown-aware view) AND
+  // gate on the compliance-difficulty band — recovery short-circuits
+  // gaslight to 'off' regardless of stored intensity.
+  const [{ data: gaslightRow }, { data: diffRow }] = await Promise.all([
+    supabase
+      .from('effective_gaslight_intensity')
+      .select('intensity')
+      .eq('user_id', userId)
+      .maybeSingle(),
+    supabase
+      .from('compliance_difficulty_state')
+      .select('current_difficulty_band, override_band')
+      .eq('user_id', userId)
+      .maybeSingle(),
+  ])
+  const storedIntensity = ((gaslightRow as { intensity?: string } | null)?.intensity ?? 'off') as GaslightIntensity
+  const band = effectiveBand(diffRow as { current_difficulty_band: DifficultyBand; override_band: DifficultyBand | null } | null)
+  const gaslightIntensity = bandGaslightIntensity(storedIntensity, band) as GaslightIntensity
 
   // Use the larger of chastity_streak / denial_day so the engine fires
   // for either reinforcement vector. denial_day = days since last_release;
