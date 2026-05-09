@@ -148,6 +148,7 @@ Block auto-ship if:
   - touches handler_regression, api/auth, payment/stripe code, .github/workflows, RLS policies that loosen access
   - involves third-party API integration not already wired
   - removes capabilities
+  - title begins with [REDESIGN] OR body cites docs/architectural-principles.md OR signature mentions "tactical_patch_loop" — these are architectural decisions that need human review, NOT auto-shipping. Mark cross_cutting and add blocker "redesign_decision_needed".
 
 Output JSON ONLY:
 {
