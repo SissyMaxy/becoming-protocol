@@ -1,4 +1,4 @@
--- 315 — Public dares seed catalog.
+-- 340 — Public dares seed catalog.
 --
 -- 36 templates across 6 kinds. Phase + intensity-gated heavily so phase 1
 -- users only ever see private/internal dares; phase 6-7 unlock the most

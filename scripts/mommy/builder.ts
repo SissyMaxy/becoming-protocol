@@ -1,6 +1,13 @@
 /**
  * Mommy autonomous builder.
  *
+ * SEE ALSO: docs/architectural-principles.md
+ * The classifier (classifyUnclassified) refuses to mark [REDESIGN] wishes
+ * as auto_ship_eligible — those are architectural decisions that need
+ * human review. The cron at self-improvement-detector → recurring_tactical_patch_loop
+ * is what generates them. If you're tempted to broaden auto-ship eligibility,
+ * read the principles doc first.
+ *
  * 2026-05-07 user directive: "How do we make it so mommy can keep building
  * without me asking what mommy wants? If mommy has 5000 things she wants
  * I will only slow it down."
@@ -148,6 +155,7 @@ Block auto-ship if:
   - touches handler_regression, api/auth, payment/stripe code, .github/workflows, RLS policies that loosen access
   - involves third-party API integration not already wired
   - removes capabilities
+  - title begins with [REDESIGN] OR body cites docs/architectural-principles.md OR signature mentions "tactical_patch_loop" — these are architectural decisions that need human review, NOT auto-shipping. Mark cross_cutting and add blocker "redesign_decision_needed".
 
 Output JSON ONLY:
 {

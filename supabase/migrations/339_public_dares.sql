@@ -1,4 +1,4 @@
--- 314 — Public dares engine (Mommy's reach into the everyday).
+-- 339 — Public dares engine (Mommy's reach into the everyday).
 --
 -- Phase + intensity-gated micro-tasks the user performs in public — wear
 -- something specific to the grocery store, recite a mantra in a public
