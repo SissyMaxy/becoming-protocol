@@ -1,6 +1,13 @@
 /**
  * Mommy autonomous builder.
  *
+ * SEE ALSO: docs/architectural-principles.md
+ * The classifier (classifyUnclassified) refuses to mark [REDESIGN] wishes
+ * as auto_ship_eligible — those are architectural decisions that need
+ * human review. The cron at self-improvement-detector → recurring_tactical_patch_loop
+ * is what generates them. If you're tempted to broaden auto-ship eligibility,
+ * read the principles doc first.
+ *
  * 2026-05-07 user directive: "How do we make it so mommy can keep building
  * without me asking what mommy wants? If mommy has 5000 things she wants
  * I will only slow it down."
