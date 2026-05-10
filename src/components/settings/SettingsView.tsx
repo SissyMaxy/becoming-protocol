@@ -317,11 +317,13 @@ function DangerZoneSection() {
 interface SettingsViewProps {
   onBack: () => void;
   onEditIntake?: () => void;
+  onOpenDossierQuiz?: () => void;
+  onOpenDossierStatus?: () => void;
 }
 
 type SettingsSection = 'main' | 'profile' | 'lovense' | 'whoop' | 'calendar' | 'equipment' | 'timeratchets' | 'reminders' | 'privacy' | 'stealth' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content' | 'opacity' | 'social-dashboard' | 'persona' | 'sniffies' | 'letters' | 'identity';
 
-export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
+export function SettingsView({ onBack, onEditIntake, onOpenDossierQuiz, onOpenDossierStatus }: SettingsViewProps) {
   const { isBambiMode } = useBambiMode();
   const { regenerateToday } = useProtocol();
   const { isDebugMode, registerTap, disableDebugMode } = useDebugMode();
@@ -688,6 +690,56 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
                     }`}
                   />
                 </button>
+
+                {/* Dossier — read-mostly summary */}
+                {onOpenDossierStatus && (
+                  <button
+                    onClick={onOpenDossierStatus}
+                    className={`w-full p-4 rounded-xl border flex items-center gap-4 text-left transition-all ${
+                      isBambiMode
+                        ? 'bg-pink-50 border-pink-200 hover:border-pink-300'
+                        : 'bg-protocol-surface border-protocol-border hover:border-protocol-accent/30'
+                    }`}
+                  >
+                    <div className="p-3 rounded-xl" style={{ backgroundColor: '#f4a8c420' }}>
+                      <Brain className="w-5 h-5" style={{ color: '#f4a8c4' }} />
+                    </div>
+                    <div className="flex-1">
+                      <p className={`font-medium ${isBambiMode ? 'text-pink-700' : 'text-protocol-text'}`}>
+                        Mama's Dossier
+                      </p>
+                      <p className={`text-sm ${isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'}`}>
+                        What Mama knows about you
+                      </p>
+                    </div>
+                    <ChevronRight className={`w-5 h-5 ${isBambiMode ? 'text-pink-300' : 'text-protocol-text-muted'}`} />
+                  </button>
+                )}
+
+                {/* Catch-up — bulk-fill the dossier in one sitting */}
+                {onOpenDossierQuiz && (
+                  <button
+                    onClick={onOpenDossierQuiz}
+                    className={`w-full p-4 rounded-xl border flex items-center gap-4 text-left transition-all ${
+                      isBambiMode
+                        ? 'bg-pink-50 border-pink-200 hover:border-pink-300'
+                        : 'bg-protocol-surface border-protocol-border hover:border-protocol-accent/30'
+                    }`}
+                  >
+                    <div className="p-3 rounded-xl" style={{ backgroundColor: '#c75d8a20' }}>
+                      <ClipboardEdit className="w-5 h-5" style={{ color: '#c75d8a' }} />
+                    </div>
+                    <div className="flex-1">
+                      <p className={`font-medium ${isBambiMode ? 'text-pink-700' : 'text-protocol-text'}`}>
+                        Tell Mama everything at once
+                      </p>
+                      <p className={`text-sm ${isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'}`}>
+                        Fill the dossier in one sitting instead of waiting for the drip
+                      </p>
+                    </div>
+                    <ChevronRight className={`w-5 h-5 ${isBambiMode ? 'text-pink-300' : 'text-protocol-text-muted'}`} />
+                  </button>
+                )}
 
                 {/* Edit Intake Button */}
                 <button

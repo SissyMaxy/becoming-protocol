@@ -64,6 +64,7 @@ import { SystemGrowthCard } from './SystemGrowthCard';
 import { PunishmentQueueCard } from './PunishmentQueueCard';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
+import { DossierDripCard } from './DossierDripCard';
 import { SlipLogCard } from './SlipLogCard';
 import { GinaSessionsCard } from './GinaSessionsCard';
 import { RationalizationPatternCard } from './RationalizationPatternCard';
@@ -259,6 +260,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
       <>
         <div style={{ maxWidth: 720, margin: '0 auto', padding: '12px 16px 0' }}>
           <MommyDossierBanner />
+          <DossierDripCard />
         </div>
         <FocusMode onSwitchToCalendar={() => setViewMode('calendar')} />
       </>
@@ -387,6 +389,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
           <HandlerDreamCard />
           <HandlerKnowCard />
           <HandlerRunningCard />
+          <DossierDripCard />
           <OutreachQueueCard />
           <DeviceScheduleCard />
           <SlipLogCard />
