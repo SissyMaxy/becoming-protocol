@@ -4,7 +4,7 @@
  * settings, legacy Today view access, and help.
  */
 
-import { Settings, ChevronRight, HelpCircle, Calendar, Radio, Eye, FileText, Mail, ShieldAlert, PauseCircle, ArrowUpRight, Flame, Shirt, MessageCircle, BarChart3, Camera } from 'lucide-react';
+import { Settings, ChevronRight, HelpCircle, Calendar, Radio, Eye, FileText, Mail, ShieldAlert, PauseCircle, ArrowUpRight, Flame, Shirt, MessageCircle, BarChart3, Camera, Users } from 'lucide-react';
 
 type MenuItemId =
   | 'settings' | 'help'
@@ -18,7 +18,8 @@ type MenuItemId =
   | 'progress-page' | 'sealed-page' | 'log-release' | 'social-dashboard'
   | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol'
   | 'escalation_ladder' | 'force' | 'wardrobe' | 'gina-vibe' | 'trajectory'
-  | 'verification-vault';
+  | 'verification-vault'
+  | 'community-queue' | 'community-list' | 'community-log';
 
 interface MenuViewProps {
   onNavigate: (view: MenuItemId) => void;
@@ -39,6 +40,13 @@ export function MenuView({ onNavigate }: MenuViewProps) {
       label: 'Socials',
       description: 'Posts, replies, queue, quality metrics',
       color: '#1DA1F2',
+    },
+    {
+      id: 'community-queue' as MenuItemId,
+      icon: Users,
+      label: 'Community outreach',
+      description: 'Drafts pending review, communities, submission log',
+      color: '#FF4500',
     },
     {
       id: 'journal' as MenuItemId,

@@ -309,6 +309,77 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{"action":"weekly_adaptation"}'
 
+  # ── COMMUNITY OUTREACH ─────────────────────────────────────────
+  # Sunday 3 AM UTC: refresh subreddit metadata + seed new users.
+  outreach-research:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if Sunday 3 AM window
+        id: should_run
+        run: |
+          DOW=$(date -u +%u)
+          HOUR=$(date -u +%H)
+          MINUTE=$(date -u +%M)
+          if [ "$DOW" = "7" ] && [ "$HOUR" = "03" ] && [ "$MINUTE" -lt "10" ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Trigger outreach-research
+        if: steps.should_run.outputs.run == 'true'
+        run: |
+          curl -sS -X POST "${{ env.SUPABASE_URL }}/functions/v1/outreach-research" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}'
+
+  # 5 AM UTC daily: generate 1-2 community drafts per user.
+  outreach-draft-generator:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if 5 AM window
+        id: should_run
+        run: |
+          HOUR=$(date -u +%H)
+          MINUTE=$(date -u +%M)
+          if [ "$HOUR" = "05" ] && [ "$MINUTE" -lt "10" ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Trigger outreach-draft-generator
+        if: steps.should_run.outputs.run == 'true'
+        run: |
+          curl -sS -X POST "${{ env.SUPABASE_URL }}/functions/v1/outreach-draft-generator" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}'
+
+  # Every 30 minutes: pick up approved drafts where auto_submit_enabled=true,
+  # check engagement threshold + rate limits, fire to Reddit.
+  outreach-submit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if 30-minute window
+        id: should_run
+        run: |
+          MINUTE=$(date -u +%M)
+          if [ "$MINUTE" -lt "5" ] || [ "$MINUTE" -ge "30" -a "$MINUTE" -lt "35" ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Trigger outreach-submit
+        if: steps.should_run.outputs.run == 'true'
+        run: |
+          curl -sS -X POST "${{ env.SUPABASE_URL }}/functions/v1/outreach-submit" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}'
+
   # 7 AM UTC daily: Autonomous strategist — full-state Claude review,
   # writes strategic directives + notes for the day ahead
   handler-strategist:
