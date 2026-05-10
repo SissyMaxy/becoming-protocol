@@ -1,6 +1,6 @@
 # Handler-Centrality Audit
 
-Generated: 2026-05-09T19:17:52.886Z
+Generated: 2026-05-10T23:11:50.213Z
 
 Each function below writes a user-facing artifact (decree, commitment, outreach, confession prompt, etc.) **without first reading any Handler-state table**. The artifact is therefore generated without reference to the current persona, phase, mode, slip count, or recent directives — it cannot speak with Handler authority.
 
@@ -12,10 +12,10 @@ Memory rule: `feedback_handler_is_singular_authority.md`. Refactor each entry to
 
 | File:Line | Function | Writes (user-facing) |
 |-----------|----------|---------------------|
-| `api\handler\_lib\chat-action.ts:10076` | `maybeGenerateBodyDirectives` | `body_feminization_directives` |
-| `api\handler\_lib\chat-action.ts:10977` | `executeDeviceCommand` | `lovense_commands` |
-| `api\handler\_lib\chat-action.ts:14001` | `runRationalizationGate` | `handler_outreach_queue` |
-| `api\handler\_lib\chat-action.ts:14031` | `runPronounGate` | `handler_outreach_queue` |
+| `api\handler\_lib\chat-action.ts:10134` | `maybeGenerateBodyDirectives` | `body_feminization_directives` |
+| `api\handler\_lib\chat-action.ts:11035` | `executeDeviceCommand` | `lovense_commands` |
+| `api\handler\_lib\chat-action.ts:14059` | `runRationalizationGate` | `handler_outreach_queue` |
+| `api\handler\_lib\chat-action.ts:14089` | `runPronounGate` | `handler_outreach_queue` |
 | `supabase\functions\auto-loophole-closer\index.ts:66` | `safeJSON` | `handler_decrees`, `punishment_queue` |
 | `supabase\functions\bind-enforcer-cron\index.ts:97` | `fireConsequence` | `handler_decrees` |
 | `supabase\functions\capability-digest-cron\index.ts:77` | `digestForCanonicalUser` | `handler_outreach_queue` |

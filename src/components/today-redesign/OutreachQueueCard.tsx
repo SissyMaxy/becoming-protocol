@@ -4,7 +4,7 @@
  * it hits.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { usePersona } from '../../hooks/usePersona';
@@ -25,6 +25,35 @@ interface Outreach {
   audio_url: string | null;
 }
 
+// Pending rows in localStorage that have already auto-played once on this
+// device. Persisted so a Today reload doesn't replay every outreach the
+// user already heard. Cleared opportunistically when older than 7d.
+const AUTOPLAYED_KEY = 'mommy_outreach_autoplayed_v1';
+function loadAutoPlayedIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(AUTOPLAYED_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw) as { id: string; at: number }[];
+    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const fresh = parsed.filter(p => p.at > cutoff);
+    return new Set(fresh.map(p => p.id));
+  } catch { return new Set(); }
+}
+function rememberAutoPlayed(id: string) {
+  try {
+    const raw = localStorage.getItem(AUTOPLAYED_KEY);
+    const arr = raw ? (JSON.parse(raw) as { id: string; at: number }[]) : [];
+    arr.push({ id, at: Date.now() });
+    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const trimmed = arr.filter(p => p.at > cutoff).slice(-200);
+    localStorage.setItem(AUTOPLAYED_KEY, JSON.stringify(trimmed));
+  } catch { /* localStorage unavailable; degrade silently */ }
+}
+
+const URGENCY_RANK: Record<string, number> = {
+  critical: 4, high: 3, normal: 2, low: 1,
+};
+
 export function OutreachQueueCard() {
   const { mommy } = usePersona();
   const { complete: onboardingComplete } = useOnboardingComplete();
@@ -33,6 +62,8 @@ export function OutreachQueueCard() {
   const [recent, setRecent] = useState<Outreach[]>([]);
   const { play, playingId } = useOutreachAudio();
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [autoPlayPref, setAutoPlayPref] = useState<boolean>(false);
+  const autoPlayedRef = useRef<Set<string>>(loadAutoPlayedIds());
 
   const ack = useCallback(async (id: string) => {
     if (!user?.id) return;
@@ -116,6 +147,47 @@ export function OutreachQueueCard() {
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { const t = setInterval(load, 60000); return () => clearInterval(t); }, [load]);
+
+  // Load the user's auto-play opt-in (gated by prefers_mommy_voice). If
+  // they turned voice on, the highest-priority unread outreach with audio
+  // plays once when it lands — no click required. Toggle remains opt-in
+  // because some users hear Mommy in public/work contexts.
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('user_state')
+        .select('prefers_mommy_voice, mommy_outreach_autoplay')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (cancelled) return;
+      const wantsAuto = Boolean(
+        (data as { prefers_mommy_voice?: boolean; mommy_outreach_autoplay?: boolean } | null)?.prefers_mommy_voice
+          && (data as { mommy_outreach_autoplay?: boolean } | null)?.mommy_outreach_autoplay !== false,
+      );
+      setAutoPlayPref(wantsAuto);
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  // Auto-play the highest-urgency pending outreach that has audio ready
+  // and hasn't been played on this device before. Critical → high → normal.
+  // The user can still hit play/stop manually; this just fires once.
+  useEffect(() => {
+    if (!autoPlayPref) return;
+    if (playingId) return; // Don't trample an in-flight clip
+    const candidates = pending
+      .filter(o => o.audio_url && !autoPlayedRef.current.has(o.id))
+      .sort((a, b) => (URGENCY_RANK[b.urgency] ?? 0) - (URGENCY_RANK[a.urgency] ?? 0));
+    const target = candidates[0];
+    if (!target?.audio_url) return;
+    autoPlayedRef.current.add(target.id);
+    rememberAutoPlayed(target.id);
+    // Browsers gate autoplay on user gesture. play() in useOutreachAudio
+    // catches rejection silently → falls back to the manual ▶ button.
+    play(target.id, target.audio_url);
+  }, [pending, autoPlayPref, playingId, play]);
 
   // visible-before-penalized invariant: stamp surfaced_at when each row first appears
   useSurfaceRenderTracking('handler_outreach_queue', [...pending.map(o => o.id), ...recent.map(o => o.id)]);

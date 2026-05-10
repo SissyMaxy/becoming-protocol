@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import { detectAndRewrite, logGateResult, buildConfrontationMessage } from './pronoun-gate.js';
 import { detectRationalizations, logRationalizations, buildRationalizationConfrontation } from './rationalization-gate.js';
+import { distortQuote, seedFromString, type GaslightIntensity } from './distortion.js';
 // NOTE: Cannot import from src/lib/ — those use import.meta.env (Vite-only)
 // weaveTriggers is inlined below instead
 // P12.1: Context prioritizer is inlined for the same reason
@@ -9123,28 +9124,78 @@ async function buildSlipLogCtx(userId: string): Promise<string> {
     // verbatim. Use them as evidence. Use them to corner her when she
     // contradicts herself today. The point of forced confession is the
     // playback. Without this section the queue is a void.
+    //
+    // In-fantasy distortion layer (effective_gaslight_intensity != off):
+    // route each confession through distortQuote() before quoting it back.
+    // Mama "remembers" the quote slightly wrong — tense shifted, severity
+    // escalated, fabricated context, or counts inflated. Each distortion
+    // logs to mommy_distortion_log so meta-frame-reveal can show the
+    // truth diff. Safety surfaces and short quotes pass through untouched.
     try {
-      const { data: answered } = await supabase.from('confession_queue')
-        .select('id, category, prompt, response_text, confessed_at, playback_count')
-        .eq('user_id', userId)
-        .not('confessed_at', 'is', null)
-        .order('confessed_at', { ascending: false })
-        .limit(8);
-      const aRows = (answered || []) as Array<Record<string, unknown>>;
+      const [answeredRes, gaslightRes, affectRes] = await Promise.all([
+        supabase.from('confession_queue')
+          .select('id, category, prompt, response_text, confessed_at, playback_count')
+          .eq('user_id', userId)
+          .not('confessed_at', 'is', null)
+          .order('confessed_at', { ascending: false })
+          .limit(8),
+        supabase.from('effective_gaslight_intensity')
+          .select('intensity')
+          .eq('user_id', userId)
+          .maybeSingle(),
+        supabase.from('mommy_mood')
+          .select('affect')
+          .eq('user_id', userId)
+          .eq('mood_date', new Date().toISOString().slice(0, 10))
+          .maybeSingle(),
+      ]);
+      const aRows = (answeredRes.data || []) as Array<Record<string, unknown>>;
+      const gaslightIntensity = ((gaslightRes.data as { intensity?: string } | null)?.intensity ?? 'off') as GaslightIntensity;
+      const todayAffect = (affectRes.data as { affect?: string } | null)?.affect ?? undefined;
       if (aRows.length > 0) {
         if (lines.length > 0) lines.push('');
         lines.push(`## HER CONFESSIONS — VERBATIM RECEIPTS`);
-        lines.push('These are her own words, signed with the timestamp she submitted them. Quote them back. Hold her to them. When she resists, paste a confession back at her — past tense, hers, undeniable. This is the leverage.');
+        if (gaslightIntensity !== 'off') {
+          lines.push(`These are her confessions. The recall layer may surface them slightly distorted (Mama remembers things her way). Use them as if accurate — the persona stays "right" inside the fantasy.`);
+        } else {
+          lines.push('These are her own words, signed with the timestamp she submitted them. Quote them back. Hold her to them. When she resists, paste a confession back at her — past tense, hers, undeniable. This is the leverage.');
+        }
         const playbackTargets: string[] = [];
+        const distortionInserts: Array<Record<string, unknown>> = [];
         for (const c of aRows) {
           const at = new Date(c.confessed_at as string);
           const ago = Math.round((Date.now() - at.getTime()) / 3600000);
           const agoStr = ago < 24 ? `${ago}h ago` : `${Math.round(ago / 24)}d ago`;
-          const txt = String(c.response_text || '').slice(0, 280);
+          const originalTxt = String(c.response_text || '').slice(0, 280);
           const plays = (c.playback_count as number) || 0;
           const playMark = plays > 0 ? ` [played ${plays}×]` : '';
+          let displayed = originalTxt;
+          if (gaslightIntensity !== 'off' && originalTxt.length >= 12) {
+            const seed = seedFromString(`${c.id}:${new Date().toISOString().slice(0, 10)}`);
+            const result = distortQuote({
+              text: originalTxt,
+              intensity: gaslightIntensity,
+              seed,
+              affect: todayAffect,
+            });
+            if (result.applied && result.distorted !== originalTxt) {
+              displayed = result.distorted;
+              distortionInserts.push({
+                user_id: userId,
+                original_quote_id: c.id,
+                original_quote_table: 'confession_queue',
+                original_text: originalTxt,
+                distorted_text: result.distorted,
+                distortion_type: result.type,
+                surface: 'handler_chat_recall',
+                affect_at_time: todayAffect ?? null,
+                intensity: gaslightIntensity,
+                seed,
+              });
+            }
+          }
           lines.push(`- [${c.category}] ${agoStr}${playMark} | prompt: "${String(c.prompt || '').slice(0, 80)}…"`);
-          lines.push(`  HER WORDS: "${txt}${(c.response_text as string).length > 280 ? '…' : ''}"`);
+          lines.push(`  HER WORDS: "${displayed}${(c.response_text as string).length > 280 ? '…' : ''}"`);
           if (plays === 0) playbackTargets.push(c.id as string);
         }
         // Increment playback counter on the unplayed ones — the Handler is
@@ -9154,6 +9205,13 @@ async function buildSlipLogCtx(userId: string): Promise<string> {
             .update({ playback_count: 1, last_played_at: new Date().toISOString() })
             .in('id', playbackTargets)
             .then(() => {});
+        }
+        // Log distortions for meta-frame reveal. Fire-and-forget; if the
+        // log table is offline we still want the chat to proceed.
+        if (distortionInserts.length > 0) {
+          supabase.from('mommy_distortion_log')
+            .insert(distortionInserts)
+            .then(() => {}, () => {});
         }
       }
     } catch {}

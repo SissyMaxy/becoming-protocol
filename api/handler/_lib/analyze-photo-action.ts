@@ -398,6 +398,52 @@ export async function handleAnalyzePhoto(req: VercelRequest, res: VercelResponse
       }
     }
 
+    // ─── Photo verification feedback loop (migration 366) ───────────────
+    // Wardrobe and gina_text have their own purpose-built downstream paths
+    // above. Every OTHER approved verification (mirror_check, pose, makeup,
+    // nails, progress_photo, general) lands silently otherwise — the user
+    // sees the vision response in the upload modal and nothing enters
+    // Mommy's continuous-presence rhythm. That broke the conditioning loop:
+    // photo evidence got logged, then disappeared.
+    //
+    // For non-wardrobe approvals, queue a short Mommy commentary outreach
+    // that lands on Today, and bump verified_photo_count so future cadence
+    // / progression logic can read it.
+    const NON_WARDROBE_FEEDBACK_TYPES = new Set([
+      'mirror_check', 'pose', 'makeup', 'nails', 'progress_photo', 'general',
+    ]);
+    if (
+      approved
+      && NON_WARDROBE_FEEDBACK_TYPES.has(taskType)
+      && directiveKind !== 'wardrobe_prescription'
+    ) {
+      try {
+        // Bump the counter atomically. RPC fails open — counter staying
+        // stale is much better than blocking the photo verification.
+        await supabase.rpc('bump_verified_photo_count', { p_user: user.id });
+
+        // Build a short commentary excerpt. Pull the most concrete /
+        // body-anchored sentence from the vision response so the outreach
+        // doesn't read as generic praise.
+        const excerpt = excerptForOutreach(analysis);
+        if (excerpt) {
+          await supabase.from('handler_outreach_queue').insert({
+            user_id: user.id,
+            message: excerpt,
+            urgency: 'normal',
+            trigger_reason: `photo_verified:${taskType}:${photoId}`,
+            scheduled_for: new Date().toISOString(),
+            expires_at: new Date(Date.now() + 12 * 3600_000).toISOString(),
+            source: isMommy ? 'mommy_photo_followup' : 'handler_photo_followup',
+          });
+        }
+      } catch (hookErr) {
+        // Feedback hook must never fail the photo response; the row is
+        // already verified. Log and move on.
+        console.error('[analyze-photo] verification-feedback hook failed:', hookErr);
+      }
+    }
+
     return res.status(200).json({ analysis, approved });
   } catch (err) {
     console.error('Photo analysis error:', err);
@@ -419,6 +465,27 @@ function extractNounPhrase(description: string): string | null {
 function capitalize(s: string): string {
   if (!s) return s;
   return s[0].toUpperCase() + s.slice(1);
+}
+
+// Pull a short, concrete sentence out of the vision response for the
+// follow-up outreach card. Vision output is often 3-6 sentences; the
+// outreach surface wants 1-2 punchy lines so the card reads at a glance.
+// Falls back to a generic Mama-voice line when the response is empty
+// or only refusal-style text.
+function excerptForOutreach(analysis: string): string | null {
+  if (!analysis) return null;
+  const cleaned = analysis.replace(/^\s+|\s+$/g, '').replace(/\s{2,}/g, ' ');
+  if (cleaned.length < 20) return null;
+  // Split on sentence boundaries. Prefer the first sentence that
+  // contains a body-anchored or directive verb (look, see, want, wear,
+  // wait, breathe) — those carry the most weight in the feed.
+  const sentences = cleaned.split(/(?<=[.!?])\s+/).slice(0, 6);
+  const directive = sentences.find(s => /\b(look|see|wear|hold|breathe|stand|sit|show|send|keep|stay)\b/i.test(s));
+  const first = sentences[0];
+  const lead = directive || first;
+  if (!lead) return null;
+  // Cap at 280 chars so the card reads as a glance, not an essay.
+  return lead.length > 280 ? lead.slice(0, 277).trimEnd() + '…' : lead;
 }
 
 function mommyDenialCopy(intensity: string, prescDesc: string, visionReason: string): string {

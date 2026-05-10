@@ -132,6 +132,20 @@ Deno.serve(async (req: Request) => {
     }
     const text = truncateAtWordBoundary(cleaned, MAX_TTS_CHARS)
 
+    // Daily char budget gate (migration 365). Skip with a clear marker
+    // rather than calling ElevenLabs when the user's daily cap is spent.
+    const { data: remainingData } = await supabase.rpc('mommy_tts_budget_remaining', { p_user: row.user_id })
+    const remaining = typeof remainingData === 'number' ? remainingData : 0
+    if (remaining < text.length) {
+      await supabase.from('handler_outreach_queue').update({
+        tts_status: 'skipped',
+        tts_error: `budget_exceeded_today:${remaining}/${text.length}`,
+      }).eq('id', row.id)
+      return new Response(JSON.stringify({ ok: true, skipped: 'budget_exceeded', remaining, needed: text.length }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     const ttsRes = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
       {
@@ -185,6 +199,14 @@ Deno.serve(async (req: Request) => {
       tts_error: null,
     }).eq('id', row.id)
 
+    // Record char usage against the daily budget. Best-effort: failure
+    // here would let one render slip past the cap but never block the
+    // queue, which is the right tradeoff.
+    await supabase.rpc('mommy_tts_record_usage', {
+      p_user: row.user_id,
+      p_chars: text.length,
+    })
+
     return new Response(JSON.stringify({
       ok: true,
       outreach_id: row.id,
@@ -192,6 +214,7 @@ Deno.serve(async (req: Request) => {
       affect,
       voice_settings: voiceSettings,
       audio_bytes: audioBuffer.length,
+      chars_billed: text.length,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)

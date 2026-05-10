@@ -131,6 +131,36 @@ export async function enqueuePunishment(
       ? new Date(Date.now() + tpl.due_hours * 3600000).toISOString()
       : null;
 
+  // Quote the triggering slip(s) into the description so the punishment
+  // reads as sourced, not fabricated. Per feedback_handler_must_cite_evidence:
+  // "punishments without quoting the trigger read as fabricated; bake the
+  // snippet into the prompt, skip the slip if no evidence text exists."
+  // Two quotes max keeps the line readable; longer source_text gets clipped.
+  const slipIds = options.triggered_by_slip_ids || [];
+  let description = tpl.description;
+  if (slipIds.length > 0) {
+    try {
+      const { data: slips } = await supabase
+        .from('slip_log')
+        .select('source_text')
+        .in('id', slipIds)
+        .limit(3);
+      const quotes = (slips || [])
+        .map((s: Record<string, unknown>) => String(s.source_text || '').trim())
+        .filter((s: string) => s.length > 0)
+        .slice(0, 2);
+      if (quotes.length > 0) {
+        const quoted = quotes
+          .map((q: string) => `"${q.length > 120 ? q.slice(0, 117).trimEnd() + '…' : q}"`)
+          .join(' and ');
+        description = `Because you wrote ${quoted}. ${description}`;
+      }
+    } catch {
+      // Best-effort: fall back to the unsourced template if the slip query
+      // fails. Never block the enqueue on a citation lookup.
+    }
+  }
+
   const { data, error } = await supabase
     .from('punishment_queue')
     .insert({
@@ -138,10 +168,10 @@ export async function enqueuePunishment(
       punishment_type: tpl.punishment_type,
       severity: tpl.severity,
       title: tpl.title,
-      description: tpl.description,
+      description,
       parameters: tpl.parameters || {},
       due_by: dueBy,
-      triggered_by_slip_ids: options.triggered_by_slip_ids || [],
+      triggered_by_slip_ids: slipIds,
       triggered_by_hard_mode: options.triggered_by_hard_mode || false,
     })
     .select('id')
