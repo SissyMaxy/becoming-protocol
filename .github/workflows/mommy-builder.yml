@@ -7,11 +7,28 @@ name: Mommy autonomous builder
 #      eligible. Postgres trigger → kick-builder edge fn → this workflow.
 #      THIS IS THE PRIMARY PATH.
 #
-#   2. Backstop cron — every 30 min in case (1) fails for any reason
-#      (PAT rotated, GH dispatch rate-limited, edge fn cold-start).
+#   2. Backstop cron — every 15 min in case (1) fails for any reason
+#      (PAT rotated, GH dispatch rate-limited, edge fn cold-start). Bumped
+#      from 30→15 min on 2026-05-10 so the loop is never quiet for >15 min
+#      even when the dispatch path is degraded.
 #
 #   3. workflow_dispatch — manual button in the GH UI. Mode selector for
 #      dry/draft/ship/classify/drain.
+#
+# CONCURRENCY (single-runner, intentional):
+#   The `concurrency: mommy-builder` group keeps exactly one builder run
+#   alive at a time. Tempting to bump to N=2/N=3 for throughput, but two
+#   parallel drain loops collide on:
+#     - migration numbering (both pick "next free integer above NNN" and
+#       race to write the same number)
+#     - branch naming (mommy/<wish-slug>-<wish-id-prefix> uses the wish ID
+#       prefix; same prefix → same branch race)
+#     - shared file edits (two wishes touching the same generator → merge
+#       conflict at PR time)
+#   Until builder.ts has a DB-level "next-migration reservation" + per-wish
+#   working-tree lock, throughput comes from --drain (one runner ships up
+#   to 20 wishes per invocation) plus the 15-min backstop, NOT from parallel
+#   runners. Revisit when migration numbering moves to a counter table.
 #
 # REQUIRED SECRETS:
 #   ANTHROPIC_API_KEY       — drafter + classifier (Sonnet 4.6 / Haiku 4.5)
@@ -27,7 +44,7 @@ on:
   repository_dispatch:
     types: [mommy-build-trigger]
   schedule:
-    - cron: '*/30 * * * *'   # every 30 min backstop
+    - cron: '*/15 * * * *'   # every 15 min backstop (was */30; bumped 2026-05-10)
   workflow_dispatch:
     inputs:
       mode:

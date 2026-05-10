@@ -15,6 +15,7 @@ import { useContentPipeline } from '../../hooks/useContentPipeline';
 import { getCalendar, getDistributionHistory, getTopFans, getFanCount } from '../../lib/content-pipeline';
 import { useAuth } from '../../context/AuthContext';
 import { PerformanceLogInput } from '../content/PerformanceLogInput';
+import { MommyPulsePanel } from './MommyPulsePanel';
 import type {
   ContentCalendarDay,
   Distribution,
@@ -88,6 +89,11 @@ export function ContentDashboard({ onBack }: ContentDashboardProps) {
       </div>
 
       <div className="space-y-6">
+
+        {/* Mommy autonomous-loop pulse — supervisor heartbeat. Top of dashboard
+            so the operator can spot a stalled loop in one glance before reading
+            anything else. */}
+        <MommyPulsePanel />
 
         {/* Revenue Overview */}
         <section className="bg-zinc-950 border border-green-500/20 rounded-lg p-4">
