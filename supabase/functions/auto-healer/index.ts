@@ -27,6 +27,7 @@
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { resolveOpenGithubRows, type OpenGhRow, type GhRun } from './github-resolver.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -145,46 +146,81 @@ Deno.serve(async (req: Request) => {
   }
 
   // FIX 6: github_actions auto-close. For each open github_actions row,
-  // ask GitHub if a later run on the same head_sha + workflow name
-  // succeeded. If yes, close the open row as 'resolved' — the failure
-  // self-healed via a re-run. Batched per SHA to keep API calls minimal.
-  // Implements the auto-close TODO from deploy-health-monitor.
+  // ask GitHub if a later run succeeded for the same workflow name.
+  // Two patterns close a row (see github-resolver.ts):
+  //   (a) same-sha re-run succeeded — original failure self-healed
+  //   (b) later commit on main succeeded — the fix landed in a follow-up
+  // Pattern (b) was added 2026-05-10 after preflight + Mommy-deploy
+  // accumulated 20+ rows across distinct shas while one source bug stayed
+  // unfixed. Without (b), every old row stayed open forever even after
+  // the actual fix landed.
+  //
+  // We pull two windows of runs: per-sha for (a), and a recent window of
+  // main-branch runs for (b). Both feed the pure resolver.
   const githubToken = Deno.env.get('GITHUB_TOKEN') ?? ''
   if (githubToken) {
     const { data: openGh } = await supabase
       .from('deploy_health_log')
-      .select('id, user_id, raw, title')
+      .select('id, user_id, raw, title, detected_at')
       .eq('status', 'open')
       .eq('source', 'github_actions')
       .limit(100)
-    type GhRow = { id: string; user_id: string; raw: { sha?: string; name?: string; run_id?: number } | null; title: string }
-    const bySha: Record<string, GhRow[]> = {}
-    for (const row of (openGh ?? []) as GhRow[]) {
+    const openRows = (openGh ?? []) as OpenGhRow[]
+
+    // Recent window of main-branch runs — broad enough to catch later-commit
+    // fixes for any open row up to a few days old.
+    let mainRuns: GhRun[] = []
+    try {
+      const r = await fetch(
+        `https://api.github.com/repos/SissyMaxy/becoming-protocol/actions/runs?branch=main&per_page=100`,
+        { headers: { 'Authorization': `Bearer ${githubToken}`, 'Accept': 'application/vnd.github+json' } },
+      )
+      if (r.ok) {
+        const data = await r.json() as { workflow_runs?: GhRun[] }
+        mainRuns = (data.workflow_runs ?? []).map(rr => ({
+          id: rr.id, name: rr.name, conclusion: rr.conclusion,
+          head_sha: rr.head_sha, head_branch: rr.head_branch ?? 'main',
+        }))
+      }
+    } catch (_) { /* skip on transient API failure — same-sha lookups still run below */ }
+
+    // Per-sha window for pattern (a). Keeps API calls bounded.
+    const shasNeeded = new Set<string>()
+    for (const row of openRows) {
       const sha = row.raw?.sha
-      if (!sha || !row.raw?.name) continue
-      ;(bySha[sha] ??= []).push(row)
+      if (sha && !mainRuns.some(rr => rr.head_sha === sha)) shasNeeded.add(sha)
     }
-    for (const [sha, rows] of Object.entries(bySha)) {
+    const shaRuns: GhRun[] = []
+    for (const sha of shasNeeded) {
       try {
         const r = await fetch(
           `https://api.github.com/repos/SissyMaxy/becoming-protocol/actions/runs?head_sha=${sha}&per_page=50`,
           { headers: { 'Authorization': `Bearer ${githubToken}`, 'Accept': 'application/vnd.github+json' } },
         )
         if (!r.ok) continue
-        const data = await r.json() as { workflow_runs?: Array<{ id: number; name: string; conclusion: string }> }
-        const runs = data.workflow_runs ?? []
-        for (const row of rows) {
-          const name = row.raw!.name!
-          const failedRunId = row.raw!.run_id ?? 0
-          const successor = runs.find(rr => rr.name === name && rr.conclusion === 'success' && rr.id > failedRunId)
-          if (!successor) continue
-          await supabase.from('deploy_health_log').update({
-            status: 'resolved',
-            resolved_at: new Date().toISOString(),
-          }).eq('id', row.id)
-          fixes.push({ kind: 'github_run_auto_closed', user_id: row.user_id, detail: `${name} on ${sha.slice(0, 7)} re-ran green (run ${successor.id})` })
+        const data = await r.json() as { workflow_runs?: GhRun[] }
+        for (const rr of (data.workflow_runs ?? [])) {
+          shaRuns.push({
+            id: rr.id, name: rr.name, conclusion: rr.conclusion,
+            head_sha: rr.head_sha, head_branch: rr.head_branch ?? 'main',
+          })
         }
-      } catch (_) { /* skip on transient API failure */ }
+      } catch (_) { /* skip transient */ }
+    }
+
+    const decisions = resolveOpenGithubRows(openRows, [...mainRuns, ...shaRuns])
+    const userIdById: Record<string, string> = {}
+    for (const row of openRows) userIdById[row.id] = row.user_id
+    for (const dec of decisions) {
+      await supabase.from('deploy_health_log').update({
+        status: 'resolved',
+        resolved_at: new Date().toISOString(),
+      }).eq('id', dec.rowId)
+      fixes.push({
+        kind: dec.reason === 'later_commit_on_main' ? 'github_run_auto_closed_later_commit' : 'github_run_auto_closed',
+        user_id: userIdById[dec.rowId],
+        detail: dec.detail,
+      })
     }
   }
 
