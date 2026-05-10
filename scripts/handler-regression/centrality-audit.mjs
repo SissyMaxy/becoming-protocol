@@ -102,7 +102,11 @@ function isAllowed(filePath) {
 // tables it reads from. A violation is "writes ≥1 user-facing without
 // reading ≥1 handler-state."
 function analyzeFile(file) {
-  const text = readFileSync(file, 'utf8');
+  // Strip CRLF → LF so Windows checkouts produce the same block boundaries
+  // as Linux CI. Without this the `line === '}'` block-closer never matches
+  // when autocrlf=true leaves `\r` behind, and the count diverges by a few
+  // entries between Windows local and Linux CI.
+  const text = readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
   // Split into rough function blocks. Quick heuristic: each `async function`,
   // `function`, `const X = async (...) =>`, etc., starts a block, and the
   // block ends at the next top-level brace at column 0. This is imperfect

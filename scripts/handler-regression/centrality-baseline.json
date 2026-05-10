@@ -10,20 +10,16 @@
   "supabase/functions/_shared/job-handlers/handler-autonomous.ts:ensureTodayOutfitMandate",
   "supabase/functions/_shared/job-handlers/handler-autonomous.ts:ensureWeeklyMeasurementCommitment",
   "supabase/functions/_shared/job-handlers/handler-autonomous.ts:fireDailyMorningBrief",
-  "supabase/functions/_shared/job-handlers/handler-autonomous.ts:generateDisclosureDraftsForUser",
   "supabase/functions/_shared/job-handlers/handler-autonomous.ts:generateEvidenceReport",
   "supabase/functions/_shared/job-handlers/handler-autonomous.ts:plantTodaySymptom",
   "supabase/functions/_shared/job-handlers/handler-autonomous.ts:prescribeVoiceDrill",
   "supabase/functions/_shared/job-handlers/handler-autonomous.ts:promoteConfessionsToImplants",
-  "supabase/functions/_shared/job-handlers/handler-autonomous.ts:reframeJournalEntries",
   "supabase/functions/_shared/job-handlers/handler-autonomous.ts:runGapAnalysis",
   "supabase/functions/_shared/job-handlers/handler-autonomous.ts:spontaneousOutreach",
   "supabase/functions/_shared/job-handlers/handler-autonomous.ts:tickVoicePitchRatchet",
-  "supabase/functions/auto-loophole-closer/index.ts:safeJSON",
   "supabase/functions/bind-enforcer-cron/index.ts:fireConsequence",
   "supabase/functions/capability-digest-cron/index.ts:digestForCanonicalUser",
-  "supabase/functions/handler-evolve/index.ts:evolveForUser",
-  "supabase/functions/mommy-mood/index.ts:safeJSON",
-  "supabase/functions/sponsor-page/index.ts:escapeHtml",
-  "supabase/functions/trajectory-predictor/index.ts:safeJSON"
+  "supabase/functions/mommy-fast-react/index.ts:fireFastAction",
+  "supabase/functions/mommy-gaslight/index.ts:persistImplant",
+  "supabase/functions/mommy-scheme/index.ts:fireAction"
 ]
