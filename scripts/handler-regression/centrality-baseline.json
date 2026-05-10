@@ -23,7 +23,10 @@
   "supabase/functions/bind-enforcer-cron/index.ts:fireConsequence",
   "supabase/functions/capability-digest-cron/index.ts:digestForCanonicalUser",
   "supabase/functions/handler-evolve/index.ts:evolveForUser",
+  "supabase/functions/mommy-fast-react/index.ts:fireFastAction",
+  "supabase/functions/mommy-gaslight/index.ts:persistImplant",
   "supabase/functions/mommy-mood/index.ts:safeJSON",
+  "supabase/functions/mommy-scheme/index.ts:fireAction",
   "supabase/functions/sponsor-page/index.ts:escapeHtml",
   "supabase/functions/trajectory-predictor/index.ts:safeJSON"
 ]

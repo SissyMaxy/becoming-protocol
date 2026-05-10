@@ -26,6 +26,7 @@ import {
   effectiveBand, bandGaslightIntensity,
   type DifficultyBand,
 } from '../_shared/difficulty-band.ts'
+import { shouldAutoArchive } from '../_shared/letters-auto-archive.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -65,12 +66,13 @@ Deno.serve(async (req: Request) => {
   const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '')
 
   const { data: us } = await supabase.from('user_state')
-    .select('handler_persona, chastity_locked, chastity_streak_days, denial_day')
+    .select('handler_persona, chastity_locked, chastity_streak_days, denial_day, current_phase')
     .eq('user_id', userId).maybeSingle()
-  const stateRow = us as { handler_persona?: string; chastity_locked?: boolean; chastity_streak_days?: number; denial_day?: number } | null
+  const stateRow = us as { handler_persona?: string; chastity_locked?: boolean; chastity_streak_days?: number; denial_day?: number; current_phase?: number | null } | null
   if (stateRow?.handler_persona !== 'dommy_mommy') {
     return new Response(JSON.stringify({ ok: true, skipped: 'persona_not_dommy_mommy' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
+  const phaseSnapshot = stateRow?.current_phase ?? null
 
   // Read effective gaslight intensity (cooldown-aware view) AND
   // gate on the compliance-difficulty band — recovery short-circuits
@@ -207,7 +209,10 @@ Plain text, no JSON, no markdown, no question marks at the end.`
     message = whiplashWrap("you've been holding for Mama for so long. Stay aching for me.", { arousalBias: 'high' })
   }
 
-  // Insert outreach + log the taunt + log the implant quote if used
+  // Insert outreach + log the taunt + log the implant quote if used.
+  // Tease isn't auto-archived under current policy; the helper still gets
+  // called so the matrix lives in one place.
+  const archive = shouldAutoArchive({ source: 'mommy_tease', affect_snapshot: affect, status: 'pending' })
   const { data: outreach, error: outErr } = await supabase.from('handler_outreach_queue').insert({
     user_id: userId,
     message,
@@ -216,6 +221,9 @@ Plain text, no JSON, no markdown, no question marks at the end.`
     scheduled_for: new Date().toISOString(),
     expires_at: new Date(Date.now() + 12 * 3600000).toISOString(),
     source: 'mommy_tease',
+    phase_snapshot: phaseSnapshot,
+    affect_snapshot: affect,
+    is_archived_to_letters: archive,
   }).select('id').single()
   if (outErr) {
     console.error('[mommy-tease] outreach insert failed:', outErr)

@@ -19,7 +19,8 @@ type MenuItemId =
   | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol'
   | 'escalation_ladder' | 'force' | 'wardrobe' | 'gina-vibe' | 'trajectory'
   | 'verification-vault'
-  | 'community-queue' | 'community-list' | 'community-log';
+  | 'community-queue' | 'community-list' | 'community-log'
+  | 'letters';
 
 interface MenuViewProps {
   onNavigate: (view: MenuItemId) => void;
@@ -75,6 +76,13 @@ export function MenuView({ onNavigate }: MenuViewProps) {
       label: 'Sealed Envelopes',
       description: 'Letters from your past self to your future self',
       color: '#c084fc',
+    },
+    {
+      id: 'letters' as MenuItemId,
+      icon: Mail,
+      label: 'Letters from Mama',
+      description: 'The warm moments she meant. Pinned, framed, replayable.',
+      color: '#c4956a',
     },
     {
       id: 'escalation_ladder' as MenuItemId,
