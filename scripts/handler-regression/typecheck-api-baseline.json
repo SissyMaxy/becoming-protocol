@@ -12,5 +12,6 @@
   "api/whoop/[action].ts::TS18046::'newTokens' is of type 'unknown'.",
   "api/whoop/[action].ts::TS18046::'tokens' is of type 'unknown'.",
   "api/whoop/[action].ts::TS2339::Property 'records' does not exist on type '{}'.",
-  "src/lib/calendar/google-client.ts::TS2322::Type 'unknown' is not assignable to type 'TokenExchangeResult'."
+  "src/lib/calendar/google-client.ts::TS2322::Type 'unknown' is not assignable to type 'TokenExchangeResult'.",
+  "src/lib/outreach/reddit-client.ts::TS2322::Type 'unknown' is not assignable to type 'TokenExchangeResult'."
 ]

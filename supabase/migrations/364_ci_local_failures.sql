@@ -1,4 +1,4 @@
--- 314 — CI gate parity: ci_local_failures table.
+-- 364 — CI gate parity: ci_local_failures table.
 --
 -- Why: today's recurring failure pattern is "local checks pass, CI catches
 -- new violation". The fix is `npm run ci` running every CI gate locally

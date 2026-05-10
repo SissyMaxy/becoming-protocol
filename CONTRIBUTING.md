@@ -43,7 +43,7 @@ In order, matching `.github/workflows/preflight.yml`:
    merges for hours today).
 
 The first step that fails short-circuits the run. The failure class is
-captured to `ci_local_failures` (see migration 314) for clustering — patterns
+captured to `ci_local_failures` (see migration 364) for clustering — patterns
 recurring 3+ times become candidates for new auto-fix recipes in the
 deploy-fixer pattern library.
 
