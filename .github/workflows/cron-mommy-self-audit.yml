@@ -1,0 +1,57 @@
+name: Mommy Self-Audit (daily introspection) + Evolution Summary (weekly)
+
+# Daily self-audit cron runs the introspection panel and queues
+# self_strengthening wishes for the builder. Weekly evolution-summary closes
+# the loop with a paragraph landing on Today.
+#
+# Scheduled slots are picked to avoid the existing daily/twice-weekly cron
+# clusters (04:00 / 04:30 / 05:00 / 06:05 / 07:30 / 11:05 / 13:05 / 22:10 UTC):
+#   - 03:30 UTC daily          — self-audit
+#   - 12:00 UTC Sunday          — weekly evolution-summary
+#
+# Both endpoints have pg_cron backstops (15 min later) registered in
+# migration 365, so if a GH runner skips, the work still fires.
+
+on:
+  schedule:
+    - cron: '30 3 * * *'   # mommy-self-audit (daily)
+    - cron: '0 12 * * 0'   # mommy-evolution-summary (Sunday noon UTC)
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Which endpoint to fire (self-audit | evolution-summary | both)'
+        required: false
+        default: 'self-audit'
+
+concurrency:
+  group: cron-mommy-self-audit
+  cancel-in-progress: false
+
+jobs:
+  fire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: mommy-self-audit
+        if: |
+          github.event.schedule == '30 3 * * *'
+          || (github.event_name == 'workflow_dispatch' && (github.event.inputs.target == 'self-audit' || github.event.inputs.target == 'both' || github.event.inputs.target == ''))
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/mommy-self-audit" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"cron"}' \
+            -m 480 || echo "mommy-self-audit failed (non-fatal — pg_cron backstop fires 15 min later)"
+
+      - name: mommy-evolution-summary
+        if: |
+          github.event.schedule == '0 12 * * 0'
+          || (github.event_name == 'workflow_dispatch' && (github.event.inputs.target == 'evolution-summary' || github.event.inputs.target == 'both'))
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/mommy-evolution-summary" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"cron"}' \
+            -m 240 || echo "mommy-evolution-summary failed (non-fatal — pg_cron backstop fires 15 min later)"
