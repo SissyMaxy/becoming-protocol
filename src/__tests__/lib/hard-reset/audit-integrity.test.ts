@@ -17,7 +17,7 @@ const MIGRATION_PATH = path.join(
   REPO_ROOT,
   'supabase',
   'migrations',
-  '301_hard_reset.sql'
+  '353_hard_reset.sql'
 )
 
 const sql = fs.readFileSync(MIGRATION_PATH, 'utf8')

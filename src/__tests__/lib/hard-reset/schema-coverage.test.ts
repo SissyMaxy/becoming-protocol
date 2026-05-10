@@ -19,7 +19,7 @@ import * as path from 'node:path'
 
 const REPO_ROOT = path.resolve(__dirname, '../../../../')
 const MIGRATIONS_DIR = path.join(REPO_ROOT, 'supabase', 'migrations')
-const HARD_RESET_MIGRATION = path.join(MIGRATIONS_DIR, '301_hard_reset.sql')
+const HARD_RESET_MIGRATION = path.join(MIGRATIONS_DIR, '353_hard_reset.sql')
 
 // Tables we're allowed to exclude from the wipe. Each entry must have a
 // short justification — adding a table here means user data will SURVIVE a
