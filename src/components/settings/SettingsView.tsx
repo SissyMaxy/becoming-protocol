@@ -30,6 +30,7 @@ import {
   Calendar,
   Lock,
   Mail,
+  Sparkles,
 } from 'lucide-react';
 import { useAftercareOptional } from '../../context/AftercareContext';
 import { profileStorageV2 } from '../../lib/profile-storage-v2';
@@ -65,6 +66,7 @@ import { SleepContentSettings } from '../sleep-content/SleepContentSettings';
 import { SocialMediaDashboard } from '../social/SocialMediaDashboard';
 import { PersonaSettings } from './PersonaSettings';
 import { SniffiesSettings } from './SniffiesSettings';
+import { PhaseProgressPanel } from '../identity/PhaseProgressPanel';
 
 const DIFFICULTY_LEVELS = [
   { id: 'gentle', label: 'Gentle', desc: 'Lighter load, longer timers' },
@@ -316,7 +318,7 @@ interface SettingsViewProps {
   onEditIntake?: () => void;
 }
 
-type SettingsSection = 'main' | 'profile' | 'lovense' | 'whoop' | 'calendar' | 'equipment' | 'timeratchets' | 'reminders' | 'privacy' | 'stealth' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content' | 'opacity' | 'social-dashboard' | 'persona' | 'sniffies' | 'letters';
+type SettingsSection = 'main' | 'profile' | 'lovense' | 'whoop' | 'calendar' | 'equipment' | 'timeratchets' | 'reminders' | 'privacy' | 'stealth' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content' | 'opacity' | 'social-dashboard' | 'persona' | 'sniffies' | 'letters' | 'identity';
 
 export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
   const { isBambiMode } = useBambiMode();
@@ -414,6 +416,13 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
       color: '#a855f7',
     },
     {
+      id: 'identity' as const,
+      icon: Sparkles,
+      label: 'Identity',
+      description: 'Phase progress and advancement',
+      color: '#ec4899',
+    },
+    {
       id: 'sleep-content' as const,
       icon: Moon,
       label: 'Sleep Content',
@@ -503,6 +512,7 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
     if (activeSection === 'social-dashboard') return 'Socials';
     if (activeSection === 'persona') return 'Persona';
     if (activeSection === 'sniffies') return 'Sniffies imports';
+    if (activeSection === 'identity') return 'Identity';
     const section = sections.find(s => s.id === activeSection);
     return section?.label || 'Settings';
   };
@@ -1241,6 +1251,10 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
 
         {/* Sniffies imports */}
         {activeSection === 'sniffies' && <SniffiesSettings />}
+
+        {/* Identity → Phase progress + auto-advance toggles. Self-hides when
+            feminine_self isn't present (identity branch unmerged). */}
+        {activeSection === 'identity' && <PhaseProgressPanel />}
       </div>
     </div>
   );
