@@ -11,6 +11,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useBambiMode } from '../../context/BambiModeContext';
 import { supabase } from '../../lib/supabase';
+import { HardResetSection } from './HardResetSection';
 
 export function PrivacySettings() {
   const { user, signOut } = useAuth();
@@ -154,6 +155,9 @@ export function PrivacySettings() {
               </div>
             </div>
           </button>
+
+          {/* Hard reset / emergency wipe */}
+          <HardResetSection />
 
           {/* Sign out */}
           <button
