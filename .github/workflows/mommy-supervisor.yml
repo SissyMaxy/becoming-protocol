@@ -1,0 +1,63 @@
+name: Mommy supervisor
+
+# Watchdog over the autonomous build + outreach loop. Reads metrics from the
+# last 1-24h, compares against thresholds, and intervenes (HTTP-kicks an edge
+# function or enqueues a self-heal wish) when a component goes quiet. Every
+# evaluation + action is logged to mommy_supervisor_log; /api/admin/mommy-pulse
+# rolls those rows up into the green/yellow/red panel on /admin.
+#
+# Cadence: every 10 minutes. Light enough that overlapping runs don't matter
+# (the supervisor itself rate-limits actions per metric via mommy_supervisor_log
+# lookups), heavy enough that a stalled component is noticed before the user is.
+#
+# REQUIRED SECRETS:
+#   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — same secrets mommy-builder uses
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Mode'
+        required: true
+        default: 'live'
+        type: choice
+        options:
+          - live
+          - dry
+
+# Multiple supervisor runs interfering would be wasteful but not unsafe (every
+# action is throttled at the DB-row level). Cancel-in-progress=false so a slow
+# run finishes rather than getting cut off by the next tick.
+concurrency:
+  group: mommy-supervisor
+  cancel-in-progress: false
+
+jobs:
+  supervise:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Run supervisor
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          MODE="${{ github.event.inputs.mode || 'live' }}"
+          if [[ "$MODE" == "dry" ]]; then
+            npm run mommy:supervisor -- --dry
+          else
+            npm run mommy:supervisor
+          fi
