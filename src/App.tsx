@@ -103,6 +103,8 @@ import { WardrobeInventoryView } from './components/wardrobe';
 import { IdentitySettingsView } from './components/identity';
 import { GinaVibeCaptureCard } from './components/gina';
 import { TrajectoryArchiveView } from './components/trajectory';
+import { RecapsIndexView } from './components/recaps/RecapsIndexView';
+import { RecapDetailView } from './components/recaps/RecapDetailView';
 import { JournalView } from './components/journal';
 import { ProtocolAnalytics } from './components/analytics/ProtocolAnalytics';
 import { HandlerAutonomousView } from './components/autonomous';
@@ -146,7 +148,18 @@ const DEEP_LINK_VIEWS: Record<string, string> = {
   '/community/queue': 'community-queue',
   '/community/list': 'community-list',
   '/community/log': 'community-log',
+  '/recaps': 'recaps',
 };
+
+// Parse `/recaps/<recap_id>` deep link → returns the id, or null.
+function parseRecapDetailId(): string | null {
+  const hash = window.location.hash;
+  const m = hash.match(/^#\/recaps\/([0-9a-f-]+)\/?$/i);
+  if (m) return m[1];
+  const path = window.location.pathname;
+  const m2 = path.match(/^\/recaps\/([0-9a-f-]+)\/?$/i);
+  return m2 ? m2[1] : null;
+}
 
 function parseDeepLinkView(): string | null {
   // Check hash first (app uses hash routing: /#/social-dashboard)
@@ -173,7 +186,7 @@ function LoadingScreen() {
   );
 }
 
-type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | 'hypno-learning' | 'goon-session' | 'progress-page' | 'sealed-page' | 'content-capture' | 'content-queue' | 'content-calendar' | 'content-fans' | 'content-polls' | 'content-revenue' | 'content-settings' | 'vault-browser' | 'log-release' | 'conditioning-library' | 'social-dashboard' | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol' | 'escalation_ladder' | 'force' | 'wardrobe' | 'gina-vibe' | 'trajectory' | 'mommy-dossier' | 'identity' | 'verification-vault' | 'community-queue' | 'community-list' | 'community-log' | 'letters' | 'dossier' | null;
+type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | 'hypno-learning' | 'goon-session' | 'progress-page' | 'sealed-page' | 'content-capture' | 'content-queue' | 'content-calendar' | 'content-fans' | 'content-polls' | 'content-revenue' | 'content-settings' | 'vault-browser' | 'log-release' | 'conditioning-library' | 'social-dashboard' | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol' | 'escalation_ladder' | 'force' | 'wardrobe' | 'gina-vibe' | 'trajectory' | 'mommy-dossier' | 'identity' | 'verification-vault' | 'community-queue' | 'community-list' | 'community-log' | 'letters' | 'dossier' | 'recaps' | 'recap-detail' | null;
 
 /** Session picker → launches immersive SessionContainer */
 function SessionPickerOrContainer({ onBack }: { onBack: () => void }) {
@@ -307,8 +320,30 @@ function AuthenticatedAppInner() {
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
-  const [activeTab, setActiveTab] = useState<Tab>(deepLinkView ? 'menu' : 'protocol');
-  const [menuSubView, setMenuSubView] = useState<MenuSubView>((deepLinkView as MenuSubView) || null);
+  const initialRecapId = parseRecapDetailId();
+  const [recapDetailId, setRecapDetailId] = useState<string | null>(initialRecapId);
+  const [activeTab, setActiveTab] = useState<Tab>(deepLinkView || initialRecapId ? 'menu' : 'protocol');
+  const [menuSubView, setMenuSubView] = useState<MenuSubView>(
+    initialRecapId ? 'recap-detail' : ((deepLinkView as MenuSubView) || null)
+  );
+
+  // Hash routing for /recaps and /recaps/<id> — kept in sync with menuSubView.
+  useEffect(() => {
+    const onHash = () => {
+      const id = parseRecapDetailId();
+      if (id) {
+        setRecapDetailId(id);
+        setMenuSubView('recap-detail');
+        setActiveTab('menu');
+      } else if (window.location.hash === '#/recaps' || window.location.hash === '#/recaps/') {
+        setRecapDetailId(null);
+        setMenuSubView('recaps');
+        setActiveTab('menu');
+      }
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
   const [showMorningFlow, setShowMorningFlow] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
   // Welcome wizard — kink-companion onboarding (persona/intensity/safeword/aftercare).
@@ -985,6 +1020,31 @@ function AuthenticatedAppInner() {
         );
       case 'trajectory':
         return <TrajectoryArchiveView onBack={handleBackFromSubView} />;
+      case 'recaps':
+        return (
+          <RecapsIndexView
+            onBack={handleBackFromSubView}
+            onOpen={(id) => {
+              window.location.hash = `#/recaps/${id}`;
+              setMenuSubView('recap-detail');
+              setRecapDetailId(id);
+              window.history.pushState({ tab: activeTab, subView: 'recap-detail', recapId: id }, '');
+            }}
+          />
+        );
+      case 'recap-detail':
+        if (!recapDetailId) return null;
+        return (
+          <RecapDetailView
+            recapId={recapDetailId}
+            onBack={() => {
+              window.location.hash = '#/recaps';
+              setMenuSubView('recaps');
+              setRecapDetailId(null);
+              window.history.pushState({ tab: activeTab, subView: 'recaps' }, '');
+            }}
+          />
+        );
       case 'social-dashboard':
         return <SocialMediaDashboard onBack={handleBackFromSubView} />;
       case 'community-queue':

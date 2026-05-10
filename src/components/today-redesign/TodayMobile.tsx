@@ -46,6 +46,7 @@ import { SponsorMilestoneCard } from './SponsorMilestoneCard';
 import { WornItemCard } from './WornItemCard';
 import { DmTemplateCard } from './DmTemplateCard';
 import { MorningBriefCard } from './MorningBriefCard';
+import { WeeklyRecapCard } from './WeeklyRecapCard';
 import { StrategicPlanCard } from './StrategicPlanCard';
 import { CodeAuditCard } from './CodeAuditCard';
 import { ConfessionLockoutGate } from './ConfessionLockoutGate';
@@ -295,6 +296,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             <HandlerDecreeCard />
             <ConfessionQueueCard />
             <MorningBriefCard />
+            <WeeklyRecapCard onOpenDetail={(id) => { window.location.hash = `#/recaps/${id}`; }} />
           </CollapsibleGroup>
 
           {/* TODAY'S BODY WORK — outfit, workout, voice, arousal, doses. */}
