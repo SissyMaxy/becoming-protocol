@@ -21,6 +21,10 @@ import {
   pickMantra, phaseToMantraScale,
   type MantraRow, type MantraIntensity, type MantraSelectContext,
 } from '../_shared/mantra-select.ts'
+import {
+  effectiveBand, bandMantraCeiling,
+  type DifficultyBand,
+} from '../_shared/difficulty-band.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -37,6 +41,11 @@ function jsonResponse(body: Record<string, unknown>, status = 200): Response {
 
 function isMantraIntensity(v: unknown): v is MantraIntensity {
   return v === 'gentle' || v === 'firm' || v === 'cruel'
+}
+
+const TIER_RANK: Record<MantraIntensity, number> = { gentle: 0, firm: 1, cruel: 2 }
+function capIntensity(requested: MantraIntensity, ceiling: MantraIntensity): MantraIntensity {
+  return TIER_RANK[requested] <= TIER_RANK[ceiling] ? requested : ceiling
 }
 
 Deno.serve(async (req: Request) => {
@@ -76,8 +85,19 @@ Deno.serve(async (req: Request) => {
   const affect = (mood as { affect?: string } | null)?.affect ?? 'patient'
 
   const phase = phaseToMantraScale((us as { current_phase?: number } | null)?.current_phase)
-  // Intensity ceiling: explicit override > a future user_state column > 'gentle'
-  const intensity: MantraIntensity = intensityOverride ?? 'firm'
+
+  // Intensity ceiling — body override beats compliance band beats default.
+  // Recovery band hard-caps to 'gentle' regardless of any other input.
+  const { data: diff } = await supabase
+    .from('compliance_difficulty_state')
+    .select('current_difficulty_band, override_band')
+    .eq('user_id', userId)
+    .maybeSingle()
+  const band = effectiveBand(diff as { current_difficulty_band: DifficultyBand; override_band: DifficultyBand | null } | null)
+  const bandCeiling: MantraIntensity = bandMantraCeiling(band)
+  const intensity: MantraIntensity = intensityOverride
+    ? capIntensity(intensityOverride, bandCeiling)
+    : bandCeiling
 
   // Recent delivery map for the dedup window
   const since = new Date(Date.now() - DEDUP_WINDOW_DAYS * 86_400_000).toISOString()

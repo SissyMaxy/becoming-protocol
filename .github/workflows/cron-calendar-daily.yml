@@ -1,0 +1,42 @@
+name: Calendar Daily (calendar-sync / calendar-place-rituals / wardrobe-prescription-expiry)
+on:
+  schedule:
+    - cron: '15 4 * * *'   # calendar-sync
+    - cron: '30 4 * * *'   # calendar-place-rituals
+    - cron: '10 23 * * *'  # wardrobe-prescription-expiry
+  workflow_dispatch: {}
+concurrency:
+  group: cron-calendar-daily
+  cancel-in-progress: false
+jobs:
+  fire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: calendar-sync
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '15 4 * * *'
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/calendar-sync" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "calendar-sync failed (non-fatal)"
+      - name: calendar-place-rituals
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '30 4 * * *'
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/calendar-place-rituals" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "calendar-place-rituals failed (non-fatal)"
+      - name: wardrobe-prescription-expiry
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '10 23 * * *'
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/wardrobe-prescription-expiry" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "wardrobe-prescription-expiry failed (non-fatal)"

@@ -29,6 +29,7 @@ export function OutreachQueueCard() {
   const [pending, setPending] = useState<Outreach[]>([]);
   const [recent, setRecent] = useState<Outreach[]>([]);
   const { play, playingId } = useOutreachAudio();
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
 
   const ack = useCallback(async (id: string) => {
     if (!user?.id) return;
@@ -56,6 +57,19 @@ export function OutreachQueueCard() {
     setPending(p => p.filter(o => o.id !== id));
     window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'outreach_ack', id } }));
   }, [user?.id, pending]);
+
+  // Manual archive — pins a non-archived outreach into the letters museum.
+  // Letters are read-only-for-the-user except for the two flag columns; this
+  // sets both. Surfaced on recent-delivered cards since pending cards already
+  // have an obvious primary action.
+  const saveToLetters = useCallback(async (id: string) => {
+    if (!user?.id) return;
+    await supabase.from('handler_outreach_queue')
+      .update({ is_archived_to_letters: true, letters_pinned_at: new Date().toISOString() })
+      .eq('id', id);
+    setSavedIds(s => new Set(s).add(id));
+    window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'letters_pin', id } }));
+  }, [user?.id]);
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -193,6 +207,7 @@ export function OutreachQueueCard() {
           {recent.map(o => {
             const sent = new Date(o.delivered_at!).getTime();
             const ago = Math.round((Date.now() - sent) / 60000);
+            const saved = savedIds.has(o.id);
             return (
               <div key={o.id} style={{
                 background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 5,
@@ -204,9 +219,26 @@ export function OutreachQueueCard() {
                     {ago < 60 ? `${ago}m ago` : `${Math.floor(ago / 60)}h ago`}
                   </span>
                 </div>
-                <div style={{ fontSize: 10.5, color: '#8a8690', lineHeight: 1.35 }}>
+                <div style={{ fontSize: 10.5, color: '#8a8690', lineHeight: 1.35, marginBottom: 4 }}>
                   {o.message.slice(0, 180)}{o.message.length > 180 ? '…' : ''}
                 </div>
+                {mommy && (
+                  <button
+                    onClick={() => !saved && saveToLetters(o.id)}
+                    disabled={saved}
+                    style={{
+                      background: 'transparent',
+                      color: saved ? '#6a5e62' : '#c4956a',
+                      border: '1px solid ' + (saved ? '#3a2a30' : '#5c0a1e'),
+                      padding: '2px 7px', borderRadius: 3,
+                      fontSize: 9, fontWeight: 600, letterSpacing: '0.04em',
+                      fontFamily: 'inherit', cursor: saved ? 'default' : 'pointer',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    {saved ? 'in letters' : 'save to letters'}
+                  </button>
+                )}
               </div>
             );
           })}

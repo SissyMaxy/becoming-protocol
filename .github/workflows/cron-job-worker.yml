@@ -1,0 +1,48 @@
+name: cron-job-worker
+
+# Drains background_jobs every minute. Each invocation claims up to 5 jobs
+# from the queue, races each against a 25s per-handler cap, and returns within
+# 30s overall. The worker is idempotent — if the cron run fires while a prior
+# one is still claiming/running, both are safe (FOR UPDATE SKIP LOCKED in the
+# claim RPC ensures no double-claim).
+
+on:
+  # TEMPORARILY DISABLED 2026-05-09 — the long-running-fn refactor branch
+  # (which deploys the `job-worker` edge function and creates the
+  # `background_jobs` table) has not landed in main yet, so every scheduled
+  # run 404s and writes a deploy_health_log failure row.
+  #
+  # TO RE-ENABLE:
+  #   1. Confirm `job-worker` is listed:
+  #        npx supabase functions list --project-ref atevwvexapiykchvqvhm
+  #   2. Confirm the table exists:
+  #        SELECT 1 FROM information_schema.tables WHERE table_name='background_jobs';
+  #   3. Restore:  schedule: [{ cron: '*/1 * * * *' }]
+  #
+  # workflow_dispatch is preserved so the worker can still be smoke-tested
+  # manually (it'll 404 until step 1 is true; that's expected).
+  schedule: []
+  workflow_dispatch: {}
+
+# IMPORTANT: never cancel a running worker. We'd rather have two overlapping
+# drain runs than abort one mid-flight (the in-flight one might have claimed
+# rows that wouldn't be released cleanly).
+concurrency:
+  group: cron-job-worker
+  cancel-in-progress: false
+
+jobs:
+  drain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: invoke job-worker
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/job-worker" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{"max_jobs":5}' \
+            -m 60

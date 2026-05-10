@@ -5,10 +5,16 @@ name: Mommy deploy on merge
 # autonomy — without auto-deploy, shipped code sits on main but production
 # never sees it.
 #
-# REQUIRED SECRETS:
+# REQUIRED SECRETS (operator must set in repo Settings → Secrets):
 #   SUPABASE_ACCESS_TOKEN   — `supabase login --token`
 #   SUPABASE_PROJECT_REF    — for `--project-ref`
 #   SUPABASE_DB_PASSWORD    — for `supabase db push`
+#
+# When ANY of these is unset, the workflow logs the missing secrets and
+# exits successfully (no email failure). This lets the workflow stay wired
+# for the future without spamming failures while the operator hasn't
+# provisioned secrets yet. The migrations and edge functions can still be
+# applied manually from the host (`supabase db push`, `npm run deploy`).
 #
 # This workflow only deploys on:
 #   - Push to main
@@ -33,12 +39,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check required secrets
+        id: secrets
+        env:
+          HAVE_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN != '' }}
+          HAVE_REF: ${{ secrets.SUPABASE_PROJECT_REF != '' }}
+          HAVE_PW: ${{ secrets.SUPABASE_DB_PASSWORD != '' }}
+        run: |
+          missing=""
+          if [[ "$HAVE_TOKEN" != "true" ]]; then missing="$missing SUPABASE_ACCESS_TOKEN"; fi
+          if [[ "$HAVE_REF" != "true" ]]; then missing="$missing SUPABASE_PROJECT_REF"; fi
+          if [[ "$HAVE_PW" != "true" ]]; then missing="$missing SUPABASE_DB_PASSWORD"; fi
+          if [[ -n "$missing" ]]; then
+            echo "::warning::Mommy deploy skipped — missing secrets:$missing"
+            echo "::warning::Set these in repo Settings → Secrets and variables → Actions, then re-run."
+            echo "::warning::Migrations + edge functions can still be applied manually from the host."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install Supabase CLI
+        if: steps.secrets.outputs.ready == 'true'
         uses: supabase/setup-cli@v1
         with:
           version: latest
 
       - name: Apply migrations
+        if: steps.secrets.outputs.ready == 'true'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
@@ -48,6 +76,7 @@ jobs:
           supabase db push --password "$SUPABASE_DB_PASSWORD"
 
       - name: Deploy edge functions
+        if: steps.secrets.outputs.ready == 'true'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}

@@ -1,0 +1,32 @@
+name: Content Daily (workout-prescriber / capability-digest)
+on:
+  schedule:
+    - cron: '10 7 * * *'   # workout-prescriber
+    - cron: '30 7 * * *'   # capability-digest-cron
+  workflow_dispatch: {}
+concurrency:
+  group: cron-content-daily
+  cancel-in-progress: false
+jobs:
+  fire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: workout-prescriber
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '10 7 * * *'
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/workout-prescriber" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "workout-prescriber failed (non-fatal)"
+      - name: capability-digest-cron
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '30 7 * * *'
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/capability-digest-cron" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "capability-digest-cron failed (non-fatal)"

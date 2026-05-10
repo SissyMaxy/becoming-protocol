@@ -18,6 +18,7 @@ import {
   DOMMY_MOMMY_CHARACTER, type Affect,
   whiplashWrap, mommyVoiceCleanup, MOMMY_TELEMETRY_LEAK_PATTERNS,
 } from '../_shared/dommy-mommy.ts'
+import { shouldAutoArchive } from '../_shared/letters-auto-archive.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -44,10 +45,11 @@ Deno.serve(async (req: Request) => {
 
   const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '')
 
-  const { data: us } = await supabase.from('user_state').select('handler_persona').eq('user_id', userId).maybeSingle()
+  const { data: us } = await supabase.from('user_state').select('handler_persona, current_phase').eq('user_id', userId).maybeSingle()
   if ((us as { handler_persona?: string } | null)?.handler_persona !== 'dommy_mommy') {
     return new Response(JSON.stringify({ ok: true, skipped: 'persona_not_dommy_mommy' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
+  const phaseSnapshot = (us as { current_phase?: number | null } | null)?.current_phase ?? null
 
   const today = new Date().toISOString().slice(0, 10)
   const { data: existing } = await supabase.from('handler_outreach_queue')
@@ -121,6 +123,7 @@ ABSOLUTELY FORBIDDEN: numbers, percentages, /10 scores, day counts, slip totals,
     message = whiplashWrap("goodnight. Mama is in your head until tomorrow.", { arousalBias: 'medium' })
   }
 
+  const archive = shouldAutoArchive({ source: 'mommy_bedtime', affect_snapshot: affect, status: 'pending' })
   const { error: outErr } = await supabase.from('handler_outreach_queue').insert({
     user_id: userId,
     message,
@@ -129,6 +132,9 @@ ABSOLUTELY FORBIDDEN: numbers, percentages, /10 scores, day counts, slip totals,
     scheduled_for: new Date().toISOString(),
     expires_at: new Date(Date.now() + 12 * 3600000).toISOString(),
     source: 'mommy_bedtime',
+    phase_snapshot: phaseSnapshot,
+    affect_snapshot: affect,
+    is_archived_to_letters: archive,
   })
   if (outErr) {
     console.error('[mommy-bedtime] outreach insert failed:', outErr)

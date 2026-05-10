@@ -22,6 +22,11 @@ import {
   distortQuote, seedFromString,
   type GaslightIntensity, type DistortionResult,
 } from '../_shared/distortion.ts'
+import {
+  effectiveBand, bandGaslightIntensity,
+  type DifficultyBand,
+} from '../_shared/difficulty-band.ts'
+import { shouldAutoArchive } from '../_shared/letters-auto-archive.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -61,20 +66,32 @@ Deno.serve(async (req: Request) => {
   const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '')
 
   const { data: us } = await supabase.from('user_state')
-    .select('handler_persona, chastity_locked, chastity_streak_days, denial_day')
+    .select('handler_persona, chastity_locked, chastity_streak_days, denial_day, current_phase')
     .eq('user_id', userId).maybeSingle()
-  const stateRow = us as { handler_persona?: string; chastity_locked?: boolean; chastity_streak_days?: number; denial_day?: number } | null
+  const stateRow = us as { handler_persona?: string; chastity_locked?: boolean; chastity_streak_days?: number; denial_day?: number; current_phase?: number | null } | null
   if (stateRow?.handler_persona !== 'dommy_mommy') {
     return new Response(JSON.stringify({ ok: true, skipped: 'persona_not_dommy_mommy' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
+  const phaseSnapshot = stateRow?.current_phase ?? null
 
-  // Read effective gaslight intensity (cooldown-aware view).
-  const { data: gaslightRow } = await supabase
-    .from('effective_gaslight_intensity')
-    .select('intensity')
-    .eq('user_id', userId)
-    .maybeSingle()
-  const gaslightIntensity = ((gaslightRow as { intensity?: string } | null)?.intensity ?? 'off') as GaslightIntensity
+  // Read effective gaslight intensity (cooldown-aware view) AND
+  // gate on the compliance-difficulty band — recovery short-circuits
+  // gaslight to 'off' regardless of stored intensity.
+  const [{ data: gaslightRow }, { data: diffRow }] = await Promise.all([
+    supabase
+      .from('effective_gaslight_intensity')
+      .select('intensity')
+      .eq('user_id', userId)
+      .maybeSingle(),
+    supabase
+      .from('compliance_difficulty_state')
+      .select('current_difficulty_band, override_band')
+      .eq('user_id', userId)
+      .maybeSingle(),
+  ])
+  const storedIntensity = ((gaslightRow as { intensity?: string } | null)?.intensity ?? 'off') as GaslightIntensity
+  const band = effectiveBand(diffRow as { current_difficulty_band: DifficultyBand; override_band: DifficultyBand | null } | null)
+  const gaslightIntensity = bandGaslightIntensity(storedIntensity, band) as GaslightIntensity
 
   // Use the larger of chastity_streak / denial_day so the engine fires
   // for either reinforcement vector. denial_day = days since last_release;
@@ -192,7 +209,10 @@ Plain text, no JSON, no markdown, no question marks at the end.`
     message = whiplashWrap("you've been holding for Mama for so long. Stay aching for me.", { arousalBias: 'high' })
   }
 
-  // Insert outreach + log the taunt + log the implant quote if used
+  // Insert outreach + log the taunt + log the implant quote if used.
+  // Tease isn't auto-archived under current policy; the helper still gets
+  // called so the matrix lives in one place.
+  const archive = shouldAutoArchive({ source: 'mommy_tease', affect_snapshot: affect, status: 'pending' })
   const { data: outreach, error: outErr } = await supabase.from('handler_outreach_queue').insert({
     user_id: userId,
     message,
@@ -201,6 +221,9 @@ Plain text, no JSON, no markdown, no question marks at the end.`
     scheduled_for: new Date().toISOString(),
     expires_at: new Date(Date.now() + 12 * 3600000).toISOString(),
     source: 'mommy_tease',
+    phase_snapshot: phaseSnapshot,
+    affect_snapshot: affect,
+    is_archived_to_letters: archive,
   }).select('id').single()
   if (outErr) {
     console.error('[mommy-tease] outreach insert failed:', outErr)

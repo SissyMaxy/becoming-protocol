@@ -13,6 +13,7 @@ import { HandlerProvider, useHandlerContext } from './context/HandlerContext';
 import { AmbushProvider } from './components/ambush';
 import { ModalOrchestratorProvider } from './context/ModalOrchestrator';
 import { AftercareProvider } from './context/AftercareContext';
+import { BedtimeRitualProvider } from './context/BedtimeRitualContext';
 import { useOrchestratedModals } from './hooks/useOrchestratedModals';
 import { useDisassociationRecovery } from './hooks/useDisassociationRecovery';
 import { useCompulsoryGate } from './hooks/useCompulsoryGate';
@@ -45,6 +46,7 @@ import { GinaSessionRecorder } from './components/today-redesign/GinaSessionReco
 import { MorningMantraGate } from './components/today-redesign/MorningMantraGate';
 import { MommyDossierQuiz } from './components/persona/MommyDossierQuiz';
 import { VerificationVault } from './components/verification/VerificationVault';
+import { LettersArchiveView } from './components/letters';
 import { GinaKeyHolderPage } from './components/gina/GinaKeyHolderPage';
 import { usePunishmentNotifications } from './hooks/usePunishmentNotifications';
 import { DailyReportCard } from './components/handler/DailyReportCard';
@@ -107,6 +109,7 @@ import { GoonSessionView } from './components/sessions/GoonSessionView';
 import { SleepContentPlayer } from './components/sleep-content';
 import { ConditioningLibrary, ConditioningPlayer } from './components/conditioning';
 import { SocialMediaDashboard } from './components/social/SocialMediaDashboard';
+import { CommunityQueue, CommunityList, CommunityLog } from './components/community';
 import { getTodayDate } from './lib/protocol';
 import { profileStorage, letterStorage } from './lib/storage';
 // useTaskBank, useGoals, useWeekend — now used only inside TodayView (badge removed)
@@ -137,6 +140,9 @@ const DEEP_LINK_VIEWS: Record<string, string> = {
   '/journal': 'journal',
   '/settings': 'settings',
   '/identity': 'identity',
+  '/community/queue': 'community-queue',
+  '/community/list': 'community-list',
+  '/community/log': 'community-log',
 };
 
 function parseDeepLinkView(): string | null {
@@ -164,7 +170,7 @@ function LoadingScreen() {
   );
 }
 
-type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | 'hypno-learning' | 'goon-session' | 'progress-page' | 'sealed-page' | 'content-capture' | 'content-queue' | 'content-calendar' | 'content-fans' | 'content-polls' | 'content-revenue' | 'content-settings' | 'vault-browser' | 'log-release' | 'conditioning-library' | 'social-dashboard' | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol' | 'escalation_ladder' | 'force' | 'wardrobe' | 'gina-vibe' | 'trajectory' | 'mommy-dossier' | 'identity' | 'verification-vault' | null;
+type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | 'hypno-learning' | 'goon-session' | 'progress-page' | 'sealed-page' | 'content-capture' | 'content-queue' | 'content-calendar' | 'content-fans' | 'content-polls' | 'content-revenue' | 'content-settings' | 'vault-browser' | 'log-release' | 'conditioning-library' | 'social-dashboard' | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol' | 'escalation_ladder' | 'force' | 'wardrobe' | 'gina-vibe' | 'trajectory' | 'mommy-dossier' | 'identity' | 'verification-vault' | 'community-queue' | 'community-list' | 'community-log' | 'letters' | null;
 
 /** Session picker → launches immersive SessionContainer */
 function SessionPickerOrContainer({ onBack }: { onBack: () => void }) {
@@ -758,6 +764,8 @@ function AuthenticatedAppInner() {
         );
       case 'verification-vault':
         return <VerificationVault onBack={handleBackFromSubView} />;
+      case 'letters':
+        return <LettersArchiveView onBack={handleBackFromSubView} />;
       case 'investments':
       case 'wishlist':
         // These are now in ProgressDashboard, redirect there
@@ -905,6 +913,12 @@ function AuthenticatedAppInner() {
         return <TrajectoryArchiveView onBack={handleBackFromSubView} />;
       case 'social-dashboard':
         return <SocialMediaDashboard onBack={handleBackFromSubView} />;
+      case 'community-queue':
+        return <CommunityQueue onBack={handleBackFromSubView} />;
+      case 'community-list':
+        return <CommunityList onBack={handleBackFromSubView} />;
+      case 'community-log':
+        return <CommunityLog onBack={handleBackFromSubView} />;
       case 'dashboard':
         return (
           <div>
@@ -1253,9 +1267,11 @@ function AuthenticatedApp() {
             >
               <ModalOrchestratorProvider>
                 <AftercareProvider>
-                  <AmbushProvider enabled={false}>
-                    <AuthenticatedAppInner />
-                  </AmbushProvider>
+                  <BedtimeRitualProvider>
+                    <AmbushProvider enabled={false}>
+                      <AuthenticatedAppInner />
+                    </AmbushProvider>
+                  </BedtimeRitualProvider>
                 </AftercareProvider>
               </ModalOrchestratorProvider>
             </HandlerProvider>

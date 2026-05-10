@@ -14,6 +14,7 @@ import {
   arousalToPhrase, mommyVoiceCleanup, MOMMY_TELEMETRY_LEAK_PATTERNS,
   isTestPollution,
 } from '../_shared/dommy-mommy.ts'
+import { shouldAutoArchive } from '../_shared/letters-auto-archive.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -34,10 +35,11 @@ Deno.serve(async (req: Request) => {
   const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '')
 
   // Persona gate
-  const { data: us } = await supabase.from('user_state').select('handler_persona').eq('user_id', userId).maybeSingle()
+  const { data: us } = await supabase.from('user_state').select('handler_persona, current_phase').eq('user_id', userId).maybeSingle()
   if ((us as { handler_persona?: string } | null)?.handler_persona !== 'dommy_mommy') {
     return new Response(JSON.stringify({ ok: true, skipped: 'persona_not_dommy_mommy' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
+  const phaseSnapshot = (us as { current_phase?: number | null } | null)?.current_phase ?? null
 
   // Today's affect → praise threshold
   const today = new Date().toISOString().slice(0, 10)
@@ -140,6 +142,7 @@ Plain text only. Mama feels her; Mama doesn't recite numbers.`
     message = whiplashWrap(`${arousalPlain}. Stay there for me. Don't you dare let it drop.`, { arousalBias: 'high' })
   }
 
+  const archive = shouldAutoArchive({ source: 'mommy_praise', affect_snapshot: affect, status: 'pending' })
   const { data: outreach } = await supabase.from('handler_outreach_queue').insert({
     user_id: userId,
     message,
@@ -148,6 +151,9 @@ Plain text only. Mama feels her; Mama doesn't recite numbers.`
     scheduled_for: new Date().toISOString(),
     expires_at: new Date(Date.now() + 4 * 3600000).toISOString(),
     source: 'mommy_praise',
+    phase_snapshot: phaseSnapshot,
+    affect_snapshot: affect,
+    is_archived_to_letters: archive,
   }).select('id').single()
 
   await supabase.from('mommy_praise_cooldown').insert({
