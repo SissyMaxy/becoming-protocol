@@ -169,7 +169,12 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN NULL;
 END $$;
 
--- 04:00 UTC daily — mommy-ideate (cadence bump per task brief: continuous brainstorming)
+-- mommy-ideate cadence is owned by .github/workflows/cron-mommy-ideate.yml
+-- (Mon+Thu 04:00 UTC twice-weekly). Daily pg_cron registration removed to
+-- respect the GH Action's stated floor: "Daily polls add cost without much
+-- value because suggestions converge — twice-weekly is the floor (do not
+-- reduce further)." Also unschedule any prior daily job left in pg_cron from
+-- earlier branch tip:
 DO $$
 DECLARE jid BIGINT;
 BEGIN
@@ -177,20 +182,6 @@ BEGIN
     PERFORM cron.unschedule(jid);
   END LOOP;
 END $$;
-SELECT cron.schedule(
-  'mommy-ideate-daily-04-00',
-  '0 4 * * *',
-  $cmd$
-    SELECT net.http_post(
-      url := current_setting('app.settings.supabase_url', true) || '/functions/v1/mommy-ideate',
-      headers := jsonb_build_object(
-        'Content-Type', 'application/json',
-        'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true)
-      ),
-      body := '{}'::jsonb
-    );
-  $cmd$
-);
 
 -- 04:30 UTC daily — wish-classifier backstop (the trigger usually catches
 -- ideate output live; this cron handles cases where the trigger HTTP failed
