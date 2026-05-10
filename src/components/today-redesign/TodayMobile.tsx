@@ -59,6 +59,7 @@ import { PublicDareCard } from './PublicDareCard';
 import { GoodGirlPointsCard } from '../persona/GoodGirlPointsCard';
 import { ProtocolHealthCard } from './ProtocolHealthCard';
 import { MommyIdeationCard } from './MommyIdeationCard';
+import { DeployFixerStatusCard } from './DeployFixerStatusCard';
 import { PunishmentQueueCard } from './PunishmentQueueCard';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
@@ -315,6 +316,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           <CollapsibleGroup id="strategy_briefings" label="Strategy & Briefings" tone="#a78bfa" hint="health · daily brief · strategist · code audit">
             <ProtocolHealthCard />
             <MommyIdeationCard />
+            <DeployFixerStatusCard />
             <DailyBriefingCard />
             <StrategicPlanCard />
             <CodeAuditCard />
