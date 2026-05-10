@@ -15,6 +15,7 @@ import {
 import { useHandlerAI } from '../../../hooks/useHandlerAI';
 import { useHandlerContext } from '../../../context/HandlerContext';
 import { DataCard } from '../shared/DataCard';
+import { BuilderTelemetryCard } from '../cards/BuilderTelemetryCard';
 
 export function LiveControlsTab() {
   const handlerAI = useHandlerAI();
@@ -140,6 +141,9 @@ export function LiveControlsTab() {
 
   return (
     <div className="space-y-4">
+      {/* Builder telemetry — read-only, no per-wish approval flow */}
+      <BuilderTelemetryCard />
+
       {/* Quick Actions */}
       <DataCard
         title="Quick Actions"
