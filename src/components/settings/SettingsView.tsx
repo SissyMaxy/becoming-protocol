@@ -646,6 +646,49 @@ export function SettingsView({ onBack, onEditIntake }: SettingsViewProps) {
                   />
                 </button>
 
+                {/* Replay welcome wizard — re-tour through the kink-companion
+                    onboarding (persona / safeword / intensity / aftercare).
+                    Doesn't reset onboarding_completed_at; just re-runs the
+                    flow as a refresher. */}
+                <button
+                  onClick={() => {
+                    window.location.hash = '/welcome';
+                  }}
+                  className={`w-full p-4 rounded-xl border flex items-center gap-4 text-left transition-all ${
+                    isBambiMode
+                      ? 'bg-pink-50 border-pink-200 hover:border-pink-300'
+                      : 'bg-protocol-surface border-protocol-border hover:border-protocol-accent/30'
+                  }`}
+                >
+                  <div
+                    className="p-3 rounded-xl"
+                    style={{ backgroundColor: '#a8987820' }}
+                  >
+                    <Sparkles className="w-5 h-5" style={{ color: '#a89878' }} />
+                  </div>
+                  <div className="flex-1">
+                    <p
+                      className={`font-medium ${
+                        isBambiMode ? 'text-pink-700' : 'text-protocol-text'
+                      }`}
+                    >
+                      Replay onboarding
+                    </p>
+                    <p
+                      className={`text-sm ${
+                        isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'
+                      }`}
+                    >
+                      Walk through persona, safeword, and intensity again
+                    </p>
+                  </div>
+                  <ChevronRight
+                    className={`w-5 h-5 ${
+                      isBambiMode ? 'text-pink-300' : 'text-protocol-text-muted'
+                    }`}
+                  />
+                </button>
+
                 {/* Edit Intake Button */}
                 <button
                   onClick={onEditIntake}

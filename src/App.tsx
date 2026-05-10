@@ -30,6 +30,8 @@ import { History } from './components/History';
 // SealedContentView removed — accessible via Handler conversation
 import { MenuView } from './components/MenuView';
 import { OnboardingFlow } from './components/Onboarding';
+import { OnboardingWizard } from './components/onboarding-welcome';
+import { loadOnboardingState } from './lib/onboarding/storage';
 // DayIncompleteModal removed - navigation is now unrestricted
 // InvestmentMilestoneModal now rendered via useOrchestratedModals
 import { SharedWishlistView } from './components/wishlist';
@@ -308,6 +310,15 @@ function AuthenticatedAppInner() {
   const [menuSubView, setMenuSubView] = useState<MenuSubView>((deepLinkView as MenuSubView) || null);
   const [showMorningFlow, setShowMorningFlow] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
+  // Welcome wizard — kink-companion onboarding (persona/intensity/safeword/aftercare).
+  // Independent of the legacy intake `OnboardingFlow`; runs after it. Null = not
+  // yet checked; true = needs to run; false = already done.
+  const [showWelcome, setShowWelcome] = useState<boolean | null>(null);
+  // Hash route `#/welcome` lets the user replay the wizard from Settings.
+  const [welcomeReplay, setWelcomeReplay] = useState<boolean>(() => {
+    const h = window.location.hash.replace('#', '');
+    return h === '/welcome' || h === '/welcome/';
+  });
   const [editIntakeMode, setEditIntakeMode] = useState(false);
   const [editIntakeProfile, setEditIntakeProfile] = useState<Partial<UserProfile> | null>(null);
   const [showSleepContent, setShowSleepContent] = useState(false);
@@ -511,6 +522,28 @@ function AuthenticatedAppInner() {
     checkOnboarding();
   }, []);
 
+  // Check if welcome wizard (kink-companion onboarding) is complete.
+  // Runs after the legacy intake — only checked once authUser is known.
+  const authUserId = authUser?.id;
+  useEffect(() => {
+    if (!authUserId) return;
+    let cancelled = false;
+    loadOnboardingState(authUserId)
+      .then(s => { if (!cancelled) setShowWelcome(!s.completedAt); })
+      .catch(() => { if (!cancelled) setShowWelcome(false); });
+    return () => { cancelled = true; };
+  }, [authUserId]);
+
+  // Listen for `#/welcome` hash so users can replay onboarding from Settings.
+  useEffect(() => {
+    const onHash = () => {
+      const h = window.location.hash.replace('#', '');
+      setWelcomeReplay(h === '/welcome' || h === '/welcome/');
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
   // Check if we need to show morning flow — only show after confirming no entry exists
   const morningCheckDone = useRef(false);
   useEffect(() => {
@@ -643,13 +676,41 @@ function AuthenticatedAppInner() {
     }
   };
 
-  if ((isLoading || showOnboarding === null || compulsoryLoading) && !loadingTimedOut) {
+  if ((isLoading || showOnboarding === null || (showOnboarding === false && showWelcome === null) || compulsoryLoading) && !loadingTimedOut) {
     return <LoadingScreen />;
   }
 
   // Show onboarding if not complete
   if (showOnboarding) {
     return <OnboardingFlow onComplete={handleOnboardingComplete} />;
+  }
+
+  // Show welcome wizard if first-run kink-companion onboarding hasn't
+  // happened yet — runs AFTER the legacy intake. Also entered via the
+  // `#/welcome` hash from Settings → Replay onboarding (welcomeReplay).
+  // The first check intentionally lets `null` (loading) fall through so
+  // the user doesn't see a flash of Today before we know.
+  if (
+    !editIntakeMode &&
+    showOnboarding === false &&
+    (welcomeReplay || showWelcome === true) &&
+    authUser?.id
+  ) {
+    return (
+      <ErrorBoundary componentName="OnboardingWizard">
+        <OnboardingWizard
+          onComplete={() => {
+            // If this was a replay, just clear the hash. If it was the
+            // first run, also flip the local flag so we don't re-mount.
+            if (welcomeReplay) {
+              window.location.hash = '';
+              setWelcomeReplay(false);
+            }
+            setShowWelcome(false);
+          }}
+        />
+      </ErrorBoundary>
+    );
   }
 
   // Show edit intake flow
