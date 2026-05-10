@@ -46,6 +46,9 @@ jobs:
       - name: TypeScript build (tsc -b + vite build)
         run: npm run build
 
+      - name: TypeScript api/ surface (fails on NEW errors beyond baseline)
+        run: npm run ci:typecheck-api
+
       - name: ESLint (informational — pre-existing 264 issues; new errors should be triaged)
         run: npm run lint
         continue-on-error: true
@@ -61,6 +64,9 @@ jobs:
 
       - name: Storage privacy lint (no getPublicUrl on private buckets)
         run: npm run lint:storage
+
+      - name: Baseline drift detection (fails on stale baseline entries)
+        run: npm run ci:check-baselines
 
   architectural-audits:
     name: Architectural audits (cohesion, centrality, coverage)

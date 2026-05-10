@@ -1,0 +1,16 @@
+[
+  "api/conditioning/index.ts::TS18046::'claudeData' is of type 'unknown'.",
+  "api/handler/_lib/chat-action.ts::TS18046::'claudeData' is of type 'unknown'.",
+  "api/handler/_lib/chat-action.ts::TS18046::'data' is of type 'unknown'.",
+  "api/handler/_lib/chat-action.ts::TS18046::'embeddingData' is of type 'unknown'.",
+  "api/handler/_lib/chat-action.ts::TS18046::'fallbackData' is of type 'unknown'.",
+  "api/handler/_lib/chat-action.ts::TS18046::'orData' is of type 'unknown'.",
+  "api/handler/_lib/chat-action.ts::TS18046::'result' is of type 'unknown'.",
+  "api/hypno/[action].ts::TS2304::Cannot find name 'BodyInit'.",
+  "api/memory/index.ts::TS18046::'embeddingData' is of type 'unknown'.",
+  "api/voice/_lib/transcribe-action.ts::TS2304::Cannot find name 'BodyInit'.",
+  "api/whoop/[action].ts::TS18046::'newTokens' is of type 'unknown'.",
+  "api/whoop/[action].ts::TS18046::'tokens' is of type 'unknown'.",
+  "api/whoop/[action].ts::TS2339::Property 'records' does not exist on type '{}'.",
+  "src/lib/calendar/google-client.ts::TS2322::Type 'unknown' is not assignable to type 'TokenExchangeResult'."
+]

@@ -1,0 +1,41 @@
+#!/usr/bin/env sh
+# CI gate parity pre-push hook.
+#
+# Runs `npm run ci` against the about-to-be-pushed worktree. Blocks the push
+# if any gate fails, so CI red after push becomes basically impossible.
+#
+# Bypass (for emergencies, requires conscious choice):
+#   git push --no-verify
+# OR set CI_GATE_SKIP=1 env var. Avoid both unless you've already pushed once
+# and know the gate is broken — fix the gate, don't bypass.
+#
+# Install: npm run ci:install-hooks
+
+if [ "${CI_GATE_SKIP:-0}" = "1" ]; then
+  echo "[pre-push] CI_GATE_SKIP=1 — bypassing gate. Make sure you know why."
+  exit 0
+fi
+
+# When pushing zero refs (e.g. delete-only), nothing to validate.
+if [ -z "$1" ]; then
+  : # fall through; git pre-push hooks always pass remote name as $1
+fi
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT" || exit 1
+
+echo "[pre-push] running npm run ci  (set CI_GATE_SKIP=1 to bypass)"
+CI_ACTOR=pre_push_hook npm run --silent ci
+status=$?
+
+if [ $status -ne 0 ]; then
+  echo ""
+  echo "[pre-push] BLOCKED — npm run ci failed. Fix the failures, OR refresh"
+  echo "[pre-push] baselines if a refactor intentionally shifted them:"
+  echo "[pre-push]     npm run ci:refresh-baselines"
+  echo "[pre-push] Then re-push. To bypass once (NOT RECOMMENDED): CI_GATE_SKIP=1 git push"
+  exit $status
+fi
+
+echo "[pre-push] gate passed; pushing"
+exit 0
