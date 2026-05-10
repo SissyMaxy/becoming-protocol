@@ -1,0 +1,32 @@
+name: Mommy Ideate (cross-model panel)
+
+# Twice-weekly cross-model ideation panel for Dommy Mommy hardening + protocol
+# infra. Anthropic + OpenAI + OpenRouter (Gemini) run the same hardening-context
+# prompt; a Sonnet judge pass synthesizes. Output lands in mommy_ideation_log
+# and the wish-classifier picks it up for the autonomous build loop.
+#
+# Cadence: Mon + Thu 04:00 UTC. Daily polls add cost without much value because
+# suggestions converge — twice-weekly is the floor (do not reduce further).
+
+on:
+  schedule:
+    - cron: '0 4 * * 1,4'
+  workflow_dispatch: {}
+
+concurrency:
+  group: cron-mommy-ideate
+  cancel-in-progress: false
+
+jobs:
+  ideate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: invoke
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/mommy-ideate" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron","focus":"protocol_or_mommy_improvements"}' \
+            -m 240 || echo "ideate failed (non-fatal)"

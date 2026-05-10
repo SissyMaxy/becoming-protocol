@@ -20,6 +20,10 @@ import {
   composeRetroactiveAffectLine, seedFromString,
   type GaslightIntensity,
 } from '../_shared/distortion.ts'
+import {
+  effectiveBand, bandGaslightIntensity,
+  type DifficultyBand,
+} from '../_shared/difficulty-band.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -56,11 +60,18 @@ interface Snapshot {
   recent_confession_themes: string[]
   recent_compliance_pct: number
   recent_handler_messages_count: number
+  // Bedtime ritual snapshot — informs the morning tone but never
+  // triggers a penalty (skip is unconditional + soft).
+  bedtime_last_night: 'completed' | 'skipped' | 'partial' | 'none'
 }
 
 async function buildSnapshot(supabase: ReturnType<typeof createClient>, userId: string): Promise<Snapshot> {
   const since7d = new Date(Date.now() - 7 * 86400000).toISOString()
-  const [arousal, slips, state, conf, commitsAll, commitsDone, outreach] = await Promise.all([
+  // Bedtime "last night" lookup window: anything started after 18:00
+  // yesterday (UTC). Captures the most recent completed/skipped row
+  // before today's morning brief fires.
+  const bedtimeSince = new Date(Date.now() - 14 * 3600_000).toISOString()
+  const [arousal, slips, state, conf, commitsAll, commitsDone, outreach, bedtimeRow] = await Promise.all([
     supabase.from('arousal_log').select('value, created_at').eq('user_id', userId).gte('created_at', since7d).limit(50),
     supabase.from('slip_log').select('id').eq('user_id', userId).gte('detected_at', since7d).limit(100),
     supabase.from('user_state').select('slip_points_current, chastity_locked, chastity_streak_days, denial_day').eq('user_id', userId).maybeSingle(),
@@ -68,6 +79,7 @@ async function buildSnapshot(supabase: ReturnType<typeof createClient>, userId: 
     supabase.from('handler_commitments').select('id').eq('user_id', userId).gte('created_at', since7d),
     supabase.from('handler_commitments').select('id').eq('user_id', userId).eq('status', 'fulfilled').gte('created_at', since7d),
     supabase.from('handler_outreach_queue').select('id').eq('user_id', userId).gte('created_at', since7d),
+    supabase.from('bedtime_ritual_completions').select('completed_at, skipped_at, steps_completed').eq('user_id', userId).gte('started_at', bedtimeSince).order('started_at', { ascending: false }).limit(1).maybeSingle(),
   ])
 
   const arousalRows = (arousal.data || []) as Array<{ value: number }>
@@ -77,6 +89,16 @@ async function buildSnapshot(supabase: ReturnType<typeof createClient>, userId: 
   const allCount = (commitsAll.data || []).length
   const doneCount = (commitsDone.data || []).length
   const compliance = allCount > 0 ? doneCount / allCount : 1
+
+  // Bedtime status — derived, never penalty-bearing.
+  const br = bedtimeRow.data as { completed_at?: string | null; skipped_at?: string | null; steps_completed?: unknown } | null
+  let bedtime_last_night: 'completed' | 'skipped' | 'partial' | 'none' = 'none'
+  if (br) {
+    const stepCount = Array.isArray(br.steps_completed) ? br.steps_completed.length : 0
+    if (br.completed_at) bedtime_last_night = 'completed'
+    else if (br.skipped_at) bedtime_last_night = stepCount > 0 ? 'partial' : 'skipped'
+    else bedtime_last_night = stepCount > 0 ? 'partial' : 'none'
+  }
 
   return {
     arousal_avg_7d: Math.round(arousalAvg * 10) / 10,
@@ -89,6 +111,7 @@ async function buildSnapshot(supabase: ReturnType<typeof createClient>, userId: 
     recent_confession_themes: ((conf.data || []) as Array<{ prompt: string }>).map(c => c.prompt.slice(0, 80)),
     recent_compliance_pct: Math.round(compliance * 100),
     recent_handler_messages_count: (outreach.data || []).length,
+    bedtime_last_night,
   }
 }
 
@@ -135,6 +158,15 @@ Deno.serve(async (req: Request) => {
       : snapshot.recent_handler_messages_count > 0
       ? "Mama's been around"
       : "Mama's been quiet lately",
+    // Bedtime is a soft signal — never call it a "skip" or "miss" in
+    // the rationale; this is hint-only context for tone selection.
+    bedtime_last_night: snapshot.bedtime_last_night === 'completed'
+      ? "she came to Mama before sleep last night"
+      : snapshot.bedtime_last_night === 'partial'
+        ? "she started the goodnight ritual but didn't finish"
+        : snapshot.bedtime_last_night === 'skipped'
+          ? "she went to bed without coming to Mama last night"
+          : "no bedtime context",
   }
 
   const userPrompt = `STATE OF YOUR GIRL (last week, in plain Mama-voice — DO NOT ask for or invent numbers):
@@ -202,12 +234,21 @@ Output JSON only:
   // honors any active cooldown automatically.
   let retroactive_emitted = false
   try {
-    const { data: gaslightRow } = await supabase
-      .from('effective_gaslight_intensity')
-      .select('intensity')
-      .eq('user_id', userId)
-      .maybeSingle()
-    const gaslightIntensity = ((gaslightRow as { intensity?: string } | null)?.intensity ?? 'off') as GaslightIntensity
+    const [{ data: gaslightRow }, { data: diffRow }] = await Promise.all([
+      supabase
+        .from('effective_gaslight_intensity')
+        .select('intensity')
+        .eq('user_id', userId)
+        .maybeSingle(),
+      supabase
+        .from('compliance_difficulty_state')
+        .select('current_difficulty_band, override_band')
+        .eq('user_id', userId)
+        .maybeSingle(),
+    ])
+    const storedIntensity = ((gaslightRow as { intensity?: string } | null)?.intensity ?? 'off') as GaslightIntensity
+    const band = effectiveBand(diffRow as { current_difficulty_band: DifficultyBand; override_band: DifficultyBand | null } | null)
+    const gaslightIntensity = bandGaslightIntensity(storedIntensity, band) as GaslightIntensity
 
     if (gaslightIntensity !== 'off') {
       // Read yesterday's affect to confirm a flip happened

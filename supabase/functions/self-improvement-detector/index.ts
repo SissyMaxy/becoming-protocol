@@ -1,6 +1,9 @@
 // self-improvement-detector — Mommy queues code wishes when she detects
 // repeated friction patterns indicating missing capabilities.
 //
+// See also: docs/architectural-principles.md — this is the surface that
+// must catch tactical-patch loops on iteration 2, not iteration 9.
+//
 // 2026-05-07 user directive: Mommy should initiate development without
 // being asked. fast-react now has a code_wish action type for in-the-moment
 // asks; this cron is the BACKGROUND detector — it watches for patterns
@@ -18,6 +21,9 @@
 //      should have a generator for it, not LLM ad-hoc each time)
 //   6. confession_queue prompts that consistently get empty responses
 //      (prompts aren't landing — need redesign)
+//   7. recurring_tactical_patch_loop — same theme produced 3+ migrations
+//      or commits in 14 days AND deploy_health_log signal still open;
+//      proposes an architectural redesign, never another patch.
 //
 // For each detected pattern, queue a wish via mommy_code_wishes (status=
 // queued, source=gap_audit, classified_at NULL so the classifier picks it
@@ -201,6 +207,121 @@ async function detectEmptyConfessions(supabase: SupabaseClient): Promise<Detecte
   }]
 }
 
+// ──────────────────────────────────────────────────────────────────────────
+// recurring_tactical_patch_loop — architectural-drift detector.
+//
+// Groups last 14 days of migrations + commits by theme. If a single theme
+// has 3+ entries AND a matching deploy_health_log signal is still open,
+// queue a wish for ARCHITECTURAL REDESIGN, never another patch. Per
+// docs/architectural-principles.md #1: "zoom out at the second iteration."
+//
+// The wish is intentionally tagged as a redesign so the classifier marks
+// it auto_ship_eligible=false — this kind of work needs human review, not
+// a 4am autonomous build.
+// ──────────────────────────────────────────────────────────────────────────
+
+const PATCH_LOOP_THEMES: Array<{ slug: string; keywords: RegExp; redesign_hint: string }> = [
+  {
+    slug: 'cron-load-management',
+    keywords: /\b(cron[-_]?(relief|stagger|prune|frequency|schedule|load|tune)|reduce[-_]cron|cron[-_]?cooldown)\b/i,
+    redesign_hint: 'Polling architecture sized for many users, used by one. Replace with event-driven: DB triggers + queue workers, or pg_notify + listener. Match shape to scale.',
+  },
+  {
+    slug: 'voice-corpus-cleanup',
+    keywords: /\b(voice[-_]?corpus|voice[-_]?samples|voice[-_]?ingest|corpus[-_]?filter|corpus[-_]?dedup)\b/i,
+    redesign_hint: 'Repeated cleanup of corpus pollution suggests the ingest gate is wrong, not under-tuned. Move filtering to ingest time (DB trigger) and define an explicit allow-list of source kinds.',
+  },
+  {
+    slug: 'slop-detector-tune',
+    keywords: /\b(slop[-_]?detector|slop[-_]?gate|slop[-_]?regex|slop[-_]?threshold)\b/i,
+    redesign_hint: 'Repeated slop-regex tweaks suggest the detector is regex-shaped when it should be classifier-shaped. Replace with a cheap-judge call (openrouter-cheap-judge) anchored to corpus exemplars.',
+  },
+  {
+    slug: 'confession-prompt-tune',
+    keywords: /\b(confession[-_]?prompt|min[-_]?chars|prompt[-_]?length|prompt[-_]?gate)\b/i,
+    redesign_hint: 'Per-prompt char minimums must live in the seed bank, not as global tuning. Refactor to per-prompt min_chars (already an established pattern in feedback memory).',
+  },
+  {
+    slug: 'outreach-throttle',
+    keywords: /\b(outreach[-_]?(throttle|rate|cap|cooldown|limit))\b/i,
+    redesign_hint: 'Repeated rate caps suggest the queue is fed too eagerly. Move dedup + priority into a queue-side admission policy rather than throttling at delivery time.',
+  },
+]
+
+async function fetchRecentMigrationFilenames(): Promise<string[]> {
+  const url = 'https://api.github.com/repos/SissyMaxy/becoming-protocol/contents/supabase/migrations?ref=main'
+  try {
+    const r = await fetch(url, { headers: { 'Accept': 'application/vnd.github+json' } })
+    if (!r.ok) return []
+    const list = await r.json() as Array<{ name: string }>
+    return list
+      .filter(f => /^\d+.*\.sql$/.test(f.name))
+      .sort((a, b) => b.name.localeCompare(a.name))
+      .slice(0, 30)
+      .map(f => f.name)
+  } catch {
+    return []
+  }
+}
+
+async function fetchRecentCommitSubjects(daysBack: number): Promise<string[]> {
+  const since = new Date(Date.now() - daysBack * 86400_000).toISOString()
+  const url = `https://api.github.com/repos/SissyMaxy/becoming-protocol/commits?since=${since}&per_page=100`
+  try {
+    const r = await fetch(url, { headers: { 'Accept': 'application/vnd.github+json' } })
+    if (!r.ok) return []
+    const list = await r.json() as Array<{ commit: { message: string } }>
+    return list.map(c => c.commit.message.split('\n')[0])
+  } catch {
+    return []
+  }
+}
+
+async function deployHealthOpenForTheme(supabase: SupabaseClient, themeSlug: string): Promise<boolean> {
+  const theme = PATCH_LOOP_THEMES.find(t => t.slug === themeSlug)
+  if (!theme) return false
+  const since = new Date(Date.now() - 14 * 86400_000).toISOString()
+  const { data } = await supabase
+    .from('deploy_health_log')
+    .select('title, detail, status')
+    .eq('status', 'open')
+    .gte('detected_at', since)
+    .limit(50)
+  for (const row of (data || []) as Array<{ title: string; detail: string | null }>) {
+    const blob = `${row.title} ${row.detail ?? ''}`
+    if (theme.keywords.test(blob)) return true
+  }
+  return false
+}
+
+async function detectRecurringTacticalPatchLoop(supabase: SupabaseClient): Promise<DetectedFriction[]> {
+  const [migrations, commits] = await Promise.all([
+    fetchRecentMigrationFilenames(),
+    fetchRecentCommitSubjects(14),
+  ])
+  if (migrations.length === 0 && commits.length === 0) return []
+
+  const out: DetectedFriction[] = []
+  for (const theme of PATCH_LOOP_THEMES) {
+    const matches: string[] = []
+    for (const fname of migrations) if (theme.keywords.test(fname)) matches.push(`migration:${fname}`)
+    for (const subj of commits) if (theme.keywords.test(subj)) matches.push(`commit:${subj.slice(0, 80)}`)
+    if (matches.length < 3) continue
+
+    const stillFiring = await deployHealthOpenForTheme(supabase, theme.slug)
+    if (!stillFiring) continue  // root issue resolved → not a loop
+
+    out.push({
+      pattern_signature: `friction:tactical_patch_loop:${theme.slug}`,
+      wish_title: `[REDESIGN] Tactical-patch loop on theme "${theme.slug}" (${matches.length} patches in 14d)`,
+      wish_body: `Theme "${theme.slug}" has produced ${matches.length} tactical patches in the last 14 days while a matching deploy_health_log signal is still open. Per docs/architectural-principles.md #1, this is the iteration-2 zoom-out signal: do not propose another patch.\n\nProposed redesign:\n${theme.redesign_hint}\n\nRecent entries:\n${matches.slice(0, 12).map(m => `  - ${m}`).join('\n')}\n\nThis wish is intentionally NOT auto-ship eligible. The decision is whether to redesign the architecture; an autonomous builder shouldn't make that call alone.`,
+      protocol_goal: 'architectural_drift / redesign_not_repatch',
+      priority: 'high',
+    })
+  }
+  return out
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -214,6 +335,7 @@ Deno.serve(async (req: Request) => {
     ['repeated_builder_failures', detectRepeatedBuilderFailures],
     ['recurring_counter_escape', detectRecurringCounterEscape],
     ['empty_confessions', detectEmptyConfessions],
+    ['recurring_tactical_patch_loop', detectRecurringTacticalPatchLoop],
   ] as const) {
     try {
       const found = await fn(supabase)

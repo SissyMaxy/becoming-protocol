@@ -9,6 +9,12 @@
 // and audits them through the alternating Anthropic/OpenAI lens for cross-
 // model coverage.
 //
+// META-PASS (2026-04-30): each run also looks at the last 14 days of merged
+// migrations + commits and groups them by theme. If a single theme produced
+// 3+ tactical patches without resolving the root issue, it writes a
+// tactical_patch_loop finding with a redesign proposal — never another
+// patch. See docs/architectural-principles.md (principle #1).
+//
 // POST { user_id?: string, files?: string[], force_provider?: 'anthropic'|'openai' }
 //   files: optional manual list (debug); default is rotation queue
 //   user_id: writes findings under this user (default = handler-api user)
@@ -56,6 +62,7 @@ You are NOT looking for general code quality issues. You are looking for FORCED-
 - anti_pattern: a code shape that contradicts the protocol's stated intent (e.g., apologetic Handler text in a directive system, opt-in flags on supposedly compulsory features).
 - voice_drift: prompt/text that softens Handler voice — e.g., "would you like", "if you want", emojis in handler text, therapy-speak in directive mode.
 - leak_risk: a path that could expose her identity / kink / transition state to the wrong audience (e.g., handler jargon in public-facing copy, real-name leakage to platform posts).
+- tactical_patch_loop: the same class of problem has needed 3+ tactical fixes on the same theme without resolving the underlying signal. The fix is a redesign, not another patch. See docs/architectural-principles.md.
 
 PRINCIPLES:
 - Trust-based systems FAIL. Every check that can be bypassed will be bypassed.
@@ -192,6 +199,176 @@ async function auditFile(
   }
 }
 
+// ──────────────────────────────────────────────────────────────────────────
+// META-PASS: tactical-patch-loop detection across recent migrations.
+//
+// Group last 14 days of migration filenames + commit subjects by theme. If
+// a single theme has 3+ entries and a deploy_health_log row matching that
+// theme is still firing (status='open'), write a tactical_patch_loop
+// finding with a redesign proposal.
+//
+// Themes are detected by keyword match on filename / commit subject:
+//   cron-load-management    → cron, stagger, prune, frequency, schedule
+//   voice-corpus-cleanup    → voice corpus, voice samples, voice ingest
+//   slop-detector-tune      → slop detector, slop gate, slop regex
+//   confession-prompt-tune  → confession prompt, min_chars
+//   outreach-throttle       → outreach throttle, outreach rate, outreach cap
+// ──────────────────────────────────────────────────────────────────────────
+
+const PATCH_LOOP_THEMES: Array<{ slug: string; keywords: RegExp; redesign_hint: string }> = [
+  {
+    slug: 'cron-load-management',
+    keywords: /\b(cron[-_]?(relief|stagger|prune|frequency|schedule|load|tune)|reduce[-_]cron|cron[-_]?cooldown)\b/i,
+    redesign_hint: 'Polling architecture sized for many users, used by one. Replace with event-driven: DB triggers + queue workers, or pg_notify + listener. Match shape to scale.',
+  },
+  {
+    slug: 'voice-corpus-cleanup',
+    keywords: /\b(voice[-_]?corpus|voice[-_]?samples|voice[-_]?ingest|corpus[-_]?filter|corpus[-_]?dedup)\b/i,
+    redesign_hint: 'Repeated cleanup of corpus pollution suggests the ingest gate is wrong, not under-tuned. Move filtering to ingest time (DB trigger) and define an explicit allow-list of source kinds.',
+  },
+  {
+    slug: 'slop-detector-tune',
+    keywords: /\b(slop[-_]?detector|slop[-_]?gate|slop[-_]?regex|slop[-_]?threshold)\b/i,
+    redesign_hint: 'Repeated slop-regex tweaks suggest the detector is regex-shaped when it should be classifier-shaped. Replace with a cheap-judge call (openrouter-cheap-judge) anchored to corpus exemplars.',
+  },
+  {
+    slug: 'confession-prompt-tune',
+    keywords: /\b(confession[-_]?prompt|min[-_]?chars|prompt[-_]?length|prompt[-_]?gate)\b/i,
+    redesign_hint: 'Per-prompt char minimums must live in the seed bank, not as global tuning. Refactor to per-prompt min_chars (already an established pattern in feedback memory).',
+  },
+  {
+    slug: 'outreach-throttle',
+    keywords: /\b(outreach[-_]?(throttle|rate|cap|cooldown|limit))\b/i,
+    redesign_hint: 'Repeated rate caps suggest the queue is fed too eagerly. Move dedup + priority into a queue-side admission policy rather than throttling at delivery time.',
+  },
+]
+
+interface MigrationEntry {
+  filename: string
+  date: string
+}
+
+async function fetchRecentMigrations(): Promise<MigrationEntry[]> {
+  // Public repo listing API; covers last 100 migrations (newest first).
+  const url = 'https://api.github.com/repos/SissyMaxy/becoming-protocol/contents/supabase/migrations?ref=main'
+  try {
+    const r = await fetch(url, { headers: { 'Accept': 'application/vnd.github+json' } })
+    if (!r.ok) return []
+    const list = await r.json() as Array<{ name: string }>
+    // GitHub doesn't return commit dates in the contents listing; we approximate
+    // recency via filename ordering (numeric prefix). The cron runs weekly so a
+    // 100-row window is sufficient.
+    return list
+      .filter(f => /^\d+.*\.sql$/.test(f.name))
+      .sort((a, b) => b.name.localeCompare(a.name))
+      .slice(0, 50)
+      .map(f => ({ filename: f.name, date: '' }))
+  } catch {
+    return []
+  }
+}
+
+async function fetchRecentCommits(daysBack: number): Promise<Array<{ sha: string; message: string; date: string }>> {
+  const since = new Date(Date.now() - daysBack * 86400_000).toISOString()
+  const url = `https://api.github.com/repos/SissyMaxy/becoming-protocol/commits?since=${since}&per_page=100`
+  try {
+    const r = await fetch(url, { headers: { 'Accept': 'application/vnd.github+json' } })
+    if (!r.ok) return []
+    const list = await r.json() as Array<{ sha: string; commit: { message: string; author: { date: string } } }>
+    return list.map(c => ({
+      sha: c.sha.slice(0, 7),
+      message: c.commit.message.split('\n')[0],
+      date: c.commit.author.date,
+    }))
+  } catch {
+    return []
+  }
+}
+
+async function deployHealthOpenForTheme(
+  supabase: ReturnType<typeof createClient>,
+  themeSlug: string,
+): Promise<boolean> {
+  // A theme is "still firing" if any open deploy_health_log row's title or
+  // detail mentions a keyword we associate with the theme.
+  const theme = PATCH_LOOP_THEMES.find(t => t.slug === themeSlug)
+  if (!theme) return false
+  const since = new Date(Date.now() - 14 * 86400_000).toISOString()
+  const { data } = await supabase
+    .from('deploy_health_log')
+    .select('title, detail, status')
+    .eq('status', 'open')
+    .gte('detected_at', since)
+    .limit(50)
+  for (const row of (data || []) as Array<{ title: string; detail: string | null }>) {
+    const blob = `${row.title} ${row.detail ?? ''}`
+    if (theme.keywords.test(blob)) return true
+  }
+  return false
+}
+
+async function detectTacticalPatchLoops(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<number> {
+  const [migrations, commits] = await Promise.all([
+    fetchRecentMigrations(),
+    fetchRecentCommits(14),
+  ])
+  if (migrations.length === 0 && commits.length === 0) return 0
+
+  const themeBuckets = new Map<string, { entries: string[]; redesign_hint: string }>()
+  for (const theme of PATCH_LOOP_THEMES) {
+    const matches: string[] = []
+    for (const m of migrations.slice(0, 20)) {  // recent migrations window
+      if (theme.keywords.test(m.filename)) matches.push(`migration:${m.filename}`)
+    }
+    for (const c of commits) {
+      if (theme.keywords.test(c.message)) matches.push(`commit:${c.sha} ${c.message.slice(0, 80)}`)
+    }
+    if (matches.length >= 3) {
+      themeBuckets.set(theme.slug, { entries: matches, redesign_hint: theme.redesign_hint })
+    }
+  }
+
+  let persisted = 0
+  for (const [slug, bucket] of themeBuckets.entries()) {
+    const stillFiring = await deployHealthOpenForTheme(supabase, slug)
+    if (!stillFiring) continue  // root issue resolved → not a loop
+
+    const finding_hash = hashFinding('META:tactical_patch_loop', slug, 0)
+    const { data: existing } = await supabase
+      .from('handler_audit_findings')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('finding_hash', finding_hash)
+      .eq('status', 'open')
+      .gte('created_at', new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString())
+      .maybeSingle()
+    if (existing) continue
+
+    const description = `Theme "${slug}" has ${bucket.entries.length} tactical patches in the last 14 days while a matching deploy_health_log row is still open. Per docs/architectural-principles.md #1, this is the iteration-2 zoom-out signal — pause, do not patch again.\n\nRecent entries:\n${bucket.entries.slice(0, 10).map(e => `  - ${e}`).join('\n')}`
+
+    const { error } = await supabase.from('handler_audit_findings').insert({
+      user_id: userId,
+      file_path: `META:${slug}`,
+      audited_by: 'meta_pass',
+      finding_type: 'tactical_patch_loop',
+      severity: 'high',
+      title: `Tactical-patch loop on theme: ${slug} (${bucket.entries.length} patches)`,
+      description,
+      suggested_fix: bucket.redesign_hint,
+      code_excerpt: null,
+      line_start: null,
+      line_end: null,
+      auto_actionable: false,
+      finding_hash,
+    })
+    if (!error) persisted++
+  }
+  return persisted
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') {
@@ -262,11 +439,19 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  let metaFindings = 0
+  try {
+    metaFindings = await detectTacticalPatchLoops(supabase, userId)
+  } catch (err) {
+    console.error('[handler-code-audit] meta-pass failed:', err)
+  }
+
   return new Response(JSON.stringify({
     ok: true,
     auditor: provider,
     files_audited: files.length,
     total_new_findings: totalNewFindings,
+    meta_findings: metaFindings,
     detail: summary,
   }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 })

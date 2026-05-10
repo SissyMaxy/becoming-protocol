@@ -236,7 +236,16 @@ serve(async (req) => {
         {
           title: row.payload?.title as string | undefined,
           body: row.payload?.body as string | undefined,
-          data: { notification_id: row.id, ...(row.payload?.data as Record<string, unknown> || {}) },
+          // Inject `notification_type` into input.data as `source` so the
+          // neutralizer's FORCE_NEUTRAL_SOURCE_PREFIXES check (sniffies /
+          // mommy_sniffies) fires regardless of stealth state. The existing
+          // type/kind data values from row.payload?.data are still
+          // checked too — see _shared/stealth.ts.
+          data: {
+            notification_id: row.id,
+            source: row.notification_type,
+            ...(row.payload?.data as Record<string, unknown> || {}),
+          },
         },
         stealthOn,
       )
