@@ -14,10 +14,17 @@ interface PhotoVerificationUploadProps {
    */
   directiveKind?: 'wardrobe_prescription' | 'public_dare';
   directiveId?: string;
-  onComplete?: (photoId?: string) => void;
+  /**
+   * When the upload is the photo half of an inline reply to an outreach
+   * card, pass the outreach id so the saved verification_photos row gets
+   * source_outreach_id stamped on it and the outreach reply API can
+   * link both halves.
+   */
+  sourceOutreachId?: string;
+  onComplete?: (photoId?: string, photoPath?: string) => void;
 }
 
-export function PhotoVerificationUpload({ taskType = 'general', directiveKind, directiveId, onComplete }: PhotoVerificationUploadProps) {
+export function PhotoVerificationUpload({ taskType = 'general', directiveKind, directiveId, sourceOutreachId, onComplete }: PhotoVerificationUploadProps) {
   const { user } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
@@ -57,6 +64,7 @@ export function PhotoVerificationUpload({ taskType = 'general', directiveKind, d
           photo_url: photoPath,
           caption: caption || null,
           prescription_id: directiveKind === 'wardrobe_prescription' ? (directiveId ?? null) : null,
+          source_outreach_id: sourceOutreachId ?? null,
         })
         .select()
         .single();
@@ -90,7 +98,7 @@ export function PhotoVerificationUpload({ taskType = 'general', directiveKind, d
       const result = await res.json();
       setAnalysis(result.analysis);
       setAnalyzing(false);
-      onComplete?.(photoRow.id as string | undefined);
+      onComplete?.(photoRow.id as string | undefined, photoPath);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Upload failed';
       setError(msg);

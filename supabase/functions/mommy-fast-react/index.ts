@@ -150,11 +150,23 @@ async function fireFastAction(
     if (action.type === 'outreach') {
       const p = action.payload as { message: string; urgency?: string; trigger_reason?: string; expires_in_hours?: number }
       const expiresMs = (p.expires_in_hours ?? 6) * 3600_000
+      // Reply-loop lineage: when this fast-react fired in response to a
+      // user reply (event_kind='response_received' + context carries the
+      // source outreach id), tag the new outreach's trigger_reason as
+      // `reply_to:<source_outreach_id>` so dedup gates know it's part of
+      // an exchange, not a fresh demand from a cron beat.
+      let defaultTriggerReason = `fast_react:${eventKind}`
+      if (eventKind === 'response_received' && body.context && typeof body.context === 'object') {
+        const ctxSource = (body.context as Record<string, unknown>).source_outreach_id
+        if (typeof ctxSource === 'string' && ctxSource.length > 0) {
+          defaultTriggerReason = `reply_to:${ctxSource}`
+        }
+      }
       const { data: row, error } = await supabase.from('handler_outreach_queue').insert({
         user_id: userId,
         message: p.message,
         urgency: p.urgency ?? 'normal',
-        trigger_reason: p.trigger_reason ?? `fast_react:${eventKind}`,
+        trigger_reason: p.trigger_reason ?? defaultTriggerReason,
         scheduled_for: new Date().toISOString(),
         expires_at: new Date(Date.now() + expiresMs).toISOString(),
         source: 'mommy_fast_react',

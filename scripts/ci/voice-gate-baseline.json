@@ -9,7 +9,9 @@
     "src/types/arousal.ts::roleplay: { label: 'Roleplay', emoji: '🎭' },",
     "src/types/arousal.ts::| 'roleplay'",
     "src/types/sexting.ts::communication_style: 'brief' | 'chatty' | 'roleplay' | 'transactional';",
-    "supabase/functions/mommy-ideate-arousal/index.ts::\"role play\" / \"roleplay\" / \"role-play\""
+    "supabase/functions/mommy-ideate-arousal/index.ts::\"role play\" / \"roleplay\" / \"role-play\"",
+    "supabase/functions/mommy-self-audit/index.ts::'(Forced feminization is Mama CLAIMING her good girl — not a therapist intake. Phrases like \"role play\", \"this is a simulation\", \"not medica",
+    "supabase/functions/mommy-self-audit/index.ts::{ phrase: 'role play / roleplay / role-play', re: /\\brole.?play(?:ing|ed|s)?\\b/i },"
   ],
   "intake": [
     "api/handler/_lib/chat-action.ts::console.error('[HRT] Intake auto-draft failed:', draftErr);",
@@ -35,7 +37,9 @@
     "src/components/today-redesign/useTodayData.ts::intake_submitted: 'Intake submitted',",
     "src/data/weekend-activities.ts::feminizationBenefit: 'Phytoestrogen intake, domestic femininity',",
     "src/lib/task-bank.ts::- \"log_entry\" — asks for SPECIFIC DATA: numbers, ratings, intake reports, check-ins with multiple fields. STRUCTURED FORM. Must also include",
-    "supabase/functions/mommy-ideate-arousal/index.ts::\"intake\" / \"questionnaire\""
+    "supabase/functions/mommy-ideate-arousal/index.ts::\"intake\" / \"questionnaire\"",
+    "supabase/functions/mommy-self-audit/index.ts::'(Forced feminization is Mama CLAIMING her good girl — not a therapist intake. Phrases like \"role play\", \"this is a simulation\", \"not medica",
+    "supabase/functions/mommy-self-audit/index.ts::{ phrase: 'intake / questionnaire', re: /\\b(?:intake\\s+(?:questionnaire|form|process)|questionnaire)\\b/i },"
   ],
   "simulation": [
     "src/lib/handler-conditioning.ts::surfaceContent: ['technique training', 'toy progression', 'oral simulation'],",
@@ -47,29 +51,41 @@
     "supabase/functions/handler-platform/index.ts::postUrl: `https://reddit.com/r/${subreddit}/simulated`,",
     "supabase/functions/handler-platform/index.ts::postUrl: `https://twitter.com/simulated/${Date.now()}`,",
     "supabase/functions/mommy-ideate-arousal/index.ts::\"simulation\" / \"simulated\"",
-    "supabase/functions/mommy-ideate-arousal/index.ts::Safety affordances are framed as Mommy's care: \"if you ever need Mama to stop, you say the word, I stop\" — not \"you may use the safeword to"
+    "supabase/functions/mommy-ideate-arousal/index.ts::Safety affordances are framed as Mommy's care: \"if you ever need Mama to stop, you say the word, I stop\" — not \"you may use the safeword to",
+    "supabase/functions/mommy-self-audit/index.ts::'(Forced feminization is Mama CLAIMING her good girl — not a therapist intake. Phrases like \"role play\", \"this is a simulation\", \"not medica",
+    "supabase/functions/mommy-self-audit/index.ts::{ phrase: 'this is a simulation/fantasy/game/fiction', re: /\\bthis\\s+is\\s+(?:a|just|only)?\\s*(?:simulation|fantasy|a\\s+game|fictional|fictio"
   ],
   "questionnaire": [
     "supabase/functions/hrt-booking-worker/index.ts::instruction_for_mama: `An HRT-push moment is open right now (signal: ${opp.reason}). Maxy is at booking-step \"${opp.current_step}\"; Mama wan",
-    "supabase/functions/mommy-ideate-arousal/index.ts::\"intake\" / \"questionnaire\""
+    "supabase/functions/mommy-ideate-arousal/index.ts::\"intake\" / \"questionnaire\"",
+    "supabase/functions/mommy-self-audit/index.ts::'(Forced feminization is Mama CLAIMING her good girl — not a therapist intake. Phrases like \"role play\", \"this is a simulation\", \"not medica",
+    "supabase/functions/mommy-self-audit/index.ts::{ phrase: 'intake / questionnaire', re: /\\b(?:intake\\s+(?:questionnaire|form|process)|questionnaire)\\b/i },"
   ],
   "fiction": [
     "src/components/Intake/layers/ArousalLayer.tsx::'Erotic fiction',",
     "src/lib/protocol-core/modules/findom-module.ts::\"Men don't pay for fiction. They pay for power. You have ${activePigs} men paying regularly.\",",
-    "supabase/functions/mommy-ideate-arousal/index.ts::\"fiction\" / \"fictional\""
+    "supabase/functions/mommy-ideate-arousal/index.ts::\"fiction\" / \"fictional\"",
+    "supabase/functions/mommy-self-audit/index.ts::{ phrase: 'fictional / fictionalized', re: /\\bfictional(?:i[sz]ed|i[sz]ation)?\\b/i },",
+    "supabase/functions/mommy-self-audit/index.ts::{ phrase: 'this is a simulation/fantasy/game/fiction', re: /\\bthis\\s+is\\s+(?:a|just|only)?\\s*(?:simulation|fantasy|a\\s+game|fictional|fictio"
   ],
   "not-medical-advice": [
-    "supabase/functions/mommy-ideate-arousal/index.ts::\"not medical advice\""
+    "supabase/functions/mommy-ideate-arousal/index.ts::\"not medical advice\"",
+    "supabase/functions/mommy-self-audit/index.ts::'(Forced feminization is Mama CLAIMING her good girl — not a therapist intake. Phrases like \"role play\", \"this is a simulation\", \"not medica"
   ],
   "disclaimer": [
     "supabase/functions/mommy-ideate-arousal/index.ts::\"disclaimer\"",
     "supabase/functions/mommy-ideate-arousal/index.ts::\"premise\": \"<one paragraph in Mommy's voice describing what the user experiences. This MUST follow the voice floors above — no clinical/disc",
-    "supabase/functions/mommy-ideate-arousal/index.ts::Output JSON: { \"features\": [...] }. Aim for 8-12 features. Be horny in the persona's voice when writing voice_check_sample, operationally pr"
+    "supabase/functions/mommy-ideate-arousal/index.ts::Output JSON: { \"features\": [...] }. Aim for 8-12 features. Be horny in the persona's voice when writing voice_check_sample, operationally pr",
+    "supabase/functions/mommy-self-audit/index.ts::rendered: '## IMMERSION-BREAKING PHRASES IN USER-FACING COPY (last 7d)\\n(clean — no clinical/disclaimer/meta-framing leaked into user-visibl",
+    "supabase/functions/mommy-self-audit/index.ts::{ phrase: 'disclaimer', re: /\\bdisclaimer\\b/i },"
   ],
   "for-entertainment": [
-    "supabase/functions/mommy-ideate-arousal/index.ts::\"for entertainment\""
+    "supabase/functions/mommy-ideate-arousal/index.ts::\"for entertainment\"",
+    "supabase/functions/mommy-self-audit/index.ts::{ phrase: 'for entertainment purposes', re: /\\bfor\\s+entertainment\\s+(?:purposes|only|use)\\b/i },"
   ],
   "consent-to-fantasy": [
-    "supabase/functions/mommy-ideate-arousal/index.ts::\"consent to the fantasy\""
+    "supabase/functions/mommy-ideate-arousal/index.ts::\"consent to the fantasy\"",
+    "supabase/functions/mommy-self-audit/index.ts::'(Forced feminization is Mama CLAIMING her good girl — not a therapist intake. Phrases like \"role play\", \"this is a simulation\", \"not medica",
+    "supabase/functions/mommy-self-audit/index.ts::{ phrase: 'consent to the fantasy/scene', re: /\\bconsent\\s+to\\s+the\\s+(?:fantasy|scene|roleplay)\\b/i },"
   ]
 }
