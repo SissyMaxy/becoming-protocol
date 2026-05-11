@@ -4,7 +4,7 @@
  * it hits.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { usePersona } from '../../hooks/usePersona';
@@ -13,6 +13,8 @@ import { applyPersonaGate } from '../../lib/onboarding/persona-gate';
 import { useSurfaceRenderTracking } from '../../lib/surface-render-hooks';
 import { useOutreachAudio } from '../../hooks/useOutreachAudio';
 import { ConfessionAudioPlayer } from './ConfessionAudioPlayer';
+import { OutreachReplyComposer } from './OutreachReplyComposer';
+import { detectPhotoDemand, detectReplyDeadline, formatCountdown } from '../../lib/outreach/reply-cues';
 
 interface Outreach {
   id: string;
@@ -26,6 +28,9 @@ interface Outreach {
   audio_url: string | null;
   kind: string | null;
   recall_confession_id: string | null;
+  requires_photo: boolean | null;
+  reply_deadline_at: string | null;
+  replied_at: string | null;
   // Hydrated from a follow-up query — keeps the embed contract simple.
   recall_audio_path?: string | null;
   recall_audio_duration_sec?: number | null;
@@ -92,7 +97,7 @@ export function OutreachQueueCard() {
     // so the recap doesn't appear twice on Today.
     const [pRes, rRes] = await Promise.all([
       supabase.from('handler_outreach_queue')
-        .select('id, message, urgency, trigger_reason, scheduled_for, delivered_at, expires_at, source, audio_url, kind, recall_confession_id')
+        .select('id, message, urgency, trigger_reason, scheduled_for, delivered_at, expires_at, source, audio_url, kind, recall_confession_id, requires_photo, reply_deadline_at, replied_at')
         .eq('user_id', user.id)
         .is('delivered_at', null)
         .neq('source', 'dossier_question')
@@ -100,7 +105,7 @@ export function OutreachQueueCard() {
         .order('scheduled_for', { ascending: true })
         .limit(8),
       supabase.from('handler_outreach_queue')
-        .select('id, message, urgency, trigger_reason, scheduled_for, delivered_at, expires_at, source, audio_url, kind, recall_confession_id')
+        .select('id, message, urgency, trigger_reason, scheduled_for, delivered_at, expires_at, source, audio_url, kind, recall_confession_id, requires_photo, reply_deadline_at, replied_at')
         .eq('user_id', user.id)
         .not('delivered_at', 'is', null)
         .neq('source', 'dossier_question')
@@ -159,6 +164,20 @@ export function OutreachQueueCard() {
   useEffect(() => { load(); }, [load]);
   useEffect(() => { const t = setInterval(load, 60000); return () => clearInterval(t); }, [load]);
 
+  // Countdown ticker — refreshes the soft-deadline chip every second so
+  // "in 9m 42s" actually counts. Only ticks when at least one pending
+  // row carries a deadline; otherwise it idles to avoid wasted renders.
+  const [nowMs, setNowMs] = useState(Date.now());
+  const anyDeadline = useMemo(
+    () => pending.some(o => o.reply_deadline_at || detectReplyDeadline(o.message)),
+    [pending],
+  );
+  useEffect(() => {
+    if (!anyDeadline) return;
+    const t = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [anyDeadline]);
+
   // visible-before-penalized invariant: stamp surfaced_at when each row first appears
   useSurfaceRenderTracking('handler_outreach_queue', [...pending.map(o => o.id), ...recent.map(o => o.id)]);
 
@@ -189,17 +208,40 @@ export function OutreachQueueCard() {
           {pending.map(o => {
             const fires = new Date(o.scheduled_for).getTime();
             const mins = Math.round((fires - Date.now()) / 60000);
+            // Soft deadline — prefer the explicit column over the parsed cue.
+            // Both bake the moment Mama wants an answer back; the column wins
+            // when generators set it directly.
+            const parsedDeadline = detectReplyDeadline(o.message, new Date(fires));
+            const deadlineMs = o.reply_deadline_at
+              ? new Date(o.reply_deadline_at).getTime()
+              : parsedDeadline?.deadlineAt.getTime() ?? 0;
+            const countdownText = deadlineMs > 0 ? formatCountdown(deadlineMs, nowMs) : null;
+            const photoDemanded = !!o.requires_photo || detectPhotoDemand(o.message);
             return (
               <div key={o.id} style={{
                 background: '#0a0a0d', border: `1px solid ${urgencyColor(o.urgency)}33`,
                 borderLeft: `3px solid ${urgencyColor(o.urgency)}`,
                 borderRadius: 5, padding: '7px 9px', marginBottom: 5,
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 9, fontWeight: 700, color: urgencyColor(o.urgency), textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     {o.urgency}
                   </span>
                   <span style={{ fontSize: 9.5, color: '#8a8690' }}>{o.source.replace(/_/g, ' ')}</span>
+                  {countdownText && (
+                    <span style={{
+                      fontSize: 9.5, fontWeight: 700,
+                      color: countdownText === 'passed' ? '#f47272' : urgencyColor(o.urgency),
+                      background: countdownText === 'passed' ? '#3a0a0a' : `${urgencyColor(o.urgency)}22`,
+                      padding: '1px 6px', borderRadius: 3,
+                      letterSpacing: '0.04em', textTransform: 'uppercase',
+                      fontVariantNumeric: 'tabular-nums',
+                    }}>
+                      {mommy
+                        ? (countdownText === 'passed' ? 'mama\'s waiting' : `mama wants this in ${countdownText}`)
+                        : (countdownText === 'passed' ? 'overdue' : `due in ${countdownText}`)}
+                    </span>
+                  )}
                   <span style={{ fontSize: 9.5, color: '#8a8690', marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>
                     {mins <= 0 ? 'now' : mins < 60 ? `in ${mins}m` : `in ${Math.floor(mins / 60)}h`}
                   </span>
@@ -257,6 +299,23 @@ export function OutreachQueueCard() {
                     </button>
                   )}
                 </div>
+                {/*
+                  Inline reply composer. Lives directly on the card so the
+                  user answers Mama from where she demanded it. Skipped for
+                  weekly-recap / dossier kinds (their own cards own the
+                  capture flow) and for mantra outreach (mantras are
+                  spoken, not typed — the existing ack flow already POSTs
+                  to /api/mantra/acknowledge).
+                */}
+                {o.kind !== 'weekly_recap' && o.kind !== 'dossier_question' && o.source !== 'mommy_mantra' && !o.replied_at && (
+                  <OutreachReplyComposer
+                    outreachId={o.id}
+                    mommy={mommy}
+                    requiresPhoto={photoDemanded}
+                    accentColor={urgencyColor(o.urgency)}
+                    onReplied={load}
+                  />
+                )}
               </div>
             );
           })}
