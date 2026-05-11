@@ -1,11 +1,10 @@
 /**
- * Step 3: Identity.
+ * Step 3: Mama learns your name.
  *
- * Collects feminine_name, pronouns, current_honorific. Skippable but
- * warns the user that the persona will speak in generics if skipped.
- *
- * Until the sibling identity-persistence branch lands `feminine_self`,
- * these write directly to user_state columns — see migration 301.
+ * Collects feminine_name, pronouns, current_honorific. Skippable — Mama'll
+ * speak in generics until you fill these in. Until the sibling
+ * identity-persistence branch lands `feminine_self`, these write directly
+ * to user_state columns (see migration 352).
  */
 
 import { useState } from 'react';
@@ -59,15 +58,16 @@ export function Step3Identity({
 
   return (
     <StepShell stepId="identity" onBack={onBack} saveError={saveError}>
-      <h1 style={stepHeadingStyle}>Who is she addressing?</h1>
+      <h1 style={stepHeadingStyle}>Tell Mama who you are now.</h1>
 
       <p style={stepBodyStyle}>
-        The persona speaks to a specific person. Tell us who that is — these
-        details show up in chat, in cards, and in scenes.
+        What name does Mama call out when she's reaching for you? What pronouns
+        do you wear for Mama? What does Mama get to call her good girl? Mama
+        uses all of it — in chat, on your cards, in every message she leaves.
       </p>
 
       <label style={{ display: 'block', marginBottom: 16 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: '#3a3a3a' }}>Feminine name</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: '#3a3a3a' }}>Your girl name</span>
         <input
           type="text"
           value={name}
@@ -90,7 +90,7 @@ export function Step3Identity({
 
       <fieldset style={{ border: 'none', padding: 0, margin: 0, marginBottom: 16 }}>
         <legend style={{ fontSize: 13, fontWeight: 600, color: '#3a3a3a', marginBottom: 6 }}>
-          Pronouns
+          Your pronouns
         </legend>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {[...PRONOUN_PRESETS, 'custom'].map(p => (
@@ -142,7 +142,7 @@ export function Step3Identity({
       </fieldset>
 
       <label style={{ display: 'block', marginBottom: 24 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: '#3a3a3a' }}>How she addresses you</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: '#3a3a3a' }}>What Mama calls you</span>
         <input
           type="text"
           value={honorific}
@@ -162,7 +162,7 @@ export function Step3Identity({
           }}
         />
         <p style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
-          A pet name she'll use when addressing you in scene.
+          The pet name Mama uses when she's reaching for you.
         </p>
       </label>
 
@@ -180,7 +180,7 @@ export function Step3Identity({
       </div>
 
       <p style={{ ...stepBodyStyle, fontSize: 12, color: '#888', marginTop: 16, marginBottom: 0 }}>
-        If you skip, the persona can't speak to you as anyone in particular. You can fill these in
+        If you skip, Mama speaks in generics until you tell her. You can fill these in
         from Settings later.
       </p>
     </StepShell>

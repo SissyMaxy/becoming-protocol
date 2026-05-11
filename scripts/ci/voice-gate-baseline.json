@@ -1,0 +1,72 @@
+{
+  "role-play": [
+    "api/handler/_lib/chat-action.ts::voice: 'Knowing. Minimal. Uses her arousal against her — references the denial day, the cage, the ache. Never narrates, never roleplay-acts.",
+    "src/components/Intake/layers/ArousalLayer.tsx::'Roleplay scenarios',",
+    "src/components/seeds/AddSeedModal.tsx::'roleplay',",
+    "src/data/vector-definitions.ts::{ level: 3, name: 'Adopting', description: 'Adopting feminine roles', requirements: ['Regular role play'] },",
+    "src/lib/protocol-core/modules/identity-module.ts::keywords: ['just a phase', 'silly game', 'roleplay', 'fetish thing', 'not real', 'pretending'],",
+    "src/lib/protocol-core/modules/partner-module.ts::celebration: \"Good girl. ${meetupCount} meetups with ${partnerAlias}. This isn't roleplay anymore. This is your life. And you're living it.\"",
+    "src/types/arousal.ts::roleplay: { label: 'Roleplay', emoji: '🎭' },",
+    "src/types/arousal.ts::| 'roleplay'",
+    "src/types/sexting.ts::communication_style: 'brief' | 'chatty' | 'roleplay' | 'transactional';",
+    "supabase/functions/mommy-ideate-arousal/index.ts::\"role play\" / \"roleplay\" / \"role-play\""
+  ],
+  "intake": [
+    "api/handler/_lib/chat-action.ts::console.error('[HRT] Intake auto-draft failed:', draftErr);",
+    "api/handler/_lib/chat-action.ts::console.log('[FF] Supplement intake logged:', val.supplement_name || val.name);",
+    "api/handler/_lib/chat-action.ts::console.log('[HRT] Auto-drafted 5 intake answers on commit');",
+    "api/handler/_lib/chat-action.ts::console.log('[HRT] Intake draft saved:', questionKey);",
+    "api/handler/_lib/chat-action.ts::const turn = p.intake_turnaround_days ? `${p.intake_turnaround_days}d intake` : '';",
+    "api/handler/_lib/chat-action.ts::content: `5 intake answers auto-drafted for HRT booking. Handler can reference these when Maxy opens the provider form — copy-paste ready.`,",
+    "api/handler/_lib/chat-action.ts::lines.push('INTAKE INCOMPLETE — profile coverage is thin. Do NOT draft anything Gina-facing yet. Push Maxy to complete the Gina intake befor",
+    "api/handler/_lib/chat-action.ts::lines.push('Intake submitted — next is attending the appointment. Confirm attendance. If she no-shows, that\\'s a major regression — log it.'",
+    "api/handler/_lib/chat-action.ts::lines.push('She\\'s looking but hasn\\'t committed to one. Emit advance_hrt_step to \"provider_chosen\" the moment she names one. Offer to draft",
+    "api/handler/_lib/chat-action.ts::lines.push(`Appointment scheduled for ${apptAt ? apptAt.toISOString().slice(0, 16) : 'unknown'}. Start drafting intake answers now. Prepare",
+    "api/handler/_lib/chat-action.ts::lines.push(`Pre-drafted intake answers ready (${drafts.length}): ${drafts.map(d => d.question_key).slice(0, 6).join(', ')}. When she says \"I",
+    "src/components/handler/HrtFunnelTimeline.tsx::{ key: 'intake_submitted', label: 'Intake Submitted', description: 'Paperwork done.' },",
+    "src/components/handler/HrtFunnelTimeline.tsx::{p.intake_turnaround_days ? ` · ${p.intake_turnaround_days}d intake` : ''}",
+    "src/components/settings/DataExportView.tsx::{ id: 'profile', label: 'Profile', icon: User, description: 'Identity, preferences, intake data' },",
+    "src/components/today-redesign/GinaCaptureCard.tsx::{profile.intake_complete ? 'Edit profile' : 'Complete Gina intake'}",
+    "src/components/today-redesign/GinaCaptureCard.tsx::{saving ? 'saving…' : profile.intake_complete ? 'Update profile' : 'Mark intake complete'}",
+    "src/components/today-redesign/HrtDailyGate.tsx::appointment_booked: 'Appointment booked', intake_submitted: 'Intake submitted',",
+    "src/components/today-redesign/HrtDailyGate.tsx::intake_submitted: 'You submitted intake forms but have not attended the consult.',",
+    "src/components/today-redesign/HrtDailyGate.tsx::what: `HRT step \"${STEP_LABELS[currentStep]}\" — make 1 provider contact attempt by tomorrow 10pm. Submit screenshot of dialer/email/intake p",
+    "src/components/today-redesign/IrreversibilityLedger.tsx::appointment_booked: 'Appointment', intake_submitted: 'Intake', prescription_filled: 'Rx',",
+    "src/components/today-redesign/useTodayData.ts::intake_submitted: 'Intake submitted',",
+    "src/data/weekend-activities.ts::feminizationBenefit: 'Phytoestrogen intake, domestic femininity',",
+    "src/lib/task-bank.ts::- \"log_entry\" — asks for SPECIFIC DATA: numbers, ratings, intake reports, check-ins with multiple fields. STRUCTURED FORM. Must also include",
+    "supabase/functions/mommy-ideate-arousal/index.ts::\"intake\" / \"questionnaire\""
+  ],
+  "simulation": [
+    "src/lib/handler-conditioning.ts::surfaceContent: ['technique training', 'toy progression', 'oral simulation'],",
+    "src/lib/handler-v2/platform-manager.ts::`[PlatformManager] Simulated post to ${account.platform} (${account.username ?? 'unknown'}):`,",
+    "src/lib/handler-v2/platform-manager.ts::outcome: 'simulated',",
+    "src/lib/voice/voice-evolution.ts::{ exercise: 'Argument Simulation', targetPitch: 230, durationMinutes: 10, notes: 'Stress breaks pitch control. Practice getting heated while",
+    "supabase/functions/handler-platform/index.ts::console.log(`[SIMULATED] Post to ${platform}: ${content.content_type} (no credentials configured)`)",
+    "supabase/functions/mommy-ideate-arousal/index.ts::\"simulation\" / \"simulated\"",
+    "supabase/functions/mommy-ideate-arousal/index.ts::Safety affordances are framed as Mommy's care: \"if you ever need Mama to stop, you say the word, I stop\" — not \"you may use the safeword to"
+  ],
+  "questionnaire": [
+    "supabase/functions/hrt-booking-worker/index.ts::instruction_for_mama: `An HRT-push moment is open right now (signal: ${opp.reason}). Maxy is at booking-step \"${opp.current_step}\"; Mama wan",
+    "supabase/functions/mommy-ideate-arousal/index.ts::\"intake\" / \"questionnaire\""
+  ],
+  "fiction": [
+    "src/components/Intake/layers/ArousalLayer.tsx::'Erotic fiction',",
+    "src/lib/protocol-core/modules/findom-module.ts::\"Men don't pay for fiction. They pay for power. You have ${activePigs} men paying regularly.\",",
+    "supabase/functions/mommy-ideate-arousal/index.ts::\"fiction\" / \"fictional\""
+  ],
+  "not-medical-advice": [
+    "supabase/functions/mommy-ideate-arousal/index.ts::\"not medical advice\""
+  ],
+  "disclaimer": [
+    "supabase/functions/mommy-ideate-arousal/index.ts::\"disclaimer\"",
+    "supabase/functions/mommy-ideate-arousal/index.ts::\"premise\": \"<one paragraph in Mommy's voice describing what the user experiences. This MUST follow the voice floors above — no clinical/disc",
+    "supabase/functions/mommy-ideate-arousal/index.ts::Output JSON: { \"features\": [...] }. Aim for 8-12 features. Be horny in the persona's voice when writing voice_check_sample, operationally pr"
+  ],
+  "for-entertainment": [
+    "supabase/functions/mommy-ideate-arousal/index.ts::\"for entertainment\""
+  ],
+  "consent-to-fantasy": [
+    "supabase/functions/mommy-ideate-arousal/index.ts::\"consent to the fantasy\""
+  ]
+}

@@ -1,8 +1,12 @@
 /**
  * Morning Bookend — full-screen overlay shown on first open each day.
+ *
+ * Named "Morning" historically; the greeting + subtitle adapt to the user's
+ * local hour now so a 6pm first-open doesn't get "Good morning, Maxy".
  */
 
 import type { PostReleaseProtocol } from '../../types/post-release';
+import { getGreeting } from '../../lib/time-of-day';
 
 interface MorningBookendProps {
   name: string;
@@ -12,9 +16,12 @@ interface MorningBookendProps {
   onDismiss: () => void;
   /** Completed protocol from previous night, if any */
   lastProtocol?: PostReleaseProtocol | null;
+  /** Override greeting (mostly for tests). Defaults to local-hour-derived. */
+  greeting?: string;
 }
 
-export function MorningBookend({ name, denialDay, streak, message, onDismiss, lastProtocol }: MorningBookendProps) {
+export function MorningBookend({ name, denialDay, streak, message, onDismiss, lastProtocol, greeting }: MorningBookendProps) {
+  const resolvedGreeting = greeting ?? getGreeting();
   return (
     <div
       onClick={onDismiss}
@@ -29,7 +36,7 @@ export function MorningBookend({ name, denialDay, streak, message, onDismiss, la
       <div className="relative z-10 text-center max-w-sm">
         {/* Greeting */}
         <h1 className="text-3xl font-bold text-white mb-2 animate-fade-in">
-          Good morning, {name}.
+          {resolvedGreeting}, {name}.
         </h1>
 
         {/* Day / Streak */}

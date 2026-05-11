@@ -59,6 +59,9 @@ jobs:
       - name: Pattern lint (fails on NEW hits beyond baseline)
         run: npm run lint:patterns
 
+      - name: Voice gate (bans clinical/disclaimer phrases in user-facing copy; fails on NEW hits beyond baseline)
+        run: npm run lint:voice
+
       - name: Migration lint (fails on NEW non-idempotent patterns)
         run: npm run lint:migrations
 

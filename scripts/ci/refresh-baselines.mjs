@@ -15,6 +15,7 @@ const ROOT = join(__dirname, '..', '..');
 
 const targets = [
   ['pattern-lint',   'node scripts/handler-regression/pattern-lint.mjs --update-baseline'],
+  ['voice-gate',     'node scripts/ci/voice-gate.mjs --update-baseline'],
   ['migration-lint', 'node scripts/handler-regression/migration-lint.mjs --update-baseline'],
   ['centrality',     'node scripts/handler-regression/centrality-audit.mjs --update-baseline'],
   ['typecheck-api',  'node scripts/ci/typecheck-api.mjs --update-baseline'],

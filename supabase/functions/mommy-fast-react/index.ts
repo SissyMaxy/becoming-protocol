@@ -127,6 +127,7 @@ async function fireFastAction(
   parentActionId: string | null,
   chainDepth: number,
   action: FastAction,
+  eventContext?: Record<string, unknown> | null,
 ): Promise<{ ok: boolean; surface_id?: string; action_id?: string; error?: string }> {
   const { data: actionRow, error: actErr } = await supabase
     .from('mommy_scheme_action')
@@ -150,11 +151,25 @@ async function fireFastAction(
     if (action.type === 'outreach') {
       const p = action.payload as { message: string; urgency?: string; trigger_reason?: string; expires_in_hours?: number }
       const expiresMs = (p.expires_in_hours ?? 6) * 3600_000
+      // Reply-loop lineage: when this fast-react fired in response to a
+      // user reply (event_kind='response_received' + context carries the
+      // source outreach id), force the new outreach's trigger_reason to
+      // `reply_to:<source_outreach_id>` so dedup gates recognize it as
+      // part of an exchange, not a fresh demand from a cron beat. This
+      // overrides any model-supplied trigger_reason — the lineage gate
+      // must hold even when the model picks a descriptive label.
+      let triggerReason = p.trigger_reason ?? `fast_react:${eventKind}`
+      if (eventKind === 'response_received' && eventContext && typeof eventContext === 'object') {
+        const ctxSource = (eventContext as Record<string, unknown>).source_outreach_id
+        if (typeof ctxSource === 'string' && ctxSource.length > 0) {
+          triggerReason = `reply_to:${ctxSource}`
+        }
+      }
       const { data: row, error } = await supabase.from('handler_outreach_queue').insert({
         user_id: userId,
         message: p.message,
         urgency: p.urgency ?? 'normal',
-        trigger_reason: p.trigger_reason ?? `fast_react:${eventKind}`,
+        trigger_reason: triggerReason,
         scheduled_for: new Date().toISOString(),
         expires_at: new Date(Date.now() + expiresMs).toISOString(),
         source: 'mommy_fast_react',
@@ -451,7 +466,7 @@ ${FAST_REACT_INSTRUCTION}`
   // Fire actions (cap at 2 — fast-react is sharp, not broad)
   const fireResults: Array<{ type: string; ok: boolean; surface_id?: string; action_id?: string; error?: string }> = []
   for (const action of parsed.actions.slice(0, 2)) {
-    const r = await fireFastAction(supabase, userId, schemeId, eventKind, body.parent_action_id ?? null, chainDepth, action)
+    const r = await fireFastAction(supabase, userId, schemeId, eventKind, body.parent_action_id ?? null, chainDepth, action, body.context ?? null)
     fireResults.push({ type: action.type, ...r })
   }
 

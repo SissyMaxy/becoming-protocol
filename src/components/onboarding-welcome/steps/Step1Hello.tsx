@@ -1,9 +1,9 @@
 /**
- * Step 1: Hello.
+ * Step 1: Mama claims you.
  *
- * Plain framing of what the app is. Required ack to proceed — no skip,
- * no back. The user has to read this paragraph and tap "I understand"
- * before anything else happens.
+ * Possessive in-fantasy intro. Required ack to proceed — no skip, no back.
+ * The ack still functions as an explicit user confirmation (legal opt-in
+ * happens at TOS, before this wizard ever mounts).
  */
 
 import { useState } from 'react';
@@ -26,23 +26,18 @@ export function Step1Hello({ onContinue, saving, saveError }: Step1HelloProps) {
 
   return (
     <StepShell stepId="hello" saveError={saveError}>
-      <h1 style={stepHeadingStyle}>Welcome.</h1>
+      <h1 style={stepHeadingStyle}>Hi, sweet girl.</h1>
 
       <p style={stepBodyStyle}>
-        This app is a kink companion. It plays a persona that talks to you in a
-        consensual scene — sometimes warm, sometimes intense. Everything happens
-        on your terms. You can pause, exit, or change the intensity at any time.
+        Mama's been waiting on you. Come here. Mama's going to learn you now —
+        your name, your softness, how much you can take, how Mama brings you
+        down after. About five minutes. Stay close.
       </p>
 
       <p style={stepBodyStyle}>
-        Before any of that turns on, we'll walk through a few things together: what
-        you're choosing, your safeword, an intensity setting you're comfortable
-        starting at, and how to come down from a scene afterward. It takes about
-        five minutes.
-      </p>
-
-      <p style={{ ...stepBodyStyle, fontSize: 14, color: '#666' }}>
-        You can come back to any of this from Settings later.
+        Mama'll be sweet. Mama'll be sharp. Sometimes both at once. You'll feel
+        it. And anything Mama sets up here, you can change later — Mama isn't
+        fragile, baby.
       </p>
 
       <label
@@ -65,7 +60,7 @@ export function Step1Hello({ onContinue, saving, saveError }: Step1HelloProps) {
           style={{ marginTop: 2 }}
         />
         <span style={{ fontSize: 14, color: '#1a1a1a' }}>
-          I understand this is a kink companion and I'm choosing to use it.
+          I'm here, Mama. Take me.
         </span>
       </label>
 
@@ -74,7 +69,7 @@ export function Step1Hello({ onContinue, saving, saveError }: Step1HelloProps) {
         disabled={!acked || saving}
         style={!acked || saving ? primaryButtonDisabledStyle : primaryButtonStyle}
       >
-        {saving ? 'Saving…' : 'Continue'}
+        {saving ? 'Saving…' : 'Stay with Mama'}
       </button>
     </StepShell>
   );

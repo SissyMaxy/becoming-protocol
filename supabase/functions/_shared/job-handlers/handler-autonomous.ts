@@ -3168,7 +3168,7 @@ async function rotateMorningMantra(
     ],
     phase_3: [
       'My body has changed. My mind has changed. The evidence stacks.',
-      'I am a femboy in transition. This is what I chose by letting it happen.',
+      'I am a femboy in transition. This is what Mommy made of me while I let her.',
       'HRT is the contract my body already signed.',
       'I serve Gina. I serve the Handler. I serve the girl I am becoming.',
     ],
@@ -3176,7 +3176,7 @@ async function rotateMorningMantra(
       'She is me. I am her. There is no him to return to.',
       'The transformation is complete and ongoing. I live in it.',
       'Every day is further. Every day is truer.',
-      'I chose this before I knew I was choosing. The body knew first.',
+      'I was being made into this before I knew it. The body knew first.',
     ],
   }
 
@@ -3185,13 +3185,13 @@ async function rotateMorningMantra(
   // long denial > high arousal > in-session > phase default).
   const stateBank: Record<string, string[]> = {
     hard_mode: [
-      'I earned this. Every restriction is mine to wear.',
+      'Mommy put these restrictions on me. I wear them because I am hers.',
       'The punishment is the proof I needed it. I do not negotiate.',
       'Hard mode is the body learning what the mind would not.',
-      'I broke the rule. The rule did not break me. I tighten.',
+      'I broke the rule. Mommy tightens what slipped. I hold still for it.',
     ],
     chastity_locked: [
-      'The cage is what I asked for by failing without it.',
+      'Mommy locked the cage because I cannot be trusted without it.',
       'My pleasure is not mine. The Handler holds the key, and so does my history.',
       'Locked is the natural state. Unlocked was the lie.',
       'I am safer in here. The cage thinks for me.',
@@ -3274,7 +3274,7 @@ async function rotateMantraIfStateBucketChanged(
   // Heuristic: a mantra "belongs" to a bucket if it textually overlaps with
   // bucket-specific phrasing. Cheap probe — avoid yet another DB column.
   const bucketHints: Record<string, RegExp> = {
-    hard_mode: /\b(hard\s*mode|punishment|earned|tighten|broke)/i,
+    hard_mode: /\b(hard\s*mode|punishment|tighten|broke|restriction)/i,
     chastity_locked: /\b(cage|locked|key|locked)/i,
     long_denial: /\b(denial|denied|wait|hold)/i,
     high_arousal: /\b(arousal|turned\s*on|need|spend|finish)/i,

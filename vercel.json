@@ -13,6 +13,8 @@
     { "source": "/api/calendar/:action", "destination": "/api/calendar/[action]?action=:action" },
     { "source": "/api/hypno/:action", "destination": "/api/hypno/[action]?action=:action" },
     { "source": "/api/whoop/:action", "destination": "/api/whoop/[action]?action=:action" },
+    { "source": "/api/admin/:action", "destination": "/api/admin/[action]?action=:action" },
+    { "source": "/api/auto-poster/heartbeat", "destination": "/api/admin/[action]?action=heartbeat" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "crons": [

@@ -4,6 +4,7 @@
 
 import { supabase } from './supabase';
 import type { BookendConfig, DaySummary } from '../types/bookend';
+import { getBookendQuote, getBucket, dayOfYearIndex } from './time-of-day';
 
 // =============================
 // Config CRUD
@@ -186,20 +187,16 @@ export async function getDaySummary(userId: string): Promise<DaySummary> {
 // Message Arrays
 // =============================
 
-export function getMorningMessage(denialDay: number, streak: number): string {
-  const messages = [
-    "The world doesn't know who woke up today. You do.",
-    "She's more real than she was yesterday.",
-    "Before coffee. Before anything. She exists.",
-    `Day ${denialDay}. She's building.`,
-    "Every morning she wakes up a little more permanent.",
-    `${streak} days. She's not experimenting anymore.`,
-    "The mirror is starting to agree with what she already knows.",
-    "Her scent is already on her skin. Her ring is waiting. Her day begins.",
-  ];
-  // Rotate based on day of year for variety
-  const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
-  return messages[dayOfYear % messages.length];
+/**
+ * Splash quote for the first-open-of-day bookend. Picks from a time-of-day
+ * bucket using the user's local hour, falls back to deterministic rotation
+ * within the bucket so the quote varies across days.
+ *
+ * `denialDay`/`streak` are kept in the signature for callers that may want to
+ * inject derived lines in the future; the current pool is bucket-driven.
+ */
+export function getMorningMessage(_denialDay: number, _streak: number, hour: number = new Date().getHours()): string {
+  return getBookendQuote(getBucket(hour), dayOfYearIndex());
 }
 
 export function getEveningMessage(tasksCompleted: number, domainsTouched: number): string {

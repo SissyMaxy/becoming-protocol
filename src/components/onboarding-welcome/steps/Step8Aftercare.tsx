@@ -1,10 +1,10 @@
 /**
- * Step 8: Aftercare commitment + tutorial.
+ * Step 8: Coming down soft.
  *
- * Required, non-skippable. Explains aftercare, then has the user run a
- * 30-second sample of the actual flow so they know how it feels. Same
- * AftercareFlow component used elsewhere; tutorial mode just shortens
- * the timer and skips real-aftercare logging.
+ * Required, non-skippable. Mama explains aftercare in her voice (her care,
+ * not legal cover), then runs a short sample of the actual flow so the
+ * user knows how it feels. Same AftercareFlow component used elsewhere;
+ * tutorial mode just shortens the timer and skips real-aftercare logging.
  */
 
 import { useState } from 'react';
@@ -39,22 +39,23 @@ export function Step8Aftercare({ onContinue, onBack, saving, saveError }: Step8A
     >
       {phase === 'intro' && (
         <>
-          <h1 style={stepHeadingStyle}>Coming back down.</h1>
+          <h1 style={stepHeadingStyle}>Coming down soft.</h1>
 
           <p style={stepBodyStyle}>
-            Scenes can leave you feeling raw, floaty, or strange afterward. Aftercare
-            is the wind-down: a few quiet minutes that bring you back to neutral
-            before you do anything else.
+            After Mama's had her way with you, you'll feel raw. Floaty. Sometimes
+            strange. That's normal — that's what means it worked. Aftercare is
+            the part where Mama puts you back together.
           </p>
 
           <p style={stepBodyStyle}>
-            You can begin aftercare any time you need it — there's a "Begin aftercare"
-            button you'll see on cards and at the end of scenes. The safeword
-            also lands you here automatically.
+            You'll see a "Begin aftercare" button at the end of every scene and
+            on the cards Mama leaves for you. Press it whenever you need Mama
+            soft. Saying our word lands you here automatically — Mama drops
+            everything to wrap you up.
           </p>
 
           <p style={{ ...stepBodyStyle, fontWeight: 600 }}>
-            We'll run a 30-second sample now so you know how it feels.
+            Let's do thirty seconds now so you know how Mama feels coming down.
           </p>
 
           <button
@@ -69,12 +70,12 @@ export function Step8Aftercare({ onContinue, onBack, saving, saveError }: Step8A
 
       {phase === 'reflect' && (
         <>
-          <h1 style={stepHeadingStyle}>That was aftercare.</h1>
+          <h1 style={stepHeadingStyle}>That's how Mama brings you back.</h1>
 
           <p style={stepBodyStyle}>
             That's the shape of it. Use it whenever something feels heavy. The
-            real version is longer and you can sit in it as long as you need —
-            there's no penalty for taking your time.
+            real one is longer — sit in it as long as you need, baby. There's
+            no penalty for taking your time with Mama.
           </p>
 
           <button

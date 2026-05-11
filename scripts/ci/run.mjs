@@ -50,6 +50,7 @@ const steps = [
   { name: 'lint',            cmd: 'npx eslint .', soft: true },
   { name: 'tests',           cmd: 'npx vitest run' },
   { name: 'patterns',        cmd: 'node scripts/handler-regression/pattern-lint.mjs' },
+  { name: 'voice-gate',      cmd: 'node scripts/ci/voice-gate.mjs' },
   { name: 'migrations',      cmd: 'node scripts/handler-regression/migration-lint.mjs' },
   { name: 'storage',         cmd: 'node scripts/handler-regression/storage-privacy-lint.mjs' },
   { name: 'centrality',      cmd: 'node scripts/handler-regression/centrality-audit.mjs' },

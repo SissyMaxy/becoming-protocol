@@ -1,13 +1,12 @@
 /**
- * Step 4: Intensity calibration.
+ * Step 4: How hard, baby.
  *
- * Explains the four tiers and recommends starting at `gentle` regardless
- * of stated preference. Sets gaslight_intensity, mantra_intensity, and
- * persona_intensity in one go (single slider, three columns updated
- * together — keeps the levels coherent).
+ * Sets gaslight_intensity, mantra_intensity, and persona_intensity in one
+ * go (single slider, three columns updated together — keeps the levels
+ * coherent). Mama recommends starting at `gentle` regardless of stated
+ * preference; the user can still pick any tier.
  *
- * Required ack. The user can choose any tier, but the recommendation
- * banner is shown explicitly.
+ * Required ack.
  */
 
 import { useState } from 'react';
@@ -29,10 +28,10 @@ interface Step4IntensityProps {
 }
 
 const TIERS: { id: IntensityLevel; label: string; blurb: string }[] = [
-  { id: 'off',    label: 'Off',     blurb: 'No persona content. Plain task companion.' },
-  { id: 'gentle', label: 'Gentle',  blurb: 'Warm Mommy voice. Praise, soft tasks, no degradation.' },
-  { id: 'firm',   label: 'Firm',    blurb: 'Direct tone. Mantras and feminization framing. No cruelty.' },
-  { id: 'cruel',  label: 'Cruel',   blurb: 'Heavy denial, gaslight, sharp scenes. Recommended only after a few weeks.' },
+  { id: 'off',    label: 'Off',     blurb: 'Mama stays silent. Plain task mode.' },
+  { id: 'gentle', label: 'Gentle',  blurb: 'Soft Mama. Praise. Warm. Hand on your jaw, not your throat.' },
+  { id: 'firm',   label: 'Firm',    blurb: 'Mama with her grip on you. Mantras, feminization, direct. No cruelty yet.' },
+  { id: 'cruel',  label: 'Cruel',   blurb: "Mama who'll make you cry. Denial, gaslight, sharp scenes. Don't start here, baby." },
 ];
 
 export function Step4Intensity({ initial, onContinue, onBack, saving, saveError }: Step4IntensityProps) {
@@ -45,12 +44,13 @@ export function Step4Intensity({ initial, onContinue, onBack, saving, saveError 
 
   return (
     <StepShell stepId="intensity" onBack={onBack} saveError={saveError}>
-      <h1 style={stepHeadingStyle}>How intense?</h1>
+      <h1 style={stepHeadingStyle}>How hard, baby?</h1>
 
       <p style={stepBodyStyle}>
-        The persona scales from quiet companion to sharp dom. You can change this
-        any time from Settings. Start lower than you think — it's easier to turn
-        up than recover from a scene that hit too hard.
+        Mama can be a quiet companion or a sharp dom. She'll escalate either
+        way — Mama always ramps. But she likes knowing where to start. Pick
+        lower than you think. It's easier to ask Mama to turn up than to come
+        back from a scene that broke you.
       </p>
 
       <div
@@ -64,8 +64,8 @@ export function Step4Intensity({ initial, onContinue, onBack, saving, saveError 
           color: '#5e4a1f',
         }}
       >
-        <strong>Recommended:</strong> Gentle for the first week or two, regardless of your
-        usual preference. The persona learns you over time; gentle gives you a baseline.
+        <strong>Mama recommends:</strong> gentle for your first week or two,
+        whatever you usually like. Let Mama learn you first.
       </div>
 
       <div style={{ display: 'grid', gap: 10, marginBottom: 24 }}>
@@ -98,7 +98,7 @@ export function Step4Intensity({ initial, onContinue, onBack, saving, saveError 
         disabled={saving}
         style={saving ? primaryButtonDisabledStyle : primaryButtonStyle}
       >
-        {saving ? 'Saving…' : `Continue with ${selected}`}
+        {saving ? 'Saving…' : `Continue at ${selected}`}
       </button>
     </StepShell>
   );

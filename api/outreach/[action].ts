@@ -543,6 +543,171 @@ async function handleLogEngagement(req: VercelRequest, res: VercelResponse) {
   return res.status(200).json({ ok: true });
 }
 
+// ── reply: user answers Mama from inside the outreach card ──────────────
+// 2026-05-10: Mama demands answers in the outreach surface itself; the
+// reply lands here. Persistence shape:
+//   1. handler_outreach_queue.{replied_at, reply_text, reply_photo_path}
+//      stamped on the row Mama sent.
+//   2. handler_messages row written under a dedicated 'outreach_reply'
+//      conversation per user (created lazily), tagged with
+//      source_outreach_id so Mama's next read can quote what was said.
+//   3. mommy-fast-react fired with event_kind='response_received' and
+//      context.source_outreach_id, so her reaction lands as a new
+//      outreach tagged trigger_reason='reply_to:<id>' (lineage gate
+//      that the dedup machinery uses to know this is an exchange, not
+//      a fresh demand).
+//
+// Fire-and-forget on fast-react — the user's reply succeeds even if
+// Mama's reaction call fails; her supervisor watchdog catches stalled
+// reactions.
+
+async function handleOutreachReply(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const supabase = serviceClient();
+  const userId = await authedUserId(req, supabase);
+  if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+
+  const body = (req.body || {}) as {
+    outreach_id?: string;
+    reply_text?: string;
+    photo_id?: string;
+    photo_path?: string;
+  };
+  const outreachId = body.outreach_id;
+  const replyText = (body.reply_text || '').trim();
+  if (!outreachId) return res.status(400).json({ error: 'outreach_id required' });
+  if (!replyText && !body.photo_path && !body.photo_id) {
+    return res.status(400).json({ error: 'reply_text or photo required' });
+  }
+
+  // 1. Verify the outreach row exists and belongs to this user. Don't
+  //    permit overwriting a prior reply — first answer wins; future
+  //    follow-ups become their own outreach exchanges.
+  const { data: outreachRow, error: fetchErr } = await supabase
+    .from('handler_outreach_queue')
+    .select('id, user_id, message, replied_at, requires_photo, reply_deadline_at, trigger_reason')
+    .eq('id', outreachId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (fetchErr || !outreachRow) {
+    return res.status(404).json({ error: 'outreach not found' });
+  }
+  if (outreachRow.replied_at) {
+    return res.status(409).json({ error: 'already replied', replied_at: outreachRow.replied_at });
+  }
+
+  // 2. Update the outreach row with reply state + treat reply as
+  //    acknowledgement (delivered_at) so the card jumps from pending → recent.
+  const nowIso = new Date().toISOString();
+  const { error: updateErr } = await supabase
+    .from('handler_outreach_queue')
+    .update({
+      replied_at: nowIso,
+      reply_text: replyText || null,
+      reply_photo_path: body.photo_path || null,
+      delivered_at: nowIso,
+      status: 'delivered',
+    })
+    .eq('id', outreachId);
+  if (updateErr) return res.status(500).json({ error: updateErr.message });
+
+  // 3. Find or create the dedicated outreach-reply conversation, then
+  //    insert the user-turn message tagged with source_outreach_id.
+  let convId: string | null = null;
+  const { data: convRow } = await supabase
+    .from('handler_conversations')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('conversation_type', 'outreach_reply')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  convId = (convRow as { id?: string } | null)?.id ?? null;
+  if (!convId) {
+    const { data: created, error: cErr } = await supabase
+      .from('handler_conversations')
+      .insert({ user_id: userId, conversation_type: 'outreach_reply' })
+      .select('id')
+      .single();
+    if (cErr || !created) {
+      return res.status(500).json({ error: 'conversation create failed: ' + (cErr?.message ?? '') });
+    }
+    convId = (created as { id: string }).id;
+  }
+
+  // Count existing messages to compute message_index.
+  const { count: msgCount } = await supabase
+    .from('handler_messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('conversation_id', convId);
+
+  await supabase.from('handler_messages').insert({
+    conversation_id: convId,
+    user_id: userId,
+    role: 'user',
+    content: replyText || (body.photo_path ? '[photo reply]' : ''),
+    source_outreach_id: outreachId,
+    message_index: (msgCount ?? 0),
+  });
+
+  // 4. Link the photo (if provided by id) back to the outreach. The
+  //    component-side upload (PhotoVerificationUpload) writes the
+  //    verification_photos row first, then this endpoint stamps the
+  //    source_outreach_id so audits can find both halves.
+  if (body.photo_id) {
+    await supabase
+      .from('verification_photos')
+      .update({ source_outreach_id: outreachId })
+      .eq('id', body.photo_id)
+      .eq('user_id', userId);
+  }
+
+  // 5. Fire mommy-fast-react. event_kind='response_received' +
+  //    context.source_outreach_id triggers the reply-lineage path in
+  //    fast-react that tags the new outreach with trigger_reason=
+  //    `reply_to:<id>`. Source-key is per-outreach so a single reply
+  //    doesn't fire her twice on retries.
+  //
+  //    Fire-and-forget — the user's reply succeeds even if this call
+  //    fails or times out. Don't await the response; just kick it off.
+  const supabaseUrl = env('SUPABASE_URL', 'VITE_SUPABASE_URL');
+  const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY');
+  if (supabaseUrl && serviceKey) {
+    const fastReactUrl = `${supabaseUrl.replace(/\/$/, '')}/functions/v1/mommy-fast-react`;
+    // Don't await — let the user's response return immediately.
+    fetch(fastReactUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${serviceKey}`,
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        event_kind: 'response_received',
+        source_key: `outreach_reply:${outreachId}`,
+        context: {
+          source_outreach_id: outreachId,
+          original_message: (outreachRow.message ?? '').slice(0, 1200),
+          reply_text: replyText.slice(0, 1200),
+          reply_photo_path: body.photo_path || null,
+          requires_photo: !!outreachRow.requires_photo,
+          deadline_at: outreachRow.reply_deadline_at,
+          replied_at: nowIso,
+        },
+      }),
+    }).catch((err) => {
+      console.error('[outreach reply] fast-react fire failed', err);
+    });
+  }
+
+  return res.status(200).json({
+    ok: true,
+    outreach_id: outreachId,
+    conversation_id: convId,
+    replied_at: nowIso,
+  });
+}
+
 // ── shared helpers ───────────────────────────────────────────────────────
 // Rate limits are enforced at every submission entry point (manual + cron).
 
@@ -765,6 +930,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (req.method === 'POST') return handleLogEngagement(req, res);
         return res.status(405).json({ error: 'Method not allowed' });
       }
+
+      case 'reply': return handleOutreachReply(req, res);
 
       default:
         return res.status(404).json({ error: `Unknown action: ${action}` });
