@@ -73,7 +73,7 @@ jobs:
 
       - name: Refresh voice-gate baseline on Linux for capture (debug)
         if: failure()
-        run: node scripts/ci/voice-gate.mjs --update-baseline
+        run: node debug-voice-gate.mjs
 
       - name: Upload regenerated voice-gate baseline (debug)
         if: failure()
