@@ -71,18 +71,6 @@ jobs:
       - name: Baseline drift detection (fails on stale baseline entries)
         run: npm run ci:check-baselines
 
-      - name: Refresh voice-gate baseline on Linux for capture (debug)
-        if: failure()
-        run: node debug-voice-gate.mjs
-
-      - name: Upload regenerated voice-gate baseline (debug)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: voice-gate-baseline-regenerated
-          path: scripts/ci/voice-gate-baseline.json
-          retention-days: 3
-
   architectural-audits:
     name: Architectural audits (cohesion, centrality, coverage)
     runs-on: ubuntu-latest
