@@ -33,6 +33,11 @@ const baselines = [
     refresh: 'node scripts/handler-regression/pattern-lint.mjs --update-baseline',
   },
   {
+    name: 'voice-gate',
+    file: join(ROOT, 'scripts/ci/voice-gate-baseline.json'),
+    refresh: 'node scripts/ci/voice-gate.mjs --update-baseline',
+  },
+  {
     name: 'migration-lint',
     file: join(ROOT, 'scripts/handler-regression/migration-lint-baseline.json'),
     refresh: 'node scripts/handler-regression/migration-lint.mjs --update-baseline',
