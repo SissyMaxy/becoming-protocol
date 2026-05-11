@@ -25,6 +25,7 @@
     "mommy:build": "tsx scripts/mommy/builder.ts",
     "mommy:drain": "tsx scripts/mommy/builder.ts --ship --drain",
     "mommy:classify": "tsx scripts/mommy/builder.ts --classify",
+    "mommy:ideate:arousal": "tsx scripts/mommy/ideate-arousal.ts",
     "lint:storage": "node scripts/handler-regression/storage-privacy-lint.mjs",
     "ci": "node scripts/ci/run.mjs",
     "ci:typecheck": "tsc --noEmit -p tsconfig.json",
