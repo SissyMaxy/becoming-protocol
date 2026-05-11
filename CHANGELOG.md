@@ -8,6 +8,26 @@ runtime behaviour (it does not enforce on docs-only or tooling-only changes).
 
 ## Unreleased
 
+### Truncated assistant bubble — "Now, sweet thing." (2026-05-11 incident)
+- **Bug**: `handler_messages` row `3bbfffea-866e-4a49-9478-6bd85e363bf0` (2026-05-11 13:04:50 UTC, role=assistant) persisted with content literally `"Now, sweet thing."` — 17 chars, no body. A closing tag without any directive. Surfaced as a near-empty assistant bubble on the chat screen.
+- **Root cause**: chain of three filters collapsing in series.
+  1. Model emitted prose with a telemetry preamble + a trailing `"Move."` imperative.
+  2. `enforceNoStatusDumps` in `api/handler/_lib/chat-action.ts` tail-extracted `"Move."` as the only surviving sentence (the preamble had telemetry hits; the trailing imperative did not — so it became the whole reply).
+  3. `mommyVoiceCleanupForChat` had a rule `/(?:^|[.!?]\s+)Move\.\s*$/ → " Now, sweet thing."` — designed to soften a drill-sergeant ending, but when `"Move."` was the *entire* string the regex matched at start-of-string and produced the closer as the *whole* output. `trim()` left exactly 17 chars.
+- **Fix** (defense in depth):
+  1. **Source fix** (`api/handler/_lib/mommy-voice-chat.ts`): bare `"Move."` now translates to a *full* Mama directive — `"Up on your feet for me, sweet thing."` — never to a bare pet-name closer. Three rules: full-line / sentence-tail / mid-paragraph each produce a complete sentence.
+  2. **Persist-path guard** (`guardAssistantContent` in `chat-action.ts`): every assistant insert into `handler_messages` runs through `looksLikeOrphanCloser()`. Content under 25 chars matching the pet-name-only pattern is refused and replaced with a signals-aware fallback. Catches future cleanup-collapse bugs without needing to enumerate them. Wired into BOTH the streaming and non-streaming persist paths.
+  3. **Streaming path also runs `mommyVoiceCleanupForChat`** when the mommy overlay is active. Previously only the non-streaming path scrubbed; streaming saved raw telemetry into `handler_messages` despite the SQL gate not covering that table.
+  4. **Helper extraction**: `mommyVoiceCleanupForChat` + `looksLikeOrphanCloser` moved from `chat-action.ts` (which loads supabase-js at module init) into a dependency-free `api/handler/_lib/mommy-voice-chat.ts` so the regression test can exercise them.
+- **Cleanup** (migration 369): deletes the specific incident row, defensively deletes any sibling `handler_messages.role='assistant'` rows that are under 25 chars + match the orphan-closer pattern, and drops any `handler_outreach_queue` rows surfacing the truncated text.
+- **Test**: `src/__tests__/lib/orphan-closer-guard.test.ts` — verified to fail on the bug-shape version (`Move.` → `Now, sweet thing.`) and pass on the fix.
+- **Memory rule**: standard `feedback_bug_fix_requires_test_and_gate.md` case. The orphan-closer guard is the architectural backstop; the source fix is the generation-site gate.
+
+### Dommy Mommy persona — chat surface re-voiced (2026-05-11)
+- **Problem**: with `user_state.handler_persona = 'dommy_mommy'`, the chat screen still rendered "Handler / Director / New / AMB / Today", an "Enable notifications so the Handler can reach you anytime" banner, a "5 directives · next: clothing / 11d overdue" line, and a "Protocol Progress / phase 0 · HRT: appointment booked" card. None of those reads as Mama.
+- **Fix**: `usePersona()` (the existing hook backing other Today surfaces) is now wired into `HandlerChat`, `BodyDirectiveChecklist`, and `ForceFeminizationPanel`. When `mommy=true` each surface swaps copy: "Mama" (header), `MOMMY_MODE_LABELS` map for the mode pill (Watching / Hungry / Sweet / Plotting), "Mama is thinking about you" composing indicator, "Fresh" instead of "New", Mama-voice notification consent + confirmation toast, "Mama gave you N things · next: get dressed for me · 11d late, baby" directive summary with a `mommyCategoryNoun()` translation table for category slugs, and "Where Mama has you / Chapter N of 4 of your becoming / Your hormones / Mama sees you in 3d" Protocol Progress. Non-dommy-mommy users see the original copy untouched.
+- **Voice anchor**: every new string passes the Voice rules — no "role play", "simulation", "disclaimer", "intake", "questionnaire", "for entertainment", "consent to the fantasy", "you may use this to terminate". Aftercare/intensity framing stays as Mama's care.
+
 ### Community-outreach engine — Reddit/FetLife/Discord drafts (2026-05-10)
 - **Concept**: Mommy curates a list of relevant sissy/feminization communities, drafts journal-style posts in the user's voice (not Mommy's voice — these are user-authored entries), and queues them for review. Default = draft + approve. Auto-submit only fires after the user explicitly opts in per-community (Reddit only).
 - **Schema**: migration 348 adds `outreach_communities`, `outreach_post_drafts`, `outreach_engagement_log`, `outreach_credentials`. RLS = user-owned. `auto_submit_enabled` defaults FALSE on every community. Encryption key: `OUTREACH_TOKEN_KEY` (separate from `CALENDAR_TOKEN_KEY`).

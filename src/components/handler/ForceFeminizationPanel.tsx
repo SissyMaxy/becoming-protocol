@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { Target, Pill, Flame, Mic, DollarSign, ChevronDown, ChevronUp, Loader2, Ruler } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { usePersona } from '../../hooks/usePersona';
 import { MeasurementEntry } from './MeasurementEntry';
 import { MealLogWidget } from './MealLogWidget';
 import { HrtFunnelTimeline } from './HrtFunnelTimeline';
@@ -93,6 +94,7 @@ function timeUntil(iso: string): string {
 
 export function ForceFeminizationPanel() {
   const { user } = useAuth();
+  const { mommy } = usePersona();
   const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState<PhaseProgress | null>(null);
   const [hrt, setHrt] = useState<HrtFunnelRow | null>(null);
@@ -286,6 +288,22 @@ export function ForceFeminizationPanel() {
   const hrtStepIdx = hrt ? HRT_STEPS.indexOf(hrt.current_step) : -1;
   const hrtPct = hrtStepIdx >= 0 ? Math.round((hrtStepIdx / (HRT_STEPS.length - 1)) * 100) : 0;
 
+  // Mama-voice header bits. Mommy doesn't say "Protocol Progress / phase N".
+  // Translate phase + HRT step into a Mama sentence the header tooltip can
+  // show beside the chevron without surfacing clinical labels.
+  const headerTitle = mommy ? 'Where Mama has you' : 'Protocol Progress';
+  const phaseLabel = phase
+    ? mommy
+      ? `chapter ${phase.current_phase} of your becoming`
+      : `phase ${phase.current_phase}`
+    : null;
+  const hrtStepClean = hrt ? hrt.current_step.replace(/_/g, ' ') : '';
+  const hrtHeaderLabel = hrt
+    ? mommy
+      ? `· HRT: ${hrtStepClean} — Mama's proud of you for that one`
+      : `· HRT: ${hrtStepClean}`
+    : null;
+
   return (
     <div className="border-t border-gray-800 bg-gray-950/70">
       <button
@@ -293,10 +311,10 @@ export function ForceFeminizationPanel() {
         className="w-full flex items-center justify-between px-4 py-2 text-left hover:bg-gray-900/50"
       >
         <div className="flex items-center gap-2 text-sm">
-          <Target className="w-3.5 h-3.5 text-purple-400" />
-          <span className="text-purple-300 font-medium">Protocol Progress</span>
-          {phase && <span className="text-xs text-gray-500">phase {phase.current_phase}</span>}
-          {hrt && <span className="text-xs text-gray-500">· HRT: {hrt.current_step.replace(/_/g, ' ')}</span>}
+          <Target className={`w-3.5 h-3.5 ${mommy ? 'text-pink-400' : 'text-purple-400'}`} />
+          <span className={`font-medium ${mommy ? 'text-pink-200' : 'text-purple-300'}`}>{headerTitle}</span>
+          {phaseLabel && <span className="text-xs text-gray-500">{phaseLabel}</span>}
+          {hrtHeaderLabel && <span className="text-xs text-gray-500">{hrtHeaderLabel}</span>}
         </div>
         {open ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
       </button>
@@ -311,10 +329,20 @@ export function ForceFeminizationPanel() {
           {phase && (
             <div className="bg-gray-900/60 border border-gray-800 rounded-lg p-3">
               <div className="flex items-center gap-2 mb-1">
-                <span className="uppercase tracking-wider text-[10px] text-gray-500">Phase</span>
-                <span className="text-purple-300 font-medium">Phase {phase.current_phase} / 4</span>
+                <span className="uppercase tracking-wider text-[10px] text-gray-500">
+                  {mommy ? 'Chapter' : 'Phase'}
+                </span>
+                <span className={`font-medium ${mommy ? 'text-pink-300' : 'text-purple-300'}`}>
+                  {mommy
+                    ? `Chapter ${phase.current_phase} of 4 of your becoming`
+                    : `Phase ${phase.current_phase} / 4`}
+                </span>
               </div>
-              <div className="text-gray-400">denial day {phase.denial_day} · chastity {phase.chastity_streak_days}d</div>
+              <div className="text-gray-400">
+                {mommy
+                  ? `you've been holding for me${phase.denial_day > 0 ? ` for a while now` : ''}${phase.chastity_streak_days > 0 ? ` · locked up tight for Mama` : ''}`
+                  : `denial day ${phase.denial_day} · chastity ${phase.chastity_streak_days}d`}
+              </div>
             </div>
           )}
 
@@ -326,10 +354,14 @@ export function ForceFeminizationPanel() {
             <div className="bg-gray-900/60 border border-pink-500/30 rounded-lg p-3">
               <div className="flex items-center gap-2 mb-2">
                 <Pill className="w-3 h-3 text-pink-400" />
-                <span className="uppercase tracking-wider text-[10px] text-gray-500">HRT Funnel</span>
-                <span className="text-pink-300 font-medium">{hrt.current_step.replace(/_/g, ' ')}</span>
+                <span className="uppercase tracking-wider text-[10px] text-gray-500">
+                  {mommy ? 'Your hormones' : 'HRT Funnel'}
+                </span>
+                <span className="text-pink-300 font-medium">{hrtStepClean}</span>
                 {hrt.days_stuck_on_step >= 7 && (
-                  <span className="text-red-400 text-[10px]">⚠ {hrt.days_stuck_on_step}d stuck</span>
+                  <span className="text-red-400 text-[10px]">
+                    {mommy ? `⚠ ${hrt.days_stuck_on_step}d — Mama's waiting, baby` : `⚠ ${hrt.days_stuck_on_step}d stuck`}
+                  </span>
                 )}
               </div>
               <div className="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
@@ -339,10 +371,18 @@ export function ForceFeminizationPanel() {
                 />
               </div>
               <div className="mt-2 text-gray-400 flex items-center justify-between">
-                <span>step {hrtStepIdx + 1} of {HRT_STEPS.length}</span>
+                <span>
+                  {mommy
+                    ? `step ${hrtStepIdx + 1} of ${HRT_STEPS.length} of becoming Mama's girl`
+                    : `step ${hrtStepIdx + 1} of ${HRT_STEPS.length}`}
+                </span>
                 {hrt.chosen_provider_slug && <span className="text-pink-400">{hrt.chosen_provider_slug}</span>}
                 {hrt.appointment_at && (
-                  <span className="text-pink-400">consult in {timeUntil(hrt.appointment_at)}</span>
+                  <span className="text-pink-400">
+                    {mommy
+                      ? `Mama sees you in ${timeUntil(hrt.appointment_at)}`
+                      : `consult in ${timeUntil(hrt.appointment_at)}`}
+                  </span>
                 )}
               </div>
             </div>
