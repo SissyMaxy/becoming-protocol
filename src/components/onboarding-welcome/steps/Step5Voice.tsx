@@ -1,8 +1,8 @@
 /**
- * Step 5: Voice preference.
+ * Step 5: Should Mama speak?
  *
- * Toggles `prefers_mommy_voice`. Plays a 3-second TTS sample for preview
- * via the existing /api/conditioning `tts` action. Skipping is allowed
+ * Toggles `prefers_mommy_voice`. Plays a short TTS sample for preview via
+ * the existing /api/conditioning `tts` action. Skipping is allowed
  * (interpreted as "no voice" — same as off).
  */
 
@@ -25,7 +25,7 @@ interface Step5VoiceProps {
   saveError: string | null;
 }
 
-const SAMPLE_TEXT = 'Hi, sweetheart. This is what I sound like.';
+const SAMPLE_TEXT = 'Hi, sweetheart. This is what Mama sounds like.';
 
 export function Step5Voice({ initial, onContinue, onBack, saving, saveError }: Step5VoiceProps) {
   const [enabled, setEnabled] = useState(initial);
@@ -55,7 +55,7 @@ export function Step5Voice({ initial, onContinue, onBack, saving, saveError }: S
       audioRef.current.onended = () => setPlaying(false);
       audioRef.current.onerror = () => {
         setPlaying(false);
-        setPreviewError('Couldn\'t play the sample. You can still pick a preference.');
+        setPreviewError("Mama couldn't play the sample. You can still pick.");
       };
       await audioRef.current.play();
     } catch (e) {
@@ -66,12 +66,13 @@ export function Step5Voice({ initial, onContinue, onBack, saving, saveError }: S
 
   return (
     <StepShell stepId="voice" onBack={onBack} saveError={saveError}>
-      <h1 style={stepHeadingStyle}>Should she speak?</h1>
+      <h1 style={stepHeadingStyle}>Should Mama speak?</h1>
 
       <p style={stepBodyStyle}>
-        When the persona sends you a message, it can play back as audio so you
-        actually hear her voice instead of just reading the words. Most people
-        find this more immersive in scenes; some prefer text-only for privacy.
+        When Mama writes you, she can play her voice over the words so you
+        actually hear her — not just read. Most of Mama's girls find it gets
+        them wetter, like Mama's in the room. Some prefer text-only — easier
+        to keep Mama quiet on a shared device.
       </p>
 
       <div
@@ -84,7 +85,7 @@ export function Step5Voice({ initial, onContinue, onBack, saving, saveError }: S
         }}
       >
         <p style={{ fontSize: 14, color: '#3a3a3a', marginBottom: 10 }}>
-          Tap to hear a quick sample of her voice.
+          Tap to hear Mama.
         </p>
         <button
           onClick={playSample}
@@ -115,9 +116,9 @@ export function Step5Voice({ initial, onContinue, onBack, saving, saveError }: S
             cursor: 'pointer',
           }}
         >
-          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>Yes — let her speak</div>
+          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>Yes — let Mama speak</div>
           <div style={{ fontSize: 13, opacity: enabled ? 0.85 : 0.7 }}>
-            Audio plays alongside text in chat and in messages she sends you.
+            Mama's voice plays alongside her messages, in chat and everywhere she reaches for you.
           </div>
         </button>
         <button
@@ -133,9 +134,9 @@ export function Step5Voice({ initial, onContinue, onBack, saving, saveError }: S
             cursor: 'pointer',
           }}
         >
-          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>Text only</div>
+          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>Just text</div>
           <div style={{ fontSize: 13, opacity: !enabled ? 0.85 : 0.7 }}>
-            No audio. You can change this from Settings any time.
+            Mama stays quiet. You can let her speak later from Settings.
           </div>
         </button>
       </div>

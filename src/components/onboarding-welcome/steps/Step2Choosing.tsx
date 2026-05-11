@@ -1,11 +1,11 @@
 /**
- * Step 2: What you're choosing.
+ * Step 2: Mama tells you what she's about to do, and teaches you our word.
  *
- * Explains the persona, the kind of content, and how intensity scales.
- * Teaches the safeword as a literal: typing it anywhere exits to neutral
- * aftercare and disables persona content for 24 hours. Required ack —
- * the user must explicitly acknowledge that they understand the safeword
- * before proceeding.
+ * Safeword is required: typing it anywhere exits to neutral aftercare and
+ * disables persona content for 24 hours. Framed as Mama's rule, not legal
+ * cover — but it still functions exactly the same way.
+ *
+ * Required ack on both: our word, and what Mama's going to do.
  */
 
 import { useState } from 'react';
@@ -33,25 +33,24 @@ export function Step2Choosing({ onContinue, onBack, saving, saveError }: Step2Ch
 
   return (
     <StepShell stepId="choosing" onBack={onBack} saveError={saveError}>
-      <h1 style={stepHeadingStyle}>What you're choosing.</h1>
+      <h1 style={stepHeadingStyle}>What Mama's going to do.</h1>
 
       <section style={{ marginBottom: 24 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>The persona</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Who I am</h2>
         <p style={stepBodyStyle}>
-          The companion plays a Mommy character — caring on the surface, with
-          intensity underneath. She speaks to you in scene. She is not a
-          therapist, an assistant, or a real person, and she does not give
-          medical or legal advice.
+          Mama. Mature. Sweet on the surface, sharp underneath, both at once when
+          Mama feels like it. She's going to talk to you in scene, every day,
+          for as long as you stay close. She means every word.
         </p>
       </section>
 
       <section style={{ marginBottom: 24 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>The content</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>What we're doing</h2>
         <p style={stepBodyStyle}>
-          Scenes can include feminization themes, denial, and recited mantras.
-          Content scales with the intensity you set in the next step. At any
-          intensity, you remain in control — the persona never overrides your
-          choices.
+          Mama's going to turn you. Mantras. Scenes. Denial. Feminization. Mama
+          scales it to what you can take, and Mama ramps. You stay in control
+          of the dial — Mama never overrides your choice on intensity, and you
+          can pull back from Settings any time.
         </p>
       </section>
 
@@ -64,9 +63,9 @@ export function Step2Choosing({ onContinue, onBack, saving, saveError }: Step2Ch
           borderRadius: 8,
         }}
       >
-        <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Your safeword</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Our word</h2>
         <p style={stepBodyStyle}>
-          Your safeword is the word{' '}
+          Mama's word is{' '}
           <code
             style={{
               background: '#f0f0f0',
@@ -82,12 +81,13 @@ export function Step2Choosing({ onContinue, onBack, saving, saveError }: Step2Ch
           .
         </p>
         <p style={stepBodyStyle}>
-          Saying or typing it anywhere in the app — chat, a task field, a check-in —
-          exits to neutral aftercare and disables persona content for 24 hours.
-          You don't have to explain or justify it.
+          If you ever need Mama to stop — anywhere you can type, baby. Chat, a
+          task, a check-in — you say it and Mama stops. Mama drops you straight
+          into aftercare and goes quiet for a day. You don't owe Mama an
+          explanation. That's the rule.
         </p>
         <p style={{ ...stepBodyStyle, fontSize: 14, color: '#666', marginBottom: 0 }}>
-          Tip: you can also exit a scene from the chat header at any time.
+          You can also leave a scene from the chat header any time. Mama doesn't get hurt.
         </p>
       </section>
 
@@ -111,7 +111,7 @@ export function Step2Choosing({ onContinue, onBack, saving, saveError }: Step2Ch
           style={{ marginTop: 2 }}
         />
         <span style={{ fontSize: 14, color: '#1a1a1a' }}>
-          I understand the safeword is <strong>{ONBOARDING_SAFEWORD}</strong> and how to use it.
+          I know our word — <strong>{ONBOARDING_SAFEWORD}</strong> — and how it stops Mama.
         </span>
       </label>
 
@@ -135,7 +135,7 @@ export function Step2Choosing({ onContinue, onBack, saving, saveError }: Step2Ch
           style={{ marginTop: 2 }}
         />
         <span style={{ fontSize: 14, color: '#1a1a1a' }}>
-          I understand what kinds of scenes the persona will run.
+          I know what Mama's going to do with me.
         </span>
       </label>
 

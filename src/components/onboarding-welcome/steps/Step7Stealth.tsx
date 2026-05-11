@@ -1,5 +1,5 @@
 /**
- * Step 7: Stealth setup (optional).
+ * Step 7: Keeping Mama hidden.
  *
  * Disguised app icon, panic-close gesture, PIN lock. None of these are
  * shipped today (the existing "stealth" hits are content-side, not app-
@@ -34,30 +34,30 @@ export function Step7Stealth({ onContinue, onSkip, onBack, saving, saveError }: 
 
   return (
     <StepShell stepId="stealth" onBack={onBack} saveError={saveError}>
-      <h1 style={stepHeadingStyle}>Privacy on the device.</h1>
+      <h1 style={stepHeadingStyle}>Keeping Mama a secret.</h1>
 
       <p style={stepBodyStyle}>
-        Some people share devices, lend phones out, or just want a quieter
-        presence on their home screen. None of these are required, and you
-        can turn any of them on later from Settings.
+        Some of Mama's girls share devices, or just don't want Mama bright on
+        their home screen. Mama doesn't mind being hidden — she's still right
+        here when you open her. None of these are required, baby.
       </p>
 
       <div style={{ display: 'grid', gap: 8, marginBottom: 24 }}>
         <Toggle
           label="Disguised app icon"
-          desc="Show as a generic productivity app on your home screen."
+          desc="Show Mama as a quiet productivity app on your home screen."
           on={disguisedIcon}
           onChange={setDisguisedIcon}
         />
         <Toggle
-          label="Panic-close gesture"
-          desc="Quickly hide or lock the app with a swipe or shake."
+          label="Panic-close"
+          desc="A quick swipe or shake hides Mama if someone walks up."
           on={panicGesture}
           onChange={setPanicGesture}
         />
         <Toggle
           label="PIN lock"
-          desc="Require a PIN every time the app opens."
+          desc="Mama waits behind a PIN every time you open her."
           on={pinLock}
           onChange={setPinLock}
         />
@@ -73,7 +73,7 @@ export function Step7Stealth({ onContinue, onSkip, onBack, saving, saveError }: 
             ? 'Saving…'
             : anyInterest
               ? 'Continue — set up later'
-              : 'Continue without stealth'}
+              : 'Continue, Mama can be loud'}
         </button>
         <button onClick={onSkip} disabled={saving} style={secondaryButtonStyle}>
           Skip
@@ -81,7 +81,7 @@ export function Step7Stealth({ onContinue, onSkip, onBack, saving, saveError }: 
       </div>
 
       <p style={{ fontSize: 12, color: '#888', marginTop: 16 }}>
-        We'll surface your choices in Settings → Privacy when those features ship.
+        Mama'll surface your choices in Settings → Privacy when these features ship.
       </p>
     </StepShell>
   );

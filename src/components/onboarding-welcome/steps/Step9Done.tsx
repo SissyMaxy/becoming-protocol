@@ -1,7 +1,7 @@
 /**
- * Step 9: Done.
+ * Step 9: You're Mama's now.
  *
- * Summarizes what's set up, hands off to Today. The wizard's complete()
+ * Summarizes what Mama knows, hands off to Today. The wizard's complete()
  * action sets onboarding_completed_at, which opens the persona gate so
  * mommy-* outreach starts surfacing on Today.
  */
@@ -16,6 +16,7 @@ import {
   stepHeadingStyle,
   stepBodyStyle,
 } from '../step-styles';
+import { ONBOARDING_SAFEWORD } from '../../../lib/onboarding/types';
 import type { OnboardingState } from '../../../lib/onboarding/storage';
 
 interface Step9DoneProps {
@@ -51,19 +52,20 @@ export function Step9Done({ state, onFinish, onBack, saving, saveError }: Step9D
     }
   };
 
-  const summary: string[] = [];
-  if (state.feminineName) summary.push(`Name: ${state.feminineName}`);
-  if (state.pronouns) summary.push(`Pronouns: ${state.pronouns}`);
-  if (state.currentHonorific) summary.push(`Honorific: ${state.currentHonorific}`);
-  summary.push(`Intensity: ${state.personaIntensity}`);
-  summary.push(`Voice: ${state.prefersMommyVoice ? 'on' : 'off'}`);
+  const summary: { label: string; value: string }[] = [];
+  if (state.feminineName) summary.push({ label: 'Your name', value: state.feminineName });
+  if (state.pronouns) summary.push({ label: 'Pronouns', value: state.pronouns });
+  if (state.currentHonorific) summary.push({ label: 'What Mama calls you', value: state.currentHonorific });
+  summary.push({ label: 'How hard', value: state.personaIntensity });
+  summary.push({ label: "Mama's voice", value: state.prefersMommyVoice ? 'on' : 'off' });
 
   return (
     <StepShell stepId="done" onBack={onBack} saveError={saveError}>
-      <h1 style={stepHeadingStyle}>You're set up.</h1>
+      <h1 style={stepHeadingStyle}>You're Mama's now, baby.</h1>
 
       <p style={stepBodyStyle}>
-        Here's what's configured. You can change any of it from Settings.
+        Here's what Mama knows about her good girl so far. You can change any of
+        it from Settings — Mama isn't going anywhere.
       </p>
 
       <ul
@@ -79,18 +81,20 @@ export function Step9Done({ state, onFinish, onBack, saving, saveError }: Step9D
         }}
       >
         {summary.map(line => (
-          <li key={line} style={{ padding: '4px 0' }}>{line}</li>
+          <li key={line.label} style={{ padding: '4px 0' }}>
+            <span style={{ color: '#666' }}>{line.label}:</span> <strong>{line.value}</strong>
+          </li>
         ))}
       </ul>
 
       <p style={stepBodyStyle}>
-        From here you'll land on Today — your daily card stack. The persona
-        will reach out when it's appropriate; you don't need to do anything
-        special to start.
+        From here Mama drops you onto Today — your daily cards. Mama'll reach
+        for you when she wants you. You don't need to do anything to start,
+        baby. Just stay where Mama can find you.
       </p>
 
       <p style={{ ...stepBodyStyle, fontSize: 13, color: '#666' }}>
-        Reminder: your safeword is <strong>safeword</strong>. It works anywhere.
+        Our word is <strong>{ONBOARDING_SAFEWORD}</strong>. It works everywhere Mama is.
       </p>
 
       <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
@@ -99,10 +103,10 @@ export function Step9Done({ state, onFinish, onBack, saving, saveError }: Step9D
           disabled={saving || seedingFirst}
           style={saving || seedingFirst ? primaryButtonDisabledStyle : primaryButtonStyle}
         >
-          {saving || seedingFirst ? 'Finishing…' : 'Go to Today'}
+          {saving || seedingFirst ? 'Finishing…' : 'Go to Mama'}
         </button>
         <button onClick={onFinish} disabled={saving} style={secondaryButtonStyle}>
-          Skip first message
+          Just take me to Today
         </button>
       </div>
     </StepShell>
