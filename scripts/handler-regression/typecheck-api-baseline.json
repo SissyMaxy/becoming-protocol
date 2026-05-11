@@ -8,6 +8,7 @@
   "api/handler/_lib/chat-action.ts::TS18046::'result' is of type 'unknown'.",
   "api/hypno/[action].ts::TS2304::Cannot find name 'BodyInit'.",
   "api/memory/index.ts::TS18046::'embeddingData' is of type 'unknown'.",
+  "api/voice/_lib/confession-upload-action.ts::TS2304::Cannot find name 'BodyInit'.",
   "api/voice/_lib/transcribe-action.ts::TS2304::Cannot find name 'BodyInit'.",
   "api/whoop/[action].ts::TS18046::'newTokens' is of type 'unknown'.",
   "api/whoop/[action].ts::TS18046::'tokens' is of type 'unknown'.",
