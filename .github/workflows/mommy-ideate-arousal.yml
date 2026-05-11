@@ -1,0 +1,82 @@
+name: Mommy Ideate (arousal panel)
+
+# Sharply-pointed arousal-feature ideation panel. Variant of the
+# generic mommy-ideate panel with the voice-floor system prompt and
+# the embodied-feature JSON shape. Runs the same 3-LLM panel
+# (Anthropic + OpenAI + OpenRouter) and Sonnet judge.
+#
+# Manual-trigger only. Arousal feature ideation is not on a cron —
+# Maxy fires it when she wants more arousal-shaped wishes in the
+# autonomous build queue. The mommy-builder workflow then picks up
+# any auto-ship-eligible wishes via its 30-min backstop or the
+# repository_dispatch hook.
+#
+# Pipeline (one click → wishes queued):
+#   1. mommy-ideate-arousal edge fn runs the 3-lens panel + judge
+#   2. scripts/mommy/ideate-arousal.ts voice-checks each judged
+#      feature, drops failures, maps fields, inserts wishes with
+#      source='arousal_panel' and (where panel says safe + size S/M)
+#      auto_ship_eligible=true.
+#   3. mommy-builder picks them up in its next drain run.
+#
+# REQUIRED SECRETS:
+#   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — wish queue I/O + edge fn auth
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_features:
+        description: 'Max wishes to queue (default 7, panel judge caps at 5-7)'
+        required: false
+        default: '7'
+        type: string
+      intensity_floor:
+        description: 'Optional intensity floor passed to panel'
+        required: false
+        default: ''
+        type: choice
+        options:
+          - ''
+          - gentle
+          - moderate
+          - firm
+          - relentless
+      dry:
+        description: 'Dry-run: invoke panel and preview but insert no wishes'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: mommy-ideate-arousal
+  cancel-in-progress: false
+
+jobs:
+  ideate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Run arousal panel + queue wishes
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          ARGS="--max=${{ github.event.inputs.max_features }}"
+          if [[ -n "${{ github.event.inputs.intensity_floor }}" ]]; then
+            ARGS="$ARGS --intensity=${{ github.event.inputs.intensity_floor }}"
+          fi
+          if [[ "${{ github.event.inputs.dry }}" == "true" ]]; then
+            ARGS="$ARGS --dry"
+          fi
+          npm run mommy:ideate:arousal -- $ARGS
