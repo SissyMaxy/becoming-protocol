@@ -31,6 +31,13 @@ const BANNED = [
 const text = readFileSync(file, 'utf8');
 const lines = text.split('\n');
 console.log('line count:', lines.length);
+console.log('line 294 raw:', JSON.stringify(lines[293]));
+console.log('line 304 raw:', JSON.stringify(lines[303]));
+console.log('line 392 raw (first 200):', JSON.stringify((lines[391] || '').slice(0, 200)));
+const l294 = lines[293] || '';
+const l294strip = l294.replace(/\/\/.*$/, '');
+console.log('line 294 stripped:', JSON.stringify(l294strip));
+console.log('line 294 strip differs from raw:', l294 !== l294strip);
 
 let totalHits = 0;
 for (const p of BANNED) {
