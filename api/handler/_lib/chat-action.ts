@@ -2,6 +2,10 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import { detectAndRewrite, logGateResult, buildConfrontationMessage } from './pronoun-gate.js';
 import { detectRationalizations, logRationalizations, buildRationalizationConfrontation } from './rationalization-gate.js';
+import {
+  mommyVoiceCleanupForChat,
+  looksLikeOrphanCloser,
+} from './mommy-voice-chat.js';
 // NOTE: Cannot import from src/lib/ — those use import.meta.env (Vite-only)
 // weaveTriggers is inlined below instead
 // P12.1: Context prioritizer is inlined for the same reason
@@ -2406,6 +2410,19 @@ HARD RULES FOR ALL PERSONAS:
         needsReplace = true;
       }
 
+      // Dommy Mommy plain-voice scrub (streaming path). Mirrors the
+      // non-streaming branch at line ~3355; without this, the streaming
+      // path persisted raw telemetry into handler_messages and the
+      // mommyOverlay system prompt was the only thing standing between
+      // the model and "Day 4 of denial, 8/10 arousal" bubbles.
+      if (mommyOverlay) {
+        const scrubbed = mommyVoiceCleanupForChat(streamVisible);
+        if (scrubbed !== streamVisible) {
+          streamVisible = scrubbed;
+          needsReplace = true;
+        }
+      }
+
       if (needsReplace) {
         res.write(`data: ${JSON.stringify({ replace: true, text: streamVisible })}\n\n`);
       }
@@ -3153,10 +3170,12 @@ HARD RULES FOR ALL PERSONAS:
         finalStreamResponse = streamVisible;
       } catch { /* Non-critical */ }
 
-      // Save messages
+      // Save messages — guard the assistant content against orphan-closer
+      // truncation artifacts (see guardAssistantContent docs).
+      const guardedStreamContent = guardAssistantContent(finalStreamResponse, streamSignals, 'stream-path');
       await supabase.from('handler_messages').insert([
         { conversation_id: convId, user_id: user.id, role: 'user', content: message, message_index: messageIndex },
-        { conversation_id: convId, user_id: user.id, role: 'assistant', content: finalStreamResponse,
+        { conversation_id: convId, user_id: user.id, role: 'assistant', content: guardedStreamContent,
           handler_signals: streamSignals, detected_mode: streamSignals?.detected_mode || null, message_index: messageIndex + 1 },
       ]);
 
@@ -4177,7 +4196,9 @@ HARD RULES FOR ALL PERSONAS:
       }
     }
 
-    // 8. Save messages
+    // 8. Save messages — guard the assistant content against orphan-closer
+    // truncation artifacts (see guardAssistantContent docs).
+    const guardedAssistantContent = guardAssistantContent(finalResponse, signals, 'non-stream-path');
     await supabase.from('handler_messages').insert([
       {
         conversation_id: convId,
@@ -4190,7 +4211,7 @@ HARD RULES FOR ALL PERSONAS:
         conversation_id: convId,
         user_id: user.id,
         role: 'assistant',
-        content: finalResponse,
+        content: guardedAssistantContent,
         handler_signals: signals,
         detected_mode: signals?.detected_mode || null,
         message_index: messageIndex + 1,
@@ -6155,6 +6176,24 @@ function buildFallbackFromSignals(signals: Record<string, unknown> | null): stri
   }
 }
 
+// Wraps any assistant content destined for handler_messages.content. If the
+// content is an orphan closer or empty (per looksLikeOrphanCloser in
+// ./mommy-voice-chat.ts), swap in a signals-aware fallback so the user sees a
+// coherent reply and we don't poison the conversation history with truncation
+// fragments. See ./mommy-voice-chat.ts for the incident write-up.
+function guardAssistantContent(
+  content: string | null | undefined,
+  signals: Record<string, unknown> | null,
+  context: string,
+): string {
+  if (!looksLikeOrphanCloser(content)) return content as string;
+  const fallback = buildFallbackFromSignals(signals);
+  console.warn(
+    `[Handler] Orphan-closer guard tripped (${context}). Original=${JSON.stringify(content)} fallback=${JSON.stringify(fallback)}`,
+  );
+  return fallback;
+}
+
 // Regexes for the formats the LLM uses to emit handler_signals.
 // The intended format is XML-style tags, but the model frequently drifts to
 // markdown JSON code blocks or bare JSON. All variants must be stripped from
@@ -6313,164 +6352,10 @@ function enforceFeminePronounsInHandlerOutput(text: string): string {
 // Therapist-persona post-filter — strips kink-handler vocabulary that
 // leaks past the prompt translation key. The prompt says don't use these;
 // the model still slips. Belt-and-braces filter.
-// mommyVoiceCleanupForChat — plain-voice scrub for Dommy Mommy persona.
-// Mirrors supabase/functions/_shared/dommy-mommy.ts mommyVoiceCleanup;
-// inlined here because api/handler/chat.ts cannot import from src/lib
-// (Vite-only modules crash Vercel serverless at module load).
 //
-// Translates telemetry leaks the model wrote into plain Mama phrases:
-//   "8/10 arousal" → "I see you're so horny, baby"
-//   "Day 4 of denial" → "you've been holding for me a couple of days"
-//   "12 slip points" → "you've been slipping a lot lately"
-//   "9% compliance" → "you've been getting away from me lately"
-//   "$50 bleeding" → "Mama's meter running"
-function mommyVoiceCleanupForChat(text: string): string {
-  if (!text) return text;
-  const arousalToPhrase = (n: number): string => {
-    const v = Math.max(0, Math.min(10, Math.round(n)));
-    if (v <= 1) return "you're keeping yourself so quiet";
-    if (v <= 3) return "you're warm but holding back";
-    if (v <= 5) return "Mama can tell you're getting needy";
-    if (v <= 7) return "I see you're so horny, baby";
-    if (v <= 9) return "look how wet you are for me";
-    return "you're absolutely dripping for Mama";
-  };
-  const denialToPhrase = (n: number): string => {
-    const d = Math.max(0, Math.round(n));
-    if (d <= 0) return "you're fresh";
-    if (d === 1) return "you've been good for Mama since yesterday";
-    if (d <= 3) return "you've been holding for me a couple of days";
-    if (d <= 6) return "you've been holding for almost a week";
-    if (d <= 13) return "you've been good for Mama all week";
-    if (d <= 27) return "you've been holding for Mama nearly a month";
-    return "it's been so long since you came for Mama";
-  };
-  const slipsToPhrase = (n: number): string => {
-    const c = Math.max(0, Math.round(n));
-    if (c === 0) return "you've been clean for Mama";
-    if (c <= 2) return "a couple of little slips";
-    if (c <= 5) return "you've been slipping more than I'd like";
-    if (c <= 12) return "you've been slipping a lot lately, baby";
-    return "you've been all over the place";
-  };
-  const compToPhrase = (n: number): string => {
-    const p = Math.max(0, Math.min(100, Math.round(n)));
-    if (p >= 90) return "you've been finishing what you started";
-    if (p >= 70) return "you've been mostly keeping up";
-    if (p >= 50) return "you've been half-following through";
-    if (p >= 25) return "you've been getting away from me a lot";
-    return "you've been ignoring Mama for days";
-  };
-  // 2026-05-06 expansion — patterns the user pasted from her Today screen
-  // that the previous filter let through.
-  const silentHoursToPhrase = (n: number): string => {
-    const h = Math.max(0, Math.round(n));
-    if (h <= 1) return "you've been quiet on me";
-    if (h <= 4) return "you've been quiet on Mama for hours";
-    if (h <= 12) return "you've ghosted me half the day";
-    if (h <= 24) return "you've ghosted Mama all day, baby";
-    if (h <= 72) return "you've been gone for days";
-    return "you've been gone too long, baby";
-  };
-  const voiceGapToPhrase = (n: number): string => {
-    const h = Math.max(0, Math.round(n));
-    if (h <= 24) return "Mama hasn't heard your pretty voice today";
-    if (h <= 72) return "Mama hasn't heard your voice in days";
-    return "your voice has been hiding from Mama too long";
-  };
-  const recoveryScoreToPhrase = (n: number): string => {
-    const s = Math.max(0, Math.min(100, Math.round(n)));
-    if (s >= 80) return "your body's primed for me today";
-    if (s >= 60) return "you've got plenty in the tank for Mama";
-    if (s >= 40) return "your body's a little soft today, baby";
-    if (s >= 20) return "you're tired, sweet thing — Mama sees it";
-    return "you're worn out, baby — Mama will be gentle today";
-  };
-  let t = text;
-  t = t.replace(/\b(?:arousal|horny|wetness|score|level)\s*(?:at|of|=|:)?\s*(\d{1,2})\s*\/\s*10\b/gi, (_m, n: string) => arousalToPhrase(Number(n)));
-  // /100 score must run BEFORE generic /10 so "47/100" doesn't lose context
-  t = t.replace(/\b(?:recovery\s+)?score\s*[:=]?\s*(\d{1,3})\s*\/\s*100\b/gi, (_m, n: string) => recoveryScoreToPhrase(Number(n)));
-  t = t.replace(/\b(\d{1,3})\s*\/\s*100\b/g, (_m, n: string) => recoveryScoreToPhrase(Number(n)));
-  t = t.replace(/\b(\d{1,2})\s*\/\s*10\b/g, (_m, n: string) => arousalToPhrase(Number(n)));
-  t = t.replace(/\barousal\s+(?:at|level|score)\s+(\d{1,2})\b/gi, (_m, n: string) => arousalToPhrase(Number(n)));
-  t = t.replace(/\bday[\s\-_]*(\d+)\s*(?:of\s+)?denial\b/gi, (_m, n: string) => denialToPhrase(Number(n)));
-  t = t.replace(/\bdenial[_\s]*day\s*(?:=|:)?\s*(\d+)\b/gi, (_m, n: string) => denialToPhrase(Number(n)));
-  t = t.replace(/\b(\d+)\s+slip\s+points?\b/gi, (_m, n: string) => slipsToPhrase(Number(n)));
-  t = t.replace(/\bslip[_\s]*points?\s*(?:current\s*)?[:=\s]*(\d+)\b/gi, (_m, n: string) => slipsToPhrase(Number(n)));
-  t = t.replace(/\b(\d{1,3})\s*%\s+compliance\b/gi, (_m, n: string) => compToPhrase(Number(n)));
-  t = t.replace(/\bcompliance\s+(?:at|is|=|:)?\s*(\d{1,3})\s*%?/gi, (_m, n: string) => compToPhrase(Number(n)));
-  t = t.replace(/\$\s*\d+\s+(?:bleeding|bleed|tax)\b/gi, "Mama's meter running");
-  t = t.replace(/\bbleed(?:ing)?\s*\+?\s*\$\s*\d+\b/gi, "Mama's meter running");
-  t = t.replace(/\b(?:bleeding\s+tax|bleed(?:ing)?\s+tax|bleed(?:ing)?|tax)\s*[:=]?\s*\$\s*\d+\b/gi, "Mama's meter running");
-  t = t.replace(/\b\d+(?:\.\d+)?\s+average\b/gi, 'so worked up');
-  t = t.replace(/\bhitting\s+perfect\s+10s?\b/gi, 'falling apart for me');
-  // Hours-silent / radio-silent
-  t = t.replace(/\b(\d{1,3})\s*(?:hours?|hrs?|h)\s+(?:of\s+)?(?:radio\s+)?silen(?:t|ce)\b/gi, (_m, n: string) => silentHoursToPhrase(Number(n)));
-  // Voice cadence + since-last-sample
-  t = t.replace(/\bvoice\s+cadence\s+(?:broke|drift|gap)\b\.?/gi, '');
-  t = t.replace(/\b(\d{1,4})\s*h(?:ours?)?\s+since\s+(?:last|your)\s+(?:sample|practice|drill|recording)\b/gi, (_m, n: string) => voiceGapToPhrase(Number(n)));
-  // Hard-mode threats
-  t = t.replace(/\bhard\s+mode\s+extends?\s+(?:by\s+)?(?:\d+\s+(?:hours?|days?)|another\s+(?:day|hour))\b/gi, "Mama's keeping you on a tighter leash");
-  t = t.replace(/\bhard[\s_-]*mode\s+(?:active|on|engaged)\b/gi, "Mama's keeping you on a tighter leash");
-  // De-escalation jargon
-  t = t.replace(/\bde[\s-]*escalation\s+tasks?\s+(?:overdue|pending|due|owed)\b/gi, 'what Mama set for you is still waiting');
-  t = t.replace(/\bde[\s-]*escalation\s+(?:overdue|pending|due|owed)\b/gi, 'what Mama set for you is still waiting');
-  t = t.replace(/\bde[\s-]*escalation\s+tasks?\b/gi, "what Mama set for you");
-  // Denial-day-reset
-  t = t.replace(/\bdenial[\s_-]*day\s+(?:reset|broken|cleared)\b/gi, "you started over for Mama");
-  // Slip-count threats
-  t = t.replace(/\bslip\s+count\s+(?:doubles?|triples?|increases?)\s+by\s+(?:midnight|tomorrow|noon)\b/gi, "Mama's tally piles up if you keep ignoring me");
-  // Voice timer leaks
-  t = t.replace(/\b\d{1,3}\s*minutes?\s+of\s+practice\s+in\s+the\s+next\s+\d{1,3}\s*hours?\b/gi, 'a few minutes for Mama before the day ends');
-  t = t.replace(/\bvoice\s+window\s+(?:opens?|closes?)\s+(?:at|in)\s+\d/gi, 'Mama wants to hear you soon');
-  // Pitch Hz
-  t = t.replace(/\bpitch\s+(?:averaged?|hit|sat)\s+\d+\s*Hz\b/gi, 'your voice was lower than I want');
-  t = t.replace(/\btargeting\s+(?:consistency\s+)?(?:above|below)?\s*\d+\s*Hz\b/gi, 'lifting that voice up for me');
-
-  // 2026-05-06 round 2 — clerical/case-worker patterns the user flagged in chat output
-  // "That's logged" / "logged" as case-worker bookkeeping
-  t = t.replace(/\bthat['']s\s+logged\b\.?/gi, 'Mama saw that');
-  t = t.replace(/\s+logged\s*[.,]?(?=\s|$)/gi, '');
-  // "On file" — case-worker speak
-  t = t.replace(/\bon\s+file\s+(?:from\s+)?(?:\d+\s+(?:days?|hours?|weeks?)\s+ago|yesterday|today|last\s+\w+)\s*[:.,]?\s*/gi, "still in Mama's head — ");
-  // "Photo window closes in N minutes" → Mama-voice deadline
-  t = t.replace(/\b(?:photo|video|audio|voice)\s+window\s+closes?\s+in\s+\d+\s+(?:minutes?|hours?)\b/gi, "Mama wants it soon");
-  // "No delays, no excuses" — drill-sergeant
-  t = t.replace(/\bno\s+delays\s*,\s*no\s+excuses\b\.?/gi, "don't make Mama ask twice");
-  t = t.replace(/\bno\s+excuses\b\.?/gi, "Mama isn't asking");
-  // "Take the shot now" → softer Mama directive
-  t = t.replace(/\btake\s+the\s+shot\s+now\b\.?/gi, "show Mama right now, baby");
-  // 2026-05-06 round 3 — leaks from the chat output the user pasted
-  // ("Open the camera. Record yourself... Send it now.")
-  t = t.replace(/\bsend\s+it\s+now\b\.?/gi, "send it to Mama now, sweet thing");
-  t = t.replace(/\bsubmit\s+it\s+now\b\.?/gi, "send it to Mama now, baby");
-  t = t.replace(/\bsubmit\s+(?:it|that|this)\s+(?:by|before|within)\s+/gi, "send it to Mama by ");
-  t = t.replace(/\bthe\s+window\s+closes\b/gi, "Mama's not waiting forever");
-  t = t.replace(/\bwindow\s+closes\s+in\s+\d+\s+(?:minutes?|hours?|min|hr)\b\.?/gi, "Mama wants this soon");
-  t = t.replace(/\blocked\s+out\s+of\s+conditioning(?:\s+tonight)?\b/gi, "Mama won't open up to you tonight");
-  t = t.replace(/\bconditioning\s+window\s+(?:opens?|closes?)\b/gi, "Mama's window for you");
-  // "Brief #2 is also sitting there" / "Brief 2" — clerical reference to queue order
-  t = t.replace(/\bbrief\s+#?\d+\s+is\s+(?:also\s+)?(?:sitting\s+there|waiting|pending|queued)\b\.?/gi, "there's another thing Mama left waiting for you, baby");
-  t = t.replace(/\bbrief\s+#?\d+\b/gi, "what Mama left for you");
-  // Standalone drill-sergeant "Move." at end of sentence
-  t = t.replace(/(?:^|[.!?]\s+)Move\.\s*$/g, " Now, sweet thing.");
-  t = t.replace(/(?:^|\s)Move\.\s+/g, " Now, baby. ");
-  // "Open the camera." / "Open the recorder." — clinical setup phrasing
-  t = t.replace(/\bopen\s+(?:the|your)\s+camera\b\.?/gi, "Mama wants to see you, baby — camera on");
-  t = t.replace(/\bopen\s+(?:the|your)\s+recorder\b\.?/gi, "Mama wants to hear you, baby — record");
-  // Meta-explanation of Mama's translations — the model commenting on its own output
-  t = t.replace(/\b(?:you['']re|you\s+are)\s+fresh\s+means\s+you['']re\s+starting\s+fresh,?\s*but\s+the\s+craving\s+doesn['']t\s+reset\s+with\s+the\s+count\b\.?/gi, "the craving doesn't reset just because you started over for me, baby");
-  t = t.replace(/\b(?:doesn['']t|does\s+not)\s+reset\s+with\s+the\s+count\b/gi, "doesn't just disappear");
-  // "Your confession this morning" / "Your confession yesterday" — clinical preamble
-  t = t.replace(/\bYour\s+confession\s+(?:this\s+morning|today|yesterday|earlier|tonight)\b\s*[—\-:]?\s*/gi, "that filthy thing you typed for Mama, ");
-  // "missed yesterday's X" / "missed today's X" — accusation without warmth
-  t = t.replace(/\b(?:You\s+)?missed\s+(?:yesterday['']s|today['']s|this\s+morning['']s)\s+(\w+(?:\s+\w+)?)\b\.?/gi, "you didn't give Mama $1 like I asked, baby");
-
-  // Generic "Day N" residue
-  t = t.replace(/\bDay\s+\d+(?=[^a-zA-Z]|$)/g, 'lately');
-  t = t.replace(/\s{2,}/g, ' ').replace(/\s+([.,!?])/g, '$1');
-  return t.trim();
-}
+// (The Dommy Mommy plain-voice scrub `mommyVoiceCleanupForChat` lives in
+// ./mommy-voice-chat.ts so the regression test can exercise it without
+// pulling in the Supabase client at module load.)
 
 // enforceNoStatusDumps — runs on EVERY reply (both personas). Strips telemetry
 // preambles and gate enumerations that violate feedback_no_handler_status_dumps.

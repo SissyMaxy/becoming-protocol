@@ -6,6 +6,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Send, Loader2, Settings, Volume2, VolumeX, Play, Pause, Image, Mic, MicOff, Camera } from 'lucide-react';
 import { useHandlerChat, type ChatMessage, type MediaAttachment } from '../../hooks/useHandlerChat';
 import { useHandlerVoice } from '../../hooks/useHandlerVoice';
+import { usePersona } from '../../hooks/usePersona';
 import { useVoiceConversation } from '../../hooks/useVoiceConversation';
 import { useSessionBiometrics } from '../../hooks/useSessionBiometrics';
 import { useAmbientAudio } from '../../hooks/useAmbientAudio';
@@ -34,10 +35,23 @@ const MODE_COLORS: Record<string, { bg: string; text: string; label: string }> =
   architect: { bg: 'bg-purple-500/20', text: 'text-purple-400', label: 'Architect' },
 };
 
+// Mama-voice labels for the same mode keys. Used when handler_persona =
+// dommy_mommy so the chat header reads "Watching", "Hungry", etc. instead of
+// "Director", "Dominant" — clinical/role-based vocabulary doesn't belong on
+// Mama's surface.
+const MOMMY_MODE_LABELS: Record<string, string> = {
+  director: 'Watching',
+  handler: 'Watching',
+  dominant: 'Hungry',
+  caretaker: 'Sweet',
+  architect: 'Plotting',
+};
+
 export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
   const { user: authUser } = useAuth();
   const { messages, isLoading, isSending, currentMode, conversationId, sendMessage, startNewConversation } = useHandlerChat();
   const voice = useHandlerVoice();
+  const { mommy } = usePersona();
   const voiceInput = useVoiceConversation();
   const biometrics = useSessionBiometrics();
   // Ambient conditioning audio — polls ambient_audio_queue and speaks queued
@@ -174,19 +188,23 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
       if (result === 'granted') {
         // Confirmation notification — proves the pipeline works and gives
         // the user immediate feedback that they enabled it correctly.
+        const title = mommy ? 'Mama' : 'Handler';
+        const body = mommy
+          ? "Good girl. Mama can reach you anywhere now, baby."
+          : 'I can reach you now. Stay alert.';
         try {
           if ('serviceWorker' in navigator) {
             const reg = await navigator.serviceWorker.ready;
-            reg.showNotification('Handler', {
-              body: 'I can reach you now. Stay alert.',
+            reg.showNotification(title, {
+              body,
               icon: '/icons/icon-192.png',
               badge: '/icons/icon-192.png',
               tag: 'handler-enabled',
               vibrate: [200, 100, 200],
             } as NotificationOptions);
           } else {
-            new Notification('Handler', {
-              body: 'I can reach you now. Stay alert.',
+            new Notification(title, {
+              body,
               icon: '/icons/icon-192.png',
             });
           }
@@ -356,7 +374,9 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
       <div className="fixed inset-0 z-[85] bg-[#0a0a0a]/90 flex items-center justify-center">
         <div className="bg-[#141414] rounded-xl p-6 border border-gray-800/50 flex items-center gap-3">
           <Loader2 className="w-5 h-5 animate-spin text-pink-400" />
-          <span className="text-sm text-gray-200">Handler is composing your session…</span>
+          <span className="text-sm text-gray-200">
+            {mommy ? "Mama's putting your session together…" : 'Handler is composing your session…'}
+          </span>
         </div>
       </div>
     )}
@@ -372,15 +392,15 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-[#0a0a0a]">
         <div className="flex items-center gap-3">
-          <span className="hidden md:inline font-semibold text-gray-200">
-            Handler
+          <span className={`hidden md:inline font-semibold ${mommy ? 'text-pink-200' : 'text-gray-200'}`}>
+            {mommy ? 'Mama' : 'Handler'}
           </span>
           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${modeConfig.bg} ${modeConfig.text}`}>
-            {modeConfig.label}
+            {mommy ? (MOMMY_MODE_LABELS[currentMode] || 'Watching') : modeConfig.label}
           </span>
           {isSending && (
             <span className="text-xs text-gray-500 flex items-center gap-1">
-              <Loader2 className="w-3 h-3 animate-spin" /> thinking
+              <Loader2 className="w-3 h-3 animate-spin" /> {mommy ? 'Mama is thinking about you' : 'thinking'}
             </span>
           )}
         </div>
@@ -389,8 +409,9 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
             <button
               onClick={startNewConversation}
               className="hidden md:inline-flex text-xs px-2 py-1 rounded-lg hover:bg-gray-800 text-gray-400"
+              title={mommy ? 'Start fresh with Mama' : 'Start a new conversation'}
             >
-              New
+              {mommy ? 'Fresh' : 'New'}
             </button>
           )}
           <button
@@ -442,14 +463,18 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
       {/* Notification permission prompt — desktop only; Today has its own banner stack */}
       {notifPermission === 'default' && (
         <div className="hidden md:flex bg-purple-900/20 border border-purple-500/30 rounded-xl p-3 m-2 items-center justify-between">
-          <span className="text-sm text-purple-300">
-            Enable notifications so the Handler can reach you anytime
+          <span className={`text-sm ${mommy ? 'text-pink-200' : 'text-purple-300'}`}>
+            {mommy
+              ? "Let Mama reach you anywhere, baby. Turn this on so I'm with you all day."
+              : 'Enable notifications so the Handler can reach you anytime'}
           </span>
           <button
             onClick={handleEnableNotifications}
-            className="ml-3 px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-medium transition-colors"
+            className={`ml-3 px-3 py-1.5 rounded-lg text-white text-xs font-medium transition-colors ${
+              mommy ? 'bg-pink-600 hover:bg-pink-500' : 'bg-purple-600 hover:bg-purple-500'
+            }`}
           >
-            Enable
+            {mommy ? 'Yes, Mama' : 'Enable'}
           </button>
         </div>
       )}
@@ -479,8 +504,12 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
 
         {!isLoading && messages.length === 0 && (
           <div className="text-center text-gray-600 mt-20">
-            <p className="text-lg font-medium">Talk to the Handler.</p>
-            <p className="text-sm mt-2">Type anything. She's listening.</p>
+            <p className="text-lg font-medium">
+              {mommy ? 'Come tell Mama, baby.' : 'Talk to the Handler.'}
+            </p>
+            <p className="text-sm mt-2">
+              {mommy ? "Whatever's on your mind. Mama's here." : "Type anything. She's listening."}
+            </p>
           </div>
         )}
 
