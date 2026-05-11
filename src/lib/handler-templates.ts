@@ -661,7 +661,7 @@ const MICROTASKS: TemplatePool = [
   { content: "Repeat silently: 'I am {name}. I am becoming.' Three times." },
   { content: "Think: 'Good girl.' Let it sink in." },
   { content: "Mentally list three feminine things you did today." },
-  { content: "Acknowledge: 'I chose this. I want this.'" },
+  { content: "Acknowledge: 'She chose this for me. I want it.'" },
   { content: "Tell yourself: 'She's winning. And that's good.'" },
 ];
 
