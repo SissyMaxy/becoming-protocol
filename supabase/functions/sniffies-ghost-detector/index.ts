@@ -106,15 +106,12 @@ Deno.serve(async (req: Request) => {
         contact_id: c.id,
         contact_display_name: c.display_name,
         outcomes: c.outcomes,
-        // last_seen lets the slip card render context without needing
-        // to re-read the contact row.
         last_seen_at: c.last_seen_at,
-        // Source label so the slip → outreach pipeline can render
-        // sniffies-flavored copy if it wants.
         slip_source: 'sniffies_ghost',
       },
       triggered_hard_mode: false,
       handler_acknowledged: false,
+      is_synthetic: true,
     }))
 
   if (newSlips.length === 0) {

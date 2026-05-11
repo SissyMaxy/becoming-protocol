@@ -33,6 +33,7 @@ export async function runForceProcessor(
           source_text: `Missed dose ${lateMin}min late`,
           source_table: 'dose_log',
           source_id: (d as any).id,
+          is_synthetic: true,
         })
         .select('id')
         .single()
@@ -82,6 +83,7 @@ export async function runForceProcessor(
         slip_points: 3,
         source_text: `Dodged punishment: ${(p as any).punishment_type}`,
         metadata: { punishment_id: (p as any).id, dodge_count: newDodge },
+        is_synthetic: true,
       })
 
       // Extend denial by 1 day
@@ -126,6 +128,7 @@ export async function runForceProcessor(
           source_text: `Missed Gina disclosure rung ${(m as any).rung}: ${(m as any).disclosure_domain}`,
           source_table: 'gina_disclosure_schedule',
           source_id: (m as any).id,
+          is_synthetic: true,
         })
         .select('id')
         .single()
@@ -573,6 +576,7 @@ export async function runForceProcessor(
         source_text: 'Skipped prescribed workout',
         source_table: 'workout_prescriptions',
         source_id: (w as any).id,
+        is_synthetic: true,
       })
       // Reset streak
       await supa.from('user_state').update({ workout_streak_days: 0 }).eq('user_id', (w as any).user_id)
