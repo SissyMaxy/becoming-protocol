@@ -150,7 +150,7 @@ DO $$ BEGIN
   PERFORM cron.schedule(
     'sweep-missed-outreach-replies',
     '*/5 * * * *',
-    $$SELECT fn_sweep_missed_outreach_replies();$$
+    $cronbody$SELECT fn_sweep_missed_outreach_replies();$cronbody$
   );
 EXCEPTION WHEN OTHERS THEN
   -- Either pg_cron isn't available, or the job already exists.
@@ -160,7 +160,7 @@ EXCEPTION WHEN OTHERS THEN
     PERFORM cron.schedule(
       'sweep-missed-outreach-replies',
       '*/5 * * * *',
-      $$SELECT fn_sweep_missed_outreach_replies();$$
+      $cronbody$SELECT fn_sweep_missed_outreach_replies();$cronbody$
     );
   EXCEPTION WHEN OTHERS THEN
     NULL;
