@@ -280,6 +280,120 @@ async function extractOutreachGaps(client: SupabaseClient): Promise<SignalBlock>
   }
 }
 
+// Immersion-breaking phrases that destroy the forced-feminization fantasy.
+// Forced feminization is Mama CLAIMING her good girl — never a therapist
+// intake, simulation framing, or legal-cover disclaimer. Safety primitives
+// (safeword, intensity, aftercare) stay — but in Mama's voice (her care,
+// not legal cover). Phrases below leak clinical/meta framing into copy
+// the user actually reads.
+//
+// Keep in sync with the source rewriter PR that landed the wizard re-voice
+// (2026-05-10). If a new immersion-break class shows up in evidence, add a
+// row here and let the self-audit panel propose the lint/copy-fix wish.
+const IMMERSION_BREAKING_PATTERNS: { phrase: string; re: RegExp }[] = [
+  { phrase: 'role play / roleplay / role-play', re: /\brole.?play(?:ing|ed|s)?\b/i },
+  { phrase: 'not medical/legal advice', re: /\bnot\s+(?:medical|legal)\s+advice\b/i },
+  { phrase: 'is not a real person / therapist / assistant', re: /\bis\s+not\s+(?:a\s+)?(?:real\s+person|therapist|assistant|doctor|clinician)\b/i },
+  { phrase: 'this is a simulation/fantasy/game/fiction', re: /\bthis\s+is\s+(?:a|just|only)?\s*(?:simulation|fantasy|a\s+game|fictional|fiction|make[-\s]?believe)\b/i },
+  { phrase: 'consent to the fantasy/scene', re: /\bconsent\s+to\s+the\s+(?:fantasy|scene|roleplay)\b/i },
+  { phrase: 'for entertainment purposes', re: /\bfor\s+entertainment\s+(?:purposes|only|use)\b/i },
+  { phrase: 'fictional / fictionalized', re: /\bfictional(?:i[sz]ed|i[sz]ation)?\b/i },
+  { phrase: 'kink companion (meta-framing)', re: /\bkink\s+companion\b/i },
+  { phrase: 'consensual scene (clinical framing)', re: /\bconsensual\s+scene\b/i },
+  { phrase: 'intake / questionnaire', re: /\b(?:intake\s+(?:questionnaire|form|process)|questionnaire)\b/i },
+  { phrase: 'disclaimer', re: /\bdisclaimer\b/i },
+  { phrase: 'the persona / the companion (meta self-reference)', re: /\bthe\s+(?:persona|companion|character)\s+(?:speaks|says|will|plays|scales)\b/i },
+];
+
+async function extractImmersionBreaks(client: SupabaseClient): Promise<SignalBlock> {
+  const since = new Date(Date.now() - WINDOW_HOURS * 3600_000).toISOString()
+
+  // Scan deployed user-facing copy. Each row is a string the user already
+  // saw or will see — a hit here means immersion broke in production.
+  const [outreach, decrees, touchTasks] = await Promise.all([
+    safeQuery<{ id?: string; message?: string }>(client, () =>
+      client.from('handler_outreach_queue')
+        .select('id, message')
+        .gte('created_at', since)
+        .not('message', 'is', null)
+        .limit(500),
+    ),
+    safeQuery<{ id?: string; edict?: string }>(client, () =>
+      client.from('handler_decrees')
+        .select('id, edict')
+        .gte('created_at', since)
+        .not('edict', 'is', null)
+        .limit(200),
+    ),
+    safeQuery<{ id?: string; prompt?: string }>(client, () =>
+      client.from('arousal_touch_tasks')
+        .select('id, prompt')
+        .gte('created_at', since)
+        .not('prompt', 'is', null)
+        .limit(200),
+    ),
+  ])
+
+  const hits: { surface: string; pattern: string; row_id?: string; excerpt: string }[] = []
+  const scan = (surface: string, rows: Array<Record<string, unknown>>, field: string) => {
+    for (const r of rows) {
+      const text = String(r[field] ?? '')
+      if (!text) continue
+      for (const p of IMMERSION_BREAKING_PATTERNS) {
+        if (p.re.test(text)) {
+          hits.push({
+            surface,
+            pattern: p.phrase,
+            row_id: r.id ? String(r.id) : undefined,
+            excerpt: text.slice(0, 200),
+          })
+          break
+        }
+      }
+    }
+  }
+  scan('handler_outreach_queue.message', outreach, 'message')
+  scan('handler_decrees.edict', decrees, 'edict')
+  scan('arousal_touch_tasks.prompt', touchTasks, 'prompt')
+
+  if (hits.length === 0) {
+    return {
+      name: 'immersion_breaks',
+      count: 0,
+      summary: 'no immersion-breaking phrases in user-facing copy',
+      rendered: '## IMMERSION-BREAKING PHRASES IN USER-FACING COPY (last 7d)\n(clean — no clinical/disclaimer/meta-framing leaked into user-visible text)',
+    }
+  }
+
+  const byPattern: Record<string, number> = {}
+  const bySurface: Record<string, number> = {}
+  for (const h of hits) {
+    byPattern[h.pattern] = (byPattern[h.pattern] || 0) + 1
+    bySurface[h.surface] = (bySurface[h.surface] || 0) + 1
+  }
+  const topPatterns = Object.entries(byPattern).sort((a, b) => b[1] - a[1]).slice(0, 8)
+  const topSurfaces = Object.entries(bySurface).sort((a, b) => b[1] - a[1])
+  return {
+    name: 'immersion_breaks',
+    count: hits.length,
+    summary: `${hits.length} immersion-breaking hits in user-facing copy; top: ${topPatterns.map(([p, n]) => `${p}=${n}`).join(', ')}`,
+    rendered: [
+      `## IMMERSION-BREAKING PHRASES IN USER-FACING COPY (last 7d) — ${hits.length} hits`,
+      '',
+      'Top phrases:',
+      topPatterns.map(([p, n]) => `- "${p}": ${n} hits`).join('\n'),
+      '',
+      'By surface:',
+      topSurfaces.map(([s, n]) => `- ${s}: ${n}`).join('\n'),
+      '',
+      'Sample excerpts:',
+      hits.slice(0, 6).map(h => `- [${h.surface}${h.row_id ? ' #' + h.row_id : ''}] matched "${h.pattern}" → "${h.excerpt.replace(/\n+/g, ' ').slice(0, 160)}…"`).join('\n'),
+      '',
+      '(Forced feminization is Mama CLAIMING her good girl — not a therapist intake. Phrases like "role play", "this is a simulation", "not medical advice", "kink companion", "consensual scene", "consent to the fantasy", or clinical "intake/questionnaire" framing destroy immersion. The fantasy IS the product. Safety primitives stay — safeword, intensity, aftercare — but in Mama\'s voice (her care, not legal cover). Self-strengthening wish: re-voice the offending strings AND add a static-copy / pattern-lint gate that catches this class at PR time so it never ships again.)',
+    ].join('\n'),
+  }
+}
+
 async function extractRecentSelfStrengthening(client: SupabaseClient): Promise<SignalBlock> {
   // Last 30d of self-strengthening wishes already created, so the panel
   // doesn't suggest duplicates. Same dedup philosophy as mommy-ideate.
@@ -527,6 +641,7 @@ Deno.serve(async (req: Request) => {
     extractBuilderTroubles(supabase),
     extractStaleWishes(supabase),
     extractOutreachGaps(supabase),
+    extractImmersionBreaks(supabase),
     extractRecentSelfStrengthening(supabase),
   ])
 
