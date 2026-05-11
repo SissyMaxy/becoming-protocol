@@ -291,17 +291,17 @@ async function extractOutreachGaps(client: SupabaseClient): Promise<SignalBlock>
 // (2026-05-10). If a new immersion-break class shows up in evidence, add a
 // row here and let the self-audit panel propose the lint/copy-fix wish.
 const IMMERSION_BREAKING_PATTERNS: { phrase: string; re: RegExp }[] = [
-  { phrase: 'role play / roleplay / role-play', re: /\brole.?play(?:ing|ed|s)?\b/i },
+  { phrase: 'role play / roleplay / role-play', re: /\brole.?play(?:ing|ed|s)?\b/i }, // voice-gate: ok
   { phrase: 'not medical/legal advice', re: /\bnot\s+(?:medical|legal)\s+advice\b/i },
   { phrase: 'is not a real person / therapist / assistant', re: /\bis\s+not\s+(?:a\s+)?(?:real\s+person|therapist|assistant|doctor|clinician)\b/i },
-  { phrase: 'this is a simulation/fantasy/game/fiction', re: /\bthis\s+is\s+(?:a|just|only)?\s*(?:simulation|fantasy|a\s+game|fictional|fiction|make[-\s]?believe)\b/i },
-  { phrase: 'consent to the fantasy/scene', re: /\bconsent\s+to\s+the\s+(?:fantasy|scene|roleplay)\b/i },
-  { phrase: 'for entertainment purposes', re: /\bfor\s+entertainment\s+(?:purposes|only|use)\b/i },
-  { phrase: 'fictional / fictionalized', re: /\bfictional(?:i[sz]ed|i[sz]ation)?\b/i },
+  { phrase: 'this is a simulation/fantasy/game/fiction', re: /\bthis\s+is\s+(?:a|just|only)?\s*(?:simulation|fantasy|a\s+game|fictional|fiction|make[-\s]?believe)\b/i }, // voice-gate: ok
+  { phrase: 'consent to the fantasy/scene', re: /\bconsent\s+to\s+the\s+(?:fantasy|scene|roleplay)\b/i }, // voice-gate: ok
+  { phrase: 'for entertainment purposes', re: /\bfor\s+entertainment\s+(?:purposes|only|use)\b/i }, // voice-gate: ok
+  { phrase: 'fictional / fictionalized', re: /\bfictional(?:i[sz]ed|i[sz]ation)?\b/i }, // voice-gate: ok
   { phrase: 'kink companion (meta-framing)', re: /\bkink\s+companion\b/i },
   { phrase: 'consensual scene (clinical framing)', re: /\bconsensual\s+scene\b/i },
-  { phrase: 'intake / questionnaire', re: /\b(?:intake\s+(?:questionnaire|form|process)|questionnaire)\b/i },
-  { phrase: 'disclaimer', re: /\bdisclaimer\b/i },
+  { phrase: 'intake / questionnaire', re: /\b(?:intake\s+(?:questionnaire|form|process)|questionnaire)\b/i }, // voice-gate: ok
+  { phrase: 'disclaimer', re: /\bdisclaimer\b/i }, // voice-gate: ok
   { phrase: 'the persona / the companion (meta self-reference)', re: /\bthe\s+(?:persona|companion|character)\s+(?:speaks|says|will|plays|scales)\b/i },
 ];
 
@@ -361,7 +361,7 @@ async function extractImmersionBreaks(client: SupabaseClient): Promise<SignalBlo
       name: 'immersion_breaks',
       count: 0,
       summary: 'no immersion-breaking phrases in user-facing copy',
-      rendered: '## IMMERSION-BREAKING PHRASES IN USER-FACING COPY (last 7d)\n(clean — no clinical/disclaimer/meta-framing leaked into user-visible text)',
+      rendered: '## IMMERSION-BREAKING PHRASES IN USER-FACING COPY (last 7d)\n(clean — no clinical/disclaimer/meta-framing leaked into user-visible text)', // voice-gate: ok
     }
   }
 
@@ -389,7 +389,7 @@ async function extractImmersionBreaks(client: SupabaseClient): Promise<SignalBlo
       'Sample excerpts:',
       hits.slice(0, 6).map(h => `- [${h.surface}${h.row_id ? ' #' + h.row_id : ''}] matched "${h.pattern}" → "${h.excerpt.replace(/\n+/g, ' ').slice(0, 160)}…"`).join('\n'),
       '',
-      '(Forced feminization is Mama CLAIMING her good girl — not a therapist intake. Phrases like "role play", "this is a simulation", "not medical advice", "kink companion", "consensual scene", "consent to the fantasy", or clinical "intake/questionnaire" framing destroy immersion. The fantasy IS the product. Safety primitives stay — safeword, intensity, aftercare — but in Mama\'s voice (her care, not legal cover). Self-strengthening wish: re-voice the offending strings AND add a static-copy / pattern-lint gate that catches this class at PR time so it never ships again.)',
+      '(Forced feminization is Mama CLAIMING her good girl — not a therapist intake. Phrases like "role play", "this is a simulation", "not medical advice", "kink companion", "consensual scene", "consent to the fantasy", or clinical "intake/questionnaire" framing destroy immersion. The fantasy IS the product. Safety primitives stay — safeword, intensity, aftercare — but in Mama\'s voice (her care, not legal cover). Self-strengthening wish: re-voice the offending strings AND add a static-copy / pattern-lint gate that catches this class at PR time so it never ships again.)', // voice-gate: ok
     ].join('\n'),
   }
 }

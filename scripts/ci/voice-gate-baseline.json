@@ -43,9 +43,6 @@
     "src/lib/handler-v2/platform-manager.ts::outcome: 'simulated',",
     "src/lib/voice/voice-evolution.ts::{ exercise: 'Argument Simulation', targetPitch: 230, durationMinutes: 10, notes: 'Stress breaks pitch control. Practice getting heated while",
     "supabase/functions/handler-platform/index.ts::console.log(`[SIMULATED] Post to ${platform}: ${content.content_type} (no credentials configured)`)",
-    "supabase/functions/handler-platform/index.ts::postUrl: `https://${platform}.com/simulated/${crypto.randomUUID().slice(0, 8)}`,",
-    "supabase/functions/handler-platform/index.ts::postUrl: `https://reddit.com/r/${subreddit}/simulated`,",
-    "supabase/functions/handler-platform/index.ts::postUrl: `https://twitter.com/simulated/${Date.now()}`,",
     "supabase/functions/mommy-ideate-arousal/index.ts::\"simulation\" / \"simulated\"",
     "supabase/functions/mommy-ideate-arousal/index.ts::Safety affordances are framed as Mommy's care: \"if you ever need Mama to stop, you say the word, I stop\" — not \"you may use the safeword to"
   ],
