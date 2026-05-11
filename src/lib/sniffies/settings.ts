@@ -4,7 +4,7 @@ import { DEFAULT_SNIFFIES_SETTINGS, SniffiesSettings } from './types';
 export async function loadSniffiesSettings(userId: string): Promise<SniffiesSettings> {
   const { data, error } = await supabase
     .from('sniffies_settings')
-    .select('sniffies_integration_enabled, persona_use_enabled, dares_use_enabled, slip_use_enabled')
+    .select('sniffies_integration_enabled, persona_use_enabled, dares_use_enabled, slip_use_enabled, auto_react_enabled')
     .eq('user_id', userId)
     .maybeSingle();
   if (error) {
@@ -12,11 +12,16 @@ export async function loadSniffiesSettings(userId: string): Promise<SniffiesSett
     return { ...DEFAULT_SNIFFIES_SETTINGS };
   }
   if (!data) return { ...DEFAULT_SNIFFIES_SETTINGS };
+  const row = data as Record<string, unknown>;
   return {
-    sniffies_integration_enabled: !!(data as Record<string, unknown>).sniffies_integration_enabled,
-    persona_use_enabled: !!(data as Record<string, unknown>).persona_use_enabled,
-    dares_use_enabled: !!(data as Record<string, unknown>).dares_use_enabled,
-    slip_use_enabled: !!(data as Record<string, unknown>).slip_use_enabled,
+    sniffies_integration_enabled: !!row.sniffies_integration_enabled,
+    persona_use_enabled: !!row.persona_use_enabled,
+    dares_use_enabled: !!row.dares_use_enabled,
+    slip_use_enabled: !!row.slip_use_enabled,
+    // Default TRUE when the column is missing/null (legacy rows + migration 367 backfill).
+    auto_react_enabled: row.auto_react_enabled === null || row.auto_react_enabled === undefined
+      ? true
+      : !!row.auto_react_enabled,
   };
 }
 

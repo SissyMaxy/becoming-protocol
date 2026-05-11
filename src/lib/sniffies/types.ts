@@ -24,6 +24,10 @@ export interface SniffiesSettings {
   persona_use_enabled: boolean;
   dares_use_enabled: boolean;
   slip_use_enabled: boolean;
+  // "Pause Mama" lever — when FALSE, the dispatcher skips even if every
+  // other gate is on. Lets the user import without firing real-time
+  // reactions. Defaults TRUE per migration 367.
+  auto_react_enabled: boolean;
 }
 
 export const DEFAULT_SNIFFIES_SETTINGS: SniffiesSettings = {
@@ -31,6 +35,7 @@ export const DEFAULT_SNIFFIES_SETTINGS: SniffiesSettings = {
   persona_use_enabled: false,
   dares_use_enabled: false,
   slip_use_enabled: false,
+  auto_react_enabled: true,
 };
 
 export interface SniffiesContact {
