@@ -8,7 +8,8 @@
     "src/lib/protocol-core/modules/partner-module.ts::celebration: \"Good girl. ${meetupCount} meetups with ${partnerAlias}. This isn't roleplay anymore. This is your life. And you're living it.\"",
     "src/types/arousal.ts::roleplay: { label: 'Roleplay', emoji: '🎭' },",
     "src/types/arousal.ts::| 'roleplay'",
-    "src/types/sexting.ts::communication_style: 'brief' | 'chatty' | 'roleplay' | 'transactional';"
+    "src/types/sexting.ts::communication_style: 'brief' | 'chatty' | 'roleplay' | 'transactional';",
+    "supabase/functions/mommy-ideate-arousal/index.ts::\"role play\" / \"roleplay\" / \"role-play\""
   ],
   "intake": [
     "api/handler/_lib/chat-action.ts::console.error('[HRT] Intake auto-draft failed:', draftErr);",
@@ -33,7 +34,8 @@
     "src/components/today-redesign/IrreversibilityLedger.tsx::appointment_booked: 'Appointment', intake_submitted: 'Intake', prescription_filled: 'Rx',",
     "src/components/today-redesign/useTodayData.ts::intake_submitted: 'Intake submitted',",
     "src/data/weekend-activities.ts::feminizationBenefit: 'Phytoestrogen intake, domestic femininity',",
-    "src/lib/task-bank.ts::- \"log_entry\" — asks for SPECIFIC DATA: numbers, ratings, intake reports, check-ins with multiple fields. STRUCTURED FORM. Must also include"
+    "src/lib/task-bank.ts::- \"log_entry\" — asks for SPECIFIC DATA: numbers, ratings, intake reports, check-ins with multiple fields. STRUCTURED FORM. Must also include",
+    "supabase/functions/mommy-ideate-arousal/index.ts::\"intake\" / \"questionnaire\""
   ],
   "simulation": [
     "src/lib/handler-conditioning.ts::surfaceContent: ['technique training', 'toy progression', 'oral simulation'],",
@@ -43,13 +45,31 @@
     "supabase/functions/handler-platform/index.ts::console.log(`[SIMULATED] Post to ${platform}: ${content.content_type} (no credentials configured)`)",
     "supabase/functions/handler-platform/index.ts::postUrl: `https://${platform}.com/simulated/${crypto.randomUUID().slice(0, 8)}`,",
     "supabase/functions/handler-platform/index.ts::postUrl: `https://reddit.com/r/${subreddit}/simulated`,",
-    "supabase/functions/handler-platform/index.ts::postUrl: `https://twitter.com/simulated/${Date.now()}`,"
+    "supabase/functions/handler-platform/index.ts::postUrl: `https://twitter.com/simulated/${Date.now()}`,",
+    "supabase/functions/mommy-ideate-arousal/index.ts::\"simulation\" / \"simulated\"",
+    "supabase/functions/mommy-ideate-arousal/index.ts::Safety affordances are framed as Mommy's care: \"if you ever need Mama to stop, you say the word, I stop\" — not \"you may use the safeword to"
   ],
   "questionnaire": [
-    "supabase/functions/hrt-booking-worker/index.ts::instruction_for_mama: `An HRT-push moment is open right now (signal: ${opp.reason}). Maxy is at booking-step \"${opp.current_step}\"; Mama wan"
+    "supabase/functions/hrt-booking-worker/index.ts::instruction_for_mama: `An HRT-push moment is open right now (signal: ${opp.reason}). Maxy is at booking-step \"${opp.current_step}\"; Mama wan",
+    "supabase/functions/mommy-ideate-arousal/index.ts::\"intake\" / \"questionnaire\""
   ],
   "fiction": [
     "src/components/Intake/layers/ArousalLayer.tsx::'Erotic fiction',",
-    "src/lib/protocol-core/modules/findom-module.ts::\"Men don't pay for fiction. They pay for power. You have ${activePigs} men paying regularly.\","
+    "src/lib/protocol-core/modules/findom-module.ts::\"Men don't pay for fiction. They pay for power. You have ${activePigs} men paying regularly.\",",
+    "supabase/functions/mommy-ideate-arousal/index.ts::\"fiction\" / \"fictional\""
+  ],
+  "not-medical-advice": [
+    "supabase/functions/mommy-ideate-arousal/index.ts::\"not medical advice\""
+  ],
+  "disclaimer": [
+    "supabase/functions/mommy-ideate-arousal/index.ts::\"disclaimer\"",
+    "supabase/functions/mommy-ideate-arousal/index.ts::\"premise\": \"<one paragraph in Mommy's voice describing what the user experiences. This MUST follow the voice floors above — no clinical/disc",
+    "supabase/functions/mommy-ideate-arousal/index.ts::Output JSON: { \"features\": [...] }. Aim for 8-12 features. Be horny in the persona's voice when writing voice_check_sample, operationally pr"
+  ],
+  "for-entertainment": [
+    "supabase/functions/mommy-ideate-arousal/index.ts::\"for entertainment\""
+  ],
+  "consent-to-fantasy": [
+    "supabase/functions/mommy-ideate-arousal/index.ts::\"consent to the fantasy\""
   ]
 }
