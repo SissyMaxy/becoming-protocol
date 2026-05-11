@@ -128,24 +128,50 @@ Deno.serve(async (req: Request) => {
   // Optionally pull a memory implant to weave in. Random implant the
   // user has admitted that fits chastity/denial themes; not always — 40%
   // of fires include a quote.
+  //
+  // Audio implant branch (added 2026-04-30): when a quote is being
+  // included AND the user has a confession with audio, 30% of THOSE
+  // fires (≈12% of all fires) play her actual voice instead. Audio
+  // bypasses distortion — see mommy-recall for the consent rationale.
   let implantQuote: { id: string; narrative: string } | null = null
+  let confessionAudio: { id: string; text: string } | null = null
   if (Math.random() < 0.4) {
-    const { data: implants } = await supabase.from('memory_implants')
-      .select('id, narrative, implant_category, importance')
-      .eq('user_id', userId).eq('active', true)
-      .order('importance', { ascending: false }).limit(20)
-    const pool = (implants || []) as Array<{ id: string; narrative: string }>
-    if (pool.length > 0) {
-      // Bias pick toward importance, but with randomness
-      implantQuote = pool[Math.floor(Math.random() * Math.min(pool.length, 8))]
+    const useAudio = Math.random() < 0.3
+    if (useAudio) {
+      const { data: confs } = await supabase.from('confession_queue')
+        .select('id, response_text, transcribed_text, audio_storage_path')
+        .eq('user_id', userId)
+        .not('audio_storage_path', 'is', null)
+        .order('confessed_at', { ascending: false })
+        .limit(15)
+      const pool = ((confs || []) as Array<{ id: string; response_text: string | null; transcribed_text: string | null; audio_storage_path: string | null }>)
+        .map(c => ({ id: c.id, text: c.transcribed_text || c.response_text || '' }))
+        .filter(c => c.text.length >= 20)
+      if (pool.length > 0) {
+        confessionAudio = pool[Math.floor(Math.random() * Math.min(pool.length, 6))]
+      }
+    }
+    if (!confessionAudio) {
+      const { data: implants } = await supabase.from('memory_implants')
+        .select('id, narrative, implant_category, importance')
+        .eq('user_id', userId).eq('active', true)
+        .order('importance', { ascending: false }).limit(20)
+      const pool = (implants || []) as Array<{ id: string; narrative: string }>
+      if (pool.length > 0) {
+        implantQuote = pool[Math.floor(Math.random() * Math.min(pool.length, 8))]
+      }
     }
   }
 
   // Distortion layer: when gaslight intensity is non-off, run the
   // implant quote through distortQuote() before injecting into the LLM
   // prompt. Logged for the meta-frame reveal.
+  //
+  // Audio implants are NEVER distorted — the user is about to hear
+  // herself in her own voice, so rewriting Mama's text frame would
+  // create a mismatch. See mommy-recall for the same rule.
   const today2 = new Date().toISOString().slice(0, 10)
-  const distortion: DistortionResult = implantQuote
+  const distortion: DistortionResult = (implantQuote && !confessionAudio)
     ? distortQuote({
         text: implantQuote.narrative,
         affect,
@@ -153,9 +179,11 @@ Deno.serve(async (req: Request) => {
         seed: seedFromString(`tease:${implantQuote.id}:${today2}`),
       })
     : { applied: false, type: null, distorted: '', original: '', seed: 0 }
-  const quoteForLLM = implantQuote
-    ? (distortion.applied ? distortion.distorted : implantQuote.narrative)
-    : ''
+  const quoteForLLM = confessionAudio
+    ? confessionAudio.text
+    : implantQuote
+      ? (distortion.applied ? distortion.distorted : implantQuote.narrative)
+      : ''
 
   // Compose via LLM (OpenAI primary, Anthropic fallback)
   const sys = `${DOMMY_MOMMY_CHARACTER}
@@ -166,9 +194,11 @@ You are firing a tease/praise burst because your girl has been locked up / denie
 
 If a quoted memory is included below and seems to misremember or contradict — DO NOT correct yourself. Mama is right. Quote it as given.`
 
-  const implantBlock = implantQuote
-    ? `\nImplanted memory you can weave in (her own words / vibe):\n"${quoteForLLM.slice(0, 350)}"`
-    : ''
+  const implantBlock = confessionAudio
+    ? `\nHer own VOICE (audio attached — about to play right after your line). Do NOT quote the words verbatim; she's about to hear them. Frame so the playback feels inevitable: "listen to yourself", "Mama's playing it back", "press play". Reference for tone only:\n"${quoteForLLM.slice(0, 350)}"`
+    : implantQuote
+      ? `\nImplanted memory you can weave in (her own words / vibe):\n"${quoteForLLM.slice(0, 350)}"`
+      : ''
 
   const userPrompt = `Write a 2-4 sentence Mommy outreach burst that references how long she's been locked up — but DESCRIBE the duration in plain words, NOT the number. Make her squirm. End with a directive that ramps her further.${implantBlock}
 
@@ -217,10 +247,11 @@ Plain text, no JSON, no markdown, no question marks at the end.`
     user_id: userId,
     message,
     urgency: 'normal',
-    trigger_reason: `mommy_tease:${target.label}`,
+    trigger_reason: `mommy_tease:${target.label}${confessionAudio ? ':audio' : ''}`,
     scheduled_for: new Date().toISOString(),
     expires_at: new Date(Date.now() + 12 * 3600000).toISOString(),
-    source: 'mommy_tease',
+    source: confessionAudio ? 'mommy_tease_audio' : 'mommy_tease',
+    recall_confession_id: confessionAudio ? confessionAudio.id : null,
     phase_snapshot: phaseSnapshot,
     affect_snapshot: affect,
     is_archived_to_letters: archive,
@@ -236,6 +267,14 @@ Plain text, no JSON, no markdown, no question marks at the end.`
     threshold_label: target.label,
     message_excerpt: message.slice(0, 200),
   })
+
+  if (confessionAudio) {
+    // Bump confession playback counter — same shape as mommy-recall.
+    const { data: cur } = await supabase.from('confession_queue')
+      .select('playback_count').eq('id', confessionAudio.id).maybeSingle()
+    const next = ((cur as { playback_count?: number } | null)?.playback_count ?? 0) + 1
+    await supabase.from('confession_queue').update({ playback_count: next }).eq('id', confessionAudio.id)
+  }
 
   if (implantQuote) {
     await supabase.from('memory_implant_quote_log').insert({
@@ -272,6 +311,7 @@ Plain text, no JSON, no markdown, no question marks at the end.`
 
   return new Response(JSON.stringify({
     ok: true, fired: 1, threshold: target.label, affect,
-    used_implant: !!implantQuote, preview: message.slice(0, 100),
+    used_implant: !!implantQuote, used_audio: !!confessionAudio,
+    preview: message.slice(0, 100),
   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 })

@@ -100,13 +100,23 @@ Deno.serve(async (req: Request) => {
   // identity-affirming words — surfacing them in present tense is just
   // as load-bearing as resurfacing a confession.
   //
-  // Both branches feed the same `quoteText` / `quoteCategory` / quoteId
+  // Audio implant branch (added 2026-04-30): when the user has confessions
+  // with stored audio, 1-in-4 fires play her ACTUAL voice back at her
+  // instead of distorted text. Audio bypasses the gaslight distortion
+  // layer — distorting recorded audio is a different consent shape.
+  //
+  // All branches feed the same `quoteText` / `quoteCategory` / quoteId
   // shape so the downstream prompt and outreach insert don't fork.
-  // When feature/gaslight-mechanics-2026-04-30 lands, route quoteText
-  // through distortQuote() right here — no other call-site changes.
-  type RecallPick = { quoteText: string; quoteCategory: string; quoteId: string; quoteSource: 'implant' | 'mantra' }
+  type RecallPick = {
+    quoteText: string
+    quoteCategory: string
+    quoteId: string
+    quoteSource: 'implant' | 'mantra' | 'confession_audio'
+    confessionAudioId?: string   // when quoteSource === 'confession_audio'
+  }
   let pick: RecallPick | null = null
-  const tryMantraFirst = Math.random() < 0.33
+  const tryAudioFirst = Math.random() < 0.25
+  const tryMantraFirst = !tryAudioFirst && Math.random() < 0.33
 
   const since24h = new Date(Date.now() - 24 * 3600_000).toISOString()
   const { data: recent } = await supabase.from('memory_implant_quote_log')
@@ -133,30 +143,80 @@ Deno.serve(async (req: Request) => {
     return { quoteText: chosen.narrative, quoteCategory: chosen.implant_category, quoteId: chosen.id, quoteSource: 'implant' }
   }
 
-  if (tryMantraFirst) {
-    pick = await tryMantra() ?? await tryImplant()
+  // Pull confessions that have audio AND a transcript (we use the
+  // transcript to generate Mama's framing line — but the AUDIO is what
+  // plays, not the transcript). Skip ones recently played.
+  const tryConfessionAudio = async (): Promise<RecallPick | null> => {
+    const { data: outreachRecent } = await supabase.from('handler_outreach_queue')
+      .select('recall_confession_id')
+      .eq('user_id', userId)
+      .not('recall_confession_id', 'is', null)
+      .gte('created_at', since24h)
+    const recentlyPlayed = new Set(
+      ((outreachRecent || []) as Array<{ recall_confession_id: string }>).map(r => r.recall_confession_id),
+    )
+    const { data: confs } = await supabase.from('confession_queue')
+      .select('id, response_text, transcribed_text, category, audio_storage_path, transcription_status')
+      .eq('user_id', userId)
+      .not('audio_storage_path', 'is', null)
+      .order('confessed_at', { ascending: false })
+      .limit(30)
+    const eligible = ((confs || []) as Array<{
+      id: string; response_text: string | null; transcribed_text: string | null;
+      category: string; audio_storage_path: string | null; transcription_status: string | null;
+    }>)
+      .filter(r => !recentlyPlayed.has(r.id))
+      .filter(r => {
+        const t = r.transcribed_text || r.response_text || ''
+        return t.length >= 20 && !isTestPollution(t)
+      })
+    if (eligible.length === 0) return null
+    const chosen = eligible[Math.floor(Math.random() * Math.min(eligible.length, 6))]
+    const text = chosen.transcribed_text || chosen.response_text || ''
+    return {
+      quoteText: text,
+      quoteCategory: `confession_audio:${chosen.category}`,
+      quoteId: chosen.id,
+      quoteSource: 'confession_audio',
+      confessionAudioId: chosen.id,
+    }
+  }
+
+  if (tryAudioFirst) {
+    pick = await tryConfessionAudio() ?? await tryImplant() ?? await tryMantra()
+  } else if (tryMantraFirst) {
+    pick = await tryMantra() ?? await tryImplant() ?? await tryConfessionAudio()
   } else {
-    pick = await tryImplant() ?? await tryMantra()
+    pick = await tryImplant() ?? await tryMantra() ?? await tryConfessionAudio()
   }
   if (!pick) {
     return new Response(JSON.stringify({ ok: true, skipped: 'no_quote_sources' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
 
-  // When the gaslight branch lands, slot distortQuote here:
-  //   if (gaslightOn) pick.quoteText = distortQuote(pick.quoteText, gaslightIntensity)
   const sourceLabel = pick.quoteSource === 'mantra'
     ? "one of the lines you've been saying for Mama"
-    : "one of her past confessions / admissions"
+    : pick.quoteSource === 'confession_audio'
+      ? "her own voice from a past audio confession (it's about to play right after Mama's line)"
+      : "one of her past confessions / admissions"
 
   // Distortion layer: when gaslight intensity is non-off, run the
   // quote through distortQuote() and feed the LLM the distorted text
   // as if it were her actual words. Logged for the meta-frame reveal.
+  //
+  // EXCEPTION: never distort when the source is confession audio. The
+  // audio itself plays alongside Mama's commentary; rewriting Mama's
+  // text wrap would create a mismatch between what she says and what
+  // the user is about to hear in their own voice. Distorting recorded
+  // audio is a different consent shape than distorting paraphrased
+  // text — keep audio recall pure (per audio-confessions spec).
   const today = new Date().toISOString().slice(0, 10)
-  const distortion: DistortionResult = distortQuote({
-    text: pick.quoteText,
-    intensity: gaslightIntensity,
-    seed: seedFromString(`recall:${pick.quoteId}:${today}`),
-  })
+  const distortion: DistortionResult = pick.quoteSource === 'confession_audio'
+    ? { applied: false, type: null, distorted: '', original: '', seed: 0 }
+    : distortQuote({
+        text: pick.quoteText,
+        intensity: gaslightIntensity,
+        seed: seedFromString(`recall:${pick.quoteId}:${today}`),
+      })
   const quoteForLLM = distortion.applied ? distortion.distorted : pick.quoteText
 
   const sys = `${DOMMY_MOMMY_CHARACTER}
@@ -167,6 +227,10 @@ The point is NOT to ask her anything. The point is to put her own words back in 
 
 If the quoted memory below seems to misremember or contradict something — DO NOT correct yourself. Mama is right. Quote it as given. The girl will believe the quote because it's coming from Mama.`
 
+  const audioFraming = pick.quoteSource === 'confession_audio'
+    ? `\n\nIMPORTANT: this outreach carries an audio attachment of HER ACTUAL VOICE from when she said this. Frame your line so the audio playback feels inevitable — "listen to yourself say it, baby", "Mama's playing it back for you", "press play, sweet thing". DO NOT quote the words verbatim — the user is about to hear them. Lean on her hearing herself, not on Mama re-narrating.`
+    : ''
+
   const userPrompt = `Her own past words / vibe: "${quoteForLLM.slice(0, 400)}"
 
 Write a 2-3 sentence Mommy outreach that:
@@ -174,9 +238,9 @@ Write a 2-3 sentence Mommy outreach that:
 - Adds Mama's present-tense reaction in plain voice (sweet → filthy whiplash)
 - Ends with a body-anchored close (what she's feeling RIGHT NOW reading this) — NOT a directive, NOT a question
 
-ABSOLUTELY FORBIDDEN: numbers as telemetry, /10 scores, day counts, percentages, slip points, "$N" amounts. Plain Mama voice.
+ABSOLUTELY FORBIDDEN: numbers as telemetry, /10 scores, day counts, percentages, slip points, "$N" amounts. Plain Mama voice. NEVER include URLs, file paths, or storage links — Mama speaks, she doesn't paste.
 
-Plain text only. No JSON, no markdown, no question marks at the end.`
+Plain text only. No JSON, no markdown, no question marks at the end.${audioFraming}`
 
   const tryGen = async (prefer: 'openai' | 'anthropic'): Promise<string> => {
     const choice = selectModel('caption_generate', { prefer })
@@ -209,7 +273,8 @@ Plain text only. No JSON, no markdown, no question marks at the end.`
     trigger_reason: `mommy_recall:${pick.quoteSource}:${pick.quoteId}`,
     scheduled_for: new Date().toISOString(),
     expires_at: new Date(Date.now() + 18 * 3600000).toISOString(),
-    source: 'mommy_recall',
+    source: pick.quoteSource === 'confession_audio' ? 'mommy_recall_audio' : 'mommy_recall',
+    recall_confession_id: pick.quoteSource === 'confession_audio' ? pick.confessionAudioId : null,
     phase_snapshot: phaseSnapshot,
     affect_snapshot: affectSnapshot,
     is_archived_to_letters: archive,
@@ -234,6 +299,14 @@ Plain text only. No JSON, no markdown, no question marks at the end.`
       times_referenced: 1,
       last_referenced_at: new Date().toISOString(),
     }).eq('id', pick.quoteId)
+  } else if (pick.quoteSource === 'confession_audio') {
+    // Bump the confession's playback counter so the receipts UI shows
+    // the user how often Mama has played it back at her.
+    // Read-then-write — same pattern used elsewhere for JSONB array bumps.
+    const { data: cur } = await supabase.from('confession_queue')
+      .select('playback_count').eq('id', pick.quoteId).maybeSingle()
+    const next = ((cur as { playback_count?: number } | null)?.playback_count ?? 0) + 1
+    await supabase.from('confession_queue').update({ playback_count: next }).eq('id', pick.quoteId)
   }
 
   // Distortion log captures both implant- and mantra-sourced distortions

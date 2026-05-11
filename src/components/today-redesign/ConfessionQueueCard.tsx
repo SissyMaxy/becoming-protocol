@@ -8,6 +8,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { usePersona } from '../../hooks/usePersona';
+import { ConfessionAudioCapture } from './ConfessionAudioCapture';
+import { ConfessionAudioPlayer } from './ConfessionAudioPlayer';
 
 interface Confession {
   id: string;
@@ -19,6 +21,10 @@ interface Confession {
   response_text: string | null;
   confessed_at: string | null;
   missed: boolean;
+  audio_storage_path: string | null;
+  audio_duration_sec: number | null;
+  transcribed_text: string | null;
+  transcription_status: string | null;
 }
 
 interface Receipt {
@@ -28,6 +34,8 @@ interface Receipt {
   confessed_at: string;
   playback_count: number;
   promoted_to_implant_id: string | null;
+  audio_storage_path: string | null;
+  audio_duration_sec: number | null;
 }
 
 const CATEGORY_TONE: Record<string, string> = {
@@ -72,13 +80,13 @@ export function ConfessionQueueCard() {
       // the anchor didn't exist. The button silently did nothing.
       // Letting the user answer late is better than locking her out.
       supabase.from('confession_queue')
-        .select('id, category, prompt, context_note, deadline, created_at, response_text, confessed_at, missed')
+        .select('id, category, prompt, context_note, deadline, created_at, response_text, confessed_at, missed, audio_storage_path, audio_duration_sec, transcribed_text, transcription_status')
         .eq('user_id', user.id)
         .is('confessed_at', null)
         .order('deadline', { ascending: true })
         .limit(6),
       supabase.from('confession_queue')
-        .select('id, category, response_text, confessed_at, playback_count, promoted_to_implant_id')
+        .select('id, category, response_text, confessed_at, playback_count, promoted_to_implant_id, audio_storage_path, audio_duration_sec')
         .eq('user_id', user.id)
         .not('confessed_at', 'is', null)
         .order('confessed_at', { ascending: false })
@@ -222,9 +230,23 @@ export function ConfessionQueueCard() {
                     {r.promoted_to_implant_id && (
                       <span style={{ color: '#6ee7b7', marginLeft: 6 }}>·implant</span>
                     )}
-                    <div style={{ fontStyle: 'italic', color: '#e8e6e3', marginTop: 2 }}>
-                      "{r.response_text.slice(0, 200)}{r.response_text.length > 200 ? '…' : ''}"
-                    </div>
+                    {r.audio_storage_path && (
+                      <span style={{ color: '#f4a7c4', marginLeft: 6 }}>·voice</span>
+                    )}
+                    {r.response_text && (
+                      <div style={{ fontStyle: 'italic', color: '#e8e6e3', marginTop: 2 }}>
+                        "{r.response_text.slice(0, 200)}{r.response_text.length > 200 ? '…' : ''}"
+                      </div>
+                    )}
+                    {r.audio_storage_path && (
+                      <div style={{ marginTop: 4 }}>
+                        <ConfessionAudioPlayer
+                          audioPath={r.audio_storage_path}
+                          durationSec={r.audio_duration_sec}
+                          compact
+                        />
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -307,7 +329,7 @@ export function ConfessionQueueCard() {
                 </div>
               </div>
             )}
-            <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+            <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
               <button
                 onClick={() => confess(c.id)}
                 disabled={!draft.trim() || submittingId === c.id}
@@ -322,9 +344,17 @@ export function ConfessionQueueCard() {
               >
                 {submittingId === c.id ? '…' : mommy ? 'Tell Mama' : 'Confess'}
               </button>
-              <span style={{ fontSize: 10, color: '#5a5560', alignSelf: 'center' }}>
-                Be specific — name a moment, a feeling, a person, a body part, a time of day. Boilerplate gets refused.
+              <span style={{ fontSize: 9.5, color: '#5a5560', alignSelf: 'center' }}>
+                or
               </span>
+              <ConfessionAudioCapture
+                confessionId={c.id}
+                mommy={mommy}
+                onTranscribed={() => load()}
+              />
+            </div>
+            <div style={{ fontSize: 9.5, color: '#5a5560', marginTop: 6, fontStyle: 'italic' }}>
+              Type, or hold to speak. Either lands as a confession on file.
             </div>
           </div>
         );

@@ -37,6 +37,7 @@ import type {
   AudioSessionIntensity,
   AudioSessionKind,
 } from '../../lib/audio-sessions/template-selector';
+import { ConfessionAudioCapture } from './ConfessionAudioCapture';
 
 type TaskKind =
   | 'overdue_dose' | 'overdue_confession' | 'overdue_punishment' | 'overdue_decree'
@@ -712,6 +713,37 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
               >
                 {submitting ? 'submitting…' : 'submit'}
               </button>
+              {/*
+                Audio confession path. Hold to speak; on release we upload
+                + transcribe and stamp confessed_at server-side. Then we
+                advance to the next task. Default text path stays exactly
+                as before — audio is opt-in, alongside the textarea.
+                Only available for confession surfaces with a real rowId
+                (commitments use a different table).
+              */}
+              {task.kind !== 'due_today_commitment' && task.rowId && (
+                <div style={{
+                  marginTop: 14, paddingTop: 14, borderTop: '1px dashed #22222a',
+                  display: 'flex', flexDirection: 'column', gap: 6,
+                }}>
+                  <div style={{ fontSize: 10, color: '#8a8690', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    or speak it
+                  </div>
+                  <ConfessionAudioCapture
+                    confessionId={task.rowId}
+                    mommy={isMommyPersona(persona)}
+                    onTranscribed={async ({ transcript }) => {
+                      // Audio upload already stamps confessed_at server-side.
+                      // Clear local draft, fire the change event, and advance.
+                      if (task.rowId) localStorage.removeItem(`focus_draft:${task.rowId}`);
+                      window.dispatchEvent(new CustomEvent('td-task-changed', {
+                        detail: { source: task.kind, id: task.rowId, transcript },
+                      }));
+                      await advance();
+                    }}
+                  />
+                </div>
+              )}
             </div>
           )}
 
