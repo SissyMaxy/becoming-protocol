@@ -20,7 +20,8 @@ type MenuItemId =
   | 'escalation_ladder' | 'force' | 'wardrobe' | 'gina-vibe' | 'trajectory'
   | 'verification-vault'
   | 'community-queue' | 'community-list' | 'community-log'
-  | 'letters';
+  | 'letters'
+  | 'life-as-woman';
 
 interface MenuViewProps {
   onNavigate: (view: MenuItemId) => void;
@@ -83,6 +84,13 @@ export function MenuView({ onNavigate }: MenuViewProps) {
       label: 'Letters from Mama',
       description: 'The warm moments she meant. Pinned, framed, replayable.',
       color: '#c4956a',
+    },
+    {
+      id: 'life-as-woman' as MenuItemId,
+      icon: Flame,
+      label: 'Life as a woman',
+      description: 'Sniffies, trance, gooning, content — Mommy edits, you click.',
+      color: '#d8a6d0',
     },
     {
       id: 'escalation_ladder' as MenuItemId,
