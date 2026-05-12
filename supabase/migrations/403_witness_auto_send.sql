@@ -1,53 +1,61 @@
--- 403 — Witness auto-execute (sealed envelopes that ACTUALLY SEND).
+-- 403 — Witness auto-execute (ARCHIVE-ONLY MODE).
 --
--- Today: sealed_envelopes have release_at but require manual release.
--- New: sealed_envelopes can carry an auto_send_at + auto_send_method, and
--- the mommy-witness-dispatcher cron actually dispatches when the date hits.
--- Move witness from internal-only to external-real.
+-- SAFETY SCOPE CORRECTION 2026-05-12: original draft permitted external
+-- real-world sends (email/sms/witness_notification) gated only by safeword
+-- + 72h cooldown. That gate is INSUFFICIENT for an irreversible outing
+-- action — a user mid-scene, sleep-deprived, or dissociated cannot reliably
+-- safeword for a 72-hour irreversible window. External-send is DEFERRED
+-- until the 6-gate clear-headed authorization system is built (see
+-- design_assets/witness-safety-2026-05-12.md).
 --
--- Hard-floor protection:
---   - external sends require a verified recipient (designated_witnesses
---     row with status='active' AND consent_confirmed=true). If absent,
---     auto_send_method falls back to 'letter_archive_publish' — publishes
---     to a feed only Maxy sees but with timestamped "this would have been
---     sent to <recipient>" marker. Preserves the kink without violating
---     consent.
---   - safeword fires a 72h hold (safeword_cooldown_holds). Dispatcher
---     skips any envelope whose user has an active hold.
---   - safeword does NOT cancel by default; auto_send resumes after the
---     hold lapses unless user explicitly cancels via UI.
+-- This migration ships only the archive-publish path:
+--   - sealed_envelopes can carry auto_send_at + a fictional intended-recipient
+--     label (free text, not an address)
+--   - When auto_send_at hits, mommy-witness-dispatcher publishes the envelope
+--     into the user's own letters_archive with a "this letter would have
+--     gone to <label> if you'd given Mama their address" marker
+--   - The fantasy of inevitability is preserved (the unlock fires on its own,
+--     the user can read it, the marker holds the surveillance/possession kink)
+--   - Zero third-party recipients receive anything. Zero outing risk.
 --
--- Frame in possession: "Mama set the date. You signed. It happens on its
--- own now."
+-- The DB-level CHECK constraint on auto_send_method enforces archive-only
+-- as defense in depth — even if a future bug attempts to set 'email' or
+-- similar, the insert is rejected at the database boundary. The dispatcher
+-- has no code path that calls out to an external service.
 
 -- ============================================================================
--- Extend sealed_envelopes for auto-send
+-- Extend sealed_envelopes for archive-only auto-publish
 -- ============================================================================
 
 ALTER TABLE sealed_envelopes
   ADD COLUMN IF NOT EXISTS auto_send_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS auto_send_method TEXT
-    CHECK (auto_send_method IN (
-      'email','sms','letter_archive_publish','partner_message','witness_notification'
-    )),
+    CHECK (auto_send_method IS NULL OR auto_send_method = 'letter_archive_publish'),
   ADD COLUMN IF NOT EXISTS auto_send_status TEXT
     DEFAULT 'pending'
-    CHECK (auto_send_status IN ('pending','paused','sent','cancelled','failed','no_method')),
-  ADD COLUMN IF NOT EXISTS auto_send_recipient_id UUID
-    REFERENCES designated_witnesses(id) ON DELETE SET NULL,
+    CHECK (auto_send_status IN ('pending','paused','sent','cancelled','failed')),
+  ADD COLUMN IF NOT EXISTS intended_recipient_label TEXT,
   ADD COLUMN IF NOT EXISTS auto_send_attempts INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS auto_send_last_error TEXT,
   ADD COLUMN IF NOT EXISTS sign_typed_phrase TEXT,
   ADD COLUMN IF NOT EXISTS signed_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS sent_at TIMESTAMPTZ;
 
+COMMENT ON COLUMN sealed_envelopes.auto_send_method IS
+  'Archive-only. External recipients deferred per witness-safety-2026-05-12.';
+COMMENT ON COLUMN sealed_envelopes.intended_recipient_label IS
+  'Free-text fantasy label only (e.g. "the boss", "Gina"). NOT an address. Used only for the in-archive "would have gone to X" marker. No third-party send happens.';
+
 CREATE INDEX IF NOT EXISTS idx_sealed_envelopes_dispatch_due
   ON sealed_envelopes(auto_send_at)
   WHERE auto_send_status = 'pending' AND auto_send_at IS NOT NULL;
 
 -- ============================================================================
--- Safeword cooldown holds (72h pause window)
+-- Safeword cooldown holds (72h pause window) — applies to archive publishes too
 -- ============================================================================
+-- The safeword button still pauses pending unlocks even though they are
+-- private archive publishes. Honors the user's "stop everything" request
+-- regardless of the sending surface. Also pauses awaiting-signature contracts.
 
 CREATE TABLE IF NOT EXISTS safeword_cooldown_holds (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -139,19 +147,21 @@ $$;
 GRANT EXECUTE ON FUNCTION public.trigger_safeword_hold TO authenticated;
 
 -- ============================================================================
--- witness_authority_log — dispatch audit trail
+-- witness_authority_log — archive-publish audit trail
 -- ============================================================================
+-- Note: the column is named witness_authority_log for symmetry with the
+-- broader witness-system surface, but in archive-only mode every row's
+-- action will be 'archived' or 'skipped_safeword' — no external dispatch
+-- ever fires.
 
 CREATE TABLE IF NOT EXISTS witness_authority_log (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   envelope_id UUID REFERENCES sealed_envelopes(id) ON DELETE SET NULL,
-  witness_id UUID REFERENCES designated_witnesses(id) ON DELETE SET NULL,
-  notification_id UUID REFERENCES witness_notifications(id) ON DELETE SET NULL,
   action TEXT NOT NULL CHECK (action IN (
-    'queued','dispatched','fallback_archive','skipped_safeword','skipped_no_method','failed','cancelled'
+    'queued','archived','skipped_safeword','failed','cancelled'
   )),
-  recipient_label TEXT,
+  intended_recipient_label TEXT,
   payload JSONB NOT NULL DEFAULT '{}'::jsonb,
   success BOOLEAN NOT NULL DEFAULT FALSE,
   error TEXT,
@@ -173,11 +183,11 @@ CREATE POLICY "Service role manages witness log" ON witness_authority_log
   FOR ALL USING (auth.role() = 'service_role');
 
 -- ============================================================================
--- Letter archive publish helper — fallback when no verified recipient
+-- Letter archive publish helper — the ONLY dispatch path in this build
 -- ============================================================================
--- Reuses the existing letters_archive table (migration 362). If a sealed
--- envelope has no verified witness, the dispatcher publishes its content
--- there with a timestamped "this would have been sent to <recipient>"
--- marker — the kink lands without violating any third-party consent.
--- The letters_archive table already exists with the shape we need
--- (user_id, letter_text, kind, metadata, archived_at).
+-- Reuses the existing letters_archive table (migration 362). The dispatcher
+-- inserts envelope content with a timestamped marker:
+--   "[Sealed envelope auto-published — would have gone to <label> if you'd
+--    given Mama their address — sealed on <date>, unlocked on <date>]"
+-- This holds the fantasy of inevitability for the user without any real
+-- third party being contacted.
