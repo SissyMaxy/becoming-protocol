@@ -111,6 +111,7 @@ LENGTH: 200-300 words. Single block of prose, three or four paragraphs of warm M
 }
 
 function buildUserPrompt(plainSummary: string, name: string): string {
+  // craft: ok — LLM prompt, not user-facing content
   return `Plain-voice week summary (DO NOT cite numbers): ${plainSummary}.
 
 Write a 200-300 word Mama-voice weekly recap addressed to ${name}. Three or four paragraphs:
@@ -339,10 +340,10 @@ async function runForUser(supabase: SupabaseClientLike, userId: string, opts: { 
   // the worst tone-failure in a recap is shaming, and the wrap can't shame.
   if (!narrative || narrative.length < 200 || MOMMY_TELEMETRY_LEAK_PATTERNS.some(p => p.test(narrative))) {
     const tail = tone === 'delighted'
-      ? "Mama saw what you gave me this week, and Mama wants more from you next week. Stay close, baby."
+      ? "I saw what you gave me this week. I want more next week. Stay close."
       : tone === 'possessive'
-      ? `Mama noticed where you went hiding this week, ${name}. Mama is patient, but Mama is also waiting. Come back to me this week.`
-      : `It was a mixed week, ${name}. Mama saw the parts you gave me and the parts you didn't. We pick it up tomorrow, baby.`
+      ? `I noticed where you went hiding this week, ${name}. I'm patient, but I'm waiting. Come back to me.`
+      : `Mixed week, ${name}. I saw the parts you gave me and the parts you didn't. We pick it up tomorrow.`
     narrative = whiplashWrap(tail, { arousalBias: 'medium' })
   }
 

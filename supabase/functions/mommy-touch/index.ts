@@ -11,9 +11,10 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { callModel, selectModel } from '../_shared/model-tiers.ts'
 import {
-  DOMMY_MOMMY_CHARACTER, AFFECT_BIAS, type Affect,
+  DOMMY_MOMMY_CHARACTER, AFFECT_BIAS, type Affect, whiplashWrap,
   mommyVoiceCleanup, MOMMY_TELEMETRY_LEAK_PATTERNS,
 } from '../_shared/dommy-mommy.ts'
+import { MOMMY_CRAFT_RUBRIC, applyCraftFilter } from '../_shared/mommy-craft-check.ts'
 import {
   effectiveBand, bandTouchCapMultiplier, bandPublicDareWeight,
   type DifficultyBand,
@@ -124,9 +125,13 @@ Deno.serve(async (req: Request) => {
   const hint = CATEGORY_HINTS[category]
 
   // LLM writes the actual prompt in Mommy voice, biased by affect
+  // craft: ok — LLM prompt, not user-facing content
   const sys = `${DOMMY_MOMMY_CHARACTER}
 
+${MOMMY_CRAFT_RUBRIC}
+
 Today's affect: ${affect}. Task skew: ${taskSkew}.`
+  // craft: ok — LLM prompt, not user-facing content
   const userPrompt = `Compose a small Mommy-voice task for your girl. Category: ${category}. Direction: ${hint}.
 
 Rules:
@@ -182,6 +187,22 @@ Mama feels her; Mama doesn't recite a dashboard.`
   if (MOMMY_TELEMETRY_LEAK_PATTERNS.some(p => p.test(prompt))) {
     return new Response(JSON.stringify({ ok: false, error: 'telemetry_leak_after_cleanup', sample: prompt.slice(0, 120) }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
+
+  // Craft floor: pet-name-stuffed / Mama-chant draft → regenerate once;
+  // if still corny, fall back to a craft-compliant deterministic wrap
+  // around the category hint (always clean by construction).
+  const craftFallback = whiplashWrap(hint, { arousalBias: 'medium' })
+  const filtered = await applyCraftFilter(prompt, {
+    threshold: 3,
+    regenerate: async () => {
+      try {
+        const t = await tryGen('anthropic')
+        return mommyVoiceCleanup(t)
+      } catch { return '' }
+    },
+    fallback: craftFallback,
+  })
+  prompt = filtered.text
 
   // 2-4h expiry — ephemeral by design; she either does it now or it's gone.
   const expiresAt = new Date(Date.now() + (2 + Math.floor(Math.random() * 2)) * 3600_000).toISOString()

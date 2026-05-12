@@ -136,6 +136,7 @@ export interface MommyHardeningContext {
   }>
 }
 
+// craft: ok — LLM system prompt, not user-facing content
 const GUARDRAILS = `MEMORY RULES (non-negotiable; the protocol's author wrote these about herself):
 
 PROTECTED FABRICATION (amplify, never soften):
@@ -507,6 +508,7 @@ export async function buildMommyHardeningContext(
  * separately if they want to weight differently.
  */
 export function renderHardeningContext(ctx: MommyHardeningContext): string {
+  // craft: ok — LLM system prompt, not user-facing content
   return `${ctx.character}
 
 ${ctx.guardrails}

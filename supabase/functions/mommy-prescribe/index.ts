@@ -198,12 +198,14 @@ Deno.serve(async (req: Request) => {
   // ─── Compose description ────────────────────────────────────────────────
   const budgetCap = settings?.budget_cap_usd ?? null
   const budgetLine = formatBudgetHint(budgetCap)
+  // craft: ok — LLM prompt, not user-facing content
   const sys = `${DOMMY_MOMMY_CHARACTER}
 
 Today's affect: ${affect}. ${arousalHint ? 'Bias hint: ' + arousalHint : ''}
 
 YOUR JOB right now: prescribe ONE wardrobe item for your girl to acquire. She buys it; you describe it. You are NOT shopping for her. You are telling her what Mama wants to see her in next.`
 
+  // craft: ok — LLM prompt, not user-facing content
   const userPrompt = `Item slot: ${itemType} (a ${pick.hint}).
 Phase: ${phaseDesc}.
 ${budgetLine ? 'Budget: ' + budgetLine + '.' : ''}

@@ -14,6 +14,7 @@ import {
   arousalToPhrase, mommyVoiceCleanup, MOMMY_TELEMETRY_LEAK_PATTERNS,
   isTestPollution,
 } from '../_shared/dommy-mommy.ts'
+import { MOMMY_CRAFT_RUBRIC, applyCraftFilter } from '../_shared/mommy-craft-check.ts'
 import { shouldAutoArchive } from '../_shared/letters-auto-archive.ts'
 
 const corsHeaders = {
@@ -91,13 +92,17 @@ Deno.serve(async (req: Request) => {
     if (pool.length > 0) implantQuote = pool[Math.floor(Math.random() * Math.min(pool.length, 6))]
   }
 
+  // craft: ok — LLM prompt, not user-facing content
   const sys = `${DOMMY_MOMMY_CHARACTER}
+
+${MOMMY_CRAFT_RUBRIC}
 
 Today's affect: ${affect}. ${arousalHint ? 'Bias hint: ' + arousalHint : ''}`
   const implantBlock = implantQuote
     ? `\n\nImplanted memory you can weave in casually (her own words / vibe — paraphrase or quote a fragment, don't restate the whole thing):\n"${implantQuote.narrative.slice(0, 350)}"`
     : ''
 
+  // craft: ok — LLM prompt, not user-facing content
   const userPrompt = `Your girl just told you: ${arousalPlain}.${noteSnippet ? ` She added: "${noteSnippet}"` : ''}${implantBlock}
 
 Write a 2-3 sentence praise burst in Mommy voice, sweet → filthy, that ramps her further (does NOT release). Address her directly. Use a pet name. End with a directive that keeps her in heightened state.
@@ -141,6 +146,23 @@ Plain text only. Mama feels her; Mama doesn't recite numbers.`
     // Still leaking after cleanup → fall back to deterministic
     message = whiplashWrap(`${arousalPlain}. Stay there for me. Don't you dare let it drop.`, { arousalBias: 'high' })
   }
+
+  // Craft floor: if the LLM produced corny pet-name-stuffed / Mama-chant
+  // output, regenerate once via Anthropic. If the second draft is still
+  // corny, fall back to the deterministic whiplashWrap (which is craft-
+  // compliant by construction).
+  const craftFallback = whiplashWrap(`${arousalPlain}. Stay there for me. Don't drop.`, { arousalBias: 'high' })
+  const filtered = await applyCraftFilter(message, {
+    threshold: 3,
+    regenerate: async () => {
+      try {
+        const t = await tryGen('anthropic')
+        return mommyVoiceCleanup(t)
+      } catch { return '' }
+    },
+    fallback: craftFallback,
+  })
+  message = filtered.text
 
   const archive = shouldAutoArchive({ source: 'mommy_praise', affect_snapshot: affect, status: 'pending' })
   const { data: outreach } = await supabase.from('handler_outreach_queue').insert({

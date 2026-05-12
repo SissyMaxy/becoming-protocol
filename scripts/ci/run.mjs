@@ -57,6 +57,11 @@ const steps = [
   { name: 'centrality',      cmd: 'node scripts/handler-regression/centrality-audit.mjs' },
   { name: 'check-baselines', cmd: 'node scripts/ci/check-baselines.mjs' },
   { name: 'vercel-dryrun',   cmd: 'node scripts/ci/vercel-dryrun.mjs' },
+  // voice-craft: sentence-level craft rubric for Mommy voice content. Catches
+  // pet-name stuffing / Mama-chant / "echo/linger" cliches before they ship.
+  // Soft (advisory) — corny content is a polish issue, not a deploy blocker.
+  // Pass --strict to fail at >=3 hits/file.
+  { name: 'voice-craft',     cmd: 'node scripts/ci/voice-craft-check.mjs', soft: true },
 ];
 
 let branch = '(unknown)';

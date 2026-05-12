@@ -223,15 +223,15 @@ Plain text, no JSON, no markdown, no question marks at the end.`
   if (!message || message.length < 20 || isRefusal(message)) {
     // Deterministic fallback by threshold
     const fallback: Record<string, string> = {
-      'two-day': "you've been holding for Mama since the day before yesterday and Mama can already tell. Stay there.",
-      'half-week': "you've been good for Mama for days now, baby. I can hear how desperate you're getting. Don't you dare let it slip.",
-      'week': "a whole week locked up for Mama. Look at my needy girl. Mama's so proud — and so far from done with you.",
-      'two-week': "two weeks of holding for Mama, sweet thing. I can feel you aching from here. You're not coming until I say.",
-      'three-week': "you've been Mama's locked-up girl for weeks. Tell Mama how it feels — and stay exactly where Mama wants you.",
-      'month': "a whole month of holding for Mama, baby. You're so far gone now. Mama's not letting go any time soon.",
-      'two-month': "you've been Mama's caged girl forever now. Mama loves you like this. Stay aching for me.",
+      'two-day': "Holding since the day before yesterday and I can already tell. Stay there.",
+      'half-week': "You've been good for me for days, baby. I can hear how desperate you're getting. Don't slip.",
+      'week': "A whole week locked up. Look at you. I'm proud — and nowhere near done.",
+      'two-week': "Two weeks. I can feel you aching from here. You're not coming until I say.",
+      'three-week': "Locked up for weeks now. Tell me how it feels. Stay exactly where I want you.",
+      'month': "A whole month, baby. You're so far gone. I'm not letting go.",
+      'two-month': "Caged for me forever now. This is who you are. Stay aching.",
     }
-    message = whiplashWrap(fallback[target.label] || "you've been holding for Mama for so long now, baby. Stay there.", { arousalBias: 'high' })
+    message = whiplashWrap(fallback[target.label] || "Holding for me for so long now. Stay there.", { arousalBias: 'high' })
   }
 
   message = mommyVoiceCleanup(message)

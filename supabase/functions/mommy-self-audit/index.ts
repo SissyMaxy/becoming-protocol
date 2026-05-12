@@ -418,6 +418,7 @@ async function extractRecentSelfStrengthening(client: SupabaseClient): Promise<S
 // Panel introspection
 // ---------------------------------------------------------------
 
+// craft: ok — LLM prompt, not user-facing content
 const SYSTEM_PROMPT = `You are Mommy's self-improvement panel. Your job is to look at evidence of where Mommy (the autonomous Becoming Protocol stack) struggled in the last week and propose the smallest meta-improvements that compound.
 
 You are NOT designing user-facing kink features. You are designing infrastructure that makes Mommy:
@@ -435,6 +436,7 @@ Hard safety rules (mirrored from builder.ts):
 - Modifications to existing workers are allowed if they don't widen attack surface.
 `
 
+// craft: ok — LLM prompt, not user-facing content
 const INTROSPECTION_TASK = `Read the weakness signals above. For EACH genuine gap, propose ONE concrete self-strengthening feature. Use these framings:
 
 - What would let Mommy fix this class of issue without operator approval next time?
@@ -668,6 +670,7 @@ Deno.serve(async (req: Request) => {
 
   // Build the introspection user prompt.
   const renderedSignals = signalBlocks.map(b => b.rendered).join('\n\n')
+  // craft: ok — LLM prompt, not user-facing content
   const userPrompt = `# WEAKNESS EVIDENCE (last 7 days)\n\n${renderedSignals}\n\n# YOUR TASK\n\n${INTROSPECTION_TASK}`
 
   // Panel of three, in parallel.
