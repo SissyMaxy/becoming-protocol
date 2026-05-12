@@ -76,6 +76,8 @@ import { RationalizationPatternCard } from './RationalizationPatternCard';
 import { DeviceScheduleCard } from './DeviceScheduleCard';
 import { IdentityDisplacementCard } from './IdentityDisplacementCard';
 import { MantraStreakCard } from './MantraStreakCard';
+import { MantraDrillCard } from './MantraDrillCard';
+import { MommySceneCard } from './MommySceneCard';
 import { HandlerDreamCard } from './HandlerDreamCard';
 import { DailyBriefingCard } from './DailyBriefingCard';
 
@@ -339,6 +341,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         <WardrobePrescriptionCard />
         <PublicDareCard />
         <RightNowCard />
+        <MommySceneCard />
         <ProtocolDayCard />
         <HandlerPlanCalendar />
 
@@ -388,6 +391,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         <CollapsibleGroup id="progress" label="Progress & Tracking" tone="#6ee7b7" hint="phase · streaks · body deltas">
           <PhaseProgressCard />
           <MantraStreakCard />
+          <MantraDrillCard />
           <IdentityDisplacementCard />
           <BodyMeasurementCard />
           <HandlerEvolutionCard />
