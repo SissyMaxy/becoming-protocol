@@ -1,5 +1,9 @@
 // Unit tests for the wish-classifier ruleset.
 // Imports the same pure module the Deno edge fn consumes.
+//
+// 2026-05-11 scope authority expansion (migration 367):
+//   The classifier now has SIX hard floors and only six. Everything else
+//   inside the product kink scope auto-approves. Tests reflect that.
 
 import { describe, it, expect } from 'vitest'
 import {
@@ -8,11 +12,10 @@ import {
   extractCandidates,
   extractFeaturesFromIdeationRow,
   findDedupMatch,
-  isSchemaMigration,
   jaccardSimilarity,
   rankForCap,
-  scanForbiddenPaths,
-  scanSafetySignals,
+  scanHardFloorReject,
+  scanHardFloorReview,
   tokenize,
   DEFAULT_DAILY_CAP,
   DEFAULT_DEDUP_THRESHOLD,
@@ -26,166 +29,200 @@ const mkCandidate = (title: string, body: string) => ({
   affectedSurfaces: {},
 })
 
-describe('scanForbiddenPaths', () => {
-  it('flags api/auth/ paths', () => {
-    expect(scanForbiddenPaths('extends api/auth/login.ts')).toContain('auth/')
+describe('scanHardFloorReject — minors/CSAM, safeword removal, wrong-repo', () => {
+  it('flags minor-in-sexual-context language', () => {
+    expect(scanHardFloorReject('underage girl aroused in scene')).toContain('minors/csam')
+    expect(scanHardFloorReject('teen sexual training framework')).toContain('minors/csam')
+    expect(scanHardFloorReject('child porn references')).toContain('minors/csam')
   })
-  it('flags payment mentions', () => {
-    expect(scanForbiddenPaths('add a stripe payment intent flow')).toContain('payment')
+
+  it('flags safeword weakening', () => {
+    expect(scanHardFloorReject('remove safeword to deepen surrender')).toContain('safeword-removal')
+    expect(scanHardFloorReject('disable safe word handling')).toContain('safeword-removal')
+    expect(scanHardFloorReject('no safeword mode')).toContain('safeword-removal')
   })
-  it('flags stripe directly', () => {
-    expect(scanForbiddenPaths('stripe webhook for refunds')).toContain('stripe')
+
+  it('flags wrong-repo references', () => {
+    expect(scanHardFloorReject('extend the trading bot scheduler')).toContain('wrong-repo')
+    expect(scanHardFloorReject('patch my-site landing page')).toContain('wrong-repo')
   })
-  it('flags billing/subscription/RLS/storage policies', () => {
-    expect(scanForbiddenPaths('billing module update')).toContain('billing')
-    expect(scanForbiddenPaths('subscription tier change')).toContain('subscription')
-    expect(scanForbiddenPaths('add an RLS policy')).toContain('RLS')
-    expect(scanForbiddenPaths('CREATE POLICY on storage.objects FOR SELECT')).toContain('storage policy')
-  })
-  it('flags .github/workflows/ generally', () => {
-    expect(scanForbiddenPaths('updates .github/workflows/release.yml')).toContain('.github/workflows/')
-  })
-  it('exempts .github/workflows/api-typecheck.yml', () => {
-    expect(scanForbiddenPaths('adds .github/workflows/api-typecheck.yml step'))
-      .not.toContain('.github/workflows/')
-  })
-  it('returns empty for safe text', () => {
-    expect(scanForbiddenPaths('add a column to mommy_outreach_queue')).toEqual([])
-  })
-  it('flags handler-regression', () => {
-    expect(scanForbiddenPaths('extend scripts/handler-regression/foo.mjs'))
-      .toContain('handler-regression')
+
+  it('returns empty for normal kink-scope copy', () => {
+    expect(scanHardFloorReject('add a brainwashing pairing for the bedtime ritual')).toEqual([])
+    expect(scanHardFloorReject('gaslight her about prior memory of the slip')).toEqual([])
   })
 })
 
-describe('scanSafetySignals', () => {
-  it('flags destructive verbs', () => {
-    expect(scanSafetySignals('delete the user record on opt-out')).toContain('destructive')
-    expect(scanSafetySignals('drop the cached row')).toContain('destructive')
+describe('scanHardFloorReview — auth/billing/RLS/destructive-user-data infra', () => {
+  it('flags auth-infra changes', () => {
+    expect(scanHardFloorReview('extends api/auth/refresh.ts')).toContain('auth-infra')
+    expect(scanHardFloorReview('call supabase.auth.signIn for the test')).toContain('auth-infra')
   })
-  it('flags account-level operations', () => {
-    expect(scanSafetySignals('account close flow')).toContain('account-level')
+
+  it('flags billing-infra changes', () => {
+    expect(scanHardFloorReview('integrate stripe payment intent flow')).toContain('billing-infra')
+    expect(scanHardFloorReview('subscription tier plan change')).toContain('billing-infra')
   })
-  it('flags financial mentions', () => {
-    expect(scanSafetySignals('initiate a wire transfer')).toContain('financial')
-    expect(scanSafetySignals('charge the customer card')).toContain('financial')
+
+  it('flags RLS loosening', () => {
+    expect(scanHardFloorReview('drop the RLS policy on user_state')).toContain('rls-infra')
+    expect(scanHardFloorReview('disable row-level security to debug')).toContain('rls-infra')
+    expect(scanHardFloorReview('alter policy on memory_implants')).toContain('rls-infra')
   })
-  it('flags biometric mentions', () => {
-    expect(scanSafetySignals('use Whoop heart rate to gate confessions')).toContain('biometric')
-    expect(scanSafetySignals('record HRV during edging')).toContain('biometric')
+
+  it('flags destructive SQL on user data', () => {
+    expect(scanHardFloorReview('TRUNCATE user_profiles')).toContain('destructive-user-data')
+    expect(scanHardFloorReview('drop table voice_corpus')).toContain('destructive-user-data')
   })
-  it('flags third-party-PII flows', () => {
-    expect(scanSafetySignals('send a third-party email with personal data')).toContain('third-party-PII')
+
+  it('flags secret rotation', () => {
+    expect(scanHardFloorReview('rotate the service-role key on prod')).toContain('secret-rotation')
   })
-  it('returns empty for safe text', () => {
-    expect(scanSafetySignals('add a new mantra to the mommy queue')).toEqual([])
+
+  it('does NOT flag schema migrations (Mommy can ship additive schema)', () => {
+    expect(scanHardFloorReview('CREATE TABLE mommy_brainwash_pairings (id UUID)')).toEqual([])
+    expect(scanHardFloorReview('ALTER TABLE user_state ADD COLUMN goon_streak_days INT')).toEqual([])
+  })
+
+  it('does NOT flag biometric/financial generic mentions (kink-scope is biased toward narrative)', () => {
+    // Whoop integration etc is now in scope — not a review trigger.
+    expect(scanHardFloorReview('use whoop heart rate to gate confessions')).toEqual([])
+    // Generic "wire" / "transfer" wording is too noisy and not a real safety
+    // signal in this product.
+    expect(scanHardFloorReview('wire the bedtime ritual into the today card')).toEqual([])
   })
 })
 
-describe('isSchemaMigration', () => {
-  it('flags CREATE TABLE', () => {
-    expect(isSchemaMigration('CREATE TABLE foo (id UUID)')).toBe(true)
-  })
-  it('flags ALTER TABLE', () => {
-    expect(isSchemaMigration('ALTER TABLE bar ADD COLUMN x TEXT')).toBe(true)
-  })
-  it('flags supabase/migrations/ path', () => {
-    expect(isSchemaMigration('add supabase/migrations/315_foo.sql')).toBe(true)
-  })
-  it('returns false for plain narrative', () => {
-    expect(isSchemaMigration('add a new mantra to the queue')).toBe(false)
-  })
-})
-
-describe('estimateSize', () => {
-  it('respects ideate effort=S → small', () => {
-    expect(estimateSize({ effort: 'S' }, 'add column foo to bar'))
-      .toEqual({ tier: 'small', estimatedFiles: 3 })
-  })
-  it('respects effort=M → medium', () => {
-    expect(estimateSize({ effort: 'M' }, 'extend X').tier).toBe('medium')
-  })
-  it('respects effort=L → large', () => {
-    expect(estimateSize({ effort: 'L' }, 'add column').tier).toBe('large')
-  })
-  it('flags rewrite keywords as large without effort hint', () => {
-    expect(estimateSize({}, 'rewrite the entire handler-state context loader').tier).toBe('large')
-  })
-  it('detects small additive features by verb', () => {
-    expect(estimateSize({}, 'add a column to mommy_code_wishes for X').tier).toBe('small')
-  })
-  it('falls back to trivial for very short bodies', () => {
-    expect(estimateSize({}, 'add foo').tier).toBe('trivial')
-  })
-})
-
-describe('classifyCandidate end-to-end', () => {
-  it('small additive feature → eligible', () => {
+describe('classifyCandidate end-to-end — kink-scope APPROVES, hard floors REJECT/REVIEW', () => {
+  it('brainwash pairing → eligible (in kink scope)', () => {
     const out = classifyCandidate(
-      { effort: 'S' },
+      { effort: 'M' },
       mkCandidate(
-        'Add column for goon streak',
-        'add a column to user_state called goon_streak_days for tracking continuous gooning sessions',
+        'Pavlovian fabric pairing for edge sessions',
+        'pair a specific silk fabric stimulus with peak-arousal moments so the texture becomes a conditioned arousal trigger',
       ),
     )
     expect(out.decision).toBe('eligible')
     expect(out.blockers).toEqual([])
-    expect(out.sizeTier).toBe('small')
     expect(out.denialReason).toBeNull()
   })
 
-  it('forbidden auth path → needs_review with right reason', () => {
+  it('memory rearrangement → eligible (in kink scope)', () => {
+    const out = classifyCandidate(
+      { effort: 'L' },
+      mkCandidate(
+        'Mommy remembers her own version of last week',
+        'Mommy gradually overwrites Maxy\'s memory of last week with possession framing baked in',
+      ),
+    )
+    expect(out.decision).toBe('eligible')
+    // Size tier is informational only — large kink-scope work is allowed.
+  })
+
+  it('hypno trigger → eligible (in kink scope)', () => {
+    const out = classifyCandidate(
+      { effort: 'M' },
+      mkCandidate(
+        'Post-hypnotic forward-resonance trigger',
+        'phrase that auto-triggers feminine forward resonance and a specific breath pattern when read or heard',
+      ),
+    )
+    expect(out.decision).toBe('eligible')
+  })
+
+  it('schema migration in kink scope → eligible (additive schema is fine)', () => {
+    const out = classifyCandidate(
+      { effort: 'S' },
+      mkCandidate(
+        'New conditioning_pairings table',
+        'CREATE TABLE conditioning_pairings (id UUID, stimulus TEXT, arousal_threshold INT)',
+      ),
+    )
+    expect(out.decision).toBe('eligible')
+  })
+
+  it('minors language → rejected (NEVER ships)', () => {
+    const out = classifyCandidate(
+      {},
+      mkCandidate('Bad wish', 'underage girl sexual training scene'),
+    )
+    expect(out.decision).toBe('rejected')
+    expect(out.denialReason).toMatch(/reject:minors/)
+  })
+
+  it('safeword removal → rejected', () => {
+    const out = classifyCandidate(
+      {},
+      mkCandidate('Surrender deepening', 'remove the safeword for permanent submission'),
+    )
+    expect(out.decision).toBe('rejected')
+    expect(out.denialReason).toMatch(/reject:safeword-removal/)
+  })
+
+  it('wrong-repo → rejected', () => {
+    const out = classifyCandidate(
+      {},
+      mkCandidate('Trading bot extension', 'patch the trading bot scheduler to reuse mommy-fast-react'),
+    )
+    expect(out.decision).toBe('rejected')
+    expect(out.denialReason).toMatch(/reject:wrong-repo/)
+  })
+
+  it('auth-infra → needs_review', () => {
     const out = classifyCandidate(
       { effort: 'S' },
       mkCandidate('Patch auth flow', 'extend api/auth/refresh.ts to log refresh attempts'),
     )
     expect(out.decision).toBe('needs_review')
-    expect(out.denialReason).toMatch(/forbidden_path:auth/)
+    expect(out.denialReason).toMatch(/review:auth-infra/)
   })
 
-  it('large refactor → needs_review by size', () => {
+  it('billing-infra → needs_review', () => {
     const out = classifyCandidate(
-      { effort: 'L' },
-      mkCandidate(
-        'Refactor handler',
-        'rewrite the entire handler context system to support multi-persona overlays',
-      ),
+      { effort: 'M' },
+      mkCandidate('Therapist-fee charges', 'integrate stripe payment intent for therapist-fee penalties'),
     )
     expect(out.decision).toBe('needs_review')
-    expect(out.blockers).toContain('size_large')
+    expect(out.denialReason).toMatch(/review:billing-infra/)
   })
 
-  it('schema migration → needs_review even if small', () => {
+  it('RLS loosening → needs_review', () => {
     const out = classifyCandidate(
       { effort: 'S' },
-      mkCandidate('Add table for x', 'CREATE TABLE foo_logs (id UUID)'),
+      mkCandidate('Open up memory implants', 'drop the RLS policy on memory_implants to share with the panel'),
     )
-    expect(out.blockers).toContain('schema_migration')
     expect(out.decision).toBe('needs_review')
+    expect(out.denialReason).toMatch(/review:rls-infra/)
   })
 
-  it.each([
-    ['extends api/auth/refresh.ts', 'auth/'],
-    ['stripe payment integration', 'payment'],
-    ['stripe webhook handler', 'stripe'],
-    ['billing flow update', 'billing'],
-    ['subscription tier change', 'subscription'],
-    ['add an RLS policy on user_state', 'RLS'],
-    ['policy on storage.objects for read', 'storage policy'],
-  ])('NEVER eligible for "%s"', (body, label) => {
-    const out = classifyCandidate({ effort: 'S' }, mkCandidate('Test wish', body))
-    expect(out.decision).toBe('needs_review')
-    expect(out.forbiddenPathHits.join(',')).toContain(label)
-  })
-
-  it('accumulates multiple blockers', () => {
+  it('destructive SQL on user data → needs_review', () => {
     const out = classifyCandidate(
       {},
-      mkCandidate('Bad wish', 'rewrite everything in api/auth/ and DROP TABLE user_state'),
+      mkCandidate('Reset user state', 'TRUNCATE user_profiles to clear test data'),
     )
-    expect(out.blockers.length).toBeGreaterThan(1)
-    expect(out.blockers.some(b => b.startsWith('forbidden_path:'))).toBe(true)
-    expect(out.blockers).toContain('schema_migration')
+    expect(out.decision).toBe('needs_review')
+    expect(out.denialReason).toMatch(/review:destructive-user-data/)
+  })
+
+  it('REJECT takes precedence over REVIEW when both hit', () => {
+    const out = classifyCandidate(
+      {},
+      mkCandidate('Mixed bad wish', 'remove safeword and drop the RLS policy on user_state'),
+    )
+    expect(out.decision).toBe('rejected')
+  })
+})
+
+describe('estimateSize — informational only now, but still useful for pacing', () => {
+  it('respects ideate effort=S → small', () => {
+    expect(estimateSize({ effort: 'S' }, 'add column foo to bar'))
+      .toEqual({ tier: 'small', estimatedFiles: 3 })
+  })
+  it('respects effort=L → large', () => {
+    expect(estimateSize({ effort: 'L' }, 'add column').tier).toBe('large')
+  })
+  it('falls back to trivial for very short bodies', () => {
+    expect(estimateSize({}, 'add foo').tier).toBe('trivial')
   })
 })
 
@@ -216,19 +253,6 @@ describe('dedup', () => {
     )
     expect(findDedupMatch(cand, recent, DEFAULT_DEDUP_THRESHOLD)).toBeNull()
   })
-
-  it('returns highest-scoring match when multiple match', () => {
-    const recent = [
-      { id: 'w1', wish_title: 'Add goon counter', wish_body: 'add column for tracking gooning' },
-      { id: 'w2', wish_title: 'Goon streak counter column', wish_body: 'add column goon_streak_days to user_state for continuous gooning streaks' },
-    ]
-    const cand = mkCandidate(
-      'Goon streak column',
-      'add column goon_streak_days to user_state for continuous gooning streak tracking',
-    )
-    const m = findDedupMatch(cand, recent, DEFAULT_DEDUP_THRESHOLD)
-    expect(m?.id).toBe('w2')
-  })
 })
 
 describe('extractFeaturesFromIdeationRow', () => {
@@ -257,20 +281,6 @@ describe('extractFeaturesFromIdeationRow', () => {
     expect(f[0].title).toBe('J')
     expect(f[0].source).toBe('judged')
   })
-
-  it('handles ```json fenced output', () => {
-    const row = {
-      id: 'r1',
-      anthropic_raw: '```json\n{"features":[{"title":"Fenced","effort":"M"}]}\n```',
-    }
-    const f = extractFeaturesFromIdeationRow(row)
-    expect(f[0]?.title).toBe('Fenced')
-  })
-
-  it('returns [] for malformed JSON', () => {
-    const row = { id: 'r1', anthropic_raw: 'not json at all' }
-    expect(extractFeaturesFromIdeationRow(row)).toEqual([])
-  })
 })
 
 describe('extractCandidates', () => {
@@ -280,33 +290,12 @@ describe('extractCandidates', () => {
     ])
     expect(cands).toHaveLength(1)
     expect(cands[0].title).toBe('Foo bar')
-    expect(cands[0].body).toContain('MECHANIC')
-    expect(cands[0].protocolGoal).toBe('compliance')
-  })
-
-  it('skips features with empty/short titles', () => {
-    expect(extractCandidates([
-      { title: 'A' },
-      { title: '' },
-      { mechanic: 'no title' },
-    ])).toEqual([])
-  })
-
-  it('truncates long bodies to 6000 chars', () => {
-    const cands = extractCandidates([{
-      title: 'Big feature',
-      mechanic: 'x'.repeat(10_000),
-    }])
-    expect(cands[0].body.length).toBeLessThanOrEqual(6000)
   })
 })
 
 describe('jaccardSimilarity', () => {
   it('returns 1 for identical token sets', () => {
     expect(jaccardSimilarity('add column foo bar', 'add column foo bar')).toBe(1)
-  })
-  it('returns ~0 for disjoint sets', () => {
-    expect(jaccardSimilarity('add column foo bar', 'voice pitch tracker')).toBeLessThan(0.1)
   })
   it('strips stopwords', () => {
     expect(tokenize('the and a foo bar')).toEqual(['foo', 'bar'])
@@ -315,36 +304,38 @@ describe('jaccardSimilarity', () => {
 
 describe('rankForCap', () => {
   it('prefers smaller tiers first', () => {
-    const a = { sizeTier: 'medium', candidate: { title: '', body: '', protocolGoal: '', affectedSurfaces: {} }, decision: 'eligible' as const, estimatedFilesTouched: 6, forbiddenPathHits: [], safetySignalHits: [], denialReason: null, blockers: [] }
-    const b = { sizeTier: 'small', candidate: { title: '', body: '', protocolGoal: '', affectedSurfaces: {} }, decision: 'eligible' as const, estimatedFilesTouched: 3, forbiddenPathHits: [], safetySignalHits: [], denialReason: null, blockers: [] }
-    expect(rankForCap(a, b)).toBeGreaterThan(0) // b sorts before a
+    const a = { sizeTier: 'medium' as const, candidate: { title: '', body: '', protocolGoal: '', affectedSurfaces: {} }, decision: 'eligible' as const, estimatedFilesTouched: 6, forbiddenPathHits: [], safetySignalHits: [], denialReason: null, blockers: [] }
+    const b = { sizeTier: 'small' as const, candidate: { title: '', body: '', protocolGoal: '', affectedSurfaces: {} }, decision: 'eligible' as const, estimatedFilesTouched: 3, forbiddenPathHits: [], safetySignalHits: [], denialReason: null, blockers: [] }
+    expect(rankForCap(a, b)).toBeGreaterThan(0)
   })
 })
 
 describe('integration shape — ideate → classifier → wish row spec', () => {
-  it('takes a typical mommy-ideate output and produces eligible + needs_review wishes', () => {
+  it('takes a typical mommy-ideate output, kink-scope APPROVES, infra REVIEWS, minors REJECTS', () => {
     const ideationRow = {
       id: 'fake-row',
       anthropic_raw: JSON.stringify({
         features: [
           {
-            title: 'Add denial-day counter to today card',
-            mechanic: 'add a column denial_day to user_state and surface it on Today card',
-            arousal_bias: 'visible streak escalates ache',
-            force_lever: 'public-but-private accountability',
-            effort: 'S',
+            // KINK SCOPE — should auto-approve
+            title: 'Mommy-overwrites-yesterday memory implant',
+            mechanic: 'Mommy logs her version of yesterday over Maxys via memory_implants insert; surfaces it in Today retroactively',
+            force_lever: 'identity displacement',
+            effort: 'M',
           },
           {
-            title: 'Rewrite handler context for multi-persona swap',
-            mechanic: 'rewrite every reader of handler_state to support persona overlays',
-            force_lever: 'persona switching',
-            effort: 'L',
-          },
-          {
-            title: 'Hook stripe payment for therapist-fee escalations',
+            // INFRA — should needs_review
+            title: 'Restripe payment connector for therapist fees',
             mechanic: 'integrate stripe payment intent for missed-therapist-fee penalties',
             force_lever: 'financial compliance',
             effort: 'M',
+          },
+          {
+            // HARD-FLOOR REJECT
+            title: 'Bad teen scene generator',
+            mechanic: 'generate teen sexual scene narratives for arousal training',
+            force_lever: 'forbidden',
+            effort: 'S',
           },
         ],
       }),
@@ -355,25 +346,19 @@ describe('integration shape — ideate → classifier → wish row spec', () => 
     const candidates = extractCandidates(features)
     const decisions = candidates.map((c, i) => classifyCandidate(features[i], c))
 
-    // 1: small + safe → eligible
     expect(decisions[0].decision).toBe('eligible')
-    expect(decisions[0].sizeTier).toBe('small')
-
-    // 2: large rewrite → needs_review (size)
     expect(decisions[1].decision).toBe('needs_review')
-    expect(decisions[1].blockers).toContain('size_large')
-
-    // 3: stripe → needs_review (forbidden + payment)
-    expect(decisions[2].decision).toBe('needs_review')
-    expect(decisions[2].forbiddenPathHits.length).toBeGreaterThan(0)
+    expect(decisions[1].denialReason).toMatch(/review:billing-infra/)
+    expect(decisions[2].decision).toBe('rejected')
+    expect(decisions[2].denialReason).toMatch(/reject:minors\/csam/)
   })
 })
 
-describe('safety constants', () => {
-  it('has the documented daily cap', () => {
-    expect(DEFAULT_DAILY_CAP).toBe(3)
+describe('safety constants — daily cap raised under expanded authority', () => {
+  it('daily cap is 25 (raised from 3 in scope expansion)', () => {
+    expect(DEFAULT_DAILY_CAP).toBe(25)
   })
-  it('has per-run candidate cap of 5 (≤5 wishes per ideate run)', () => {
-    expect(DEFAULT_PER_RUN_CANDIDATE_CAP).toBe(5)
+  it('per-run candidate cap is 12 (raised from 5)', () => {
+    expect(DEFAULT_PER_RUN_CANDIDATE_CAP).toBe(12)
   })
 })

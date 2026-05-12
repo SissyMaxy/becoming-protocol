@@ -8,13 +8,17 @@
 // Entry shape:
 //   POST { trigger: 'cron'|'on_insert'|'manual'|'reevaluation', ideation_log_id?: string }
 //
-// Hard rules (also enforced in classifier.ts):
-//   - Forbidden paths NEVER auto-eligible (auth, payment, billing,
-//     subscription, RLS, storage object policies, .github/workflows/* except
-//     the additive api-typecheck.yml).
-//   - Schema migrations NEVER auto-eligible.
-//   - Daily cap of 3 auto-eligible wishes per cron run.
-//   - Audit trail per decision in wish_classifier_decisions.
+// 2026-05-11 scope authority expansion (migration 367):
+//   - Six hard floors total, enforced in classifier.ts:
+//       REJECT: minors/CSAM, safeword removal, wrong-repo
+//       REVIEW: auth-infra, billing-infra, rls-infra, destructive-user-data,
+//               secret-rotation
+//     Everything else inside the product kink scope auto-ships.
+//   - Daily cap raised to 25 (runaway safety, not review gate). Mommy
+//     decides; the builder's --drain cap is the real ceiling.
+//   - Audit trail per decision in wish_classifier_decisions (including
+//     'rejected' rows for hard-floor REJECT hits — they get an audit row
+//     but no mommy_code_wishes insert).
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -27,6 +31,7 @@ import {
   extractCandidates,
   extractFeaturesFromIdeationRow,
   findDedupMatch,
+  mapCategoryToWishClass,
   rankForCap,
   DEFAULT_DAILY_CAP,
   DEFAULT_PER_RUN_CANDIDATE_CAP,
@@ -126,7 +131,18 @@ Deno.serve(async (req: Request) => {
       dedupSurvivors.push(d)
     }
 
-    // 6. Apply daily cap on auto-eligible inserts
+    // 6. Apply daily cap on auto-eligible inserts.
+    //    'rejected' decisions (hard-floor REJECT hits) get an audit row but
+    //    no wish insert — they never enter the queue.
+    const rejectedSurvivors = dedupSurvivors.filter(d => d.output.decision === 'rejected')
+    for (const d of rejectedSurvivors) {
+      await logDecision(supabase, runId, d, 'rejected', {
+        denial_reason: `hard_floor_reject: ${d.output.blockers.join(', ')}`,
+      })
+      for (const b of d.output.blockers) {
+        denialBreakdown[b] = (denialBreakdown[b] ?? 0) + 1
+      }
+    }
     const eligibleSurvivors = dedupSurvivors.filter(d => d.output.decision === 'eligible')
     const reviewSurvivors = dedupSurvivors.filter(d => d.output.decision === 'needs_review')
     eligibleSurvivors.sort((a, b) => rankForCap(a.output, b.output))
@@ -139,6 +155,7 @@ Deno.serve(async (req: Request) => {
 
     // 7. Insert eligible wishes
     for (const d of eligibleToInsert) {
+      const wishClass = mapCategoryToWishClass(d.feature.category)
       const wishId = await insertWish(supabase, {
         candidate: d.output.candidate,
         sourceIdeationLogId: d.sourceLogId,
@@ -148,6 +165,7 @@ Deno.serve(async (req: Request) => {
         estimatedFilesTouched: d.output.estimatedFilesTouched,
         autoShipBlockers: null,
         denialReason: null,
+        wishClass,
       })
       await logDecision(supabase, runId, d, 'eligible', { resulting_wish_id: wishId })
       eligibleCount++
@@ -155,6 +173,7 @@ Deno.serve(async (req: Request) => {
 
     // 8. Insert capped-but-otherwise-eligible as needs_review (they roll to next run)
     for (const d of eligibleCapped) {
+      const wishClass = mapCategoryToWishClass(d.feature.category)
       const wishId = await insertWish(supabase, {
         candidate: d.output.candidate,
         sourceIdeationLogId: d.sourceLogId,
@@ -163,7 +182,8 @@ Deno.serve(async (req: Request) => {
         complexityTier: d.output.sizeTier,
         estimatedFilesTouched: d.output.estimatedFilesTouched,
         autoShipBlockers: ['daily_cap_exceeded'],
-        denialReason: 'Daily cap of 3 auto-eligible wishes hit; rolled to next run.',
+        denialReason: `Daily cap of ${DEFAULT_DAILY_CAP} auto-eligible wishes hit; rolled to next run.`,
+        wishClass,
       })
       await logDecision(supabase, runId, d, 'skipped_cap', {
         resulting_wish_id: wishId,
@@ -171,8 +191,9 @@ Deno.serve(async (req: Request) => {
       })
     }
 
-    // 9. Insert needs_review wishes (forbidden paths / safety / size / schema)
+    // 9. Insert needs_review wishes (auth/billing/RLS infra or destructive SQL — the hard-floor REVIEW set)
     for (const d of reviewSurvivors) {
+      const wishClass = mapCategoryToWishClass(d.feature.category)
       const wishId = await insertWish(supabase, {
         candidate: d.output.candidate,
         sourceIdeationLogId: d.sourceLogId,
@@ -182,6 +203,7 @@ Deno.serve(async (req: Request) => {
         estimatedFilesTouched: d.output.estimatedFilesTouched,
         autoShipBlockers: d.output.blockers,
         denialReason: d.output.denialReason,
+        wishClass,
       })
       await logDecision(supabase, runId, d, 'needs_review', {
         resulting_wish_id: wishId,
@@ -302,6 +324,7 @@ interface InsertWishArgs {
   estimatedFilesTouched: number
   autoShipBlockers: string[] | null
   denialReason: string | null
+  wishClass: string
 }
 
 async function insertWish(supabase: SupabaseClient, args: InsertWishArgs): Promise<string | null> {
@@ -314,6 +337,7 @@ async function insertWish(supabase: SupabaseClient, args: InsertWishArgs): Promi
     affected_surfaces: args.candidate.affectedSurfaces,
     priority: 'normal',
     status: args.status,
+    wish_class: args.wishClass,
     auto_ship_eligible: args.autoShipEligible,
     complexity_tier: args.complexityTier,
     estimated_files_touched: args.estimatedFilesTouched,
@@ -333,7 +357,7 @@ async function logDecision(
   supabase: SupabaseClient,
   runId: string,
   d: DecisionInFlight,
-  decision: 'eligible' | 'needs_review' | 'skipped_dedup' | 'skipped_cap' | 'error',
+  decision: 'eligible' | 'needs_review' | 'rejected' | 'skipped_dedup' | 'skipped_cap' | 'error',
   extra: {
     resulting_wish_id?: string | null
     dedup_match_wish_id?: string | null

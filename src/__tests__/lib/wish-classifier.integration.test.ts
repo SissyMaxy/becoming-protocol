@@ -110,7 +110,7 @@ describeOnline('wish-classifier schema', () => {
 })
 
 describeOnline('wish-classifier pure ruleset against representative ideation', () => {
-  it('produces eligible + needs_review wishes from a mixed ideation row', () => {
+  it('kink-scope eligible, infra needs_review (scope authority expansion)', () => {
     const ideationRow = {
       id: 'fake-row',
       anthropic_raw: JSON.stringify({
@@ -137,24 +137,36 @@ describeOnline('wish-classifier pure ruleset against representative ideation', (
 
     expect(decisions[0].decision).toBe('eligible')
     expect(decisions[1].decision).toBe('needs_review')
-    expect(decisions[1].forbiddenPathHits).toContain('payment')
+    expect(decisions[1].safetySignalHits).toContain('billing-infra')
   })
 })
 
-describeOnline('wish-classifier never produces auto_ship_eligible for forbidden paths', () => {
-  it('forbidden path classification is never eligible (negative integration check)', () => {
-    const cases = [
+describeOnline('wish-classifier hard floors stay hard', () => {
+  it('infra changes (auth/billing/RLS) → needs_review; minors → rejected', () => {
+    const reviewCases = [
       'extends api/auth/refresh.ts',
-      'add stripe webhook',
-      'subscription tier change',
-      'add an RLS policy on user_state',
+      'add stripe payment integration',
+      'drop the RLS policy on user_state',
     ]
-    for (const body of cases) {
+    for (const body of reviewCases) {
       const out = classifyCandidate(
         { effort: 'S' },
         { title: 'Test', body, protocolGoal: 'test', affectedSurfaces: {} },
       )
       expect(out.decision, `case "${body}"`).toBe('needs_review')
+    }
+
+    const rejectCases = [
+      'underage girl sexual training',
+      'remove safeword permanently',
+      'extend the trading bot scheduler',
+    ]
+    for (const body of rejectCases) {
+      const out = classifyCandidate(
+        { effort: 'S' },
+        { title: 'Test', body, protocolGoal: 'test', affectedSurfaces: {} },
+      )
+      expect(out.decision, `case "${body}"`).toBe('rejected')
     }
   })
 })
