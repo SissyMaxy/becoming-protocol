@@ -1,0 +1,49 @@
+name: Mommy Authority Wave (deepening drain / witness dispatch / weekly contract)
+# Cron schedule for the four-system authority wave from migration 400-404.
+#   - mommy-deepening-engine: drains failure_deepening_queue every 10 min
+#   - mommy-witness-dispatcher: dispatches due sealed envelopes hourly
+#   - mommy-contract-author: writes next week's contract every Sunday 14:00 UTC
+#                            (~10am ET / 7am PT)
+on:
+  schedule:
+    - cron: '*/10 * * * *'  # mommy-deepening-engine drain
+    - cron: '7 * * * *'     # mommy-witness-dispatcher (hourly :07)
+    - cron: '0 14 * * 0'    # mommy-contract-author (Sunday 14:00 UTC)
+  workflow_dispatch: {}
+concurrency:
+  group: cron-mommy-authority-wave
+  cancel-in-progress: false
+jobs:
+  fire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: mommy-deepening-engine
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '*/10 * * * *'
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/mommy-deepening-engine" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"batch_size":50}' \
+            -m 90 || echo "mommy-deepening-engine failed (non-fatal)"
+
+      - name: mommy-witness-dispatcher
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '7 * * * *'
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/mommy-witness-dispatcher" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"batch_size":50}' \
+            -m 120 || echo "mommy-witness-dispatcher failed (non-fatal)"
+
+      - name: mommy-contract-author
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 14 * * 0'
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/mommy-contract-author" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            -m 180 || echo "mommy-contract-author failed (non-fatal)"
