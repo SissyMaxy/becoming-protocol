@@ -287,8 +287,13 @@ Deno.serve(async (req: Request) => {
         // with redaction signals for closer inspection.
         needs_review: m.text.includes('[redacted-'),
       }))
+    let insertedMessageIds: string[] = []
     if (messageRows.length > 0) {
-      await admin.from('sniffies_chat_messages').insert(messageRows)
+      const { data: insertedRows } = await admin
+        .from('sniffies_chat_messages')
+        .insert(messageRows)
+        .select('id')
+      insertedMessageIds = ((insertedRows ?? []) as Array<{ id: string }>).map(r => r.id)
     }
 
     // 7. Update the import row.
@@ -313,12 +318,35 @@ Deno.serve(async (req: Request) => {
       })
       .eq('id', importId)
 
+    // 8. Hand off to the dispatcher so Mama becomes aware of each new
+    // message: slip-scan, dossier enrich, proactive react, confession
+    // demand. Skipped when the import is in manual_review — those
+    // messages need user inspection before any persona use.
+    let dispatchInvoked = false
+    if (!holdForReview && insertedMessageIds.length > 0) {
+      try {
+        const dispatchUrl = (Deno.env.get('SUPABASE_URL') ?? '') + '/functions/v1/mommy-sniffies-dispatcher'
+        const auth = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        // Fire-and-forget — we don't want a slow Mama call to stall the
+        // import response. Errors logged inside the dispatcher.
+        void fetch(dispatchUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth}` },
+          body: JSON.stringify({ user_id: userId, message_ids: insertedMessageIds }),
+        }).catch(e => console.warn('[sniffies-extract-import] dispatch kickoff failed:', e))
+        dispatchInvoked = true
+      } catch (e) {
+        console.warn('[sniffies-extract-import] dispatch kickoff threw:', e)
+      }
+    }
+
     return new Response(JSON.stringify({
       ok: true,
       contacts: extracted.contacts.length,
       messages: messageRows.length,
       hold_for_review: holdForReview,
       redaction_flags: flagsArr,
+      dispatch_invoked: dispatchInvoked,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)

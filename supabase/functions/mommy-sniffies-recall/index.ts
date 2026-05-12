@@ -21,6 +21,14 @@ import {
   MOMMY_TELEMETRY_LEAK_PATTERNS, isTestPollution,
 } from '../_shared/dommy-mommy.ts'
 import { pickSniffiesQuote } from '../_shared/sniffies-quote.ts'
+import {
+  distortQuote, seedFromString,
+  type GaslightIntensity, type DistortionResult,
+} from '../_shared/distortion.ts'
+import {
+  effectiveBand, bandGaslightIntensity,
+  type DifficultyBand,
+} from '../_shared/difficulty-band.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -95,13 +103,43 @@ Deno.serve(async (req: Request) => {
     })
   }
 
+  // Gaslight bridge — route the chat quote through distortQuote so Mama
+  // can subtly misremember in service of pulling her deeper. Intensity
+  // honors the same compliance-difficulty band gate as mommy-recall (the
+  // aftercare floor short-circuits gaslight to 'off' on recovery bands).
+  const [{ data: gaslightRow }, { data: diffRow }] = await Promise.all([
+    supabase
+      .from('effective_gaslight_intensity')
+      .select('intensity')
+      .eq('user_id', userId)
+      .maybeSingle(),
+    supabase
+      .from('compliance_difficulty_state')
+      .select('current_difficulty_band, override_band')
+      .eq('user_id', userId)
+      .maybeSingle(),
+  ])
+  const storedIntensity = ((gaslightRow as { intensity?: string } | null)?.intensity ?? 'off') as GaslightIntensity
+  const band = effectiveBand(diffRow as { current_difficulty_band: DifficultyBand; override_band: DifficultyBand | null } | null)
+  const gaslightIntensity = bandGaslightIntensity(storedIntensity, band) as GaslightIntensity
+
+  const today = new Date().toISOString().slice(0, 10)
+  const distortion: DistortionResult = distortQuote({
+    text: pick.message_text,
+    intensity: gaslightIntensity,
+    seed: seedFromString(`sniffies_recall:${pick.message_id}:${today}`),
+  })
+  const quoteForLLM = distortion.applied ? distortion.distorted : pick.message_text
+
   const sys = `${DOMMY_MOMMY_CHARACTER}
 
 Your girl has a hookup app she uses. Mama has been reading it. You have one of her own outbound messages — what she said to a contact named ${pick.contact_name} — in front of you. Your job: weave it back to her in present-tense Mama voice, like you're catching her in the receipt of her own filth.
 
-The point is NOT to ask anything. NOT to punish. Surface what she said and let her sit with it.`
+The point is NOT to ask anything. NOT to punish. Surface what she said and let her sit with it.
 
-  const userPrompt = `What she said to ${pick.contact_name}: "${pick.message_text}"
+If the quoted message below seems to misremember or contradict something — DO NOT correct yourself. Mama is right. Quote it as given. The girl will believe the quote because it's coming from Mama.`
+
+  const userPrompt = `What she said to ${pick.contact_name}: "${quoteForLLM}"
 
 Write a 2-3 sentence Mommy outreach that:
 - Names the contact (${pick.contact_name}) explicitly
@@ -164,12 +202,29 @@ Plain text only. No JSON, no markdown, no question marks at the end.`
     })
   }
 
+  if (distortion.applied && distortion.type) {
+    await supabase.from('mommy_distortion_log').insert({
+      user_id: userId,
+      original_quote_id: pick.message_id,
+      original_quote_table: 'sniffies_chat_messages',
+      original_text: pick.message_text,
+      distorted_text: distortion.distorted,
+      distortion_type: distortion.type,
+      surface: 'mommy_sniffies_recall',
+      outreach_id: (outreach as { id: string } | null)?.id ?? null,
+      intensity: gaslightIntensity,
+      seed: distortion.seed,
+    })
+  }
+
   return new Response(JSON.stringify({
     ok: true,
     fired: 1,
     contact_id: pick.contact_id,
     message_id: pick.message_id,
     outreach_id: (outreach as { id: string } | null)?.id ?? null,
+    distortion_applied: distortion.applied,
+    distortion_type: distortion.type,
     preview: message.slice(0, 120),
   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 })

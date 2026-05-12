@@ -25,7 +25,7 @@ import type {
   SniffiesSourceKind,
 } from '../../lib/sniffies/types';
 
-type SavingFlag = 'idle' | 'integration' | 'persona' | 'dares' | 'slip' | 'upload';
+type SavingFlag = 'idle' | 'integration' | 'persona' | 'dares' | 'slip' | 'auto_react' | 'upload';
 
 export function SniffiesSettings() {
   const { user } = useAuth();
@@ -67,7 +67,12 @@ export function SniffiesSettings() {
   }, [user, refresh]);
 
   async function handleToggle(
-    key: 'sniffies_integration_enabled' | 'persona_use_enabled' | 'dares_use_enabled' | 'slip_use_enabled',
+    key:
+      | 'sniffies_integration_enabled'
+      | 'persona_use_enabled'
+      | 'dares_use_enabled'
+      | 'slip_use_enabled'
+      | 'auto_react_enabled',
     flag: SavingFlag,
   ) {
     setSaving(flag);
@@ -75,7 +80,10 @@ export function SniffiesSettings() {
     try {
       // Master switch enforcement: if the master goes off, granular
       // flags also go off so the surfaces don't accidentally fire when
-      // the user re-enables only the master later.
+      // the user re-enables only the master later. auto_react_enabled
+      // stays at its default TRUE so re-enabling the master picks
+      // back up where the user left off — they explicitly pause via
+      // its own toggle.
       if (key === 'sniffies_integration_enabled' && settings.sniffies_integration_enabled) {
         await update({
           sniffies_integration_enabled: false,
@@ -206,6 +214,14 @@ export function SniffiesSettings() {
             isBambiMode={isBambiMode}
             disabled={saving !== 'idle' || !integrationOn}
             onToggle={() => handleToggle('slip_use_enabled', 'slip')}
+          />
+          <ToggleRow
+            label="Let Mama react in real time"
+            description="When a new chat lands, Mama reads it and responds (claim, demand, recall). Turn off to pause her without losing imports."
+            checked={settings.auto_react_enabled}
+            isBambiMode={isBambiMode}
+            disabled={saving !== 'idle' || !integrationOn}
+            onToggle={() => handleToggle('auto_react_enabled', 'auto_react')}
           />
         </div>
       </section>
