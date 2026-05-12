@@ -101,6 +101,7 @@ export function OutreachQueueCard() {
         .eq('user_id', user.id)
         .is('delivered_at', null)
         .neq('source', 'dossier_question')
+        .neq('source', 'voice_lesson')
         .gte('expires_at', new Date().toISOString())
         .order('scheduled_for', { ascending: true })
         .limit(8),
@@ -109,6 +110,7 @@ export function OutreachQueueCard() {
         .eq('user_id', user.id)
         .not('delivered_at', 'is', null)
         .neq('source', 'dossier_question')
+        .neq('source', 'voice_lesson')
         .order('delivered_at', { ascending: false })
         .limit(3),
     ]);

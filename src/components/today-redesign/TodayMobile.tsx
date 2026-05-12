@@ -67,6 +67,7 @@ import { PunishmentQueueCard } from './PunishmentQueueCard';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
 import { DossierDripCard } from './DossierDripCard';
+import { VoiceLessonCard } from '../voice/VoiceLessonCard';
 import { SlipLogCard } from './SlipLogCard';
 import { GinaSessionsCard } from './GinaSessionsCard';
 import { RationalizationPatternCard } from './RationalizationPatternCard';
@@ -341,6 +342,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             <HandlerKnowCard />
             <HandlerRunningCard />
             <DossierDripCard />
+            <VoiceLessonCard />
             <OutreachQueueCard />
             <DeviceScheduleCard />
             <SlipLogCard />

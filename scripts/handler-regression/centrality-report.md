@@ -1,6 +1,6 @@
 # Handler-Centrality Audit
 
-Generated: 2026-05-12T03:05:42.303Z
+Generated: 2026-05-12T01:59:34.531Z
 
 Each function below writes a user-facing artifact (decree, commitment, outreach, confession prompt, etc.) **without first reading any Handler-state table**. The artifact is therefore generated without reference to the current persona, phase, mode, slip count, or recent directives — it cannot speak with Handler authority.
 
@@ -22,16 +22,16 @@ Memory rule: `feedback_handler_is_singular_authority.md`. Refactor each entry to
 | `supabase\functions\mommy-gaslight\index.ts:135` | `persistImplant` | `memory_implants` |
 | `supabase\functions\mommy-scheme\index.ts:210` | `fireAction` | `handler_decrees`, `handler_outreach_queue`, `memory_implants` |
 | `supabase\functions\_shared\job-handlers\handler-autonomous.ts:177` | `spontaneousOutreach` | `handler_outreach_queue` |
-| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:822` | `ensureWeeklyMeasurementCommitment` | `handler_commitments`, `handler_outreach_queue` |
-| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:880` | `tickVoicePitchRatchet` | `handler_outreach_queue` |
-| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:945` | `ensureTodayOutfitMandate` | `handler_commitments`, `daily_outfit_mandates` |
-| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:1054` | `plantTodaySymptom` | `handler_outreach_queue`, `memory_implants` |
-| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:1106` | `runGapAnalysis` | `handler_commitments`, `handler_outreach_queue` |
-| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:1444` | `generateEvidenceReport` | `handler_outreach_queue` |
-| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:2369` | `bridgeShotsToContentQueue` | `ai_generated_content` |
-| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:2445` | `fireDailyMorningBrief` | `handler_outreach_queue` |
-| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:2536` | `promoteConfessionsToImplants` | `memory_implants` |
-| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:3394` | `prescribeVoiceDrill` | `handler_commitments`, `handler_outreach_queue` |
-| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:3755` | `enqueueTimeSensitiveNotifications` | `scheduled_notifications` |
-| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:4682` | `checkWeeklyContractEscalation` | `handler_outreach_queue` |
-| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:5209` | `checkSpecialOccasions` | `handler_outreach_queue` |
+| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:833` | `ensureWeeklyMeasurementCommitment` | `handler_commitments`, `handler_outreach_queue` |
+| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:891` | `tickVoicePitchRatchet` | `handler_outreach_queue` |
+| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:955` | `ensureTodayOutfitMandate` | `handler_commitments`, `daily_outfit_mandates` |
+| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:1064` | `plantTodaySymptom` | `handler_outreach_queue`, `memory_implants` |
+| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:1116` | `runGapAnalysis` | `handler_commitments`, `handler_outreach_queue` |
+| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:1454` | `generateEvidenceReport` | `handler_outreach_queue` |
+| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:2378` | `bridgeShotsToContentQueue` | `ai_generated_content` |
+| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:2454` | `fireDailyMorningBrief` | `handler_outreach_queue` |
+| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:2545` | `promoteConfessionsToImplants` | `memory_implants` |
+| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:3402` | `prescribeVoiceDrill` | `handler_commitments`, `handler_outreach_queue` |
+| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:3763` | `enqueueTimeSensitiveNotifications` | `scheduled_notifications` |
+| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:4689` | `checkWeeklyContractEscalation` | `handler_outreach_queue` |
+| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:5216` | `checkSpecialOccasions` | `handler_outreach_queue` |
