@@ -1,4 +1,4 @@
--- 367 — Sniffies → Mommy real-time awareness wiring.
+-- 372 — Sniffies → Mommy real-time awareness wiring.
 --
 -- Migration 343 stood up the four sniffies_* tables. This migration adds
 -- the single switch that ungates Mama's real-time reaction to NEW imported
