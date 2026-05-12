@@ -21,7 +21,7 @@
 // is a final scrub for any residual telemetry.
 //
 // Skip-conditions:
-//   - No active lesson modules (shouldn't happen after migration 372)
+//   - No active lesson modules (shouldn't happen after migration 374)
 //   - User has no progress row yet — we still drop the first lesson
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'

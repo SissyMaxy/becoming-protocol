@@ -1,4 +1,4 @@
--- 372 — Real voice-feminization curriculum.
+-- 374 — Real voice-feminization curriculum.
 --
 -- Replaces the rubber-stamp "submit audio → pass" pattern with a
 -- structured 10-lesson curriculum, real acoustic analysis (LPC formants,
