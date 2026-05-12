@@ -1,4 +1,5 @@
--- 371 — Mommy as editor: content_queue editorial notes + daily prompter.
+-- 388 — Mommy as editor: content_queue editorial notes + daily prompter.
+-- (Renumbered from 371; collided with merged main work.)
 --
 -- System 4 of the "life as a woman" surfaces. Mommy reviews pending
 -- content_queue items, drafts caption rewrites + posting recommendations,

@@ -1,62 +1,41 @@
--- 367 — Mommy authority log + safeword-active helper.
+-- 384 — life-as-woman authority log extensions + safeword helper + settings.
 --
--- Cross-cutting infra for the "life as a woman" surfaces (sniffies outbound,
--- hypno trance, gooning, content editor). Every action Mommy takes inside
--- those surfaces — drafted a sniffies message, authored a trance script,
--- selected a content piece, issued an editorial note — writes a row here.
--- The log is the dossier for what Mommy did on the user's behalf, and the
--- watchdog reads it to verify Mommy stayed inside hard floors.
+-- Renumbered from 367 (collided with merged main work). The
+-- `mommy_authority_log` base table already exists on main from PR #53
+-- (mig 400) and was extended with short-name aliases by PR #55 (mig 378).
+-- This migration is therefore PURELY ADDITIVE for mommy_authority_log:
+-- it only adds the four life-as-woman-specific pointer columns the new
+-- surfaces need (surface, action, target_table, target_id, autonomous).
+-- The base columns (action_kind / source_system / action_summary /
+-- action_payload / shipped_at) stay NOT NULL — every life-as-woman edge
+-- function populates BOTH the legacy columns AND the new aliases. The
+-- short-name columns (system, summary, payload, created_at) were already
+-- added in mig 378 so we do not redeclare them.
 --
--- Pairs with: a portable safeword-active helper. Every Mommy generator
--- must respect a safeword event within 60 seconds. The check is one
--- function read instead of a duplicated subquery in every edge fn.
+-- Companion artifacts created here for the first time:
+--   - is_safeword_active(uid, window_seconds) helper function
+--   - life_as_woman_settings table (master + per-system toggles)
+--   - life_as_woman_system_active view
 --
 -- Hard floors enforced here:
 --   - RLS owner-only (read), service-role write
---   - No PII in log payloads; structured pointers only (table/row id)
 --   - Safeword helper looks at meta_frame_breaks (created in 306) so any
 --     safeword exit from the gaslight surface auto-pauses every new system
 
--- ─── 1. mommy_authority_log ─────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS mommy_authority_log (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  -- Which surface acted. Free-form so new surfaces don't need a migration,
-  -- but conventional values: 'sniffies_outbound', 'hypno_trance',
-  -- 'gooning', 'chastity_v2', 'kink_curriculum', 'content_editor',
-  -- 'content_prompter', 'cross_platform'.
-  surface TEXT NOT NULL,
-  -- What Mommy did. Convention: '<verb>_<object>' e.g. 'drafted_sniffies_message',
-  -- 'authored_trance_session', 'issued_editorial_note', 'queued_content_prompt'.
-  action TEXT NOT NULL,
-  -- Pointer to the row this action produced (sniffies_outbound_drafts.id,
-  -- hypno_trance_sessions.id, mommy_editorial_notes.id, etc). NULL when the
-  -- action was advisory and produced no persistent row.
-  target_table TEXT,
-  target_id UUID,
-  -- Plain-voice one-liner of what happened, for the dossier feed. NOT the
-  -- user-facing text — that lives in target_table/target_id.
-  summary TEXT,
-  -- Optional structured detail. Convention: keep it shallow, no message
-  -- bodies; reference-only.
-  payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-  -- Whether Mommy authored this autonomously (default true) vs the user
-  -- explicitly requested it. Watchdog reports on the autonomous-ratio.
-  autonomous BOOLEAN NOT NULL DEFAULT TRUE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS idx_mommy_authority_user_recent
-  ON mommy_authority_log (user_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_mommy_authority_surface
-  ON mommy_authority_log (user_id, surface, created_at DESC);
+-- ─── 1. mommy_authority_log — ADDITIVE columns only ────────────────────
+-- The table already exists from mig 400. Mig 378 already added system /
+-- summary / payload / created_at. We only add what's truly new for the
+-- life-as-woman wave. Index name is unique (`_law_` infix) to avoid
+-- silent collision with the existing idx_mommy_authority_log_by_system.
+ALTER TABLE mommy_authority_log
+  ADD COLUMN IF NOT EXISTS surface TEXT,
+  ADD COLUMN IF NOT EXISTS action TEXT,
+  ADD COLUMN IF NOT EXISTS target_table TEXT,
+  ADD COLUMN IF NOT EXISTS target_id UUID,
+  ADD COLUMN IF NOT EXISTS autonomous BOOLEAN DEFAULT TRUE;
 
-ALTER TABLE mommy_authority_log ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS mommy_authority_log_owner ON mommy_authority_log;
-CREATE POLICY mommy_authority_log_owner ON mommy_authority_log
-  FOR SELECT USING (auth.uid() = user_id);
-DROP POLICY IF EXISTS mommy_authority_log_service ON mommy_authority_log;
-CREATE POLICY mommy_authority_log_service ON mommy_authority_log
-  FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE INDEX IF NOT EXISTS idx_mommy_authority_log_law_surface
+  ON mommy_authority_log (user_id, surface, created_at DESC);
 
 -- ─── 2. safeword-active helper ──────────────────────────────────────────
 -- Returns TRUE if the user has triggered a safeword in the last 60 seconds.
@@ -169,3 +148,5 @@ FROM life_as_woman_settings;
 INSERT INTO life_as_woman_settings (user_id)
 SELECT user_id FROM user_state
 ON CONFLICT (user_id) DO NOTHING;
+
+NOTIFY pgrst, 'reload schema';

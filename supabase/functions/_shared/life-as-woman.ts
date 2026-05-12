@@ -90,6 +90,12 @@ export async function gateLifeAsWoman(
 /**
  * Log a Mommy action to mommy_authority_log. Best-effort; logging failures
  * never block the action.
+ *
+ * Populates BOTH the legacy NOT NULL columns (action_kind, source_system,
+ * action_summary, action_payload from mig 400) AND the life-as-woman short-
+ * name aliases (surface, action, target_table, target_id, summary, payload,
+ * autonomous added by mig 378 + 384). Otherwise the insert would fail the
+ * NOT NULL constraints on the legacy columns.
  */
 export async function logAuthority(
   supabase: SupabaseClient,
@@ -105,14 +111,23 @@ export async function logAuthority(
   },
 ): Promise<void> {
   try {
+    const summary = args.summary ?? `${args.surface}:${args.action}`
+    const payload = args.payload ?? {}
     await supabase.from('mommy_authority_log').insert({
       user_id: args.user_id,
+      // ── Legacy mig-400 columns (NOT NULL) — derive from new fields. ──
+      action_kind: args.action,
+      source_system: args.surface,
+      action_summary: summary,
+      action_payload: payload,
+      // ── New life-as-woman short-name columns (mig 378 + 384) ────────
       surface: args.surface,
       action: args.action,
       target_table: args.target_table ?? null,
       target_id: args.target_id ?? null,
-      summary: args.summary ?? null,
-      payload: args.payload ?? {},
+      system: args.surface,
+      summary,
+      payload,
       autonomous: args.autonomous ?? true,
     })
   } catch (_) { /* log failures are non-fatal */ }

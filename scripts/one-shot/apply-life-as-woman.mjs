@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// apply-life-as-woman.mjs — applies migrations 367-371 via Supabase Management API.
+// apply-life-as-woman.mjs — applies migrations 384-388 via Supabase Management API.
 //
 // Reads SUPABASE_ACCESS_TOKEN + SUPABASE_PROJECT_REF (or VITE_SUPABASE_URL to
 // derive) + SUPABASE_SERVICE_ROLE_KEY from .env. Falls back to running each
@@ -22,11 +22,11 @@ dotenv.config({ path: join(MAIN_REPO_ROOT, '.env') })
 dotenv.config({ path: join(MAIN_REPO_ROOT, '.env.local') })
 
 const MIGRATIONS = [
-  '367_mommy_authority_log.sql',
-  '368_sniffies_outbound.sql',
-  '369_hypno_trance.sql',
-  '370_gooning_chastity_kink.sql',
-  '371_mommy_content_editor.sql',
+  '384_mommy_authority_log.sql',
+  '385_sniffies_outbound.sql',
+  '386_hypno_trance.sql',
+  '387_gooning_chastity_kink.sql',
+  '388_mommy_content_editor.sql',
 ]
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''

@@ -1,4 +1,5 @@
--- 370 — Long-form gooning + chastity v2 + kink training curriculum.
+-- 387 — Long-form gooning + chastity v2 + kink training curriculum.
+-- (Renumbered from 370; collided with merged main work.)
 --
 -- System 3 of the "life as a woman" surfaces. Three coordinated tables:
 --   - gooning_sessions — pre-authored 60-90 min Mommy audio narratives

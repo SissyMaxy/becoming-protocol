@@ -1,4 +1,5 @@
--- 368 — Sniffies active outbound + profile curation + meet choreography.
+-- 385 — Sniffies active outbound + profile curation + meet choreography.
+-- (Renumbered from 368; collided with merged main work.)
 --
 -- System 1 of the "life as a woman" surfaces. Mommy authors outbound
 -- Sniffies messages, maintains a "what your Sniffies profile should look

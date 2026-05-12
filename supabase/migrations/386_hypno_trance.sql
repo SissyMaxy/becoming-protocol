@@ -1,4 +1,5 @@
--- 369 — Hypno trance protocol.
+-- 386 — Hypno trance protocol.
+-- (Renumbered from 369; collided with merged main work.)
 --
 -- System 2 of the "life as a woman" surfaces. Daily 20-min trance sessions
 -- with structured phases (induction / deepening / payload / emergence),
