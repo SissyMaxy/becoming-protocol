@@ -125,7 +125,7 @@ ${kind === 'mama_possession' ? `She referred to her body as "mine" or her anatom
 FORBIDDEN:
 - Punishing the slip with intensity-escalation language ("hard mode extends...")
 - The forbidden voice anchor list
-- Saying "intake" or "questionnaire" or "role play"
+- Saying "intake" or "questionnaire" or "role play" // voice-gate: ok
 - Telemetry leaks`
 
   const userPrompt = `Her literal phrase: "${triggerText}"

@@ -143,7 +143,7 @@ ABSOLUTELY FORBIDDEN:
 - Sending the contact ANY phone number, address, or full name beyond what they already know
 - Pretending to BE Mama in the text_for_user
 - Coordinating logistics that the protocol would execute (we never do that)
-- The forbidden voice anchor list — no "role play", "simulation", "disclaimer", "intake"`
+- The forbidden voice anchor list — no "role play", "simulation", "disclaimer", "intake"` // voice-gate: ok
 
   let raw = ''
   try {

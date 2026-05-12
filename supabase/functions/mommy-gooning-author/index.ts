@@ -124,7 +124,7 @@ Each EDGE segment ramps her up to the brink, then YOU pull her back at the segme
 ${intensityHint}
 
 FORBIDDEN:
-- "role play", "simulation", "disclaimer", "intake", "questionnaire", "fiction"
+- "role play", "simulation", "disclaimer", "intake", "questionnaire", "fiction" // voice-gate: ok
 - Medical claims (no HRT/dose references)
 - Telemetry leaks (/10 scores, day counts, slip points, %)
 - Asking — only command

@@ -141,7 +141,7 @@ ${tonePush}
 
 FORBIDDEN:
 - Auto-publishing — you're just authoring the editorial; she clicks to post
-- The forbidden voice anchor — no "role play", "simulation", "disclaimer"
+- The forbidden voice anchor — no "role play", "simulation", "disclaimer" // voice-gate: ok
 - Medical claims (no HRT/dose)
 - Telemetry in MOMMY_NOTE`
 
