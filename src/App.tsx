@@ -49,6 +49,7 @@ import { MorningMantraGate } from './components/today-redesign/MorningMantraGate
 import { MommyDossierQuiz } from './components/persona/MommyDossierQuiz';
 import { VerificationVault } from './components/verification/VerificationVault';
 import { LettersArchiveView } from './components/letters';
+import { LifeAsWomanView } from './components/life-as-woman';
 import { MommyDossierStatus } from './components/persona/MommyDossierStatus';
 import { GinaKeyHolderPage } from './components/gina/GinaKeyHolderPage';
 import { usePunishmentNotifications } from './hooks/usePunishmentNotifications';
@@ -186,7 +187,7 @@ function LoadingScreen() {
   );
 }
 
-type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | 'hypno-learning' | 'goon-session' | 'progress-page' | 'sealed-page' | 'content-capture' | 'content-queue' | 'content-calendar' | 'content-fans' | 'content-polls' | 'content-revenue' | 'content-settings' | 'vault-browser' | 'log-release' | 'conditioning-library' | 'social-dashboard' | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol' | 'escalation_ladder' | 'force' | 'wardrobe' | 'gina-vibe' | 'trajectory' | 'mommy-dossier' | 'identity' | 'verification-vault' | 'community-queue' | 'community-list' | 'community-log' | 'letters' | 'dossier' | 'recaps' | 'recap-detail' | null;
+type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | 'hypno-learning' | 'goon-session' | 'progress-page' | 'sealed-page' | 'content-capture' | 'content-queue' | 'content-calendar' | 'content-fans' | 'content-polls' | 'content-revenue' | 'content-settings' | 'vault-browser' | 'log-release' | 'conditioning-library' | 'social-dashboard' | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol' | 'escalation_ladder' | 'force' | 'wardrobe' | 'gina-vibe' | 'trajectory' | 'mommy-dossier' | 'identity' | 'verification-vault' | 'community-queue' | 'community-list' | 'community-log' | 'letters' | 'dossier' | 'recaps' | 'recap-detail' | 'life-as-woman' | null;
 
 /** Session picker → launches immersive SessionContainer */
 function SessionPickerOrContainer({ onBack }: { onBack: () => void }) {
@@ -863,6 +864,8 @@ function AuthenticatedAppInner() {
         return <VerificationVault onBack={handleBackFromSubView} />;
       case 'letters':
         return <LettersArchiveView onBack={handleBackFromSubView} />;
+      case 'life-as-woman':
+        return <LifeAsWomanView onBack={handleBackFromSubView} />;
       case 'dossier':
         return (
           <div>
