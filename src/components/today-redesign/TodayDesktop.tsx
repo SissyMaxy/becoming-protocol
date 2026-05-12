@@ -66,6 +66,7 @@ import { SupabaseHealthCard } from './SupabaseHealthCard';
 import { PunishmentQueueCard } from './PunishmentQueueCard';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
+import { VoiceLessonCard } from '../voice/VoiceLessonCard';
 import { DossierDripCard } from './DossierDripCard';
 import { SlipLogCard } from './SlipLogCard';
 import { GinaSessionsCard } from './GinaSessionsCard';
@@ -394,6 +395,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
           <HandlerKnowCard />
           <HandlerRunningCard />
           <DossierDripCard />
+          <VoiceLessonCard />
           <OutreachQueueCard />
           <DeviceScheduleCard />
           <SlipLogCard />
