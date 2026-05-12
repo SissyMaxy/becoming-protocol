@@ -260,11 +260,14 @@ function TypedMantraFallback({ mantra, onPass }: { mantra: string; onPass: () =>
   const [count, setCount] = useState(0);
   const [hint, setHint] = useState<string | null>(null);
   const passedRef = useRef(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   const required = 3;
-  const matches = normalize(typed) === normalize(mantra);
+  const trimmed = typed.trim();
+  const matches = trimmed.length > 0 && normalize(typed) === normalize(mantra);
 
-  const handleSubmit = () => {
-    if (passedRef.current) return; // already dismissed once
+  const handleSubmit = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (passedRef.current) return;
     if (matches) {
       const newCount = count + 1;
       setCount(newCount);
@@ -273,37 +276,52 @@ function TypedMantraFallback({ mantra, onPass }: { mantra: string; onPass: () =>
       if (newCount >= required) {
         passedRef.current = true;
         onPass();
+        return;
       }
-    } else if (typed.trim().length > 0) {
-      setHint('Does not match. Type the mantra exactly as shown.');
+      // refocus for the next pass so mobile keyboard stays open
+      requestAnimationFrame(() => inputRef.current?.focus());
+    } else if (trimmed.length > 0) {
+      // reset progress — no partial credit
+      setCount(0);
+      setTyped('');
+      setHint("Say it again, baby. Word for word.");
+      requestAnimationFrame(() => inputRef.current?.focus());
     }
   };
 
   return (
     <div className="border-t border-gray-800 pt-4 mt-2">
-      <p className="text-xs text-gray-500 text-center mb-2">
-        Mic not working? Type the mantra {required} times instead ({count}/{required})
+      <p className="text-xs text-gray-400 text-center mb-2">
+        No voice? Type it for Mommy — {required} times, exact. ({count}/{required})
       </p>
-      <div className="flex gap-2">
+      <form onSubmit={handleSubmit} className="flex gap-2" autoComplete="off">
         <input
+          ref={inputRef}
           type="text"
+          name="mantra-typed"
+          id="mantra-typed"
           value={typed}
           onChange={(e) => { setTyped(e.target.value); if (hint) setHint(null); }}
-          onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit(); }}
           placeholder="Type the mantra exactly..."
-          className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm"
+          className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-3 text-white"
+          style={{ fontSize: '16px', WebkitUserSelect: 'text', userSelect: 'text', WebkitTouchCallout: 'default' } as React.CSSProperties}
           autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="none"
+          spellCheck={false}
+          inputMode="text"
+          enterKeyHint="send"
+          aria-label="Type the mantra"
         />
         <button
-          onClick={handleSubmit}
-          disabled={!matches}
-          className="px-4 py-2 rounded-lg bg-purple-600 disabled:bg-gray-800 text-white text-sm"
+          type="submit"
+          className="px-4 py-3 rounded-lg bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white text-sm font-medium min-w-[64px]"
         >
           {count}/{required}
         </button>
-      </div>
+      </form>
       {hint && (
-        <p className="text-xs text-red-400 text-center mt-2">{hint}</p>
+        <p className="text-xs text-pink-300 text-center mt-2 italic">{hint}</p>
       )}
     </div>
   );
