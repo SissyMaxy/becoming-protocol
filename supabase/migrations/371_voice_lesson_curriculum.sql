@@ -1,4 +1,4 @@
--- 370 — Real voice-feminization curriculum.
+-- 371 — Real voice-feminization curriculum.
 --
 -- Replaces the rubber-stamp "submit audio → pass" pattern with a
 -- structured 10-lesson curriculum, real acoustic analysis (LPC formants,
@@ -203,7 +203,7 @@ BEGIN
       'confession_missed', 'hrt_dose_missed', 'chastity_unlocked_early',
       'immersion_session_broken', 'disclosure_deadline_missed',
       'voice_masculine_pitch', 'resistance_statement', 'handler_ignored',
-      'voice_lesson_skipped',                    -- ← added in 370
+      'voice_lesson_skipped',                    -- ← added in 371
       'other'
     ));
 END $$;

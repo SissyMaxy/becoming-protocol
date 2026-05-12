@@ -1,4 +1,4 @@
--- 371 — Register the voice-coach-daily-cron edge function.
+-- 372 — Register the voice-coach-daily-cron edge function.
 --
 -- Daily at 9:00 UTC: voice-coach-daily-cron picks the next unlocked
 -- lesson for each canonical user and inserts a handler_outreach_queue
