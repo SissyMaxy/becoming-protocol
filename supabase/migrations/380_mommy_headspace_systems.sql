@@ -28,12 +28,20 @@
 -- 'dommy_mommy') enforced in the edge fns, not the DB.
 
 -- ============================================
--- 0. mommy_authority_log — cross-cutting sink
+-- 0. mommy_authority_log — cross-cutting sink (additive ALTERs only)
 -- ============================================
--- Every Mommy-initiated artifact writes one row. Used by the supervisor
--- watchdog (project_mommy_supervisor.md) and the daily capability digest.
--- Action enum is open TEXT (no CHECK) so new headspace systems can land
--- their own action labels without a schema change. Known values:
+-- Coexistence note: main's mig 400 (and the parallel mig 410) already create
+-- this table with their own column shapes (action_kind/source_system/payload
+-- variants). This migration is purely ADDITIVE: it only adds the columns the
+-- headspace edge fns need (action / surface / ref_table / ref_id / meta /
+-- acted_at), without recreating the table or touching pre-existing columns,
+-- indexes, or policies. Fresh-deploy safety: a minimal CREATE TABLE IF NOT
+-- EXISTS bootstraps the table when neither 400 nor 410 has run yet (e.g.
+-- dev DBs branching off this PR alone). Both mig 400 and mig 410 also use
+-- CREATE TABLE IF NOT EXISTS, so they no-op cleanly when this migration ran
+-- first.
+--
+-- Headspace action labels written to this table:
 --   'mantra_drill_logged'       — reps submitted
 --   'mantra_milestone_reached'  — 1k / 10k / 100k threshold crossed
 --   'random_clip_queued'        — clip-scheduler dropped a clip
@@ -45,20 +53,31 @@
 --   'scene_executing'           — live-prompt window opened
 --   'scene_debriefed'           — debrief submitted
 --   'scene_aborted'             — scene cancelled (refusal / window passed)
+
+-- Bootstrap: minimal table for the fresh-deploy case. No-ops when 400/410
+-- already created the table.
 CREATE TABLE IF NOT EXISTS mommy_authority_log (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  action TEXT NOT NULL,
-  surface TEXT,                       -- 'mantra' | 'random_clip' | 'live_reframe' | 'scene' | 'voice_in_head'
-  ref_table TEXT,
-  ref_id UUID,
-  meta JSONB,
-  acted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE
 );
+
+-- Additive columns required by the headspace edge fns.
+ALTER TABLE mommy_authority_log ADD COLUMN IF NOT EXISTS action TEXT;
+ALTER TABLE mommy_authority_log ADD COLUMN IF NOT EXISTS surface TEXT;
+ALTER TABLE mommy_authority_log ADD COLUMN IF NOT EXISTS ref_table TEXT;
+ALTER TABLE mommy_authority_log ADD COLUMN IF NOT EXISTS ref_id UUID;
+ALTER TABLE mommy_authority_log ADD COLUMN IF NOT EXISTS meta JSONB;
+ALTER TABLE mommy_authority_log ADD COLUMN IF NOT EXISTS acted_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+-- Additive indexes — keyed off the columns we just added. CREATE INDEX IF
+-- NOT EXISTS is name-keyed so these don't collide with mig 400/410 indexes.
 CREATE INDEX IF NOT EXISTS idx_mommy_authority_log_user_time
   ON mommy_authority_log (user_id, acted_at DESC);
 CREATE INDEX IF NOT EXISTS idx_mommy_authority_log_surface
   ON mommy_authority_log (user_id, surface, acted_at DESC);
+
+-- RLS + policies are idempotent (DROP IF EXISTS / CREATE). Safe regardless
+-- of whether 400/410 already attached their own equivalents.
 ALTER TABLE mommy_authority_log ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS mommy_authority_log_owner ON mommy_authority_log;
 CREATE POLICY mommy_authority_log_owner ON mommy_authority_log
