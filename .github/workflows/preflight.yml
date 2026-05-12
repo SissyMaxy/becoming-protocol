@@ -43,6 +43,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: No CRLF in tracked text files (CR bytes break baseline byte-diff across OSes)
+        run: node scripts/ci/no-crlf.mjs
+
       - name: TypeScript build (tsc -b + vite build)
         run: npm run build
 
@@ -70,6 +73,9 @@ jobs:
 
       - name: Baseline drift detection (fails on stale baseline entries)
         run: npm run ci:check-baselines
+
+      - name: Vercel deploy-shape (warn on >=30 fns, fail on >60 — architectural-pressure trip-wire)
+        run: npm run ci:vercel-dryrun
 
   architectural-audits:
     name: Architectural audits (cohesion, centrality, coverage)

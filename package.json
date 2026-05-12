@@ -39,7 +39,10 @@
     "ci:centrality": "node scripts/handler-regression/centrality-audit.mjs",
     "ci:check-baselines": "node scripts/ci/check-baselines.mjs",
     "ci:refresh-baselines": "node scripts/ci/refresh-baselines.mjs",
-    "ci:install-hooks": "node scripts/ci/install-hooks.mjs"
+    "ci:install-hooks": "node scripts/ci/install-hooks.mjs",
+    "ci:no-crlf": "node scripts/ci/no-crlf.mjs",
+    "ci:vercel-dryrun": "node scripts/ci/vercel-dryrun.mjs",
+    "prepare": "node scripts/ci/install-hooks.mjs || true"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.74.0",
