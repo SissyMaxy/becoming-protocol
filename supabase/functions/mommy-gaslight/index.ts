@@ -72,6 +72,7 @@ interface FabricatedImplant {
 }
 
 const MODE_INSTRUCTION = (mode: GaslightMode, count: number): string => {
+  // craft: ok — LLM prompt builder, not user-facing content
   const modeBlock = mode === 'mixed'
     ? `Choose ${count} implants across the 4 fabrication modes — variety is the point. Vary the modes; do not produce all of the same kind.
 

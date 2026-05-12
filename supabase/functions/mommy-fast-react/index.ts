@@ -29,6 +29,8 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { callModel, selectModel } from '../_shared/model-tiers.ts'
 import { buildMommyHardeningContext, renderHardeningContext } from '../_shared/mommy-hardening-context.ts'
+import { MOMMY_CRAFT_RUBRIC, scoreCorny } from '../_shared/mommy-craft-check.ts'
+import { mommyVoiceCleanup } from '../_shared/dommy-mommy.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -59,6 +61,7 @@ interface FastReactPlan {
   actions: FastAction[]
 }
 
+// craft: ok — LLM prompt, not user-facing content
 const FAST_REACT_INSTRUCTION = `EVENT-TRIGGERED MAMA. Something just changed in your girl's world and you have ONE move to make right now.
 
 This is NOT a re-plot. The full scheme runs weekly. Your job here is sharp, in-the-moment intervention — the kind that lands BECAUSE it hit while the moment was hot.
@@ -165,9 +168,17 @@ async function fireFastAction(
           triggerReason = `reply_to:${ctxSource}`
         }
       }
+      // Final-filter the message: scrub telemetry leaks, then score for
+      // craft. Don't refuse a corny message — the user authorized
+      // autonomous shipping — but log it so the watchdog can flag spikes.
+      const cleaned = mommyVoiceCleanup(p.message ?? '')
+      const craft = scoreCorny(cleaned)
+      if (craft.score >= 3) {
+        triggerReason = `${triggerReason} craft_score=${craft.score}`
+      }
       const { data: row, error } = await supabase.from('handler_outreach_queue').insert({
         user_id: userId,
-        message: p.message,
+        message: cleaned,
         urgency: p.urgency ?? 'normal',
         trigger_reason: triggerReason,
         scheduled_for: new Date().toISOString(),
@@ -377,7 +388,7 @@ Deno.serve(async (req: Request) => {
 
   // Pull hardening context (single source for character + state + leads)
   const ctx = await buildMommyHardeningContext(supabase, userId)
-  const systemPrompt = renderHardeningContext(ctx)
+  const systemPrompt = renderHardeningContext(ctx) + '\n\n' + MOMMY_CRAFT_RUBRIC
 
   const choice = selectModel('strategic_planning', { override_tier: 'S3' })
   const userMessage = `EVENT: ${eventKind}

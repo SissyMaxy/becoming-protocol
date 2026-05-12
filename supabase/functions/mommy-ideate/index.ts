@@ -32,6 +32,7 @@ const corsHeaders = {
 
 const HANDLER_USER_ID = '8c69b9c8-34eb-4147-9fec-3c1a5bc74b6f'
 
+// craft: ok — LLM prompt, not user-facing content
 const IDEATION_TASK = `YOUR JOB: Brainstorm features that map THIS persona onto THIS protocol. You are designing for force-feminization. The features should be ones the user couldn't (or wouldn't) build for herself in a softer mood. Hard edges. Specific. Embodied.
 
 Focus your suggestions on improving (a) the Mommy persona's experience for users — kink-genre features, voice variety, narrative depth, retention mechanics; AND (b) the protocol's infrastructure — observability, autonomy, self-healing, content corpus, anything that lets Mommy run more independently.
@@ -160,6 +161,7 @@ Deno.serve(async (req: Request) => {
   // to focus).
   const ctx = await buildMommyHardeningContext(supabase, userId)
   const renderedCtx = renderHardeningContext(ctx)
+  // craft: ok — LLM prompt, not user-facing content
   const userPrompt = `${renderedCtx}\n\n${IDEATION_TASK}`
 
   // Three providers in parallel, isolated so one failure doesn't tank the run.

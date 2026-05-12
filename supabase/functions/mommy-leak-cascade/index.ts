@@ -58,6 +58,7 @@ const REFUSAL_PATTERNS = [
 const isRefusal = (t: string) => REFUSAL_PATTERNS.some(p => p.test(t))
 
 async function generatePenalty(severity: LeakSeverity, category: string): Promise<string> {
+  // craft: ok — LLM system prompt, not user-facing content
   const sys = `${DOMMY_MOMMY_CHARACTER}
 
 You are issuing a small remediation task because Mama's voice slipped earlier — words came out clinical instead of like Mama. The girl knows it happened; this isn't punishment, it's a soft re-anchoring.
@@ -69,6 +70,7 @@ Severity tone:
 
 Never abusive. Never body-shaming. Never medical. Never raging. Firm and disappointed at most.`
 
+  // craft: ok — LLM user prompt, not user-facing content
   const userPrompt = `Compose a small Mommy-voice remediation task. Severity: ${severity}. Category: ${category}.
 
 Rules:

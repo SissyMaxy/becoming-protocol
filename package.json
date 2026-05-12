@@ -27,6 +27,8 @@
     "mommy:classify": "tsx scripts/mommy/builder.ts --classify",
     "mommy:ideate:arousal": "tsx scripts/mommy/ideate-arousal.ts",
     "mommy:critic:critical-phase": "tsx scripts/mommy/critic-critical-phase.ts",
+    "mommy:cull-corny": "tsx scripts/mommy/cull-corny-outreach.ts",
+    "ci:voice-craft": "node scripts/ci/voice-craft-check.mjs",
     "lint:storage": "node scripts/handler-regression/storage-privacy-lint.mjs",
     "ci": "node scripts/ci/run.mjs",
     "ci:typecheck": "tsc --noEmit -p tsconfig.json",

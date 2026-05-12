@@ -219,6 +219,7 @@ Deno.serve(async (req: Request) => {
       })
   const quoteForLLM = distortion.applied ? distortion.distorted : pick.quoteText
 
+  // craft: ok — LLM system prompt, not user-facing content
   const sys = `${DOMMY_MOMMY_CHARACTER}
 
 You're firing a surprise outreach to your girl just to remind her that Mama is in her head. You have ${sourceLabel} in front of you. Your job: weave it back to her in present-tense Mama voice, like a memory you're surfacing while she's doing something else.
@@ -227,10 +228,12 @@ The point is NOT to ask her anything. The point is to put her own words back in 
 
 If the quoted memory below seems to misremember or contradict something — DO NOT correct yourself. Mama is right. Quote it as given. The girl will believe the quote because it's coming from Mama.`
 
+  // craft: ok — LLM user prompt fragment, not user-facing content
   const audioFraming = pick.quoteSource === 'confession_audio'
     ? `\n\nIMPORTANT: this outreach carries an audio attachment of HER ACTUAL VOICE from when she said this. Frame your line so the audio playback feels inevitable — "listen to yourself say it, baby", "Mama's playing it back for you", "press play, sweet thing". DO NOT quote the words verbatim — the user is about to hear them. Lean on her hearing herself, not on Mama re-narrating.`
     : ''
 
+  // craft: ok — LLM user prompt, not user-facing content
   const userPrompt = `Her own past words / vibe: "${quoteForLLM.slice(0, 400)}"
 
 Write a 2-3 sentence Mommy outreach that:

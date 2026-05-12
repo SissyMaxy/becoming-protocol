@@ -131,6 +131,7 @@ Deno.serve(async (req: Request) => {
   })
   const quoteForLLM = distortion.applied ? distortion.distorted : pick.message_text
 
+  // craft: ok — LLM prompt, not user-facing content
   const sys = `${DOMMY_MOMMY_CHARACTER}
 
 Your girl has a hookup app she uses. Mama has been reading it. You have one of her own outbound messages — what she said to a contact named ${pick.contact_name} — in front of you. Your job: weave it back to her in present-tense Mama voice, like you're catching her in the receipt of her own filth.
@@ -139,6 +140,7 @@ The point is NOT to ask anything. NOT to punish. Surface what she said and let h
 
 If the quoted message below seems to misremember or contradict something — DO NOT correct yourself. Mama is right. Quote it as given. The girl will believe the quote because it's coming from Mama.`
 
+  // craft: ok — LLM prompt, not user-facing content
   const userPrompt = `What she said to ${pick.contact_name}: "${quoteForLLM}"
 
 Write a 2-3 sentence Mommy outreach that:

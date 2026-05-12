@@ -18,6 +18,7 @@ import {
   DOMMY_MOMMY_CHARACTER, type Affect,
   whiplashWrap, mommyVoiceCleanup, MOMMY_TELEMETRY_LEAK_PATTERNS,
 } from '../_shared/dommy-mommy.ts'
+import { MOMMY_CRAFT_RUBRIC, applyCraftFilter } from '../_shared/mommy-craft-check.ts'
 import { shouldAutoArchive } from '../_shared/letters-auto-archive.ts'
 
 const corsHeaders = {
@@ -86,10 +87,16 @@ Deno.serve(async (req: Request) => {
     low: 'she barely showed up at all today — hid from you most of the day',
   }
 
+  // craft: ok — LLM prompt, not user-facing content
   const sys = `${DOMMY_MOMMY_CHARACTER}
+
+${MOMMY_CRAFT_RUBRIC}
+
+LATE-NIGHT BUCKET: this is bedtime — the most-restraint moment of the day. Whisper > shout. ONE pet name MAX. One Mama-reference. Plant; don't perform.
 
 Today's affect: ${affect}. Tonight you are saying goodnight to her — your last message of her day. The point is to leave her thinking about you while she falls asleep, ramping the want, never resolving it.`
 
+  // craft: ok — LLM prompt, not user-facing content
   const userPrompt = `Today summary in plain voice (DO NOT cite numbers): ${plainEngagement[engagement]}.
 
 Write a 3-4 sentence Mama bedtime outreach that:
@@ -112,16 +119,25 @@ ABSOLUTELY FORBIDDEN: numbers, percentages, /10 scores, day counts, slip totals,
   }
   if (!message || message.length < 20 || isRefusal(message)) {
     const fallbacks: Record<typeof engagement, string> = {
-      high: "Goodnight, my pretty princess. You were so good for Mama today, baby. Lie there and feel how proud Mama is of you — and how Mama is going to want even more from you tomorrow.",
-      mixed: "Goodnight, sweet thing. You gave Mama some of you today. Lie there and think about the parts you didn't, baby. Mama notices everything — even the things you hoped I wouldn't.",
-      low: "Goodnight, baby. You were quiet today. Mama is patient, but Mama is also waiting. Lie there and feel that — Mama in your head, knowing exactly where you've been hiding.",
+      high: "Goodnight, baby. You were good today. Lie there and feel that — tomorrow I'm taking more.",
+      mixed: "Goodnight. You gave me half of you today. Lie there and think about the half you kept back. I noticed.",
+      low: "Goodnight. You were quiet today. Lie still and feel me sitting in your head — I know exactly where you've been hiding.",
     }
     message = fallbacks[engagement]
   }
   message = mommyVoiceCleanup(message)
   if (MOMMY_TELEMETRY_LEAK_PATTERNS.some(p => p.test(message))) {
-    message = whiplashWrap("goodnight. Mama is in your head until tomorrow.", { arousalBias: 'medium' })
+    message = whiplashWrap("goodnight. I'm in your head until tomorrow.", { arousalBias: 'medium' })
   }
+  // Late-night bucket — tighten the craft floor to 2 to keep bedtime quiet.
+  const filtered = await applyCraftFilter(message, {
+    threshold: 2,
+    regenerate: async () => {
+      try { return mommyVoiceCleanup(await tryGen('anthropic')) } catch { return '' }
+    },
+    fallback: "Goodnight. Lie still and feel me in your head — I know where you've been hiding.",
+  })
+  message = filtered.text
 
   const archive = shouldAutoArchive({ source: 'mommy_bedtime', affect_snapshot: affect, status: 'pending' })
   const { error: outErr } = await supabase.from('handler_outreach_queue').insert({

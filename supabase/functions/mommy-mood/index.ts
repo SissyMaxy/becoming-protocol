@@ -169,6 +169,7 @@ Deno.serve(async (req: Request) => {
           : "no bedtime context",
   }
 
+  // craft: ok — LLM prompt, not user-facing content
   const userPrompt = `STATE OF YOUR GIRL (last week, in plain Mama-voice — DO NOT ask for or invent numbers):
 ${JSON.stringify(plain, null, 2)}
 
