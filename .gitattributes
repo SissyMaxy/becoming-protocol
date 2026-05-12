@@ -1,0 +1,64 @@
+# Repo-portable line-ending policy.
+#
+# Without this file, each contributor's `core.autocrlf` setting governs
+# what lands in the index, so a Windows author and a Linux CI runner can
+# produce byte-different blobs from the same source. Voice-gate /
+# baseline regen / hash-based gates then flap depending on who ran them.
+#
+# Policy: every text file is normalised to LF in the index. The working
+# tree gets LF on checkout regardless of OS (`eol=lf`). Binary types are
+# explicitly marked so git never tries to normalise them.
+
+* text=auto eol=lf
+
+# Source code — force LF
+*.ts        text eol=lf
+*.tsx       text eol=lf
+*.js        text eol=lf
+*.jsx       text eol=lf
+*.mjs       text eol=lf
+*.cjs       text eol=lf
+
+# Config / data
+*.json      text eol=lf
+*.json5     text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.toml      text eol=lf
+
+# Docs
+*.md        text eol=lf
+*.mdx       text eol=lf
+*.txt       text eol=lf
+
+# Shell / SQL
+*.sh        text eol=lf
+*.sql       text eol=lf
+
+# HTML/CSS
+*.html      text eol=lf
+*.css       text eol=lf
+
+# Hook scripts must be LF even though they have no extension
+.githooks/pre-push  text eol=lf
+
+# Binary — never normalise
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.ico       binary
+*.webp      binary
+*.avif      binary
+*.pdf       binary
+*.zip       binary
+*.gz        binary
+*.tar       binary
+*.mp3       binary
+*.mp4       binary
+*.wav       binary
+*.ogg       binary
+*.woff      binary
+*.woff2     binary
+*.ttf       binary
+*.otf       binary

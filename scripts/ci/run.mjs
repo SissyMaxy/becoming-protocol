@@ -45,6 +45,7 @@ const actor = (() => {
 // because the repo carries 264 pre-existing lint issues that CI explicitly
 // declared informational; making local strict would diverge from CI parity.
 const steps = [
+  { name: 'no-crlf',         cmd: 'node scripts/ci/no-crlf.mjs' },
   { name: 'typecheck',       cmd: 'npx tsc --noEmit -p tsconfig.json' },
   { name: 'typecheck-api',   cmd: 'node scripts/ci/typecheck-api.mjs' },
   { name: 'lint',            cmd: 'npx eslint .', soft: true },
@@ -55,6 +56,7 @@ const steps = [
   { name: 'storage',         cmd: 'node scripts/handler-regression/storage-privacy-lint.mjs' },
   { name: 'centrality',      cmd: 'node scripts/handler-regression/centrality-audit.mjs' },
   { name: 'check-baselines', cmd: 'node scripts/ci/check-baselines.mjs' },
+  { name: 'vercel-dryrun',   cmd: 'node scripts/ci/vercel-dryrun.mjs' },
 ];
 
 let branch = '(unknown)';
