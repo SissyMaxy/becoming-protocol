@@ -1,4 +1,4 @@
--- 367 — Gate mommy_immediate + mommy_receipt triggers against synthetic rows.
+-- 371 — Gate mommy_immediate + mommy_receipt triggers against synthetic rows.
 --
 -- Incident 2026-05-11: Maxy reported Mommy spamming her with 4-row bursts
 -- every 5-10 min while she'd been silent for 3 days. Diagnosis:
