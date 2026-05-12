@@ -238,6 +238,7 @@ export async function processDodged(userId: string): Promise<number> {
       slip_points: 3,
       source_text: `dodged punishment: ${p.punishment_type}`,
       metadata: { punishment_id: p.id, dodge_count: newDodge },
+      is_synthetic: true,
     });
     await applyDenialExtension(userId, 1);
   }

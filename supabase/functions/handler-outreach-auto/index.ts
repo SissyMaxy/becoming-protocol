@@ -66,9 +66,15 @@ serve(async req => {
         .limit(1)
         .maybeSingle()
 
-      const minutesSinceLastMessage = recentMsg
-        ? Math.round((now.getTime() - new Date((recentMsg as any).created_at).getTime()) / 60000)
-        : 999999
+      // Sentinel fallback was 999999 minutes (~694 days), which leaked into
+      // user-facing copy as "694 days silent" when handler_messages had no
+      // row for this user (fresh account, table cleared, role filter missed).
+      // If we can't pin "last message", skip auto-outreach for this user —
+      // we have no honest anchor for absence_pressure / morning_checkin copy.
+      if (!recentMsg) continue
+      const minutesSinceLastMessage = Math.round(
+        (now.getTime() - new Date((recentMsg as any).created_at).getTime()) / 60000
+      )
       const hoursSinceLastMessage = Math.round(minutesSinceLastMessage / 60)
 
       // Hard gate: never fire outreach if user engaged within the last 30 min.

@@ -165,8 +165,13 @@ for (const [name, hits] of byPattern) {
 }
 
 if (updateBaseline) {
+  // Sort outer keys alphabetically — Map insertion order depends on file scan
+  // order (readdirSync returns inode order on Linux, alpha on NTFS), which
+  // makes the JSON key order platform-dependent and breaks the byte-diff in
+  // check-baselines.mjs across OS.
   const out = {};
-  for (const [name, set] of currentHitKeys) out[name] = [...set].sort();
+  const sortedNames = [...currentHitKeys.keys()].sort();
+  for (const name of sortedNames) out[name] = [...currentHitKeys.get(name)].sort();
   writeFileSync(baselinePath, JSON.stringify(out, null, 2) + '\n');
   console.log(`[voice-gate] Baseline updated: ${totalHits} hit(s) captured at ${relative(ROOT, baselinePath)}`);
   process.exit(0);

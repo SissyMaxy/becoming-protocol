@@ -127,6 +127,7 @@ export async function processMissedDoses(userId: string): Promise<number> {
         source_text: `Missed dose scheduled ${d.scheduled_at}, ${lateMinutes}min late`,
         source_table: 'dose_log',
         source_id: d.id,
+        is_synthetic: true,
       })
       .select('id')
       .single();

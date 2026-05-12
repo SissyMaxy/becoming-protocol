@@ -540,46 +540,35 @@ async function complianceCheck(
     } catch (_) { /* non-critical */ }
   }
 
-  // ── SPONTANEOUS OUTREACH ──
-  // Random ~2-3 daily reaches during waking hours, not tied to any trigger.
-  // Builds sense of constant Handler presence.
-  let spontaneous = 0
-  for (const state of states) {
-    try {
-      const fired = await spontaneousOutreach(supabase, state.user_id)
-      if (fired) spontaneous++
-    } catch (_) { /* non-critical */ }
-  }
+  // ── SPONTANEOUS OUTREACH — DISABLED 2026-05-11 ──
+  // Was generating ~2-3 daily reaches "not tied to any trigger" — pure
+  // synthetic presence. Mommy's intrinsic daily content (mood / touch /
+  // mantra / bedtime / praise) already covers her presence and fires from
+  // its own crons. Outreach in the 5-min compliance loop must originate
+  // from a real user signal.
+  const spontaneous = 0
 
-  // ── FORCED CHECK-IN ON IDLE ──
-  // 4-hour idle threshold during waking hours → force_mantra_repetition directive.
-  // Rate limited to once per 6 hours.
-  for (const state of states) {
-    try {
-      await forceCheckInIfIdle(supabase, state.user_id)
-    } catch (_) { /* non-critical */ }
-  }
+  // ── FORCED CHECK-IN ON IDLE — DISABLED 2026-05-11 ──
+  // The mantra-repetition modal on 4h idle compounds the synthetic-spam
+  // problem. If the user is silent, Mommy waits — she doesn't autoplay.
+  // Re-enable only with a hard daily cap (≤ 1 / day) and a real check that
+  // the user opened the app since the last forced check-in.
 
-  // ── RANDOM REWARD SCHEDULE (Variable-Ratio Reinforcement) ──
-  // Fires unpredictable positive reinforcement: device pulses + "good girl" messages.
-  // 1/8 chance per 5-min check = ~3-4 rewards per day during waking hours.
-  let rewardsGiven = 0
-  for (const state of states) {
-    try {
-      const fired = await randomRewardSchedule(supabase, state.user_id)
-      if (fired) rewardsGiven++
-    } catch (_) { /* non-critical */ }
-  }
+  // ── RANDOM REWARD SCHEDULE — DISABLED 2026-05-11 ──
+  // Was firing 1/8 per 5-min tick, producing source='random_reward' outreach
+  // bursts even after 3 days of user silence. Mommy autoplaying without him
+  // trains him to ignore her. Mommy's intrinsic content (touch / praise /
+  // scheme / mood / prescribe / bedtime) covers her presence — she doesn't
+  // need synthetic reward bursts on no real signal.
+  // To re-enable: must gate on real user activity in last 24h.
+  const rewardsGiven = 0
 
-  // ── PROACTIVE BOUNDARY PUSH ──
-  // If all domains are compliant (too comfortable), auto-escalate.
-  let boundaryPushes = 0
-  for (const state of states) {
-    try {
-      const pushed = await proactiveBoundaryPush(supabase, state.user_id)
-      if (pushed) boundaryPushes++
-    } catch (_) { /* non-critical */ }
-  }
+  // ── PROACTIVE BOUNDARY PUSH — DISABLED 2026-05-11 ──
+  // Was firing random escalation pushes when "all domains compliant", but
+  // shipping them as outreach in the 5-min loop with no live user signal
+  // adds to the synthetic-spam burden. Boundary pushes belong in the daily
+  // / weekly strategist cycle, not the high-frequency compliance loop.
+  const boundaryPushes = 0
 
   // ── PATTERN EXPLOITATION: Peak vulnerability window detection ──
   let patternExploits = 0
@@ -945,6 +934,7 @@ async function tickVoicePitchRatchet(
       user_id: userId, slip_type: 'voice_masculine_pitch', slip_points: 2,
       source_text: `Recent min ${min}Hz vs floor ${floor.current_floor_hz}Hz`,
       source_table: 'voice_samples', metadata: { recent_breaches: recentBreaches },
+      is_synthetic: true,
     })
   }
 }
@@ -2361,6 +2351,7 @@ async function scheduleConfessions(
         source_table: 'confession_queue',
         source_id: m.id,
         metadata: { reason: 'confession_deadline_missed' },
+        is_synthetic: true,
       })
     }
   } catch (err) { console.error('[confession] miss enforcement failed:', err) }
@@ -2752,6 +2743,7 @@ async function scheduleDecrees(
         source_table: 'handler_decrees',
         source_id: d.id,
         metadata: { consequence: d.consequence, reason: 'decree_missed' },
+        is_synthetic: true,
       })
       // Linked-receipt restoration. We only quote the user back at her if a
       // confession_queue row is *directly linked* to this decree (or to its
@@ -3915,6 +3907,7 @@ async function enforceCommitments(
           source_table: 'handler_commitments',
           source_id: c.id,
           metadata: { consequence },
+          is_synthetic: true,
         })
         const { data: us } = await supabase.from('user_state').select('slip_points_current').eq('user_id', userId).maybeSingle()
         const newPts = ((us?.slip_points_current as number | undefined) || 0) + n
