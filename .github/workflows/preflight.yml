@@ -74,7 +74,7 @@ jobs:
       - name: Baseline drift detection (fails on stale baseline entries)
         run: npm run ci:check-baselines
 
-      - name: Vercel deploy-shape (warn on >=12 fns, fail on >24)
+      - name: Vercel deploy-shape (warn on >=30 fns, fail on >60 — architectural-pressure trip-wire)
         run: npm run ci:vercel-dryrun
 
   architectural-audits:

@@ -6,20 +6,20 @@
  * class that used to break Vercel builds. This script catches the OTHER
  * Vercel-specific failure modes that wouldn't surface locally:
  *
- *   1. Function-count overrun. Vercel Hobby caps at 12 serverless functions
- *      per project. Each `.ts` file in `api/` is one function, EXCEPT files
- *      and folders whose name starts with `_`. New routes can quietly push
- *      the count past the limit and deploys fail with a generic "too many
- *      functions" error that's hard to map back to the offending PR.
+ *   1. Function-count growth. Each `.ts` file in `api/` is one serverless
+ *      function (excluding files / folders prefixed with `_`). Pro plan
+ *      removes the old 12-fn Hobby cap, so this is no longer a deploy-
+ *      blocking class — but unconstrained growth is still an architectural
+ *      smell. The warn threshold flags consolidate-candidate routes; the
+ *      hard cap catches genuine runaway growth.
  *
  *   2. `tsconfig.api.json` coverage drift. If a new `api/` file is added
  *      but `tsconfig.api.json` doesn't include it, the api typecheck still
  *      passes locally — but Vercel compiles every file under `api/` and
  *      will fail on errors the typecheck never saw.
  *
- * Mode: warn-by-default. Hobby limit is set as the warning threshold (12).
- * Hard fail at >24 (true runaway-growth signal — by then every new route
- * deserves a refactor not a bigger plan).
+ * Plan: Pro (2026-05-11). 12-fn cap removed; this gate is purely about
+ * architectural pressure now.
  *
  * Usage:
  *   node scripts/ci/vercel-dryrun.mjs
@@ -32,8 +32,12 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..');
 const API_DIR = join(ROOT, 'api');
 
-const HOBBY_LIMIT = 12;
-const HARD_LIMIT = 24;
+// Warn threshold: signals architectural pressure — at ~30 routes, an
+// [action]-style dispatcher usually beats N more single-purpose files.
+// Hard limit: runaway-growth signal; merging past here without a refactor
+// turns the api/ surface into a maintenance liability.
+const WARN_AT = 30;
+const HARD_LIMIT = 60;
 
 /**
  * Walk `api/` and return every `.ts` file that Vercel would deploy as a
@@ -67,16 +71,12 @@ const count = functions.length;
 
 console.log(`ci:vercel-dryrun  ${count} serverless function(s) detected under api/`);
 
-if (count >= HOBBY_LIMIT) {
-  console.warn(`ci:vercel-dryrun  WARN — ${count} functions exceeds Hobby plan's ${HOBBY_LIMIT}-function cap.`);
-  console.warn(`  Affected files:`);
-  for (const f of functions) {
-    console.warn(`    ${relative(ROOT, f)}`);
-  }
-  console.warn(`  Vercel will reject the deploy on a Hobby plan. Options:`);
-  console.warn(`    - consolidate routes via [action]-style dispatchers`);
+if (count >= WARN_AT) {
+  console.warn(`ci:vercel-dryrun  WARN — ${count} functions exceeds architectural-pressure threshold (${WARN_AT}).`);
+  console.warn(`  At this size, an [action]-style dispatcher usually beats N more single-purpose routes.`);
+  console.warn(`  Options:`);
+  console.warn(`    - consolidate via [action]-style dispatchers`);
   console.warn(`    - move shared logic under an underscore-prefixed folder (api/foo/_lib/...)`);
-  console.warn(`    - upgrade plan (Pro raises this cap)`);
 }
 
 if (count > HARD_LIMIT) {
@@ -121,5 +121,5 @@ if (existsSync(tsconfigPath)) {
   }
 }
 
-console.log(`ci:vercel-dryrun  PASS — function count within ${HARD_LIMIT}-function hard cap`);
+console.log(`ci:vercel-dryrun  PASS — function count within ${HARD_LIMIT}-function runaway-growth cap`);
 process.exit(0);
