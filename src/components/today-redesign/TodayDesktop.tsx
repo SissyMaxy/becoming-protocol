@@ -56,6 +56,8 @@ import { FocusMode } from './FocusMode';
 import { MommyMoodIndicator } from '../persona/MommyMoodIndicator';
 import { ArousalTouchCard } from '../persona/ArousalTouchCard';
 import { WardrobePrescriptionCard } from './WardrobePrescriptionCard';
+import { MommyDailyPlanCard } from './MommyDailyPlanCard';
+import { MommyAmbientPlayerCard } from './MommyAmbientPlayerCard';
 import { PublicDareCard } from './PublicDareCard';
 import { GoodGirlPointsCard } from '../persona/GoodGirlPointsCard';
 import { ProtocolHealthCard } from './ProtocolHealthCard';
@@ -330,6 +332,8 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         </button>
         {/* SPINE — always visible. Single answer to "what now". */}
         <MommyMoodIndicator />
+        <MommyDailyPlanCard />
+        <MommyAmbientPlayerCard />
         <GoodGirlPointsCard />
         <ArousalTouchCard />
         <WardrobePrescriptionCard />
