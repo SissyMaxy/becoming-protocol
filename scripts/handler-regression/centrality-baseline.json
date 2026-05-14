@@ -21,5 +21,6 @@
   "supabase/functions/capability-digest-cron/index.ts:digestForCanonicalUser",
   "supabase/functions/mommy-fast-react/index.ts:fireFastAction",
   "supabase/functions/mommy-gaslight/index.ts:persistImplant",
-  "supabase/functions/mommy-scheme/index.ts:fireAction"
+  "supabase/functions/mommy-scheme/index.ts:fireAction",
+  "supabase/functions/sniffies-restart-coach/index.ts:processUser"
 ]
