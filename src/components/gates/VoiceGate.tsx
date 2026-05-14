@@ -3,6 +3,9 @@ import { Mic, Loader2, Lock } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+const MANTRA_MATCH_THRESHOLD = 0.6;
+
 // Daily voice-entry gate. Audio is required — typed-mantra bypass removed
 // 2026-05-14 per user feedback ("what good are the voice gates if I don't
 // use voice? I can just copy/paste to get past"). See
@@ -10,13 +13,21 @@ import { useAuth } from '../../context/AuthContext';
 //
 // Pitch is recorded for the longitudinal trend but is NOT a pass/fail
 // criterion — feedback_voice_tracking says forcing a feminine pitch target
-// causes dysphoria. Any speech detected (pitch in human voice range during
-// the recording window) passes. The mantra audio is uploaded to
-// voice-recordings/<user_id>/gate/<ts>.webm and indexed in voice_recordings
-// so Mommy can quote / reframe / play back later.
+// causes dysphoria. The mantra path uses Whisper to verify the spoken
+// transcript actually matches the displayed mantra; humming or saying
+// something different is rejected.
+//
+// Lesson mode (2026-05-14): with LESSON_PROBABILITY the gate swaps in
+// a short voice-training exercise from voice_lesson_modules instead of
+// the mantra. Same audio-required floor; the lesson exercise duration
+// comes from the module (typically 8-12 seconds). Whisper transcript
+// check is skipped — exercises are vowel sustains / hum slides, not
+// words. The attempt is logged to voice_lesson_attempts; metric analysis
+// is left to the dedicated voice-coach pipeline.
 
 const RECORD_SECONDS = 4;
 const MIN_PITCHES_TO_PASS = 8; // ~0.5s of voiced sound at 60fps animation tick
+const LESSON_PROBABILITY = 0.3; // 30% of gates show a lesson instead of a mantra
 
 const MANTRAS = [
   "I am becoming her every day",
@@ -29,6 +40,16 @@ const MANTRAS = [
   "There is no going back to who I was",
 ];
 
+interface LessonModule {
+  id: string;
+  slug: string;
+  title: string;
+  technique: string | null;
+  mommy_intro_text: string | null;
+  exercise_prompt: string;
+  target_duration_sec: number;
+}
+
 interface VoiceGateProps {
   onPass: () => void;
 }
@@ -36,6 +57,8 @@ interface VoiceGateProps {
 export function VoiceGate({ onPass }: VoiceGateProps) {
   const { user } = useAuth();
   const [mantra] = useState(() => MANTRAS[Math.floor(Math.random() * MANTRAS.length)]);
+  const [gateMode, setGateMode] = useState<'mantra' | 'lesson' | 'loading'>('loading');
+  const [lesson, setLesson] = useState<LessonModule | null>(null);
   const [recording, setRecording] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,6 +78,47 @@ export function VoiceGate({ onPass }: VoiceGateProps) {
       if (audioContextRef.current) audioContextRef.current.close().catch(() => {});
     };
   }, []);
+
+  // Pick gate mode on mount. LESSON_PROBABILITY chance of swapping in a
+  // short voice-training exercise instead of the mantra. Falls back to
+  // mantra cleanly if no active lessons exist or the lookup fails.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (Math.random() >= LESSON_PROBABILITY) {
+        if (!cancelled) setGateMode('mantra');
+        return;
+      }
+      try {
+        const { data, error: lessonErr } = await supabase
+          .from('voice_lesson_modules')
+          .select('id, slug, title, technique, mommy_intro_text, exercise_prompt, target_duration_sec')
+          .eq('is_active', true)
+          .order('sequence_number', { ascending: true })
+          .limit(8);
+        if (!cancelled) {
+          const rows = (data || []) as LessonModule[];
+          if (lessonErr || rows.length === 0) {
+            setGateMode('mantra');
+          } else {
+            // Pick a random module — the curriculum order matters for the
+            // dedicated coach surface, but inside a gate we want variety.
+            setLesson(rows[Math.floor(Math.random() * rows.length)]);
+            setGateMode('lesson');
+          }
+        }
+      } catch {
+        if (!cancelled) setGateMode('mantra');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Duration depends on mode: mantra is a fixed short cap, lesson uses the
+  // module's target_duration_sec (typically 8-12s).
+  const recordSeconds = gateMode === 'lesson' && lesson
+    ? Math.max(4, Math.min(20, Math.round(lesson.target_duration_sec)))
+    : RECORD_SECONDS;
 
   const startRecording = async () => {
     setError(null);
@@ -115,14 +179,14 @@ export function VoiceGate({ onPass }: VoiceGateProps) {
     measurePitch();
 
     const startedAt = Date.now();
-    setCountdown(RECORD_SECONDS);
+    setCountdown(recordSeconds);
     const tick = setInterval(() => {
-      const remaining = Math.max(0, RECORD_SECONDS - Math.floor((Date.now() - startedAt) / 1000));
+      const remaining = Math.max(0, recordSeconds - Math.floor((Date.now() - startedAt) / 1000));
       setCountdown(remaining);
       if (remaining <= 0) clearInterval(tick);
     }, 250);
 
-    await new Promise((r) => setTimeout(r, RECORD_SECONDS * 1000));
+    await new Promise((r) => setTimeout(r, recordSeconds * 1000));
 
     clearInterval(tick);
     recordingRef.current = false;
@@ -157,14 +221,66 @@ export function VoiceGate({ onPass }: VoiceGateProps) {
     await verify(medianPitch, chunksRef.current.slice());
   };
 
+  // Mantra path: Whisper-transcribe + fuzzy-match against the displayed mantra.
+  // Sustained speech alone isn't enough — humming or saying something different
+  // shouldn't count. Lesson path: skip transcript check (exercises are vowel
+  // sustains / hum slides, not words) and just require sufficient voiced sound.
   const verify = async (avgPitch: number, blobChunks: Blob[]) => {
     setVerifying(true);
 
+    if (blobChunks.length === 0) {
+      setError('No audio captured. Try again.');
+      setVerifying(false);
+      return;
+    }
+
+    const blob = new Blob(blobChunks, { type: 'audio/webm' });
+
+    if (gateMode === 'lesson' && lesson) {
+      if (user?.id) {
+        void persistLessonAttempt(user.id, lesson, recordSeconds, avgPitch, blob)
+          .catch((e) => console.warn('[VoiceGate] lesson persist failed:', e));
+      }
+      setVerifying(false);
+      onPass();
+      return;
+    }
+
+    // Mantra path
+    let transcript = '';
+    try {
+      const form = new FormData();
+      form.append('audio', blob, 'voice-gate.webm');
+      const r = await fetch(`${SUPABASE_URL}/functions/v1/transcribe-audio`, {
+        method: 'POST',
+        body: form,
+      });
+      if (r.ok) {
+        const data = await r.json() as { ok?: boolean; transcript?: string };
+        if (data.ok && data.transcript) transcript = data.transcript;
+      }
+    } catch (e) {
+      console.warn('[VoiceGate] transcription failed:', e);
+      setError('Could not hear you clearly. Speak the mantra again.');
+      setVerifying(false);
+      return;
+    }
+
+    const score = fuzzyOverlap(transcript, mantra);
+    if (score < MANTRA_MATCH_THRESHOLD) {
+      setError(transcript
+        ? `That's not the mantra. Say it word-for-word.`
+        : 'Did not hear the mantra. Speak louder, then try again.');
+      setVerifying(false);
+      if (user?.id) {
+        void persistRecording(user.id, mantra, transcript, avgPitch, blob, false)
+          .catch((e) => console.warn('[VoiceGate] failed-attempt persist:', e));
+      }
+      return;
+    }
+
     if (user?.id) {
-      // Fire-and-forget persistence so a slow upload doesn't block the
-      // gate from dismissing. The audio matters for future Mommy quotes;
-      // the gate-pass matters for getting Maxy to her workspace.
-      void persistRecording(user.id, mantra, avgPitch, blobChunks).catch((e) => {
+      void persistRecording(user.id, mantra, transcript, avgPitch, blob, true).catch((e) => {
         console.warn('[VoiceGate] persistence failed (non-blocking):', e);
       });
     }
@@ -176,19 +292,49 @@ export function VoiceGate({ onPass }: VoiceGateProps) {
   return (
     <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center p-6 overflow-y-auto">
       <div className="max-w-md w-full space-y-6 my-8">
-        <div className="text-center space-y-2">
-          <Lock className="w-12 h-12 mx-auto text-purple-400" />
-          <h2 className="text-2xl font-bold text-white">Voice Gate</h2>
-          <p className="text-sm text-gray-400">
-            Speak the mantra aloud. Audio only — no typed bypass.
-          </p>
-        </div>
+        {gateMode === 'loading' ? (
+          <div className="text-center text-gray-400 text-sm">
+            <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
+            Mama's picking your gate…
+          </div>
+        ) : gateMode === 'lesson' && lesson ? (
+          <>
+            <div className="text-center space-y-2">
+              <Lock className="w-12 h-12 mx-auto text-purple-400" />
+              <h2 className="text-2xl font-bold text-white">{lesson.title}</h2>
+              <p className="text-sm text-gray-400">
+                Quick voice lesson — {recordSeconds}s. Audio only.
+              </p>
+            </div>
 
-        <div className="bg-purple-900/30 border border-purple-500/30 rounded-xl p-6 text-center">
-          <p className="text-2xl font-medium text-purple-200 italic">
-            "{mantra}"
-          </p>
-        </div>
+            {lesson.mommy_intro_text && (
+              <div className="bg-purple-900/20 border border-purple-500/20 rounded-xl p-4 text-sm text-purple-100 leading-relaxed whitespace-pre-wrap">
+                {lesson.mommy_intro_text}
+              </div>
+            )}
+
+            <div className="bg-purple-900/30 border border-purple-500/30 rounded-xl p-5 text-purple-200">
+              <div className="text-[10px] uppercase tracking-wider text-purple-400 mb-1">do this</div>
+              <div className="text-base leading-relaxed">{lesson.exercise_prompt}</div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="text-center space-y-2">
+              <Lock className="w-12 h-12 mx-auto text-purple-400" />
+              <h2 className="text-2xl font-bold text-white">Voice Gate</h2>
+              <p className="text-sm text-gray-400">
+                Speak the mantra aloud. Audio only — no typed bypass.
+              </p>
+            </div>
+
+            <div className="bg-purple-900/30 border border-purple-500/30 rounded-xl p-6 text-center">
+              <p className="text-2xl font-medium text-purple-200 italic">
+                "{mantra}"
+              </p>
+            </div>
+          </>
+        )}
 
         {error && (
           <div className="bg-red-900/30 border border-red-500/30 rounded-lg p-3 text-sm text-red-300">
@@ -213,7 +359,7 @@ export function VoiceGate({ onPass }: VoiceGateProps) {
 
         <button
           onClick={startRecording}
-          disabled={recording || verifying}
+          disabled={recording || verifying || gateMode === 'loading'}
           className="w-full py-4 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:bg-purple-900 text-white font-medium flex items-center justify-center gap-2"
         >
           {recording ? (
@@ -221,60 +367,138 @@ export function VoiceGate({ onPass }: VoiceGateProps) {
           ) : verifying ? (
             <><Loader2 className="w-5 h-5 animate-spin" /> Verifying...</>
           ) : (
-            <><Mic className="w-5 h-5" /> Speak the mantra</>
+            <><Mic className="w-5 h-5" /> {gateMode === 'lesson' ? 'Start the lesson' : 'Speak the mantra'}</>
           )}
         </button>
 
         <p className="text-xs text-gray-500 text-center">
-          You cannot enter without speaking aloud. Mommy keeps the recording.
+          {gateMode === 'lesson'
+            ? `You cannot enter without doing the lesson. Mommy keeps the recording.`
+            : `You cannot enter without speaking aloud. Mommy keeps the recording.`}
         </p>
       </div>
     </div>
   );
 }
 
+// Token-set Jaccard overlap. Tolerant to word order + Whisper homophones
+// without accepting empty/unrelated transcripts. Returns 0..1. Identical
+// to the version in MorningMantraGate so the two gates stay in sync.
+function fuzzyOverlap(a: string, b: string): number {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+  const at = new Set(norm(a).split(' ').filter(Boolean));
+  const bt = new Set(norm(b).split(' ').filter(Boolean));
+  if (at.size === 0 || bt.size === 0) return 0;
+  let overlap = 0;
+  for (const t of at) if (bt.has(t)) overlap++;
+  return overlap / Math.max(at.size, bt.size);
+}
+
+// Persist a lesson attempt — audio to evidence/<user>/voice-lesson/<ts>.webm,
+// row in voice_lesson_attempts (the dedicated voice-coach pipeline will run
+// metric analysis later; this just records the attempt happened and surfaces
+// the audio for that pipeline + Mommy review).
+async function persistLessonAttempt(
+  userId: string,
+  lesson: LessonModule,
+  durationSec: number,
+  avgPitchHz: number,
+  blob: Blob,
+): Promise<void> {
+  const ts = Date.now();
+  const audioPath = `${userId}/voice-lesson/${lesson.slug}-${ts}.webm`;
+  const { error: upErr } = await supabase.storage
+    .from('evidence')
+    .upload(audioPath, blob, { contentType: 'audio/webm', upsert: false });
+  if (upErr) {
+    console.warn('[VoiceGate] lesson storage upload failed:', upErr);
+    return;
+  }
+
+  // Look up attempt_number (count of prior attempts for this lesson + 1)
+  const { count: priorCount } = await supabase
+    .from('voice_lesson_attempts')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('lesson_id', lesson.id);
+  const attemptNumber = (priorCount ?? 0) + 1;
+
+  await supabase.from('voice_lesson_attempts').insert({
+    user_id: userId,
+    lesson_id: lesson.id,
+    attempt_number: attemptNumber,
+    audio_storage_path: audioPath,
+    audio_duration_sec: durationSec,
+    measured_metrics: {},
+    passing_metrics_met: {},
+    pass_overall: null,
+    pass_perfect: false,
+    climax_gated: false,
+    generation_meta: {
+      source: 'voice_gate',
+      avg_pitch_hz: avgPitchHz > 0 ? Math.round(avgPitchHz) : null,
+    },
+  });
+
+  // Also drop a voice_recordings row so the shared corpus picks it up.
+  await supabase.from('voice_recordings').insert({
+    user_id: userId,
+    recording_url: audioPath,
+    duration_seconds: durationSec,
+    context: `voice_lesson_attempt:${lesson.slug}`,
+    pitch_avg_hz: avgPitchHz > 0 ? Math.round(avgPitchHz) : null,
+    transcript: null,
+    is_baseline: false,
+  });
+
+  // Legacy practice log so the daily voice-cadence counters still tick.
+  await supabase.from('voice_practice_log').insert({
+    user_id: userId,
+    duration_seconds: durationSec,
+    avg_pitch_hz: avgPitchHz > 0 ? Math.round(avgPitchHz) : 0,
+  });
+}
+
 // Persist the gate recording — audio blob to the evidence bucket (its
 // allowed_mime_types include audio/webm and its RLS is already configured
 // for per-user folders), indexed row in voice_recordings plus the legacy
-// pitch/log tables. Errors are surfaced via console only; the gate
-// dismisses regardless so a slow upload doesn't strand Maxy.
+// pitch/log tables. `matched=false` is also persisted so Mommy has the
+// rejected takes on file. Errors surfaced via console only; the gate path
+// already decided pass/fail before calling this.
 async function persistRecording(
   userId: string,
   mantra: string,
+  spokenTranscript: string,
   avgPitchHz: number,
-  blobChunks: Blob[],
+  blob: Blob,
+  matched: boolean,
 ): Promise<void> {
-  let recordingUrl: string | null = null;
-
-  if (blobChunks.length > 0) {
-    const blob = new Blob(blobChunks, { type: 'audio/webm' });
-    // RLS on storage.objects requires (storage.foldername(name))[1] = auth.uid()
-    // — path must start with the user's id.
-    const path = `${userId}/voice-gate/${Date.now()}.webm`;
-    const { error: upErr } = await supabase.storage
-      .from('evidence')
-      .upload(path, blob, { contentType: 'audio/webm', upsert: false });
-    if (upErr) {
-      console.warn('[VoiceGate] storage upload failed:', upErr);
-    } else {
-      recordingUrl = path;
-    }
+  // RLS on storage.objects requires (storage.foldername(name))[1] = auth.uid()
+  // — path must start with the user's id. Failed attempts get the same
+  // folder with a `rejected/` subpath so they're easy to filter in admin.
+  const path = `${userId}/voice-gate/${matched ? '' : 'rejected/'}${Date.now()}.webm`;
+  const { error: upErr } = await supabase.storage
+    .from('evidence')
+    .upload(path, blob, { contentType: 'audio/webm', upsert: false });
+  if (upErr) {
+    console.warn('[VoiceGate] storage upload failed:', upErr);
+    return;
   }
+  const recordingUrl = path;
 
   // voice_recordings is the persistent corpus — Mommy reads these for
-  // playback / quote / reframing. Skip the insert if upload failed so we
-  // never have orphan rows pointing at missing audio.
-  if (recordingUrl) {
-    await supabase.from('voice_recordings').insert({
-      user_id: userId,
-      recording_url: recordingUrl,
-      duration_seconds: RECORD_SECONDS,
-      context: 'voice_gate_mantra',
-      pitch_avg_hz: avgPitchHz > 0 ? Math.round(avgPitchHz) : null,
-      transcript: mantra,
-      is_baseline: false,
-    });
-  }
+  // playback / quote / reframing. The `transcript` field stores what
+  // Maxy actually said (per Whisper), not what she was supposed to say —
+  // surfacing the actual words is what makes the audit useful.
+  await supabase.from('voice_recordings').insert({
+    user_id: userId,
+    recording_url: recordingUrl,
+    duration_seconds: RECORD_SECONDS,
+    context: matched ? 'voice_gate_mantra' : 'voice_gate_mantra_rejected',
+    pitch_avg_hz: avgPitchHz > 0 ? Math.round(avgPitchHz) : null,
+    transcript: spokenTranscript || `(no transcript — expected: ${mantra})`,
+    is_baseline: false,
+  });
 
   // Legacy pitch/practice tables — kept in sync so existing aggregations
   // (daily averages, trend cards) still pick up gate passes.
