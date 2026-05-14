@@ -1,5 +1,6 @@
 {
   "consent-to-fantasy": [
+    "supabase/functions/_shared/ego-deconstruction.ts::- NEVER use any of: \"echo\", \"linger\", \"wrap around\", \"every inch\", \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"inta",
     "supabase/functions/mommy-ambient-author/index.ts::- Never use: \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"intake\", \"questionnaire\", \"for entertainment\", \"consent to",
     "supabase/functions/mommy-anticipation-amplifier/index.ts::Forbidden phrases (build spec): \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"intake\", \"questionnaire\", \"for entertai",
     "supabase/functions/mommy-contract-author/index.ts::\"body_text\": \"the contract itself, 6-12 sentences in Mama's voice. Read top-to-bottom as a possessive declaration of what she IS this week.",
@@ -14,6 +15,7 @@
     "supabase/functions/mommy-reality-reframe-letters/index.ts::- Never use: \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"intake\", \"questionnaire\", \"for entertainment\", \"consent to"
   ],
   "disclaimer": [
+    "supabase/functions/_shared/ego-deconstruction.ts::- NEVER use any of: \"echo\", \"linger\", \"wrap around\", \"every inch\", \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"inta",
     "supabase/functions/mommy-ambient-author/index.ts::- Never use: \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"intake\", \"questionnaire\", \"for entertainment\", \"consent to",
     "supabase/functions/mommy-anticipation-amplifier/index.ts::Forbidden phrases (build spec): \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"intake\", \"questionnaire\", \"for entertai",
     "supabase/functions/mommy-contract-author/index.ts::\"body_text\": \"the contract itself, 6-12 sentences in Mama's voice. Read top-to-bottom as a possessive declaration of what she IS this week.",
@@ -32,6 +34,7 @@
   "fiction": [
     "src/components/Intake/layers/ArousalLayer.tsx::'Erotic fiction',",
     "src/lib/protocol-core/modules/findom-module.ts::\"Men don't pay for fiction. They pay for power. You have ${activePigs} men paying regularly.\",",
+    "supabase/functions/_shared/ego-deconstruction.ts::- NEVER use any of: \"echo\", \"linger\", \"wrap around\", \"every inch\", \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"inta",
     "supabase/functions/mommy-ambient-author/index.ts::- Never use: \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"intake\", \"questionnaire\", \"for entertainment\", \"consent to",
     "supabase/functions/mommy-anticipation-amplifier/index.ts::Forbidden phrases (build spec): \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"intake\", \"questionnaire\", \"for entertai",
     "supabase/functions/mommy-contract-author/index.ts::\"body_text\": \"the contract itself, 6-12 sentences in Mama's voice. Read top-to-bottom as a possessive declaration of what she IS this week.",
@@ -45,6 +48,7 @@
     "supabase/functions/mommy-reality-reframe-letters/index.ts::- Never use: \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"intake\", \"questionnaire\", \"for entertainment\", \"consent to"
   ],
   "for-entertainment": [
+    "supabase/functions/_shared/ego-deconstruction.ts::- NEVER use any of: \"echo\", \"linger\", \"wrap around\", \"every inch\", \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"inta",
     "supabase/functions/mommy-ambient-author/index.ts::- Never use: \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"intake\", \"questionnaire\", \"for entertainment\", \"consent to",
     "supabase/functions/mommy-anticipation-amplifier/index.ts::Forbidden phrases (build spec): \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"intake\", \"questionnaire\", \"for entertai",
     "supabase/functions/mommy-contract-author/index.ts::\"body_text\": \"the contract itself, 6-12 sentences in Mama's voice. Read top-to-bottom as a possessive declaration of what she IS this week.",
@@ -82,6 +86,7 @@
     "src/components/today-redesign/useTodayData.ts::intake_submitted: 'Intake submitted',",
     "src/data/weekend-activities.ts::feminizationBenefit: 'Phytoestrogen intake, domestic femininity',",
     "src/lib/task-bank.ts::- \"log_entry\" — asks for SPECIFIC DATA: numbers, ratings, intake reports, check-ins with multiple fields. STRUCTURED FORM. Must also include",
+    "supabase/functions/_shared/ego-deconstruction.ts::- NEVER use any of: \"echo\", \"linger\", \"wrap around\", \"every inch\", \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"inta",
     "supabase/functions/mommy-ambient-author/index.ts::- Never use: \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"intake\", \"questionnaire\", \"for entertainment\", \"consent to",
     "supabase/functions/mommy-anticipation-amplifier/index.ts::Forbidden phrases (build spec): \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"intake\", \"questionnaire\", \"for entertai",
     "supabase/functions/mommy-contract-author/index.ts::\"body_text\": \"the contract itself, 6-12 sentences in Mama's voice. Read top-to-bottom as a possessive declaration of what she IS this week.",
@@ -96,6 +101,7 @@
     "supabase/functions/mommy-reality-reframe-letters/index.ts::- Never use: \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"intake\", \"questionnaire\", \"for entertainment\", \"consent to"
   ],
   "not-medical-advice": [
+    "supabase/functions/_shared/ego-deconstruction.ts::- NEVER use any of: \"echo\", \"linger\", \"wrap around\", \"every inch\", \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"inta",
     "supabase/functions/mommy-ambient-author/index.ts::- Never use: \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"intake\", \"questionnaire\", \"for entertainment\", \"consent to",
     "supabase/functions/mommy-anticipation-amplifier/index.ts::Forbidden phrases (build spec): \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"intake\", \"questionnaire\", \"for entertai",
     "supabase/functions/mommy-contract-author/index.ts::\"body_text\": \"the contract itself, 6-12 sentences in Mama's voice. Read top-to-bottom as a possessive declaration of what she IS this week.",
@@ -109,6 +115,7 @@
     "supabase/functions/mommy-reality-reframe-letters/index.ts::- Never use: \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"intake\", \"questionnaire\", \"for entertainment\", \"consent to"
   ],
   "questionnaire": [
+    "supabase/functions/_shared/ego-deconstruction.ts::- NEVER use any of: \"echo\", \"linger\", \"wrap around\", \"every inch\", \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"inta",
     "supabase/functions/hrt-booking-worker/index.ts::instruction_for_mama: `An HRT-push moment is open right now (signal: ${opp.reason}). Maxy is at booking-step \"${opp.current_step}\"; Mama wan",
     "supabase/functions/mommy-ambient-author/index.ts::- Never use: \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"intake\", \"questionnaire\", \"for entertainment\", \"consent to",
     "supabase/functions/mommy-anticipation-amplifier/index.ts::Forbidden phrases (build spec): \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"intake\", \"questionnaire\", \"for entertai",
@@ -133,6 +140,7 @@
     "src/types/arousal.ts::roleplay: { label: 'Roleplay', emoji: '🎭' },",
     "src/types/arousal.ts::| 'roleplay'",
     "src/types/sexting.ts::communication_style: 'brief' | 'chatty' | 'roleplay' | 'transactional';",
+    "supabase/functions/_shared/ego-deconstruction.ts::- NEVER use any of: \"echo\", \"linger\", \"wrap around\", \"every inch\", \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"inta",
     "supabase/functions/mommy-ambient-author/index.ts::- Never use: \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"intake\", \"questionnaire\", \"for entertainment\", \"consent to",
     "supabase/functions/mommy-anticipation-amplifier/index.ts::Forbidden phrases (build spec): \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"intake\", \"questionnaire\", \"for entertai",
     "supabase/functions/mommy-contract-author/index.ts::\"body_text\": \"the contract itself, 6-12 sentences in Mama's voice. Read top-to-bottom as a possessive declaration of what she IS this week.",
@@ -151,6 +159,7 @@
     "src/lib/handler-v2/platform-manager.ts::`[PlatformManager] Simulated post to ${account.platform} (${account.username ?? 'unknown'}):`,",
     "src/lib/handler-v2/platform-manager.ts::outcome: 'simulated',",
     "src/lib/voice/voice-evolution.ts::{ exercise: 'Argument Simulation', targetPitch: 230, durationMinutes: 10, notes: 'Stress breaks pitch control. Practice getting heated while",
+    "supabase/functions/_shared/ego-deconstruction.ts::- NEVER use any of: \"echo\", \"linger\", \"wrap around\", \"every inch\", \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"inta",
     "supabase/functions/handler-platform/index.ts::console.log(`[SIMULATED] Post to ${platform}: ${content.content_type} (no credentials configured)`)",
     "supabase/functions/mommy-ambient-author/index.ts::- Never use: \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"intake\", \"questionnaire\", \"for entertainment\", \"consent to",
     "supabase/functions/mommy-anticipation-amplifier/index.ts::Forbidden phrases (build spec): \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"intake\", \"questionnaire\", \"for entertai",
