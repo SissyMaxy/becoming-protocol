@@ -3,8 +3,20 @@ import { Mic, Loader2, Lock } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 
+// Daily voice-entry gate. Audio is required — typed-mantra bypass removed
+// 2026-05-14 per user feedback ("what good are the voice gates if I don't
+// use voice? I can just copy/paste to get past"). See
+// feedback_no_copy_paste_rituals + feedback_anticipate_resistance.
+//
+// Pitch is recorded for the longitudinal trend but is NOT a pass/fail
+// criterion — feedback_voice_tracking says forcing a feminine pitch target
+// causes dysphoria. Any speech detected (pitch in human voice range during
+// the recording window) passes. The mantra audio is uploaded to
+// voice-recordings/<user_id>/gate/<ts>.webm and indexed in voice_recordings
+// so Mommy can quote / reframe / play back later.
+
 const RECORD_SECONDS = 4;
-const PITCH_THRESHOLD_HZ = 140;
+const MIN_PITCHES_TO_PASS = 8; // ~0.5s of voiced sound at 60fps animation tick
 
 const MANTRAS = [
   "I am becoming her every day",
@@ -32,6 +44,8 @@ export function VoiceGate({ onPass }: VoiceGateProps) {
   const [countdown, setCountdown] = useState<number | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
   const recordingRef = useRef(false);
 
   useEffect(() => {
@@ -51,10 +65,11 @@ export function VoiceGate({ onPass }: VoiceGateProps) {
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (err) {
+      const denied = err instanceof Error && err.name === 'NotAllowedError';
       setError(
-        err instanceof Error && err.name === 'NotAllowedError'
-          ? 'Microphone blocked. Allow access or use the typed fallback below.'
-          : 'No microphone available. Use the typed fallback below.'
+        denied
+          ? 'Microphone blocked. Allow mic access in your browser settings — there is no typed bypass anymore. Speak the mantra to enter.'
+          : 'No microphone available. Plug one in or switch devices — there is no typed bypass.'
       );
       return;
     }
@@ -62,9 +77,24 @@ export function VoiceGate({ onPass }: VoiceGateProps) {
     streamRef.current = stream;
     setRecording(true);
     recordingRef.current = true;
+    chunksRef.current = [];
 
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    // MediaRecorder writes the audio blob; AnalyserNode samples pitch.
+    // Both consume the same MediaStream so the user gets one mic prompt.
+    let mr: MediaRecorder | null = null;
+    try {
+      mr = new MediaRecorder(stream);
+      mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      mr.start(500);
+      mediaRecorderRef.current = mr;
+    } catch (mrErr) {
+      // Audio recording without persistence is still better than no enforcement.
+      console.warn('[VoiceGate] MediaRecorder unavailable, pitch-only mode:', mrErr);
+    }
+
+    const audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
     audioContextRef.current = audioContext;
+    if (audioContext.state === 'suspended') { try { await audioContext.resume(); } catch { /* ignore */ } }
     const source = audioContext.createMediaStreamSource(stream);
     const analyser = audioContext.createAnalyser();
     analyser.fftSize = 2048;
@@ -98,45 +128,45 @@ export function VoiceGate({ onPass }: VoiceGateProps) {
     recordingRef.current = false;
     setRecording(false);
     setCountdown(null);
+
+    // Stop and wait for the final dataavailable.
+    if (mr && mr.state !== 'inactive') {
+      await new Promise<void>((resolve) => {
+        mr!.onstop = () => resolve();
+        try { mr!.stop(); } catch { resolve(); }
+      });
+    }
+
     stream.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     audioContext.close().catch(() => {});
     audioContextRef.current = null;
 
-    if (pitches.length === 0) {
-      setError('No speech detected. Speak the mantra aloud and try again.');
+    // Speech-detection check — the only pass criterion. Pitch threshold
+    // intentionally not enforced per feedback_voice_tracking (no forced
+    // feminine targets). Copy/paste cannot produce a voiced fundamental;
+    // an empty mic stream produces zero pitches in the human range.
+    if (pitches.length < MIN_PITCHES_TO_PASS) {
+      setError('No speech detected. Speak the mantra aloud — louder if your mic level is low. Try again.');
       return;
     }
 
     const sorted = [...pitches].sort((a, b) => a - b);
     const medianPitch = sorted[Math.floor(sorted.length / 2)];
     setPitch(medianPitch);
-    await verify(medianPitch);
+    await verify(medianPitch, chunksRef.current.slice());
   };
 
-  const verify = async (avgPitch: number) => {
+  const verify = async (avgPitch: number, blobChunks: Blob[]) => {
     setVerifying(true);
 
-    if (avgPitch < PITCH_THRESHOLD_HZ) {
-      setError(`Pitch too low: ${avgPitch.toFixed(0)}Hz (need ≥${PITCH_THRESHOLD_HZ}Hz). Speak higher.`);
-      setVerifying(false);
-      return;
-    }
-
     if (user?.id) {
-      try {
-        await supabase.from('voice_practice_log').insert({
-          user_id: user.id,
-          duration_seconds: RECORD_SECONDS,
-          avg_pitch_hz: Math.round(avgPitch),
-        });
-        await supabase.from('voice_pitch_samples').insert({
-          user_id: user.id,
-          pitch_hz: Math.round(avgPitch),
-        });
-      } catch {
-        // Non-critical
-      }
+      // Fire-and-forget persistence so a slow upload doesn't block the
+      // gate from dismissing. The audio matters for future Mommy quotes;
+      // the gate-pass matters for getting Maxy to her workspace.
+      void persistRecording(user.id, mantra, avgPitch, blobChunks).catch((e) => {
+        console.warn('[VoiceGate] persistence failed (non-blocking):', e);
+      });
     }
 
     setVerifying(false);
@@ -150,7 +180,7 @@ export function VoiceGate({ onPass }: VoiceGateProps) {
           <Lock className="w-12 h-12 mx-auto text-purple-400" />
           <h2 className="text-2xl font-bold text-white">Voice Gate</h2>
           <p className="text-sm text-gray-400">
-            Speak the mantra aloud to enter. Pitch must be feminine.
+            Speak the mantra aloud. Audio only — no typed bypass.
           </p>
         </div>
 
@@ -168,10 +198,10 @@ export function VoiceGate({ onPass }: VoiceGateProps) {
 
         {recording && livePitch !== null && (
           <div className="bg-gray-900 rounded-lg p-3 text-sm text-center">
-            <span className={livePitch >= PITCH_THRESHOLD_HZ ? 'text-green-400' : 'text-yellow-400'}>
+            <span className="text-purple-300">
               {livePitch.toFixed(0)}Hz
             </span>
-            <span className="text-gray-500 ml-2">(target: ≥{PITCH_THRESHOLD_HZ}Hz)</span>
+            <span className="text-gray-500 ml-2">(recording…)</span>
           </div>
         )}
 
@@ -195,25 +225,73 @@ export function VoiceGate({ onPass }: VoiceGateProps) {
           )}
         </button>
 
-        {/* Typed fallback for devices without mic */}
-        <TypedMantraFallback mantra={mantra} onPass={() => {
-          // Dismiss gate immediately — log fire-and-forget so a slow or
-          // failed insert never blocks the dismiss.
-          onPass();
-          if (user?.id) {
-            supabase.from('voice_practice_log')
-              .insert({ user_id: user.id, duration_seconds: 5, avg_pitch_hz: 0 })
-              .then(() => {})
-              .then(undefined, () => {});
-          }
-        }} />
-
         <p className="text-xs text-gray-500 text-center">
-          You cannot enter without completing this. The Handler is waiting.
+          You cannot enter without speaking aloud. Mommy keeps the recording.
         </p>
       </div>
     </div>
   );
+}
+
+// Persist the gate recording — audio blob to the evidence bucket (its
+// allowed_mime_types include audio/webm and its RLS is already configured
+// for per-user folders), indexed row in voice_recordings plus the legacy
+// pitch/log tables. Errors are surfaced via console only; the gate
+// dismisses regardless so a slow upload doesn't strand Maxy.
+async function persistRecording(
+  userId: string,
+  mantra: string,
+  avgPitchHz: number,
+  blobChunks: Blob[],
+): Promise<void> {
+  let recordingUrl: string | null = null;
+
+  if (blobChunks.length > 0) {
+    const blob = new Blob(blobChunks, { type: 'audio/webm' });
+    // RLS on storage.objects requires (storage.foldername(name))[1] = auth.uid()
+    // — path must start with the user's id.
+    const path = `${userId}/voice-gate/${Date.now()}.webm`;
+    const { error: upErr } = await supabase.storage
+      .from('evidence')
+      .upload(path, blob, { contentType: 'audio/webm', upsert: false });
+    if (upErr) {
+      console.warn('[VoiceGate] storage upload failed:', upErr);
+    } else {
+      recordingUrl = path;
+    }
+  }
+
+  // voice_recordings is the persistent corpus — Mommy reads these for
+  // playback / quote / reframing. Skip the insert if upload failed so we
+  // never have orphan rows pointing at missing audio.
+  if (recordingUrl) {
+    await supabase.from('voice_recordings').insert({
+      user_id: userId,
+      recording_url: recordingUrl,
+      duration_seconds: RECORD_SECONDS,
+      context: 'voice_gate_mantra',
+      pitch_avg_hz: avgPitchHz > 0 ? Math.round(avgPitchHz) : null,
+      transcript: mantra,
+      is_baseline: false,
+    });
+  }
+
+  // Legacy pitch/practice tables — kept in sync so existing aggregations
+  // (daily averages, trend cards) still pick up gate passes.
+  await Promise.all([
+    supabase.from('voice_practice_log').insert({
+      user_id: userId,
+      duration_seconds: RECORD_SECONDS,
+      avg_pitch_hz: avgPitchHz > 0 ? Math.round(avgPitchHz) : 0,
+    }),
+    avgPitchHz > 0
+      ? supabase.from('voice_pitch_samples').insert({
+          user_id: userId,
+          pitch_hz: Math.round(avgPitchHz),
+          context: 'voice_gate',
+        })
+      : Promise.resolve(),
+  ]);
 }
 
 function autoCorrelate(buffer: Float32Array, sampleRate: number): number {
@@ -249,62 +327,4 @@ function autoCorrelate(buffer: Float32Array, sampleRate: number): number {
   const T0 = maxpos;
 
   return sampleRate / T0;
-}
-
-function normalize(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
-}
-
-function TypedMantraFallback({ mantra, onPass }: { mantra: string; onPass: () => void }) {
-  const [typed, setTyped] = useState('');
-  const [count, setCount] = useState(0);
-  const [hint, setHint] = useState<string | null>(null);
-  const passedRef = useRef(false);
-  const required = 3;
-  const matches = normalize(typed) === normalize(mantra);
-
-  const handleSubmit = () => {
-    if (passedRef.current) return; // already dismissed once
-    if (matches) {
-      const newCount = count + 1;
-      setCount(newCount);
-      setTyped('');
-      setHint(null);
-      if (newCount >= required) {
-        passedRef.current = true;
-        onPass();
-      }
-    } else if (typed.trim().length > 0) {
-      setHint('Does not match. Type the mantra exactly as shown.');
-    }
-  };
-
-  return (
-    <div className="border-t border-gray-800 pt-4 mt-2">
-      <p className="text-xs text-gray-500 text-center mb-2">
-        Mic not working? Type the mantra {required} times instead ({count}/{required})
-      </p>
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={typed}
-          onChange={(e) => { setTyped(e.target.value); if (hint) setHint(null); }}
-          onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit(); }}
-          placeholder="Type the mantra exactly..."
-          className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm"
-          autoComplete="off"
-        />
-        <button
-          onClick={handleSubmit}
-          disabled={!matches}
-          className="px-4 py-2 rounded-lg bg-purple-600 disabled:bg-gray-800 text-white text-sm"
-        >
-          {count}/{required}
-        </button>
-      </div>
-      {hint && (
-        <p className="text-xs text-red-400 text-center mt-2">{hint}</p>
-      )}
-    </div>
-  );
 }
