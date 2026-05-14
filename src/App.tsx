@@ -48,6 +48,7 @@ import { GinaSessionRecorder } from './components/today-redesign/GinaSessionReco
 import { MorningMantraGate } from './components/today-redesign/MorningMantraGate';
 import { EveningConfessionGate } from './components/today-redesign/EveningConfessionGate';
 import { DisclosureRehearsalView } from './components/disclosure/DisclosureRehearsalView';
+import { LivePhotoPingResponder } from './components/live-photo/LivePhotoPingResponder';
 import { MommyDossierQuiz } from './components/persona/MommyDossierQuiz';
 import { VerificationVault } from './components/verification/VerificationVault';
 import { LettersArchiveView } from './components/letters';
@@ -1254,6 +1255,7 @@ function AuthenticatedAppInner() {
             setShowDisclosureRehearsal(false);
           }} />
         )}
+        <LivePhotoPingResponder />
       </>
     );
   }
@@ -1325,6 +1327,11 @@ function AuthenticatedAppInner() {
           setShowDisclosureRehearsal(false);
         }} />
       )}
+
+      {/* Live photo ping responder — self-gating overlay. Mama pings via
+          push + live_photo_pings row; this component detects the pending
+          row and renders the camera-only response UI. */}
+      <LivePhotoPingResponder />
 
       {/* Whoop OAuth callback toast */}
       {whoopToast && (
