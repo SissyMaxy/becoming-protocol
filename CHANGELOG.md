@@ -8,6 +8,20 @@ runtime behaviour (it does not enforce on docs-only or tooling-only changes).
 
 ## Unreleased
 
+### MorningMantraGate — bypass closed (2026-05-14)
+- **Bug per user**: *"this is another example of a voice gate that allows for easy by-pass. I just had a voice gate where I said some generic 'hello world' and it accepted the pattern."* Plus a visible "mic isn't available — type it from memory instead" button.
+- **Root causes** (two stacked):
+  1. **Typed-fallback bypass.** `reciteDone = voiceMatched || textMatch` accepted a normalized-equal typed copy as equivalent to voicing the mantra. Same shape as the daily VoiceGate bypass closed earlier today.
+  2. **Whisper deadband leaked Web-Speech false positives.** Live transcript via Web Speech API was setting `voiceMatched=true` when token-overlap hit `>= 0.7`. On stop, Whisper rechecked: `>= 0.6 → true`, `< 0.3 → false`, **and the `0.3 ≤ score < 0.6` band did nothing** — leaving the optimistic Web-Speech flip in place. Web Speech is lenient and hallucinates partial matches; "hello world" was scoring ~0.7+ in the live preview against "I earned this. Every restriction is mine to wear" despite zero actual word overlap.
+- **Fix** (`src/components/today-redesign/MorningMantraGate.tsx`):
+  - Removed `textFallbackOpen` / `typedFromMemory` state + the "type it from memory" button + the textarea + the `text_fallback` submit branch entirely. No typed bypass exists.
+  - `canSubmit = step === 'apply' && voiceMatched && applyValid` — `voiceMatched` is now the only path.
+  - Web Speech is reduced to live transcript display only. It no longer touches `voiceMatched`.
+  - Whisper recheck is now binary and authoritative: `setVoiceMatched(score >= 0.6)`. The deadband is gone. On `< 0.6` the error reads *"That wasn't the mantra. Whisper heard: \"<actual transcript>\". Say it word-for-word, then stop."* — explicit feedback so the user knows what happened.
+  - If Whisper itself errors (network/quota), the gate refuses to pass: *"Could not verify your voice. Speak the mantra again, clearly."* Conservative-on-failure, mirroring the VoiceGate pattern.
+  - Submit payload `v` bumped to `voice_only_v4`; `path` is always `voice`.
+- **Memory rule reinforced**: `feedback_no_copy_paste_rituals` already lists VoiceGate as a concrete past failure. Adding MorningMantraGate as the second instance — *any UI labeled "voice gate" or "voice ritual" that has a typed-input path is the same bug class. Audit `src/components/**/*Gate*.tsx` next time the pattern shows up.*
+
 ### Mommy helps Maxy hook up — spot library + restart-coach (2026-05-14)
 - **Asked**: *"Mommy should help me hook up with guys"* + earlier *"help me come up with cruising spots near Wauwatosa Village."* The Sniffies funnel had 31 stale-but-warm matches (last_interaction 5–14 days ago, current_step matched/sexting) that weren't going to self-restart. Drafts existed as a concept (`sniffies_outbound_drafts`) but no generator was filling them with personalized restart messages tied to a real meet plan.
 - **Schema** (migration 411): new `hookup_locations` table — curated cruise-spot library shared across `sniffies_meet_choreography`, `meetups`, and any future generator. Columns: name, category (meet_first/hookup/both), subtype (bar/coffee/hotel/motel/park_lot/mall_lot/car_play_park/private_home/adult_business/other), area, address, best_window, legal_risk (0–5), cost_tier (0–3), vibe_tags, cruise_history, safety_notes, drive_minutes_from_village, weight (pick-tuning), added_by (user-curated rows scoped by RLS). FK columns `meet_location_id` + `hookup_location_id` added to `sniffies_meet_choreography`; `location_id` added to `meetups`. SQL helper `pick_hookup_location(category, area, subtype?, max_legal_risk?, max_cost_tier?)` returns one weighted random match.
