@@ -20,6 +20,7 @@ import { BodyDirectiveChecklist } from './BodyDirectiveChecklist';
 import { ForceFeminizationPanel } from './ForceFeminizationPanel';
 import { RewardFlash } from './RewardFlash';
 import { useAuth } from '../../context/AuthContext';
+import { usePronounAutocorrect } from '../../lib/ego-deconstruction/use-pronoun-autocorrect';
 
 interface HandlerChatProps {
   onClose: () => void;
@@ -60,6 +61,12 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
   // Sleep-window affirmation drip — schedules notifications during configured
   // sleep window and hands the loop to the service worker for background play.
   useSleepAudioConditioning();
+
+  // Pronoun autocorrect (mechanic 6). Reads ego_pronoun_autocorrect_*
+  // from life_as_woman_system_active; transforms input value before
+  // setState; logs application + dispute.
+  const pronoun = usePronounAutocorrect({ userId: authUser?.id, surface: 'chat' });
+  const priorInputRef = useRef<string>('');
 
   // Auto-start biometric polling when Handler enters dominant/conditioning mode
   const bioPollStartedRef = useRef(false);
@@ -614,7 +621,17 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
             ref={inputRef}
             type="text"
             value={input}
-            onChange={e => setInput(e.target.value)}
+            onChange={e => {
+              const raw = e.target.value;
+              // Detect dispute: user typed back toward an autocorrected
+              // form (length shrank toward prior original).
+              if (priorInputRef.current && raw.length < priorInputRef.current.length) {
+                void pronoun.recordDispute(raw);
+              }
+              const transformed = pronoun.transform(raw);
+              priorInputRef.current = transformed;
+              setInput(transformed);
+            }}
             onKeyDown={handleKeyDown}
             placeholder={voiceInput.isListening ? 'Speak now...' : ''}
             disabled={isSending}

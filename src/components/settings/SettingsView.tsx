@@ -69,6 +69,7 @@ import { PersonaSettings } from './PersonaSettings';
 import { SniffiesSettings } from './SniffiesSettings';
 import { PhaseProgressPanel } from '../identity/PhaseProgressPanel';
 import { WeeklyRecapSettings } from './WeeklyRecapSettings';
+import { EgoDeconstructionSettings } from './EgoDeconstructionSettings';
 
 const DIFFICULTY_LEVELS = [
   { id: 'gentle', label: 'Gentle', desc: 'Lighter load, longer timers' },
@@ -322,7 +323,7 @@ interface SettingsViewProps {
   onOpenDossierStatus?: () => void;
 }
 
-type SettingsSection = 'main' | 'profile' | 'lovense' | 'whoop' | 'calendar' | 'equipment' | 'timeratchets' | 'reminders' | 'privacy' | 'stealth' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content' | 'opacity' | 'social-dashboard' | 'persona' | 'sniffies' | 'letters' | 'identity' | 'weekly-recap';
+type SettingsSection = 'main' | 'profile' | 'lovense' | 'whoop' | 'calendar' | 'equipment' | 'timeratchets' | 'reminders' | 'privacy' | 'stealth' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content' | 'opacity' | 'social-dashboard' | 'persona' | 'sniffies' | 'letters' | 'identity' | 'weekly-recap' | 'ego-deconstruction';
 
 export function SettingsView({ onBack, onEditIntake, onOpenDossierQuiz, onOpenDossierStatus }: SettingsViewProps) {
   const { isBambiMode } = useBambiMode();
@@ -448,6 +449,13 @@ export function SettingsView({ onBack, onEditIntake, onOpenDossierQuiz, onOpenDo
       color: '#c4847a',
     },
     {
+      id: 'ego-deconstruction' as const,
+      icon: Brain,
+      label: 'Ego deconstruction',
+      description: 'Twelve mechanisms — opt-in, intensity sliders, pause buttons',
+      color: '#a78bfa',
+    },
+    {
       id: 'privacy' as const,
       icon: Shield,
       label: 'Privacy',
@@ -525,6 +533,7 @@ export function SettingsView({ onBack, onEditIntake, onOpenDossierQuiz, onOpenDo
     if (activeSection === 'sniffies') return 'Sniffies imports';
     if (activeSection === 'identity') return 'Identity';
     if (activeSection === 'weekly-recap') return 'Weekly Recap';
+    if (activeSection === 'ego-deconstruction') return 'Ego deconstruction';
     const section = sections.find(s => s.id === activeSection);
     return section?.label || 'Settings';
   };
@@ -1336,6 +1345,9 @@ export function SettingsView({ onBack, onEditIntake, onOpenDossierQuiz, onOpenDo
 
         {/* Weekly Recap */}
         {activeSection === 'weekly-recap' && <WeeklyRecapSettings />}
+
+        {/* Ego deconstruction (12 mechanics) */}
+        {activeSection === 'ego-deconstruction' && <EgoDeconstructionSettings />}
 
         {/* Social Media Dashboard */}
         {activeSection === 'social-dashboard' && (

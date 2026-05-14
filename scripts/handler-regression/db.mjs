@@ -85,8 +85,17 @@ await test('plum safeword is active', async () => {
   truthy(hit, 'plum row');
 });
 await test('outreach queue has no expired pending rows', async () => {
+  // Only count statuses that are actually deliverable. Superseded rows are
+  // by-design unconsumable (the supersede triggers tombstone them with
+  // expires_at in the past); they show up here transiently between the
+  // trigger firing and mark_expired_outreach running, which made this test
+  // flake against the shared DB. The invariant we care about is "no row that
+  // could still fire is past its expires_at deadline".
   const { data } = await supa.from('handler_outreach_queue')
-    .select('id, expires_at').eq('user_id', UID).is('delivered_at', null);
+    .select('id, expires_at')
+    .eq('user_id', UID)
+    .is('delivered_at', null)
+    .in('status', ['pending', 'queued', 'scheduled']);
   const expired = (data || []).filter(r => r.expires_at && new Date(r.expires_at) < new Date()).length;
   eq(expired, 0, 'no expired-but-pending rows');
 });
