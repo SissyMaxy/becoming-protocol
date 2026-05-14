@@ -137,6 +137,7 @@
   "supabase/migrations/203b_unify_content_posts_into_ai_generated_content.sql::insert-without-on-conflict::INSERT INTO ai_generated_content ... ; (no ON CONFLICT)",
   "supabase/migrations/268_handler_notes_idempotency_and_rate_limit.sql::insert-without-on-conflict::INSERT INTO handler_notes ... ; (no ON CONFLICT)",
   "supabase/migrations/340_public_dares_seed.sql::insert-without-on-conflict::INSERT INTO public_dare_templates ... ; (no ON CONFLICT)",
+  "supabase/migrations/415_disclosure_rehearsal_compulsion.sql::insert-without-on-conflict::INSERT INTO handler_outreach_queue ... ; (no ON CONFLICT)",
   "supabase/migrations/416_regression_probe_visibility_gate.sql::insert-without-on-conflict::INSERT INTO scheduled_notifications ... ; (no ON CONFLICT)",
   "supabase/migrations/apply_1_tables.sql::insert-without-on-conflict::INSERT INTO supabase_migrations ... ; (no ON CONFLICT)",
   "supabase/migrations/catchup_031_037.sql::alter-table-add-column-needs-if-not-exists::ALTER TABLE mood_checkins ADD COLUMN triggered_by TEXT;",
