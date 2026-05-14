@@ -95,6 +95,11 @@ export function OutreachQueueCard() {
     // inline answer UI; exclude it here so the same row isn't shown twice.
     // Skip kind='weekly_recap' — those render via the dedicated WeeklyRecapCard
     // so the recap doesn't appear twice on Today.
+    // Filter regression/test-probe sources out of every read. Migration 416
+    // also clamps their expires_at to 30s in the past (so the gte filter
+    // below already drops them), but this is belt-and-suspenders — the
+    // user must NEVER see "Probe visibility marker for decree …" in their
+    // UI even between a test's insert and its delete.
     const [pRes, rRes] = await Promise.all([
       supabase.from('handler_outreach_queue')
         .select('id, message, urgency, trigger_reason, scheduled_for, delivered_at, expires_at, source, audio_url, kind, recall_confession_id, requires_photo, reply_deadline_at, replied_at')
@@ -102,6 +107,8 @@ export function OutreachQueueCard() {
         .is('delivered_at', null)
         .neq('source', 'dossier_question')
         .neq('source', 'voice_lesson')
+        .not('source', 'like', 'regression_%')
+        .not('trigger_reason', 'like', 'probe_%')
         .gte('expires_at', new Date().toISOString())
         .order('scheduled_for', { ascending: true })
         .limit(8),
@@ -111,6 +118,8 @@ export function OutreachQueueCard() {
         .not('delivered_at', 'is', null)
         .neq('source', 'dossier_question')
         .neq('source', 'voice_lesson')
+        .not('source', 'like', 'regression_%')
+        .not('trigger_reason', 'like', 'probe_%')
         .order('delivered_at', { ascending: false })
         .limit(3),
     ]);
