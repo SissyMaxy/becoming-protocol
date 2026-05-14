@@ -67,13 +67,11 @@ export function MorningMantraGate() {
   const [alreadySubmitted, setAlreadySubmitted] = useState<boolean | null>(null);
   const [step, setStep] = useState<Step>('recite');
 
-  // Recite step: voice path + text fallback
+  // Recite step: voice path only (typed fallback removed 2026-05-14)
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [transcript, setTranscript] = useState('');
   const [voiceMatched, setVoiceMatched] = useState(false);
-  const [textFallbackOpen, setTextFallbackOpen] = useState(false);
-  const [typedFromMemory, setTypedFromMemory] = useState('');
   const [micError, setMicError] = useState<string | null>(null);
 
   // Apply step
@@ -138,12 +136,11 @@ export function MorningMantraGate() {
   if (!inWindow && !pastWindow) return null;
 
   const targetMantra = config.current_mantra;
-  const typedNormalized = normalize(typedFromMemory);
-  const targetNormalized = normalize(targetMantra);
-  const textMatch = typedFromMemory.length > 0 && typedNormalized === targetNormalized;
-  const reciteDone = voiceMatched || textMatch;
+  // Typed fallback removed 2026-05-14 per user feedback ("another voice gate
+  // that allows for easy by-pass"). Voice-required, Whisper-authoritative,
+  // no escape hatch. Mirrors the same fix made to src/components/gates/VoiceGate.tsx.
   const applyValid = applyText.trim().length >= 25;
-  const canSubmit = step === 'apply' && reciteDone && applyValid;
+  const canSubmit = step === 'apply' && voiceMatched && applyValid;
 
   const startRecording = async () => {
     setMicError(null);
@@ -160,9 +157,11 @@ export function MorningMantraGate() {
       setRecordSeconds(0);
       timerRef.current = setInterval(() => setRecordSeconds(s => s + 1), 1000);
 
-      // Web Speech API for live in-progress transcript hint (so the user sees
-      // overlap % climbing). Final authoritative transcript comes from Whisper
-      // on stop, which is more accurate.
+      // Web Speech API is LIVE PREVIEW ONLY — shows the user a running
+      // transcript so they can see overlap % climbing. It does NOT decide
+      // pass/fail. Whisper on stop is the sole authority — Web Speech is
+      // lenient and hallucinates partial matches (this is exactly how
+      // "hello world" was passing the gate before 2026-05-14).
       const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (SR) {
         const rec = new SR();
@@ -178,10 +177,7 @@ export function MorningMantraGate() {
           }
           const liveTranscript = finalT + interim;
           setTranscript(liveTranscript);
-          // Optimistic flip — we re-check with Whisper on stop
-          if (fuzzyOverlap(liveTranscript, targetMantra) >= 0.7) {
-            setVoiceMatched(true);
-          }
+          // Display only — voiceMatched is set by Whisper on stop, never here.
         };
         rec.onerror = () => {};
         recognitionRef.current = rec;
@@ -201,9 +197,13 @@ export function MorningMantraGate() {
     return new Promise<void>((resolve) => {
       if (mediaRecorderRef.current) {
         mediaRecorderRef.current.onstop = async () => {
-          // After recording stops, send the audio blob to Whisper for an
-          // authoritative transcript. Web Speech is the live preview;
-          // Whisper is the ground truth for the match decision.
+          // Whisper is the SOLE pass/fail authority. The 0.3–0.6 deadband
+          // that used to leave voiceMatched untouched was the source of the
+          // "hello world passes" bug — fixed by making this binary:
+          // overlap ≥ 0.6 → matched; anything else → not matched.
+          // Conservative-on-failure: if Whisper itself errors, we don't
+          // pass. The user can re-record.
+          let whisperScored = false;
           try {
             const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
             if (blob.size > 0) {
@@ -217,17 +217,25 @@ export function MorningMantraGate() {
                 const data = await r.json() as { ok?: boolean; transcript?: string };
                 if (data.ok && data.transcript) {
                   setTranscript(data.transcript);
-                  if (fuzzyOverlap(data.transcript, targetMantra) >= 0.6) {
-                    setVoiceMatched(true);
-                  } else if (fuzzyOverlap(data.transcript, targetMantra) < 0.3) {
-                    // Whisper returned but nothing close — clear the optimistic flip
-                    setVoiceMatched(false);
+                  const score = fuzzyOverlap(data.transcript, targetMantra);
+                  setVoiceMatched(score >= 0.6);
+                  whisperScored = true;
+                  if (score < 0.6) {
+                    setMicError(`That wasn't the mantra. Whisper heard: "${data.transcript.slice(0, 120)}". Say it word-for-word, then stop.`);
+                  } else {
+                    setMicError(null);
                   }
                 }
               }
             }
           } catch (e) {
-            console.warn('[MorningMantra] Whisper transcription failed (non-fatal):', e);
+            console.warn('[MorningMantra] Whisper transcription failed:', e);
+          }
+          if (!whisperScored) {
+            // No authoritative score = don't pass. Web Speech's optimistic
+            // flip is intentionally not used here.
+            setVoiceMatched(false);
+            setMicError('Could not verify your voice. Speak the mantra again, clearly.');
           }
           resolve();
         };
@@ -271,11 +279,10 @@ export function MorningMantraGate() {
         reps_required: 1,
         reps_submitted: 1,
         typed_content: JSON.stringify({
-          v: 'voice_first_v3',
-          path: voiceMatched ? 'voice' : 'text_fallback',
+          v: 'voice_only_v4',
+          path: 'voice',
           recite_seconds: recordSeconds,
-          transcript: voiceMatched ? transcript.slice(0, 1000) : null,
-          typed_from_memory: !voiceMatched && textMatch ? typedFromMemory.slice(0, 1000) : null,
+          transcript: transcript.slice(0, 1000),
           applied_to_today: applyText.slice(0, 1000),
         }).slice(0, 10000),
       });
@@ -307,7 +314,7 @@ export function MorningMantraGate() {
         {step === 'recite' && (
           <>
             <div style={{ fontSize: 13, color: '#e8e6e3', lineHeight: 1.5, marginBottom: 14 }}>
-              Say it aloud. Your voice on the recording is the conditioning. Typing is a fallback when the mic isn&apos;t available.
+              Say it aloud. Whisper compares your voice to the mantra — speak it word-for-word. No typed bypass.
             </div>
             <div style={{
               fontSize: 18, color: '#f4c272', fontStyle: 'italic',
@@ -317,7 +324,7 @@ export function MorningMantraGate() {
               {targetMantra}
             </div>
 
-            {!voiceMatched && !textFallbackOpen && !recording && (
+            {!voiceMatched && !recording && (
               <button
                 onClick={startRecording}
                 style={{
@@ -379,56 +386,19 @@ export function MorningMantraGate() {
               <div style={{ fontSize: 11, color: '#f47272', marginBottom: 8 }}>{micError}</div>
             )}
 
-            {!voiceMatched && !textFallbackOpen && (
-              <button
-                onClick={() => setTextFallbackOpen(true)}
-                style={{
-                  width: '100%', padding: '8px 14px', borderRadius: 6, border: '1px solid #2d1a4d',
-                  background: 'transparent', color: '#8a8690',
-                  fontWeight: 500, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
-                  marginBottom: 8,
-                }}
-              >
-                mic isn&apos;t available — type it from memory instead
-              </button>
-            )}
-
-            {textFallbackOpen && !voiceMatched && (
-              <>
-                <div style={{ fontSize: 11.5, color: '#8a8690', marginBottom: 6 }}>
-                  Type from memory. The mantra above is hidden as you type — no copy-paste pass-through.
-                </div>
-                <textarea
-                  value={typedFromMemory}
-                  onChange={e => setTypedFromMemory(e.target.value)}
-                  placeholder="Type the mantra from memory…"
-                  rows={3}
-                  style={{
-                    width: '100%', background: '#050507',
-                    border: `1px solid ${textMatch ? '#5fc88f' : '#22222a'}`, borderRadius: 8,
-                    padding: 12, fontSize: 14, color: '#e8e6e3', fontFamily: 'inherit',
-                    resize: 'vertical', lineHeight: 1.6, marginBottom: 6,
-                  }}
-                />
-                <div style={{ fontSize: 11, color: textMatch ? '#5fc88f' : '#8a8690', marginBottom: 8 }}>
-                  {textMatch ? '✓ matches' : 'keep typing — case + punctuation ignored'}
-                </div>
-              </>
-            )}
-
             <button
               onClick={() => setStep('apply')}
-              disabled={!reciteDone || recording}
+              disabled={!voiceMatched || recording}
               style={{
                 width: '100%', padding: '10px 14px', borderRadius: 7, border: 'none',
-                background: reciteDone && !recording ? '#7c3aed' : '#22222a',
-                color: reciteDone && !recording ? '#fff' : '#6a656e',
+                background: voiceMatched && !recording ? '#7c3aed' : '#22222a',
+                color: voiceMatched && !recording ? '#fff' : '#6a656e',
                 fontWeight: 700, fontSize: 13,
-                cursor: reciteDone && !recording ? 'pointer' : 'not-allowed',
+                cursor: voiceMatched && !recording ? 'pointer' : 'not-allowed',
                 fontFamily: 'inherit',
               }}
             >
-              {recording ? 'finish recording first' : reciteDone ? 'continue →' : 'recite the mantra to continue'}
+              {recording ? 'finish recording first' : voiceMatched ? 'continue →' : 'speak the mantra to continue'}
             </button>
           </>
         )}
