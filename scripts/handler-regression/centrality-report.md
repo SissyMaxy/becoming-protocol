@@ -1,6 +1,6 @@
 # Handler-Centrality Audit
 
-Generated: 2026-05-14T20:19:54.454Z
+Generated: 2026-05-14T20:31:22.590Z
 
 Each function below writes a user-facing artifact (decree, commitment, outreach, confession prompt, etc.) **without first reading any Handler-state table**. The artifact is therefore generated without reference to the current persona, phase, mode, slip count, or recent directives — it cannot speak with Handler authority.
 
@@ -8,7 +8,7 @@ Memory rule: `feedback_handler_is_singular_authority.md`. Refactor each entry to
 
 **Allowed-list (skipped):** functions in `api/handler/chat.ts`, `supabase/functions/handler-autonomous/index.ts`, `supabase/functions/handler-outreach-auto/index.ts` are exempt because they ARE the Handler — their callers have already loaded state.
 
-## 24 centrality violations
+## 25 centrality violations
 
 | File:Line | Function | Writes (user-facing) |
 |-----------|----------|---------------------|
@@ -18,6 +18,7 @@ Memory rule: `feedback_handler_is_singular_authority.md`. Refactor each entry to
 | `api\handler\_lib\chat-action.ts:13916` | `runPronounGate` | `handler_outreach_queue` |
 | `supabase\functions\bind-enforcer-cron\index.ts:97` | `fireConsequence` | `handler_decrees` |
 | `supabase\functions\capability-digest-cron\index.ts:77` | `digestForCanonicalUser` | `handler_outreach_queue` |
+| `supabase\functions\live-photo-pinger\index.ts:191` | `maybePingUser` | `handler_outreach_queue` |
 | `supabase\functions\mommy-fast-react\index.ts:125` | `fireFastAction` | `handler_decrees`, `handler_outreach_queue`, `memory_implants` |
 | `supabase\functions\mommy-gaslight\index.ts:136` | `persistImplant` | `memory_implants` |
 | `supabase\functions\mommy-scheme\index.ts:211` | `fireAction` | `handler_decrees`, `handler_outreach_queue`, `memory_implants` |
