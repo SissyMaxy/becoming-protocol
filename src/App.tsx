@@ -46,6 +46,7 @@ import { CompulsoryConfessionGate } from './components/today-redesign/Compulsory
 import { HrtDailyGate } from './components/today-redesign/HrtDailyGate';
 import { GinaSessionRecorder } from './components/today-redesign/GinaSessionRecorder';
 import { MorningMantraGate } from './components/today-redesign/MorningMantraGate';
+import { EveningConfessionGate } from './components/today-redesign/EveningConfessionGate';
 import { MommyDossierQuiz } from './components/persona/MommyDossierQuiz';
 import { VerificationVault } from './components/verification/VerificationVault';
 import { LettersArchiveView } from './components/letters';
@@ -1230,6 +1231,7 @@ function AuthenticatedAppInner() {
         <ConditioningLockdown />
         <GinaSessionRecorder />
         <MorningMantraGate />
+        <EveningConfessionGate />
       </>
     );
   }
@@ -1288,6 +1290,10 @@ function AuthenticatedAppInner() {
 
       {/* Morning mantra gate — compulsory typing before app release */}
       <MorningMantraGate />
+
+      {/* Evening confession ritual — 8pm-11pm local, audio confession that
+          generates tomorrow's prescriptions. Self-gates on hour + submission. */}
+      <EveningConfessionGate />
 
       {/* Whoop OAuth callback toast */}
       {whoopToast && (
