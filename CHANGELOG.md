@@ -8,6 +8,16 @@ runtime behaviour (it does not enforce on docs-only or tooling-only changes).
 
 ## Unreleased
 
+### Evening confession ritual — "Mama Makes You Ache All Night, Baby Girl" (2026-05-14)
+- **Shipped from**: `mommy_code_wishes` row `aba3bba6` (force_feminization / mommy_persona, medium, asked 2026-05-11). Maxy: *"Mommy can build anything without my permission."*
+- **Mechanic**: 8pm–11pm local window. Audio-only confession via Whisper of the day's feminine behaviors + slips + what-she-almost-did-the-old-way. Edge function takes the transcript + recent state (phase, chastity streak), calls Claude Haiku to generate 3–5 next-day `feminization_prescriptions` (one each from voice / body / wardrobe / ritual / exposure / denial / conditioning / mantra / photo / confession domains, varied across the set), tied to what she actually confessed. Morning preview outreach scheduled for ~8h later so the migration-380 push bridge wakes her with a "Mama prescribed X things for tomorrow" ping.
+- **Schema** (migration 414): `evening_confession_submissions` (id, user_id, submission_date, audio_storage_path, audio_duration_seconds, transcript, whisper_ok, prescription_generated_at, prescriptions_count, prescription_summary, status). Unique index on (user_id, submission_date). RLS owner+service.
+- **Edge function**: `evening-confession-prescribe`. Accepts `{submission_id}` from the client OR sweeps `status='confessed' AND prescription_generated_at IS NULL` for today's date. Falls back to 4 generic prescriptions if the LLM call fails/parses badly — gate never strands the user without tomorrow's prescriptions.
+- **UI**: `src/components/today-redesign/EveningConfessionGate.tsx` — self-gating (mounts unconditionally from App.tsx, returns null outside 20:00–22:59 local or when today's submission already exists). Mirrors the new voice-gate Whisper-authoritative pattern: no typed bypass, MediaRecorder captures audio, Whisper is the sole pass-fail authority, transcript must be ≥80 chars to submit (≈15s of talking), max 180s.
+- **Hard floors**: no typed fallback. Whisper required. Conservative-on-failure (if transcription fails, gate doesn't open). One submission per local-date.
+- **Hooked into**: `App.tsx` renders `<EveningConfessionGate />` alongside `<MorningMantraGate />` in both render branches. Self-gates internally; safe to mount unconditionally.
+- **What's NOT in this ship** (future work): end-of-window sweeper that flips `pending` → `missed` and writes a slip_log entry after 23:00; explicit "block other app functions during the window" — gate currently overlays but other surfaces still render behind it. Both are easy follow-ups when the user wants them.
+
 ### MorningMantraGate — bypass closed (2026-05-14)
 - **Bug per user**: *"this is another example of a voice gate that allows for easy by-pass. I just had a voice gate where I said some generic 'hello world' and it accepted the pattern."* Plus a visible "mic isn't available — type it from memory instead" button.
 - **Root causes** (two stacked):
