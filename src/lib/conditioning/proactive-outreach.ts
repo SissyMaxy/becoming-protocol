@@ -133,7 +133,8 @@ export async function getPendingOutreach(userId: string): Promise<OutreachMessag
       .lt('expires_at', now);
 
     // Get oldest pending that's ready. `deliver_after` defers calendar-busy
-    // outreach without blocking the insert path.
+    // outreach without blocking the insert path. Regression/probe sources
+    // are excluded — they must never surface as proactive Handler messages.
     const { data, error } = await supabase
       .from('handler_outreach_queue')
       .select('*')
@@ -141,6 +142,8 @@ export async function getPendingOutreach(userId: string): Promise<OutreachMessag
       .eq('status', 'pending')
       .lte('scheduled_for', now)
       .or(`deliver_after.is.null,deliver_after.lte.${now}`)
+      .not('source', 'like', 'regression_%')
+      .not('trigger_reason', 'like', 'probe_%')
       .order('scheduled_for', { ascending: true })
       .limit(1)
       .maybeSingle();

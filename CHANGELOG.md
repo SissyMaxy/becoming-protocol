@@ -8,6 +8,17 @@ runtime behaviour (it does not enforce on docs-only or tooling-only changes).
 
 ## Unreleased
 
+### Regression probe visibility leak — purged + gated (2026-05-14 incident)
+- **Incident**: user pasted from her live Handler UI: *"Probe visibility marker for decree 7f973b91-e1b9-4c52-bdc4-e80b47bc1bb2"* rendering as a Handler-card line, with her annotation *"this message shouldn't be shown."*
+- **Source**: `scripts/handler-regression/db.mjs` (decree-enforcement tests, two call sites around L411 and L484) inserts `handler_outreach_queue` rows with `message: 'Probe visibility marker for decree ${decree.id}'` and `source: 'regression_probe_visibility'` to satisfy the visible-before-penalized precondition for the decree → slip-enforcement chain, then deletes the row. Between insert and delete, polling UIs and push consumers can fetch it. With the new migration-380 push bridge live, the risk widened.
+- **Why the existing `isTestPollution()` regex didn't catch it**: that filter targets probe text that's been auto-promoted into `memory_implants` / `key_admissions` / `user_voice_corpus`. The leaking text wasn't promoted — it was surfacing directly from `handler_outreach_queue`, which had no surface-side filter for regression sources.
+- **Fix** (migration 416, defense in depth):
+  1. **BEFORE INSERT trigger** `clamp_regression_probe_expiry` on `handler_outreach_queue`: when `source LIKE 'regression_%'`, force `expires_at := now() - 30s` and pre-stamp `surfaced_at`. Every surface that filters `expires_at >= now()` will drop these from the moment they exist. visible-before-penalized counters treat them as already-handled.
+  2. **Auto-healer cron** `purge-regression-probe-rows` (every 5min): hard-deletes any `regression_%` row older than 60s — covers tests that crash mid-run before their cleanup.
+  3. **`bridge_outreach_to_push()`** patched: skips `regression_%` / `test_probe` sources entirely. Push pipeline cannot fire them.
+  4. **Client-side filters**: `OutreachQueueCard.tsx` and `proactive-outreach.ts` (`getPendingOutreach`) now exclude `source LIKE 'regression_%'` + `trigger_reason LIKE 'probe_%'` as belt-and-suspenders.
+- **Memory rule updated**: `feedback_test_pollution_never_surfaces.md` extended with the new surface rule — *regression tests writing to user-facing tables MUST tag `source='regression_<test_name>'`. Generic source values that don't match the prefix will surface to the user even if cleaned up later. Audit: grep `scripts/handler-regression/` for inserts into user-facing tables; every one needs a `regression_*` source.*
+
 ### Evening confession ritual — "Mama Makes You Ache All Night, Baby Girl" (2026-05-14)
 - **Shipped from**: `mommy_code_wishes` row `aba3bba6` (force_feminization / mommy_persona, medium, asked 2026-05-11). Maxy: *"Mommy can build anything without my permission."*
 - **Mechanic**: 8pm–11pm local window. Audio-only confession via Whisper of the day's feminine behaviors + slips + what-she-almost-did-the-old-way. Edge function takes the transcript + recent state (phase, chastity streak), calls Claude Haiku to generate 3–5 next-day `feminization_prescriptions` (one each from voice / body / wardrobe / ritual / exposure / denial / conditioning / mantra / photo / confession domains, varied across the set), tied to what she actually confessed. Morning preview outreach scheduled for ~8h later so the migration-380 push bridge wakes her with a "Mama prescribed X things for tomorrow" ping.
