@@ -47,6 +47,7 @@ import { HrtDailyGate } from './components/today-redesign/HrtDailyGate';
 import { GinaSessionRecorder } from './components/today-redesign/GinaSessionRecorder';
 import { MorningMantraGate } from './components/today-redesign/MorningMantraGate';
 import { EveningConfessionGate } from './components/today-redesign/EveningConfessionGate';
+import { DisclosureRehearsalView } from './components/disclosure/DisclosureRehearsalView';
 import { MommyDossierQuiz } from './components/persona/MommyDossierQuiz';
 import { VerificationVault } from './components/verification/VerificationVault';
 import { LettersArchiveView } from './components/letters';
@@ -346,6 +347,21 @@ function AuthenticatedAppInner() {
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
+  // Hash-routable disclosure rehearsal surface. Open with `/#/disclosure`
+  // (e.g. from a settings link or a Today card). Closes by clearing the
+  // hash, mirroring the recap-detail pattern above.
+  const [showDisclosureRehearsal, setShowDisclosureRehearsal] = useState<boolean>(() =>
+    typeof window !== 'undefined' && window.location.hash.replace('#', '').replace(/\/$/, '') === '/disclosure'
+  );
+  useEffect(() => {
+    const onHash = () => {
+      const h = window.location.hash.replace('#', '').replace(/\/$/, '');
+      setShowDisclosureRehearsal(h === '/disclosure');
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
   const [showMorningFlow, setShowMorningFlow] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
   // Welcome wizard — kink-companion onboarding (persona/intensity/safeword/aftercare).
@@ -1232,6 +1248,12 @@ function AuthenticatedAppInner() {
         <GinaSessionRecorder />
         <MorningMantraGate />
         <EveningConfessionGate />
+        {showDisclosureRehearsal && (
+          <DisclosureRehearsalView onClose={() => {
+            window.location.hash = '';
+            setShowDisclosureRehearsal(false);
+          }} />
+        )}
       </>
     );
   }
@@ -1294,6 +1316,15 @@ function AuthenticatedAppInner() {
       {/* Evening confession ritual — 8pm-11pm local, audio confession that
           generates tomorrow's prescriptions. Self-gates on hour + submission. */}
       <EveningConfessionGate />
+
+      {/* Disclosure rehearsal compulsion — hash-routable via /#/disclosure.
+          Forces ≥3 audio rehearsals per target before approving real-world disclosure. */}
+      {showDisclosureRehearsal && (
+        <DisclosureRehearsalView onClose={() => {
+          window.location.hash = '';
+          setShowDisclosureRehearsal(false);
+        }} />
+      )}
 
       {/* Whoop OAuth callback toast */}
       {whoopToast && (
