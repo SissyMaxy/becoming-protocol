@@ -14,7 +14,7 @@ import { useSurfaceRenderTracking } from '../../lib/surface-render-hooks';
 import { useOutreachAudio } from '../../hooks/useOutreachAudio';
 import { ConfessionAudioPlayer } from './ConfessionAudioPlayer';
 import { OutreachReplyComposer } from './OutreachReplyComposer';
-import { detectPhotoDemand, detectReplyDeadline, formatCountdown } from '../../lib/outreach/reply-cues';
+import { detectPhotoDemand, detectMediaKind, detectReplyDeadline, formatCountdown, type EvidenceKind } from '../../lib/outreach/reply-cues';
 
 interface Outreach {
   id: string;
@@ -29,6 +29,7 @@ interface Outreach {
   kind: string | null;
   recall_confession_id: string | null;
   requires_photo: boolean | null;
+  evidence_kind: EvidenceKind | null;
   reply_deadline_at: string | null;
   replied_at: string | null;
   // Hydrated from a follow-up query — keeps the embed contract simple.
@@ -102,7 +103,7 @@ export function OutreachQueueCard() {
     // UI even between a test's insert and its delete.
     const [pRes, rRes] = await Promise.all([
       supabase.from('handler_outreach_queue')
-        .select('id, message, urgency, trigger_reason, scheduled_for, delivered_at, expires_at, source, audio_url, kind, recall_confession_id, requires_photo, reply_deadline_at, replied_at')
+        .select('id, message, urgency, trigger_reason, scheduled_for, delivered_at, expires_at, source, audio_url, kind, recall_confession_id, requires_photo, evidence_kind, reply_deadline_at, replied_at')
         .eq('user_id', user.id)
         .is('delivered_at', null)
         .neq('source', 'dossier_question')
@@ -113,7 +114,7 @@ export function OutreachQueueCard() {
         .order('scheduled_for', { ascending: true })
         .limit(8),
       supabase.from('handler_outreach_queue')
-        .select('id, message, urgency, trigger_reason, scheduled_for, delivered_at, expires_at, source, audio_url, kind, recall_confession_id, requires_photo, reply_deadline_at, replied_at')
+        .select('id, message, urgency, trigger_reason, scheduled_for, delivered_at, expires_at, source, audio_url, kind, recall_confession_id, requires_photo, evidence_kind, reply_deadline_at, replied_at')
         .eq('user_id', user.id)
         .not('delivered_at', 'is', null)
         .neq('source', 'dossier_question')
@@ -228,6 +229,7 @@ export function OutreachQueueCard() {
               : parsedDeadline?.deadlineAt.getTime() ?? 0;
             const countdownText = deadlineMs > 0 ? formatCountdown(deadlineMs, nowMs) : null;
             const photoDemanded = !!o.requires_photo || detectPhotoDemand(o.message);
+            const evidenceKind: EvidenceKind | null = o.evidence_kind ?? detectMediaKind(o.message);
             return (
               <div key={o.id} style={{
                 background: '#0a0a0d', border: `1px solid ${urgencyColor(o.urgency)}33`,
@@ -323,6 +325,7 @@ export function OutreachQueueCard() {
                     outreachId={o.id}
                     mommy={mommy}
                     requiresPhoto={photoDemanded}
+                    evidenceKind={evidenceKind}
                     accentColor={urgencyColor(o.urgency)}
                     onReplied={load}
                   />

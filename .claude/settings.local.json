@@ -127,7 +127,10 @@
       "mcp__claude_ai_Supabase__get_publishable_keys",
       "mcp__claude_ai_Vercel__get_deployment",
       "mcp__claude_ai_Vercel__list_teams",
-      "mcp__claude_ai_Vercel__list_projects"
+      "mcp__claude_ai_Vercel__list_projects",
+      "mcp__plugin_supabase_supabase__list_projects",
+      "mcp__plugin_supabase_supabase__apply_migration",
+      "mcp__plugin_supabase_supabase__execute_sql"
     ]
   }
 }

@@ -22,6 +22,7 @@ import { RewardFlash } from './RewardFlash';
 import { useAuth } from '../../context/AuthContext';
 import { usePronounAutocorrect } from '../../lib/ego-deconstruction/use-pronoun-autocorrect';
 import { useRealNameLockout } from '../../lib/real-name-lockout/use-real-name-lockout';
+import { detectMediaKind, type EvidenceKind } from '../../lib/outreach/reply-cues';
 
 interface HandlerChatProps {
   onClose: () => void;
@@ -182,6 +183,10 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
     return () => window.removeEventListener('handler-prescribe-session', handler);
   }, []);
   const [photoTaskType, setPhotoTaskType] = useState<'outfit' | 'mirror_check' | 'pose' | 'makeup' | 'nails' | 'general'>('outfit');
+  // Media kind for the upload panel. When Mama's latest turn asks for
+  // video/audio specifically, default to that so the user doesn't get a
+  // photo-only widget when she said "record yourself saying X".
+  const [mediaKind, setMediaKind] = useState<'photo' | 'video' | 'audio' | 'any'>('photo');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const initRef = useRef(false);
@@ -547,21 +552,23 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Photo verification upload panel */}
+      {/* Media verification upload panel — kind toggle (photo/video/audio)
+          + task-type chips (only relevant for photo). The kind defaults
+          come from inferring Mama's latest demand. */}
       {showPhotoUpload && (
         <div className="px-4 py-3 border-t border-gray-800/50 bg-[#0a0a0a] space-y-2">
-          <div className="flex items-center gap-2 overflow-x-auto pb-1">
-            {(['outfit', 'mirror_check', 'pose', 'makeup', 'nails', 'general'] as const).map((t) => (
+          <div className="flex items-center gap-2">
+            {(['photo','video','audio'] as const).map((k) => (
               <button
-                key={t}
-                onClick={() => setPhotoTaskType(t)}
-                className={`text-xs px-2.5 py-1 rounded-full whitespace-nowrap transition-colors ${
-                  photoTaskType === t
+                key={k}
+                onClick={() => setMediaKind(k)}
+                className={`text-xs px-3 py-1.5 rounded-full whitespace-nowrap transition-colors capitalize ${
+                  mediaKind === k
                     ? 'bg-purple-600 text-white'
-                    : 'bg-[#141414] text-gray-500 hover:text-gray-300'
+                    : 'bg-[#141414] text-gray-400 hover:text-gray-200'
                 }`}
               >
-                {t.replace('_', ' ')}
+                {k}
               </button>
             ))}
             <button
@@ -571,7 +578,29 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
               Close
             </button>
           </div>
-          <PhotoVerificationUpload taskType={photoTaskType} />
+          {mediaKind === 'photo' && (
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              {(['outfit', 'mirror_check', 'pose', 'makeup', 'nails', 'general'] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setPhotoTaskType(t)}
+                  className={`text-xs px-2.5 py-1 rounded-full whitespace-nowrap transition-colors ${
+                    photoTaskType === t
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-[#141414] text-gray-500 hover:text-gray-300'
+                  }`}
+                >
+                  {t.replace('_', ' ')}
+                </button>
+              ))}
+            </div>
+          )}
+          <PhotoVerificationUpload
+            taskType={mediaKind === 'video' ? 'video_evidence'
+                     : mediaKind === 'audio' ? 'voice_evidence'
+                     : photoTaskType}
+            mediaKind={mediaKind}
+          />
         </div>
       )}
 
@@ -597,9 +626,24 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
           </div>
         )}
         <div className="flex items-center gap-2">
-          {/* Photo verification toggle */}
+          {/* Media verification toggle. On open, auto-detect what kind Mama is asking for. */}
           <button
-            onClick={() => setShowPhotoUpload((v) => !v)}
+            onClick={() => {
+              setShowPhotoUpload((v) => {
+                const next = !v;
+                if (next) {
+                  // Find most recent assistant turn and infer media kind from it.
+                  const lastAssist = [...messages].reverse().find((m) => m.role === 'assistant');
+                  if (lastAssist?.content) {
+                    const inferred: EvidenceKind | null = detectMediaKind(lastAssist.content);
+                    if (inferred && inferred !== 'none') {
+                      setMediaKind(inferred);
+                    }
+                  }
+                }
+                return next;
+              });
+            }}
             disabled={isSending}
             className={`p-3 rounded-xl transition-all ${
               showPhotoUpload

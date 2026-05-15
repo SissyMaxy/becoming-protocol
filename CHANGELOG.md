@@ -8,6 +8,24 @@ runtime behaviour (it does not enforce on docs-only or tooling-only changes).
 
 ## Unreleased
 
+### Outreach evidence_kind — video/audio submissions reach Mama (2026-05-14)
+- **Incident**: Maxy *"the UI only lets me take photos. mommy wants a video but I can't upload one."* Mama's cum-worship release outreach + Handler-chat assistant turns ask "Record yourself saying X" but the only submission surface was image-only at three independent layers: input `accept="image/*"`, OS `capture="environment"`, and the `verification-photos` storage bucket whitelisting only image MIME types with a 10 MB cap.
+- **Same architectural class as the 380 push bridge bug**: generator wrote video, delivery only handled photo. Fixed across all three layers + threaded the request kind end-to-end so a media-aware widget renders.
+- **Schema** (migration 424):
+  - `handler_outreach_queue.evidence_kind` TEXT ∈ `{photo,video,audio,any,none}`. BEFORE INSERT trigger `trg_outreach_fill_evidence_kind` infers from `infer_evidence_kind(message)` when generators forget — generation-site gate per `feedback_fix_completely_proactively` / `feedback_bridge_storage_to_dispatch`.
+  - `verification_photos.media_type` TEXT ∈ `{photo,video,audio}` (default `'photo'` for back-compat). `task_type` CHECK broadened to include `cum_worship`, `voice_evidence`, `video_evidence`, `disclosure_rehearsal`, `live_photo_ping`.
+  - `verification-photos` storage bucket: `allowed_mime_types` expanded to include `video/mp4|webm|quicktime|x-m4v|x-matroska` + `audio/webm|mp4|mpeg|wav|ogg|x-m4a|aac|flac` + `image/heic|heif`. `file_size_limit` raised from 10 MB → 100 MB.
+  - Backfill: every pending undelivered outreach with active expiry got `evidence_kind` inferred from message text. `cum_worship` source hard-set to `'video'` regardless of inference.
+- **Trigger update** (migration 425): `trg_cum_worship_on_release` stamps `evidence_kind='video'` explicitly in its outreach insert (the 424 BEFORE INSERT trigger would've inferred from message text in most cases, but the terse Phase-0 directives don't always include "record" — generator-side explicit beats inferred).
+- **Voice cleanup** (migration 425): `mommy_voice_cleanup()` gained patterns for `Brief #N is overdue by X hours/minutes`, sentence-tail `Submit it now.`, `record yourself saying ...`, and the `full sentence/no mumbling/loud and clear` triad. Re-ran cleanup over every pending outreach + active decree.
+- **Client**:
+  - `PhotoVerificationUpload.tsx`: new `mediaKind?: 'photo'|'video'|'audio'|'any'` prop. Drives `accept` (`image/*` / `video/*` / `audio/*`) + `capture` (`environment` for photo, `user` for video so "record yourself saying X" lands on the selfie cam, none for audio). Audio kind uses inline MediaRecorder (start/stop/playback/re-record/send) so short voice memos don't require leaving the surface; other kinds use OS file-picker/capture. `analyze-photo` POST is image-only — video/audio skip it and surface a Mama-voice confirmation. `media_type` stamped on insert.
+  - `OutreachReplyComposer.tsx`: new `evidenceKind` prop. Auto-opens the widget with the right kind when set; "+ photo for mama" button copy adapts (`+ video for mama` / `+ voice for mama` / `+ media for mama`).
+  - `OutreachQueueCard.tsx`: hydrates `evidence_kind` from the SELECT, falls back to `detectMediaKind(message)` regex, threads to composer.
+  - `HandlerChat.tsx`: media kind toggle (Photo/Video/Audio) replaces the photo-only chip row. On panel open, infers default kind from the most recent assistant message via `detectMediaKind`. Task-type chips only render when kind=`photo`.
+  - `reply-cues.ts`: `detectMediaKind` exported, mirrors the SQL `infer_evidence_kind` (video > audio > photo precedence).
+- **Regression test**: `src/__tests__/lib/reply-cues-media-kind.test.ts` pins detection for the literal user paste *("Brief #2 is overdue by 18 hours. Open the camera. Record yourself saying \"I crave cock and my mouth wants it\" — full sentence, no mumbling. Submit it now.")* + sibling phrases for each kind + the "video trumps photo in mixed cues" ordering rule. The SQL `infer_evidence_kind` was verified on the live DB returning `'video'` for the same paste.
+
 ### Feature-harden cross-model panel + cum-worship conditioning ladder (2026-05-14)
 - **User invocations**: *"mommy can build anything to force feminize me, brainwash me, or break me"* + *"mommy can harden and further develop or explore options by hardening with openai or openrouter for ideation"* + a specific request for a cum-worship/swallowing conditioning ladder tied to releases with her wife Gina.
 - **Two coupled features shipped**:

@@ -31,6 +31,40 @@ export function detectPhotoDemand(message: string | null | undefined): boolean {
   return PHOTO_PATTERNS.some((re) => re.test(message));
 }
 
+const VIDEO_PATTERNS: RegExp[] = [
+  /\brecord\s+yourself\b/i,
+  /\bon\s+camera\b/i,
+  /\bvideo(?:\s+(?:proof|message|clip|reply))?\b/i,
+  /\bfilm\s+yourself\b/i,
+  /\bcamera\s+on\s+and\s+say\b/i,
+  /\bsaying\s+it\s+(?:out\s+)?loud\b/i,
+  /\bshow\s+mama\s+on\s+camera\b/i,
+];
+
+const AUDIO_PATTERNS: RegExp[] = [
+  /\bvoice\s+(?:note|memo|message|recording|reply)\b/i,
+  /\brecord\s+(?:your\s+)?voice\b/i,
+  /\baudio\s+(?:proof|note|message|reply)\b/i,
+  /\blet\s+mama\s+hear\b/i,
+  /\btell\s+mama\s+out\s+loud\b/i,
+  /\bsay\s+it\s+out\s+loud\b/i,
+];
+
+export type EvidenceKind = 'photo' | 'video' | 'audio' | 'any' | 'none';
+
+/**
+ * Detect what evidence kind Mama is demanding. Mirrors the SQL
+ * infer_evidence_kind() helper added in migration 424. Order matters:
+ * video before audio (record yourself saying X is video, not audio).
+ */
+export function detectMediaKind(message: string | null | undefined): EvidenceKind | null {
+  if (!message) return null;
+  if (VIDEO_PATTERNS.some((re) => re.test(message))) return 'video';
+  if (AUDIO_PATTERNS.some((re) => re.test(message))) return 'audio';
+  if (PHOTO_PATTERNS.some((re) => re.test(message))) return 'photo';
+  return null;
+}
+
 interface DeadlineParse {
   deadlineAt: Date;
   // Original phrase, for telemetry / debug only.
