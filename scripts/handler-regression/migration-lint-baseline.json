@@ -151,6 +151,8 @@
   "supabase/migrations/439_builder_self_heal.sql::insert-without-on-conflict::INSERT INTO mommy_supervisor_log ... ; (no ON CONFLICT)",
   "supabase/migrations/440_anti_resistance_trigger.sql::insert-without-on-conflict::INSERT INTO cock_curriculum_resistance_log ... ; (no ON CONFLICT)",
   "supabase/migrations/440_anti_resistance_trigger.sql::insert-without-on-conflict::INSERT INTO handler_outreach_queue ... ; (no ON CONFLICT)",
+  "supabase/migrations/443_surprise_praise.sql::insert-without-on-conflict::INSERT INTO handler_outreach_queue ... ; (no ON CONFLICT)",
+  "supabase/migrations/443_surprise_praise.sql::insert-without-on-conflict::INSERT INTO mama_praise_library ... ; (no ON CONFLICT)",
   "supabase/migrations/apply_1_tables.sql::insert-without-on-conflict::INSERT INTO supabase_migrations ... ; (no ON CONFLICT)",
   "supabase/migrations/catchup_031_037.sql::alter-table-add-column-needs-if-not-exists::ALTER TABLE mood_checkins ADD COLUMN triggered_by TEXT;",
   "supabase/migrations/catchup_031_037.sql::alter-table-add-column-needs-if-not-exists::ALTER TABLE user_state ADD COLUMN consecutive_survival_days INTEGER DEFAULT 0;",
