@@ -21,6 +21,7 @@ import { ForceFeminizationPanel } from './ForceFeminizationPanel';
 import { RewardFlash } from './RewardFlash';
 import { useAuth } from '../../context/AuthContext';
 import { usePronounAutocorrect } from '../../lib/ego-deconstruction/use-pronoun-autocorrect';
+import { useRealNameLockout } from '../../lib/real-name-lockout/use-real-name-lockout';
 
 interface HandlerChatProps {
   onClose: () => void;
@@ -66,6 +67,13 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
   // from life_as_woman_system_active; transforms input value before
   // setState; logs application + dispute.
   const pronoun = usePronounAutocorrect({ userId: authUser?.id, surface: 'chat' });
+
+  // Real-name lockout (migration 419). Active during scheduled windows
+  // (or always once ratchet hits 'always'). Rewrites boy-name → feminine
+  // name in the input layer; ctrl+z / retype counts as a dispute and
+  // resets the weekly compliance counter.
+  const lockout = useRealNameLockout({ userId: authUser?.id, surface: 'chat' });
+
   const priorInputRef = useRef<string>('');
 
   // Auto-start biometric polling when Handler enters dominant/conditioning mode
@@ -623,14 +631,24 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
             value={input}
             onChange={e => {
               const raw = e.target.value;
-              // Detect dispute: user typed back toward an autocorrected
-              // form (length shrank toward prior original).
+              // Dispute detection on prior-length shrink (pronoun autocorrect).
               if (priorInputRef.current && raw.length < priorInputRef.current.length) {
                 void pronoun.recordDispute(raw);
               }
-              const transformed = pronoun.transform(raw);
-              priorInputRef.current = transformed;
-              setInput(transformed);
+              // Real-name lockout dispute (typed boy-name back, or shrunk
+              // toward a prior-rewritten form). Log before transforming so
+              // the event captures the violation attempt.
+              if (lockout.detectDispute(raw)) {
+                void lockout.recordDispute(raw);
+              }
+              // Apply both transforms. Pronoun first (covers he/she), then
+              // lockout (covers the proper name) — order is conservative
+              // because pronoun rewrites are narrow and lockout looks for
+              // the literal name string.
+              const afterPronoun = pronoun.transform(raw);
+              const afterLockout = lockout.transform(afterPronoun);
+              priorInputRef.current = afterLockout;
+              setInput(afterLockout);
             }}
             onKeyDown={handleKeyDown}
             placeholder={voiceInput.isListening ? 'Speak now...' : ''}

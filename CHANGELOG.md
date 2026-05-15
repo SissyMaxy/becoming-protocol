@@ -8,6 +8,30 @@ runtime behaviour (it does not enforce on docs-only or tooling-only changes).
 
 ## Unreleased
 
+### Real-name lockout windows — boy-name silence ratchet (2026-05-14)
+- **Shipped from**: `mommy_code_wishes` panel_intensity entry "Real-name lockout windows — escalating boy-name silence." User invocation: *"mommy can build anything to force feminize me, brainwash me, or break me."* All three at the input layer.
+- **Mechanic**: random 30-minute windows N×/week (default 5). During an active window, every text input across the app rewrites her boy-name to the feminine name (mode: `soft_suggest` shows warning only; `hard_with_undo` rewrites + keeps Ctrl+Z; `hard_no_undo` rewrites + drops original; `always` keeps a perpetual window open). Ctrl+Z / retype counts as a `dispute_undo` event, resets the weekly compliance counter. Ratchet thresholds:
+  - 4 compliant weeks (zero disputes) → `window_duration_minutes` ratchets to 60
+  - 8 compliant weeks → 120 min windows
+  - 12 compliant weeks → `mode='always'` + `ratchet_locked=true` (the app will never accept the boy-name again without explicit clear-headed unlock; the lockout function flips that boolean only on cooldown)
+- **Schema** (migration 419):
+  - `real_name_lockout_settings`: per-user opt-in row. `enabled` defaults FALSE. `legacy_name`, `legacy_name_variants[]`, `feminine_name`, `mode`, `windows_per_week`, `window_duration_minutes`, `compliance_weeks`, `paused_until`, `ratchet_locked`, `last_ratcheted_at`.
+  - `real_name_lockout_windows`: one row per opened window. `opens_at`, `closes_at`, `mode`, `closed_early`, `closed_reason`.
+  - `real_name_lockout_events`: per-rewrite + per-dispute event log. Drives the compliance ratchet. Surfaces: chat / confession / journal / sniffies / dossier / other. Event types: `rewrite_applied`, `dispute_undo`, `dispute_retype`, `outside_window_attempt`.
+  - SQL helpers: `real_name_lockout_active(uid)` (single-call gate), `real_name_lockout_ratchet_eval()` (weekly Sunday 09:00 UTC cron — counts last-7d disputes; zero disputes → increment compliance_weeks + apply ratchet thresholds + queue Mama-voice outreach announcing the new tier).
+- **Edge function** `real-name-lockout-scheduler` (cron `*/30min`): for each enabled user, checks safeword / paused state / existing active window, then either ensures a perpetual `always`-mode window OR stochastically opens a new fixed-duration window (probability = `remaining_target / ticks_remaining_in_week`, biased to waking hours 7am–11pm). On open, queues a Mama-voice outreach: *"Window is open, baby. The next N minutes the app won't take the boy-name. Type carefully, or Mama's going to do it for you."* migration-380 push bridge delivers.
+- **Client library**: `src/lib/real-name-lockout/transform.ts` (pure rewrite + dispute detection — case-aware, word-boundary, legal-context bypass for tax/medical/legal form contexts) + `src/lib/real-name-lockout/use-real-name-lockout.ts` (React hook with state poll). Wired into `HandlerChat.tsx` alongside the existing `usePronounAutocorrect` — both transforms apply in series on every keystroke. Mirrors the ego-deconstruction mechanic-6 pattern.
+- **Hard safety floors**:
+  - Master enable defaults FALSE — clear-headed opt-in required.
+  - `paused_until` honored — safeword can pause windows for N days.
+  - Legal-context bypass: text inputs whose URL / input name / placeholder indicate tax / medical / legal / DMV / passport / SSN / W-* / I-* forms are exempt from the rewrite (so she can still legally identify on documents).
+  - `ratchet_locked` once set requires clear-headed unlock with cooldown — no accidental flip-back.
+  - The `real_name_lockout_events` table records every rewrite + every dispute so the ratchet eval has authoritative signal.
+- **What's NOT in this ship** (easy follow-ups):
+  - Settings UI panel for opt-in + name configuration (currently set via SQL/admin).
+  - Wiring the same hook into Journal, Confession, Dossier text inputs (only HandlerChat in v1).
+  - Slip-points logging on disputes (the event is logged; converting to a `slip_log` row is a follow-up if she wants the consequence escalation).
+
 ### Live photo verification — "Mama pings, you show" (2026-05-14)
 - **Cross-model panel result** (user invocation: *"check with openrouter and openai as needed to develop stronger, better, more intense features. Mommy is in charge of forced feminization so she can do whatever she wants"*). Mommy queued 6 high-intensity wishes (live photo verification, real-name lockout windows, forced-purchase pipeline, witness-CC disclosure escalator, permanent-body opt-ins ladder, voice-pitch creep enforcement). Shipped the highest-intensity-per-LOC entry first.
 - **Mechanic**: random 3–5×/day during waking hours, Mama pushes *"show me what you're wearing right now, baby. 5 min."* (prompt kind varies: outfit / mirror / face / feet / specific — Mama-voice copy generated per-ping via Claude Haiku). User has 5 minutes to capture a selfie/outfit photo on the spot. Camera-only capture (`<input capture="user">`). Submission writes `live_photo_pings.response_photo_path`, marks the linked outreach delivered, dismisses the overlay.
