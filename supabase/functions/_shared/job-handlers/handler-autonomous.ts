@@ -2735,11 +2735,21 @@ async function scheduleDecrees(
 
       const slipMatch = (d.consequence || '').match(/slip\s*\+(\d+)/)
       const pts = slipMatch ? Math.min(10, parseInt(slipMatch[1], 10)) : 2
+      // Cut at word boundary, not mid-syllable. 2026-05-15: bare .slice(0, 120)
+      // produced "Here's wha" / "exclusive content avai" — unreadable. Find the
+      // last space within the budget; ellipsis if truncated.
+      const cutAtWord = (s: string, max: number): string => {
+        if (s.length <= max) return s;
+        const head = s.slice(0, max);
+        const lastSpace = head.lastIndexOf(' ');
+        const cut = lastSpace > max * 0.5 ? head.slice(0, lastSpace) : head;
+        return cut.trimEnd() + '…';
+      };
       await supabase.from('slip_log').insert({
         user_id: userId,
         slip_type: 'other',
         slip_points: pts,
-        source_text: `Missed decree: ${d.edict.slice(0, 120)}`,
+        source_text: `Missed decree: ${cutAtWord(d.edict, 200)}`,
         source_table: 'handler_decrees',
         source_id: d.id,
         metadata: { consequence: d.consequence, reason: 'decree_missed' },
