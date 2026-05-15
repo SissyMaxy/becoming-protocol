@@ -31,10 +31,41 @@ const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undef
 const SNOOZE_KEY = 'bp_mama_phone_snooze_until';
 const SNOOZE_MS = 4 * 60 * 60 * 1000;
 
+/**
+ * Decode a base64url-encoded VAPID public key to bytes.
+ *
+ * Hardened (2026-05-15): trims surrounding whitespace + quotes (env var
+ * copy-paste artifacts), validates the charset, throws a clear error
+ * instead of bubbling up a cryptic `atob` exception. The overlay catches
+ * this and surfaces a "VAPID key looks wrong" message rather than
+ * crashing on tap.
+ */
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const raw = atob(base64);
+  if (!base64String) throw new Error('VAPID_PUBLIC_KEY_EMPTY');
+  // Strip Vercel env-var paste artifacts: surrounding quotes, whitespace.
+  const cleaned = base64String
+    .trim()
+    .replace(/^['"`]|['"`]$/g, '')
+    .trim();
+  if (!cleaned) throw new Error('VAPID_PUBLIC_KEY_EMPTY');
+  // base64url: A-Z a-z 0-9 - _ only. Anything else means the env var
+  // was set to a placeholder or has hidden characters.
+  if (!/^[A-Za-z0-9_-]+$/.test(cleaned)) {
+    throw new Error('VAPID_PUBLIC_KEY_INVALID_CHARSET');
+  }
+  // Uncompressed P-256 public key is 65 bytes → ~87 base64url chars.
+  // Compressed would be 33 → ~44. Anything wildly off is misconfigured.
+  if (cleaned.length < 40 || cleaned.length > 100) {
+    throw new Error(`VAPID_PUBLIC_KEY_BAD_LENGTH:${cleaned.length}`);
+  }
+  const padding = '='.repeat((4 - (cleaned.length % 4)) % 4);
+  const base64 = (cleaned + padding).replace(/-/g, '+').replace(/_/g, '/');
+  let raw: string;
+  try {
+    raw = atob(base64);
+  } catch {
+    throw new Error('VAPID_PUBLIC_KEY_DECODE_FAILED');
+  }
   const arr = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
   return arr;
@@ -141,9 +172,25 @@ export function MamaPhoneOverlay() {
       const reg = await navigator.serviceWorker.ready;
       let sub = await reg.pushManager.getSubscription();
       if (!sub) {
+        let keyBytes: Uint8Array;
+        try {
+          keyBytes = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+        } catch (e) {
+          const code = e instanceof Error ? e.message : String(e);
+          if (code.startsWith('VAPID_PUBLIC_KEY_EMPTY')) {
+            setError("Mama's VAPID key is missing on Vercel. Set VITE_VAPID_PUBLIC_KEY and redeploy.");
+          } else if (code.startsWith('VAPID_PUBLIC_KEY_INVALID_CHARSET')) {
+            setError("Mama's VAPID key has stray characters (quotes, whitespace, or wrong value). Re-paste it on Vercel — no quotes, no spaces.");
+          } else if (code.startsWith('VAPID_PUBLIC_KEY_BAD_LENGTH')) {
+            setError(`Mama's VAPID key is the wrong length (${code.split(':')[1] || '?'}). Should be ~87 characters. Generate a fresh keypair.`);
+          } else {
+            setError("Mama's VAPID key won't decode. Re-paste it on Vercel from a freshly-generated keypair.");
+          }
+          return;
+        }
         sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+          applicationServerKey: keyBytes,
         });
       }
       const p256dh = arrayBufferToBase64(sub.getKey('p256dh'));
