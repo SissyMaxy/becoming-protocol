@@ -23,6 +23,7 @@ interface Decree {
 
 const PROOF_LABEL: Record<string, string> = {
   photo: 'photo',
+  video: 'video',
   audio: 'audio',
   text: 'text',
   journal_entry: 'journal',
@@ -30,6 +31,19 @@ const PROOF_LABEL: Record<string, string> = {
   device_state: 'device',
   none: '—',
 };
+
+const PROOF_ICON: Record<string, string> = {
+  photo: '📸',
+  video: '🎥',
+  audio: '🎤',
+};
+
+function mediaKindForProof(proofType: string): 'photo' | 'video' | 'audio' | 'any' {
+  if (proofType === 'video') return 'video';
+  if (proofType === 'audio' || proofType === 'voice_pitch_sample') return 'audio';
+  if (proofType === 'photo') return 'photo';
+  return 'any';
+}
 
 export function HandlerDecreeCard() {
   const { user } = useAuth();
@@ -121,21 +135,22 @@ export function HandlerDecreeCard() {
             <div style={{ fontSize: 10, color: '#f47272', marginBottom: 8 }}>
               Miss → {d.consequence}
             </div>
-            {photoOpenId === d.id && d.proof_type === 'photo' ? (
+            {photoOpenId === d.id && ['photo','video','audio','voice_pitch_sample'].includes(d.proof_type) ? (
               <PhotoUploadWidget
                 verificationType="freeform"
                 directiveId={d.id}
                 directiveKind="handler_decree"
                 directiveSnippet={d.edict}
+                mediaKind={mediaKindForProof(d.proof_type)}
                 onComplete={async () => {
-                  // Photo submission counts as decree fulfillment.
+                  // Media submission counts as decree fulfillment.
                   await supabase.from('handler_decrees').update({
                     status: 'fulfilled',
                     fulfilled_at: new Date().toISOString(),
                   }).eq('id', d.id);
                   setPhotoOpenId(null);
                   load();
-                  window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'decree_photo', id: d.id } }));
+                  window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'decree_media', id: d.id } }));
                 }}
                 onCancel={() => setPhotoOpenId(null)}
               />
@@ -144,7 +159,12 @@ export function HandlerDecreeCard() {
                 <textarea
                   value={note}
                   onChange={e => setNotes(n => ({ ...n, [d.id]: e.target.value }))}
-                  placeholder={d.proof_type === 'photo' ? 'or add a note (use 📸 button to send a photo)' : 'proof link / brief note'}
+                  placeholder={
+                    d.proof_type === 'photo' ? 'or add a note (use 📸 button to send a photo)' :
+                    d.proof_type === 'video' ? 'or add a note (use 🎥 button to send a video)' :
+                    d.proof_type === 'audio' || d.proof_type === 'voice_pitch_sample' ? 'or add a note (use 🎤 button to send audio)' :
+                    'proof link / brief note'
+                  }
                   rows={2}
                   style={{
                     width: '100%', background: '#050507', border: '1px solid #22222a',
@@ -164,7 +184,7 @@ export function HandlerDecreeCard() {
                   >
                     {submittingId === d.id ? '…' : 'Fulfilled'}
                   </button>
-                  {d.proof_type === 'photo' && (
+                  {['photo','video','audio','voice_pitch_sample'].includes(d.proof_type) && (
                     <button
                       onClick={() => setPhotoOpenId(d.id)}
                       style={{
@@ -173,7 +193,7 @@ export function HandlerDecreeCard() {
                         fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
                       }}
                     >
-                      📸 send photo
+                      {PROOF_ICON[d.proof_type] || '📎'} send {d.proof_type === 'voice_pitch_sample' ? 'audio' : d.proof_type}
                     </button>
                   )}
                 </div>

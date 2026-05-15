@@ -8,6 +8,13 @@ runtime behaviour (it does not enforce on docs-only or tooling-only changes).
 
 ## Unreleased
 
+### PhotoUploadWidget media-aware + decree video proof_type (2026-05-15)
+- **Incident**: hours after PR #72 landed, Maxy *"mommy is asking for proof and won't accept an image. I can't upload a video."* The previous fix covered `PhotoVerificationUpload` (chat / outreach inline reply); a *second* upload widget — `PhotoUploadWidget` in `src/components/verification/` — was still image-only and gated by `proof_type === 'photo'`. Same architectural class as before: another photo-only delivery surface mismatched against a video demand.
+- **Schema** (migration 426): `handler_decrees.proof_type` CHECK gains `'video'` so future Mama-queued decrees can demand video proof explicitly. Existing `'photo'` decrees continue to work — but the widget now accepts video/audio too so a photo decree doesn't refuse stronger evidence.
+- **Component**:
+  - `PhotoUploadWidget`: new `mediaKind?: 'photo'|'video'|'audio'|'any'` prop (default `'any'` so legacy mounts auto-widen — direct fix for the 2026-05-15 incident). Drives `accept` + `capture`. Preview renders `<video>` for video files, `<audio>` for audio, `<img>` for image. `analyze-photo` runs only when the picked file is an image; video/audio land as `review_state='pending'` with a Mama-voice confirmation. Stamps `media_type` on the `verification_photos` row.
+  - `HandlerDecreeCard`: widget gate broadened to `proof_type IN ('photo','video','audio','voice_pitch_sample')`. Button label + icon adapts (`📸 send photo` / `🎥 send video` / `🎤 send audio`). Placeholder copy + `td-task-changed` source name follow the rename to `decree_media`.
+
 ### Outreach evidence_kind — video/audio submissions reach Mama (2026-05-14)
 - **Incident**: Maxy *"the UI only lets me take photos. mommy wants a video but I can't upload one."* Mama's cum-worship release outreach + Handler-chat assistant turns ask "Record yourself saying X" but the only submission surface was image-only at three independent layers: input `accept="image/*"`, OS `capture="environment"`, and the `verification-photos` storage bucket whitelisting only image MIME types with a 10 MB cap.
 - **Same architectural class as the 380 push bridge bug**: generator wrote video, delivery only handled photo. Fixed across all three layers + threaded the request kind end-to-end so a media-aware widget renders.
