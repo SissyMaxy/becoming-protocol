@@ -1,6 +1,6 @@
 # Handler-Centrality Audit
 
-Generated: 2026-05-15T03:48:48.832Z
+Generated: 2026-05-15T06:16:06.649Z
 
 Each function below writes a user-facing artifact (decree, commitment, outreach, confession prompt, etc.) **without first reading any Handler-state table**. The artifact is therefore generated without reference to the current persona, phase, mode, slip count, or recent directives — it cannot speak with Handler authority.
 
@@ -8,7 +8,7 @@ Memory rule: `feedback_handler_is_singular_authority.md`. Refactor each entry to
 
 **Allowed-list (skipped):** functions in `api/handler/chat.ts`, `supabase/functions/handler-autonomous/index.ts`, `supabase/functions/handler-outreach-auto/index.ts` are exempt because they ARE the Handler — their callers have already loaded state.
 
-## 26 centrality violations
+## 27 centrality violations
 
 | File:Line | Function | Writes (user-facing) |
 |-----------|----------|---------------------|
@@ -24,6 +24,7 @@ Memory rule: `feedback_handler_is_singular_authority.md`. Refactor each entry to
 | `supabase\functions\mommy-scheme\index.ts:211` | `fireAction` | `handler_decrees`, `handler_outreach_queue`, `memory_implants` |
 | `supabase\functions\real-name-lockout-scheduler\index.ts:67` | `openWindow` | `handler_outreach_queue` |
 | `supabase\functions\sniffies-restart-coach\index.ts:223` | `processUser` | `handler_outreach_queue` |
+| `supabase\functions\verification-evidence-grader\index.ts:210` | `queueFeedbackOutreach` | `handler_outreach_queue` |
 | `supabase\functions\_shared\job-handlers\handler-autonomous.ts:177` | `spontaneousOutreach` | `handler_outreach_queue` |
 | `supabase\functions\_shared\job-handlers\handler-autonomous.ts:822` | `ensureWeeklyMeasurementCommitment` | `handler_commitments`, `handler_outreach_queue` |
 | `supabase\functions\_shared\job-handlers\handler-autonomous.ts:880` | `tickVoicePitchRatchet` | `handler_outreach_queue` |
