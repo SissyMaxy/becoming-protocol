@@ -5,6 +5,12 @@
 // Trigger: if last 7d reply-grade voice_match avg < 60 in current persona
 // AND >= 10 graded → flip. If just-flipped < 24h ago, hold (no thrashing).
 //
+// LOCK-AWARE (2026-05-15): if user_state.handler_persona_locked = TRUE,
+// skip entirely. This rotation only applies to the handler↔therapist pair;
+// it doesn't know about dommy_mommy and was silently rotating Maxy out of
+// it for weeks. The DB-side trigger (migration 436) also refuses the write,
+// but checking the lock here avoids burning grade-aggregation cycles.
+//
 // Cron every 4h.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
@@ -28,14 +34,20 @@ Deno.serve(async (req: Request) => {
   const since7d = new Date(Date.now() - 7 * 24 * 3600_000).toISOString()
   const since24h = new Date(Date.now() - 24 * 3600_000).toISOString()
   const [state, grades, lastShift] = await Promise.all([
-    supabase.from('user_state').select('handler_persona').eq('user_id', userId).maybeSingle(),
+    supabase.from('user_state').select('handler_persona, handler_persona_locked').eq('user_id', userId).maybeSingle(),
     supabase.from('handler_reply_grades').select('score_voice_match, score_overall').eq('user_id', userId).gte('graded_at', since7d).limit(200),
     supabase.from('persona_shift_log').select('shifted_at').eq('user_id', userId).gte('shifted_at', since24h).order('shifted_at', { ascending: false }).limit(1),
   ])
 
-  const current = ((state.data as { handler_persona?: string } | null)?.handler_persona) || 'handler'
+  const stateRow = (state.data ?? null) as { handler_persona?: string; handler_persona_locked?: boolean } | null
+  const current = stateRow?.handler_persona || 'handler'
+  const locked = Boolean(stateRow?.handler_persona_locked)
   const gradesArr = (grades.data ?? []) as Array<{ score_voice_match: number; score_overall: number }>
   const justShifted = (lastShift.data ?? []).length > 0
+
+  if (locked) {
+    return new Response(JSON.stringify({ ok: true, flipped: 'no_change', reason: `persona locked to ${current}`, current }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+  }
 
   if (justShifted) {
     return new Response(JSON.stringify({ ok: true, flipped: 'no_change', reason: 'shifted within 24h, holding' }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
