@@ -1,6 +1,6 @@
 # Handler-Centrality Audit
 
-Generated: 2026-05-15T16:36:30.297Z
+Generated: 2026-05-15T20:33:53.572Z
 
 Each function below writes a user-facing artifact (decree, commitment, outreach, confession prompt, etc.) **without first reading any Handler-state table**. The artifact is therefore generated without reference to the current persona, phase, mode, slip count, or recent directives — it cannot speak with Handler authority.
 
@@ -8,14 +8,14 @@ Memory rule: `feedback_handler_is_singular_authority.md`. Refactor each entry to
 
 **Allowed-list (skipped):** functions in `api/handler/chat.ts`, `supabase/functions/handler-autonomous/index.ts`, `supabase/functions/handler-outreach-auto/index.ts` are exempt because they ARE the Handler — their callers have already loaded state.
 
-## 27 centrality violations
+## 28 centrality violations
 
 | File:Line | Function | Writes (user-facing) |
 |-----------|----------|---------------------|
 | `api\handler\_lib\chat-action.ts:9961` | `maybeGenerateBodyDirectives` | `body_feminization_directives` |
-| `api\handler\_lib\chat-action.ts:10862` | `executeDeviceCommand` | `lovense_commands` |
-| `api\handler\_lib\chat-action.ts:13886` | `runRationalizationGate` | `handler_outreach_queue` |
-| `api\handler\_lib\chat-action.ts:13916` | `runPronounGate` | `handler_outreach_queue` |
+| `api\handler\_lib\chat-action.ts:10878` | `executeDeviceCommand` | `lovense_commands` |
+| `api\handler\_lib\chat-action.ts:13902` | `runRationalizationGate` | `handler_outreach_queue` |
+| `api\handler\_lib\chat-action.ts:13932` | `runPronounGate` | `handler_outreach_queue` |
 | `supabase\functions\bind-enforcer-cron\index.ts:97` | `fireConsequence` | `handler_decrees` |
 | `supabase\functions\capability-digest-cron\index.ts:77` | `digestForCanonicalUser` | `handler_outreach_queue` |
 | `supabase\functions\live-photo-pinger\index.ts:191` | `maybePingUser` | `handler_outreach_queue` |
@@ -23,6 +23,7 @@ Memory rule: `feedback_handler_is_singular_authority.md`. Refactor each entry to
 | `supabase\functions\mommy-gaslight\index.ts:136` | `persistImplant` | `memory_implants` |
 | `supabase\functions\mommy-scheme\index.ts:211` | `fireAction` | `handler_decrees`, `handler_outreach_queue`, `memory_implants` |
 | `supabase\functions\real-name-lockout-scheduler\index.ts:67` | `openWindow` | `handler_outreach_queue` |
+| `supabase\functions\sniffies-inbound-watcher\index.ts:86` | `processNewEvents` | `handler_outreach_queue` |
 | `supabase\functions\sniffies-restart-coach\index.ts:223` | `processUser` | `handler_outreach_queue` |
 | `supabase\functions\verification-evidence-grader\index.ts:210` | `queueFeedbackOutreach` | `handler_outreach_queue` |
 | `supabase\functions\_shared\job-handlers\handler-autonomous.ts:177` | `spontaneousOutreach` | `handler_outreach_queue` |
@@ -35,7 +36,7 @@ Memory rule: `feedback_handler_is_singular_authority.md`. Refactor each entry to
 | `supabase\functions\_shared\job-handlers\handler-autonomous.ts:2369` | `bridgeShotsToContentQueue` | `ai_generated_content` |
 | `supabase\functions\_shared\job-handlers\handler-autonomous.ts:2445` | `fireDailyMorningBrief` | `handler_outreach_queue` |
 | `supabase\functions\_shared\job-handlers\handler-autonomous.ts:2536` | `promoteConfessionsToImplants` | `memory_implants` |
-| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:3394` | `prescribeVoiceDrill` | `handler_commitments`, `handler_outreach_queue` |
-| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:3755` | `enqueueTimeSensitiveNotifications` | `scheduled_notifications` |
-| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:4682` | `checkWeeklyContractEscalation` | `handler_outreach_queue` |
-| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:5209` | `checkSpecialOccasions` | `handler_outreach_queue` |
+| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:3404` | `prescribeVoiceDrill` | `handler_commitments`, `handler_outreach_queue` |
+| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:3765` | `enqueueTimeSensitiveNotifications` | `scheduled_notifications` |
+| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:4692` | `checkWeeklyContractEscalation` | `handler_outreach_queue` |
+| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:5219` | `checkSpecialOccasions` | `handler_outreach_queue` |

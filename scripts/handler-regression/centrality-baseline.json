@@ -24,6 +24,7 @@
   "supabase/functions/mommy-gaslight/index.ts:persistImplant",
   "supabase/functions/mommy-scheme/index.ts:fireAction",
   "supabase/functions/real-name-lockout-scheduler/index.ts:openWindow",
+  "supabase/functions/sniffies-inbound-watcher/index.ts:processNewEvents",
   "supabase/functions/sniffies-restart-coach/index.ts:processUser",
   "supabase/functions/verification-evidence-grader/index.ts:queueFeedbackOutreach"
 ]
