@@ -145,6 +145,7 @@
   "supabase/migrations/423_cum_worship_release_trigger.sql::insert-without-on-conflict::INSERT INTO handler_outreach_queue ... ; (no ON CONFLICT)",
   "supabase/migrations/425_cum_worship_evidence_kind_and_voice_cleanup.sql::insert-without-on-conflict::INSERT INTO cum_worship_events ... ; (no ON CONFLICT)",
   "supabase/migrations/425_cum_worship_evidence_kind_and_voice_cleanup.sql::insert-without-on-conflict::INSERT INTO handler_outreach_queue ... ; (no ON CONFLICT)",
+  "supabase/migrations/430_cum_worship_advancement_eval.sql::insert-without-on-conflict::INSERT INTO handler_outreach_queue ... ; (no ON CONFLICT)",
   "supabase/migrations/apply_1_tables.sql::insert-without-on-conflict::INSERT INTO supabase_migrations ... ; (no ON CONFLICT)",
   "supabase/migrations/catchup_031_037.sql::alter-table-add-column-needs-if-not-exists::ALTER TABLE mood_checkins ADD COLUMN triggered_by TEXT;",
   "supabase/migrations/catchup_031_037.sql::alter-table-add-column-needs-if-not-exists::ALTER TABLE user_state ADD COLUMN consecutive_survival_days INTEGER DEFAULT 0;",
