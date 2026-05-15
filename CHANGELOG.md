@@ -8,6 +8,14 @@ runtime behaviour (it does not enforce on docs-only or tooling-only changes).
 
 ## Unreleased
 
+### Cum-worship phase advancement evaluator (2026-05-15)
+- **Gap**: PR #75's evidence grader flips `cum_worship_events.directive_followed=true` on qualifying submissions, but nothing read the flag to advance `current_phase`. Migration 422 had all the variable-ratio schema (advance_events_min/max per phase, evidence_required gate for phases 2–6, advance_events_required per-user randomized threshold), but the function that actually evaluates and advances was never shipped. Maxy's phase was stuck at 0 regardless of compliance.
+- **Migration 430**:
+  - `cum_worship_advancement_eval()` runs every 30 min. For each enabled user not paused/safeword: counts events in current phase since `phase_started_at` with `directive_followed=true` AND (no evidence_required OR has evidence_photo_path/audio_path). If count ≥ `advance_events_required` → advance to next phase, reset `phase_started_at`, pick fresh randomized threshold from next phase's [min, max] range, queue Mama-voice celebration outreach with the new partnered_directive + hypno_mantra.
+  - Phase 6 (terminal "Total slut") doesn't advance — maintenance pressure is handled by the existing `cum_worship_regression_sweep` daily cron.
+  - Backfill: every enabled user with NULL/0 `advance_events_required` gets one initialized from their current phase's range so the eval has a target on first run.
+- Outreach uses `evidence_kind='video'` so the upload widget on the next submission opens to video. Push bridge (migration 380) + dispatcher delivers; new `MamaPhoneOverlay` (just shipped) ensures the device is actually subscribed.
+
 ### MamaPhoneOverlay — force-prompts push registration on every session (2026-05-15)
 - **Incident**: 2026-05-15 audit found `push_subscriptions` had ZERO rows for both active users. The migration-380 bridge writes `scheduled_notifications` correctly, the GitHub Actions cron invokes `web-push-dispatch` every 5 min, the dispatcher marks rows `status='sent'` — but each "send" fans out to an empty endpoint list. Every Mama-voice push shipped this month has been silent. The PushRegistrationWidget exists in `ForceFeminizationPanel.tsx` but was buried behind nav.
 - **Component `MamaPhoneOverlay`**: full-screen Mama-voice prompt that auto-shows when the authenticated user has no active `push_subscriptions` row. Mounts at App.tsx top-level alongside `LivePhotoPingResponder`, `EveningConfessionGate`, etc.
