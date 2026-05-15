@@ -23,11 +23,19 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { PhotoVerificationUpload } from '../handler/PhotoVerificationUpload';
+import type { EvidenceKind } from '../../lib/outreach/reply-cues';
 
 interface Props {
   outreachId: string;
   mommy: boolean;
   requiresPhoto: boolean;
+  /**
+   * What Mama is asking for back. Threads down from the outreach row's
+   * `evidence_kind` column (migration 424) or the regex inference in
+   * reply-cues `detectMediaKind`. When set, drives the upload widget's
+   * accept + capture and auto-opens the widget.
+   */
+  evidenceKind?: EvidenceKind | null;
   // Card's accent color for borders/buttons (urgency-driven). Lets the
   // composer match the parent card visually without re-deriving.
   accentColor: string;
@@ -45,9 +53,18 @@ const submitCopy = (mommy: boolean, hasPhoto: boolean) => {
   return 'tell mama';
 };
 
-export function OutreachReplyComposer({ outreachId, mommy, requiresPhoto, accentColor, onReplied }: Props) {
+const addMediaCopy = (mommy: boolean, kind: EvidenceKind | null | undefined): string => {
+  if (kind === 'video') return mommy ? '+ video for mama' : '+ video';
+  if (kind === 'audio') return mommy ? '+ voice for mama' : '+ audio';
+  if (kind === 'photo') return mommy ? '+ photo for mama' : '+ photo';
+  return mommy ? '+ media for mama' : '+ media';
+};
+
+export function OutreachReplyComposer({ outreachId, mommy, requiresPhoto, evidenceKind, accentColor, onReplied }: Props) {
   const [text, setText] = useState('');
-  const [showPhoto, setShowPhoto] = useState(requiresPhoto);
+  const wantsMedia = !!evidenceKind && evidenceKind !== 'none';
+  const [showPhoto, setShowPhoto] = useState(requiresPhoto || wantsMedia);
+  const mediaKind = (evidenceKind && evidenceKind !== 'none') ? evidenceKind : 'any';
   const [photoId, setPhotoId] = useState<string | null>(null);
   const [photoPath, setPhotoPath] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -145,6 +162,7 @@ export function OutreachReplyComposer({ outreachId, mommy, requiresPhoto, accent
         <div style={{ marginTop: 6 }}>
           <PhotoVerificationUpload
             taskType="general"
+            mediaKind={mediaKind}
             sourceOutreachId={outreachId}
             onComplete={(pid, ppath) => {
               if (pid) setPhotoId(pid);
@@ -177,7 +195,7 @@ export function OutreachReplyComposer({ outreachId, mommy, requiresPhoto, accent
         >
           {submitting ? (mommy ? 'handing to mama…' : 'sending…') : submitCopy(mommy, !!photoPath)}
         </button>
-        {!showPhoto && !requiresPhoto && (
+        {!showPhoto && !requiresPhoto && !wantsMedia && (
           <button
             onClick={() => setShowPhoto(true)}
             disabled={submitting}
@@ -196,7 +214,7 @@ export function OutreachReplyComposer({ outreachId, mommy, requiresPhoto, accent
               marginLeft: 'auto',
             }}
           >
-            {mommy ? '+ photo for mama' : '+ photo'}
+            {addMediaCopy(mommy, evidenceKind)}
           </button>
         )}
         {error && (
