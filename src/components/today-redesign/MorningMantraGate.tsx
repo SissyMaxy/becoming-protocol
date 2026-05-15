@@ -197,13 +197,20 @@ export function MorningMantraGate() {
     return new Promise<void>((resolve) => {
       if (mediaRecorderRef.current) {
         mediaRecorderRef.current.onstop = async () => {
-          // Whisper is the SOLE pass/fail authority. The 0.3–0.6 deadband
-          // that used to leave voiceMatched untouched was the source of the
-          // "hello world passes" bug — fixed by making this binary:
-          // overlap ≥ 0.6 → matched; anything else → not matched.
-          // Conservative-on-failure: if Whisper itself errors, we don't
-          // pass. The user can re-record.
-          let whisperScored = false;
+          // Whisper is the preferred pass/fail authority. When it 502s
+          // (OpenAI quota/timeout — observed 2026-05-15) the gate used
+          // to lock the user out for a server-side problem. Fallback chain:
+          //   1. Whisper transcript → fuzzy match (authoritative)
+          //   2. If Whisper errors/empty: Web Speech transcript captured
+          //      during recording → fuzzy match against the SAME 0.6
+          //      threshold, BUT only when recording lasted >= 4s (so
+          //      a 0.5s noise blip can't trigger the fallback).
+          //   3. If both fail: don't pass.
+          // No typed bypass anywhere.
+          let scored = false;
+          let scoreSource: 'whisper' | 'webspeech' | null = null;
+          let scoreValue = 0;
+          let heardText = '';
           try {
             const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
             if (blob.size > 0) {
@@ -216,26 +223,42 @@ export function MorningMantraGate() {
               if (r.ok) {
                 const data = await r.json() as { ok?: boolean; transcript?: string };
                 if (data.ok && data.transcript) {
+                  heardText = data.transcript;
                   setTranscript(data.transcript);
-                  const score = fuzzyOverlap(data.transcript, targetMantra);
-                  setVoiceMatched(score >= 0.6);
-                  whisperScored = true;
-                  if (score < 0.6) {
-                    setMicError(`That wasn't the mantra. Whisper heard: "${data.transcript.slice(0, 120)}". Say it word-for-word, then stop.`);
-                  } else {
-                    setMicError(null);
-                  }
+                  scoreValue = fuzzyOverlap(data.transcript, targetMantra);
+                  scored = true;
+                  scoreSource = 'whisper';
                 }
+              } else {
+                console.warn('[MorningMantra] Whisper HTTP error:', r.status);
               }
             }
           } catch (e) {
             console.warn('[MorningMantra] Whisper transcription failed:', e);
           }
-          if (!whisperScored) {
-            // No authoritative score = don't pass. Web Speech's optimistic
-            // flip is intentionally not used here.
+
+          if (!scored) {
+            const ws = (transcript || '').trim();
+            if (ws.length >= 4 && recordSeconds >= 4) {
+              heardText = ws;
+              scoreValue = fuzzyOverlap(ws, targetMantra);
+              scored = true;
+              scoreSource = 'webspeech';
+              console.warn('[MorningMantra] Whisper unavailable, using Web Speech transcript');
+            }
+          }
+
+          if (scored) {
+            setVoiceMatched(scoreValue >= 0.6);
+            if (scoreValue >= 0.6) {
+              setMicError(null);
+            } else {
+              const heardLabel = scoreSource === 'whisper' ? 'Whisper heard' : 'Mama heard (fallback)';
+              setMicError(`That wasn't the mantra. ${heardLabel}: "${heardText.slice(0, 120)}". Say it word-for-word, then stop.`);
+            }
+          } else {
             setVoiceMatched(false);
-            setMicError('Could not verify your voice. Speak the mantra again, clearly.');
+            setMicError('Audio service unavailable. Re-record — the recording must be at least 4 seconds.');
           }
           resolve();
         };
