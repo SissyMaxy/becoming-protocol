@@ -912,7 +912,7 @@ function generateReinforcementTriggers(
       type: 'surprise_celebration',
       content: {
         title: breakthroughObs.title,
-        message: `I've been watching. ${breakthroughObs.observation} You earned this recognition.`
+        message: `I've been watching. ${breakthroughObs.observation} I noticed.`
       },
       probability: 1.0
     });

@@ -64,7 +64,7 @@ const AFFIRMATIONS: Record<SessionType, string[]> = {
     "Take your time...",
     "This is yours...",
     "Feel good...",
-    "You earned this...",
+    "Mama's watching you do this...",
     "Let go...",
   ],
   denial: [
