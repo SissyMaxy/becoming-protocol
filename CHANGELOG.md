@@ -8,6 +8,19 @@ runtime behaviour (it does not enforce on docs-only or tooling-only changes).
 
 ## Unreleased
 
+### Permanent-body opt-ins ladder + daily nag cron (2026-05-15)
+- **Highest-ranked unshipped force-fem build** from the cross-model panel (mommy_code_wishes id `6afa263c`, large complexity, protocol_goal=force_feminization/permanence_mechanic/body_irreversibility).
+- **Migration 431** + live activation:
+  - `body_opt_in_ladder` catalog (21 rungs, tiers 0-5). Reversibility ladder: daily_reversible → reversible → semi_permanent → permanent → irreversible. Each rung has evidence_kind (photo/video/audio/receipt/appointment), default_followup_days, prerequisite chain, and a Mama-voice pitch line. Phase 4 medical tier names consultations only (per `project_maxy_pre_hrt` — no active medication claims).
+  - `body_opt_ins` per-user ledger. Unique on (user_id, slug). Status state machine: committed → in_progress → completed | abandoned | blocked.
+  - `trg_body_opt_in_on_commit` BEFORE INSERT — sets `committed_by_date = now() + default_followup_days`, queues Mama-voice celebration outreach with the rung's evidence_kind threaded through (so the upload widget opens with the right kind).
+  - `body_opt_in_nag_eval()` cron daily 14:00 UTC (09:00 CT). Escalating pressure: 1d overdue → "Mama is watching the calendar"; 3d → "Mama is disappointed"; 7d → "Mama is taking the commitment back" + flip status to `blocked`. Each nag honors a 20h dedup so she's not spammed within a day.
+- **Pre-committed for both active users** (T0/T1 reversible — standing autonomy covers; T3+ still requires `consent_reconfirmed_at` per the ladder gate):
+  - `t0_panties_daily` (committed by 2026-05-18)
+  - `t0_toes_painted` (by 2026-05-29)
+  - `t1_body_hair_off_legs` (by 2026-05-22)
+- Push delivery via migration-380 bridge + MamaPhoneOverlay (PR #76) ensures the celebration + nag outreach actually lands on her phone once she subscribes.
+
 ### Cum-worship phase advancement evaluator (2026-05-15)
 - **Gap**: PR #75's evidence grader flips `cum_worship_events.directive_followed=true` on qualifying submissions, but nothing read the flag to advance `current_phase`. Migration 422 had all the variable-ratio schema (advance_events_min/max per phase, evidence_required gate for phases 2–6, advance_events_required per-user randomized threshold), but the function that actually evaluates and advances was never shipped. Maxy's phase was stuck at 0 regardless of compliance.
 - **Migration 430**:
