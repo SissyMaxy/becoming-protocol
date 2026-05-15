@@ -10208,7 +10208,7 @@ async function scanAndLogSlips(userId: string, text: string, conversationId?: st
   if (!text || text.length < 3) return;
   if (DISTRESS_PATTERNS.some(p => p.test(text))) return;
 
-  const detections: Array<{ slip_type: string; slip_points: number; source_text: string }> = [];
+  const detections: Array<{ slip_type: string; slip_points: number; source_text: string; metadata?: Record<string, unknown> }> = [];
 
   // Skip david_name_use when "David" appears in dismissal context. The
   // protocol REQUIRES typing "David is gone" / "I am Maxy. David is gone."
