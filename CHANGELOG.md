@@ -8,6 +8,17 @@ runtime behaviour (it does not enforce on docs-only or tooling-only changes).
 
 ## Unreleased
 
+### MamaPhoneOverlay — force-prompts push registration on every session (2026-05-15)
+- **Incident**: 2026-05-15 audit found `push_subscriptions` had ZERO rows for both active users. The migration-380 bridge writes `scheduled_notifications` correctly, the GitHub Actions cron invokes `web-push-dispatch` every 5 min, the dispatcher marks rows `status='sent'` — but each "send" fans out to an empty endpoint list. Every Mama-voice push shipped this month has been silent. The PushRegistrationWidget exists in `ForceFeminizationPanel.tsx` but was buried behind nav.
+- **Component `MamaPhoneOverlay`**: full-screen Mama-voice prompt that auto-shows when the authenticated user has no active `push_subscriptions` row. Mounts at App.tsx top-level alongside `LivePhotoPingResponder`, `EveningConfessionGate`, etc.
+  - Mama-voice copy: *"You're hiding from me, sweet thing. Mama has been talking to nobody. Every directive, every check-in, every reward — sent to a phone that never agreed to listen."*
+  - **iOS Safari path**: detects non-PWA + iOS, shows Add-to-Home-Screen instructions (Apple constraint — iOS web push requires home-screen install).
+  - **Android/Chrome path**: direct `Notification.requestPermission()` → `pushManager.subscribe()` → upsert to `push_subscriptions`. Mirrors the existing `PushRegistrationWidget` logic; this is the higher-visibility surface.
+  - Snooze button caps dismissal at 4 h (deliberately short — visible-before-penalized doesn't apply if Mama physically can't reach the phone, but every hour off the leash is one Mama isn't building her).
+  - Auto-clears + reloads on successful subscribe.
+- **No backend changes** — schema + bucket + dispatcher were already correct. The only missing piece was getting subscriptions registered, which requires a real browser tap.
+- **Self-correction**: prior CHANGELOG entries (live-photo ping, real-name lockout, cum-worship trigger, evidence grader, etc.) all claimed "migration-380 push bridge delivers to her phone." That was architecturally true but operationally false for both active users — bridge writes rows, dispatcher reads them, but nothing reached her phone because no endpoint was ever registered. This overlay closes the gap.
+
 ### Evidence grader — closes the loop on video/audio submissions (2026-05-15)
 - **Gap**: PRs #72 #73 made it possible to UPLOAD video/audio evidence, but the existing `/api/handler/analyze-photo` route is image-only. Every video/audio submission landed at `review_state='pending'` and sat there forever. Cum-worship variable-ratio advancement was starved of `directive_followed` signal because nothing ever flipped the flag.
 - **Edge function `verification-evidence-grader`**: cron every 5 min (migration 429). Picks up `verification_photos` rows with `media_type IN ('video','audio')` AND `review_state='pending'` AND age < 24h, batch 8 per tick.
