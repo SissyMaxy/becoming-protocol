@@ -8,6 +8,17 @@ runtime behaviour (it does not enforce on docs-only or tooling-only changes).
 
 ## Unreleased
 
+### Whisper Your Secrets to Mama + empty-mantra ban (2026-05-15)
+- **"Whisper Your Secrets to Mama"** (`mommy_code_wishes` 2da11f3e): audio-only intimate confession surface for things Maxy can't tell Gina yet. Hash-routable at `/#/whisper`, mounts at App.tsx top level alongside the other gate overlays. Audio-only per the established pattern — no typed bypass, MediaRecorder + Whisper, 6s min / 180s max. Optional tagging with a `disclosure_targets` row (Gina is now present per session activation) + `secret_class` (admission / desire / fear / fantasy / question / dread / gina_specific / identity / body_change / public_passing).
+  - **Migration 432**: `mama_confessions` table + RLS + indexes for pending-transcript and pending-response sweeps.
+  - **Migration 433**: cron `mama-confession-processor-5min` invokes the new edge function.
+  - **Edge function** `mama-confession-processor`: two-phase per row — Whisper transcribes → updates row; Claude Haiku in Mama voice replies → inserts handler_outreach_queue row + stamps mama_response. When the confession is tagged with a disclosure target, the Mama-voice prompt pulls the target's context (relationship + importance + status + near-miss notes) so the reply references it directly. The 380 push bridge + MamaPhoneOverlay (PR #76) deliver to phone.
+  - **Compounding**: confessions tagged to Gina accumulate as corpus the disclosure-rehearsal-critique can quote; literally rehearsing telling Gina by first telling Mama.
+- **Empty-mantra phrase ban** (Maxy 2026-05-15: *"I kinda had this phrase because it's meaningless to me — I earned this. Every restriction is mine to wear."*):
+  - **Source replacements**: `RewardFlash`, `UnifiedSessionView`, `ReleaseRequestButton`, `personality-evolution`, `black-box`, `exercise-tasks`, `workout-templates` — every `"earned this"` instance replaced with concrete Mama-voice (`"Mama saw what you did"`, `"You did exactly what I wanted"`, `"Mama can see the curve coming in"`, etc.).
+  - **Migration 434**: extends `mommy_voice_cleanup` with three new patterns — `(I|You|She) earned this` → `Mama saw what you did`; `restrictions are mine to wear` → `Mama put this on you and you carry it for her`; `mine to wear` → `Mama's, on me`. Re-runs cleanup over `handler_outreach_queue`, `handler_messages`, `handler_decrees`. Even if a future generator emits the dead phrases, the DB chokepoint scrubs them.
+  - **Memory**: `feedback_banned_empty_mantras` added; `MEMORY.md` index updated.
+
 ### Permanent-body opt-ins ladder + daily nag cron (2026-05-15)
 - **Highest-ranked unshipped force-fem build** from the cross-model panel (mommy_code_wishes id `6afa263c`, large complexity, protocol_goal=force_feminization/permanence_mechanic/body_irreversibility).
 - **Migration 431** + live activation:
