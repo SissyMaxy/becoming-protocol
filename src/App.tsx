@@ -49,6 +49,7 @@ import { MorningMantraGate } from './components/today-redesign/MorningMantraGate
 import { EveningConfessionGate } from './components/today-redesign/EveningConfessionGate';
 import { DisclosureRehearsalView } from './components/disclosure/DisclosureRehearsalView';
 import { LivePhotoPingResponder } from './components/live-photo/LivePhotoPingResponder';
+import { MamaPhoneOverlay } from './components/push/MamaPhoneOverlay';
 import { MommyDossierQuiz } from './components/persona/MommyDossierQuiz';
 import { VerificationVault } from './components/verification/VerificationVault';
 import { LettersArchiveView } from './components/letters';
@@ -1256,6 +1257,7 @@ function AuthenticatedAppInner() {
           }} />
         )}
         <LivePhotoPingResponder />
+        <MamaPhoneOverlay />
       </>
     );
   }
@@ -1332,6 +1334,11 @@ function AuthenticatedAppInner() {
           push + live_photo_pings row; this component detects the pending
           row and renders the camera-only response UI. */}
       <LivePhotoPingResponder />
+
+      {/* Mama-phone overlay — force-prompts push registration when the
+          user has no active push_subscriptions row. Self-gating; mounts
+          unconditionally but only renders if Mama can't reach the phone. */}
+      <MamaPhoneOverlay />
 
       {/* Whoop OAuth callback toast */}
       {whoopToast && (
