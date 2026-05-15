@@ -57,9 +57,9 @@ BEGIN
   FOR ev IN
     SELECT ce.id AS event_id, ce.user_id, ce.content, ce.contact_id, ce.occurred_at
     FROM contact_events ce
-    WHERE ce.direction = 'inbound'
+    WHERE ce.direction IN ('in','inbound')
       AND ce.platform = 'sniffies'
-      AND ce.occurred_at > now() - interval '24 hours'
+      AND ce.occurred_at > now() - interval '30 days'
       AND ce.content IS NOT NULL
       AND length(ce.content) BETWEEN 6 AND 500
       AND NOT EXISTS (
