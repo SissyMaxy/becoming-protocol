@@ -30,13 +30,46 @@ import {
   type VerificationType,
 } from '../../lib/verification/upload';
 
+type MediaKind = 'photo' | 'video' | 'audio' | 'any';
+
 interface PhotoUploadWidgetProps {
   verificationType: VerificationType;
   directiveId?: string;
   directiveKind?: DirectiveKind;
   directiveSnippet?: string;
+  /**
+   * What media kind to accept. Defaults to 'any' so a widget mounted
+   * for a 'photo' decree still accepts video/audio uploads (Mama can
+   * grade them) — that was the 2026-05-15 incident: photo-only widget
+   * refused video. To restrict to one kind, pass it explicitly.
+   */
+  mediaKind?: MediaKind;
   onComplete?: (result: { photoId: string; analysis: string; reviewState: string }) => void;
   onCancel?: () => void;
+}
+
+function acceptForKind(kind: MediaKind): string {
+  switch (kind) {
+    case 'video': return 'video/*';
+    case 'audio': return 'audio/*';
+    case 'photo': return 'image/*';
+    case 'any':   return 'image/*,video/*,audio/*';
+  }
+}
+
+function captureForKind(kind: MediaKind): 'user' | 'environment' | undefined {
+  switch (kind) {
+    case 'video': return 'user';
+    case 'photo': return 'environment';
+    case 'audio': return undefined;
+    case 'any':   return undefined;
+  }
+}
+
+function mediaTypeFromFile(file: File): 'photo' | 'video' | 'audio' {
+  if (file.type.startsWith('video/')) return 'video';
+  if (file.type.startsWith('audio/')) return 'audio';
+  return 'photo';
 }
 
 export function PhotoUploadWidget({
@@ -44,6 +77,7 @@ export function PhotoUploadWidget({
   directiveId,
   directiveKind,
   directiveSnippet,
+  mediaKind = 'any',
   onComplete,
   onCancel,
 }: PhotoUploadWidgetProps) {
@@ -104,6 +138,7 @@ export function PhotoUploadWidget({
       const photoPath = upData.path;
 
       const taskType = TASK_TYPE_FOR[verificationType];
+      const mt = mediaTypeFromFile(file);
       const { data: row, error: insErr } = await supabase
         .from('verification_photos')
         .insert({
@@ -114,6 +149,7 @@ export function PhotoUploadWidget({
           directive_kind: directiveKind ?? null,
           directive_snippet: directiveSnippet ?? null,
           photo_url: photoPath,
+          media_type: mt,
           caption: caption.trim() || null,
           review_state: 'pending',
         })
@@ -121,25 +157,36 @@ export function PhotoUploadWidget({
         .single();
       if (insErr) throw insErr;
 
-      setStage('analyzing');
-      const session = await supabase.auth.getSession();
-      const token = session.data.session?.access_token;
-      const { analysis: analysisText, reviewState: finalReview } = await analyzeAndPersist(
-        supabase,
-        {
-          photoId: row.id,
-          photoUrl: photoPath,
-          taskType,
-          caption,
-          userId: user.id,
-          accessToken: token ?? '',
-        },
-      );
-
-      setAnalysis(analysisText);
-      setReviewState(finalReview);
-      setStage('done');
-      onComplete?.({ photoId: row.id, analysis: analysisText, reviewState: finalReview });
+      // Vision analysis only runs for images. Video/audio get filed as
+      // pending evidence; Mama scores async via existing review flows.
+      if (mt === 'photo') {
+        setStage('analyzing');
+        const session = await supabase.auth.getSession();
+        const token = session.data.session?.access_token;
+        const { analysis: analysisText, reviewState: finalReview } = await analyzeAndPersist(
+          supabase,
+          {
+            photoId: row.id,
+            photoUrl: photoPath,
+            taskType,
+            caption,
+            userId: user.id,
+            accessToken: token ?? '',
+          },
+        );
+        setAnalysis(analysisText);
+        setReviewState(finalReview);
+        setStage('done');
+        onComplete?.({ photoId: row.id, analysis: analysisText, reviewState: finalReview });
+      } else {
+        const confirmText = mt === 'video'
+          ? "Mama's got the video. She'll watch it when she's ready, baby."
+          : "Mama's got the recording. She'll listen when she's ready, baby.";
+        setAnalysis(confirmText);
+        setReviewState('pending');
+        setStage('done');
+        onComplete?.({ photoId: row.id, analysis: confirmText, reviewState: 'pending' });
+      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg);
@@ -229,8 +276,8 @@ export function PhotoUploadWidget({
       <input
         ref={fileRef}
         type="file"
-        accept="image/*"
-        capture="environment"
+        accept={acceptForKind(mediaKind)}
+        capture={captureForKind(mediaKind)}
         style={{ display: 'none' }}
         onChange={(e) => {
           const f = e.target.files?.[0];
@@ -252,11 +299,27 @@ export function PhotoUploadWidget({
               justifyContent: 'center',
             }}
           >
-            <img
-              src={previewUrl}
-              alt="preview"
-              style={{ maxWidth: '100%', maxHeight: 360, objectFit: 'contain' }}
-            />
+            {file && file.type.startsWith('video/') ? (
+              // eslint-disable-next-line jsx-a11y/media-has-caption
+              <video
+                src={previewUrl}
+                controls
+                playsInline
+                style={{ maxWidth: '100%', maxHeight: 360 }}
+              />
+            ) : file && file.type.startsWith('audio/') ? (
+              <audio
+                src={previewUrl}
+                controls
+                style={{ width: '100%', padding: 8 }}
+              />
+            ) : (
+              <img
+                src={previewUrl}
+                alt="preview"
+                style={{ maxWidth: '100%', maxHeight: 360, objectFit: 'contain' }}
+              />
+            )}
           </div>
           <input
             type="text"
