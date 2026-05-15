@@ -16,7 +16,7 @@ export function RewardFlash() {
           'Good girl.',
           'She noticed you.',
           'This is what obedience feels like.',
-          'You earned this.',
+          'You did exactly what I wanted.',
           'Keep going, Maxy.',
         ];
         setMessage(messages[Math.floor(Math.random() * messages.length)]);

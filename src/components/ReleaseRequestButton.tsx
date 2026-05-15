@@ -84,7 +84,7 @@ export function ReleaseRequestButton({
 
         setResponse({
           type: 'granted',
-          message: `Day ${denialDay}. You've earned this. But there are conditions.`,
+          message: `Day ${denialDay}. Mama is opening you up. But there are conditions.`,
           conditions,
         });
 

@@ -891,7 +891,7 @@ const GYM_GLUTE: WorkoutTemplate = {
   completionAffirmations: [
     'Gym glute session done. Real weight, real growth.',
     'Smith machine hip thrusts. She\'s building serious curves.',
-    'Gym day complete. She earned this.',
+    'Gym day complete. The body Mama is building is showing up in the mirror.',
   ],
 };
 

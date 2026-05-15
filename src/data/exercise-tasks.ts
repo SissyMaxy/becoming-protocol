@@ -58,7 +58,7 @@ export const EXERCISE_DOMAIN_TASKS: TaskImportData[] = [
     intensity: 3,
     instruction: 'Complete a Band Burn session with heavy bands.',
     subtext: 'The resistance shapes you. Embrace it.',
-    affirmation: 'Stronger bands, stronger glutes. She earned this.',
+    affirmation: 'Stronger bands, stronger glutes. Mama can see the curve coming in.',
     requires: { phase: 2 },
   },
   {
