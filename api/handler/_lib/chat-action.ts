@@ -10216,15 +10216,31 @@ async function scanAndLogSlips(userId: string, text: string, conversationId?: st
   // slips penalizes compliance.
   const davidIsBeingDismissed = isDavidDismissalContext(text);
 
+  // source_text must be the FULL surrounding message, not just the regex
+  // hit. The downstream confession trigger (mig 251/255) quotes
+  // source_text in the prompt — quoting only "guy" gave Maxy zero
+  // context to answer ("you wrote 'guy'" — wrote where, when, in what?).
+  // Patterns 2026-05-15: store full message (≤500 chars), keep the matched
+  // fragment in metadata.matched_fragment for debugging.
   for (const { pattern, points, type } of MASCULINE_PATS) {
     const m = text.match(pattern);
     if (!m) continue;
     if (type === 'david_name_use' && davidIsBeingDismissed) continue;
-    detections.push({ slip_type: type, slip_points: points, source_text: m[0] });
+    detections.push({
+      slip_type: type,
+      slip_points: points,
+      source_text: text.slice(0, 500),
+      metadata: { matched_fragment: m[0] },
+    });
   }
   for (const { pattern, points } of RESISTANCE_PATS) {
     const m = text.match(pattern);
-    if (m) detections.push({ slip_type: 'resistance_statement', slip_points: points, source_text: m[0] });
+    if (m) detections.push({
+      slip_type: 'resistance_statement',
+      slip_points: points,
+      source_text: text.slice(0, 500),
+      metadata: { matched_fragment: m[0] },
+    });
   }
 
   // Semantic enrichment: when regex finds nothing but the message is long enough
