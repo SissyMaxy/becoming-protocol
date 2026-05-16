@@ -1,0 +1,21 @@
+-- 509 — Permanent body opt-ins ladder.
+-- Drains user_directive wish "Permanent-body opt-ins ladder."
+-- Different from existing body_opt_ins (reversible body practice) —
+-- this is IRREVERSIBLE body modifications:
+--   0 ear_piercing
+--   1 second_piercing
+--   2 laser_consult
+--   3 laser_session_1
+--   4 electrolysis_consult
+--   5 electrolysis_session_1
+--   6 visible_piercing (helix/septum/nose/daith)
+--   7 cosmetic_procedure (lip filler / brow / etc.)
+--
+-- Each phase gated by:
+--   required_arc_stage (Gina engagement level)
+--   required_disclosure_rung (how disclosed the relationship is)
+-- So electrolysis-session-1 won't surface until Gina arc 4 AND
+-- disclosure rung 5 — the relationship can absorb the permanence.
+--
+-- Weekly Friday 16:00 UTC. Both users seeded at phase 0.
+-- Wish drained (status='shipped' in mommy_code_wishes).
