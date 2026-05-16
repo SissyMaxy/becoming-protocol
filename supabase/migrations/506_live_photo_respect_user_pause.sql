@@ -1,0 +1,17 @@
+-- 506 — Extend live photo guard to also respect user_state.pause_new_decrees_until.
+--
+-- 7th observation-driven fix this session. Mig 505 guard checks
+-- waking hours. But user can be paused (via mig 493 reversal_anchor)
+-- and still have valid waking hours.
+--
+-- Observed: this autonomous-build session has user not responding
+-- to anything for 12+ hours. First valid ping fired at 8:30am
+-- Chicago, auto-missed at 8:35, slip logged. Compounds across
+-- the day if not stopped.
+--
+-- Extension: BEFORE INSERT trigger now ALSO skips when
+-- user_state.pause_new_decrees_until > now(). Same chokepoint
+-- pattern as mig 494.
+--
+-- Also: reversed the day's first miss, set 8h pause flag on both
+-- live users to bridge the autonomous-build window.
