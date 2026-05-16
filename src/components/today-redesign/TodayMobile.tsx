@@ -68,6 +68,7 @@ import { EvidenceVaultCard } from './EvidenceVaultCard';
 import { GinaArcCard } from './GinaArcCard';
 import { LadderAdaptivePanel } from './LadderAdaptivePanel';
 import { LadderProgressionPanel } from './LadderProgressionPanel';
+import { MilestonesCard } from './MilestonesCard';
 import { SupabaseHealthCard } from './SupabaseHealthCard';
 import { PunishmentQueueCard } from './PunishmentQueueCard';
 import { ArousalLogCard } from './ArousalLogCard';
@@ -346,6 +347,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             <GinaArcCard />
             <LadderAdaptivePanel />
             <LadderProgressionPanel />
+            <MilestonesCard />
             <PhaseProgressCard />
             <MantraStreakCard />
             <MantraDrillCard />
