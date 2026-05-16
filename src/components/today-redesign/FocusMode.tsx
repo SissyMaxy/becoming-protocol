@@ -45,6 +45,7 @@ type TaskKind =
   | 'commitment_pending' | 'workout_today' | 'outfit_today' | 'voice_drill_today'
   | 'mommy_touch'
   | 'audio_session'
+  | 'focus_decree'
   | 'clean';
 
 interface FocusTask {
@@ -54,7 +55,7 @@ interface FocusTask {
   detail?: string;
   due?: string;
   /** Inline action surface: 'confess' = textarea, 'dose' = buttons, 'mark_done' = single button, 'photo' = upload, 'message' = no inline action, 'audio_session' = play button + audio element */
-  surface: 'confess' | 'dose' | 'mark_done' | 'photo' | 'message' | 'audio_session';
+  surface: 'confess' | 'dose' | 'mark_done' | 'photo' | 'message' | 'audio_session' | 'decree';
   /** Carried metadata for surface handlers */
   meta?: Record<string, unknown>;
   /** Severity tone for visual weight */
@@ -133,8 +134,16 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
     const nowIso = new Date().toISOString();
     const todayStr = new Date().toISOString().slice(0, 10);
 
+    // Mama's daily focus pick (mig 491) — when present, prioritize ABOVE all
+    // other surface logic. Lets the triage layer choose ONE task from the 30+
+    // active decrees instead of the priority cascade picking randomly.
+    const { data: focusPick } = await supabase.from('focus_picks')
+      .select('decree_id').eq('user_id', user.id).eq('pick_date', todayStr).maybeSingle();
+    const focusDecreeId = focusPick?.decree_id as string | undefined;
+
     const [overdueConfs, overduePuns, overdueDecrees, todayConfs, todayDecrees,
-           pendingCommits, regs, doseLog, outfit, workout, mommyTouch, audioOffer] = await Promise.all([
+           pendingCommits, regs, doseLog, outfit, workout, mommyTouch, audioOffer,
+           focusDecree] = await Promise.all([
       // Include missed-but-unconfessed rows. The compliance check marks
       // overdue rows missed=true (slip already fired); we still want the
       // user able to answer them late from FocusMode. Locking her out
@@ -188,6 +197,12 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
         .select('id, kind, intensity_tier, teaser, expires_at')
         .eq('user_id', user.id).is('completed_at', null)
         .gt('expires_at', nowIso).order('created_at', { ascending: false }).limit(1),
+      // Mama's daily focus pick — when populated, returns just this decree
+      focusDecreeId
+        ? supabase.from('handler_decrees')
+            .select('id, edict, deadline, proof_type').eq('id', focusDecreeId)
+            .eq('status', 'active').maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
     ]);
 
     // Compute most-overdue and most-due-today doses
@@ -217,7 +232,20 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
 
     let chosen: FocusTask | null = null;
 
-    if (mostOverdueDose && mostOverdueDose.hoursOverdue > 6) {
+    // Mama's daily focus pick (mig 491) — highest priority. When the
+    // triage layer has chosen a decree for today, surface that ABOVE
+    // anything else. Respects feedback_one_task_focus.
+    const fd = (focusDecree as { data?: { id: string; edict: string; deadline: string; proof_type: string } | null })?.data ?? null;
+    if (fd) {
+      const hoursToDeadline = (new Date(fd.deadline).getTime() - now) / 3600_000;
+      chosen = {
+        kind: 'focus_decree', rowId: fd.id,
+        title: fd.edict.length > 80 ? fd.edict.slice(0, 80) + '…' : fd.edict,
+        detail: `Mama picked this one for today. ${hoursToDeadline > 0 ? `Deadline in ${fmtCountdown(hoursToDeadline * 3600_000)}.` : `Past deadline.`}`,
+        surface: 'decree', tone: hoursToDeadline < 0 ? 'critical' : 'high',
+        meta: { proof_type: fd.proof_type },
+      };
+    } else if (mostOverdueDose && mostOverdueDose.hoursOverdue > 6) {
       chosen = {
         kind: 'overdue_dose', rowId: mostOverdueDose.regimenId,
         title: `Take ${mostOverdueDose.name}`,
