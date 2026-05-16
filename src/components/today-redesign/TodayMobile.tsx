@@ -66,6 +66,7 @@ import { DeployFixerStatusCard } from './DeployFixerStatusCard';
 import { SystemGrowthCard } from './SystemGrowthCard';
 import { EvidenceVaultCard } from './EvidenceVaultCard';
 import { GinaArcCard } from './GinaArcCard';
+import { LadderAdaptivePanel } from './LadderAdaptivePanel';
 import { SupabaseHealthCard } from './SupabaseHealthCard';
 import { PunishmentQueueCard } from './PunishmentQueueCard';
 import { ArousalLogCard } from './ArousalLogCard';
@@ -342,6 +343,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           <CollapsibleGroup id="progress" label="Progress & Tracking" tone="#6ee7b7" hint="phase · streaks · body">
             <EvidenceVaultCard />
             <GinaArcCard />
+            <LadderAdaptivePanel />
             <PhaseProgressCard />
             <MantraStreakCard />
             <MantraDrillCard />
