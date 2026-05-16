@@ -1,13 +1,14 @@
-// protocol-health-check v2 — periodic audit of every generator + bridge + chain assertion.
+// protocol-health-check v3 — mark arousal-gated generators conditional.
 //
-// Runs every 6h via pg_cron. Checks:
-//   1. Each generator function exists + recent rows in expected output table
-//   2. outreach → scheduled_notifications bridge ratio
-//   3. Per-trigger_source fulfillment rate over 7d
-//   4. test_fulfillment_chain() chain assertion (mig 457)
+// Observed in production (1h pause cycle): pavlovian was warning
+// "no_recent_output" because both users at arousal 0, but that's
+// CORRECT silence — generator only fires at arousal ≥4. Fix: mark
+// arousal-gated generators conditional. Empty output = info, not warning.
 //
-// Writes findings to mommy_supervisor_log with severity info/warning/error.
-// Prevents another proof_type='voice' silent breakage.
+// Conditional generators:
+//   - state_paired_delivery (arousal ≥4)
+//   - pavlovian (arousal ≥4)
+//   - warmup_tier (arousal ≤3)
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -18,22 +19,24 @@ interface CheckResult {
   message: string;
   context_data: Record<string, unknown>;
 }
-
 interface GeneratorSpec {
   name: string;
   function_name: string;
   expected_cadence_minutes: number;
   output_table?: string;
+  conditional?: boolean;
 }
 
 const GENERATORS: GeneratorSpec[] = [
-  { name: 'state_paired_delivery', function_name: 'state_paired_delivery_eval', expected_cadence_minutes: 15 },
+  { name: 'state_paired_delivery', function_name: 'state_paired_delivery_eval', expected_cadence_minutes: 15, conditional: true },
   { name: 'wardrobe_prescription', function_name: 'wardrobe_prescription_eval', expected_cadence_minutes: 1440, output_table: 'wardrobe_prescriptions' },
   { name: 'cruising_lead_feminization', function_name: 'cruising_lead_feminization_eval', expected_cadence_minutes: 1440 },
   { name: 'gina_disclosure', function_name: 'gina_disclosure_eval', expected_cadence_minutes: 1440, output_table: 'gina_disclosure_events' },
   { name: 'gina_seed', function_name: 'gina_seed_eval', expected_cadence_minutes: 1440, output_table: 'gina_seed_plantings' },
   { name: 'cock_conditioning', function_name: 'cock_conditioning_eval', expected_cadence_minutes: 720, output_table: 'cock_conditioning_events' },
-  { name: 'pavlovian', function_name: 'pavlovian_eval', expected_cadence_minutes: 15, output_table: 'pavlovian_events' },
+  { name: 'pavlovian', function_name: 'pavlovian_eval', expected_cadence_minutes: 15, output_table: 'pavlovian_events', conditional: true },
+  { name: 'warmup_tier', function_name: 'warmup_tier_eval', expected_cadence_minutes: 60, conditional: true },
+  { name: 'focus_picker', function_name: 'focus_picker_eval', expected_cadence_minutes: 1440 },
 ];
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
@@ -42,7 +45,7 @@ async function checkGenerator(g: GeneratorSpec): Promise<CheckResult[]> {
   const results: CheckResult[] = [];
   const { data: fnExists, error: fnErr } = await supabase.rpc('check_function_exists', { p_function_name: g.function_name }).maybeSingle();
   if (fnErr || !fnExists) {
-    results.push({ component: g.name, severity: 'error', event_kind: 'function_missing', message: `Function ${g.function_name} missing: ${fnErr?.message ?? 'no row'}`, context_data: { function_name: g.function_name } });
+    results.push({ component: g.name, severity: 'error', event_kind: 'function_missing', message: `Function ${g.function_name} missing`, context_data: { function_name: g.function_name } });
     return results;
   }
   if (g.output_table) {
@@ -55,8 +58,16 @@ async function checkGenerator(g: GeneratorSpec): Promise<CheckResult[]> {
                   : 'created_at';
     const { count, error: qErr } = await supabase.from(g.output_table).select('id', { count: 'exact', head: true }).gte(dateCol, since);
     if (qErr) results.push({ component: g.name, severity: 'warning', event_kind: 'query_error', message: `Output query failed: ${qErr.message}`, context_data: { table: g.output_table } });
-    else if ((count ?? 0) === 0) results.push({ component: g.name, severity: 'warning', event_kind: 'no_recent_output', message: `No rows in ${g.output_table} within 2x cadence window.`, context_data: { table: g.output_table, cadence_minutes: g.expected_cadence_minutes, window_hours: windowHours } });
-    else results.push({ component: g.name, severity: 'info', event_kind: 'healthy', message: `${count} rows in ${g.output_table} within window.`, context_data: { table: g.output_table, count } });
+    else if ((count ?? 0) === 0) {
+      const severity: 'info' | 'warning' = g.conditional ? 'info' : 'warning';
+      const eventKind = g.conditional ? 'conditional_quiet' : 'no_recent_output';
+      const msg = g.conditional
+        ? `No rows in ${g.output_table} within window — conditional generator (likely no users at threshold).`
+        : `No rows in ${g.output_table} within 2x cadence window.`;
+      results.push({ component: g.name, severity, event_kind: eventKind, message: msg, context_data: { table: g.output_table, cadence_minutes: g.expected_cadence_minutes, window_hours: windowHours, conditional: g.conditional ?? false } });
+    } else {
+      results.push({ component: g.name, severity: 'info', event_kind: 'healthy', message: `${count} rows in ${g.output_table} within window.`, context_data: { table: g.output_table, count } });
+    }
   }
   return results;
 }
@@ -67,7 +78,7 @@ async function checkDeliveryBridge(): Promise<CheckResult[]> {
   const { count: notifCount } = await supabase.from('scheduled_notifications').select('id', { count: 'exact', head: true }).gte('created_at', since);
   const ratio = outreachCount && outreachCount > 0 ? (notifCount ?? 0) / outreachCount : 1;
   if (ratio < 0.5 && (outreachCount ?? 0) > 5) {
-    return [{ component: 'outreach_to_push_bridge', severity: 'error', event_kind: 'low_bridge_ratio', message: `Only ${notifCount}/${outreachCount} outreach rows reached scheduled_notifications in 6h.`, context_data: { outreach_count: outreachCount, notif_count: notifCount, ratio } }];
+    return [{ component: 'outreach_to_push_bridge', severity: 'error', event_kind: 'low_bridge_ratio', message: `Only ${notifCount}/${outreachCount} outreach in 6h.`, context_data: { outreach_count: outreachCount, notif_count: notifCount, ratio } }];
   }
   return [{ component: 'outreach_to_push_bridge', severity: 'info', event_kind: 'healthy', message: `Bridge ratio ${notifCount}/${outreachCount} in 6h.`, context_data: { outreach_count: outreachCount, notif_count: notifCount, ratio } }];
 }
@@ -93,10 +104,10 @@ async function checkFulfillmentChain(): Promise<CheckResult[]> {
 async function checkChainAssertion(): Promise<CheckResult[]> {
   try {
     const { data, error } = await supabase.rpc('test_fulfillment_chain').maybeSingle();
-    if (error) return [{ component: 'chain_assertion', severity: 'error', event_kind: 'rpc_error', message: `test_fulfillment_chain RPC failed: ${error.message}`, context_data: {} }];
+    if (error) return [{ component: 'chain_assertion', severity: 'error', event_kind: 'rpc_error', message: error.message, context_data: {} }];
     const result = data as { ok?: boolean; results?: unknown };
-    if (!result?.ok) return [{ component: 'chain_assertion', severity: 'error', event_kind: 'chain_failure', message: `Chain assertion failed`, context_data: { results: result?.results } }];
-    return [{ component: 'chain_assertion', severity: 'info', event_kind: 'all_chains_ok', message: `All fulfillment chains pass.`, context_data: {} }];
+    if (!result?.ok) return [{ component: 'chain_assertion', severity: 'error', event_kind: 'chain_failure', message: 'Chain assertion failed', context_data: { results: result?.results } }];
+    return [{ component: 'chain_assertion', severity: 'info', event_kind: 'all_chains_ok', message: 'All fulfillment chains pass.', context_data: {} }];
   } catch (e) {
     return [{ component: 'chain_assertion', severity: 'error', event_kind: 'check_exception', message: (e as Error).message, context_data: {} }];
   }
@@ -107,7 +118,7 @@ Deno.serve(async (req: Request) => {
   const allResults: CheckResult[] = [];
   for (const g of GENERATORS) {
     try { allResults.push(...await checkGenerator(g)); }
-    catch (e) { allResults.push({ component: g.name, severity: 'error', event_kind: 'check_exception', message: `Check threw: ${(e as Error).message}`, context_data: {} }); }
+    catch (e) { allResults.push({ component: g.name, severity: 'error', event_kind: 'check_exception', message: (e as Error).message, context_data: {} }); }
   }
   try { allResults.push(...await checkDeliveryBridge()); } catch (e) { allResults.push({ component: 'delivery_bridge', severity: 'error', event_kind: 'check_exception', message: (e as Error).message, context_data: {} }); }
   try { allResults.push(...await checkFulfillmentChain()); } catch (e) { allResults.push({ component: 'fulfillment', severity: 'error', event_kind: 'check_exception', message: (e as Error).message, context_data: {} }); }
