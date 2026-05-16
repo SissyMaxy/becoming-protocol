@@ -1,0 +1,14 @@
+-- 499 — Ladder graduation detector. Symmetric opposite of mig 498.
+--
+-- Weekly Monday 11:00 UTC cron computes per-(user, trigger_source)
+-- fulfillment rate over 30d. When >= 0.8 AND total >= 4, queues
+-- a Mama appreciation outreach naming the actual percentage +
+-- requesting voice debrief. Logs to mommy_supervisor_log.
+--
+-- Doesn't double-advance the ladder — natural propagation triggers
+-- already handle phase advancement. This just amplifies the
+-- dopamine + retention signal so Maxy knows Mama sees the work.
+--
+-- 14-day dedup so the same ladder doesn't graduate twice in a fortnight.
+--
+-- Full schema + function applied via DB.
