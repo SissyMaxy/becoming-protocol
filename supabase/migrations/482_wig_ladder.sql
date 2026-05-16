@@ -1,0 +1,4 @@
+-- 482 — Wig ladder. 8 phases physical milestone: research → acquire →
+-- practice → home_alone → home_with_partner → out_briefly → fem_context
+-- → real_hair. Weekly Friday 18:00 UTC.
+-- Full schema + eval applied via DB.
