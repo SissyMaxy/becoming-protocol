@@ -67,6 +67,7 @@ import { SystemGrowthCard } from './SystemGrowthCard';
 import { EvidenceVaultCard } from './EvidenceVaultCard';
 import { GinaArcCard } from './GinaArcCard';
 import { LadderAdaptivePanel } from './LadderAdaptivePanel';
+import { LadderProgressionPanel } from './LadderProgressionPanel';
 import { SupabaseHealthCard } from './SupabaseHealthCard';
 import { PunishmentQueueCard } from './PunishmentQueueCard';
 import { ArousalLogCard } from './ArousalLogCard';
@@ -395,6 +396,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
           <EvidenceVaultCard />
           <GinaArcCard />
           <LadderAdaptivePanel />
+          <LadderProgressionPanel />
           <PhaseProgressCard />
           <MantraStreakCard />
           <MantraDrillCard />
