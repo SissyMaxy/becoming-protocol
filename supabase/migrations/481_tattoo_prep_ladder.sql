@@ -1,0 +1,6 @@
+-- 481 — Tattoo prep 12-month build.
+-- Permanent body marker locking identity. 8 phases time-gated (30-45
+-- days min between each rung): concept → placement → design →
+-- artist_research → consultation → deposit → scheduled → complete.
+-- Monthly cron 1st of month 13:00 UTC.
+-- Full schema + eval applied via DB.
