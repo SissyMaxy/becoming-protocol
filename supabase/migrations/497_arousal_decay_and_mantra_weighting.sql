@@ -1,0 +1,15 @@
+-- 497 — Arousal decay + mantra effectiveness weighting.
+--
+-- A) arousal_decay_eval (hourly :25) — for each dommy_mommy user
+-- with current_arousal > 0, decay by 1 if no arousal_log entry in
+-- last 4h. Models natural heat fade. Without this, mig 496 would
+-- ratchet current_arousal up forever.
+--
+-- B) pick_user_mantras rewrite — weight by landing ratio from
+-- mantra_recordings.status. Mantras with no track record OR
+-- landings >= misses get bucket 0 (preferred); chronic-misses
+-- bucket 1 (deprioritized). Random within bucket preserves variance.
+-- Proven-landing mantras surface more often without locking the
+-- pool to a single phrase.
+--
+-- Full functions applied via DB.
