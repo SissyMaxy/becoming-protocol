@@ -1,0 +1,15 @@
+-- 492 — Stale-cancel sweep + re-pick on focus fulfillment.
+--
+-- Two small additions to the triage layer (mig 491):
+--
+-- (1) decree_stale_sweep() — daily 03:00 UTC. Cancels any decree
+--     stuck active >14d without fulfillment. Prevents rotten pile
+--     accumulation when the focus picker rotates through ladders
+--     and old ones never bubble up.
+--
+-- (2) trg_repick_focus_on_fulfilled — AFTER UPDATE on handler_decrees.
+--     When today's focus_pick decree flips to fulfilled, immediately
+--     re-run focus_picker_eval so the next pick surfaces without
+--     waiting 24h. Keeps Maxy fed when she's burning through tasks.
+--
+-- Full schema + functions applied via DB.
