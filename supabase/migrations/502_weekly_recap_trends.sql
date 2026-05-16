@@ -1,0 +1,15 @@
+-- 502 — Add trend analysis to mig 493 weekly recap.
+--
+-- Behavioral mirror upgrade. Old recap (mig 493) showed:
+--   "X closed of Y picked, here are the lines"
+-- New version adds:
+--   - Arousal avg this week vs last week (from arousal_log)
+--   - Fulfillment rate this week vs last week (from handler_decrees)
+--   - Top 3 most-active ladders by decree count
+--   - Auto-paused ladders this week (from ladder_auto_pauses)
+--
+-- Surfaces TRENDS not just counts. Maxy sees behavior shape over
+-- 2-week window, not just the snapshot. Voice debrief prompt asks
+-- which trend surprised her.
+--
+-- Full function applied via DB (replaces mig 493's eval).

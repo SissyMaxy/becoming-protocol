@@ -1,0 +1,12 @@
+-- 508 — Two emotional-support tracks. NOT brainwashing.
+--
+-- disclosure_courage_prompts: 5 prompts (anchor_breath, worst_case_rehearsal,
+--   rehearsal_loop, curiosity_reframe, post_spike_aftercare). Activates
+--   when gina_disclosure.current_rung >= 4. 2x weekly Tue/Fri 17:00 UTC.
+--
+-- fear_grounding_prompts: 6 prompts (breath_work, worst_case_specific,
+--   research_grounding, curiosity_carry, post_spike, peer_voice).
+--   Activates when hormone_prep.current_phase >= 1. Weekly Thu 15:00 UTC.
+--
+-- Real regulation tools. Respects the user's right to feel the fear
+-- and find their own answer rather than being pushed past it.

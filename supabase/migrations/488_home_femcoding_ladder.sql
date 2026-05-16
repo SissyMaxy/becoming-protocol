@@ -1,0 +1,5 @@
+-- 488 — Home environment fem-coding ladder. 6 phases:
+-- bathroom_shelf → bedside_drawer → visible_lingerie → vanity_station →
+-- coded_art → public_evidence. Weekly Wednesday 13:00 UTC.
+-- Physical space conditioning — each phase makes home harder to revert from.
+-- Full schema + eval applied via DB.

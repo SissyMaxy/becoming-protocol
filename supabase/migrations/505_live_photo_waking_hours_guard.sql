@@ -1,0 +1,22 @@
+-- 505 — DB-level guard for live photo pinger waking hours.
+--
+-- Observed in production (within 1h of mig 504 activation):
+-- live-photo-pinger edge fn fired at 4:45am Chicago, outside the
+-- 8-22 waking_hours setting I configured. Auto-marked missed → +2
+-- slip on sleeping user. Real user-harm bug.
+--
+-- Root cause: edge fn ignores live_photo_settings.waking_start_hour/
+-- waking_end_hour. Rather than chase the edge fn code, enforce at DB
+-- via BEFORE INSERT trigger. Same chokepoint pattern as mig 494.
+--
+-- BEFORE INSERT trigger: extracts user's local hour (America/Chicago),
+-- if outside waking window, returns NULL → cancels insert silently
+-- + RAISE WARNING for visibility. Edge fn doesn't crash; just no-ops.
+--
+-- Also reversed the wrongful 'missed' on the existing ping +
+-- attempted slip cancellation via slip_log update.
+--
+-- This is observation-driven fix #6 this session. Pattern continues:
+-- each new generator surfaces real-world bugs in real-world conditions
+-- that pure-design could not catch. The build-observe-refine rhythm
+-- is the integration test.

@@ -64,6 +64,11 @@ import { ProtocolHealthCard } from './ProtocolHealthCard';
 import { MommyIdeationCard } from './MommyIdeationCard';
 import { DeployFixerStatusCard } from './DeployFixerStatusCard';
 import { SystemGrowthCard } from './SystemGrowthCard';
+import { EvidenceVaultCard } from './EvidenceVaultCard';
+import { GinaArcCard } from './GinaArcCard';
+import { LadderAdaptivePanel } from './LadderAdaptivePanel';
+import { LadderProgressionPanel } from './LadderProgressionPanel';
+import { MilestonesCard } from './MilestonesCard';
 import { SupabaseHealthCard } from './SupabaseHealthCard';
 import { PunishmentQueueCard } from './PunishmentQueueCard';
 import { ArousalLogCard } from './ArousalLogCard';
@@ -338,6 +343,11 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             <CodeAuditCard />
           </CollapsibleGroup>
           <CollapsibleGroup id="progress" label="Progress & Tracking" tone="#6ee7b7" hint="phase · streaks · body">
+            <EvidenceVaultCard />
+            <GinaArcCard />
+            <LadderAdaptivePanel />
+            <LadderProgressionPanel />
+            <MilestonesCard />
             <PhaseProgressCard />
             <MantraStreakCard />
             <MantraDrillCard />
