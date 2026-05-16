@@ -523,7 +523,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
       const nowIso = new Date().toISOString();
       if (task.kind === 'overdue_punishment') {
         await supabase.from('punishment_queue').update({ status: 'completed', completed_at: nowIso }).eq('id', task.rowId);
-      } else if (task.kind === 'overdue_decree' || task.kind === 'due_today_decree') {
+      } else if (task.kind === 'overdue_decree' || task.kind === 'due_today_decree' || task.kind === 'focus_decree') {
         await supabase.from('handler_decrees').update({ status: 'fulfilled', fulfilled_at: nowIso }).eq('id', task.rowId);
       } else if (task.kind === 'workout_today') {
         await supabase.from('workout_prescriptions').update({ status: 'completed', completed_at: nowIso }).eq('id', task.rowId);
@@ -832,6 +832,47 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
             >
               {submitting ? 'submitting…' : 'Mark complete'}
             </button>
+          )}
+
+          {task.surface === 'decree' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <button
+                onClick={handleMarkDone}
+                disabled={submitting}
+                style={{
+                  width: '100%', padding: '12px',
+                  background: tone.border, color: '#fff',
+                  border: 'none', borderRadius: 7,
+                  fontSize: 13, fontWeight: 700, letterSpacing: '0.04em',
+                  textTransform: 'uppercase', fontFamily: 'inherit',
+                  cursor: submitting ? 'wait' : 'pointer',
+                }}
+              >
+                {submitting ? 'submitting…' : 'Mark fulfilled'}
+              </button>
+              <button
+                onClick={async () => {
+                  if (!user?.id || submitting) return;
+                  setSubmitting(true);
+                  try {
+                    await supabase.rpc('request_focus_repick', { p_user_id: user.id, p_reason: 'user clicked different-task' });
+                  } finally {
+                    setSubmitting(false);
+                    pickNext();
+                  }
+                }}
+                disabled={submitting}
+                style={{
+                  width: '100%', padding: '8px',
+                  background: 'transparent', color: '#8a8690',
+                  border: '1px solid #2a2a32', borderRadius: 6,
+                  fontSize: 11, fontFamily: 'inherit',
+                  cursor: submitting ? 'wait' : 'pointer',
+                }}
+              >
+                ask Mama for a different one
+              </button>
+            </div>
           )}
 
           {task.surface === 'photo' && (
