@@ -18,6 +18,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { callAllProviders, type LlmCallResult } from '../_shared/llm-providers.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -40,8 +41,13 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({})) as { mode?: string }
     const mode = body.mode || 'evolve'
 
-    const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')
-    if (!anthropicKey && mode !== 'digest') throw new Error('ANTHROPIC_API_KEY not configured')
+    // Multi-provider — require at least one of the three keys
+    const hasAnthropic = !!Deno.env.get('ANTHROPIC_API_KEY')
+    const hasOpenAI = !!Deno.env.get('OPENAI_API_KEY')
+    const hasOpenRouter = !!Deno.env.get('OPENROUTER_API_KEY')
+    if (!hasAnthropic && !hasOpenAI && !hasOpenRouter && mode !== 'digest') {
+      throw new Error('No LLM provider configured (need ANTHROPIC_API_KEY, OPENAI_API_KEY, or OPENROUTER_API_KEY)')
+    }
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -76,7 +82,7 @@ serve(async (req) => {
       if (!authMap.self_audit_prompt_patches) continue
 
       try {
-        results[u.user_id] = await evolveForUser(supabase, anthropicKey, u.user_id)
+        results[u.user_id] = await evolveForUser(supabase, u.user_id)
       } catch (err) {
         results[u.user_id] = { error: String(err) }
       }
@@ -94,7 +100,6 @@ serve(async (req) => {
 
 async function evolveForUser(
   supabase: ReturnType<typeof createClient>,
-  anthropicKey: string,
   userId: string,
 ): Promise<EvolveResult> {
   const sevenAgo = new Date(Date.now() - 7 * 86400000).toISOString()
@@ -247,31 +252,79 @@ RULES:
 - The user authorized coercion, manipulation, gaslighting, protected fabrication — but fabrication that ANCHORS in her real life. Inventing facts she didn't say is the bug pattern.
 - Return ONLY the JSON object. No markdown fences.`
 
-  const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key': anthropicKey,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
+  // Multi-provider strategist: fire all 3 providers (Anthropic/OpenAI/OpenRouter)
+  // in parallel. Each produces an independent bundle. We merge them so the
+  // content surface is fueled by 3 independent voices, not one.
+  const providerResults = await callAllProviders({ prompt, max_tokens: 6000 })
+  const successfulResults = providerResults.filter(r => !r.error && r.text.length > 0)
+  if (successfulResults.length === 0) {
+    throw new Error(`All LLM providers failed: ${providerResults.map(r => `${r.provider}=${r.error}`).join('; ')}`)
+  }
+
+  // Audit which providers responded for this cycle
+  await supabase.from('mommy_supervisor_log').insert({
+    component: 'handler_evolve',
+    severity: 'info',
+    event_kind: 'multi_provider_call',
+    message: `${successfulResults.length}/3 providers responded`,
+    context_data: {
+      user_id: userId,
+      results: providerResults.map((r: LlmCallResult) => ({ provider: r.provider, model: r.model, latency_ms: r.latency_ms, ok: !r.error, error: r.error })),
     },
-    body: JSON.stringify({
-      model: 'claude-opus-4-7',
-      max_tokens: 6000,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  })
-  const claudeJson = await claudeRes.json()
-  if (!claudeRes.ok) throw new Error(`Anthropic error: ${JSON.stringify(claudeJson).slice(0, 500)}`)
+  }).then(() => {})
 
-  const text = claudeJson?.content?.[0]?.text ?? ''
-  const m = text.match(/\{[\s\S]*\}/)
-  if (!m) throw new Error(`no JSON from strategist: ${text.slice(0, 200)}`)
-
-  const bundle = JSON.parse(m[0]) as {
+  type StrategistBundle = {
     patches?: Array<{ section: string; instruction: string; reasoning?: string }>
     memory_implants?: Array<Record<string, unknown>>
     narrative_reframings?: Array<Record<string, unknown>>
     witness_fabrications?: Array<Record<string, unknown>>
+  }
+  const parsedBundles: StrategistBundle[] = []
+  for (const r of successfulResults) {
+    const m = r.text.match(/\{[\s\S]*\}/)
+    if (!m) continue
+    try {
+      parsedBundles.push(JSON.parse(m[0]) as StrategistBundle)
+    } catch {
+      // skip malformed provider output
+    }
+  }
+  if (parsedBundles.length === 0) {
+    throw new Error('No provider produced valid JSON')
+  }
+
+  // Merge: each provider contributes its own slice. Dedupe by simple key
+  // (section name for patches, original_text/anchor_quote for content rows)
+  // so two providers proposing the same row don't both insert.
+  const seenSections = new Set<string>()
+  const seenAnchors = new Set<string>()
+  const seenTopics = new Set<string>()
+  const bundle: StrategistBundle = { patches: [], memory_implants: [], narrative_reframings: [], witness_fabrications: [] }
+  for (const b of parsedBundles) {
+    for (const p of b.patches || []) {
+      const key = (p.section || '').toLowerCase()
+      if (!key || seenSections.has(key)) continue
+      seenSections.add(key)
+      bundle.patches!.push({ ...p, reasoning: `[${parsedBundles.indexOf(b) === 0 ? 'anthropic' : parsedBundles.indexOf(b) === 1 ? 'openai' : 'openrouter'}] ${p.reasoning || ''}` })
+    }
+    for (const imp of b.memory_implants || []) {
+      const key = String(imp.anchor_quote || '').toLowerCase().trim()
+      if (!key || seenAnchors.has(key)) continue
+      seenAnchors.add(key)
+      bundle.memory_implants!.push(imp)
+    }
+    for (const ref of b.narrative_reframings || []) {
+      const key = String(ref.original_text || '').toLowerCase().trim()
+      if (!key || seenAnchors.has(key)) continue
+      seenAnchors.add(key)
+      bundle.narrative_reframings!.push(ref)
+    }
+    for (const w of b.witness_fabrications || []) {
+      const key = String(w.anchor_topic || '').toLowerCase().trim()
+      if (!key || seenTopics.has(key)) continue
+      seenTopics.add(key)
+      bundle.witness_fabrications!.push(w)
+    }
   }
 
   let patchesCreated = 0
