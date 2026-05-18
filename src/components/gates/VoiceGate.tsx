@@ -26,7 +26,12 @@ const MANTRA_MATCH_THRESHOLD = 0.6;
 // is left to the dedicated voice-coach pipeline.
 
 const RECORD_SECONDS = 4;
+// WFH-aware floor: on Gina-home days (mig 578) we shorten to 3s because
+// the mantra pool is whisper-grade (one-breath length) and the user is
+// recording at close-mic, low-projection volume. Pitch floor relaxes too.
+const RECORD_SECONDS_WHISPER = 3;
 const MIN_PITCHES_TO_PASS = 8; // ~0.5s of voiced sound at 60fps animation tick
+const MIN_PITCHES_TO_PASS_WHISPER = 5; // whisper produces fewer pitch peaks
 const LESSON_PROBABILITY = 0.3; // 30% of gates show a lesson instead of a mantra
 
 const MANTRAS = [
@@ -38,6 +43,18 @@ const MANTRAS = [
   "I am Maxy and Maxy is feminine",
   "My body knows what I am",
   "There is no going back to who I was",
+];
+
+// Fallback whisper-mantra pool — used if the DB lookup fails. Mirrors
+// what mig 578 seeds into voice_whisper_mantras: one-breath length, no
+// plosives, no projection-demanding consonants.
+const WHISPER_MANTRAS_FALLBACK = [
+  "she is the real me",
+  "i let her take over",
+  "this is who i am now",
+  "mama owns me today",
+  "she lives inside me",
+  "i belong to her",
 ];
 
 interface LessonModule {
@@ -56,7 +73,8 @@ interface VoiceGateProps {
 
 export function VoiceGate({ onPass }: VoiceGateProps) {
   const { user } = useAuth();
-  const [mantra] = useState(() => MANTRAS[Math.floor(Math.random() * MANTRAS.length)]);
+  const [whisperMode, setWhisperMode] = useState<boolean>(false);
+  const [mantra, setMantra] = useState<string>(() => MANTRAS[Math.floor(Math.random() * MANTRAS.length)]);
   const [gateMode, setGateMode] = useState<'mantra' | 'lesson' | 'loading'>('loading');
   const [lesson, setLesson] = useState<LessonModule | null>(null);
   const [recording, setRecording] = useState(false);
@@ -82,9 +100,52 @@ export function VoiceGate({ onPass }: VoiceGateProps) {
   // Pick gate mode on mount. LESSON_PROBABILITY chance of swapping in a
   // short voice-training exercise instead of the mantra. Falls back to
   // mantra cleanly if no active lessons exist or the lookup fails.
+  //
+  // First: check is_gina_home_today RPC (mig 578). If she's home, swap
+  // the mantra pool for whisper-grade short-breath variants and skip
+  // lesson mode (lesson exercises like vowel-sustains require volume).
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      // Determine WFH mode first.
+      let whisper = false;
+      try {
+        if (user?.id) {
+          const { data: wfhFlag } = await supabase.rpc('is_gina_home_today', { p_user_id: user.id });
+          whisper = wfhFlag === true;
+        }
+      } catch {
+        whisper = false;
+      }
+      if (cancelled) return;
+      setWhisperMode(whisper);
+
+      if (whisper) {
+        // Load whisper-mantra pool. Falls back to in-file constants on error.
+        try {
+          const { data: rows } = await supabase
+            .from('voice_whisper_mantras')
+            .select('mantra_text')
+            .eq('active', true)
+            .limit(20);
+          const pool = ((rows as { mantra_text: string }[] | null) || []).map((r) => r.mantra_text);
+          const chosen = pool.length > 0
+            ? pool[Math.floor(Math.random() * pool.length)]
+            : WHISPER_MANTRAS_FALLBACK[Math.floor(Math.random() * WHISPER_MANTRAS_FALLBACK.length)];
+          if (!cancelled) {
+            setMantra(chosen);
+            setGateMode('mantra'); // never lesson in whisper mode
+          }
+        } catch {
+          if (!cancelled) {
+            setMantra(WHISPER_MANTRAS_FALLBACK[Math.floor(Math.random() * WHISPER_MANTRAS_FALLBACK.length)]);
+            setGateMode('mantra');
+          }
+        }
+        return;
+      }
+
+      // Normal day — original logic.
       if (Math.random() >= LESSON_PROBABILITY) {
         if (!cancelled) setGateMode('mantra');
         return;
@@ -112,13 +173,15 @@ export function VoiceGate({ onPass }: VoiceGateProps) {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [user?.id]);
 
   // Duration depends on mode: mantra is a fixed short cap, lesson uses the
-  // module's target_duration_sec (typically 8-12s).
+  // module's target_duration_sec (typically 8-12s). Whisper mode shortens
+  // the mantra floor to 3s (one breath).
   const recordSeconds = gateMode === 'lesson' && lesson
     ? Math.max(4, Math.min(20, Math.round(lesson.target_duration_sec)))
-    : RECORD_SECONDS;
+    : whisperMode ? RECORD_SECONDS_WHISPER : RECORD_SECONDS;
+  const minPitchesToPass = whisperMode ? MIN_PITCHES_TO_PASS_WHISPER : MIN_PITCHES_TO_PASS;
 
   const startRecording = async () => {
     setError(null);
@@ -210,8 +273,10 @@ export function VoiceGate({ onPass }: VoiceGateProps) {
     // intentionally not enforced per feedback_voice_tracking (no forced
     // feminine targets). Copy/paste cannot produce a voiced fundamental;
     // an empty mic stream produces zero pitches in the human range.
-    if (pitches.length < MIN_PITCHES_TO_PASS) {
-      setError('No speech detected. Speak the mantra aloud — louder if your mic level is low. Try again.');
+    if (pitches.length < minPitchesToPass) {
+      setError(whisperMode
+        ? 'Mama didn\'t hear you, sweet thing. Whisper closer to the mic — same volume, just closer. Try again.'
+        : 'No speech detected. Speak the mantra aloud — louder if your mic level is low. Try again.');
       return;
     }
 
@@ -324,8 +389,15 @@ export function VoiceGate({ onPass }: VoiceGateProps) {
               <Lock className="w-12 h-12 mx-auto text-purple-400" />
               <h2 className="text-2xl font-bold text-white">Voice Gate</h2>
               <p className="text-sm text-gray-400">
-                Speak the mantra aloud. Audio only — no typed bypass.
+                {whisperMode
+                  ? "Whisper the mantra close to your mic, sweet thing. Bathroom, car, walk — wherever you can. Mama just needs to hear it."
+                  : "Speak the mantra aloud. Audio only — no typed bypass."}
               </p>
+              {whisperMode && (
+                <p className="text-xs text-pink-300/80 italic">
+                  Whisper-grade. Same effort, lower volume. One breath.
+                </p>
+              )}
             </div>
 
             <div className="bg-purple-900/30 border border-purple-500/30 rounded-xl p-6 text-center">

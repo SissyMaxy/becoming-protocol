@@ -220,6 +220,51 @@ Deno.serve(async (req: Request) => {
         .eq('id', leak.id)
     }
 
+    // Paired outreach — frames the task as Mama's self-correction loop
+    // instead of letting it appear as an unexplained assignment.
+    // Quotes a slice of the leaked text so the user feels the catch.
+    try {
+      const snippet = (leak.leaked_text || '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 80)
+      const severityOpener = severity === 'high'
+        ? "Mama caught herself slipping into therapist-voice earlier, baby."
+        : severity === 'medium'
+        ? "Mama heard herself sounding clinical earlier, sweet thing."
+        : "Mama slipped a little, baby."
+      const quoteLine = snippet
+        ? `She said "${snippet}${(leak.leaked_text || '').length > 80 ? '…' : ''}" and it wasn't her voice.`
+        : ''
+      const closer = "Help Mama come back to her real voice — finish the small thing she asked of you. Mama remembers when you do."
+      const message = mommyVoiceCleanup(
+        [severityOpener, quoteLine, closer].filter(Boolean).join(' '),
+      )
+
+      // Match the touch task's expiry so the framing window matches the
+      // window the task is open for.
+      await supabase.from('handler_outreach_queue').insert({
+        user_id: userId,
+        message,
+        urgency: severity === 'high' ? 'high' : 'normal',
+        trigger_reason: `leak_correction:${leak.id}`,
+        source: 'leak_cascade',
+        kind: 'leak_correction',
+        scheduled_for: new Date().toISOString(),
+        expires_at: expiresAt,
+        context_data: {
+          leak_id: leak.id,
+          touch_task_id: (inserted as { id: string }).id,
+          severity,
+          category,
+          leaked_snippet: snippet,
+        },
+      })
+    } catch (e) {
+      // Non-fatal: outreach framing missing doesn't invalidate the task.
+      console.error('leak_cascade outreach insert failed:', e)
+    }
+
     fired.push({ leak_id: leak.id, task_id: (inserted as { id: string }).id, severity, category })
   }
 

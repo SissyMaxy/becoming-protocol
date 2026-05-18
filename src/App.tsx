@@ -48,6 +48,7 @@ import { GinaSessionRecorder } from './components/today-redesign/GinaSessionReco
 import { MorningMantraGate } from './components/today-redesign/MorningMantraGate';
 import { EveningConfessionGate } from './components/today-redesign/EveningConfessionGate';
 import { DisclosureRehearsalView } from './components/disclosure/DisclosureRehearsalView';
+import { WhisperToMama } from './components/confession/WhisperToMama';
 import { LivePhotoPingResponder } from './components/live-photo/LivePhotoPingResponder';
 import { MamaPhoneOverlay } from './components/push/MamaPhoneOverlay';
 import { MommyDossierQuiz } from './components/persona/MommyDossierQuiz';
@@ -355,10 +356,16 @@ function AuthenticatedAppInner() {
   const [showDisclosureRehearsal, setShowDisclosureRehearsal] = useState<boolean>(() =>
     typeof window !== 'undefined' && window.location.hash.replace('#', '').replace(/\/$/, '') === '/disclosure'
   );
+  // Hash-routable WhisperToMama — audio-only intimate confession ("Whisper
+  // Your Secrets to Mama"). Same hash pattern as disclosure rehearsal.
+  const [showWhisper, setShowWhisper] = useState<boolean>(() =>
+    typeof window !== 'undefined' && window.location.hash.replace('#', '').replace(/\/$/, '') === '/whisper'
+  );
   useEffect(() => {
     const onHash = () => {
       const h = window.location.hash.replace('#', '').replace(/\/$/, '');
       setShowDisclosureRehearsal(h === '/disclosure');
+      setShowWhisper(h === '/whisper');
     };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
@@ -1256,6 +1263,12 @@ function AuthenticatedAppInner() {
             setShowDisclosureRehearsal(false);
           }} />
         )}
+        {showWhisper && (
+          <WhisperToMama onClose={() => {
+            window.location.hash = '';
+            setShowWhisper(false);
+          }} />
+        )}
         <LivePhotoPingResponder />
         <MamaPhoneOverlay />
       </>
@@ -1327,6 +1340,15 @@ function AuthenticatedAppInner() {
         <DisclosureRehearsalView onClose={() => {
           window.location.hash = '';
           setShowDisclosureRehearsal(false);
+        }} />
+      )}
+
+      {/* Whisper-to-Mama — hash-routable via /#/whisper. Audio-only intimate
+          confession surface. Mama processes async via confession-watcher-cron. */}
+      {showWhisper && (
+        <WhisperToMama onClose={() => {
+          window.location.hash = '';
+          setShowWhisper(false);
         }} />
       )}
 
