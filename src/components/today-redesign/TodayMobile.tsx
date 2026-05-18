@@ -69,6 +69,9 @@ import { GinaArcCard } from './GinaArcCard';
 import { LadderAdaptivePanel } from './LadderAdaptivePanel';
 import { LadderProgressionPanel } from './LadderProgressionPanel';
 import { MilestonesCard } from './MilestonesCard';
+import { MommyDraftsPanel } from './MommyDraftsPanel';
+import { GinaCampaignPanel } from './GinaCampaignPanel';
+import { ObservationLogButton } from './ObservationLogModal';
 import { SupabaseHealthCard } from './SupabaseHealthCard';
 import { PunishmentQueueCard } from './PunishmentQueueCard';
 import { ArousalLogCard } from './ArousalLogCard';
@@ -345,6 +348,9 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           <CollapsibleGroup id="progress" label="Progress & Tracking" tone="#6ee7b7" hint="phase · streaks · body">
             <EvidenceVaultCard />
             <GinaArcCard />
+            <GinaCampaignPanel />
+            <ObservationLogButton />
+            <MommyDraftsPanel />
             <LadderAdaptivePanel />
             <LadderProgressionPanel />
             <MilestonesCard />
