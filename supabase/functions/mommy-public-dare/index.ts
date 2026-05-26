@@ -86,13 +86,14 @@ Deno.serve(async (req: Request) => {
 
   // ─── Gate 2: feature opt-in (the privacy floor) ─────────────────────────
   const { data: settingsRow } = await supabase.from('public_dare_settings')
-    .select('public_dare_enabled, cadence, min_intensity, allowed_kinds')
+    .select('public_dare_enabled, cadence, min_intensity, allowed_kinds, cruising_dares_enabled')
     .eq('user_id', userId).maybeSingle()
   const settings = (settingsRow as {
     public_dare_enabled?: boolean
     cadence?: 'occasional' | 'weekly' | 'off'
     min_intensity?: IntensityTier
     allowed_kinds?: string[] | null
+    cruising_dares_enabled?: boolean
   } | null) ?? null
 
   if (!force && (!settings || !settings.public_dare_enabled || settings.cadence === 'off')) {
@@ -186,7 +187,11 @@ Deno.serve(async (req: Request) => {
   if (catalogErr || !rawCatalog) {
     return jsonOk({ ok: false, error: 'catalog_read_failed', detail: catalogErr?.message ?? null }, 500)
   }
+  // Cruising tier is its own opt-in (the hookup-bridge dares). Filter it out
+  // unless cruising_dares_enabled — discreet sissification dares are gated by
+  // public_dare_enabled alone; cruising requires the second switch.
   const catalog = (rawCatalog as DareTemplate[])
+    .filter(t => t.kind !== 'cruising' || settings?.cruising_dares_enabled === true)
 
   const inCooldown = buildCooldownSet(
     catalog,
