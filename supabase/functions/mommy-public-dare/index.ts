@@ -45,6 +45,7 @@ import {
   type Phase,
   type SelectionContext,
 } from './selector.ts'
+import { generateFreshDare } from './dare-author.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -183,6 +184,9 @@ Deno.serve(async (req: Request) => {
   const { data: rawCatalog, error: catalogErr } = await supabase.from('public_dare_templates')
     .select('id, kind, description, phase_min, phase_max, intensity_tier, requires_location_context, verification_kind, affect_bias, cooldown_days, active')
     .eq('active', true)
+    // Generated dares are user-scoped: shared seeds (generated=false) plus this
+    // user's own LLM-authored dares. Never serve another user's generated dare.
+    .or(`generated.is.false,generated_for_user.eq.${userId}`)
     .limit(500)
   if (catalogErr || !rawCatalog) {
     return jsonOk({ ok: false, error: 'catalog_read_failed', detail: catalogErr?.message ?? null }, 500)
@@ -224,7 +228,56 @@ Deno.serve(async (req: Request) => {
     locationContextAvailable,
   }
 
-  const pick = pickDareTemplate(catalog, ctx)
+  // ── Fresh-vs-stored (mig 585) ───────────────────────────────────────────
+  // Roll fresh_dare_ratio: have Mommy author a fresh, fully-context-grounded
+  // dare, or serve a vetted stored template. Fresh ALWAYS falls back to stored
+  // (LLM unavailable / caricature-drift rejected) so dares never stop.
+  const ALL_KINDS: DareKind[] = ['wardrobe', 'mantra', 'posture', 'position', 'micro_ritual', 'errand_specific', 'cruising']
+  const eligibleKinds = (allowedKinds && allowedKinds.length > 0 ? allowedKinds : ALL_KINDS)
+    .filter((k) => k !== 'cruising' || settings?.cruising_dares_enabled === true)
+  const freshRatio = typeof (settings as { fresh_dare_ratio?: number } | null)?.fresh_dare_ratio === 'number'
+    ? (settings as { fresh_dare_ratio?: number }).fresh_dare_ratio!
+    : 0.5
+
+  type Picked = {
+    template: { id: string; kind: string; description: string; intensity_tier: string; verification_kind: string; requires_location_context: boolean }
+    reason: string
+  }
+  let pick: Picked | null = null
+
+  if (!force && eligibleKinds.length > 0 && Math.random() < freshRatio) {
+    const kind = eligibleKinds[Math.floor(Math.random() * eligibleKinds.length)]
+    const fresh = await generateFreshDare(supabase, userId, {
+      kind, phase, userIntensity, minIntensity, affect, locationContextAvailable,
+    })
+    if (fresh) {
+      // Persist as a user-scoped generated template so it's reusable + cooldown-
+      // tracked; the catalog grows personalized over time.
+      const { data: tpl } = await supabase.from('public_dare_templates').insert({
+        kind: fresh.kind,
+        description: fresh.description,
+        phase_min: phase,
+        phase_max: 7,
+        intensity_tier: fresh.intensity_tier,
+        requires_location_context: fresh.requires_location_context,
+        verification_kind: fresh.verification_kind,
+        affect_bias: fresh.affect_bias,
+        cooldown_days: 21,
+        active: true,
+        generated: true,
+        generated_for_user: userId,
+        created_by: 'llm',
+        generation_context: fresh.generation_context,
+      }).select('id, kind, description, intensity_tier, verification_kind, requires_location_context').single()
+      if (tpl) pick = { template: tpl as Picked['template'], reason: 'fresh_generated' }
+    }
+  }
+
+  if (!pick) {
+    const stored = pickDareTemplate(catalog, ctx)
+    if (stored) pick = { template: stored.template, reason: stored.reason }
+  }
+
   if (!pick) {
     return jsonOk({
       ok: true,
