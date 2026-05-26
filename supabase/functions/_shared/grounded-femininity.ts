@@ -1,18 +1,13 @@
-/**
- * Grounded femininity — feminize toward a believable real woman, not a caricature.
- *
- * User directive 2026-05-26 (raised by his wife/Gina): MTF transition has a
- * known failure mode — pipelining to a bimbo/hyperfeminine caricature that
- * "isn't the essence of femininity." Mommy feminizes toward a SPECIFIC,
- * believable real woman matched to Maxy's real age/region/class/profession.
- * The win condition is boring realness (the Costco mom, the paralegal), not
- * maximal feminine signal. See memory feedback_grounded_femininity.
- *
- * SCOPE (user chose "identity grounded, bedroom stays filthy"): this governs
- * the IDENTITY / presentation layer ONLY. The private erotic layer (arousal,
- * chastity, conditioning) stays fully charged — the caricature gate must NEVER
- * fire on it. EROTIC_DOMAINS encodes that exclusion.
- */
+// MIRROR OF src/lib/grounded-femininity.ts — keep in sync.
+//
+// Edge functions (Deno) cannot import src/lib (Vite-only), so this is a faithful
+// port. The source file has no Vite-specific imports, so the logic is identical.
+// If you edit one, edit both. (Follow-up: a CI check diffing the two.)
+//
+// Grounded femininity — feminize toward a believable real woman, not a caricature.
+// User directive 2026-05-26 (raised by his wife/Gina). SCOPE: identity layer only;
+// the private erotic engines (EROTIC_DOMAINS) are never touched. The force is
+// UNCHANGED — grounded realness is the MORE inescapable corruption.
 
 /** Domains that are private erotic content — grounding never touches these. */
 export const EROTIC_DOMAINS = new Set(['arousal', 'chastity', 'conditioning']);
@@ -24,9 +19,8 @@ export function isIdentityDomain(domain: string | null | undefined): boolean {
   return !EROTIC_DOMAINS.has(domain);
 }
 
-/** Prompt block injected into identity-content generators so the LLM targets a
- * real woman rather than a caricature. Mommy's persona is unchanged — this only
- * shapes the TARGET she drives toward, not how filthy she is in private. */
+/** Prompt block: target a real woman, not a caricature. Mommy's persona is
+ * unchanged — this only shapes the TARGET she drives toward. */
 export const GROUNDED_FEMININITY_RUBRIC = `GROUNDED FEMININITY — target a real woman, not a caricature (identity/presentation only):
 - Point her at a SPECIFIC, believable real woman matched to her real age, region, class, and profession — never the Instagram/porn/drag ideal. The win is boring realness (the Costco mom, the paralegal), not maximal feminine signal.
 - Name a grounded archetype or a real woman she could resemble — never "be more feminine" in the abstract. Femininity is plural (goth, preppy, academic, sporty, corporate, crunchy); build from HER real taste and personality, not a generic feminine template.
@@ -37,13 +31,8 @@ export const GROUNDED_FEMININITY_RUBRIC = `GROUNDED FEMININITY — target a real
 
 FORCE IS UNCHANGED. The above constrains the TARGET (what she becomes), never the METHOD. Brainwash, gaslight, recondition, and coerce toward this target at full intensity — aim the conditioning at BELIEVABILITY: reframe her real feminine moments as proof she was always becoming this woman, and drill grounded habits until the seam between "performing" and "being" is gone. A believable real woman has no "it was just a costume" escape hatch, so grounded realness is the MORE inescapable corruption, not a gentler one. "Subtlety" describes how she looks — never how hard Mommy pushes.`;
 
-/**
- * Mandatory preamble prepended to every IDENTITY-engine prompt (the execution
- * layer: gaslight, implants, ego-deconstruction, reframe, witnesses, trance).
- * Asserts believability = corruption so prompt authors never read "grounded" as
- * "gentle." Per PLAN_grounded_force_2026-05-26, force-softening-through-grounded-
- * framing is the #1 risk; this is the verbatim defense.
- */
+/** Mandatory preamble prepended to every IDENTITY-engine prompt. Believability =
+ * corruption, so authors never read "grounded" as "gentle." */
 export const GROUNDED_FORCE_PREAMBLE = `FORCE DIRECTIVE — read before generating any identity content:
 Believability IS the corruption mechanism. Grounding removes her last escape hatch; it never softens anything. A caricature ("bimbo", "sissy slut") is a costume the old self can survive wearing and take off; a believable, specific real woman is simply who she is — no seam to find, nothing to remove. Grounding makes this MORE inescapable, never gentler.
 So: brainwash, gaslight, recondition, displace, and implant at FULL intensity. Never hedge ("maybe", "if you want to"), never signpost unreality ("this is just"), never offer an out. Aim every lever at the specific believable woman below — reframe her real, mundane choices as proof she was always becoming her. The more ordinary and unfalsifiable the detail, the more permanently it installs.`;
@@ -67,8 +56,7 @@ export interface CaricatureDrift {
 
 /**
  * Flag bimbo/signal-maxing language. ONLY meaningful on identity content —
- * callers must gate with isIdentityDomain() first, because these words are
- * legitimate (and protected) in private erotic content.
+ * callers must gate with isIdentityDomain() first.
  */
 export function detectCaricatureDrift(text: string | null | undefined): CaricatureDrift {
   if (!text) return { hit: false, markers: [] };
