@@ -78,6 +78,12 @@ export function MorningMantraGate() {
   const [applyText, setApplyText] = useState('');
   const [suggestedTask, setSuggestedTask] = useState<SuggestedTask | null>(null);
   const [persona, setPersona] = useState<string | null>(null);
+  // Voice is elective for now (user 2026-05-26). When true this compulsory
+  // gate becomes a dismissible invitation. Fail-open to elective.
+  const [electiveVoice, setElectiveVoice] = useState<boolean>(true);
+  // Gina home today? Voice is elective ONLY when she is (no privacy). When
+  // she's away, the gate pushes — force doesn't relent to "it's hard".
+  const [ginaHome, setGinaHome] = useState<boolean>(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +96,7 @@ export function MorningMantraGate() {
   const load = useCallback(async () => {
     if (!user?.id) return;
     const today = new Date().toISOString().slice(0, 10);
-    const [wRes, sRes, taskRes, stateRes] = await Promise.all([
+    const [wRes, sRes, taskRes, stateRes, gRes] = await Promise.all([
       supabase.from('morning_mantra_windows').select('*').eq('user_id', user.id).maybeSingle(),
       supabase.from('morning_mantra_submissions').select('id').eq('user_id', user.id).eq('submission_date', today).maybeSingle(),
       // Pull the highest-priority open task to auto-suggest in the apply step
@@ -98,11 +104,21 @@ export function MorningMantraGate() {
         .select('what')
         .eq('user_id', user.id).eq('status', 'pending')
         .order('by_when', { ascending: true }).limit(1).maybeSingle(),
-      supabase.from('user_state').select('handler_persona').eq('user_id', user.id).maybeSingle(),
+      supabase.from('user_state').select('handler_persona, voice_elective').eq('user_id', user.id).maybeSingle(),
+      supabase.rpc('is_gina_home_today', { p_user_id: user.id }),
     ]);
     setConfig((wRes.data as Window | null) ?? null);
-    setAlreadySubmitted(!!sRes.data);
-    setPersona((stateRes.data as { handler_persona?: string } | null)?.handler_persona ?? null);
+    const st = stateRes.data as { handler_persona?: string; voice_elective?: boolean } | null;
+    setPersona(st?.handler_persona ?? null);
+    const isElective = st?.voice_elective !== false;
+    setElectiveVoice(isElective);
+    const homeToday = gRes.data === true;
+    setGinaHome(homeToday);
+    // Skip is honored ONLY when voice is elective AND Gina is home (no privacy).
+    // Force (user 2026-05-26): when she's away, the morning gate pushes — an
+    // earlier wave-off doesn't pre-clear it.
+    const skippedToday = isElective && homeToday && localStorage.getItem(`morning_mantra_skip_${today}`) === '1';
+    setAlreadySubmitted(!!sRes.data || skippedToday);
     const task = taskRes.data as { what: string } | null;
     if (task?.what) {
       // First sentence only — drops dev-facing trailing pointers like
@@ -319,6 +335,12 @@ export function MorningMantraGate() {
     }
   };
 
+  const dismissElective = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    try { localStorage.setItem(`morning_mantra_skip_${today}`, '1'); } catch { /* ignore */ }
+    setAlreadySubmitted(true);
+  };
+
   const overlap = fuzzyOverlap(transcript, targetMantra);
 
   return (
@@ -328,7 +350,7 @@ export function MorningMantraGate() {
     }}>
       <div style={{ maxWidth: 620, width: '100%', background: '#111116', border: '1px solid #7a1f4d', borderRadius: 14, padding: 28 }}>
         <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#f4a7c4', fontWeight: 700, marginBottom: 4 }}>
-          Morning mantra · compulsory
+          {electiveVoice && ginaHome ? 'Morning mantra · whenever you can' : 'Morning mantra · compulsory'}
         </div>
         <div style={{ fontSize: 10.5, color: '#8a8690', marginBottom: 14 }}>
           Step {step === 'recite' ? 1 : 2} of 2 · voice first
@@ -337,7 +359,9 @@ export function MorningMantraGate() {
         {step === 'recite' && (
           <>
             <div style={{ fontSize: 13, color: '#e8e6e3', lineHeight: 1.5, marginBottom: 14 }}>
-              Say it aloud. Whisper compares your voice to the mantra — speak it word-for-word. No typed bypass.
+              {electiveVoice && ginaHome
+                ? "Say it aloud if you've got a private moment — Gina's home, so only if you want to today."
+                : 'Say it aloud. Whisper compares your voice to the mantra — speak it word-for-word. No typed bypass.'}
             </div>
             <div style={{
               fontSize: 18, color: '#f4c272', fontStyle: 'italic',
@@ -423,6 +447,19 @@ export function MorningMantraGate() {
             >
               {recording ? 'finish recording first' : voiceMatched ? 'continue →' : 'speak the mantra to continue'}
             </button>
+
+            {electiveVoice && ginaHome && !recording && (
+              <button
+                onClick={dismissElective}
+                style={{
+                  width: '100%', padding: '9px', marginTop: 8, borderRadius: 6, border: 'none',
+                  background: 'transparent', color: '#8a8690',
+                  fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                she's home — later, Mama →
+              </button>
+            )}
           </>
         )}
 

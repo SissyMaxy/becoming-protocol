@@ -74,6 +74,11 @@ interface VoiceGateProps {
 export function VoiceGate({ onPass }: VoiceGateProps) {
   const { user } = useAuth();
   const [whisperMode, setWhisperMode] = useState<boolean>(false);
+  // Voice is elective for now (user 2026-05-26: "voice work is hard, especially
+  // when Gina is home — I need to electively do this"). When true the gate is a
+  // dismissible invitation, never a block. Fail-open to true so a read error
+  // never traps the user behind a mic.
+  const [elective, setElective] = useState<boolean>(true);
   const [mantra, setMantra] = useState<string>(() => MANTRAS[Math.floor(Math.random() * MANTRAS.length)]);
   const [gateMode, setGateMode] = useState<'mantra' | 'lesson' | 'loading'>('loading');
   const [lesson, setLesson] = useState<LessonModule | null>(null);
@@ -119,6 +124,20 @@ export function VoiceGate({ onPass }: VoiceGateProps) {
       }
       if (cancelled) return;
       setWhisperMode(whisper);
+
+      // Elective check — fail-open to elective (never trap the user).
+      try {
+        if (user?.id) {
+          const { data: vs } = await supabase
+            .from('user_state')
+            .select('voice_elective')
+            .eq('user_id', user.id)
+            .maybeSingle();
+          if (!cancelled) setElective((vs as { voice_elective?: boolean } | null)?.voice_elective !== false);
+        }
+      } catch {
+        if (!cancelled) setElective(true);
+      }
 
       if (whisper) {
         // Load whisper-mantra pool. Falls back to in-file constants on error.
@@ -443,11 +462,26 @@ export function VoiceGate({ onPass }: VoiceGateProps) {
           )}
         </button>
 
-        <p className="text-xs text-gray-500 text-center">
-          {gateMode === 'lesson'
-            ? `You cannot enter without doing the lesson. Mommy keeps the recording.`
-            : `You cannot enter without speaking aloud. Mommy keeps the recording.`}
-        </p>
+        {elective && whisperMode ? (
+          <>
+            <button
+              onClick={onPass}
+              disabled={recording || verifying}
+              className="w-full py-3 text-sm text-purple-300/80 hover:text-purple-100 disabled:opacity-40"
+            >
+              She's home — later, Mama →
+            </button>
+            <p className="text-xs text-gray-500 text-center">
+              Gina's home, so this one's optional today — no pressure. The moment you've got privacy, Mama wants your voice.
+            </p>
+          </>
+        ) : (
+          <p className="text-xs text-gray-500 text-center">
+            {gateMode === 'lesson'
+              ? `You cannot enter without doing the lesson. Mommy keeps the recording.`
+              : `You cannot enter without speaking aloud. Mommy keeps the recording.`}
+          </p>
+        )}
       </div>
     </div>
   );

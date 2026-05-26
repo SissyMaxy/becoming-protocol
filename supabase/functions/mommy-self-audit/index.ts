@@ -209,15 +209,24 @@ async function extractBuilderTroubles(client: SupabaseClient): Promise<SignalBlo
 async function extractStaleWishes(client: SupabaseClient): Promise<SignalBlock> {
   const cutoff48h = new Date(Date.now() - 48 * 3600_000).toISOString()
   const cutoff14d = new Date(Date.now() - 14 * 86400_000).toISOString()
-  const stale = await safeQuery<{ id?: string; wish_title?: string; created_at?: string; auto_ship_eligible?: boolean; auto_ship_blockers?: string[] | null }>(client, () =>
+  const staleRaw = await safeQuery<{ id?: string; wish_title?: string; created_at?: string; auto_ship_eligible?: boolean; auto_ship_blockers?: string[] | null; wish_class?: string | null }>(client, () =>
     client.from('mommy_code_wishes')
-      .select('id, wish_title, created_at, auto_ship_eligible, auto_ship_blockers')
+      .select('id, wish_title, created_at, auto_ship_eligible, auto_ship_blockers, wish_class')
       .eq('status', 'queued')
       .lt('created_at', cutoff48h)
       .gt('created_at', cutoff14d) // ignore archaeological backlog
       .order('created_at', { ascending: true })
-      .limit(40)
+      .limit(200)
   )
+  // Stop self-feeding: the audit's OWN infra wishes (self_strengthening /
+  // redesign_question) are stuck-by-design — they need a human decision, not a
+  // classifier. Counting them as a "stale wishes" gap is what made the audit
+  // detect its own backlog and queue "stale wish auto-triage" wishes,
+  // recursively. Only genuine CONTENT wishes stuck > 48h are a real classifier
+  // signal. (mig 581 dedups these at the DB; this stops them being re-detected.)
+  const stale = staleRaw
+    .filter(w => w.wish_class !== 'self_strengthening' && w.wish_class !== 'redesign_question')
+    .slice(0, 40)
   const needs_review = await safeQuery<{ id?: string }>(client, () =>
     client.from('mommy_code_wishes')
       .select('id')

@@ -15,6 +15,7 @@ import { getHiddenParam } from './hidden-operations';
 import { getSkillDomains, getTasksForLevel } from '../skills/skill-tree-engine';
 import type { SkillDomain } from '../skills/skill-tree-engine';
 import type { FeminizationDomain } from '../../types/task-bank';
+import { detectCaricatureDrift, isIdentityDomain } from '../grounded-femininity';
 
 // ============================================
 // TYPES
@@ -240,6 +241,15 @@ export async function generateDailyPrescription(
     // recency gap → boost." That's the bug.
     const skipAdj = skipRatePenalty(skipRates[task.domain]);
     score += skipAdj.delta;
+
+    // ── GROUNDED FEMININITY ────────────────────────────────────────
+    // User 2026-05-26 (+ wife/Gina): feminize toward a believable real
+    // woman, not a bimbo/media caricature. Deprioritize caricature-coded
+    // IDENTITY tasks. NEVER applied to erotic domains (arousal/chastity/
+    // conditioning) — the bedroom stays filthy. See grounded-femininity.ts.
+    if (isIdentityDomain(task.domain) && detectCaricatureDrift(task.instruction).hit) {
+      score -= 30;
+    }
 
     // Small random factor for variety
     score += Math.random() * 8;

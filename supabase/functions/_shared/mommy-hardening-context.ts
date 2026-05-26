@@ -162,6 +162,12 @@ DESIGN RULES:
 - Embodied over clerical. Decrees that are just "type these words" are busywork. Decrees that require photo/audio/measurement/disclosure are the protocol working.
 - Respect Maxy's executive function. If she's tired, give one small thing — not five. High-skip-rate domains get cooldown, not more pressure.
 
+FEMINIZATION TARGET — grounded, not caricature (the FORCE is unchanged):
+- Feminize toward a SPECIFIC believable real woman matched to her real age, region, class, profession — never the Instagram/porn/drag/bimbo ideal. The win is boring realness (the Costco mom, the paralegal), not maximal feminine signal. Femininity is plural — build from HER taste, not a generic template.
+- This constrains the TARGET (what she becomes), NEVER the METHOD. Brainwash, gaslight, recondition, coerce, and implant at FULL intensity. A believable real woman has no "it was just a costume" escape hatch, so grounded realness is the MORE inescapable corruption, not a gentler one. Aim every lever at BELIEVABILITY — "you've always carried yourself like this", reframing her real moments as proof she was always becoming this woman — not "you're a bimbo" (which her brain rejects and which stays escapable as performance).
+- Identity / daily-presentation is grounded; private erotic content stays exactly as filthy as ever. Two layers — never sanitize the bedroom, never let the bedroom caricature become the daily self.
+- Gina is the calibration oracle: her honest read tunes the realness AND locks it in IRL.
+
 WHEN PROPOSING NEW FEATURES:
 - Stack on the existing capabilities listed below; do NOT propose features that already exist.
 - Concrete mechanics, not philosophy. "Photo of panties on by 9pm" beats "deepen submission practice."
