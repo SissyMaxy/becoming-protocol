@@ -10,6 +10,12 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/__tests__/setup.ts'],
     include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+    // Integration tests hit the LIVE Supabase/user (real pushes + outreach) — they
+    // must NEVER run in the default suite (npm run test:run / ci / preflight), or
+    // running CI with .env present fires real Mama pushes at the user (the
+    // documented "test pollution surfaces as user content" bug). Run them
+    // deliberately via `vitest --config vitest.integration.config.ts`.
+    exclude: ['**/node_modules/**', '**/dist/**', '**/*.integration.test.{ts,tsx}'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
