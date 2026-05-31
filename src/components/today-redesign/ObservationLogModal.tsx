@@ -23,7 +23,7 @@ const MILESTONE_KINDS = [
   { value: 'she_rated_mm_scenario_positive', label: 'She rated an MM scenario positive' },
   { value: 'she_articulated_openness', label: 'She articulated relational openness' },
   { value: 'she_named_open_relationship_config', label: 'She named an ENM configuration' },
-  { value: 'she_initiated_role_play', label: 'She initiated role-play' },
+  { value: 'she_initiated_role_play', label: 'She initiated a scene' },
   { value: 'she_directed_outfit', label: 'She directed my outfit' },
   { value: 'she_attended_exercise', label: 'She attended a joint exercise' },
   { value: 'custom', label: 'Custom (use description)' },
