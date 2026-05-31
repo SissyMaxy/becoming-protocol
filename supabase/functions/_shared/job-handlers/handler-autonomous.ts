@@ -2158,9 +2158,10 @@ async function triggerOnArousalSpike(
     // to her horny state.
     try {
       const url = Deno.env.get('SUPABASE_URL') ?? ''
+      const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
       await fetch(`${url}/functions/v1/handler-evolve`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceKey}` },
         body: JSON.stringify({ user_id: userId, trigger: 'arousal_gated_growth' }),
       })
     } catch (_) { /* fire and forget */ }
@@ -3996,14 +3997,20 @@ async function enforceCommitments(
         ;(result.actions as string[]).push('hard_mode ON')
       }
 
-      // Chastity extension
+      // Chastity extension — push the unlock TARGET forward by N days. Never add
+      // to chastity_streak_days: that is a derived "time since lock" counter, and
+      // inflating it would lie about how long she's actually been locked (same
+      // class as the 2026-04-28 denial_day incident). Mirrors migration 417's
+      // COALESCE(chastity_scheduled_unlock_at, now()) + interval pattern.
       const chastMatch = consequence.match(/chastity\s*\+\s*(\d+)\s*d/)
       if (chastMatch) {
         const days = parseInt(chastMatch[1], 10)
-        const { data: us } = await supabase.from('user_state').select('chastity_streak_days').eq('user_id', userId).maybeSingle()
-        const newStreak = ((us?.chastity_streak_days as number | undefined) || 0) + days
+        const { data: us } = await supabase.from('user_state').select('chastity_scheduled_unlock_at').eq('user_id', userId).maybeSingle()
+        const existing = us?.chastity_scheduled_unlock_at ? new Date(us.chastity_scheduled_unlock_at as string).getTime() : 0
+        const base = Math.max(existing, Date.now())
+        const newUnlock = new Date(base + days * 86400000).toISOString()
         await supabase.from('user_state').update({
-          chastity_streak_days: newStreak,
+          chastity_scheduled_unlock_at: newUnlock,
           chastity_locked: true,
         }).eq('user_id', userId)
         ;(result.actions as string[]).push(`chastity +${days}d`)

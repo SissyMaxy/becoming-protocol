@@ -144,6 +144,16 @@ export async function getTasksByCategory(category: TaskCategory): Promise<Task[]
  * Convert a generated_tasks row into a Task compatible with the rules engine.
  */
 function generatedToTask(g: Record<string, unknown>): Task {
+  // requires_privacy may arrive as boolean true, string 'true'/'t'/'1', or the
+  // legacy text 'false' — normalize every truthy encoding so the Gina-home
+  // privacy gate can't be silently defeated by a type mismatch (audit #14:
+  // an intimate task surfacing while Gina is home is the exact circumvention
+  // this flag exists to prevent).
+  const requiresPrivacy =
+    g.requires_privacy === true ||
+    g.requires_privacy === 'true' ||
+    g.requires_privacy === 't' ||
+    g.requires_privacy === '1';
   return {
     id: g.id as string,
     category: (g.category as string) || 'practice',
@@ -159,7 +169,7 @@ function generatedToTask(g: Record<string, unknown>): Task {
     contentUnlock: null,
     affirmation: (g.affirmation as string) || '',
     requires: { minDenialDay: 0, minPhase: 0, equipment: [], hasItem: [] },
-    excludeIf: { ginaHome: g.requires_privacy === 'true', inSession: false },
+    excludeIf: { ginaHome: requiresPrivacy, inSession: false },
     ratchetTriggers: null,
     aiFlags: { isCore: false, canIntensify: false, canClone: false, trackResistance: false },
     createdAt: (g.created_at as string) || new Date().toISOString(),
@@ -168,7 +178,7 @@ function generatedToTask(g: Record<string, unknown>): Task {
     level: (g.level as number) || 6,
     triggerCondition: (g.trigger_condition as string) || null,
     timeWindow: (g.time_window as string) || 'any',
-    requiresPrivacy: g.requires_privacy === 'true',
+    requiresPrivacy,
     pivot: null,
   } as unknown as Task;
 }

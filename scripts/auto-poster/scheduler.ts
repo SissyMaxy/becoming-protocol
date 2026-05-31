@@ -73,13 +73,12 @@ async function loadState(): Promise<Record<string, unknown>> {
   const state: Record<string, unknown> = {};
   try {
     const { data } = await supabase
-      .from('handler_state')
-      .select('denial_day, hrt_day')
+      .from('user_state')
+      .select('denial_day')
       .eq('user_id', USER_ID)
-      .single();
+      .maybeSingle();
     if (data) {
       state.denialDay = data.denial_day;
-      state.hrtDay = data.hrt_day;
     }
   } catch {
     // State unavailable, proceed without it

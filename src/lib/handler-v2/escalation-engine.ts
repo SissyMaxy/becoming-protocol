@@ -166,7 +166,7 @@ Return JSON array. Each object:
       affirmation: task.affirmation || null,
       trigger_condition: task.trigger_condition || null,
       time_window: task.time_window || 'any',
-      requires_privacy: task.requires_privacy || 'false',
+      requires_privacy: String(task.requires_privacy) === 'true' ? 'true' : 'false',
       novel_element: task.novel_element || null,
       comfort_boundary_crossed: task.comfort_boundary_crossed || null,
       generated_by: 'handler_ai',

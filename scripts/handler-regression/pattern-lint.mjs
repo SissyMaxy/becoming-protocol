@@ -33,7 +33,13 @@ const PATTERNS = [
     name: 'additive-on-derived-counter',
     doc: 'feedback_derived_counters_never_additive.md',
     why: 'denial_day / chastity_streak_days are derived counters; mutating them additively desynchronises display from reality (incident 2026-04-28).',
-    regex: /(denial_day|chastity_streak_days|chastity_total_break_glass_count)\s*[:=]\s*[^=]*\+\s*(\d|\w)/,
+    regex: /\b(denial_day|chastity_streak_days|chastity_total_break_glass_count)\b\s*[:=]\s*[^=]*\+\s*(\d|\w)/,
+  },
+  {
+    name: 'derived-counter-via-newvar',
+    doc: 'feedback_derived_counters_never_additive.md',
+    why: 'Setting denial_day / chastity_streak_days to a newX variable is the two-line form of additive mutation the same-line + rule misses — the 2026-05-31 chastity incident did `const newStreak = (...) + days` then `chastity_streak_days: newStreak`, silently inflating a "time since lock" counter. Consequences must push the unlock target, never the counter.',
+    regex: /\b(denial_day|chastity_streak_days)\b\s*:\s*new[A-Z]\w*/,
   },
   {
     name: 'rpc-builder-in-update',

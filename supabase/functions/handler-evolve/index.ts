@@ -38,7 +38,7 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    const body = await req.json().catch(() => ({})) as { mode?: string }
+    const body = await req.json().catch(() => ({})) as { mode?: string; user_id?: string; trigger?: string }
     const mode = body.mode || 'evolve'
 
     // Multi-provider — require at least one of the three keys
@@ -54,11 +54,16 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    const { data: users } = await supabase
+    // When invoked for a specific user (e.g. arousal-gated growth from
+    // handler-autonomous), scope to that user instead of iterating every
+    // autonomous user (audit #6/#7).
+    let usersQuery = supabase
       .from('user_profiles')
       .select('user_id, handler_authorized_to, autonomous_mode')
       .eq('autonomous_mode', true)
       .limit(50)
+    if (body.user_id) usersQuery = usersQuery.eq('user_id', body.user_id)
+    const { data: users } = await usersQuery
 
     if (mode === 'digest') {
       const digestResults: Record<string, { queued: boolean; summary?: string; error?: string }> = {}
