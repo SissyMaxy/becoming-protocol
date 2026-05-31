@@ -954,9 +954,13 @@ export function useTodayData() {
     // error — the insert still lands with 0s rather than blocking.
     if ((protein === 0 || calories === 0) && args.foods && args.foods.trim().length >= 3) {
       try {
+        const { data: { session } } = await supabase.auth.getSession();
         const r = await fetch('/api/nutrition/estimate', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          },
           body: JSON.stringify({ foods: args.foods }),
         });
         if (r.ok) {

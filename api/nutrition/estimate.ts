@@ -11,14 +11,23 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
+import { createClient } from '@supabase/supabase-js';
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || '' });
+const supabase = createClient(process.env.SUPABASE_URL || '', process.env.SUPABASE_SERVICE_ROLE_KEY || '');
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
     return res.status(405).json({ error: 'Method not allowed' });
   }
+
+  // Auth: this endpoint spends Anthropic credits — require a valid user JWT so an
+  // anonymous caller can't burn the app's API budget (audit #4, denial-of-wallet).
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).json({ error: 'No auth token' });
+  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+  if (authError || !user) return res.status(401).json({ error: 'Unauthorized' });
 
   const foods = typeof req.body?.foods === 'string' ? req.body.foods.trim() : '';
   if (foods.length < 3) return res.status(400).json({ error: 'foods required (min 3 chars)' });

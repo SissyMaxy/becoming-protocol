@@ -1,4 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(process.env.SUPABASE_URL || '', process.env.SUPABASE_SERVICE_ROLE_KEY || '');
 
 // OpenAI Whisper transcription.
 // Takes raw audio (webm/ogg/wav/mp4/m4a) from the client's MediaRecorder
@@ -15,11 +18,26 @@ export async function handleTranscribe(req: VercelRequest, res: VercelResponse) 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'OPENAI_API_KEY not configured' });
 
+  // Auth: this endpoint spends OpenAI Whisper credits — require a valid user JWT
+  // so an anonymous caller can't burn the app's API budget (audit #4).
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).json({ error: 'No auth token' });
+  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+  if (authError || !user) return res.status(401).json({ error: 'Unauthorized' });
+
   try {
-    // Collect the raw request body as a Buffer
+    // Collect the raw request body as a Buffer, capped to Whisper's 25MB limit —
+    // an unbounded read is an OOM / denial-of-wallet vector.
+    const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
     const chunks: Buffer[] = [];
+    let total = 0;
     for await (const chunk of req) {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array));
+      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array);
+      total += buf.length;
+      if (total > MAX_AUDIO_BYTES) {
+        return res.status(413).json({ error: 'Audio too large (max 25MB)' });
+      }
+      chunks.push(buf);
     }
     const audioBuffer = Buffer.concat(chunks);
 
