@@ -65,6 +65,9 @@ jobs:
       - name: Voice gate (bans clinical/disclaimer phrases in user-facing copy; fails on NEW hits beyond baseline)
         run: npm run lint:voice
 
+      - name: Voice-cleanup parity (mommyVoiceCleanup copies must not drop a telemetry scrub)
+        run: node scripts/ci/voice-cleanup-parity.mjs
+
       - name: Migration lint (fails on NEW non-idempotent patterns)
         run: npm run lint:migrations
 

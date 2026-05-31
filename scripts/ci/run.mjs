@@ -52,6 +52,7 @@ const steps = [
   { name: 'tests',           cmd: 'npx vitest run' },
   { name: 'patterns',        cmd: 'node scripts/handler-regression/pattern-lint.mjs' },
   { name: 'voice-gate',      cmd: 'node scripts/ci/voice-gate.mjs' },
+  { name: 'voice-parity',    cmd: 'node scripts/ci/voice-cleanup-parity.mjs' },
   { name: 'migrations',      cmd: 'node scripts/handler-regression/migration-lint.mjs' },
   { name: 'enum-guard',      cmd: 'node scripts/ci/enum-constraint-guard.mjs' },
   { name: 'storage',         cmd: 'node scripts/handler-regression/storage-privacy-lint.mjs' },
