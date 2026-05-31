@@ -11,6 +11,7 @@
  */
 
 import { supabase } from '../supabase';
+import { incrementCounter } from '../db-increment';
 import { queueOutreachMessage } from './proactive-outreach';
 
 // ============================================
@@ -160,30 +161,7 @@ export async function assessConsequence(
 
     // Increment consequences_fired on today's cycle
     const today = new Date().toISOString().split('T')[0];
-    await supabase.rpc('increment_field', {
-      table_name: 'daily_cycles',
-      field_name: 'consequences_fired',
-      row_user_id: userId,
-      filter_field: 'cycle_date',
-      filter_value: today,
-    }).then(() => {}, () => {
-      // Fallback: manual increment if RPC doesn't exist
-      supabase
-        .from('daily_cycles')
-        .select('consequences_fired')
-        .eq('user_id', userId)
-        .eq('cycle_date', today)
-        .maybeSingle()
-        .then(({ data }) => {
-          if (data) {
-            supabase
-              .from('daily_cycles')
-              .update({ consequences_fired: (data.consequences_fired ?? 0) + 1 })
-              .eq('user_id', userId)
-              .eq('cycle_date', today);
-          }
-        });
-    });
+    await incrementCounter('daily_cycles', 'consequences_fired', { user_id: userId, cycle_date: today });
 
     return {
       currentLevel,

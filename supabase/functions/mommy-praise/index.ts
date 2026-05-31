@@ -192,10 +192,7 @@ Plain text only. Mama feels her; Mama doesn't recite numbers.`
       surface: 'mommy_praise',
       quoted_excerpt: implantQuote.narrative.slice(0, 300),
     })
-    await supabase.from('memory_implants').update({
-      times_referenced: 1,
-      last_referenced_at: new Date().toISOString(),
-    }).eq('id', implantQuote.id)
+    await supabase.rpc('increment_memory_implant_reference', { p_implant_id: implantQuote.id })
   }
 
   return new Response(JSON.stringify({ ok: true, fired: 1, value: top.value, threshold, affect, preview: message.slice(0, 80) }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })

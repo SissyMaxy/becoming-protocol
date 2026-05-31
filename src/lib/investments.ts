@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { incrementCounter } from './db-increment';
 import type {
   Investment,
   InvestmentInput,
@@ -220,30 +221,11 @@ export async function markInvestmentUsed(id: string): Promise<void> {
 
   const { error } = await supabase
     .from('investments')
-    .update({
-      times_used: supabase.rpc('increment_times_used', { row_id: id }),
-      last_used_at: new Date().toISOString(),
-    })
+    .update({ last_used_at: new Date().toISOString() })
     .eq('user_id', userId)
     .eq('id', id);
-
-  // If RPC doesn't exist, fall back to manual increment
-  if (error) {
-    const { data: current } = await supabase
-      .from('investments')
-      .select('times_used')
-      .eq('id', id)
-      .single();
-
-    await supabase
-      .from('investments')
-      .update({
-        times_used: (current?.times_used || 0) + 1,
-        last_used_at: new Date().toISOString(),
-      })
-      .eq('user_id', userId)
-      .eq('id', id);
-  }
+  if (error) console.error('[markInvestmentUsed] timestamp update failed:', error.message);
+  await incrementCounter('investments', 'times_used', { id });
 }
 
 // ============================================

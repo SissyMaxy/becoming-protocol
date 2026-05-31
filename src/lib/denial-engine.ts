@@ -3,6 +3,7 @@
 // The user's arousal belongs to the Handler. Release eligibility is not a user decision.
 
 import { supabase } from './supabase';
+import { incrementCounter } from './db-increment';
 import { getActiveGates } from './compliance-gates';
 import { getIgnoredSessionsThisCycle } from './handler-initiated-sessions';
 
@@ -356,11 +357,9 @@ export async function incrementDenialDay(userId: string): Promise<number> {
 
   await supabase
     .from('denial_state')
-    .update({
-      current_denial_day: newDay,
-      total_denial_days: supabase.rpc('increment_total_denial', { user_id_param: userId }),
-    })
+    .update({ current_denial_day: newDay })
     .eq('user_id', userId);
+  await incrementCounter('denial_state', 'total_denial_days', { user_id: userId });
 
   return newDay;
 }
@@ -369,13 +368,17 @@ export async function incrementDenialDay(userId: string): Promise<number> {
  * Extend denial minimum (punishment).
  */
 export async function extendDenialMinimum(userId: string, additionalDays: number): Promise<boolean> {
+  const { data: cycle } = await supabase
+    .from('denial_cycles')
+    .select('id, minimum_days')
+    .eq('user_id', userId)
+    .is('actual_release_day', null)
+    .maybeSingle();
+  if (!cycle) return false;
   const { error } = await supabase
     .from('denial_cycles')
-    .update({
-      minimum_days: supabase.rpc('add_to_minimum', { days: additionalDays }),
-    })
-    .eq('user_id', userId)
-    .is('actual_release_day', null);
+    .update({ minimum_days: (cycle.minimum_days ?? 0) + additionalDays })
+    .eq('id', cycle.id);
 
   if (error) {
     console.error('Error extending denial minimum:', error);

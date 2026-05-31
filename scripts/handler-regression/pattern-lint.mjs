@@ -36,6 +36,12 @@ const PATTERNS = [
     regex: /(denial_day|chastity_streak_days|chastity_total_break_glass_count)\s*[:=]\s*[^=]*\+\s*(\d|\w)/,
   },
   {
+    name: 'rpc-builder-in-update',
+    doc: 'audit #5 / db-increment.ts',
+    why: 'Embedding supabase.rpc(...) as a column value — update({ col: supabase.rpc("increment",{x:1}) }) — serializes a query-builder object instead of executing the RPC; the counter never increments (silent data loss in denial/play/usage/reference counters). Use the incrementCounter() helper or a dedicated atomic RPC called standalone.',
+    regex: /\w+:\s*supabase\.rpc\(/,
+  },
+  {
     name: 'phantom-grace-period',
     doc: 'feedback_derived_counters_never_additive.md',
     why: 'Checking "no event in last Nh while state X is true" must also verify state X has been true for ≥Nh, else the trigger fires at the moment X flips on.',

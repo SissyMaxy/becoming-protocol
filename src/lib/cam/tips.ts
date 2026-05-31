@@ -4,6 +4,7 @@
 // ============================================
 
 import { supabase } from '../supabase';
+import { incrementCounter } from '../db-increment';
 import type {
   CamTip,
   DbCamTip,
@@ -80,29 +81,11 @@ export async function processTip(
   }
 
   // Update session tip_count
-  await supabase.rpc('increment_field', {
-    table_name: 'cam_sessions',
-    field_name: 'tip_count',
-    row_id: sessionId,
-  }).then(undefined, () => {
-    // Fallback: read-update if RPC not available
-    return supabase
-      .from('cam_sessions')
-      .select('tip_count')
-      .eq('id', sessionId)
-      .single()
-      .then(({ data: session }) => {
-        if (session) {
-          return supabase
-            .from('cam_sessions')
-            .update({
-              tip_count: (session.tip_count || 0) + 1,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', sessionId);
-        }
-      });
-  });
+  await incrementCounter('cam_sessions', 'tip_count', { id: sessionId });
+  await supabase
+    .from('cam_sessions')
+    .update({ updated_at: new Date().toISOString() })
+    .eq('id', sessionId);
 
   return {
     tip: mapDbToCamTip(data as DbCamTip),

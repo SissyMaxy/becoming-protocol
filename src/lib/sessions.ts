@@ -1,6 +1,7 @@
 // Arousal session management
 
 import { supabase } from './supabase';
+import { incrementCounter } from './db-increment';
 import { addPoints, getOrCreateRewardState } from './rewards';
 import type {
   ArousalSession,
@@ -286,12 +287,12 @@ export async function completeSession(
       await supabase
         .from('user_anchors')
         .update({
-          times_used: supabase.rpc('increment', { x: 1 }),
           last_used_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
         .eq('id', anchorId)
         .eq('user_id', userId);
+      await incrementCounter('user_anchors', 'times_used', { id: anchorId });
     }
   }
 

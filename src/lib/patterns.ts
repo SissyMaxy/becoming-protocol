@@ -234,13 +234,7 @@ export async function logPatternCatch(
     return null;
   }
 
-  // Increment times_caught
-  await supabase
-    .from('masculine_patterns')
-    .update({ times_caught: supabase.rpc('increment_field') })
-    .eq('id', patternId);
-
-  // Actually, let's do this with a simple increment approach
+  // Increment times_caught (read-then-write; also bumps times_corrected when a correction landed).
   const pattern = await getPattern(patternId);
   if (pattern) {
     const updates: Record<string, number> = {

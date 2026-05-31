@@ -1,6 +1,7 @@
 // Content library management
 
 import { supabase } from './supabase';
+import { incrementCounter } from './db-increment';
 import type {
   RewardContent,
   DbRewardContent,
@@ -251,10 +252,7 @@ export async function recordContentPlay(contentId: string): Promise<void> {
   // Update play count and last played
   const { error } = await supabase
     .from('user_content_unlocks')
-    .update({
-      times_played: supabase.rpc('increment', { x: 1 }),
-      last_played_at: new Date().toISOString(),
-    })
+    .update({ last_played_at: new Date().toISOString() })
     .eq('user_id', userId)
     .eq('content_id', contentId);
 
@@ -262,6 +260,7 @@ export async function recordContentPlay(contentId: string): Promise<void> {
     console.error('Failed to record content play:', error);
     // Don't throw - this shouldn't block playback
   }
+  await incrementCounter('user_content_unlocks', 'times_played', { user_id: userId, content_id: contentId });
 }
 
 // ============================================

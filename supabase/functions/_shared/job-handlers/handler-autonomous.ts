@@ -4110,10 +4110,7 @@ async function enforceCommitments(
               surface: 'commitment_enforcement',
               quoted_excerpt: mommyImplantTail.slice(0, 300),
             }).then(() => {})
-            supabase.from('memory_implants').update({
-              times_referenced: 1,
-              last_referenced_at: new Date().toISOString(),
-            }).eq('id', usedImplantId).then(() => {})
+            supabase.rpc('increment_memory_implant_reference', { p_implant_id: usedImplantId }).then(() => {})
           }
         } else {
           message = quoteSuffix

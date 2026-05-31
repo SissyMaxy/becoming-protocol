@@ -298,10 +298,7 @@ Plain text only. No JSON, no markdown, no question marks at the end.${audioFrami
       surface: 'mommy_recall',
       quoted_excerpt: pick.quoteText.slice(0, 300),
     })
-    await supabase.from('memory_implants').update({
-      times_referenced: 1,
-      last_referenced_at: new Date().toISOString(),
-    }).eq('id', pick.quoteId)
+    await supabase.rpc('increment_memory_implant_reference', { p_implant_id: pick.quoteId })
   } else if (pick.quoteSource === 'confession_audio') {
     // Bump the confession's playback counter so the receipts UI shows
     // the user how often Mama has played it back at her.

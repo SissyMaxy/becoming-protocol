@@ -8,6 +8,7 @@
  */
 
 import { supabase } from './supabase';
+import { incrementCounter } from './db-increment';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -145,29 +146,11 @@ export async function reinforceMemory(memoryId: string): Promise<void> {
   await supabase
     .from('handler_memory')
     .update({
-      reinforcement_count: supabase.rpc('increment_field', { row_id: memoryId, field: 'reinforcement_count' }),
       last_reinforced_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
     .eq('id', memoryId);
-
-  // Fallback: direct increment
-  const { data } = await supabase
-    .from('handler_memory')
-    .select('reinforcement_count')
-    .eq('id', memoryId)
-    .single();
-
-  if (data) {
-    await supabase
-      .from('handler_memory')
-      .update({
-        reinforcement_count: data.reinforcement_count + 1,
-        last_reinforced_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', memoryId);
-  }
+  await incrementCounter('handler_memory', 'reinforcement_count', { id: memoryId });
 }
 
 // ── Memory Retrieval ─────────────────────────────────────────────────
