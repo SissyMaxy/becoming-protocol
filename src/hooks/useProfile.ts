@@ -1,7 +1,7 @@
 // useProfile.ts
 // Hook for managing user profile data across all 5 intake layers
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import type {
@@ -43,12 +43,30 @@ export function useProfile(): UseProfileReturn {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Guards against setState after unmount and against a stale response
+  // (e.g. user id changed mid-flight) applying an earlier load's result.
+  const mountedRef = useRef(true);
+  const loadTokenRef = useRef(0);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   // Load full profile
   const loadProfile = useCallback(async () => {
+    // Bump the token so any in-flight load becomes stale and its results are
+    // discarded; only the latest call is allowed to commit state.
+    const token = ++loadTokenRef.current;
+    const isCurrent = () => mountedRef.current && loadTokenRef.current === token;
+
     if (!user) {
-      setProfile(null);
-      setIntakeProgress(null);
-      setIsLoading(false);
+      if (isCurrent()) {
+        setProfile(null);
+        setIntakeProgress(null);
+        setIsLoading(false);
+      }
       return;
     }
 
@@ -71,6 +89,9 @@ export function useProfile(): UseProfileReturn {
         supabase.from('profile_depth').select('*').eq('user_id', user.id).maybeSingle(),
         supabase.from('intake_progress').select('*').eq('user_id', user.id).maybeSingle(),
       ]);
+
+      // A newer load (or unmount) superseded this one — drop the result.
+      if (!isCurrent()) return;
 
       const fullProfile: FullProfile = {};
 
@@ -97,9 +118,9 @@ export function useProfile(): UseProfileReturn {
       setProfile(fullProfile);
     } catch (err) {
       console.error('Failed to load profile:', err);
-      setError('Failed to load profile');
+      if (isCurrent()) setError('Failed to load profile');
     } finally {
-      setIsLoading(false);
+      if (isCurrent()) setIsLoading(false);
     }
   }, [user]);
 
