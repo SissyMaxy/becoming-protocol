@@ -112,18 +112,27 @@ async function handleCallbackReddit(req: VercelRequest, res: VercelResponse) {
   }
   if (!code || !state) return res.redirect(302, `${url}?reddit=error&reason=missing_params`);
 
+  // CSRF / credential-binding defence: the HttpOnly state cookie is the ONLY
+  // source of truth for user identity. Require the cookie AND a full match of
+  // both the nonce and the user_id between the cookie and the query-param
+  // state. NEVER fall back to deriving user_id from the query-param state — a
+  // crafted state would otherwise let an attacker bind a grant onto a victim.
   const stored = req.cookies?.reddit_oauth_state;
-  let userId: string | null = null;
-  if (stored) {
-    const parts = String(stored).split(':');
-    if (parts.length === 2 && parts[1] === String(state).split(':')[1]) {
-      userId = parts[0] || null;
-    }
+  if (!stored) return res.redirect(302, `${url}?reddit=error&reason=missing_state_cookie`);
+
+  const cookieParts = String(stored).split(':');
+  const queryParts = String(state).split(':');
+  if (
+    cookieParts.length !== 2 ||
+    queryParts.length !== 2 ||
+    !cookieParts[1] ||
+    cookieParts[1] !== queryParts[1] ||
+    cookieParts[0] !== queryParts[0]
+  ) {
+    return res.redirect(302, `${url}?reddit=error&reason=state_mismatch`);
   }
-  if (!userId) {
-    const sParts = String(state).split(':');
-    if (sParts.length === 2) userId = sParts[0];
-  }
+
+  const userId: string | null = cookieParts[0] || null;
   if (!userId) return res.redirect(302, `${url}?reddit=error&reason=no_user_id`);
 
   const { clientId, clientSecret, redirectUri, tokenKey } = redditConfig();

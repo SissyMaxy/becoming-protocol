@@ -28,7 +28,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { data: tokenRow } = await supabase
       .from('gina_access_tokens')
-      .select('id, user_id, capability, expires_at, revoked_at')
+      .select('id, user_id, capability, expires_at, revoked_at, use_count')
       .eq('token', token)
       .maybeSingle();
 
@@ -45,10 +45,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const userId = (tokenRow as { user_id: string }).user_id;
 
-    // Update last-used
+    // Update last-used — increment use_count rather than clobbering it to 1.
+    const priorUseCount = (tokenRow as { use_count: number | null }).use_count ?? 0;
     await supabase
       .from('gina_access_tokens')
-      .update({ last_used_at: new Date().toISOString(), use_count: 1 })
+      .update({ last_used_at: new Date().toISOString(), use_count: priorUseCount + 1 })
       .eq('id', (tokenRow as { id: string }).id);
 
     if (req.method === 'GET') {
@@ -119,7 +120,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             gina_decided_at: new Date().toISOString(),
             gina_note: body.note || null,
           })
-          .eq('id', body.outfit_id);
+          .eq('id', body.outfit_id)
+          .eq('user_id', userId);
         return res.status(200).json({ ok: true });
       }
 
@@ -161,7 +163,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             gina_decided_at: new Date().toISOString(),
             gina_note: body.note || null,
           })
-          .eq('id', body.window_id);
+          .eq('id', body.window_id)
+          .eq('user_id', userId);
 
         // Release current lock
         const { data: session } = await supabase
@@ -203,7 +206,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             gina_decided_at: new Date().toISOString(),
             gina_note: body.note || null,
           })
-          .eq('id', body.window_id);
+          .eq('id', body.window_id)
+          .eq('user_id', userId);
         return res.status(200).json({ ok: true });
       }
 
