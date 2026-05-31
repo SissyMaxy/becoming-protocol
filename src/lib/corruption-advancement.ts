@@ -557,23 +557,43 @@ export async function dailyCorruptionMaintenance(
 ): Promise<MaintenanceResult> {
   const today = new Date().toISOString().split('T')[0];
 
-  // Idempotency check
-  const { data: existing } = await supabase
+  // Idempotency: atomically CLAIM the day slot before doing any work.
+  // Insert a placeholder row keyed on (user_id, date). The UNIQUE(user_id, date)
+  // constraint + ignoreDuplicates means only ONE caller can win the slot per day;
+  // concurrent/repeat runs get back zero inserted rows and bail out without
+  // double-advancing. The row is filled in with real results at the end (step 7).
+  const { data: claimed, error: claimError } = await supabase
     .from('corruption_maintenance_log')
-    .select('id, checks_run, advancements, cascades, resumptions, notes')
-    .eq('user_id', userId)
-    .eq('date', today)
-    .single();
+    .upsert(
+      { user_id: userId, date: today },
+      { onConflict: 'user_id,date', ignoreDuplicates: true },
+    )
+    .select('id');
 
-  if (existing) {
+  if (claimError) {
+    console.error('[Corruption] Day-slot claim failed:', claimError);
+  }
+
+  // No row returned => the slot was already claimed today. Return the
+  // previously-recorded result instead of advancing again.
+  if (!claimError && (!claimed || claimed.length === 0)) {
+    const { data: existing } = await supabase
+      .from('corruption_maintenance_log')
+      .select('checks_run, advancements, cascades, resumptions, notes')
+      .eq('user_id', userId)
+      .eq('date', today)
+      .single();
+
     return {
       date: today,
-      advancements: (existing.advancements as MaintenanceResult['advancements']) || [],
-      cascades: (existing.cascades as CorruptionDomain[]) || [],
-      resumptions: (existing.resumptions as CorruptionDomain[]) || [],
-      notes: existing.notes ? [existing.notes] : ['Already ran today'],
+      advancements: (existing?.advancements as MaintenanceResult['advancements']) || [],
+      cascades: (existing?.cascades as CorruptionDomain[]) || [],
+      resumptions: (existing?.resumptions as CorruptionDomain[]) || [],
+      notes: existing?.notes ? [existing.notes] : ['Already ran today'],
     };
   }
+
+  const claimedId = claimed?.[0]?.id;
 
   const notes: string[] = [];
 
@@ -633,7 +653,7 @@ export async function dailyCorruptionMaintenance(
     executed: true,
   }).then(() => {}, () => {}); // fire-and-forget
 
-  // 7. Write maintenance log for idempotency
+  // 7. Fill in the maintenance log row we claimed at the top with real results.
   const result: MaintenanceResult = {
     date: today,
     advancements,
@@ -642,9 +662,7 @@ export async function dailyCorruptionMaintenance(
     notes,
   };
 
-  await supabase.from('corruption_maintenance_log').insert({
-    user_id: userId,
-    date: today,
+  const logPayload = {
     checks_run: checks.map(c => ({
       domain: c.domain,
       level: c.currentLevel,
@@ -655,7 +673,25 @@ export async function dailyCorruptionMaintenance(
     cascades,
     resumptions,
     notes: notes.join('; '),
-  }).then(() => {}, () => {}); // fire-and-forget
+  };
+
+  if (claimedId) {
+    await supabase
+      .from('corruption_maintenance_log')
+      .update(logPayload)
+      .eq('id', claimedId)
+      .then(() => {}, () => {}); // fire-and-forget
+  } else {
+    // Claim row id unknown (e.g. claim insert errored) — fall back to an
+    // upsert so we never write a duplicate (user_id, date) row.
+    await supabase
+      .from('corruption_maintenance_log')
+      .upsert(
+        { user_id: userId, date: today, ...logPayload },
+        { onConflict: 'user_id,date' },
+      )
+      .then(() => {}, () => {}); // fire-and-forget
+  }
 
   return result;
 }
