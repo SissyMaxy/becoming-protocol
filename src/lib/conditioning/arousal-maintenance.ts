@@ -373,6 +373,9 @@ export async function fireArousalPulse(userId: string, pulseId: string): Promise
         duration_seconds: (meta.duration_seconds as number) ?? 5,
         pattern: 'pulse',
         paired_message: null,
+        // Canonical lifecycle status so the device-schedule fire engines
+        // pick this row up; legacy fired BOOLEAN kept in sync.
+        status: 'pending',
         fired: false,
       });
       break;

@@ -152,7 +152,7 @@ async function generateDailySchedule(
     pattern: 'pulse',
     trigger_source: 'cron',
     denial_day: denialDay,
-    status: 'scheduled',
+    status: 'pending',
   })
 
   // 2. Ambient conditioning — 3-5 variable-ratio pulses throughout the day
@@ -178,7 +178,7 @@ async function generateDailySchedule(
       pattern: ['pulse', 'wave', 'fireworks'][Math.floor(Math.random() * 3)],
       trigger_source: 'cron',
       denial_day: denialDay,
-      status: 'scheduled',
+      status: 'pending',
     })
   }
 
@@ -194,7 +194,7 @@ async function generateDailySchedule(
       pattern: 'wave',
       trigger_source: 'cron',
       denial_day: denialDay,
-      status: 'scheduled',
+      status: 'pending',
     })
   }
 
@@ -224,7 +224,7 @@ async function generateDailySchedule(
       pattern_data: { note: 'vulnerability_window', resistance_risk: pred.resistance_risk },
       trigger_source: 'prediction',
       denial_day: denialDay,
-      status: 'scheduled',
+      status: 'pending',
     })
   }
 
@@ -253,7 +253,7 @@ async function generateDailySchedule(
       trigger_source: 'calendar',
       trigger_id: session.id,
       denial_day: denialDay,
-      status: 'scheduled',
+      status: 'pending',
     })
   }
 
@@ -272,11 +272,14 @@ async function executeDueSchedules(
 ): Promise<{ executed: number; failed: number }> {
   const now = new Date().toISOString()
 
-  // Get all due schedules
+  // Get all due schedules. Canonical lifecycle status is 'pending' — shared
+  // with conditioning-engine's process_device_schedule cron, the
+  // autonomous_planner writer, and the Today/calendar display readers. Rows
+  // move pending → executing → executed / expired / failed.
   const { data: due } = await supabase
     .from('device_schedule')
     .select('*')
-    .eq('status', 'scheduled')
+    .eq('status', 'pending')
     .lte('scheduled_at', now)
     .order('scheduled_at', { ascending: true })
     .limit(20)
@@ -291,7 +294,7 @@ async function executeDueSchedules(
     if (schedule.expires_at && new Date(schedule.expires_at) < new Date()) {
       await supabase
         .from('device_schedule')
-        .update({ status: 'skipped', result: { reason: 'expired' } })
+        .update({ status: 'expired', executed_at: now, result: { reason: 'expired' } })
         .eq('id', schedule.id)
       continue
     }
@@ -327,11 +330,14 @@ async function executeDueSchedules(
       },
     })
 
-    // Update status
+    // Update status. 'executed' is the canonical success terminal (shared with
+    // conditioning-engine + the Today card's done-state check); also stamp
+    // fired_at so display readers that key on fired_at agree.
     await supabase
       .from('device_schedule')
       .update({
-        status: result.success ? 'completed' : 'failed',
+        status: result.success ? 'executed' : 'failed',
+        fired_at: result.success ? now : null,
         result: { success: result.success, error: result.error },
       })
       .eq('id', schedule.id)
@@ -376,7 +382,7 @@ async function checkEnforcement(
       pattern: 'earthquake',
       trigger_source: 'commitment',
       trigger_id: c.id,
-      status: 'scheduled',
+      status: 'pending',
     })
 
     // Mark summons as fired
