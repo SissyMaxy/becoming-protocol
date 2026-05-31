@@ -41,7 +41,6 @@ import { WitnessManager, CaseFileView, SealedEnvelopesPage, QuitFrictionGate, Es
 import { ForceDashboard } from './components/force/ForceDashboard';
 import { ForceStatusStrip } from './components/force/ForceStatusStrip';
 import { TodayView as TodayRedesignView } from './components/today-redesign';
-import { ConditioningLockdown } from './components/today-redesign/ConditioningLockdown';
 import { CompulsoryConfessionGate } from './components/today-redesign/CompulsoryConfessionGate';
 import { HrtDailyGate } from './components/today-redesign/HrtDailyGate';
 import { GinaSessionRecorder } from './components/today-redesign/GinaSessionRecorder';
@@ -1253,7 +1252,6 @@ function AuthenticatedAppInner() {
         />
         <CompulsoryConfessionGate />
         <HrtDailyGate />
-        <ConditioningLockdown />
         <GinaSessionRecorder />
         <MorningMantraGate />
         <EveningConfessionGate />
@@ -1323,9 +1321,6 @@ function AuthenticatedAppInner() {
 
       {/* HRT daily gate — forces funnel advancement or written obstacle */}
       <HrtDailyGate />
-
-      {/* Conditioning lockdown — fullscreen enforcement during configured window */}
-      <ConditioningLockdown />
 
       {/* Morning mantra gate — compulsory typing before app release */}
       <MorningMantraGate />
