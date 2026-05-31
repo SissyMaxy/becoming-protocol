@@ -39,7 +39,7 @@ export default defineConfig({
           // Vendor chunks
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
           'vendor-supabase': ['@supabase/supabase-js'],
-          'vendor-ui': ['lucide-react', 'framer-motion'],
+          'vendor-ui': ['lucide-react'],
 
           // Feature chunks - lazy loaded
           'feature-handler': [

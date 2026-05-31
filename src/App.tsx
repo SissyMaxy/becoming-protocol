@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { PrivacyPage } from './components/PrivacyPage';
 import { HandlerChat } from './components/handler/HandlerChat';
 import { getPendingOutreach, evaluateAndQueueOutreach } from './lib/handler-v2/outreach-engine';
@@ -52,17 +52,17 @@ import { LivePhotoPingResponder } from './components/live-photo/LivePhotoPingRes
 import { MamaPhoneOverlay } from './components/push/MamaPhoneOverlay';
 import { MommyDossierQuiz } from './components/persona/MommyDossierQuiz';
 import { VerificationVault } from './components/verification/VerificationVault';
-import { LettersArchiveView } from './components/letters';
-import { LifeAsWomanView } from './components/life-as-woman';
+const LettersArchiveView = lazy(() => import('./components/letters').then((m) => ({ default: m.LettersArchiveView })));
+const LifeAsWomanView = lazy(() => import('./components/life-as-woman').then((m) => ({ default: m.LifeAsWomanView })));
 import { MommyDossierStatus } from './components/persona/MommyDossierStatus';
 import { GinaKeyHolderPage } from './components/gina/GinaKeyHolderPage';
 import { usePunishmentNotifications } from './hooks/usePunishmentNotifications';
 import { DailyReportCard } from './components/handler/DailyReportCard';
 import { SessionContainer } from './components/session';
 import type { SessionConfig } from './components/session';
-import { KinkQuizView } from './components/kink-quiz';
-import { WorkoutSessionPage } from './components/exercise';
-import { HerWorldPage } from './components/collections';
+const KinkQuizView = lazy(() => import('./components/kink-quiz').then((m) => ({ default: m.KinkQuizView })));
+const WorkoutSessionPage = lazy(() => import('./components/exercise').then((m) => ({ default: m.WorkoutSessionPage })));
+const HerWorldPage = lazy(() => import('./components/collections').then((m) => ({ default: m.HerWorldPage })));
 import { MorningBookend } from './components/bookends';
 import { EveningDebrief } from './components/EveningDebrief';
 import { useBookends } from './hooks/useBookends';
@@ -85,14 +85,14 @@ import { GinaEmergenceView, GinaPipelineView } from './components/gina';
 import { ServiceProgressionView, ServiceAnalyticsDashboard } from './components/service';
 import { ContentEscalationView, VaultSwipe } from './components/content';
 import { PermissionsManager } from './components/content/PermissionsManager';
-import { ContentCapture } from './components/content/ContentCapture';
-import { PostingQueue } from './components/content/PostingQueue';
-import { ContentCalendar } from './components/content/ContentCalendar';
-import { PlatformSettings } from './components/content/PlatformSettings';
-import { VaultView } from './components/content/VaultView';
-import { FanDashboard } from './components/content/FanDashboard';
-import { SubscriberPolls } from './components/content/SubscriberPolls';
-import { RevenueView } from './components/content/RevenueView';
+const ContentCapture = lazy(() => import('./components/content/ContentCapture').then((m) => ({ default: m.ContentCapture })));
+const PostingQueue = lazy(() => import('./components/content/PostingQueue').then((m) => ({ default: m.PostingQueue })));
+const ContentCalendar = lazy(() => import('./components/content/ContentCalendar').then((m) => ({ default: m.ContentCalendar })));
+const PlatformSettings = lazy(() => import('./components/content/PlatformSettings').then((m) => ({ default: m.PlatformSettings })));
+const VaultView = lazy(() => import('./components/content/VaultView').then((m) => ({ default: m.VaultView })));
+const FanDashboard = lazy(() => import('./components/content/FanDashboard').then((m) => ({ default: m.FanDashboard })));
+const SubscriberPolls = lazy(() => import('./components/content/SubscriberPolls').then((m) => ({ default: m.SubscriberPolls })));
+const RevenueView = lazy(() => import('./components/content/RevenueView').then((m) => ({ default: m.RevenueView })));
 import { ContentDashboard } from './components/admin/ContentDashboard';
 import { DomainEscalationView } from './components/domains';
 import { PatternCatchView } from './components/patterns';
@@ -115,7 +115,7 @@ import { ProtocolAnalytics } from './components/analytics/ProtocolAnalytics';
 import { HandlerAutonomousView } from './components/autonomous';
 import { CamDashboard } from './components/cam/CamDashboard';
 import { HypnoDashboard, HypnoLearningView } from './components/hypno';
-import { GoonSessionView } from './components/sessions/GoonSessionView';
+const GoonSessionView = lazy(() => import('./components/sessions/GoonSessionView').then((m) => ({ default: m.GoonSessionView })));
 import { SleepContentPlayer } from './components/sleep-content';
 import { ConditioningLibrary, ConditioningPlayer } from './components/conditioning';
 import { SocialMediaDashboard } from './components/social/SocialMediaDashboard';
@@ -1309,7 +1309,7 @@ function AuthenticatedAppInner() {
             >
               &larr; Back to Handler
             </button>
-            {renderMenuSubView()}
+            <Suspense fallback={<LoadingScreen />}>{renderMenuSubView()}</Suspense>
           </div>
         </div>
       )}
