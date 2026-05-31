@@ -504,16 +504,30 @@ export async function completeTask(
   const task = dbTaskToTask(dailyTask.task_bank);
   const pointsEarned = task.reward.points;
 
-  // Update daily task status
-  const { error: updateError } = await supabase
+  // Idempotency (audit #13): a retry / double-tap / slow-network resubmit must not
+  // double-award points, double-insert a completion, or re-fire escalation + the
+  // delayed reward. Short-circuit if already completed…
+  if (dailyTask.status === 'completed') {
+    return { success: true, pointsEarned: 0, affirmation: '' };
+  }
+
+  // …and claim the completion atomically: only the call that flips a not-completed
+  // row to 'completed' proceeds to award. A concurrent caller gets 0 rows and bails.
+  const { data: transitioned, error: updateError } = await supabase
     .from('daily_tasks')
     .update({
       status: 'completed',
       completed_at: new Date().toISOString(),
     })
-    .eq('id', dailyTaskId);
+    .eq('id', dailyTaskId)
+    .neq('status', 'completed')
+    .select('id');
 
   if (updateError) throw updateError;
+  if (!transitioned || transitioned.length === 0) {
+    // Lost the race — another call already completed it. Don't double-award.
+    return { success: true, pointsEarned: 0, affirmation: '' };
+  }
 
   // Log completion
   const { error: logError } = await supabase
