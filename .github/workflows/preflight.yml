@@ -68,6 +68,9 @@ jobs:
       - name: Migration lint (fails on NEW non-idempotent patterns)
         run: npm run lint:migrations
 
+      - name: Enum-constraint guard (fails if a generator writes a value the CHECK constraint rejects)
+        run: node scripts/ci/enum-constraint-guard.mjs
+
       - name: Storage privacy lint (no getPublicUrl on private buckets)
         run: npm run lint:storage
 

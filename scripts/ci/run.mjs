@@ -53,6 +53,7 @@ const steps = [
   { name: 'patterns',        cmd: 'node scripts/handler-regression/pattern-lint.mjs' },
   { name: 'voice-gate',      cmd: 'node scripts/ci/voice-gate.mjs' },
   { name: 'migrations',      cmd: 'node scripts/handler-regression/migration-lint.mjs' },
+  { name: 'enum-guard',      cmd: 'node scripts/ci/enum-constraint-guard.mjs' },
   { name: 'storage',         cmd: 'node scripts/handler-regression/storage-privacy-lint.mjs' },
   { name: 'centrality',      cmd: 'node scripts/handler-regression/centrality-audit.mjs' },
   { name: 'check-baselines', cmd: 'node scripts/ci/check-baselines.mjs' },
