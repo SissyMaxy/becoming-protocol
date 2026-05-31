@@ -54,6 +54,7 @@ import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
 import { execSync } from 'node:child_process'
 import { writeFile, mkdir } from 'node:fs/promises'
+import { readdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
@@ -64,13 +65,64 @@ if (!SUPABASE_URL || !SERVICE_KEY) {
 }
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } })
 
-const FORBIDDEN_PATH_PATTERNS = [
-  /^scripts\/handler-regression\//,
-  /^api\/auth\//,
-  /payment/i,
-  /stripe/i,
-  /\.github\/workflows\//,
+// Forbidden as SUBSTRINGS (not ^-anchored regexes): a ^-anchor was bypassable
+// with a leading "./" and never matched paths embedded in the affected_surfaces
+// JSON blob at all (audit #8). Substring matching on a normalized path closes both.
+const FORBIDDEN_PATH_SUBSTRINGS = [
+  'scripts/handler-regression/',
+  'api/auth/',
+  '.github/workflows/',
+  'payment',
+  'stripe',
 ]
+
+/** Normalize a repo-relative path: backslashes→/, strip ./, collapse .. segments. */
+function normalizePath(p: string): string {
+  const parts: string[] = []
+  for (const seg of p.replace(/\\/g, '/').split('/')) {
+    if (seg === '' || seg === '.') continue
+    if (seg === '..') { parts.pop(); continue }
+    parts.push(seg)
+  }
+  return parts.join('/')
+}
+
+function isForbiddenPath(p: string): boolean {
+  const n = normalizePath(p).toLowerCase()
+  return FORBIDDEN_PATH_SUBSTRINGS.some((s) => n.includes(s))
+}
+
+/** Highest numeric migration prefix + 1 (so auto-shipped migrations actually apply
+ *  instead of being silently skipped as already-applied — the hardcoded "294" bug). */
+function nextMigrationNumber(): number {
+  try {
+    let max = 0
+    for (const f of readdirSync('supabase/migrations')) {
+      const m = f.match(/^(\d+)/)
+      if (m) max = Math.max(max, parseInt(m[1], 10))
+    }
+    return max + 1
+  } catch {
+    return 587
+  }
+}
+
+/** Deterministic authority-boundary gate: scan the builder's OWN drafted .sql for
+ *  access-loosening. The drafter is instructed never to write these, but an LLM
+ *  instruction is not a gate — this is. Returns a reason string if it must be
+ *  routed to human review, else null. (Scoped to drafted files, not the 300+
+ *  legacy policies, so it stays precise.) */
+function draftRlsViolation(files: Array<{ path: string; content: string }>): string | null {
+  for (const f of files) {
+    if (!/\.sql$/i.test(f.path)) continue
+    const c = f.content
+    if (/\b(?:USING|WITH\s+CHECK)\s*\(\s*true\s*\)/i.test(c)) return `${f.path}: policy USING(true)/WITH CHECK(true)`
+    if (/\bGRANT\b[^;]*\bTO\b[^;]*\b(?:anon|public)\b/i.test(c)) return `${f.path}: GRANT ... TO anon/public`
+    if (/\bDISABLE\s+ROW\s+LEVEL\s+SECURITY\b/i.test(c)) return `${f.path}: DISABLE ROW LEVEL SECURITY`
+    if (/\bDROP\s+POLICY\b/i.test(c)) return `${f.path}: DROP POLICY`
+  }
+  return null
+}
 
 interface Wish {
   id: string
@@ -199,12 +251,14 @@ Output JSON ONLY:
 async function draftImplementation(wish: Wish): Promise<{ files: Array<{ path: string; content: string }>; commitSubject: string; notes: string } | null> {
   const client = new Anthropic()
 
+  const nextMig = nextMigrationNumber()
   const systemPrompt = `You are the autonomous builder for the Becoming Protocol — Mommy's Dommy Mommy stack. You are drafting code for a queued wish. The change will be committed to a feature branch and (if auto-ship rules pass) pushed.
 
 CONSTRAINTS:
 - Output MUST be valid JSON: { "files": [{ "path": "...", "content": "..." }], "commit_subject": "...", "notes": "..." }
 - Paths are repo-relative
-- Migrations: supabase/migrations/<NNN>_<slug>.sql where NNN is the next free integer above 294 in this branch
+- Migrations: supabase/migrations/<NNN>_<slug>.sql where NNN = ${nextMig} (the next free integer in this tree; if that exact file already exists, use the next number up). NEVER reuse an existing number — a duplicate-prefixed migration is silently skipped as already-applied.
+- RLS: NEVER write a policy that loosens access — no \`USING (true)\`, no \`WITH CHECK (true)\`, no \`GRANT ... TO anon\` or \`TO public\`. Default-deny; service-role for writes; owner SELECT only when Maxy should read. Access-loosening migrations are auto-rejected by the gate and require human review.
 - Edge functions: supabase/functions/<name>/index.ts using Deno-style imports already in use
 - Use the DO $$ ... EXCEPTION WHEN OTHERS THEN NULL; END $$ pattern for pg_cron / pg_net CREATE EXTENSION (Supabase rejects CREATE EXTENSION IF NOT EXISTS on prior-grant collisions)
 - Use defensive ALTER TABLE ADD COLUMN IF NOT EXISTS for tables that may exist on remote in older shapes
@@ -269,10 +323,7 @@ Output the JSON now.`
 }
 
 function pathIsAllowed(path: string): boolean {
-  for (const pattern of FORBIDDEN_PATH_PATTERNS) {
-    if (pattern.test(path)) return false
-  }
-  return true
+  return !isForbiddenPath(path)
 }
 
 async function applyFiles(files: Array<{ path: string; content: string }>, dryRun: boolean): Promise<string[]> {
@@ -384,15 +435,14 @@ async function processOneWish(mode: 'dry' | 'draft' | 'ship'): Promise<ShipResul
   console.log(`           tier=${wish.complexity_tier} priority=${wish.priority}`)
 
   const surfacesJson = JSON.stringify(wish.affected_surfaces ?? {}).toLowerCase()
-  for (const pattern of FORBIDDEN_PATH_PATTERNS) {
-    if (pattern.test(surfacesJson)) {
-      console.error(`[builder] REFUSED — affected_surfaces contains forbidden path pattern ${pattern}`)
-      await supabase.from('mommy_code_wishes').update({
-        auto_ship_eligible: false,
-        auto_ship_blockers: ['forbidden_path_in_surfaces'],
-      }).eq('id', wish.id)
-      return 'requires_review'
-    }
+  const hitSurface = FORBIDDEN_PATH_SUBSTRINGS.find((s) => surfacesJson.includes(s))
+  if (hitSurface) {
+    console.error(`[builder] REFUSED — affected_surfaces contains forbidden path "${hitSurface}"`)
+    await supabase.from('mommy_code_wishes').update({
+      auto_ship_eligible: false,
+      auto_ship_blockers: ['forbidden_path_in_surfaces'],
+    }).eq('id', wish.id)
+    return 'requires_review'
   }
 
   if (mode === 'ship' || mode === 'draft') {
@@ -442,6 +492,19 @@ async function processOneWish(mode: 'dry' | 'draft' | 'ship'): Promise<ShipResul
 
   console.log(`[builder] drafter produced ${draft.files.length} file(s):`)
   for (const f of draft.files) console.log(`           - ${f.path} (${f.content.length} bytes)`)
+
+  // Authority boundary (audit #8): never auto-ship access-loosening SQL.
+  const rlsViolation = draftRlsViolation(draft.files)
+  if (rlsViolation) {
+    console.error(`[builder] REFUSED auto-ship — access-loosening in draft (${rlsViolation}); routing to human review`)
+    await supabase.from('mommy_code_wishes').update({
+      status: 'queued',
+      auto_ship_eligible: false,
+      auto_ship_blockers: ['rls_loosening_needs_review'],
+    }).eq('id', wish.id)
+    await recordRun(wish.id, 'requires_review', { files: draft.files.map((f) => f.path), failureReason: `rls_loosening: ${rlsViolation}` })
+    return 'requires_review'
+  }
 
   if (mode === 'dry') {
     console.log(`[builder] dry mode — not writing or committing`)
