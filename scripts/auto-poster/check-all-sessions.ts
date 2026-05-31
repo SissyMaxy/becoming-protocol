@@ -4,9 +4,11 @@
  */
 
 import { chromium, firefox } from 'playwright';
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import { PLATFORMS } from './config';
 
-interface SessionCheck {
+export interface SessionCheck {
   platform: string;
   url: string;
   loggedIn: boolean;
@@ -139,6 +141,21 @@ async function checkPlatform(name: string, config: { profileDir: string; url: st
   return result;
 }
 
+/**
+ * Programmatic session check — returns per-platform login status without any
+ * logging or process.exit. The scheduler calls this so an expired login is
+ * SURFACED (high-severity attention) instead of every scraper silently
+ * returning zero against a logged-out profile (audit #9).
+ */
+export async function checkAllSessions(): Promise<SessionCheck[]> {
+  const platforms = Object.entries(PLATFORMS).filter(([, cfg]) => cfg.enabled);
+  const results: SessionCheck[] = [];
+  for (const [name, config] of platforms) {
+    results.push(await checkPlatform(name, config as { profileDir: string; url: string }));
+  }
+  return results;
+}
+
 async function main() {
   console.log('=== Session Validator ===\n');
 
@@ -180,7 +197,19 @@ async function main() {
   process.exit(0);
 }
 
-main().catch(err => {
-  console.error('Fatal:', err);
-  process.exit(1);
-});
+// Only run the CLI when executed directly (`npx tsx check-all-sessions.ts`).
+// When the scheduler imports checkAllSessions(), main() must NOT run — it would
+// call process.exit and kill the tick loop.
+const invokedDirectly = (() => {
+  try {
+    return !!process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+  } catch {
+    return false;
+  }
+})();
+if (invokedDirectly) {
+  main().catch(err => {
+    console.error('Fatal:', err);
+    process.exit(1);
+  });
+}
