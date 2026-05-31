@@ -26,6 +26,8 @@
     "mommy:drain": "tsx scripts/mommy/builder.ts --ship --drain",
     "mommy:classify": "tsx scripts/mommy/builder.ts --classify",
     "mommy:ideate:arousal": "tsx scripts/mommy/ideate-arousal.ts",
+    "mommy:ideate:transformative": "tsx scripts/mommy/ideate-transformative.ts",
+    "mommy:ideate:justify": "tsx scripts/mommy/add-ideation-justifications.ts",
     "mommy:critic:critical-phase": "tsx scripts/mommy/critic-critical-phase.ts",
     "mommy:cull-corny": "tsx scripts/mommy/cull-corny-outreach.ts",
     "ci:voice-craft": "node scripts/ci/voice-craft-check.mjs",

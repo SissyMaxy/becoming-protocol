@@ -119,10 +119,9 @@ export function MeasurementForm({ previous, onSaved, onClose }: MeasurementFormP
             .upload(path, data.file);
 
           if (!error) {
-            const { data: urlData } = supabase.storage
-              .from('photos')
-              .getPublicUrl(path);
-            await saveMeasurementPhoto(user.id, measurement.id, urlData.publicUrl, slot);
+            // photos is private (audit #15) — store the object PATH, not a
+            // public URL (which 401s). Readers sign on render.
+            await saveMeasurementPhoto(user.id, measurement.id, path, slot);
           }
         }
       }

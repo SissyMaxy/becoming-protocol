@@ -172,12 +172,9 @@ export async function submitToVault(
     throw new Error(`Failed to upload media: ${uploadError.message}`);
   }
 
-  // Get public URL (within RLS scope — only the user can access)
-  const { data: urlData } = supabase.storage
-    .from('vault-media')
-    .getPublicUrl(storagePath);
-
-  const mediaUrl = urlData.publicUrl;
+  // vault-media is private (audit #15) — store the object PATH, not a public
+  // URL (which 401s). Readers sign on render via SignedMedia / getSignedAssetUrl.
+  const mediaUrl = storagePath;
   const mediaType = mimeType.startsWith('image/') ? 'image'
     : mimeType.startsWith('video/') ? 'video'
     : 'audio';

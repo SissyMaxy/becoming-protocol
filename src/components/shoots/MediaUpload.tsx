@@ -13,6 +13,7 @@ import { useBambiMode } from '../../context/BambiModeContext';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { stripImageMetadata } from '../../lib/imageUtils';
+import { SignedMedia } from '../common/SignedMedia';
 
 interface MediaUploadProps {
   shootId: string;
@@ -88,17 +89,14 @@ export function MediaUpload({
 
       if (uploadError) throw uploadError;
 
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from('vault-media')
-        .getPublicUrl(storagePath);
-
+      // vault-media is private (audit #15) — keep the object PATH, not a public
+      // URL (which 401s). The preview signs on render; downstream readers do too.
       return {
         id: fileId,
         originalName: file.name,
         storagePath,
-        publicUrl: urlData.publicUrl,
-        thumbnailUrl: urlData.publicUrl, // Same URL for now — can add transforms later
+        publicUrl: storagePath,
+        thumbnailUrl: storagePath,
         status: 'done',
       };
     } catch (err) {
@@ -241,9 +239,10 @@ export function MediaUpload({
               {uploads.map((upload) => (
                 <div key={upload.id} className="relative aspect-square rounded-lg overflow-hidden">
                   {upload.status === 'done' && upload.publicUrl ? (
-                    <img
-                      src={upload.publicUrl}
-                      alt=""
+                    <SignedMedia
+                      bucket="vault-media"
+                      path={upload.publicUrl}
+                      kind="image"
                       className="w-full h-full object-cover"
                     />
                   ) : upload.status === 'uploading' ? (

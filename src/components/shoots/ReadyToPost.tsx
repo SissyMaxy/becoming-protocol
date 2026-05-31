@@ -10,6 +10,8 @@ import {
 } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
 import { DenialBadge } from '../ui/DenialBadge';
+import { SignedMedia } from '../common/SignedMedia';
+import { getSignedAssetUrl } from '../../lib/storage/signed-url';
 
 interface PlatformPost {
   id: string;
@@ -175,9 +177,13 @@ function PlatformPostCard({
   }, [post.caption, post.title]);
 
   const handleDownload = useCallback(async () => {
-    for (const url of post.mediaUrls) {
+    // mediaUrls are vault-media object PATHs (audit #15) — sign each before
+    // navigating, since a raw path / public URL would 401.
+    for (const path of post.mediaUrls) {
+      const signed = await getSignedAssetUrl('vault-media', path);
+      if (!signed) continue;
       const a = document.createElement('a');
-      a.href = url;
+      a.href = signed;
       a.download = '';
       a.target = '_blank';
       document.body.appendChild(a);
@@ -265,14 +271,15 @@ function PlatformPostCard({
         {post.caption}
       </div>
 
-      {/* Media preview */}
+      {/* Media preview — vault-media is private (audit #15); sign on render */}
       {post.mediaUrls.length > 0 && (
         <div className="px-3 mb-3 flex gap-1.5 overflow-x-auto">
           {post.mediaUrls.slice(0, 4).map((url, i) => (
-            <img
+            <SignedMedia
               key={i}
-              src={url}
-              alt=""
+              bucket="vault-media"
+              path={url}
+              kind="image"
               className="w-14 h-14 object-cover rounded-lg flex-shrink-0"
             />
           ))}

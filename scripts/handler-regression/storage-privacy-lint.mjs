@@ -23,9 +23,11 @@ const SCAN_ROOTS = [
   join(ROOT, 'src'),
 ];
 
-// Buckets flipped to private in migration 260. Any getPublicUrl against
-// these now returns a URL that 401s — the call is a latent bug.
-const PRIVATE_BUCKETS = ['verification-photos', 'evidence', 'audio'];
+// Private buckets: verification-photos / evidence / audio (flipped in
+// migration 260), vault-media (private since its creation in 048), and photos
+// (flipped in 589 as part of the signed-URL migration, audit #15). Any
+// getPublicUrl against these returns a URL that 401s — the call is a latent bug.
+const PRIVATE_BUCKETS = ['verification-photos', 'evidence', 'audio', 'vault-media', 'photos'];
 
 const RE = new RegExp(
   String.raw`\.from\(\s*['"\`](?:${PRIVATE_BUCKETS.join('|')})['"\`]\s*\)\s*\.getPublicUrl\b`

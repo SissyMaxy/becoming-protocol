@@ -11,6 +11,7 @@ import {
 import { useBambiMode } from '../../context/BambiModeContext';
 import { useAuth } from '../../context/AuthContext';
 import { VaultSwipe } from './VaultSwipe';
+import { SignedMedia } from '../common/SignedMedia';
 import { browseVaultItems, getPendingVaultItems } from '../../lib/content-pipeline';
 import type { VaultItem } from '../../types/content-pipeline';
 
@@ -194,7 +195,7 @@ export function VaultView({ onBack }: VaultViewProps) {
                   className={`relative aspect-square rounded-xl border overflow-hidden ${card}`}
                 >
                   {item.media_url ? (
-                    <img src={item.media_url} alt="" className="w-full h-full object-cover" />
+                    <SignedMedia bucket="vault-media" path={item.media_url} kind="image" className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <Icon className={`w-8 h-8 ${muted}`} />
@@ -226,7 +227,7 @@ export function VaultView({ onBack }: VaultViewProps) {
                   </div>
 
                   {selectedItem.media_url && (
-                    <img src={selectedItem.media_url} alt="" className="w-full rounded-lg max-h-48 object-cover" />
+                    <SignedMedia bucket="vault-media" path={selectedItem.media_url} kind="image" className="w-full rounded-lg max-h-48 object-cover" />
                   )}
 
                   <div className="grid grid-cols-2 gap-2 text-xs">

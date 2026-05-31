@@ -179,7 +179,7 @@ async function getStreakData(userId: string) {
     .is('ended_at', null)
     .maybeSingle();
 
-  const { data: historicalStreaks } = await supabase
+  const { data: recentStreaks } = await supabase
     .from('denial_streaks')
     .select('days_completed, ended_by')
     .eq('user_id', userId)
@@ -187,17 +187,29 @@ async function getStreakData(userId: string) {
     .order('ended_at', { ascending: false })
     .limit(5);
 
+  // longestStreak is all-time, not bounded to the recent-5 window — otherwise
+  // the personal record visibly shrinks as old big streaks roll out of view.
+  const { data: longestRow } = await supabase
+    .from('denial_streaks')
+    .select('days_completed')
+    .eq('user_id', userId)
+    .not('days_completed', 'is', null)
+    .order('days_completed', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   const currentDay = currentStreak
     ? Math.floor((Date.now() - new Date(currentStreak.started_at).getTime()) / (1000 * 60 * 60 * 24))
     : 0;
 
-  const avgStreak = historicalStreaks && historicalStreaks.length > 0
-    ? historicalStreaks.reduce((sum, s) => sum + (s.days_completed || 0), 0) / historicalStreaks.length
+  const avgStreak = recentStreaks && recentStreaks.length > 0
+    ? recentStreaks.reduce((sum, s) => sum + (s.days_completed || 0), 0) / recentStreaks.length
     : 0;
 
-  const longestStreak = historicalStreaks
-    ? Math.max(...historicalStreaks.map(s => s.days_completed || 0), 0)
-    : 0;
+  const longestStreak = Math.max(
+    longestRow?.days_completed ?? 0,
+    currentDay,
+  );
 
   return {
     currentDay,
@@ -582,8 +594,15 @@ function generateMotivationalMessage(
   return messages[Math.floor(Math.random() * messages.length)];
 }
 
-function generateWarnings(
-  streak: Awaited<ReturnType<typeof getStreakData>>,
+export interface StreakDataShape {
+  currentDay: number;
+  avgStreak: number;
+  longestStreak: number;
+  isActive: boolean;
+}
+
+export function generateWarnings(
+  streak: StreakDataShape,
   forecast: Awaited<ReturnType<typeof getQuickForecast>>
 ): MorningWarning[] {
   const warnings: MorningWarning[] = [];
@@ -605,12 +624,20 @@ function generateWarnings(
     });
   }
 
-  // Milestone warning
-  if (streak.currentDay === streak.longestStreak - 1) {
+  // Milestone warning — fires when today equals the record, so tomorrow
+  // crosses past it. (Previously fired one day early, which only tied.)
+  if (streak.longestStreak > 0 && streak.currentDay === streak.longestStreak) {
     warnings.push({
       type: 'milestone',
       title: 'Record Tomorrow',
       message: `One more day to beat your ${streak.longestStreak} day record.`,
+      severity: 'info',
+    });
+  } else if (streak.longestStreak > 0 && streak.currentDay > streak.longestStreak) {
+    warnings.push({
+      type: 'milestone',
+      title: 'New Record',
+      message: `${streak.currentDay} days — past your ${streak.longestStreak} day record.`,
       severity: 'info',
     });
   }
