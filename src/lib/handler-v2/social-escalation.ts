@@ -34,18 +34,3 @@ export async function getSocialContext(userId: string): Promise<string> {
   lines.push(`Irreversibility score: ${social.score.toFixed(1)}`);
   return lines.join('\n');
 }
-
-export async function logConnection(
-  userId: string,
-  name: string,
-  platform: string,
-  type: string,
-  strength: string = 'weak',
-  handlerInitiated: boolean = false,
-): Promise<void> {
-  await supabase.from('social_web').insert({
-    user_id: userId, connection_name: name, platform,
-    connection_type: type, thread_strength: strength,
-    handler_initiated: handlerInitiated,
-  });
-}

@@ -138,25 +138,6 @@ function mapTransactionRow(row: Record<string, unknown>): FundTransaction {
 }
 
 /**
- * Map a database row from revenue_events to our RevenueEvent interface.
- */
-export function mapRevenueRow(row: Record<string, unknown>): RevenueEvent {
-  return {
-    id: row.id as string,
-    userId: row.user_id as string,
-    platform: row.platform as string,
-    revenueType: row.revenue_type as string,
-    amount: Number(row.amount) || 0,
-    currency: (row.currency as string) || 'USD',
-    netAmount: row.net_amount != null ? Number(row.net_amount) : null,
-    subscriberId: (row.subscriber_id as string) || null,
-    subscriberName: (row.subscriber_name as string) || null,
-    contentId: (row.content_id as string) || null,
-    createdAt: row.created_at as string,
-  };
-}
-
-/**
  * Ensure the monthly penalty counter is reset if we've rolled into a new month.
  * Returns the (possibly reset) current monthly penalties total.
  */

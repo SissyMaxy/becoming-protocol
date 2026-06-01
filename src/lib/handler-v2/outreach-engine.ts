@@ -203,14 +203,3 @@ export async function getPendingOutreach(userId: string): Promise<{
     context: data.conversation_context || {},
   };
 }
-
-/**
- * Mark outreach as opened (user tapped it).
- */
-export async function markOutreachOpened(outreachId: string, conversationId: string): Promise<void> {
-  await supabase.from('handler_outreach').update({
-    status: 'opened',
-    opened_at: new Date().toISOString(),
-    conversation_id: conversationId,
-  }).eq('id', outreachId);
-}

@@ -37,29 +37,6 @@ export async function getHRTContext(userId: string): Promise<string> {
   return lines.join('\n');
 }
 
-export async function checkDoseReminders(userId: string): Promise<{ overdue: number }> {
-  const { data: pipeline } = await supabase
-    .from('hrt_pipeline').select('stage, medication')
-    .eq('user_id', userId).in('stage', ['started', 'maintaining', 'adjusting']).maybeSingle();
-
-  if (!pipeline) return { overdue: 0 };
-
-  const { data: pending } = await supabase
-    .from('hrt_doses').select('id, scheduled_at')
-    .eq('user_id', userId).is('taken_at', null).eq('missed', false)
-    .lte('scheduled_at', new Date().toISOString());
-
-  let overdue = 0;
-  for (const dose of pending || []) {
-    const minutesOverdue = (Date.now() - new Date(dose.scheduled_at).getTime()) / 60000;
-    if (minutesOverdue > 240) {
-      await supabase.from('hrt_doses').update({ missed: true }).eq('id', dose.id);
-      overdue++;
-    }
-  }
-  return { overdue };
-}
-
 export async function logDoseTaken(userId: string, medication: string): Promise<void> {
   const { data: pending } = await supabase
     .from('hrt_doses').select('id').eq('user_id', userId)

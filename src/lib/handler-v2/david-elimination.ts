@@ -7,24 +7,6 @@
 
 import { supabase } from '../supabase';
 
-export async function initializeMasculineContexts(userId: string): Promise<number> {
-  const contexts = [
-    { context_name: 'Work meetings', category: 'professional', current_presentation: 'fully_masculine', hours_per_week: 15, current_infiltrations: [], next_infiltration: 'Soften email signature to first name only' },
-    { context_name: 'Work email/chat', category: 'professional', current_presentation: 'fully_masculine', hours_per_week: 10, current_infiltrations: [], next_infiltration: 'Warmer sign-off style' },
-    { context_name: 'Grocery/errands', category: 'public', current_presentation: 'fully_masculine', hours_per_week: 3, current_infiltrations: [], next_infiltration: 'Androgynous clothing for errands' },
-    { context_name: 'Home with Gina', category: 'domestic', current_presentation: 'masculine_with_leakage', hours_per_week: 30, current_infiltrations: ['skincare visible', 'softer clothing', 'scent changed'], next_infiltration: 'Nail care visible' },
-    { context_name: 'Home alone', category: 'domestic', current_presentation: 'feminine_leaning', hours_per_week: 20, current_infiltrations: ['full_presentation', 'voice_practice', 'content_creation'], next_infiltration: 'Default to feminine immediately on privacy' },
-    { context_name: 'Gym/exercise', category: 'public', current_presentation: 'fully_masculine', hours_per_week: 4, current_infiltrations: [], next_infiltration: 'Feminine-cut workout wear' },
-  ];
-
-  let created = 0;
-  for (const ctx of contexts) {
-    const { error } = await supabase.from('masculine_contexts').insert({ user_id: userId, ...ctx });
-    if (!error) created++;
-  }
-  return created;
-}
-
 export async function calculateDavidFootprint(userId: string): Promise<{
   masculineHours: number;
   feminineHours: number;
