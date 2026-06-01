@@ -6,7 +6,11 @@
  * The bus doesn't care who listens.
  */
 
-import { supabase } from '../supabase';
+// NOTE: the Supabase client is INJECTED (constructor / setClient), not imported.
+// Importing ../supabase pulls in import.meta.env (Vite-only) and makes this module
+// — and anything that imports it — uncrashable to load in the Vercel serverless
+// runtime. Injection is what lets protocol-core run server-side (revival Stage 3).
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 // ============================================
 // EVENT TYPE DEFINITIONS
@@ -137,9 +141,11 @@ export class EventBus {
   private persistEvents = true;
   private eventQueue: ProtocolEvent[] = [];
   private isProcessing = false;
+  private db: SupabaseClient | null = null;
 
-  constructor(options?: { persistEvents?: boolean }) {
+  constructor(options?: { persistEvents?: boolean; db?: SupabaseClient }) {
     this.persistEvents = options?.persistEvents ?? true;
+    this.db = options?.db ?? null;
   }
 
   /**
@@ -147,6 +153,14 @@ export class EventBus {
    */
   setUserId(userId: string): void {
     this.userId = userId;
+  }
+
+  /**
+   * Inject the Supabase client (browser anon client on the frontend, service-role
+   * client server-side). Without it, persistence + queries are no-ops.
+   */
+  setClient(db: SupabaseClient): void {
+    this.db = db;
   }
 
   /**
@@ -293,9 +307,9 @@ export class EventBus {
    * Persist event to Supabase
    */
   private async persistEvent(event: ProtocolEvent): Promise<void> {
-    if (!this.userId) return;
+    if (!this.userId || !this.db) return;
 
-    const { error } = await supabase.from('event_log').insert({
+    const { error } = await this.db.from('event_log').insert({
       user_id: this.userId,
       event_type: event.type,
       payload: event,
@@ -317,9 +331,9 @@ export class EventBus {
     until?: Date;
     limit?: number;
   }): Promise<ProtocolEvent[]> {
-    if (!this.userId) return [];
+    if (!this.userId || !this.db) return [];
 
-    let query = supabase
+    let query = this.db
       .from('event_log')
       .select('payload')
       .eq('user_id', this.userId)
@@ -406,14 +420,16 @@ export class EventBus {
 
 let busInstance: EventBus | null = null;
 
-export function getEventBus(): EventBus {
+export function getEventBus(db?: SupabaseClient): EventBus {
   if (!busInstance) {
-    busInstance = new EventBus();
+    busInstance = new EventBus(db ? { db } : undefined);
+  } else if (db) {
+    busInstance.setClient(db);
   }
   return busInstance;
 }
 
-export function createEventBus(options?: { persistEvents?: boolean }): EventBus {
+export function createEventBus(options?: { persistEvents?: boolean; db?: SupabaseClient }): EventBus {
   return new EventBus(options);
 }
 

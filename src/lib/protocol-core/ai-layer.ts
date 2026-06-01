@@ -10,7 +10,9 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
-import { supabase } from '../supabase';
+// Supabase client is INJECTED, not imported — see event-bus.ts (revival Stage 3):
+// importing ../supabase pulls in import.meta.env and breaks server-side loading.
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 // ============================================
 // TYPES
@@ -64,10 +66,12 @@ export class PriorityBudget {
   private reserves: Record<AIPriority, number>;
   private lastResetDate: string;
   private userId: string;
+  private db: SupabaseClient | null;
 
-  constructor(dailyBudgetCents: number, userId: string) {
+  constructor(dailyBudgetCents: number, userId: string, db?: SupabaseClient) {
     this.daily = dailyBudgetCents;
     this.userId = userId;
+    this.db = db ?? null;
     this.lastResetDate = new Date().toISOString().split('T')[0];
 
     // Allocate budget by priority
@@ -171,7 +175,8 @@ export class PriorityBudget {
    * Save budget state to database
    */
   async persist(): Promise<void> {
-    await supabase.from('ai_budget').upsert({
+    if (!this.db) return;
+    await this.db.from('ai_budget').upsert({
       user_id: this.userId,
       date: this.lastResetDate,
       spent_critical: this.spent.critical,
@@ -188,9 +193,10 @@ export class PriorityBudget {
    * Load budget state from database
    */
   async load(): Promise<void> {
+    if (!this.db) return;
     const today = new Date().toISOString().split('T')[0];
 
-    const { data } = await supabase
+    const { data } = await this.db
       .from('ai_budget')
       .select('*')
       .eq('user_id', this.userId)
@@ -485,9 +491,10 @@ export function composeSystemPrompt(
 export async function createAILayer(
   userId: string,
   apiKey: string | null,
-  dailyBudgetCents: number = 150 // $1.50 default
+  dailyBudgetCents: number = 150, // $1.50 default
+  db?: SupabaseClient,
 ): Promise<AILayer> {
-  const budget = new PriorityBudget(dailyBudgetCents, userId);
+  const budget = new PriorityBudget(dailyBudgetCents, userId, db);
   await budget.load();
 
   return new AILayer(apiKey, budget);
