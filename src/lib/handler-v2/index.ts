@@ -73,51 +73,12 @@ export type { FailureModeEvent, FailureModeDetection } from './failure-modes';
 // Failure Modes (Extended - FM2, FM4, FM5, FM6, FM7)
 
 // Daily Plan Generation
-export {
-  generateDailyPlan,
-  getTodaysPlan,
-  getOrGenerateDailyPlan,
-} from './daily-plan';
-export type { DailyPlan } from './daily-plan';
 
 // Coercive Strategies
 
 // Gina Safety
-export {
-  getGinaState,
-  updateGinaVisibility,
-  isTaskGinaSafe,
-  filterTasksForGinaSafety,
-  makeNotificationGinaSafe,
-  getGinaSafeWeekendTasks,
-  getGinaSafeSharedActivities,
-  setGinaHomeState,
-  isGinaHome,
-} from './gina-safety';
-export type {
-  GinaVisibilityLevel,
-  GinaState,
-  TaskSafetyRating,
-  NotificationSafetyCheck,
-} from './gina-safety';
 
 // Crisis Kit
-export {
-  curateForCrisisKit,
-  userAddToCrisisKit,
-  getCrisisKit,
-  getCrisisKitByType,
-  deployCrisisKit,
-  rateCrisisKitItem,
-  getCrisisKitEffectiveness,
-  shouldCaptureForKit,
-  getCrisisKitPrompt,
-} from './crisis-kit';
-export type {
-  CrisisKitItemType,
-  CrisisKitItem as CrisisKitItemV2,
-  CrisisKitDeployment,
-} from './crisis-kit';
 
 // Pattern Analysis
 
@@ -243,16 +204,3 @@ export type {
 export { PLATFORM_CONFIGS } from './platform-manager';
 
 // Adaptation Engine
-export {
-  analyzePatterns,
-  predictTomorrow,
-  generateRecommendations,
-  applyRecommendation,
-  runWeeklyAdaptation,
-  getAdaptationSummary,
-} from './adaptation-engine';
-export type {
-  PatternAnalysis,
-  DayPrediction,
-  AdaptationRecommendation,
-} from './adaptation-engine';
