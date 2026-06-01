@@ -17,6 +17,7 @@ import { ModuleRegistry } from '../../../src/lib/protocol-core/module-interface'
 import { createAILayer, type AILayer } from '../../../src/lib/protocol-core/ai-layer';
 import { CoercionModule } from '../../../src/lib/protocol-core/modules/coercion-module';
 import { HandlerNotesModule } from '../../../src/lib/protocol-core/modules/handler-notes-module';
+import { HandlerDirectiveModule } from '../../../src/lib/protocol-core/modules/handler-directive-module';
 
 export interface ProtocolCoreServer {
   bus: EventBus;
@@ -115,6 +116,25 @@ export async function runHandlerNoteSave(
   } catch {
     // Non-critical — never break a live turn.
   }
+}
+
+/**
+ * Stage 5b — build the directive-loop module bound to the caller's Supabase
+ * client. The directive loop is RELOCATED into HandlerDirectiveModule (single
+ * copy); persistTurnSideEffects delegates to it through the SAME client it
+ * already holds (so characterization-test parity is exact, and there is no
+ * service-role re-client here). The api/ executors are injected at the call
+ * site. Events are not used (procedural module) → the pure bus is inert.
+ */
+export async function buildHandlerDirectiveModule(
+  db: SupabaseClient,
+  userId: string,
+): Promise<HandlerDirectiveModule> {
+  const bus = new EventBus({ db, persistEvents: false });
+  bus.setUserId(userId);
+  const mod = new HandlerDirectiveModule();
+  await mod.initialize(bus, db);
+  return mod;
 }
 
 /** Build the budgeted AI layer (service-role-backed) for a user. */
