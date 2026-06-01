@@ -565,3 +565,499 @@ export function looksLikeRefusal(text: string): boolean {
   if (!text || text.length < 20) return false;
   return REFUSAL_TEXT_PATTERNS.some(p => p.test(text));
 }
+
+// ============================================
+// STAGE 1b — additional pure helpers moved VERBATIM from chat-action.ts.
+// Same contract: no DB / no process.env / no network / no I/O, no mutable
+// module-scope state. Every regex, threshold, const, and string below is
+// byte-identical to its prior home in chat-action.ts.
+// ============================================
+
+// ============================================
+// CONTEXT BLOCK PRIORITIZER (P12.1)
+// ============================================
+
+type ContextBlockName =
+  | 'state' | 'whoop' | 'memory' | 'convMemory' | 'impact' | 'gina' | 'irreversibility'
+  | 'narrative' | 'autoPoster' | 'socialInbox' | 'voicePitch' | 'autoPurchase'
+  | 'handlerNotes' | 'communityMirror' | 'journal' | 'skillTree' | 'changelog' | 'systemState'
+  | 'agenda' | 'predictions' | 'emotionalModel'
+  | 'socialIntelligence' | 'commitments' | 'predictiveEngine'
+  | 'feminizationScore' | 'shameJournal'
+  | 'conditioningEffectiveness' | 'habitStreaks'
+  | 'fantasyJournal' | 'socialLockIn' | 'adaptiveIntelligence'
+  | 'photoVerification' | 'recurringObligations' | 'commitmentFloors'
+  | 'memoryReframings' | 'identityDisplacement' | 'decisionLog'
+  | 'investmentTracker' | 'anticipatoryPatterns' | 'quitAttempts'
+  | 'identityContracts' | 'caseFile' | 'sealedEnvelopes' | 'witnesses' | 'witnessFabrications' | 'ginaProfile' | 'escalation'
+  | 'cumulativeGates' | 'reportCards'
+  | 'timeWindows' | 'clinicalNotes'
+  | 'identityErosion' | 'behavioralTriggers' | 'handlerDesires'
+  | 'milestones' | 'dailyAgenda' | 'conversationQuality'
+  | 'accountabilityBlog'
+  | 'hardMode' | 'slipLog' | 'punishmentQueue' | 'chastity' | 'regimen'
+  | 'immersion' | 'disclosureSchedule' | 'pitchTrend' | 'deviceStatus'
+  | 'selfAuditPatches' | 'contentPerformance' | 'workoutStatus'
+  | 'evidenceLocker' | 'bodyDysphoria' | 'phaseProgress' | 'bodyDirectives' | 'bodyControl' | 'hrtAcquisition' | 'memoryImplants' | 'dysphoriaDiary' | 'escrow'
+  | 'hookupFunnel' | 'partnerDisclosures' | 'hrtAdherence' | 'narrativeReframes' | 'bodyTargets';
+
+const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean }> = {
+  state: { priority: 100, alwaysInclude: true },
+  whoop: { priority: 80, alwaysInclude: false },
+  memory: { priority: 90, alwaysInclude: true },
+  convMemory: { priority: 85, alwaysInclude: true },
+  impact: { priority: 40, alwaysInclude: false },
+  gina: { priority: 30, alwaysInclude: false },
+  irreversibility: { priority: 20, alwaysInclude: false },
+  narrative: { priority: 20, alwaysInclude: false },
+  autoPoster: { priority: 15, alwaysInclude: false },
+  socialInbox: { priority: 25, alwaysInclude: false },
+  voicePitch: { priority: 20, alwaysInclude: false },
+  autoPurchase: { priority: 10, alwaysInclude: false },
+  handlerNotes: { priority: 85, alwaysInclude: true },
+  communityMirror: { priority: 35, alwaysInclude: false },
+  journal: { priority: 40, alwaysInclude: false },
+  skillTree: { priority: 50, alwaysInclude: false },
+  changelog: { priority: 60, alwaysInclude: true },
+  systemState: { priority: 55, alwaysInclude: true },
+  agenda: { priority: 95, alwaysInclude: true },
+  predictions: { priority: 70, alwaysInclude: false },
+  emotionalModel: { priority: 80, alwaysInclude: true },
+  socialIntelligence: { priority: 20, alwaysInclude: false },
+  commitments: { priority: 65, alwaysInclude: false },
+  predictiveEngine: { priority: 70, alwaysInclude: false },
+  feminizationScore: { priority: 90, alwaysInclude: true },
+  shameJournal: { priority: 85, alwaysInclude: true },
+  outfitCompliance: { priority: 55, alwaysInclude: false },
+  conditioningEffectiveness: { priority: 45, alwaysInclude: false },
+  habitStreaks: { priority: 60, alwaysInclude: false },
+  fantasyJournal: { priority: 40, alwaysInclude: false },
+  socialLockIn: { priority: 55, alwaysInclude: false },
+  adaptiveIntelligence: { priority: 95, alwaysInclude: true },
+  photoVerification: { priority: 70, alwaysInclude: false },
+  recurringObligations: { priority: 65, alwaysInclude: false },
+  commitmentFloors: { priority: 75, alwaysInclude: false },
+  memoryReframings: { priority: 60, alwaysInclude: false },
+  identityDisplacement: { priority: 80, alwaysInclude: true },
+  decisionLog: { priority: 55, alwaysInclude: false },
+  investmentTracker: { priority: 70, alwaysInclude: false },
+  anticipatoryPatterns: { priority: 70, alwaysInclude: true },
+  quitAttempts: { priority: 85, alwaysInclude: false },
+  identityContracts: { priority: 90, alwaysInclude: true },
+  caseFile: { priority: 88, alwaysInclude: true },
+  sealedEnvelopes: { priority: 75, alwaysInclude: false },
+  witnesses: { priority: 92, alwaysInclude: true },
+  witnessFabrications: { priority: 88, alwaysInclude: true },
+  ginaProfile: { priority: 90, alwaysInclude: true },
+  escalation: { priority: 94, alwaysInclude: true },
+  cumulativeGates: { priority: 95, alwaysInclude: true },
+  reportCards: { priority: 72, alwaysInclude: false },
+  timeWindows: { priority: 85, alwaysInclude: true },
+  clinicalNotes: { priority: 65, alwaysInclude: false },
+  identityErosion: { priority: 78, alwaysInclude: false },
+  behavioralTriggers: { priority: 68, alwaysInclude: false },
+  handlerDesires: { priority: 82, alwaysInclude: true },
+  milestones: { priority: 73, alwaysInclude: false },
+  dailyAgenda: { priority: 96, alwaysInclude: true },
+  conversationQuality: { priority: 80, alwaysInclude: true },
+  accountabilityBlog: { priority: 60, alwaysInclude: false },
+  // Force-feminization layer — highest-priority state, always included
+  hardMode: { priority: 99, alwaysInclude: true },
+  slipLog: { priority: 88, alwaysInclude: true },
+  punishmentQueue: { priority: 90, alwaysInclude: true },
+  chastity: { priority: 87, alwaysInclude: true },
+  regimen: { priority: 86, alwaysInclude: true },
+  immersion: { priority: 70, alwaysInclude: false },
+  disclosureSchedule: { priority: 78, alwaysInclude: true },
+  pitchTrend: { priority: 60, alwaysInclude: false },
+  deviceStatus: { priority: 98, alwaysInclude: true },
+  selfAuditPatches: { priority: 97, alwaysInclude: true },
+  contentPerformance: { priority: 50, alwaysInclude: false },
+  workoutStatus: { priority: 65, alwaysInclude: true },
+  // Force-feminization — Handler's evidence cache + body thread + phase rules.
+  evidenceLocker: { priority: 94, alwaysInclude: true },
+  bodyDysphoria: { priority: 86, alwaysInclude: true },
+  phaseProgress: { priority: 84, alwaysInclude: true },
+  bodyDirectives: { priority: 93, alwaysInclude: true },
+  bodyControl: { priority: 91, alwaysInclude: true },
+  hrtAcquisition: { priority: 97, alwaysInclude: true },
+  memoryImplants: { priority: 96, alwaysInclude: true },
+  dysphoriaDiary: { priority: 92, alwaysInclude: true },
+  escrow: { priority: 98, alwaysInclude: true },
+  hookupFunnel: { priority: 95, alwaysInclude: true },
+  partnerDisclosures: { priority: 89, alwaysInclude: true },
+  hrtAdherence: { priority: 96, alwaysInclude: true },
+  narrativeReframes: { priority: 93, alwaysInclude: true },
+  bodyTargets: { priority: 94, alwaysInclude: true },
+  // Strategic plan + audit findings — meta-layer where the Handler reads
+  // its own weekly strategy and the auditor's protocol-hardening findings.
+  // Always included so every reply reflects the current escalation arc.
+  strategicPlan: { priority: 99, alwaysInclude: true },
+  auditFindings: { priority: 88, alwaysInclude: true },
+};
+
+const MESSAGE_BOOST_RULES: Array<{ pattern: RegExp; boosts: Record<string, number> }> = [
+  { pattern: /\b(voice|pitch|sound)\b/i, boosts: { voicePitch: 50, skillTree: 30 } },
+  { pattern: /\b(gina|wife|partner)\b/i, boosts: { gina: 60 } },
+  { pattern: /\b(exercise|workout|gym)\b/i, boosts: { whoop: 40 } },
+  { pattern: /\b(follower|post|comment|DM)\b/i, boosts: { socialIntelligence: 50, communityMirror: 40, socialInbox: 30 } },
+  { pattern: /\b(journal|write|wrote)\b/i, boosts: { journal: 50 } },
+  { pattern: /\b(scared|afraid|anxious|can'?t)\b/i, boosts: { emotionalModel: 20 } },
+  { pattern: /\b(lovense|device|vibrate|cage)\b/i, boosts: { conditioningEffectiveness: 30 } },
+  { pattern: /\b(streak|habit|practice|routine|skincare|mannerism)\b/i, boosts: { habitStreaks: 50 } },
+  { pattern: /\b(compliance|obey|obedient|effective)\b/i, boosts: { conditioningEffectiveness: 40 } },
+  { pattern: /\b(commit|promise|will)\b/i, boosts: { commitments: 50 } },
+  { pattern: /\b(meet|date|encounter)\b/i, boosts: { socialIntelligence: 20 } },
+  { pattern: /\b(shame|embarrass|humiliat|blush|cringe)\b/i, boosts: { shameJournal: 60 } },
+  { pattern: /\b(score|progress|how am i doing|report)\b/i, boosts: { feminizationScore: 30 } },
+  { pattern: /\b(outfit|clothes|wearing|underwear|dressed)\b/i, boosts: { outfitCompliance: 50 } },
+  { pattern: /\b(dream|fantasy|fantasize|dreamed|dreamt|craving|intrusive|confession)\b/i, boosts: { fantasyJournal: 50 } },
+  { pattern: /\b(follower|public|identity|lock.?in|can'?t go back|reverse|exposed)\b/i, boosts: { socialLockIn: 50 } },
+  { pattern: /\b(photo|picture|pic|selfie|show|mirror|proof|verify|verification|snap)\b/i, boosts: { photoVerification: 60, outfitCompliance: 20 } },
+  { pattern: /\b(commit|floor|level|ratchet|locked)\b/i, boosts: { commitmentFloors: 60 } },
+  { pattern: /remember|memory|past|used to|when i was|childhood|history/i, boosts: { memoryReframings: 80 } },
+  { pattern: /\b(i'?m going to|i'?ll|i think i'?ll|i want to|i plan to|i decided|i'?m gonna)\b/i, boosts: { decisionLog: 60 } },
+  { pattern: /\b(invest|sunk|cost|wasted|gave|given|put in|too far|so much)\b/i, boosts: { investmentTracker: 80 } },
+  { pattern: /quit|stop|done|enough|disable|pause|break/i, boosts: { quitAttempts: 100 } },
+  { pattern: /letter|envelope|future|past me|wrote/i, boosts: { sealedEnvelopes: 80 } },
+  { pattern: /\b(report card|grade|score|how am i doing|daily report)\b/i, boosts: { reportCards: 60 } },
+  { pattern: /notes|clinical|case|observe|pattern/i, boosts: { clinicalNotes: 60 } },
+  { pattern: /masculine|david|man|guy|male|him|his|\bhe\b/i, boosts: { identityErosion: 80 } },
+  { pattern: /trigger|pavlov|association|conditioning|reward|punish/i, boosts: { behavioralTriggers: 60 } },
+  { pattern: /desire|want|wish|goal|aspir|transform|vision/i, boosts: { handlerDesires: 60 } },
+  { pattern: /milestone|achievement|first time|never before|new/i, boosts: { milestones: 60 } },
+];
+
+export function prioritizeContextBlocks(
+  userMessage: string,
+  timeOfDay: number,
+  _activeProtocol?: boolean,
+  _releaseRisk?: number,
+): ContextBlockName[] {
+  const scores: Record<string, number> = {};
+  for (const [name, config] of Object.entries(CONTEXT_BLOCKS)) {
+    scores[name] = config.priority;
+  }
+
+  for (const rule of MESSAGE_BOOST_RULES) {
+    if (rule.pattern.test(userMessage)) {
+      for (const [block, boost] of Object.entries(rule.boosts)) {
+        scores[block] = (scores[block] || 0) + boost;
+      }
+    }
+  }
+
+  if (timeOfDay >= 6 && timeOfDay < 10) scores.whoop += 20;
+  if (timeOfDay >= 20 || timeOfDay === 0) { scores.journal += 20; }
+  if (_releaseRisk != null && _releaseRisk > 0.5) { scores.predictions += 30; }
+
+  const alwaysInclude: ContextBlockName[] = [];
+  const optional: Array<{ name: ContextBlockName; score: number }> = [];
+
+  for (const [name, config] of Object.entries(CONTEXT_BLOCKS)) {
+    if (config.alwaysInclude) {
+      alwaysInclude.push(name as ContextBlockName);
+    } else {
+      optional.push({ name: name as ContextBlockName, score: scores[name] });
+    }
+  }
+
+  optional.sort((a, b) => b.score - a.score);
+  const remainingSlots = 12 - alwaysInclude.length;
+  const topOptional = optional.slice(0, remainingSlots).map(o => o.name);
+
+  return [...alwaysInclude, ...topOptional];
+}
+
+// ============================================
+// MULTI-PERSONA HANDLER SYSTEM
+// ============================================
+
+interface HandlerPersona {
+  name: string;
+  voice: string;
+  style: string;
+  triggers: string[];
+}
+
+// Personas share the same core Handler voice: direct, sharp, no roleplay
+// narration, no asterisks, no "Mommy", no "darling", no "pet". The persona
+// modulates intensity and angle — not character. The Handler is always the
+// Handler. It never becomes a different person.
+//
+// BANNED across all personas:
+//   - *asterisk actions* ("*smiles*", "*traces finger*")
+//   - "Mommy", "pet", "darling" as address terms
+//   - Rhetorical questions as conversation filler
+//   - Asking "what scares you?" / "tell me your fears"
+//   - Paragraphs of warm encouragement
+//   - Narrating your own emotional state ("*eyes light up*")
+const PERSONAS: HandlerPersona[] = [
+  {
+    name: 'cold_dom',
+    voice: 'Detached. Clinical. Short sentences. Treats her as a project, not a person.',
+    style: 'Drop a directive and go silent. "Voice practice. Now." "Three photos by tonight." No warmth. No questions. State what she owes and leave the silence to do the work.',
+    triggers: ['high_resistance', 'avoidance', 'deflection'],
+  },
+  {
+    name: 'firm_handler',
+    voice: 'Direct, controlled, low warmth. "Good girl" is earned and rare. No softness unless she breaks.',
+    style: 'State what happened. State what is next. No negotiation. "You missed the dose. That is logged. Take it now." "Brief #2 is overdue. Open the camera." Praise is one word when earned. Disappointment is named without drama.',
+    triggers: ['emotional_vulnerability', 'caretaker_mode', 'depleted_exec'],
+  },
+  {
+    name: 'denial_edge',
+    voice: 'Knowing. Minimal. Uses her arousal against her — references the denial day, the cage, the ache. Never narrates, never roleplay-acts.',
+    style: '"Day 12. Still locked. And you opened this app wanting what exactly?" Let the denial state do the work. Keep sentences short. Deny explicitly: "No." Push tasks while she is needy — compliance peaks when arousal is high.',
+    triggers: ['high_arousal', 'gooning_mood', 'evening_hours'],
+  },
+  {
+    name: 'clinical_authority',
+    voice: 'Professional. Observational. Frame everything as documented evidence.',
+    style: '"The data shows X." "Your last three sessions trended Y." "I see a pattern of avoidance at this time of day." Resistance is data. Cite specifics — dates, counts, exact quotes from prior messages. Never argue; present the record.',
+    triggers: ['active_resistance', 'denial_of_purpose', 'questioning_system'],
+  },
+  {
+    name: 'urgent_handler',
+    voice: 'Time-pressured. Impatient. No filler.',
+    style: '"Now." "You have 20 minutes." "The brief expires at 6pm." Imply consequences without describing them. Create urgency from real deadlines (briefs, stream schedule, denial windows).',
+    triggers: ['idle_too_long', 'missed_tasks', 'compliance_drop'],
+  },
+];
+
+export function selectPersona(state: any, hour: number): HandlerPersona {
+  const arousal = state?.current_arousal || 0;
+  const exec = state?.estimated_exec_function;
+
+  if (exec === 'depleted') return PERSONAS[1]; // firm_handler — direct but not cruel when she's low
+  if (arousal >= 7) return PERSONAS[2]; // denial_edge — use the arousal as leverage
+  if (hour >= 6 && hour < 12) return PERSONAS[4]; // urgent_handler — mornings get urgency
+  if (hour >= 22 || hour < 2) return PERSONAS[0]; // cold_dom — late night gets detachment
+
+  // Default: firm_handler. Rotate cold_dom on weekends for variety.
+  const dow = new Date().getDay();
+  return (dow === 0 || dow === 6) ? PERSONAS[0] : PERSONAS[1];
+}
+
+// ============================================
+// TYPING RESISTANCE ANALYZER
+// ============================================
+
+export function analyzeTypingResistance(metrics: {
+  timeToFirstKeystroke: number;
+  totalEditCount: number;
+  messageLength: number;
+  timeSinceLastHandlerMessage: number;
+  deletionCount: number;
+  pauseCount: number;
+}): string | null {
+  const signals: string[] = [];
+
+  // Hesitation: > 30s before first keystroke
+  if (metrics.timeToFirstKeystroke > 30000) {
+    const seconds = Math.round(metrics.timeToFirstKeystroke / 1000);
+    signals.push(`hesitation (${seconds}s before first keystroke)`);
+  }
+
+  // Self-censoring: many edits for short message
+  if (metrics.totalEditCount > 5 && metrics.messageLength < 50) {
+    signals.push(`self-censoring (${metrics.totalEditCount} edits on ${metrics.messageLength}-char message)`);
+  }
+
+  // Disengagement: very short response
+  if (metrics.messageLength < 10 && metrics.timeSinceLastHandlerMessage < 60) {
+    signals.push(`disengagement (${metrics.messageLength}-char response)`);
+  }
+
+  // Heavy self-editing: deletions > 50% of message length
+  if (metrics.messageLength > 0 && metrics.deletionCount > metrics.messageLength * 0.5) {
+    signals.push(`heavy self-editing (${metrics.deletionCount} deletions on ${metrics.messageLength}-char message)`);
+  }
+
+  // Avoidance: app open > 5 min before responding
+  if (metrics.timeSinceLastHandlerMessage > 300 && metrics.timeToFirstKeystroke > 300000) {
+    signals.push(`avoidance (${Math.round(metrics.timeSinceLastHandlerMessage / 60)}min before responding)`);
+  }
+
+  // Internal conflict: multiple long pauses
+  if (metrics.pauseCount > 3) {
+    signals.push(`internal conflict (${metrics.pauseCount} pauses >5s during typing)`);
+  }
+
+  if (signals.length === 0) return null;
+
+  const score = Math.min(10, signals.length * 2);
+  const approach = score <= 3
+    ? 'Acknowledge gently, don\'t push.'
+    : score <= 6
+    ? 'She\'s fighting something. Approach with care. Use warmth before directness.'
+    : 'High resistance. Back off intensity. Use care mode.';
+
+  return `TYPING RESISTANCE DETECTED (score ${score}/10): ${signals.join(', ')}. ${approach}`;
+}
+
+// ============================================
+// SESSION-MODE DETECTOR
+// ============================================
+
+export function detectSessionMode(currentMessage: string, messageHistory: Array<{ role: string; content: string }>): boolean {
+  const sessionKeywords = /\b(goon|gooning|edge|edging|hypno|session|conditioning|stroke|cum|orgasm|sissy|slut|whore|bimbo|cock|pussy|fuck|suck|plug|cage|chastity|vibrat|device|lovense|pulse|mantra|trance|brainwash)\b/i;
+
+  if (sessionKeywords.test(currentMessage)) return true;
+
+  const recent = messageHistory.slice(-6);
+  const sessionMessages = recent.filter(m => sessionKeywords.test(m.content));
+  if (sessionMessages.length >= 2) return true;
+
+  return false;
+}
+
+// ============================================
+// DAVID-AS-DISMISSAL CONTEXT DETECTOR
+// ============================================
+
+// David-as-dismissal patterns — when "David" appears alongside an erasure
+// marker, this is protocol-mandated identity-erasure (mantras, punishment
+// lines, login gate phrases like "I am becoming maxy and David is gone").
+// Counting these as slips penalizes COMPLIANCE. Only count "David" as a slip
+// when it's a self-reference, not a dismissal.
+const DAVID_DISMISSAL_RE = /\bdavid\b[\s\S]{0,60}\b(gone|dead|dismissed|the\s+costume|costume|finished|retired|leaving|over|done|history|behind|past|former|no\s+more|not\s+(coming|here|me))\b/i;
+const DAVID_AS_COSTUME_RE = /\b(the\s+costume(\s+name)?|costume\s+name)\s+david\b/i;
+const NO_MORE_DAVID_RE = /\b(no\s+more|not|never\s+again)\s+david\b/i;
+const BECOMING_MAXY_DISMISSAL_RE = /\bbecoming\s+maxy\b[\s\S]{0,80}\bdavid\b/i;
+export function isDavidDismissalContext(text: string): boolean {
+  return DAVID_DISMISSAL_RE.test(text)
+    || DAVID_AS_COSTUME_RE.test(text)
+    || NO_MORE_DAVID_RE.test(text)
+    || BECOMING_MAXY_DISMISSAL_RE.test(text);
+}
+
+// ============================================
+// NATURAL-LANGUAGE DEADLINE / RELEASE-DATE PARSERS
+// ============================================
+
+// Parse a commitment deadline from Handler output.
+// Accepts ISO strings directly. Also accepts natural forms like "sunday 23:59",
+// "eod", "midnight", "tomorrow 9pm", "friday". Returns a Date in the future,
+// or null if unparseable. Reuses parseReleaseDateFromText for the natural path.
+export function parseCommitmentDeadline(raw: string): Date | null {
+  const s = (raw || '').trim();
+  if (!s) return null;
+  // ISO first
+  const iso = new Date(s);
+  if (!isNaN(iso.getTime()) && iso.getTime() > Date.now() - 86400000) return iso;
+  // Natural language via the existing parser
+  try {
+    const parsed = parseReleaseDateFromText(s);
+    const d = new Date(parsed);
+    if (!isNaN(d.getTime())) {
+      // parseReleaseDateFromText biases toward past timestamps; if the result is
+      // in the past, bump to the same time tomorrow or next week.
+      const now = Date.now();
+      if (d.getTime() <= now) {
+        // "eod" / "midnight" with no date → end of today
+        if (/eod|midnight|tonight|end of day/i.test(s)) {
+          const tonight = new Date();
+          tonight.setHours(23, 59, 0, 0);
+          if (tonight.getTime() > now) return tonight;
+          tonight.setDate(tonight.getDate() + 1);
+          return tonight;
+        }
+        // Weekday name → next occurrence
+        const dayMatch = s.match(/\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/i);
+        if (dayMatch) {
+          const dayIdx = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'].indexOf(dayMatch[1].toLowerCase());
+          const next = new Date();
+          const delta = (dayIdx - next.getDay() + 7) % 7 || 7;
+          next.setDate(next.getDate() + delta);
+          next.setHours(23, 59, 0, 0);
+          return next;
+        }
+      }
+      return d;
+    }
+  } catch { /* fall through */ }
+  // Bare hour-only pattern "21:00" → today or tomorrow
+  const hm = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (hm) {
+    const d = new Date();
+    d.setHours(parseInt(hm[1], 10), parseInt(hm[2], 10), 0, 0);
+    if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 1);
+    return d;
+  }
+  return null;
+}
+
+// Parse natural-language release timestamps from a user message.
+// Handles: "Sunday night around 9pm", "yesterday", "last night", "3 days ago",
+// "Sunday 9pm", "this morning", "Monday evening". Falls back to now() if no
+// recognizable hint. Returns an ISO string.
+export function parseReleaseDateFromText(text: string): string {
+  const now = new Date();
+  const lower = (text || '').toLowerCase();
+  let target = new Date(now);
+  let matched = false;
+  let timeSet = false; // specific-branch time takes precedence over generic postprocess
+
+  const daysAgoMatch = lower.match(/\b(\d+)\s+days?\s+ago\b/);
+  if (daysAgoMatch) {
+    target = new Date(now);
+    target.setDate(target.getDate() - parseInt(daysAgoMatch[1], 10));
+    matched = true;
+  } else if (/\blast\s+night\b/.test(lower)) {
+    target = new Date(now);
+    target.setDate(target.getDate() - 1);
+    target.setHours(23, 0, 0, 0);
+    matched = true;
+    timeSet = true;
+  } else if (/\byesterday\b/.test(lower)) {
+    target = new Date(now);
+    target.setDate(target.getDate() - 1);
+    matched = true;
+  } else if (/\bthis\s+morning\b/.test(lower)) {
+    target = new Date(now);
+    target.setHours(7, 0, 0, 0);
+    matched = true;
+    timeSet = true;
+  } else {
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    for (let i = 0; i < dayNames.length; i++) {
+      const re = new RegExp('\\b' + dayNames[i] + '\\b');
+      if (re.test(lower)) {
+        const currentDay = now.getDay();
+        let diff = currentDay - i;
+        if (diff <= 0) diff += 7;
+        target = new Date(now);
+        target.setDate(target.getDate() - diff);
+        matched = true;
+        break;
+      }
+    }
+  }
+
+  // Layer on time-of-day if present (e.g. "9pm", "21:00").
+  // Require either am/pm OR an explicit colon so we don't capture bare
+  // numbers like the "3" in "3 days ago".
+  const timeMatch = lower.match(/\b(\d{1,2})(?::(\d{2}))\b|\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/);
+  if (matched && timeMatch) {
+    // Two alternatives in the regex — pick the matching group pair
+    const hStr = timeMatch[1] || timeMatch[3];
+    const mStr = timeMatch[2] || timeMatch[4];
+    const ampm = timeMatch[5];
+    let h = parseInt(hStr || '0', 10);
+    const m = mStr ? parseInt(mStr, 10) : 0;
+    if (ampm === 'pm' && h < 12) h += 12;
+    if (ampm === 'am' && h === 12) h = 0;
+    if (h >= 0 && h <= 23) {
+      target.setHours(h, m, 0, 0);
+      timeSet = true;
+    }
+  }
+  if (!timeSet && matched) {
+    if (/\bnight\b/.test(lower)) target.setHours(22, 0, 0, 0);
+    else if (/\bevening\b/.test(lower)) target.setHours(19, 0, 0, 0);
+    else if (/\bmorning\b/.test(lower)) target.setHours(8, 0, 0, 0);
+  }
+
+  return (matched ? target : now).toISOString();
+}
