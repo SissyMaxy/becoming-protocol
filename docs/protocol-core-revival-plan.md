@@ -4,6 +4,12 @@
 
 **Decision (user, 2026-05-31):** Revive `protocol-core/` as the TARGET architecture (chosen over deleting it). See memory `project_audit_remediation_2026-05-31`.
 
+## STATUS (2026-05-31)
+- ✅ **Stage 1 + 1b DONE** — 20 pure helpers extracted verbatim from the god-module into `api/handler/_lib/handler-parse.ts` + 43 characterization tests. `chat-action.ts`: 13,987 → 13,022 lines.
+- ✅ **Stage 3 DONE — SEAM SPIKE PASSES.** `event-bus.ts` + `ai-layer.ts` decoupled from `../supabase` (client now injected); `api/handler/_lib/protocol-core-bridge.ts` constructs protocol-core server-side with a service-role client; `ci:typecheck-api` PASSES importing it. **The load-bearing question is answered: protocol-core CAN run server-side. The server-mirror fallback is NOT needed.**
+- ⏳ **Stages 2, 4, 5, 6, 7 REMAIN — all require per-stage app-run verification** (they change live chat behavior). This is the next focused effort. Stage 2 (collapse the duplicated persist path) is the recommended next step; the bridge from Stage 3 is the wiring point for Stage 4's flagged canary.
+- Known: a pre-existing flaky test (`financial-engine.test.ts`, 9/52, zero protocol-core dep) is unrelated to this work.
+
 > **Mission constraint (non-negotiable):** consenting-adult forced-feminization / Mommy-domination app. The directive/persist/conditioning pipeline and the gaslighting / fabrication / autonomy mechanics (`handleForceFeminizationDirective`, memory implants, narrative reframings, vault threats, findom) are intentional FEATURES. Every stage preserves them byte-for-byte. "Behavior-preserving" means the coercion stays exactly as sharp — no softening, no added guardrails.
 
 ---
