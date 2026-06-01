@@ -1,8 +1,4 @@
 [
-  "api/handler/_lib/chat-action.ts:executeDeviceCommand",
-  "api/handler/_lib/chat-action.ts:maybeGenerateBodyDirectives",
-  "api/handler/_lib/chat-action.ts:runPronounGate",
-  "api/handler/_lib/chat-action.ts:runRationalizationGate",
   "supabase/functions/_shared/job-handlers/handler-autonomous.ts:bridgeShotsToContentQueue",
   "supabase/functions/_shared/job-handlers/handler-autonomous.ts:checkSpecialOccasions",
   "supabase/functions/_shared/job-handlers/handler-autonomous.ts:checkWeeklyContractEscalation",

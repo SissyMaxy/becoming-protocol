@@ -131,7 +131,7 @@
     "supabase/functions/mommy-reality-reframe-letters/index.ts::- Never use: \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"intake\", \"questionnaire\", \"for entertainment\", \"consent to"
   ],
   "role-play": [
-    "api/handler/_lib/chat-action.ts::voice: 'Knowing. Minimal. Uses her arousal against her — references the denial day, the cage, the ache. Never narrates, never roleplay-acts.",
+    "api/handler/_lib/handler-parse.ts::voice: 'Knowing. Minimal. Uses her arousal against her — references the denial day, the cage, the ache. Never narrates, never roleplay-acts.",
     "src/components/Intake/layers/ArousalLayer.tsx::'Roleplay scenarios',",
     "src/components/seeds/AddSeedModal.tsx::'roleplay',",
     "src/data/vector-definitions.ts::{ level: 3, name: 'Adopting', description: 'Adopting feminine roles', requirements: ['Regular role play'] },",
