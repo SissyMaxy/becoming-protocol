@@ -86,6 +86,9 @@ export {
   type GeneratorState,
 } from './dynamic-task-generator';
 
+// Handler Notes Module (per-turn observation note sink — revival Stage 5)
+export { HandlerNotesModule } from './handler-notes-module';
+
 // Domain Modules
 export {
   VoiceDomainModule,

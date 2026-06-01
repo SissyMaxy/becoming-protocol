@@ -160,6 +160,7 @@ const AUTH = 'Bearer test-token';
 
 function baseDeps(supabase: import('@supabase/supabase-js').SupabaseClient, extra?: Partial<{
   executeExtraDirective: (dir: Record<string, unknown>) => Promise<void>;
+  saveHandlerNote: (note: { type: string; content: string; priority: number }) => Promise<void>;
 }>) {
   return {
     supabase,
@@ -272,6 +273,29 @@ describe('persistTurnSideEffects — handler_note', () => {
       turn({ handler_note: { content: 'orphaned' } }),
     );
     expect(insertFor(sb.queries, 'handler_notes')).toBeUndefined();
+  });
+
+  // Stage 5: when an injected saveHandlerNote writer is supplied (PROTOCOL_CORE_FLOWS
+  // turn_notes), the note routes through it INSTEAD of the inline insert.
+  it('delegates to saveHandlerNote when injected — no inline handler_notes insert', async () => {
+    const saveHandlerNote = vi.fn(() => Promise.resolve());
+    await persistTurnSideEffects(
+      baseDeps(sb.supabase, { saveHandlerNote }),
+      turn({ handler_note: { type: 'observation', content: 'She hesitated.', priority: 4 } }),
+    );
+    expect(saveHandlerNote).toHaveBeenCalledTimes(1);
+    expect(saveHandlerNote).toHaveBeenCalledWith({ type: 'observation', content: 'She hesitated.', priority: 4 });
+    // The inline insert path must NOT run.
+    expect(insertFor(sb.queries, 'handler_notes')).toBeUndefined();
+  });
+
+  it('applies the priority-0 default before delegating to saveHandlerNote', async () => {
+    const saveHandlerNote = vi.fn(() => Promise.resolve());
+    await persistTurnSideEffects(
+      baseDeps(sb.supabase, { saveHandlerNote }),
+      turn({ handler_note: { type: 'observation', content: 'Noted.' } }),
+    );
+    expect(saveHandlerNote).toHaveBeenCalledWith({ type: 'observation', content: 'Noted.', priority: 0 });
   });
 });
 

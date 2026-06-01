@@ -99,6 +99,10 @@ export type ProtocolEvent =
   | { type: 'schedule:vulnerability_window'; windowType: string }
 
   // Handler
+  // The Handler emitted a private observation note this turn. The resulting
+  // handler_notes row is byte-identical to the former inline insert in
+  // chat-action.ts / handler-persist.ts (carries conversation_id). (Stage 5.)
+  | { type: 'handler:note_captured'; noteType: string; content: string; priority: number; conversationId: string }
   | { type: 'handler:mode_changed'; from: string; to: string; reason: string }
   | { type: 'handler:intervention_fired'; interventionType: string; mode: string }
   | { type: 'handler:briefing_generated'; briefingType: 'morning' | 'evening'; layer: 1 | 2 | 3 }

@@ -16,6 +16,7 @@ import { EventBus } from '../../../src/lib/protocol-core/event-bus';
 import { ModuleRegistry } from '../../../src/lib/protocol-core/module-interface';
 import { createAILayer, type AILayer } from '../../../src/lib/protocol-core/ai-layer';
 import { CoercionModule } from '../../../src/lib/protocol-core/modules/coercion-module';
+import { HandlerNotesModule } from '../../../src/lib/protocol-core/modules/handler-notes-module';
 
 export interface ProtocolCoreServer {
   bus: EventBus;
@@ -84,6 +85,35 @@ export async function runComplianceRewardPulse(
     return /good\s+girl/i.test(visibleText);
   } catch {
     return false;
+  }
+}
+
+/**
+ * Stage 5 — persist a Handler observation note through protocol-core.
+ *
+ * Routes the per-turn `handler_note` save (formerly an inline insert at the head
+ * of persistTurnSideEffects) into HandlerNotesModule. Byte-identical row,
+ * including conversation_id. Non-throwing; events not persisted so the only
+ * write is the handler_notes row.
+ */
+export async function runHandlerNoteSave(
+  userId: string,
+  note: { type: string; content: string; priority: number },
+  conversationId: string,
+): Promise<void> {
+  try {
+    const core = createServerProtocolCore(userId, { persistEvents: false });
+    const notes = new HandlerNotesModule();
+    await notes.initialize(core.bus, core.db);
+    await core.bus.emit({
+      type: 'handler:note_captured',
+      noteType: note.type,
+      content: note.content,
+      priority: note.priority,
+      conversationId,
+    });
+  } catch {
+    // Non-critical — never break a live turn.
   }
 }
 

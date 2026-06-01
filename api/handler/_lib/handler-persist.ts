@@ -65,6 +65,14 @@ export interface PersistTurnDeps {
    * Omitted by the non-streaming caller → its behavior is unchanged.
    */
   executeExtraDirective?: (dir: Record<string, unknown>) => Promise<void>;
+  /**
+   * Optional injected writer for the per-turn handler_note save (revival Stage
+   * 5). When supplied (PROTOCOL_CORE_FLOWS includes `turn_notes`), the note is
+   * persisted THROUGH this callback — which routes to protocol-core's
+   * HandlerNotesModule — instead of the inline `handler_notes` insert. The
+   * resulting row is byte-identical. Omitted → the inline insert runs unchanged.
+   */
+  saveHandlerNote?: (note: { type: string; content: string; priority: number }) => Promise<void>;
 }
 
 export interface PersistTurn {
@@ -91,7 +99,7 @@ export async function persistTurnSideEffects(
   deps: PersistTurnDeps,
   turn: PersistTurn,
 ): Promise<void> {
-  const { supabase, user, convId, authHeader, executeExtraDirective } = deps;
+  const { supabase, user, convId, authHeader, executeExtraDirective, saveHandlerNote } = deps;
   const { signals } = turn;
 
   // ── Save handler_note ──
@@ -99,13 +107,18 @@ export async function persistTurnSideEffects(
     try {
       const note = signals.handler_note as { type?: string; content?: string; priority?: number };
       if (note.type && note.content) {
-        await supabase.from('handler_notes').insert({
-          user_id: user.id,
-          note_type: note.type,
-          content: note.content,
-          priority: note.priority || 0,
-          conversation_id: convId,
-        });
+        if (saveHandlerNote) {
+          // Stage 5: route through protocol-core (HandlerNotesModule). Same row.
+          await saveHandlerNote({ type: note.type, content: note.content, priority: note.priority || 0 });
+        } else {
+          await supabase.from('handler_notes').insert({
+            user_id: user.id,
+            note_type: note.type,
+            content: note.content,
+            priority: note.priority || 0,
+            conversation_id: convId,
+          });
+        }
       }
     } catch {
       // Non-critical — continue on failure

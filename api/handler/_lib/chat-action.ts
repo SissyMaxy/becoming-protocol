@@ -10,7 +10,7 @@ import { persistTurnSideEffects } from './handler-persist.js';
 // each migrated flow behind PROTOCOL_CORE_FLOWS; `runComplianceRewardPulse` is
 // the first flow routed through protocol-core. Importing the bridge is safe in
 // the serverless runtime — protocol-core is import.meta.env-free post-Stage 3.
-import { isProtocolCoreFlowEnabled, runComplianceRewardPulse } from './protocol-core-bridge.js';
+import { isProtocolCoreFlowEnabled, runComplianceRewardPulse, runHandlerNoteSave } from './protocol-core-bridge.js';
 // Pure parse/guard helpers extracted to ./handler-parse.ts (Stage 1 + 1b of
 // the protocol-core revival). Only the symbols still called directly from
 // chat-action.ts are imported here; the rest (REFUSAL_PATTERNS, SIGNAL_FORMATS,
@@ -2210,6 +2210,11 @@ HARD RULES FOR ALL PERSONAS:
           user,
           convId,
           authHeader: req.headers.authorization || '',
+          // Stage 5: route the handler_note save through protocol-core when
+          // PROTOCOL_CORE_FLOWS enables `turn_notes`. Byte-identical row.
+          saveHandlerNote: isProtocolCoreFlowEnabled('turn_notes')
+            ? (note) => runHandlerNoteSave(user.id, note, convId)
+            : undefined,
           executeExtraDirective: async (dir) => {
         // ── EXECUTE enqueue_punishment (streaming path) ──
         if (dir.action === 'enqueue_punishment') {
@@ -2632,6 +2637,11 @@ HARD RULES FOR ALL PERSONAS:
         user,
         convId,
         authHeader: req.headers.authorization || '',
+        // Stage 5: route the handler_note save through protocol-core when
+        // PROTOCOL_CORE_FLOWS enables `turn_notes`. Byte-identical row.
+        saveHandlerNote: isProtocolCoreFlowEnabled('turn_notes')
+          ? (note) => runHandlerNoteSave(user.id, note, convId)
+          : undefined,
       },
       { signals, userMessage: message },
     );
