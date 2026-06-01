@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { logGinaReaction } from '../lib/handler-v2/gina-intelligence';
+import { logGinaReaction } from '../lib/gina/comfort-map';
 import type {
   WeekendActivity,
   WeekendSession,
