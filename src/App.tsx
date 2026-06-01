@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { PrivacyPage } from './components/PrivacyPage';
 import { HandlerChat } from './components/handler/HandlerChat';
-import { getPendingOutreach, evaluateAndQueueOutreach } from './lib/handler-v2/outreach-engine';
+import { getPendingOutreach, evaluateAndQueueOutreach } from './lib/outreach/engine';
 import { HandlerParameters } from './lib/handler-parameters';
 import { useAuth } from './context/AuthContext';
 import { ProtocolProvider, useProtocol } from './context/ProtocolContext';
