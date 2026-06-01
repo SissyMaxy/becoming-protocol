@@ -37,20 +37,26 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // Whatever handler-persist pulls from ./chat-action.js becomes a spy. This also
 // short-circuits loading the real 14k-line module (which has heavy top-level
 // imports) under the test runner.
-vi.mock('../../../api/handler/_lib/chat-action.js', () => ({
+// Stage 7 batch 2: the executors moved to handler-runtime.js — except
+// handleForceFeminizationDirective (force-fem stays in chat-action.js). Mock
+// each at its current source so the directive module's injected exec calls hit
+// these spies.
+vi.mock('../../../api/handler/_lib/handler-force-fem.js', () => ({
+  handleForceFeminizationDirective: vi.fn(() => Promise.resolve()),
+}));
+vi.mock('../../../api/handler/_lib/handler-runtime.js', () => ({
   logDirectiveOutcome: vi.fn(() => Promise.resolve()),
   executeDeviceCommand: vi.fn(() => Promise.resolve()),
-  handleForceFeminizationDirective: vi.fn(() => Promise.resolve()),
   searchContent: vi.fn(() => Promise.resolve([])),
 }));
 
 import { persistTurnSideEffects } from '../../../api/handler/_lib/handler-persist';
+import { handleForceFeminizationDirective } from '../../../api/handler/_lib/handler-force-fem.js';
 import {
   logDirectiveOutcome,
   executeDeviceCommand,
-  handleForceFeminizationDirective,
   searchContent,
-} from '../../../api/handler/_lib/chat-action.js';
+} from '../../../api/handler/_lib/handler-runtime.js';
 
 // Typed spy handles (the vi.mock factory installed vi.fn()s).
 const mockLogDirectiveOutcome = logDirectiveOutcome as unknown as ReturnType<typeof vi.fn>;

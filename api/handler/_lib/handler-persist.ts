@@ -36,12 +36,14 @@
 // ============================================================================
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+// Stage 7: the directive executors now live outside the god-module — the
+// force-fem helper in handler-force-fem.ts, the rest in handler-runtime.ts.
+import { handleForceFeminizationDirective } from './handler-force-fem.js';
 import {
   logDirectiveOutcome,
   executeDeviceCommand,
-  handleForceFeminizationDirective,
   searchContent,
-} from './chat-action.js';
+} from './handler-runtime.js';
 import { buildHandlerDirectiveModule } from './protocol-core-bridge.js';
 
 export interface PersistTurnDeps {
