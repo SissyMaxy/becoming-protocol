@@ -71,34 +71,6 @@ export {
 export type { FailureModeEvent, FailureModeDetection } from './failure-modes';
 
 // Failure Modes (Extended - FM2, FM4, FM5, FM6, FM7)
-export {
-  getBuilderModeStats,
-  detectBuildNotDo,
-  getBuildNotDoIntervention,
-  getVoiceAvoidanceStats,
-  detectVoiceAvoidance,
-  getVoiceAvoidanceIntervention,
-  getBurnoutRiskStats,
-  detectBurnoutRisk,
-  getTaskCap,
-  getBurnoutIntervention,
-  getWeekendModeState,
-  detectWeekendMode,
-  generateWeekendPlan,
-  getStreakBreakState,
-  detectStreakCatastrophizing,
-  activateStreakBreakAutopilot,
-  getStreakBreakIntervention,
-  detectExtendedFailureModes,
-} from './failure-modes-extended';
-export type {
-  BuilderModeStats,
-  VoiceAvoidanceStats,
-  BurnoutRiskStats,
-  WeekendModeState,
-  StreakBreakState,
-  ExtendedFailureModeResult,
-} from './failure-modes-extended';
 
 // Daily Plan Generation
 export {
@@ -109,24 +81,6 @@ export {
 export type { DailyPlan } from './daily-plan';
 
 // Coercive Strategies
-export {
-  generateImperativeDirective,
-  eliminateDecisions,
-  getArousalGatedMessage,
-  extractArousalCommitment,
-  generateGuiltLeverage,
-  getEvidenceReference,
-  generateIdentityReframe,
-  generateManufacturedUrgency,
-  getStreakProtectionMessage,
-  selectCoerciveStrategy,
-  buildCoerciveContext,
-} from './coercive-strategies';
-export type {
-  CoerciveStrategy,
-  CoerciveContext,
-  CoerciveMessage,
-} from './coercive-strategies';
 
 // Gina Safety
 export {
@@ -166,15 +120,6 @@ export type {
 } from './crisis-kit';
 
 // Pattern Analysis
-export {
-  generateMonthlyReport,
-  getFailureModeHistory,
-  getOverallHealthScore,
-} from './pattern-analysis';
-export type {
-  FailureModeStats,
-  MonthlyReport,
-} from './pattern-analysis';
 
 // Arousal Controller
 export {
