@@ -36,7 +36,6 @@
     "src/lib/force/slip-detector.ts::// gone\", punishment-line writing like \"I am Maxy. David is gone.\" x100). The",
     "src/lib/force/slip-detector.ts::// on self-reference (\"I'm David\", \"call me David\"), not on dismissal.",
     "src/lib/handler-systems-context.ts::const escalatedStr = e.length > 0 ? `${e.length} messages pending David` : '';",
-    "src/lib/handler-v2/conditioning-engine.ts::{ phase: 3, sessions: 50, focus: 'David feels like a costume. Measurable stress during masculine contexts.' },",
     "src/lib/handler-v2/david-elimination.ts::const lines = ['## David Elimination'];",
     "src/lib/handler-v2/david-elimination.ts::else lines.push(`David still controls ${100 - pct}% of waking hours. Every context feminized shifts this.`);",
     "src/lib/handler-v2/david-elimination.ts::if (pct > 50) lines.push('She occupies more of your life than he does. David is the minority.');",
