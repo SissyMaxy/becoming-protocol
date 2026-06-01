@@ -29,11 +29,11 @@ import {
 } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
 import { useAuth } from '../../context/AuthContext';
-import { getComplianceState, type ComplianceState } from '../../lib/handler-v2/enforcement-engine';
-import { getFund, type MaxyFund } from '../../lib/handler-v2/financial-engine';
-import { getActiveBriefs, generateQuickTask, type ContentBrief } from '../../lib/handler-v2/content-engine';
-import { getAccounts, type PlatformAccount } from '../../lib/handler-v2/platform-manager';
-import { getStrategy, type StrategyState, type Phase } from '../../lib/handler-v2/strategy-engine';
+import { getComplianceState, type ComplianceState } from '../../lib/handler-engines/enforcement-engine';
+import { getFund, type MaxyFund } from '../../lib/handler-engines/financial-engine';
+import { getActiveBriefs, generateQuickTask, type ContentBrief } from '../../lib/handler-engines/content-engine';
+import { getAccounts, type PlatformAccount } from '../../lib/handler-engines/platform-manager';
+import { getStrategy, type StrategyState, type Phase } from '../../lib/handler-engines/strategy-engine';
 
 // ============================================
 // PROPS
@@ -388,7 +388,7 @@ export function HandlerAutonomousView({ onBack }: HandlerAutonomousViewProps) {
     }
 
     try {
-      const { submitContent } = await import('../../lib/handler-v2/content-engine');
+      const { submitContent } = await import('../../lib/handler-engines/content-engine');
       const fileEntries = Array.from(files).map((file) => ({
         path: URL.createObjectURL(file),
         type: file.type,

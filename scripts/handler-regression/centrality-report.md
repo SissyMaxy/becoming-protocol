@@ -1,6 +1,6 @@
 # Handler-Centrality Audit
 
-Generated: 2026-06-01T19:07:12.276Z
+Generated: 2026-06-01T19:12:56.045Z
 
 Each function below writes a user-facing artifact (decree, commitment, outreach, confession prompt, etc.) **without first reading any Handler-state table**. The artifact is therefore generated without reference to the current persona, phase, mode, slip count, or recent directives — it cannot speak with Handler authority.
 

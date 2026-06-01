@@ -44,7 +44,7 @@ import {
   reduceEscalation,
   getDailyEnforcementSummary,
   type ComplianceState,
-} from '../../lib/handler-v2/enforcement-engine';
+} from '../../lib/handler-engines/enforcement-engine';
 import { supabase } from '../../lib/supabase';
 
 // ============================================

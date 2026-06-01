@@ -8,11 +8,11 @@
  *   POP3 — validatePopUp catches violations
  */
 import { describe, it, expect } from 'vitest';
-import { truncateToLimit, truncatePopUp, validatePopUp } from '../../lib/handler-v2/popup-utils';
-import { TemplateEngine } from '../../lib/handler-v2/template-engine';
-import type { PopUpMessage, PopUpNotificationType, HandlerMode } from '../../lib/handler-v2/types';
-import { POPUP_LIMITS } from '../../lib/handler-v2/types';
-import type { UserState } from '../../lib/handler-v2/types';
+import { truncateToLimit, truncatePopUp, validatePopUp } from '../../lib/handler-engines/popup-utils';
+import { TemplateEngine } from '../../lib/handler-engines/template-engine';
+import type { PopUpMessage, PopUpNotificationType, HandlerMode } from '../../lib/handler-engines/types';
+import { POPUP_LIMITS } from '../../lib/handler-engines/types';
+import type { UserState } from '../../lib/handler-engines/types';
 
 // ============================================
 // HELPERS

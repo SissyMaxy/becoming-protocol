@@ -19,7 +19,7 @@ import type {
 import { DEFAULT_SKIP_COST } from '../types/task-bank';
 import { recordTaskAtLevel, getEscalationOverview } from './escalation/level-generator';
 import { shouldHideTask } from './corruption-behaviors';
-import { getCopyStyle } from './handler-v2/types';
+import { getCopyStyle } from './handler-engines/types';
 import { selectTask, isTaskStillValid } from './rules-engine-v2';
 import type { UserStateForSelection } from './rules-engine-v2';
 import { queueDelayedReward } from './dopamine-engine';
@@ -455,13 +455,13 @@ export async function getOrCreateTodayTasks(context: UserTaskContext): Promise<D
   }).catch(() => {});
 
   // Check if novelty injection should fire (fire-and-forget)
-  import('./handler-v2/novelty-engine').then(({ shouldInjectNovelty }) => {
+  import('./handler-engines/novelty-engine').then(({ shouldInjectNovelty }) => {
     import('./handler-parameters').then(({ HandlerParameters }) => {
       const params = new HandlerParameters(context.userId);
       shouldInjectNovelty(context.userId, params).then(decision => {
         if (decision?.inject) {
           console.log(`[Novelty] Injecting ${decision.type}: ${decision.reason}`);
-          import('./handler-v2/novelty-engine').then(({ logNoveltyEvent }) => {
+          import('./handler-engines/novelty-engine').then(({ logNoveltyEvent }) => {
             logNoveltyEvent(context.userId, decision.type, decision.reason).catch(() => {});
           });
         }
@@ -1646,7 +1646,7 @@ export async function prescribeNextTask(
 
     // Merge generated tasks into the candidate pool
     try {
-      const { getEligibleGeneratedTasks } = await import('./handler-v2/escalation-engine');
+      const { getEligibleGeneratedTasks } = await import('./handler-engines/escalation-engine');
       const generated = await getEligibleGeneratedTasks(context.userId);
       if (generated.length > 0) {
         const converted = generated

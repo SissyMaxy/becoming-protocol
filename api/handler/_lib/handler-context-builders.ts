@@ -23,11 +23,11 @@ import {
   RESISTANCE_PATTERNS,
   DEBATE_APPROACH_INTERVENTIONS,
   DEBATE_INSTRUCTIONS,
-  semanticMemorySearch,
   MIRROR_KEYWORDS,
-  calculateBiometricDeviceIntensity,
   type DebateApproach,
 } from './chat-action.js';
+// Stage 7 batch 2: these two moved to handler-runtime.ts.
+import { semanticMemorySearch, calculateBiometricDeviceIntensity } from './handler-runtime.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || '',

@@ -11,7 +11,7 @@ import { useBambiMode } from '../../context/BambiModeContext';
 import { CompletionInput } from '../today/CompletionInput';
 import type { ScheduledAmbush } from '../../types/scheduled-ambush';
 import type { CompletionData, TaskCompletionType } from '../../types/task-bank';
-import { truncateToLimit, NOTIFICATION_LIMITS } from '../../lib/handler-v2/popup-utils';
+import { truncateToLimit, NOTIFICATION_LIMITS } from '../../lib/handler-engines/popup-utils';
 import { AMBUSH_TYPE_CONFIG } from '../../types/scheduled-ambush';
 
 interface AmbushNotificationProps {

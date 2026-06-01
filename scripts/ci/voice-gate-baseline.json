@@ -156,8 +156,8 @@
   ],
   "simulation": [
     "src/lib/handler-conditioning.ts::surfaceContent: ['technique training', 'toy progression', 'oral simulation'],",
-    "src/lib/handler-v2/platform-manager.ts::`[PlatformManager] Simulated post to ${account.platform} (${account.username ?? 'unknown'}):`,",
-    "src/lib/handler-v2/platform-manager.ts::outcome: 'simulated',",
+    "src/lib/handler-engines/platform-manager.ts::`[PlatformManager] Simulated post to ${account.platform} (${account.username ?? 'unknown'}):`,",
+    "src/lib/handler-engines/platform-manager.ts::outcome: 'simulated',",
     "src/lib/voice/voice-evolution.ts::{ exercise: 'Argument Simulation', targetPitch: 230, durationMinutes: 10, notes: 'Stress breaks pitch control. Practice getting heated while",
     "supabase/functions/_shared/ego-deconstruction.ts::- NEVER use any of: \"echo\", \"linger\", \"wrap around\", \"every inch\", \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"inta",
     "supabase/functions/handler-platform/index.ts::console.log(`[SIMULATED] Post to ${platform}: ${content.content_type} (no credentials configured)`)",

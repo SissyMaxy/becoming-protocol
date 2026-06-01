@@ -22,12 +22,12 @@ import {
   refilterTasks,
   getHardcodedFallbackTasks,
 } from '../lib/task-bank';
-import { checkEscalationTrigger, generateNextLevel } from '../lib/handler-v2/escalation-engine';
-import { classifyResistance, logResistanceEvent } from '../lib/handler-v2/resistance-classifier';
+import { checkEscalationTrigger, generateNextLevel } from '../lib/handler-engines/escalation-engine';
+import { classifyResistance, logResistanceEvent } from '../lib/handler-engines/resistance-classifier';
 import { HandlerParameters, seedDefaultParameters } from '../lib/handler-parameters';
-import { advanceCommitmentStates } from '../lib/handler-v2/commitment-enforcement';
-import { generatePredictions } from '../lib/handler-v2/predictive-model';
-import { runOptimizationPass } from '../lib/handler-v2/parameter-optimizer';
+import { advanceCommitmentStates } from '../lib/handler-engines/commitment-enforcement';
+import { generatePredictions } from '../lib/handler-engines/predictive-model';
+import { runOptimizationPass } from '../lib/handler-engines/parameter-optimizer';
 import type {
   DailyTask,
   UserTaskContext,

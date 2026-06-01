@@ -13,7 +13,7 @@ import {
   postToPlatform,
   type PlatformAccount,
   type ScheduledPost,
-} from '../../lib/handler-v2/platform-manager';
+} from '../../lib/handler-engines/platform-manager';
 
 // ============================================
 // Mock supabase with chainable query builder

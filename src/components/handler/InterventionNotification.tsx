@@ -25,7 +25,7 @@ import {
   MessageCircle,
 } from 'lucide-react';
 import type { HandlerIntervention, InterventionType } from '../../types/handler';
-import { truncateToLimit, NOTIFICATION_LIMITS } from '../../lib/handler-v2/popup-utils';
+import { truncateToLimit, NOTIFICATION_LIMITS } from '../../lib/handler-engines/popup-utils';
 
 interface InterventionNotificationProps {
   intervention: HandlerIntervention;

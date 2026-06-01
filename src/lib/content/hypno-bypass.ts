@@ -19,7 +19,7 @@ import type {
   ComplianceBypassLevel,
   HypnoLibraryItem,
 } from '../../types/hypno-bridge';
-import type { ExecFunction } from '../handler-v2/types';
+import type { ExecFunction } from '../handler-engines/types';
 import { HYPNO_TASK_CODES } from './hypno-tasks';
 import { getAvailableLibraryItems } from '../hypno-library';
 

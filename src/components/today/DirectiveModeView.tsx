@@ -8,7 +8,7 @@ import { useDirectiveCoach, type UserStateForCoach } from '../../hooks/useDirect
 import { useHandlerV2 } from '../../hooks/useHandlerV2';
 import { useAuth } from '../../context/AuthContext';
 import type { DailyTask } from '../../types/task-bank';
-import type { HandlerIntervention } from '../../lib/handler-v2';
+import type { HandlerIntervention } from '../../lib/handler-engines';
 
 interface DirectiveModeViewProps {
   pendingTasks: DailyTask[];

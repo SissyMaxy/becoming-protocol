@@ -29,7 +29,7 @@ import {
   type TimingUserState,
 } from '../lib/timing-engine';
 import { generatePrefill, type PrefillContext } from '../lib/prefill-generator';
-import { truncateToLimit, NOTIFICATION_LIMITS } from '../lib/handler-v2/popup-utils';
+import { truncateToLimit, NOTIFICATION_LIMITS } from '../lib/handler-engines/popup-utils';
 import { getCurrentTimeOfDay, mapTimeOfDayLateNight } from '../lib/rules-engine-v2';
 import { supabase } from '../lib/supabase';
 import type { HandlerIntervention, HandlerDailyPlan } from '../types/handler';
