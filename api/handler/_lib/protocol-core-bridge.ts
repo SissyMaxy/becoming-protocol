@@ -15,6 +15,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { EventBus } from '../../../src/lib/protocol-core/event-bus';
 import { ModuleRegistry } from '../../../src/lib/protocol-core/module-interface';
 import { createAILayer, type AILayer } from '../../../src/lib/protocol-core/ai-layer';
+import { CoercionModule } from '../../../src/lib/protocol-core/modules/coercion-module';
 
 export interface ProtocolCoreServer {
   bus: EventBus;
@@ -22,16 +23,68 @@ export interface ProtocolCoreServer {
   db: SupabaseClient;
 }
 
+/**
+ * Per-flow kill-switch for the protocol-core revival (Stage 4+).
+ *
+ * `PROTOCOL_CORE_FLOWS` is a comma-separated allowlist of flow names that route
+ * through protocol-core instead of the legacy inline path in chat-action.ts.
+ * Unset / empty → every flow stays on the legacy path (production default).
+ * `*` or `all` → every flow routes through protocol-core.
+ *
+ * Example: `PROTOCOL_CORE_FLOWS=compliance_reward`
+ */
+export function isProtocolCoreFlowEnabled(flow: string): boolean {
+  const raw = (process.env.PROTOCOL_CORE_FLOWS || '').trim();
+  if (!raw) return false;
+  const set = raw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  return set.includes('*') || set.includes('all') || set.includes(flow.toLowerCase());
+}
+
 /** Build a service-role-backed protocol-core for a given user (server-side). */
-export function createServerProtocolCore(userId: string): ProtocolCoreServer {
+export function createServerProtocolCore(
+  userId: string,
+  opts: { persistEvents?: boolean } = {},
+): ProtocolCoreServer {
   const db = createClient(
     process.env.SUPABASE_URL || '',
     process.env.SUPABASE_SERVICE_ROLE_KEY || '',
   );
-  const bus = new EventBus({ db, persistEvents: true });
+  const bus = new EventBus({ db, persistEvents: opts.persistEvents ?? true });
   bus.setUserId(userId);
   const registry = new ModuleRegistry();
   return { bus, registry, db };
+}
+
+/**
+ * Stage 4 canary — fire the compliance reward pulse through protocol-core.
+ *
+ * Replaces the inline `if (/good\s+girl/i.test(...)) supabase.from('handler_directives').insert(...)`
+ * that lived in BOTH chat transports. The CoercionModule, initialized against a
+ * service-role client and driven by a `coercion:reward_signal` bus event, owns
+ * the regex test and the (byte-identical) directive insert.
+ *
+ * Events are NOT persisted here (`persistEvents: false`) so the only DB write is
+ * the handler_directives row — keeping the flag-ON / flag-OFF footprint diff
+ * strictly to that one row. Returns true iff the reward pulse fired.
+ *
+ * Non-throwing: any failure is swallowed so the canary can never break a live
+ * chat turn (matches the legacy non-critical try/catch in chat-action.ts).
+ */
+export async function runComplianceRewardPulse(
+  userId: string,
+  visibleText: string,
+): Promise<boolean> {
+  try {
+    const core = createServerProtocolCore(userId, { persistEvents: false });
+    const coercion = new CoercionModule();
+    await coercion.initialize(core.bus, core.db);
+    // emit() awaits its handlers, so the directive insert completes before this
+    // resolves.
+    await core.bus.emit({ type: 'coercion:reward_signal', visibleText });
+    return /good\s+girl/i.test(visibleText);
+  } catch {
+    return false;
+  }
 }
 
 /** Build the budgeted AI layer (service-role-backed) for a user. */

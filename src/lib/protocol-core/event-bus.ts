@@ -46,6 +46,11 @@ export type ProtocolEvent =
   | { type: 'coercion:complied'; level: number; taskId: string }
   | { type: 'coercion:episode_started'; episodeId: string; taskId: string }
   | { type: 'coercion:episode_resolved'; episodeId: string; resolution: string; effectiveLevel: number }
+  // The Handler's visible reply praised compliance ("good girl") — fire the
+  // positive-reinforcement reward pulse. Carries only the visible text; the
+  // resulting handler_directives row is byte-identical to the former inline
+  // copies in chat-action.ts (no conversation_id). (Revival Stage 4 canary.)
+  | { type: 'coercion:reward_signal'; visibleText: string }
 
   // Vault
   | { type: 'vault:item_captured'; itemId: string; tier: number; capturedDuring: string }
@@ -153,6 +158,14 @@ export class EventBus {
    */
   setUserId(userId: string): void {
     this.userId = userId;
+  }
+
+  /**
+   * Read the current user id. Server-side modules need this to stamp `user_id`
+   * on their writes (the service-role client has no `auth.uid()` to default it).
+   */
+  getUserId(): string | null {
+    return this.userId;
   }
 
   /**

@@ -6,6 +6,11 @@ import {
   mommyVoiceCleanupForChat,
 } from './mommy-voice-chat.js';
 import { persistTurnSideEffects } from './handler-persist.js';
+// Protocol-core revival bridge (Stage 4+). `isProtocolCoreFlowEnabled` gates
+// each migrated flow behind PROTOCOL_CORE_FLOWS; `runComplianceRewardPulse` is
+// the first flow routed through protocol-core. Importing the bridge is safe in
+// the serverless runtime — protocol-core is import.meta.env-free post-Stage 3.
+import { isProtocolCoreFlowEnabled, runComplianceRewardPulse } from './protocol-core-bridge.js';
 // Pure parse/guard helpers extracted to ./handler-parse.ts (Stage 1 + 1b of
 // the protocol-core revival). Only the symbols still called directly from
 // chat-action.ts are imported here; the rest (REFUSAL_PATTERNS, SIGNAL_FORMATS,
@@ -2449,8 +2454,13 @@ HARD RULES FOR ALL PERSONAS:
       }
 
       // ── FEATURE: Compliance reward pulse (streaming path) ──
+      // Stage 4 canary: when PROTOCOL_CORE_FLOWS enables `compliance_reward`,
+      // route this flow through protocol-core (CoercionModule); otherwise keep
+      // the legacy inline insert. Both produce a byte-identical directive row.
       try {
-        if (/good\s+girl/i.test(streamVisible)) {
+        if (isProtocolCoreFlowEnabled('compliance_reward')) {
+          await runComplianceRewardPulse(user.id, streamVisible);
+        } else if (/good\s+girl/i.test(streamVisible)) {
           await supabase.from('handler_directives').insert({
             user_id: user.id,
             action: 'send_device_command',
@@ -2795,9 +2805,13 @@ HARD RULES FOR ALL PERSONAS:
     }
 
     // ── FEATURE: Compliance reward pulse (non-streaming path) ──
-    // If Handler response contains "good girl", fire a gentle reward device command
+    // If Handler response contains "good girl", fire a gentle reward device command.
+    // Stage 4 canary: PROTOCOL_CORE_FLOWS=compliance_reward routes through
+    // protocol-core (CoercionModule); else the legacy inline insert. Same row.
     try {
-      if (/good\s+girl/i.test(finalResponse)) {
+      if (isProtocolCoreFlowEnabled('compliance_reward')) {
+        await runComplianceRewardPulse(user.id, finalResponse);
+      } else if (/good\s+girl/i.test(finalResponse)) {
         await supabase.from('handler_directives').insert({
           user_id: user.id,
           action: 'send_device_command',

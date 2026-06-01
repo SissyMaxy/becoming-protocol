@@ -247,14 +247,23 @@ export class CoercionModule extends BaseModule {
     this.subscribe('task:declined', (e) => this.onTaskDeclined(e));
     this.subscribe('task:completed', (e) => this.onTaskCompleted(e));
     this.subscribe('task:abandoned', (e) => this.onTaskAbandoned(e));
+    this.subscribe('coercion:reward_signal', (e) => this.onRewardSignal(e));
   }
 
   private async loadCoercionState(): Promise<void> {
+    // Scope to the current user. On the frontend RLS already does this; with a
+    // server-side SERVICE-ROLE client there is no auth.uid(), so without an
+    // explicit filter these reads would pull EVERY user's rows. Stamp the filter
+    // when the bus knows the user (it always does server-side).
+    const userId = this.bus.getUserId();
+
     // Load active episodes
-    const { data: episodes } = await this.db
+    let activeQuery = this.db
       .from('coercion_episodes')
       .select('*')
       .not('current_state', 'like', 'resolved_%');
+    if (userId) activeQuery = activeQuery.eq('user_id', userId);
+    const { data: episodes } = await activeQuery;
 
     if (episodes) {
       for (const ep of episodes) {
@@ -263,11 +272,12 @@ export class CoercionModule extends BaseModule {
     }
 
     // Load history for analytics
-    const { data: history } = await this.db
+    let historyFilter = this.db
       .from('coercion_episodes')
       .select('effective_level, resolution')
-      .not('resolution', 'is', null)
-      .limit(100);
+      .not('resolution', 'is', null);
+    if (userId) historyFilter = historyFilter.eq('user_id', userId);
+    const { data: history } = await historyFilter.limit(100);
 
     if (history) {
       this.episodeHistory = history.map(h => ({
@@ -438,6 +448,41 @@ export class CoercionModule extends BaseModule {
 
     // This counts as resistance - escalate
     // We would need the taskId from the event to find the right episode
+  }
+
+  /**
+   * Compliance reward pulse (revival Stage 4 canary).
+   *
+   * When the Handler's visible reply praises compliance ("good girl"), fire a
+   * gentle-wave reward as positive reinforcement. This is the first live flow
+   * routed THROUGH protocol-core: the inline copies that previously sat in both
+   * the streaming and non-streaming branches of chat-action.ts now run here,
+   * driven by the `coercion:reward_signal` event off the bus.
+   *
+   * Byte-identical to the former inline insert — same table, columns, values,
+   * and (deliberately) NO conversation_id. The directive insert is awaited so
+   * the write completes before the emitting `bus.emit(...)` resolves; failures
+   * are swallowed to preserve the inline "non-critical, never throws" contract.
+   */
+  private async onRewardSignal(event: ProtocolEvent): Promise<void> {
+    if (event.type !== 'coercion:reward_signal') return;
+    if (!/good\s+girl/i.test(event.visibleText)) return;
+
+    const userId = this.bus.getUserId();
+    if (!userId) return;
+
+    try {
+      await this.db.from('handler_directives').insert({
+        user_id: userId,
+        action: 'send_device_command',
+        target: 'lovense',
+        value: { pattern: 'gentle_wave' },
+        priority: 'normal',
+        reasoning: 'Reward for compliance — positive reinforcement',
+      });
+    } catch {
+      // Non-critical — mirrors the inline `catch { /* Non-critical */ }`.
+    }
   }
 
   // ============================================
