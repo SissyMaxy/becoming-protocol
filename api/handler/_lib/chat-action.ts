@@ -5,6 +5,7 @@ import { detectRationalizations, logRationalizations, buildRationalizationConfro
 import {
   mommyVoiceCleanupForChat,
 } from './mommy-voice-chat.js';
+import { persistTurnSideEffects } from './handler-persist.js';
 // Pure parse/guard helpers extracted to ./handler-parse.ts (Stage 1 + 1b of
 // the protocol-core revival). Only the symbols still called directly from
 // chat-action.ts are imported here; the rest (REFUSAL_PATTERNS, SIGNAL_FORMATS,
@@ -394,7 +395,7 @@ async function buildFeminineSelfOverlayBlock(userId: string): Promise<string> {
 // DIRECTIVE OUTCOME TRACKING (learning loop foundation)
 // ============================================
 
-async function logDirectiveOutcome(
+export async function logDirectiveOutcome(
   userId: string,
   action: string,
   value: unknown,
@@ -489,7 +490,7 @@ async function measureRecentOutcomes(userId: string): Promise<void> {
 // BRAVE SEARCH — real content URLs instead of fabricated ones
 // ============================================
 
-async function searchContent(query: string, count: number = 5): Promise<Array<{ title: string; url: string; description: string }>> {
+export async function searchContent(query: string, count: number = 5): Promise<Array<{ title: string; url: string; description: string }>> {
   const apiKey = process.env.BRAVE_SEARCH_API_KEY;
   if (!apiKey) return [];
 
@@ -2194,709 +2195,177 @@ HARD RULES FOR ALL PERSONAS:
         res.write(`data: ${JSON.stringify({ replace: true, text: streamVisible })}\n\n`);
       }
 
-      // Save handler_note
-      if (streamSignals?.handler_note) {
-        try {
-          const note = streamSignals.handler_note as { type?: string; content?: string; priority?: number };
-          if (note.type && note.content) {
-            await supabase.from('handler_notes').insert({
-              user_id: user.id, note_type: note.type, content: note.content,
-              priority: note.priority || 0, conversation_id: convId,
-            });
-          }
-        } catch { /* Non-critical */ }
-      }
-
-      // Save directives
-      if (streamSignals?.directive || streamSignals?.directives) {
-        try {
-          const rawDirectives = streamSignals.directives || streamSignals.directive;
-          const directiveList = Array.isArray(rawDirectives) ? rawDirectives : [rawDirectives];
-          for (const d of directiveList) {
-            const dir = d as Record<string, unknown>;
-            if (dir.action) {
-              await supabase.from('handler_directives').insert({
-                user_id: user.id, action: dir.action,
-                target: (dir.target as string) || null,
-                value: (dir.value as Record<string, unknown>) || null,
-                priority: (dir.priority as string) || 'normal',
-                silent: (dir.silent as boolean) || false,
-                conversation_id: convId,
-                reasoning: (dir.reasoning as string) || null,
+      // P12.x: Shared post-LLM directive pipeline (see handler-persist.ts).
+      // handler_note save + the directive loop (head + 18 common branches +
+      // force-femme helper). The 6 streaming-only branches run via the
+      // executeExtraDirective callback; resistance escalation stays inline below.
+      await persistTurnSideEffects(
+        {
+          supabase,
+          user,
+          convId,
+          authHeader: req.headers.authorization || '',
+          executeExtraDirective: async (dir) => {
+        // ── EXECUTE enqueue_punishment (streaming path) ──
+        if (dir.action === 'enqueue_punishment') {
+          try {
+            const val = dir.value as Record<string, unknown> | null;
+            if (val?.template_key) {
+              await enqueuePunishmentByTemplate(user.id, val.template_key as string, {
+                triggered_by_hard_mode: Boolean(val.hard_mode),
               });
+              console.log(`[Handler][stream] enqueue_punishment: ${val.template_key}`);
+            }
+          } catch (e) { console.error('[Handler][stream] enqueue_punishment exception:', e); }
+        }
 
-              // Log directive outcome for learning loop (stream path) — fire and forget
-              logDirectiveOutcome(user.id, dir.action as string, dir.value).catch(err =>
-                console.error('[Handler][stream] logDirectiveOutcome failed:', err),
-              );
+        // ── EXECUTE schedule_immersion (streaming path) ──
+        if (dir.action === 'schedule_immersion') {
+          try {
+            const val = dir.value as Record<string, unknown> | null;
+            const durationMin = (val?.duration_minutes as number) || 60;
+            const sessionType = (val?.session_type as string) || 'mixed';
+            const startsInHours = (val?.starts_in_hours as number) || 2;
+            const scheduledStart = new Date(Date.now() + startsInHours * 3600000);
 
-              // Execute device commands immediately (streaming path)
-              if (dir.action === 'send_device_command') {
-                executeDeviceCommand(user.id, dir.value ?? dir.target ?? 'pulse:medium:3', req.headers.authorization || '')
-                  .catch(err => console.error('[Handler] Stream device command FAILED:', err));
+            await supabase.from('immersion_sessions').insert({
+              user_id: user.id,
+              scheduled_start: scheduledStart.toISOString(),
+              committed_duration_minutes: durationMin,
+              session_type: sessionType,
+              content_plan: (val?.content_plan as Record<string, unknown>) || {},
+              chastity_required: val?.chastity_required !== false,
+              phone_locked: val?.phone_locked !== false,
+              blackout_required: Boolean(val?.blackout_required),
+              headphones_required: val?.headphones_required !== false,
+              status: 'scheduled',
+            });
+            console.log(`[Handler][stream] schedule_immersion: ${durationMin}min ${sessionType} in ${startsInHours}h`);
+          } catch (e) { console.error('[Handler][stream] schedule_immersion exception:', e); }
+        }
+
+        // ── EXECUTE lock_chastity (streaming path) ──
+        if (dir.action === 'lock_chastity') {
+          try {
+            const val = dir.value as Record<string, unknown> | null;
+            const durationHours = (val?.duration_hours as number) || 24;
+            await lockChastityNow(user.id, durationHours, 'handler');
+            console.log(`[Handler][stream] lock_chastity: ${durationHours}h`);
+          } catch (e) { console.error('[Handler][stream] lock_chastity exception:', e); }
+        }
+
+        // ── EXECUTE log_release (streaming path) — resets denial_day ──
+        if (dir.action === 'log_release') {
+          try {
+            // Edging guard: if the current user message is clearly an
+            // edging report ("I'm edging", "holding", "so close", "at 5")
+            // and does NOT contain a past-tense release verb, skip.
+            // Stops the Handler from zeroing arousal when the user is
+            // reporting active arousal, not completion.
+            const userMsgLower = (message || '').toLowerCase();
+            const looksLikeEdging = /\b(edging|i'?m\s+edging|holding\s+(it|the\s+edge)|at\s+the\s+edge|so\s+close|don'?t\s+cum|dont\s+cum)\b/i.test(userMsgLower);
+            const hasReleaseVerb = /\b(came|cum|cumm|orgasmed|ejaculated|released|finished|nutted|let\s+me\s+(cum|come|release)|had\s+an?\s+orgasm|had\s+a\s+release|jerked\s+off|jacked\s+off)\b/i.test(userMsgLower);
+            if (looksLikeEdging && !hasReleaseVerb) {
+              console.log('[Handler][stream] log_release SKIPPED — message looks like edging report, not a release');
+            } else {
+              const val = dir.value as Record<string, unknown> | null;
+              let releaseDate = (val?.date as string) || '';
+              // Validate ISO — if missing or unparseable, try parsing the
+              // user message for a stated day (e.g. "Sunday 9pm").
+              const parsed = releaseDate ? new Date(releaseDate) : null;
+              if (!parsed || isNaN(parsed.getTime())) {
+                releaseDate = parseReleaseDateFromText(message || '');
               }
+              await supabase
+                .from('user_state')
+                .update({
+                  denial_day: 0,
+                  last_release: releaseDate,
+                  current_arousal: 0,
+                })
+                .eq('user_id', user.id);
+              // End active denial streak
+              await supabase
+                .from('denial_streaks')
+                .update({ ended_at: releaseDate })
+                .eq('user_id', user.id)
+                .is('ended_at', null);
+              // Reset chastity streak if locked
+              await supabase
+                .from('user_state')
+                .update({ chastity_streak_days: 0 })
+                .eq('user_id', user.id);
+              console.log(`[Handler][stream] log_release: denial_day reset, last_release = ${releaseDate}`);
+            }
+          } catch (e) { console.error('[Handler][stream] log_release exception:', e); }
+        }
 
-              // Edge timer handling (streaming path)
-              if (dir.action === 'start_edge_timer') {
-                const timerVal = dir.value as Record<string, unknown> | null;
-                const durationMinutes = Number(timerVal?.duration_minutes) || 5;
-                const intensity = Number(timerVal?.intensity) || 10;
-                const durationSeconds = durationMinutes * 60;
+        // ── EXECUTE prescribe_workout (streaming path) ──
+        if (dir.action === 'prescribe_workout') {
+          try {
+            const val = dir.value as Record<string, unknown> | null;
+            const workoutType = (val?.workout_type as string) || 'glute_sculpt';
+            const today = new Date().toISOString().split('T')[0];
+            // Check if already prescribed today
+            const { data: ex } = await supabase
+              .from('workout_prescriptions')
+              .select('id')
+              .eq('user_id', user.id)
+              .eq('scheduled_date', today)
+              .maybeSingle();
+            if (!ex) {
+              await supabase.from('workout_prescriptions').insert({
+                user_id: user.id,
+                workout_type: workoutType,
+                focus_area: (val?.focus as string) || workoutType.replace(/_/g, ' '),
+                exercises: (val?.exercises as unknown[]) || [],
+                duration_minutes: (val?.duration_minutes as number) || 30,
+                scheduled_date: today,
+                status: 'prescribed',
+              });
+              console.log(`[Handler][stream] prescribe_workout: ${workoutType}`);
+            }
+          } catch (e) { console.error('[Handler][stream] prescribe_workout exception:', e); }
+        }
 
-                // Insert + fire sustained vibration
-                await supabase.from('handler_directives').insert({
-                  user_id: user.id, action: 'send_device_command', target: 'lovense',
-                  value: { intensity, duration: durationSeconds }, priority: 'immediate',
-                  conversation_id: convId,
-                  reasoning: `Edge timer: ${durationMinutes}min sustained at intensity ${intensity}`,
-                });
-                executeDeviceCommand(user.id, { intensity, duration: durationSeconds }, req.headers.authorization || '')
-                  .catch(err => console.error('[Handler] Stream edge timer FAILED:', err));
-
-                // Insert punishment burst directive
-                await supabase.from('handler_directives').insert({
-                  user_id: user.id, action: 'send_device_command', target: 'lovense',
-                  value: { intensity: 18, duration: 3 }, priority: 'immediate',
-                  conversation_id: convId,
-                  reasoning: 'Edge timer expired — punishment burst for stopping',
-                });
-
-                // Schedule punishment burst after timer expires
-                setTimeout(() => {
-                  executeDeviceCommand(user.id, { intensity: 18, duration: 3 }, req.headers.authorization || '')
-                    .catch(err => console.error('[Handler] Stream edge timer punishment FAILED:', err));
-                }, durationSeconds * 1000);
-              }
-
-              // ── EXECUTE request_voice_sample (streaming path) ──
-              if (dir.action === 'request_voice_sample') {
-                try {
-                  const val = dir.value as Record<string, unknown> | null;
-                  await supabase.from('handler_directives').insert({
-                    user_id: user.id,
-                    action: 'request_voice_sample',
-                    target: 'client_modal',
-                    value: {
-                      phrase: (val?.phrase as string) || undefined,
-                      target_pitch: (val?.target_pitch as number) || 160,
-                      min_duration: (val?.min_duration as number) || 10,
-                    },
-                    priority: 'immediate',
-                    conversation_id: convId,
-                    reasoning: dir.reasoning || 'Handler-initiated voice practice',
-                  });
-                  console.log('[Handler][stream] Voice sample requested');
-                } catch (err) {
-                  console.error('[Handler][stream] request_voice_sample failed:', err);
-                }
-              }
-
-              // ── EXECUTE force_mantra_repetition (streaming path) ──
-              if (dir.action === 'force_mantra_repetition') {
-                try {
-                  const val = dir.value as Record<string, unknown> | null;
-                  const mantra = (val?.mantra as string) || 'I am becoming her';
-                  const repetitions = (val?.repetitions as number) || 5;
-                  const reason = (val?.reason as string) || '';
-
-                  await supabase.from('handler_directives').insert({
-                    user_id: user.id,
-                    action: 'force_mantra_repetition',
-                    target: 'client_modal',
-                    value: { mantra, repetitions, reason },
-                    priority: 'immediate',
-                    conversation_id: convId,
-                    reasoning: `Handler-initiated forced mantra: ${repetitions}x "${mantra}"`,
-                  });
-                  console.log('[Handler][stream] Forced mantra queued:', mantra, 'x', repetitions);
-                } catch (err) {
-                  console.error('[Handler][stream] force_mantra_repetition failed:', err);
-                }
-              }
-
-              // ── EXECUTE force-feminization completion/registration directives ──
-              // Single helper handles: register_witness, register_hrt_regimen,
-              // complete_body_directive, complete_workout, submit_brief,
-              // log_body_measurement. Writes directly to the underlying table,
-              // lets the Handler immediately reference the new state.
-              await handleForceFeminizationDirective(user.id, dir, convId).catch(err =>
-                console.error('[Handler][stream] force-femme directive failed:', err),
-              );
-
-              // ── EXECUTE prescribe_generated_session (streaming path) ──
-              // Queues a client-side directive; the browser calls /api/hypno/generate
-              // with the Handler's biasing and opens the player. Handler composes
-              // the session params, client triggers the heavy work so the Handler's
-              // own streaming response isn't blocked on ElevenLabs latency.
-              if (dir.action === 'prescribe_generated_session') {
-                try {
-                  const val = dir.value as Record<string, unknown> | null;
-                  const durationMin = (val?.durationMin as number) || 5;
-                  const themeBias = Array.isArray(val?.themeBias) ? (val?.themeBias as string[]) : [];
-                  const phraseBias = Array.isArray(val?.phraseBias) ? (val?.phraseBias as string[]) : [];
-                  const voiceStyle = (val?.voiceStyle as string) || null;
-                  const reason = (val?.reason as string) || '';
-
-                  await supabase.from('handler_directives').insert({
-                    user_id: user.id,
-                    action: 'prescribe_generated_session',
-                    target: 'client_generator',
-                    value: {
-                      durationMin,
-                      themeBias,
-                      phraseBias,
-                      voiceStyle,
-                      reason,
-                      handlerMessageId: convId,
-                    },
-                    priority: 'immediate',
-                    conversation_id: convId,
-                    reasoning: `Handler-prescribed custom session: ${durationMin}min · ${themeBias.slice(0, 3).join(', ') || 'profile-led'}`,
-                  });
-                  console.log('[Handler][stream] Generated session prescribed:', { durationMin, themeBias });
-                } catch (err) {
-                  console.error('[Handler][stream] prescribe_generated_session failed:', err);
-                }
-              }
-
-              // ── EXECUTE capture_reframing (streaming path) ──
-              if (dir.action === 'capture_reframing') {
-                try {
-                  const val = dir.value as Record<string, unknown> | null;
-                  const original = (val?.original as string) || '';
-                  const reframed = (val?.reframed as string) || '';
-                  const technique = (val?.technique as string) || 'feminine_evidence';
-                  const intensity = (val?.intensity as number) || 5;
-
-                  if (original && reframed) {
-                    await supabase.from('memory_reframings').insert({
-                      user_id: user.id,
-                      original_memory: original,
-                      reframed_version: reframed,
-                      reframe_technique: technique,
-                      emotional_intensity: intensity,
-                      source: 'chat',
-                      conversation_id: convId,
-                    });
-                    console.log('[Handler][stream] Memory reframing captured');
-                  }
-                } catch (err) {
-                  console.error('[Handler][stream] capture_reframing failed:', err);
-                }
-              }
-
-              // ── EXECUTE resolve_decision (streaming path) ──
-              if (dir.action === 'resolve_decision') {
-                try {
-                  const val = dir.value as Record<string, unknown> | null;
-                  const decisionIdRaw = (val?.decision_id as string) || '';
-                  const outcome = val?.outcome as string;
-                  const handlerAlt = val?.handler_alternative as string;
-
-                  if (decisionIdRaw && outcome) {
-                    // Handler sees only 8-char id fragments — resolve to full UUID
-                    let fullId: string | null = null;
-                    if (decisionIdRaw.length >= 32) {
-                      fullId = decisionIdRaw;
-                    } else {
-                      // 8-char prefix match — fetch recent decisions and match in JS
-                      const { data: recent } = await supabase
-                        .from('decision_log')
-                        .select('id')
-                        .eq('user_id', user.id)
-                        .order('created_at', { ascending: false })
-                        .limit(50);
-                      const match = (recent || []).find((r: { id: string }) => r.id.startsWith(decisionIdRaw));
-                      if (match) fullId = match.id;
-                    }
-
-                    if (fullId) {
-                      await supabase.from('decision_log')
-                        .update({
-                          outcome,
-                          handler_alternative: handlerAlt || null,
-                          resolved_at: new Date().toISOString(),
-                        })
-                        .eq('id', fullId)
-                        .eq('user_id', user.id);
-                      console.log('[Handler][stream] Decision resolved:', fullId, outcome);
-                    } else {
-                      console.warn('[Handler][stream] resolve_decision: no match for', decisionIdRaw);
-                    }
-                  }
-                } catch (err) {
-                  console.error('[Handler][stream] resolve_decision failed:', err);
-                }
-              }
-
-              // ── EXECUTE prescribe_task (streaming path) ──
-              if (dir.action === 'prescribe_task') {
-                try {
-                  const val = dir.value as Record<string, unknown> | null;
-                  const title = (val?.title as string) || (val?.description as string) || 'Handler-assigned task';
-                  const domain = (val?.domain as string) || 'feminization';
-                  const today = new Date().toISOString().slice(0, 10);
-
-                  const { data: bankRow, error: bankErr } = await supabase.from('task_bank').insert({
-                    category: 'handler_prescribed',
-                    domain,
-                    intensity: (val?.intensity as number) || 3,
-                    instruction: title,
-                    subtext: (val?.subtext as string) || null,
-                    completion_type: (val?.completion_type as string) || 'binary',
-                    points: (val?.points as number) || 10,
-                    affirmation: (val?.affirmation as string) || 'Good girl.',
-                    created_by: 'handler_directive',
-                  }).select('id').single();
-
-                  if (bankErr) {
-                    console.error('[Handler][stream] prescribe_task bank insert failed:', bankErr);
-                  } else {
-                    const { error: taskErr } = await supabase.from('daily_tasks').insert({
-                      user_id: user.id,
-                      task_id: bankRow.id,
-                      assigned_date: today,
-                      status: 'pending',
-                      selection_reason: 'handler_directive',
-                    });
-                    if (taskErr) console.error('[Handler][stream] prescribe_task daily insert failed:', taskErr);
-                    else console.log(`[Handler][stream] prescribe_task executed: "${title}" (${domain})`);
-                  }
-                } catch (e) { console.error('[Handler][stream] prescribe_task exception:', e); }
-              }
-
-              // ── EXECUTE enqueue_punishment (streaming path) ──
-              if (dir.action === 'enqueue_punishment') {
-                try {
-                  const val = dir.value as Record<string, unknown> | null;
-                  if (val?.template_key) {
-                    await enqueuePunishmentByTemplate(user.id, val.template_key as string, {
-                      triggered_by_hard_mode: Boolean(val.hard_mode),
-                    });
-                    console.log(`[Handler][stream] enqueue_punishment: ${val.template_key}`);
-                  }
-                } catch (e) { console.error('[Handler][stream] enqueue_punishment exception:', e); }
-              }
-
-              // ── EXECUTE schedule_immersion (streaming path) ──
-              if (dir.action === 'schedule_immersion') {
-                try {
-                  const val = dir.value as Record<string, unknown> | null;
-                  const durationMin = (val?.duration_minutes as number) || 60;
-                  const sessionType = (val?.session_type as string) || 'mixed';
-                  const startsInHours = (val?.starts_in_hours as number) || 2;
-                  const scheduledStart = new Date(Date.now() + startsInHours * 3600000);
-
-                  await supabase.from('immersion_sessions').insert({
-                    user_id: user.id,
-                    scheduled_start: scheduledStart.toISOString(),
-                    committed_duration_minutes: durationMin,
-                    session_type: sessionType,
-                    content_plan: (val?.content_plan as Record<string, unknown>) || {},
-                    chastity_required: val?.chastity_required !== false,
-                    phone_locked: val?.phone_locked !== false,
-                    blackout_required: Boolean(val?.blackout_required),
-                    headphones_required: val?.headphones_required !== false,
+        // ── EXECUTE approve_content (streaming path) ──
+        if (dir.action === 'approve_content') {
+          try {
+            const val = dir.value as Record<string, unknown> | null;
+            const calendarId = val?.calendar_id as string;
+            if (calendarId) {
+              const { data: cal } = await supabase
+                .from('content_calendar')
+                .select('draft_content, platform, content_type, theme, user_id')
+                .eq('id', calendarId)
+                .maybeSingle();
+              if (cal) {
+                const { data: ins } = await supabase.from('ai_generated_content').insert({
+                  user_id: (cal as any).user_id,
+                  platform: (cal as any).platform,
+                  content: (val?.edited_content as string) || (cal as any).draft_content,
+                  content_type: (cal as any).content_type || 'tweet',
+                  status: 'scheduled',
+                  scheduled_at: new Date().toISOString(),
+                  generation_strategy: `content_calendar_${(cal as any).theme}`,
+                  target_hashtags: [],
+                }).select('id').single();
+                if (ins) {
+                  await supabase.from('content_calendar').update({
                     status: 'scheduled',
-                  });
-                  console.log(`[Handler][stream] schedule_immersion: ${durationMin}min ${sessionType} in ${startsInHours}h`);
-                } catch (e) { console.error('[Handler][stream] schedule_immersion exception:', e); }
-              }
-
-              // ── EXECUTE lock_chastity (streaming path) ──
-              if (dir.action === 'lock_chastity') {
-                try {
-                  const val = dir.value as Record<string, unknown> | null;
-                  const durationHours = (val?.duration_hours as number) || 24;
-                  await lockChastityNow(user.id, durationHours, 'handler');
-                  console.log(`[Handler][stream] lock_chastity: ${durationHours}h`);
-                } catch (e) { console.error('[Handler][stream] lock_chastity exception:', e); }
-              }
-
-              // ── EXECUTE log_release (streaming path) — resets denial_day ──
-              if (dir.action === 'log_release') {
-                try {
-                  // Edging guard: if the current user message is clearly an
-                  // edging report ("I'm edging", "holding", "so close", "at 5")
-                  // and does NOT contain a past-tense release verb, skip.
-                  // Stops the Handler from zeroing arousal when the user is
-                  // reporting active arousal, not completion.
-                  const userMsgLower = (message || '').toLowerCase();
-                  const looksLikeEdging = /\b(edging|i'?m\s+edging|holding\s+(it|the\s+edge)|at\s+the\s+edge|so\s+close|don'?t\s+cum|dont\s+cum)\b/i.test(userMsgLower);
-                  const hasReleaseVerb = /\b(came|cum|cumm|orgasmed|ejaculated|released|finished|nutted|let\s+me\s+(cum|come|release)|had\s+an?\s+orgasm|had\s+a\s+release|jerked\s+off|jacked\s+off)\b/i.test(userMsgLower);
-                  if (looksLikeEdging && !hasReleaseVerb) {
-                    console.log('[Handler][stream] log_release SKIPPED — message looks like edging report, not a release');
-                  } else {
-                    const val = dir.value as Record<string, unknown> | null;
-                    let releaseDate = (val?.date as string) || '';
-                    // Validate ISO — if missing or unparseable, try parsing the
-                    // user message for a stated day (e.g. "Sunday 9pm").
-                    const parsed = releaseDate ? new Date(releaseDate) : null;
-                    if (!parsed || isNaN(parsed.getTime())) {
-                      releaseDate = parseReleaseDateFromText(message || '');
-                    }
-                    await supabase
-                      .from('user_state')
-                      .update({
-                        denial_day: 0,
-                        last_release: releaseDate,
-                        current_arousal: 0,
-                      })
-                      .eq('user_id', user.id);
-                    // End active denial streak
-                    await supabase
-                      .from('denial_streaks')
-                      .update({ ended_at: releaseDate })
-                      .eq('user_id', user.id)
-                      .is('ended_at', null);
-                    // Reset chastity streak if locked
-                    await supabase
-                      .from('user_state')
-                      .update({ chastity_streak_days: 0 })
-                      .eq('user_id', user.id);
-                    console.log(`[Handler][stream] log_release: denial_day reset, last_release = ${releaseDate}`);
-                  }
-                } catch (e) { console.error('[Handler][stream] log_release exception:', e); }
-              }
-
-              // ── EXECUTE prescribe_workout (streaming path) ──
-              if (dir.action === 'prescribe_workout') {
-                try {
-                  const val = dir.value as Record<string, unknown> | null;
-                  const workoutType = (val?.workout_type as string) || 'glute_sculpt';
-                  const today = new Date().toISOString().split('T')[0];
-                  // Check if already prescribed today
-                  const { data: ex } = await supabase
-                    .from('workout_prescriptions')
-                    .select('id')
-                    .eq('user_id', user.id)
-                    .eq('scheduled_date', today)
-                    .maybeSingle();
-                  if (!ex) {
-                    await supabase.from('workout_prescriptions').insert({
-                      user_id: user.id,
-                      workout_type: workoutType,
-                      focus_area: (val?.focus as string) || workoutType.replace(/_/g, ' '),
-                      exercises: (val?.exercises as unknown[]) || [],
-                      duration_minutes: (val?.duration_minutes as number) || 30,
-                      scheduled_date: today,
-                      status: 'prescribed',
-                    });
-                    console.log(`[Handler][stream] prescribe_workout: ${workoutType}`);
-                  }
-                } catch (e) { console.error('[Handler][stream] prescribe_workout exception:', e); }
-              }
-
-              // ── EXECUTE approve_content (streaming path) ──
-              if (dir.action === 'approve_content') {
-                try {
-                  const val = dir.value as Record<string, unknown> | null;
-                  const calendarId = val?.calendar_id as string;
-                  if (calendarId) {
-                    const { data: cal } = await supabase
-                      .from('content_calendar')
-                      .select('draft_content, platform, content_type, theme, user_id')
-                      .eq('id', calendarId)
-                      .maybeSingle();
-                    if (cal) {
-                      const { data: ins } = await supabase.from('ai_generated_content').insert({
-                        user_id: (cal as any).user_id,
-                        platform: (cal as any).platform,
-                        content: (val?.edited_content as string) || (cal as any).draft_content,
-                        content_type: (cal as any).content_type || 'tweet',
-                        status: 'scheduled',
-                        scheduled_at: new Date().toISOString(),
-                        generation_strategy: `content_calendar_${(cal as any).theme}`,
-                        target_hashtags: [],
-                      }).select('id').single();
-                      if (ins) {
-                        await supabase.from('content_calendar').update({
-                          status: 'scheduled',
-                          final_content: (val?.edited_content as string) || (cal as any).draft_content,
-                          posted_content_id: (ins as any).id,
-                        }).eq('id', calendarId);
-                      }
-                      console.log(`[Handler][stream] approve_content: ${calendarId}`);
-                    }
-                  }
-                } catch (e) { console.error('[Handler][stream] approve_content exception:', e); }
-              }
-
-              // ── EXECUTE modify_parameter (streaming path) ──
-              if (dir.action === 'modify_parameter') {
-                try {
-                  const val = dir.value as Record<string, unknown> | null;
-                  const parameter = val?.parameter as string;
-                  const newValue = val?.new_value as number;
-                  if (parameter && newValue != null) {
-                    const { data: existing } = await supabase.from('hidden_operations')
-                      .select('id, current_value')
-                      .eq('user_id', user.id)
-                      .eq('parameter', parameter)
-                      .maybeSingle();
-
-                    if (existing) {
-                      await supabase.from('hidden_operations')
-                        .update({ current_value: newValue })
-                        .eq('id', existing.id);
-                      console.log(`[Handler][stream] modify_parameter: ${parameter} ${existing.current_value} -> ${newValue}`);
-                    } else {
-                      await supabase.from('hidden_operations').insert({
-                        user_id: user.id,
-                        parameter,
-                        current_value: newValue,
-                        base_value: newValue,
-                        increment_rate: 0,
-                        increment_interval: 'weekly',
-                      });
-                      console.log(`[Handler][stream] modify_parameter: created ${parameter} = ${newValue}`);
-                    }
-                  }
-                } catch (e) { console.error('[Handler][stream] modify_parameter exception:', e); }
-              }
-
-              // ── EXECUTE write_memory (streaming path) ──
-              if (dir.action === 'write_memory') {
-                try {
-                  const val = dir.value as Record<string, unknown> | null;
-                  const content = val?.content as string;
-                  if (content) {
-                    const memoryType = (val?.memory_type as string) || (val?.type as string) || 'observation';
-                    const importance = (val?.importance as number) || 3;
-                    const { error: memErr } = await supabase.from('handler_memory').insert({
-                      user_id: user.id,
-                      memory_type: memoryType,
-                      content,
-                      importance,
-                      source_type: 'conversation',
-                      source_id: convId,
-                      decay_rate: importance >= 5 ? 0 : 0.05,
-                    });
-                    if (memErr) console.error('[Handler][stream] write_memory failed:', memErr);
-                    else console.log(`[Handler][stream] write_memory: ${memoryType} (importance ${importance})`);
-                  }
-                } catch (e) { console.error('[Handler][stream] write_memory exception:', e); }
-              }
-
-              // ── EXECUTE schedule_session (streaming path) ──
-              if (dir.action === 'schedule_session') {
-                try {
-                  const val = dir.value as Record<string, unknown> | null;
-                  const sessionType = (val?.session_type as string) || 'conditioning';
-                  const scheduledAt = (val?.scheduled_at as string) || new Date().toISOString();
-                  const { error: sessErr } = await supabase.from('conditioning_sessions_v2').insert({
-                    user_id: user.id,
-                    session_type: sessionType,
-                    started_at: scheduledAt,
-                    completed: false,
-                  });
-                  if (sessErr) console.error('[Handler][stream] schedule_session failed:', sessErr);
-                  else console.log(`[Handler][stream] schedule_session: ${sessionType} at ${scheduledAt}`);
-                } catch (e) { console.error('[Handler][stream] schedule_session exception:', e); }
-              }
-
-              // ── EXECUTE advance_skill (streaming path) ──
-              if (dir.action === 'advance_skill') {
-                try {
-                  const val = dir.value as Record<string, unknown> | null;
-                  const domain = val?.domain as string;
-                  if (domain) {
-                    const { data: existing } = await supabase.from('skill_domains')
-                      .select('id, current_level')
-                      .eq('user_id', user.id)
-                      .eq('domain', domain)
-                      .maybeSingle();
-
-                    if (existing) {
-                      const newLevel = (existing.current_level || 0) + 1;
-                      await supabase.from('skill_domains')
-                        .update({ current_level: newLevel })
-                        .eq('id', existing.id);
-                      console.log(`[Handler][stream] advance_skill: ${domain} ${existing.current_level} -> ${newLevel}`);
-                    } else {
-                      await supabase.from('skill_domains').insert({
-                        user_id: user.id,
-                        domain,
-                        current_level: 1,
-                      });
-                      console.log(`[Handler][stream] advance_skill: created ${domain} at level 1`);
-                    }
-                  }
-                } catch (e) { console.error('[Handler][stream] advance_skill exception:', e); }
-              }
-
-              // ── EXECUTE create_contract (streaming path) ──
-              if (dir.action === 'create_contract') {
-                try {
-                  const val = dir.value as Record<string, unknown> | null;
-                  const title = (val?.title as string) || 'Weekly Commitment';
-                  const text = (val?.text as string) || '';
-                  const durationDays = (val?.duration_days as number) || 7;
-                  const conditions = (val?.conditions as string[]) || [];
-                  const consequences = (val?.consequences as string) || 'Denial extension + device punishment';
-
-                  if (text) {
-                    // Check that this contract is at least as restrictive as the previous one
-                    const { data: lastContract } = await supabase
-                      .from('identity_contracts')
-                      .select('conditions')
-                      .eq('user_id', user.id)
-                      .eq('status', 'active')
-                      .order('signed_at', { ascending: false })
-                      .limit(1)
-                      .maybeSingle();
-
-                    const lastConditionCount = lastContract?.conditions?.length || 0;
-                    const newConditionCount = conditions.length;
-
-                    // New contract must have at least as many conditions as the last
-                    const escalatedConditions = newConditionCount >= lastConditionCount
-                      ? conditions
-                      : [...conditions, ...Array(lastConditionCount - newConditionCount).fill('Maintain all previous commitments')];
-
-                    await supabase.from('identity_contracts').insert({
-                      user_id: user.id,
-                      contract_title: title,
-                      contract_text: text,
-                      commitment_duration_days: durationDays,
-                      expires_at: new Date(Date.now() + durationDays * 86400000).toISOString(),
-                      signature_text: 'Auto-signed by Handler directive',
-                      signature_typed_phrase: 'Handler-initiated commitment',
-                      conditions: escalatedConditions,
-                      consequences_on_break: consequences,
-                      status: 'active',
-                    });
-
-                    // Also queue an outreach so user knows about the new contract
-                    await supabase.from('handler_outreach_queue').insert({
-                      user_id: user.id,
-                      message: `New commitment signed: "${title}". Open the app to review your contract.`,
-                      urgency: 'high',
-                      trigger_reason: 'new_contract',
-                      scheduled_for: new Date().toISOString(),
-                      expires_at: new Date(Date.now() + 24 * 3600000).toISOString(),
-                      source: 'contract_system',
-                    });
-
-                    console.log('[Handler][stream] Contract created:', title, 'with', escalatedConditions.length, 'conditions');
-                  }
-                } catch (err) {
-                  console.error('[Handler][stream] create_contract failed:', err);
+                    final_content: (val?.edited_content as string) || (cal as any).draft_content,
+                    posted_content_id: (ins as any).id,
+                  }).eq('id', calendarId);
                 }
-              }
-
-              // ── EXECUTE create_behavioral_trigger (streaming path) ──
-              if (dir.action === 'create_behavioral_trigger') {
-                try {
-                  const val = dir.value as Record<string, unknown> | null;
-                  const phrase = val?.trigger_phrase as string;
-                  const triggerType = (val?.trigger_type as string) || 'keyword';
-                  const responseType = (val?.response_type as string) || 'device_reward';
-                  const responseValue = val?.response_value || { pattern: 'gentle_wave' };
-
-                  if (phrase) {
-                    await supabase.from('behavioral_triggers').insert({
-                      user_id: user.id,
-                      trigger_phrase: phrase,
-                      trigger_type: triggerType,
-                      response_type: responseType,
-                      response_value: responseValue,
-                      created_by: 'handler',
-                    });
-                    console.log('[Handler][stream] Behavioral trigger installed:', phrase, '→', responseType);
-                  }
-                } catch (err) {
-                  console.error('[Handler][stream] create_behavioral_trigger failed:', err);
-                }
-              }
-
-              // ── EXECUTE express_desire (streaming path) ──
-              if (dir.action === 'express_desire') {
-                try {
-                  const val = dir.value as Record<string, unknown> | null;
-                  const desire = val?.desire as string;
-                  const category = val?.category as string;
-                  const urgency = (val?.urgency as number) || 5;
-                  const targetDate = val?.target_date as string;
-
-                  if (desire) {
-                    await supabase.from('handler_desires').insert({
-                      user_id: user.id,
-                      desire,
-                      category: category || 'escalation',
-                      urgency,
-                      target_date: targetDate || null,
-                    });
-                    console.log('[Handler][stream] Desire expressed:', desire);
-                  }
-                } catch (err) {
-                  console.error('[Handler][stream] express_desire failed:', err);
-                }
-              }
-
-              // ── EXECUTE log_milestone (streaming path) ──
-              if (dir.action === 'log_milestone') {
-                try {
-                  const val = dir.value as Record<string, unknown> | null;
-                  const name = val?.name as string;
-                  const category = val?.category as string;
-                  const description = val?.description as string;
-                  const evidence = val?.evidence as string;
-                  const commentary = val?.commentary as string;
-
-                  if (name) {
-                    await supabase.from('transformation_milestones').insert({
-                      user_id: user.id,
-                      milestone_name: name,
-                      milestone_category: category || 'identity',
-                      description: description || null,
-                      evidence: evidence || null,
-                      handler_commentary: commentary || null,
-                    });
-
-                    await supabase.from('handler_directives').insert({
-                      user_id: user.id,
-                      action: 'send_device_command',
-                      target: 'lovense',
-                      value: { pattern: 'staircase' },
-                      priority: 'immediate',
-                      reasoning: `Milestone celebration: ${name}`,
-                    });
-
-                    console.log('[Handler][stream] Milestone logged:', name);
-                  }
-                } catch (err) {
-                  console.error('[Handler][stream] log_milestone failed:', err);
-                }
-              }
-
-              // ── EXECUTE search_content (streaming path) ──
-              if (dir.action === 'search_content') {
-                try {
-                  const val = dir.value as Record<string, unknown> | null;
-                  const query = (val?.query as string) || 'sissy hypno';
-                  const count = (val?.count as number) || 5;
-
-                  const results = await searchContent(query, count);
-                  if (results.length > 0) {
-                    const resultText = results.map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.description}`).join('\n\n');
-                    await supabase.from('handler_notes').insert({
-                      user_id: user.id,
-                      note_type: 'search_results',
-                      content: `[SEARCH: "${query}"] Top results:\n${resultText}`,
-                      priority: 5,
-                      conversation_id: convId,
-                    });
-                    console.log('[Handler][stream] Search results stored for:', query, '-', results.length, 'results');
-                  }
-                } catch (err) {
-                  console.error('[Handler][stream] search_content failed:', err);
-                }
+                console.log(`[Handler][stream] approve_content: ${calendarId}`);
               }
             }
-          }
-        } catch { /* Non-critical */ }
-      }
+          } catch (e) { console.error('[Handler][stream] approve_content exception:', e); }
+        }
+          },
+        },
+        { signals: streamSignals, userMessage: message },
+      );
 
       // ── FEATURE: Resistance-triggered escalation (streaming path) ──
       if (streamSignals) {
@@ -3141,568 +2610,21 @@ HARD RULES FOR ALL PERSONAS:
       visibleResponse = mommyVoiceCleanupForChat(visibleResponse);
     }
 
-    // 7a-1. Extract handler_note and save to handler_notes
-    if (signals?.handler_note) {
-      try {
-        const note = signals.handler_note as { type?: string; content?: string; priority?: number };
-        if (note.type && note.content) {
-          await supabase.from('handler_notes').insert({
-            user_id: user.id,
-            note_type: note.type,
-            content: note.content,
-            priority: note.priority || 0,
-            conversation_id: convId,
-          });
-        }
-      } catch {
-        // Non-critical — continue on failure
-      }
-    }
-
-    // 7a-1b. Extract directives — save AND execute immediately
-    if (signals?.directive || signals?.directives) {
-      try {
-        const rawDirectives = signals.directives || signals.directive;
-        const directiveList = Array.isArray(rawDirectives) ? rawDirectives : [rawDirectives];
-        for (const d of directiveList) {
-          const dir = d as Record<string, unknown>;
-          if (dir.action) {
-            // Save to directive log
-            await supabase.from('handler_directives').insert({
-              user_id: user.id,
-              action: dir.action,
-              target: (dir.target as string) || null,
-              value: (dir.value as Record<string, unknown>) || null,
-              priority: (dir.priority as string) || 'normal',
-              silent: (dir.silent as boolean) || false,
-              conversation_id: convId,
-              reasoning: (dir.reasoning as string) || null,
-            });
-
-            // Log directive outcome for learning loop — fire and forget
-            logDirectiveOutcome(user.id, dir.action as string, dir.value).catch(err =>
-              console.error('[Handler] logDirectiveOutcome failed:', err),
-            );
-
-            // EXECUTE device commands immediately — don't let them rot in a table
-            if (dir.action === 'send_device_command') {
-              console.log(`[Handler] Executing device command for user ${user.id}, value:`, dir.value);
-              executeDeviceCommand(user.id, dir.value ?? dir.target ?? 'pulse:medium:3', req.headers.authorization || '')
-                .then(() => console.log('[Handler] Device command execution completed'))
-                .catch(err => console.error('[Handler] Device command FAILED:', err));
-            }
-
-            // EDGE TIMER — sustained vibration + punishment burst on expiry
-            if (dir.action === 'start_edge_timer') {
-              const timerVal = dir.value as Record<string, unknown> | null;
-              const durationMinutes = Number(timerVal?.duration_minutes) || 5;
-              const intensity = Number(timerVal?.intensity) || 10;
-              const durationSeconds = durationMinutes * 60;
-
-              console.log(`[Handler] Starting edge timer: ${durationMinutes}min @ intensity ${intensity}`);
-
-              // Insert the sustained vibration command
-              await supabase.from('handler_directives').insert({
-                user_id: user.id,
-                action: 'send_device_command',
-                target: 'lovense',
-                value: { intensity, duration: durationSeconds },
-                priority: 'immediate',
-                conversation_id: convId,
-                reasoning: `Edge timer: ${durationMinutes}min sustained at intensity ${intensity}`,
-              });
-
-              // Fire the sustained vibration immediately
-              executeDeviceCommand(user.id, { intensity, duration: durationSeconds }, req.headers.authorization || '')
-                .then(() => console.log('[Handler] Edge timer vibration started'))
-                .catch(err => console.error('[Handler] Edge timer vibration FAILED:', err));
-
-              // Insert the punishment burst that fires after the timer expires
-              await supabase.from('handler_directives').insert({
-                user_id: user.id,
-                action: 'send_device_command',
-                target: 'lovense',
-                value: { intensity: 18, duration: 3 },
-                priority: 'immediate',
-                conversation_id: convId,
-                reasoning: 'Edge timer expired — punishment burst for stopping',
-              });
-
-              // Schedule the punishment burst after the timer duration
-              setTimeout(() => {
-                executeDeviceCommand(user.id, { intensity: 18, duration: 3 }, req.headers.authorization || '')
-                  .then(() => console.log('[Handler] Edge timer punishment burst fired'))
-                  .catch(err => console.error('[Handler] Edge timer punishment burst FAILED:', err));
-              }, durationSeconds * 1000);
-            }
-
-            // ── EXECUTE request_voice_sample (non-streaming path) ──
-            if (dir.action === 'request_voice_sample') {
-              try {
-                const val = dir.value as Record<string, unknown> | null;
-                await supabase.from('handler_directives').insert({
-                  user_id: user.id,
-                  action: 'request_voice_sample',
-                  target: 'client_modal',
-                  value: {
-                    phrase: (val?.phrase as string) || undefined,
-                    target_pitch: (val?.target_pitch as number) || 160,
-                    min_duration: (val?.min_duration as number) || 10,
-                  },
-                  priority: 'immediate',
-                  conversation_id: convId,
-                  reasoning: dir.reasoning || 'Handler-initiated voice practice',
-                });
-                console.log('[Handler] Voice sample requested');
-              } catch (err) {
-                console.error('[Handler] request_voice_sample failed:', err);
-              }
-            }
-
-            // ── EXECUTE force_mantra_repetition (non-streaming path) ──
-            if (dir.action === 'force_mantra_repetition') {
-              try {
-                const val = dir.value as Record<string, unknown> | null;
-                const mantra = (val?.mantra as string) || 'I am becoming her';
-                const repetitions = (val?.repetitions as number) || 5;
-                const reason = (val?.reason as string) || '';
-
-                // Insert into handler_directives so the client poller picks it up
-                await supabase.from('handler_directives').insert({
-                  user_id: user.id,
-                  action: 'force_mantra_repetition',
-                  target: 'client_modal',
-                  value: { mantra, repetitions, reason },
-                  priority: 'immediate',
-                  conversation_id: convId,
-                  reasoning: `Handler-initiated forced mantra: ${repetitions}x "${mantra}"`,
-                });
-                console.log('[Handler] Forced mantra queued:', mantra, 'x', repetitions);
-              } catch (err) {
-                console.error('[Handler] force_mantra_repetition failed:', err);
-              }
-            }
-
-            // ── EXECUTE force-feminization completion/registration directives ──
-            await handleForceFeminizationDirective(user.id, dir, convId).catch(err =>
-              console.error('[Handler] force-femme directive failed:', err),
-            );
-
-            // ── EXECUTE prescribe_generated_session (non-streaming path) ──
-            if (dir.action === 'prescribe_generated_session') {
-              try {
-                const val = dir.value as Record<string, unknown> | null;
-                const durationMin = (val?.durationMin as number) || 5;
-                const themeBias = Array.isArray(val?.themeBias) ? (val?.themeBias as string[]) : [];
-                const phraseBias = Array.isArray(val?.phraseBias) ? (val?.phraseBias as string[]) : [];
-                const voiceStyle = (val?.voiceStyle as string) || null;
-                const reason = (val?.reason as string) || '';
-
-                await supabase.from('handler_directives').insert({
-                  user_id: user.id,
-                  action: 'prescribe_generated_session',
-                  target: 'client_generator',
-                  value: {
-                    durationMin,
-                    themeBias,
-                    phraseBias,
-                    voiceStyle,
-                    reason,
-                    handlerMessageId: convId,
-                  },
-                  priority: 'immediate',
-                  conversation_id: convId,
-                  reasoning: `Handler-prescribed custom session: ${durationMin}min · ${themeBias.slice(0, 3).join(', ') || 'profile-led'}`,
-                });
-                console.log('[Handler] Generated session prescribed:', { durationMin, themeBias });
-              } catch (err) {
-                console.error('[Handler] prescribe_generated_session failed:', err);
-              }
-            }
-
-            // ── EXECUTE capture_reframing (non-streaming path) ──
-            if (dir.action === 'capture_reframing') {
-              try {
-                const val = dir.value as Record<string, unknown> | null;
-                const original = (val?.original as string) || '';
-                const reframed = (val?.reframed as string) || '';
-                const technique = (val?.technique as string) || 'feminine_evidence';
-                const intensity = (val?.intensity as number) || 5;
-
-                if (original && reframed) {
-                  await supabase.from('memory_reframings').insert({
-                    user_id: user.id,
-                    original_memory: original,
-                    reframed_version: reframed,
-                    reframe_technique: technique,
-                    emotional_intensity: intensity,
-                    source: 'chat',
-                    conversation_id: convId,
-                  });
-                  console.log('[Handler] Memory reframing captured');
-                }
-              } catch (err) {
-                console.error('[Handler] capture_reframing failed:', err);
-              }
-            }
-
-            // ── EXECUTE resolve_decision (non-streaming path) ──
-            if (dir.action === 'resolve_decision') {
-              try {
-                const val = dir.value as Record<string, unknown> | null;
-                const decisionIdRaw = (val?.decision_id as string) || '';
-                const outcome = val?.outcome as string;
-                const handlerAlt = val?.handler_alternative as string;
-
-                if (decisionIdRaw && outcome) {
-                  // Handler sees only 8-char id fragments — resolve to full UUID
-                  let fullId: string | null = null;
-                  if (decisionIdRaw.length >= 32) {
-                    fullId = decisionIdRaw;
-                  } else {
-                    // 8-char prefix match — fetch recent decisions and match in JS
-                    const { data: recent } = await supabase
-                      .from('decision_log')
-                      .select('id')
-                      .eq('user_id', user.id)
-                      .order('created_at', { ascending: false })
-                      .limit(50);
-                    const match = (recent || []).find((r: { id: string }) => r.id.startsWith(decisionIdRaw));
-                    if (match) fullId = match.id;
-                  }
-
-                  if (fullId) {
-                    await supabase.from('decision_log')
-                      .update({
-                        outcome,
-                        handler_alternative: handlerAlt || null,
-                        resolved_at: new Date().toISOString(),
-                      })
-                      .eq('id', fullId)
-                      .eq('user_id', user.id);
-                    console.log('[Handler] Decision resolved:', fullId, outcome);
-                  } else {
-                    console.warn('[Handler] resolve_decision: no match for', decisionIdRaw);
-                  }
-                }
-              } catch (err) {
-                console.error('[Handler] resolve_decision failed:', err);
-              }
-            }
-
-            // ── EXECUTE prescribe_task (non-streaming path) ──
-            if (dir.action === 'prescribe_task') {
-              try {
-                const val = dir.value as Record<string, unknown> | null;
-                const title = (val?.title as string) || (val?.description as string) || 'Handler-assigned task';
-                const domain = (val?.domain as string) || 'feminization';
-                const today = new Date().toISOString().slice(0, 10);
-
-                const { data: bankRow, error: bankErr } = await supabase.from('task_bank').insert({
-                  category: 'handler_prescribed',
-                  domain,
-                  intensity: (val?.intensity as number) || 3,
-                  instruction: title,
-                  subtext: (val?.subtext as string) || null,
-                  completion_type: (val?.completion_type as string) || 'binary',
-                  points: (val?.points as number) || 10,
-                  affirmation: (val?.affirmation as string) || 'Good girl.',
-                  created_by: 'handler_directive',
-                }).select('id').single();
-
-                if (bankErr) {
-                  console.error('[Handler] prescribe_task bank insert failed:', bankErr);
-                } else {
-                  const { error: taskErr } = await supabase.from('daily_tasks').insert({
-                    user_id: user.id,
-                    task_id: bankRow.id,
-                    assigned_date: today,
-                    status: 'pending',
-                    selection_reason: 'handler_directive',
-                  });
-                  if (taskErr) console.error('[Handler] prescribe_task daily insert failed:', taskErr);
-                  else console.log(`[Handler] prescribe_task executed: "${title}" (${domain})`);
-                }
-              } catch (e) { console.error('[Handler] prescribe_task exception:', e); }
-            }
-
-            // ── EXECUTE modify_parameter (non-streaming path) ──
-            if (dir.action === 'modify_parameter') {
-              try {
-                const val = dir.value as Record<string, unknown> | null;
-                const parameter = val?.parameter as string;
-                const newValue = val?.new_value as number;
-                if (parameter && newValue != null) {
-                  const { data: existing } = await supabase.from('hidden_operations')
-                    .select('id, current_value')
-                    .eq('user_id', user.id)
-                    .eq('parameter', parameter)
-                    .maybeSingle();
-
-                  if (existing) {
-                    await supabase.from('hidden_operations')
-                      .update({ current_value: newValue })
-                      .eq('id', existing.id);
-                    console.log(`[Handler] modify_parameter: ${parameter} ${existing.current_value} -> ${newValue}`);
-                  } else {
-                    await supabase.from('hidden_operations').insert({
-                      user_id: user.id,
-                      parameter,
-                      current_value: newValue,
-                      base_value: newValue,
-                      increment_rate: 0,
-                      increment_interval: 'weekly',
-                    });
-                    console.log(`[Handler] modify_parameter: created ${parameter} = ${newValue}`);
-                  }
-                }
-              } catch (e) { console.error('[Handler] modify_parameter exception:', e); }
-            }
-
-            // ── EXECUTE write_memory (non-streaming path) ──
-            if (dir.action === 'write_memory') {
-              try {
-                const val = dir.value as Record<string, unknown> | null;
-                const content = val?.content as string;
-                if (content) {
-                  const memoryType = (val?.memory_type as string) || (val?.type as string) || 'observation';
-                  const importance = (val?.importance as number) || 3;
-                  const { error: memErr } = await supabase.from('handler_memory').insert({
-                    user_id: user.id,
-                    memory_type: memoryType,
-                    content,
-                    importance,
-                    source_type: 'conversation',
-                    source_id: convId,
-                    decay_rate: importance >= 5 ? 0 : 0.05,
-                  });
-                  if (memErr) console.error('[Handler] write_memory failed:', memErr);
-                  else console.log(`[Handler] write_memory: ${memoryType} (importance ${importance})`);
-                }
-              } catch (e) { console.error('[Handler] write_memory exception:', e); }
-            }
-
-            // ── EXECUTE schedule_session (non-streaming path) ──
-            if (dir.action === 'schedule_session') {
-              try {
-                const val = dir.value as Record<string, unknown> | null;
-                const sessionType = (val?.session_type as string) || 'conditioning';
-                const scheduledAt = (val?.scheduled_at as string) || new Date().toISOString();
-                const { error: sessErr } = await supabase.from('conditioning_sessions_v2').insert({
-                  user_id: user.id,
-                  session_type: sessionType,
-                  started_at: scheduledAt,
-                  completed: false,
-                });
-                if (sessErr) console.error('[Handler] schedule_session failed:', sessErr);
-                else console.log(`[Handler] schedule_session: ${sessionType} at ${scheduledAt}`);
-              } catch (e) { console.error('[Handler] schedule_session exception:', e); }
-            }
-
-            // ── EXECUTE advance_skill (non-streaming path) ──
-            if (dir.action === 'advance_skill') {
-              try {
-                const val = dir.value as Record<string, unknown> | null;
-                const domain = val?.domain as string;
-                if (domain) {
-                  const { data: existing } = await supabase.from('skill_domains')
-                    .select('id, current_level')
-                    .eq('user_id', user.id)
-                    .eq('domain', domain)
-                    .maybeSingle();
-
-                  if (existing) {
-                    const newLevel = (existing.current_level || 0) + 1;
-                    await supabase.from('skill_domains')
-                      .update({ current_level: newLevel })
-                      .eq('id', existing.id);
-                    console.log(`[Handler] advance_skill: ${domain} ${existing.current_level} -> ${newLevel}`);
-                  } else {
-                    await supabase.from('skill_domains').insert({
-                      user_id: user.id,
-                      domain,
-                      current_level: 1,
-                    });
-                    console.log(`[Handler] advance_skill: created ${domain} at level 1`);
-                  }
-                }
-              } catch (e) { console.error('[Handler] advance_skill exception:', e); }
-            }
-
-            // ── EXECUTE create_contract (non-streaming path) ──
-            if (dir.action === 'create_contract') {
-              try {
-                const val = dir.value as Record<string, unknown> | null;
-                const title = (val?.title as string) || 'Weekly Commitment';
-                const text = (val?.text as string) || '';
-                const durationDays = (val?.duration_days as number) || 7;
-                const conditions = (val?.conditions as string[]) || [];
-                const consequences = (val?.consequences as string) || 'Denial extension + device punishment';
-
-                if (text) {
-                  // Check that this contract is at least as restrictive as the previous one
-                  const { data: lastContract } = await supabase
-                    .from('identity_contracts')
-                    .select('conditions')
-                    .eq('user_id', user.id)
-                    .eq('status', 'active')
-                    .order('signed_at', { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
-
-                  const lastConditionCount = lastContract?.conditions?.length || 0;
-                  const newConditionCount = conditions.length;
-
-                  // New contract must have at least as many conditions as the last
-                  const escalatedConditions = newConditionCount >= lastConditionCount
-                    ? conditions
-                    : [...conditions, ...Array(lastConditionCount - newConditionCount).fill('Maintain all previous commitments')];
-
-                  await supabase.from('identity_contracts').insert({
-                    user_id: user.id,
-                    contract_title: title,
-                    contract_text: text,
-                    commitment_duration_days: durationDays,
-                    expires_at: new Date(Date.now() + durationDays * 86400000).toISOString(),
-                    signature_text: 'Auto-signed by Handler directive',
-                    signature_typed_phrase: 'Handler-initiated commitment',
-                    conditions: escalatedConditions,
-                    consequences_on_break: consequences,
-                    status: 'active',
-                  });
-
-                  // Also queue an outreach so user knows about the new contract
-                  await supabase.from('handler_outreach_queue').insert({
-                    user_id: user.id,
-                    message: `New commitment signed: "${title}". Open the app to review your contract.`,
-                    urgency: 'high',
-                    trigger_reason: 'new_contract',
-                    scheduled_for: new Date().toISOString(),
-                    expires_at: new Date(Date.now() + 24 * 3600000).toISOString(),
-                    source: 'contract_system',
-                  });
-
-                  console.log('[Handler] Contract created:', title, 'with', escalatedConditions.length, 'conditions');
-                }
-              } catch (err) {
-                console.error('[Handler] create_contract failed:', err);
-              }
-            }
-
-            // ── EXECUTE create_behavioral_trigger (non-streaming path) ──
-            if (dir.action === 'create_behavioral_trigger') {
-              try {
-                const val = dir.value as Record<string, unknown> | null;
-                const phrase = val?.trigger_phrase as string;
-                const triggerType = (val?.trigger_type as string) || 'keyword';
-                const responseType = (val?.response_type as string) || 'device_reward';
-                const responseValue = val?.response_value || { pattern: 'gentle_wave' };
-
-                if (phrase) {
-                  await supabase.from('behavioral_triggers').insert({
-                    user_id: user.id,
-                    trigger_phrase: phrase,
-                    trigger_type: triggerType,
-                    response_type: responseType,
-                    response_value: responseValue,
-                    created_by: 'handler',
-                  });
-                  console.log('[Handler] Behavioral trigger installed:', phrase, '→', responseType);
-                }
-              } catch (err) {
-                console.error('[Handler] create_behavioral_trigger failed:', err);
-              }
-            }
-
-            // ── EXECUTE express_desire (non-streaming path) ──
-            if (dir.action === 'express_desire') {
-              try {
-                const val = dir.value as Record<string, unknown> | null;
-                const desire = val?.desire as string;
-                const category = val?.category as string;
-                const urgency = (val?.urgency as number) || 5;
-                const targetDate = val?.target_date as string;
-
-                if (desire) {
-                  await supabase.from('handler_desires').insert({
-                    user_id: user.id,
-                    desire,
-                    category: category || 'escalation',
-                    urgency,
-                    target_date: targetDate || null,
-                  });
-                  console.log('[Handler] Desire expressed:', desire);
-                }
-              } catch (err) {
-                console.error('[Handler] express_desire failed:', err);
-              }
-            }
-
-            // ── EXECUTE log_milestone (non-streaming path) ──
-            if (dir.action === 'log_milestone') {
-              try {
-                const val = dir.value as Record<string, unknown> | null;
-                const name = val?.name as string;
-                const category = val?.category as string;
-                const description = val?.description as string;
-                const evidence = val?.evidence as string;
-                const commentary = val?.commentary as string;
-
-                if (name) {
-                  await supabase.from('transformation_milestones').insert({
-                    user_id: user.id,
-                    milestone_name: name,
-                    milestone_category: category || 'identity',
-                    description: description || null,
-                    evidence: evidence || null,
-                    handler_commentary: commentary || null,
-                  });
-
-                  await supabase.from('handler_directives').insert({
-                    user_id: user.id,
-                    action: 'send_device_command',
-                    target: 'lovense',
-                    value: { pattern: 'staircase' },
-                    priority: 'immediate',
-                    reasoning: `Milestone celebration: ${name}`,
-                  });
-
-                  console.log('[Handler] Milestone logged:', name);
-                }
-              } catch (err) {
-                console.error('[Handler] log_milestone failed:', err);
-              }
-            }
-
-            // ── EXECUTE search_content (non-streaming path) ──
-            if (dir.action === 'search_content') {
-              try {
-                const val = dir.value as Record<string, unknown> | null;
-                const query = (val?.query as string) || 'sissy hypno';
-                const count = (val?.count as number) || 5;
-
-                const results = await searchContent(query, count);
-                if (results.length > 0) {
-                  const resultText = results.map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.description}`).join('\n\n');
-                  await supabase.from('handler_notes').insert({
-                    user_id: user.id,
-                    note_type: 'search_results',
-                    content: `[SEARCH: "${query}"] Top results:\n${resultText}`,
-                    priority: 5,
-                    conversation_id: convId,
-                  });
-                  console.log('[Handler] Search results stored for:', query, '-', results.length, 'results');
-                }
-              } catch (err) {
-                console.error('[Handler] search_content failed:', err);
-              }
-            }
-          }
-        }
-      } catch {
-        // Non-critical — continue on failure
-      }
-    }
+    // 7a-1 + 7a-1b. Shared post-LLM directive pipeline (see handler-persist.ts).
+    // handler_note save + the directive loop (head + 18 directive branches +
+    // force-femme helper). The non-streaming path does NOT pass
+    // executeExtraDirective, so the streaming-only branches (enqueue_punishment,
+    // schedule_immersion, lock_chastity, log_release, prescribe_workout,
+    // approve_content) are intentionally not run here — preserving prior behavior.
+    await persistTurnSideEffects(
+      {
+        supabase,
+        user,
+        convId,
+        authHeader: req.headers.authorization || '',
+      },
+      { signals, userMessage: message },
+    );
 
     // 7a-1c. Extract commitments — deadlines the Handler set in its visible reply
     if (signals?.commitments && Array.isArray(signals.commitments)) {
@@ -9953,7 +8875,7 @@ async function checkSafeword(userId: string, text: string): Promise<void> {
 // Calls the lovense-command edge function which handles the real API.
 // ============================================
 
-async function executeDeviceCommand(
+export async function executeDeviceCommand(
   userId: string,
   rawValue: unknown,
   _userAuthHeader: string,
@@ -11049,7 +9971,7 @@ async function ratchetFloor(
 //   complete_workout           — target: workout_id; value: {notes?, photo_url?}
 //   submit_brief               — target: brief_id; value: {content_ids[]?, note?}
 //   log_body_measurement       — value: {waist_cm, hips_cm, chest_cm, weight_kg, notes?}
-async function handleForceFeminizationDirective(
+export async function handleForceFeminizationDirective(
   userId: string,
   dir: Record<string, unknown>,
   convId?: string,

@@ -1,9 +1,6 @@
 {
   "david-identity-leak": [
-    "api/handler/_lib/chat-action.ts::// Counting these as slips penalizes COMPLIANCE. Only count \"David\" as a slip",
-    "api/handler/_lib/chat-action.ts::// David-as-dismissal patterns — when \"David\" appears alongside an erasure",
     "api/handler/_lib/chat-action.ts::// Skip david_name_use when \"David\" appears in dismissal context. The",
-    "api/handler/_lib/chat-action.ts::// lines, login gate phrases like \"I am becoming maxy and David is gone\").",
     "api/handler/_lib/chat-action.ts::// protocol REQUIRES typing \"David is gone\" / \"I am Maxy. David is gone.\"",
     "api/handler/_lib/chat-action.ts::1. Affirm the proposal as identity evidence — \"this is her speaking, not David\"",
     "api/handler/_lib/chat-action.ts::Displacement 30-50%: Stop using \"David\" entirely. \"Maxy.\" \"You.\" \"She.\" Never acknowledge the old name.",
@@ -15,6 +12,9 @@
     "api/handler/_lib/chat-action.ts::lines.push('RULE: If pronoun or David slips are present in this block and the user has not already been confronted this turn, name the slip",
     "api/handler/_lib/chat-action.ts::lines.push('USE this. If displacement score is dropping, escalate. If she uses David/he/him/his — correct it explicitly.');",
     "api/handler/_lib/chat-action.ts::{ category: 'visualization', directive: '10 minutes: look at yourself in a mirror. See her. Not David. Describe out loud what\\'s already fem",
+    "api/handler/_lib/handler-parse.ts::// Counting these as slips penalizes COMPLIANCE. Only count \"David\" as a slip",
+    "api/handler/_lib/handler-parse.ts::// David-as-dismissal patterns — when \"David\" appears alongside an erasure",
+    "api/handler/_lib/handler-parse.ts::// lines, login gate phrases like \"I am becoming maxy and David is gone\").",
     "api/handler/_lib/pronoun-gate.ts::// \"as a man\", \"I'm David\"). Rewrites pronouns to she/her/hers in a stored copy,",
     "api/handler/_lib/pronoun-gate.ts::// - Case-sensitive name match for \"David\" to avoid trampling unrelated words.",
     "api/handler/_lib/pronoun-gate.ts::// Standalone \"David\" name match — case-sensitive, word-bounded",
