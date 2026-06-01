@@ -15,12 +15,12 @@ import { getDiscoveryState } from './gina/discovery-engine';
 import { buildWhoopContext } from './whoop-context';
 import { buildCommitmentContext } from './handler-v2/commitment-enforcement';
 import { getCurrentPrediction } from './handler-v2/predictive-model';
-import { getConditioningContext } from './handler-v2/conditioning-engine';
-import { getHRTContext } from './handler-v2/hrt-pipeline';
-import { getShameContext } from './handler-v2/shame-alchemy';
-import { getRevenueContext } from './handler-v2/revenue-acceleration';
-import { getDavidEliminationContext } from './handler-v2/david-elimination';
-import { getSocialContext } from './handler-v2/social-escalation';
+import { getConditioningContext } from './handler-context/conditioning-engine';
+import { getHRTContext } from './handler-context/hrt-pipeline';
+import { getShameContext } from './handler-context/shame-alchemy';
+import { getRevenueContext } from './handler-context/revenue-acceleration';
+import { getDavidEliminationContext } from './handler-context/david-elimination';
+import { getSocialContext } from './handler-context/social-escalation';
 import {
   getVaultStats,
   getTodaySchedule,
@@ -74,8 +74,8 @@ import { buildNarrativeContext } from './conditioning/narrative-engine';
 import { buildVoicePitchContext } from './voice/pitch-tracker';
 import { buildVoiceEvolutionContext } from './voice/voice-evolution';
 import { buildInvestmentContext } from './handler-v2/auto-purchase';
-import { buildAutoPosterActivityContext } from './handler-v2/auto-poster-activity';
-import { buildLeadIntelligenceContext } from './handler-v2/lead-intelligence';
+import { buildAutoPosterActivityContext } from './handler-context/auto-poster-activity';
+import { buildLeadIntelligenceContext } from './handler-context/lead-intelligence';
 import { buildBriefContext } from './content/brief-context';
 import { buildStreamContext } from './content/stream-context';
 import { getFundBalance } from './handler-v2/auto-purchase';
