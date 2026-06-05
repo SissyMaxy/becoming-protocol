@@ -2719,6 +2719,9 @@ async function scheduleDecrees(
       .select('id, edict, consequence, trigger_source')
       .eq('user_id', userId).eq('status', 'active')
       .lt('deadline', nowIso)
+      // Don't even process decrees the surface-guarantor flagged as never
+      // surfaced — they stay active until seen (visible-before-penalized).
+      .neq('expired_unsurfaced', true)
       .limit(20)
     for (const d of (expired || []) as Array<{ id: string; edict: string; consequence: string; trigger_source: string | null }>) {
       await supabase.from('handler_decrees').update({
@@ -2726,21 +2729,18 @@ async function scheduleDecrees(
         missed_at: nowIso,
       }).eq('id', d.id)
 
-      // VISIBILITY CHECK (feedback_visible_before_penalized.md): a missed
-      // decree only counts as a slip if the user was actually alerted to it.
-      // Check for an outreach that referenced this decree id. Without
-      // visibility, mark missed but DON'T log a slip — silent escalation
-      // is the bug pattern, not protocol working as intended.
-      const { count: outreachCount } = await supabase.from('handler_outreach_queue')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', userId)
-        .ilike('message', `%${d.id}%`)
-      const wasVisible = (outreachCount || 0) > 0
-        || /shot_list:|morning_brief:|chat:/.test(d.trigger_source || '')
-      if (!wasVisible) {
-        console.log(`[decree] suppressed slip for decree ${d.id} — never surfaced to user`)
+      // VISIBILITY CHECK — Penalty Preview Rail (mig 601), the uniform gate.
+      // Decrees auto-get a penalty preview on insert; the slip fires only if
+      // that cost was surfaced with enough notice. Replaces the old fuzzy
+      // `ilike message %decree_id%` heuristic. Fail-closed.
+      const { data: mayApply } = await supabase.rpc('penalty_may_apply', {
+        p_source_table: 'handler_decrees', p_source_id: d.id,
+      })
+      if (mayApply !== true) {
+        console.log(`[decree] suppressed slip for decree ${d.id} — cost not previewed/surfaced`)
         continue
       }
+      await supabase.rpc('mark_penalty_applied', { p_source_table: 'handler_decrees', p_source_id: d.id })
 
       const slipMatch = (d.consequence || '').match(/slip\s*\+(\d+)/)
       const pts = slipMatch ? Math.min(10, parseInt(slipMatch[1], 10)) : 2
@@ -3992,7 +3992,7 @@ async function enforceCommitments(
 
       // Financial bleeding — accumulates into compliance_state.bleeding_total_today
       const bleedMatch = consequence.match(/bleed(?:ing)?\s*\+\s*\$?(\d+)/)
-      if (bleedMatch) {
+      if (bleedMatch && wasCommitmentVisible) {
         const dollars = parseInt(bleedMatch[1], 10)
         const { data: cs } = await supabase.from('compliance_state').select('bleeding_total_today').eq('user_id', userId).maybeSingle()
         const newTotal = Number((cs?.bleeding_total_today as number | undefined) || 0) + dollars
@@ -4001,7 +4001,7 @@ async function enforceCommitments(
       }
 
       // Hard mode activation
-      if (/hard_mode_activate/.test(consequence)) {
+      if (/hard_mode_activate/.test(consequence) && wasCommitmentVisible) {
         await supabase.from('user_state').update({
           hard_mode_active: true,
           hard_mode_entered_at: new Date().toISOString(),
@@ -4016,7 +4016,7 @@ async function enforceCommitments(
       // class as the 2026-04-28 denial_day incident). Mirrors migration 417's
       // COALESCE(chastity_scheduled_unlock_at, now()) + interval pattern.
       const chastMatch = consequence.match(/chastity\s*\+\s*(\d+)\s*d/)
-      if (chastMatch) {
+      if (chastMatch && wasCommitmentVisible) {
         const days = parseInt(chastMatch[1], 10)
         const { data: us } = await supabase.from('user_state').select('chastity_scheduled_unlock_at').eq('user_id', userId).maybeSingle()
         const existing = us?.chastity_scheduled_unlock_at ? new Date(us.chastity_scheduled_unlock_at as string).getTime() : 0

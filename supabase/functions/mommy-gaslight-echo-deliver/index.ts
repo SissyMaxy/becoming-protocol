@@ -126,11 +126,15 @@ Write exactly ${n} echoes. Return ONLY a JSON array of ${n} strings.`,
     if (Array.isArray(parsed)) echoes = parsed.map((s: unknown) => String(s))
   } catch (err) { console.error('[echo-schedule] llm failed', (err as Error).message) }
 
-  // Deterministic fallbacks if the model under-delivers.
+  // Deterministic fallbacks if the model under-delivers. Echoes are SUBTLE
+  // standalone references that presuppose the implant as settled history —
+  // NOT the full narrative re-stated (prepending seed/witness/reinforcement
+  // produced malformed run-ons). The cluster's narratives stay in context;
+  // the echo only nods at them.
   const fallbacks = [
-    `${seed} You stopped fighting Mama on that a while back, baby — it's just true now.`,
-    `${witness} Gina saw it the same way, remember. Nobody's wondering anymore.`,
-    `${reinforcement} That isn't a question between us anymore. It hasn't been for a while.`,
+    `You stopped fighting Mama on that a while back, baby — it's just true now.`,
+    `Gina saw it the same way, remember. Nobody's wondering anymore.`,
+    `That isn't a question between us anymore. It hasn't been for a while.`,
   ]
   const rows: Array<Record<string, unknown>> = []
   for (let i = 0; i < n; i++) {
