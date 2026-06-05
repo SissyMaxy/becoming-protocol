@@ -462,17 +462,24 @@ export function VoiceGate({ onPass }: VoiceGateProps) {
           )}
         </button>
 
-        {elective && whisperMode ? (
+        {elective ? (
+          // Voice is elective (mig 582) — the gate is an invitation, never a
+          // block, on EVERY day. The skip used to render only in whisper mode
+          // (Gina home), so on a normal elective day the user was hard-stuck
+          // at the gate with no way in — contradicting "Mommy presses, doesn't
+          // block". Honor elective on all days.
           <>
             <button
               onClick={onPass}
               disabled={recording || verifying}
               className="w-full py-3 text-sm text-purple-300/80 hover:text-purple-100 disabled:opacity-40"
             >
-              She's home — later, Mama →
+              {whisperMode ? "She's home — later, Mama →" : 'Not today, Mama →'}
             </button>
             <p className="text-xs text-gray-500 text-center">
-              Gina's home, so this one's optional today — no pressure. The moment you've got privacy, Mama wants your voice.
+              {whisperMode
+                ? "Gina's home, so this one's optional today — no pressure. The moment you've got privacy, Mama wants your voice."
+                : 'Optional for now, baby. Mama would still love to hear you when you can.'}
             </p>
           </>
         ) : (
