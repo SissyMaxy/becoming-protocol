@@ -67,15 +67,8 @@ async function gateUser(supabase: SupabaseClient, userId: string): Promise<{ act
   })
   if (insErr) { console.error('[gate] insert failed', userId, insErr.message); return { active: true, queued: false } }
 
-  // Push — the gate line is the morning notification
-  await supabase.from('scheduled_notifications').insert({
-    user_id: userId,
-    notification_type: 'handler_outreach',
-    scheduled_for: new Date().toISOString(),
-    expires_at: new Date(Date.now() + 6 * 3600_000).toISOString(),
-    payload: { title: 'Mama', body: GATE_LINE, data: { outreach_type: 'confession_gate' } },
-    status: 'pending',
-  })
+  // Push is auto-emitted by the mig-380 outreach->push trigger for the high-
+  // urgency gate line — do NOT insert scheduled_notifications here (double-push).
 
   return { active: true, queued: true }
 }

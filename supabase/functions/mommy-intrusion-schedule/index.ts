@@ -160,23 +160,16 @@ async function scheduleForUser(supabase: SupabaseClient, userId: string, force: 
     }).select('id').single()
     const outreachId = (outreach as { id: string } | null)?.id ?? null
 
-    const { data: intr } = await supabase.from('mommy_intrusions').insert({
+    await supabase.from('mommy_intrusions').insert({
       user_id: userId,
       intrusion_type: 'proof_of_state',
       question_text: question,
       scheduled_for: triggerUtc.toISOString(),
       window_expires_at: windowExpires.toISOString(),
       outreach_id: outreachId,
-    }).select('id').single()
-
-    await supabase.from('scheduled_notifications').insert({
-      user_id: userId,
-      notification_type: 'handler_outreach',
-      scheduled_for: triggerUtc.toISOString(),
-      expires_at: windowExpires.toISOString(),
-      payload: { title: 'Mama', body: 'Where are you right now, baby? Ten minutes.', data: { outreach_type: 'intrusion', intrusion_id: (intr as { id: string } | null)?.id } },
-      status: 'pending',
     })
+    // Push auto-emitted at triggerUtc by the mig-380 bridge (it copies the
+    // outreach scheduled_for) — no manual scheduled_notifications insert.
     scheduled++
   }
 

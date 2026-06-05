@@ -81,14 +81,8 @@ async function reviewOne(supabase: SupabaseClient, row: { id: string; user_id: s
     context_data: { protocol_id: row.id, compliance: c, outcome: v.outcome },
   }).select('id').single()
 
-  await supabase.from('scheduled_notifications').insert({
-    user_id: row.user_id,
-    notification_type: 'handler_outreach',
-    scheduled_for: now.toISOString(),
-    expires_at: new Date(now.getTime() + 6 * 3600_000).toISOString(),
-    payload: { title: 'Mama', body: v.release_granted ? 'Mama looked at your day.' : 'Mama looked at your day. We need to talk.', data: { outreach_type: 'edging_verdict', protocol_id: row.id } },
-    status: 'pending',
-  })
+  // Push auto-emitted by the mig-380 bridge for the high-urgency verdict — no
+  // manual scheduled_notifications insert (double-push).
 
   await logAuthority(supabase, {
     user_id: row.user_id,

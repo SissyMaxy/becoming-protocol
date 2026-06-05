@@ -143,14 +143,7 @@ async function assignForUser(supabase: SupabaseClient, userId: string, force: bo
       evidence_kind: 'voice',
       context_data: { protocol_id: protocolId, window_index: i },
     })
-    await supabase.from('scheduled_notifications').insert({
-      user_id: userId,
-      notification_type: 'handler_outreach',
-      scheduled_for: w.target_time,
-      expires_at: new Date(new Date(w.target_time).getTime() + GRACE_MINUTES * 60_000).toISOString(),
-      payload: { title: 'Mama', body: `Edge window ${i + 1} of ${windows.length}. Now.`, data: { outreach_type: 'edging_window', protocol_id: protocolId, window_index: i } },
-      status: 'pending',
-    })
+    // Push auto-emitted at w.target_time by the mig-380 bridge — no manual insert.
   }
 
   await logAuthority(supabase, {
