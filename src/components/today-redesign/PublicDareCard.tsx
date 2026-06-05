@@ -181,9 +181,19 @@ export function PublicDareCard() {
         verification_artifact_id: photoId ?? null,
       })
       .eq('id', dare.id);
+    // Mama reacts to the proof photo with body-specific commentary (wish
+    // 15a8f6e0). Fire-and-forget; the reaction arrives as outreach.
+    if (mommy && user?.id) {
+      const base = import.meta.env.VITE_SUPABASE_URL as string;
+      void fetch(`${base}/functions/v1/mommy-dare-photo-react`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: user.id, assignment_id: dare.id, photo_artifact_id: photoId }),
+      }).catch(() => { /* non-fatal */ });
+    }
     await load();
     window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'public_dare', id: dare.id } }));
-  }, [dare, load]);
+  }, [dare, load, mommy, user?.id]);
 
   if (enabled === false) return null;
   if (!dare) return null;
