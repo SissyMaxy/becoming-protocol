@@ -102,6 +102,15 @@ Deno.serve(async (req: Request) => {
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceKey}` },
       body: JSON.stringify({ user_id: c.user_id, confession_id: c.id }),
     }).catch(() => { /* non-fatal */ })
+
+    // Parallel: bind the confession to an embodied micro-decree 24-72h out
+    // (wish 849ae5af). Idempotent per confession, weekly-capped, persona/
+    // safeword-gated. Complements the miner (quote-back) with compulsion.
+    void fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/confession-action-bind`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceKey}` },
+      body: JSON.stringify({ user_id: c.user_id, confession_id: c.id }),
+    }).catch(() => { /* non-fatal */ })
   }
 
   return new Response(JSON.stringify({
