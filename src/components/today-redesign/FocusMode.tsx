@@ -27,6 +27,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { isMommyPersona } from '../../lib/persona/dommy-mommy';
+import { useSurfaceRenderTracking } from '../../lib/surface-render-hooks';
 import {
   markOfferAccepted,
   markOfferCompleted,
@@ -407,6 +408,21 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
       localStorage.setItem(`focus_draft:${task.rowId}`, confessText);
     }
   }, [confessText, task?.rowId]);
+
+  // visible-before-penalized invariant: FocusMode is Today's DEFAULT surface,
+  // so it MUST stamp surfaced_at on the decree it's showing — otherwise a
+  // decree displayed here never registers as seen and accrues a deadline the
+  // user provably looked at but the system thinks was hidden. We stamp ONLY
+  // the single decree currently on screen (not the loaded set) so surfaced_at
+  // stays honest — it means "Maxy saw THIS one". Non-decree tasks pass [].
+  const shownDecreeIds = useMemo(
+    () => (task?.rowId &&
+        (task.kind === 'focus_decree' || task.kind === 'overdue_decree' || task.kind === 'due_today_decree')
+      ? [task.rowId]
+      : []),
+    [task?.rowId, task?.kind],
+  );
+  useSurfaceRenderTracking('handler_decrees', shownDecreeIds);
 
   // Initial pick (with loader)
   useEffect(() => { pickNext(false); }, [pickNext]);
