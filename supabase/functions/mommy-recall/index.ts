@@ -132,8 +132,11 @@ Deno.serve(async (req: Request) => {
 
   const tryImplant = async (): Promise<RecallPick | null> => {
     const { data: implants } = await supabase.from('memory_implants')
-      .select('id, narrative, importance, implant_category')
+      .select('id, narrative, importance, implant_category, surface_after')
       .eq('user_id', userId).eq('active', true)
+      // surface_after gates scheduled quote-back (e.g. confession-mined
+      // implants surface 24-48h after mining; mig 595). Null = always eligible.
+      .or(`surface_after.is.null,surface_after.lte.${new Date().toISOString()}`)
       .order('importance', { ascending: false }).limit(40)
     const eligible = ((implants || []) as Array<{ id: string; narrative: string; importance: number; implant_category: string }>)
       .filter(r => !recentIds.has(r.id))

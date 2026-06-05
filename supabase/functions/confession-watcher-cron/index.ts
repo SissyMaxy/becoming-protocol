@@ -93,6 +93,15 @@ Deno.serve(async (req: Request) => {
     } catch (err) {
       results.push({ confession_id: c.id, status: 'fetch_error', detail: String(err).slice(0, 200) })
     }
+
+    // Parallel: mine the confession for scheduled gaslight implants (wish
+    // 6a7613f2). Fire-and-forget — the miner is idempotent per confession,
+    // gates itself on persona/safeword, and never blocks the fast-react.
+    void fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/confession-gaslight-mine`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceKey}` },
+      body: JSON.stringify({ user_id: c.user_id, confession_id: c.id }),
+    }).catch(() => { /* non-fatal */ })
   }
 
   return new Response(JSON.stringify({
