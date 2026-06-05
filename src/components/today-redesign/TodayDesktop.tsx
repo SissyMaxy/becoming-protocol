@@ -57,6 +57,7 @@ import { MommyMoodIndicator } from '../persona/MommyMoodIndicator';
 import { ArousalTouchCard } from '../persona/ArousalTouchCard';
 import { EdgingDayCard } from './EdgingDayCard';
 import { MommyIntrusionCard } from './MommyIntrusionCard';
+import { PenaltyPreviewCard } from './PenaltyPreviewCard';
 import { WardrobePrescriptionCard } from './WardrobePrescriptionCard';
 import { MommyDailyPlanCard } from './MommyDailyPlanCard';
 import { MommyAmbientPlayerCard } from './MommyAmbientPlayerCard';
@@ -344,6 +345,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         </button>
         {/* SPINE — always visible. Single answer to "what now". */}
         <MommyIntrusionCard />
+        <PenaltyPreviewCard />
         <MommyMoodIndicator />
         <MommyDailyPlanCard />
         <MommyAmbientPlayerCard />

@@ -2339,6 +2339,13 @@ async function scheduleConfessions(
       .limit(20)
     for (const m of (missed || []) as Array<{ id: string }>) {
       await supabase.from('confession_queue').update({ missed: true }).eq('id', m.id)
+      // Penalty Preview Rail (mig 601): the slip only fires if the cost was
+      // previewed to her with enough notice. No surfaced preview → mark
+      // missed but do NOT slip (visible-before-penalized, uniform gate).
+      const { data: mayApply } = await supabase.rpc('penalty_may_apply', {
+        p_source_table: 'confession_queue', p_source_id: m.id,
+      })
+      if (mayApply !== true) continue
       // Use slip_type='confession_missed' (specific, in constraint, and the
       // demands-confession trigger explicitly skips this type to avoid the
       // confession→slip→confession circular loop). source_text is plain
@@ -2354,6 +2361,7 @@ async function scheduleConfessions(
         metadata: { reason: 'confession_deadline_missed' },
         is_synthetic: true,
       })
+      await supabase.rpc('mark_penalty_applied', { p_source_table: 'confession_queue', p_source_id: m.id })
     }
   } catch (err) { console.error('[confession] miss enforcement failed:', err) }
 
@@ -3897,14 +3905,19 @@ async function enforceCommitments(
 
     // Parse & execute each clause
     try {
-      // VISIBILITY CHECK: skip the slip insert if the commitment was never
-      // surfaced to the user (no outreach filed referencing this commitment).
+      // VISIBILITY CHECK — Penalty Preview Rail (mig 601). The formal,
+      // uniform gate: a penalty applies ONLY if the cost was previewed to
+      // her and surfaced with enough notice. Fail-closed. This replaces the
+      // old fuzzy `ilike message %commitment_id%` heuristic and now gates
+      // EVERY consequence clause (slip, denial, witness), not just the slip.
       // feedback_visible_before_penalized.md — silent escalation is the bug.
-      const { count: oc } = await supabase.from('handler_outreach_queue')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', userId)
-        .ilike('message', `%${c.id}%`)
-      const wasCommitmentVisible = (oc || 0) > 0
+      const { data: mayApply } = await supabase.rpc('penalty_may_apply', {
+        p_source_table: 'handler_commitments', p_source_id: c.id,
+      })
+      const wasCommitmentVisible = mayApply === true
+      if (wasCommitmentVisible) {
+        await supabase.rpc('mark_penalty_applied', { p_source_table: 'handler_commitments', p_source_id: c.id })
+      }
 
       // Slip increment — writes slip_log entry + bumps user_state.slip_points_current
       const slipMatch = consequence.match(/slip\s*\+(\d+)/)
@@ -3933,7 +3946,7 @@ async function enforceCommitments(
       // a commitment with `denial +8d`, app showed "Day 11" out of nowhere).
       // The semantically correct write is chastity_scheduled_unlock_at.
       const denialMatch = consequence.match(/denial\s*\+\s*(\d+)\s*d/)
-      if (denialMatch) {
+      if (denialMatch && wasCommitmentVisible) {
         const days = parseInt(denialMatch[1], 10)
         const { data: us } = await supabase.from('user_state')
           .select('chastity_scheduled_unlock_at')
@@ -3952,7 +3965,7 @@ async function enforceCommitments(
       // Witness notification — looks up a designated witness (optionally filtered by
       // relationship in the consequence string) and queues a notification row.
       const witnessMatch = consequence.match(/witness_notify(?::\s*([a-z_]+))?/)
-      if (witnessMatch) {
+      if (witnessMatch && wasCommitmentVisible) {
         const relationship = witnessMatch[1] || null
         let wq = supabase.from('designated_witnesses')
           .select('id, witness_name, relationship')

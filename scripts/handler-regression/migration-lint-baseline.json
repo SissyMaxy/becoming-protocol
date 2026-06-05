@@ -377,6 +377,7 @@
   "supabase/migrations/584_cruising_dares.sql::insert-without-on-conflict::INSERT INTO public_dare_templates ... ; (no ON CONFLICT)",
   "supabase/migrations/591_confession_gate.sql::insert-without-on-conflict::INSERT INTO handler_outreach_queue ... ; (no ON CONFLICT)",
   "supabase/migrations/599_adaptive_loop_friction.sql::insert-without-on-conflict::INSERT INTO mommy_ux_signal_log ... ; (no ON CONFLICT)",
+  "supabase/migrations/601_penalty_preview_rail.sql::insert-without-on-conflict::INSERT INTO handler_outreach_queue ... ; (no ON CONFLICT)",
   "supabase/migrations/apply_1_tables.sql::insert-without-on-conflict::INSERT INTO supabase_migrations ... ; (no ON CONFLICT)",
   "supabase/migrations/catchup_031_037.sql::alter-table-add-column-needs-if-not-exists::ALTER TABLE mood_checkins ADD COLUMN triggered_by TEXT;",
   "supabase/migrations/catchup_031_037.sql::alter-table-add-column-needs-if-not-exists::ALTER TABLE user_state ADD COLUMN consecutive_survival_days INTEGER DEFAULT 0;",
