@@ -59,6 +59,17 @@ async function sweepEvasions(supabase: SupabaseClient, userId: string): Promise<
     await supabase.from('mommy_intrusions').update({ evaded: true, evasion_handled_at: new Date().toISOString() }).eq('id', r.id)
   }
 
+  // Emit the evasion signal into the adaptive loop (mig 605 consumer schedules
+  // a sharper reactive intrusion, capped 1/day). One signal per sweep, not
+  // per missed window, so a quiet stretch doesn't stack intrusions.
+  await supabase.from('mommy_ux_signal_log').insert({
+    user_id: userId,
+    event_type: 'evasion',
+    surface: 'intrusion:missed_window',
+    signal_strength: Math.min(5, rows.length + 1),
+    raw_context: `Went quiet on ${rows.length} intrusion window(s).`,
+  })
+
   // Shift today's mood to 'watching' so downstream generators read it.
   const today = new Date().toISOString().slice(0, 10)
   await supabase.from('mommy_mood').upsert({
