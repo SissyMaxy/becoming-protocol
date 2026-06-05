@@ -56,6 +56,7 @@ import { FocusMode } from './FocusMode';
 import { MommyMoodIndicator } from '../persona/MommyMoodIndicator';
 import { ArousalTouchCard } from '../persona/ArousalTouchCard';
 import { EdgingDayCard } from './EdgingDayCard';
+import { MommyIntrusionCard } from './MommyIntrusionCard';
 import { WardrobePrescriptionCard } from './WardrobePrescriptionCard';
 import { MommyDailyPlanCard } from './MommyDailyPlanCard';
 import { MommyAmbientPlayerCard } from './MommyAmbientPlayerCard';
@@ -293,6 +294,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             ← back to focus mode
           </button>
           {/* SPINE — always visible, top of page. Single answer to "what now". */}
+          <MommyIntrusionCard />
           <MommyMoodIndicator />
           <MommyDailyPlanCard />
           <MommyAmbientPlayerCard />
