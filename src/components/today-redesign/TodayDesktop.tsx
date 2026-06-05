@@ -68,6 +68,8 @@ import { MommyIdeationCard } from './MommyIdeationCard';
 import { DeployFixerStatusCard } from './DeployFixerStatusCard';
 import { SystemGrowthCard } from './SystemGrowthCard';
 import { EvidenceVaultCard } from './EvidenceVaultCard';
+import { IrreversibleProofCard } from './IrreversibleProofCard';
+import { AdaptationPanelCard } from './AdaptationPanelCard';
 import { GinaArcCard } from './GinaArcCard';
 import { LadderAdaptivePanel } from './LadderAdaptivePanel';
 import { LadderProgressionPanel } from './LadderProgressionPanel';
@@ -395,6 +397,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
           <MommyIdeationCard />
           <DeployFixerStatusCard />
           <SystemGrowthCard />
+          <AdaptationPanelCard />
           <SupabaseHealthCard />
           <DailyBriefingCard />
           <StrategicPlanCard />
@@ -404,6 +407,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         {/* PROGRESS — phase, mantra, identity, body measurements. Default closed. */}
         <CollapsibleGroup id="progress" label="Progress & Tracking" tone="#6ee7b7" hint="phase · streaks · body deltas">
           <EvidenceVaultCard />
+          <IrreversibleProofCard />
           <GinaArcCard />
           <GinaCampaignPanel />
           <ObservationLogButton />

@@ -68,6 +68,8 @@ import { MommyIdeationCard } from './MommyIdeationCard';
 import { DeployFixerStatusCard } from './DeployFixerStatusCard';
 import { SystemGrowthCard } from './SystemGrowthCard';
 import { EvidenceVaultCard } from './EvidenceVaultCard';
+import { IrreversibleProofCard } from './IrreversibleProofCard';
+import { AdaptationPanelCard } from './AdaptationPanelCard';
 import { GinaArcCard } from './GinaArcCard';
 import { LadderAdaptivePanel } from './LadderAdaptivePanel';
 import { LadderProgressionPanel } from './LadderProgressionPanel';
@@ -346,6 +348,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             <MommyIdeationCard />
             <DeployFixerStatusCard />
             <SystemGrowthCard />
+            <AdaptationPanelCard />
             <SupabaseHealthCard />
             <DailyBriefingCard />
             <StrategicPlanCard />
@@ -353,6 +356,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           </CollapsibleGroup>
           <CollapsibleGroup id="progress" label="Progress & Tracking" tone="#6ee7b7" hint="phase · streaks · body">
             <EvidenceVaultCard />
+            <IrreversibleProofCard />
             <GinaArcCard />
             <GinaCampaignPanel />
             <ObservationLogButton />

@@ -8,6 +8,7 @@
 
 import { supabase } from '../supabase';
 import { createAIClient } from './ai-client';
+import { autocorrect } from '../ego-deconstruction/pronoun-autocorrect';
 
 // ============================================
 // TYPES
@@ -1008,6 +1009,16 @@ export async function processForPosting(
       captions[platform] = brief.purpose;
       hashtags[platform] = [];
     }
+  }
+
+  // Pronoun-in-content (wish ef03d413): feminize masculine self-reference in
+  // generated captions before they're stored/scheduled. Reuses the
+  // ego-deconstruction autocorrect (Mechanic 6) — hard_with_undo applies the
+  // identity/body rewrites + self-reference-gated pronoun rewrites, skips
+  // quoted/code regions.
+  for (const platform of Object.keys(captions)) {
+    const text = captions[platform];
+    if (text) captions[platform] = autocorrect(text, 'hard_with_undo').corrected;
   }
 
   // Update content_library items with caption variations
