@@ -20,6 +20,7 @@
     "lint:voice": "node scripts/ci/voice-gate.mjs",
     "lint:migrations": "node scripts/handler-regression/migration-lint.mjs",
     "mommy:wishes": "tsx scripts/mommy/process-wishes.ts",
+    "mommy:workers": "tsx scripts/mommy/worker-replacement-trigger.ts",
     "mommy:queue-audio": "tsx scripts/mommy/queue-audio-session.ts",
     "mommy:mine-implants": "tsx scripts/mommy/mine-cruising-implants.ts",
     "mommy:build": "tsx scripts/mommy/builder.ts",
