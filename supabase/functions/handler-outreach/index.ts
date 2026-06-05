@@ -128,9 +128,9 @@ async function evaluateOutreach(
   // The opening line, urgency, voice all depend on persona/phase/mode.
   const { data: handlerState } = await supabase
     .from('user_state')
-    .select('handler_persona, current_phase, denial_day, hard_mode_active, chastity_locked, slip_points_current')
+    .select('handler_persona, current_phase, denial_day, hard_mode_active, chastity_locked, slip_points_current, confession_gate_active')
     .eq('user_id', userId)
-    .maybeSingle() as { data: { handler_persona?: string | null; current_phase?: number | null; denial_day?: number | null; hard_mode_active?: boolean | null; chastity_locked?: boolean | null; slip_points_current?: number | null } | null }
+    .maybeSingle() as { data: { handler_persona?: string | null; current_phase?: number | null; denial_day?: number | null; hard_mode_active?: boolean | null; chastity_locked?: boolean | null; slip_points_current?: number | null; confession_gate_active?: boolean | null } | null }
 
   // Don't outreach too frequently
   const { data: lastOutreach } = await supabase
@@ -226,7 +226,12 @@ async function evaluateOutreach(
     .gte('started_at', `${today}T00:00:00`)
 
   if ((todayConvos || 0) === 0) {
-    if (localHour >= 7 && localHour <= 10) {
+    // Confession gate: when last night's confession is still unanswered,
+    // Mama withholds the morning. The mommy-confession-gate worker owns
+    // the single gate line; the normal warm morning checkin must NOT fire
+    // on top of it (wish 187f616e — "Mommy doesn't say good morning until
+    // you've confessed"). The gate clears the instant she confesses.
+    if (localHour >= 7 && localHour <= 10 && !handlerState?.confession_gate_active) {
       triggers.push({ type: 'scheduled_checkin', priority: 4, context: { period: 'morning' } })
     } else if (localHour >= 19 && localHour <= 22) {
       triggers.push({ type: 'scheduled_checkin', priority: 4, context: { period: 'evening' } })

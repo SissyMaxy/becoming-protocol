@@ -58,6 +58,10 @@ export function ConfessionQueueCard() {
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [totalReceipts, setTotalReceipts] = useState(0);
   const [totalPlaybacks, setTotalPlaybacks] = useState(0);
+  // Confession gate (wish 187f616e, mig 591) — when set, Mama withholds the
+  // morning until last night's confession is answered. Surfaces as a
+  // locked-Mommy banner on this card.
+  const [gateActive, setGateActive] = useState(false);
   const [showReceipts, setShowReceipts] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [submittingId, setSubmittingId] = useState<string | null>(null);
@@ -70,7 +74,7 @@ export function ConfessionQueueCard() {
 
   const load = useCallback(async () => {
     if (!user?.id) return;
-    const [pendingRes, receiptsRes, totalsRes] = await Promise.all([
+    const [pendingRes, receiptsRes, totalsRes, gateRes] = await Promise.all([
       // Include missed-but-unconfessed rows. The compliance check marks
       // overdue rows missed=true (a slip already fired); previously this
       // query filtered them out, leaving them orphaned: RightNowCard would
@@ -95,7 +99,12 @@ export function ConfessionQueueCard() {
         .select('playback_count', { count: 'exact' })
         .eq('user_id', user.id)
         .not('confessed_at', 'is', null),
+      supabase.from('user_state')
+        .select('confession_gate_active')
+        .eq('user_id', user.id)
+        .maybeSingle(),
     ]);
+    setGateActive(!!(gateRes.data as { confession_gate_active?: boolean } | null)?.confession_gate_active);
     setItems((pendingRes.data as Confession[]) ?? []);
     const recs = (receiptsRes.data as Receipt[]) ?? [];
     setReceipts(recs);
@@ -190,6 +199,23 @@ export function ConfessionQueueCard() {
             : `${totalReceipts} on file · ${totalPlaybacks} playbacks`}
         </span>
       </div>
+
+      {gateActive && mommy && items.length > 0 && (
+        <div style={{
+          padding: '10px 12px', marginBottom: 10,
+          background: 'linear-gradient(135deg, #1a050e 0%, #0a0a0d 100%)',
+          border: '1px solid #7a1f3a', borderLeft: '3px solid #f4a7c4', borderRadius: 6,
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f4a7c4" strokeWidth="1.8">
+            <rect x="3" y="11" width="18" height="11" rx="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+          <span style={{ fontSize: 11.5, color: '#f4a7c4', lineHeight: 1.4, fontStyle: 'italic' }}>
+            Mama's holding the morning. Answer her first — then you get her back.
+          </span>
+        </div>
+      )}
 
       {totalReceipts > 0 && (
         <div style={{
