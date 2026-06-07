@@ -14,7 +14,7 @@ import {
   type ArousalState,
   type LovensePattern,
   type ArousalReward,
-} from '../../lib/handler-v2/arousal-controller';
+} from '../../lib/handler-engines/arousal-controller';
 
 // ============================================
 // Mock lovense

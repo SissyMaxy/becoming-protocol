@@ -6,7 +6,11 @@
  * The bus doesn't care who listens.
  */
 
-import { supabase } from '../supabase';
+// NOTE: the Supabase client is INJECTED (constructor / setClient), not imported.
+// Importing ../supabase pulls in import.meta.env (Vite-only) and makes this module
+// — and anything that imports it — uncrashable to load in the Vercel serverless
+// runtime. Injection is what lets protocol-core run server-side (revival Stage 3).
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 // ============================================
 // EVENT TYPE DEFINITIONS
@@ -42,6 +46,11 @@ export type ProtocolEvent =
   | { type: 'coercion:complied'; level: number; taskId: string }
   | { type: 'coercion:episode_started'; episodeId: string; taskId: string }
   | { type: 'coercion:episode_resolved'; episodeId: string; resolution: string; effectiveLevel: number }
+  // The Handler's visible reply praised compliance ("good girl") — fire the
+  // positive-reinforcement reward pulse. Carries only the visible text; the
+  // resulting handler_directives row is byte-identical to the former inline
+  // copies in chat-action.ts (no conversation_id). (Revival Stage 4 canary.)
+  | { type: 'coercion:reward_signal'; visibleText: string }
 
   // Vault
   | { type: 'vault:item_captured'; itemId: string; tier: number; capturedDuring: string }
@@ -90,6 +99,10 @@ export type ProtocolEvent =
   | { type: 'schedule:vulnerability_window'; windowType: string }
 
   // Handler
+  // The Handler emitted a private observation note this turn. The resulting
+  // handler_notes row is byte-identical to the former inline insert in
+  // chat-action.ts / handler-persist.ts (carries conversation_id). (Stage 5.)
+  | { type: 'handler:note_captured'; noteType: string; content: string; priority: number; conversationId: string }
   | { type: 'handler:mode_changed'; from: string; to: string; reason: string }
   | { type: 'handler:intervention_fired'; interventionType: string; mode: string }
   | { type: 'handler:briefing_generated'; briefingType: 'morning' | 'evening'; layer: 1 | 2 | 3 }
@@ -137,9 +150,11 @@ export class EventBus {
   private persistEvents = true;
   private eventQueue: ProtocolEvent[] = [];
   private isProcessing = false;
+  private db: SupabaseClient | null = null;
 
-  constructor(options?: { persistEvents?: boolean }) {
+  constructor(options?: { persistEvents?: boolean; db?: SupabaseClient }) {
     this.persistEvents = options?.persistEvents ?? true;
+    this.db = options?.db ?? null;
   }
 
   /**
@@ -147,6 +162,22 @@ export class EventBus {
    */
   setUserId(userId: string): void {
     this.userId = userId;
+  }
+
+  /**
+   * Read the current user id. Server-side modules need this to stamp `user_id`
+   * on their writes (the service-role client has no `auth.uid()` to default it).
+   */
+  getUserId(): string | null {
+    return this.userId;
+  }
+
+  /**
+   * Inject the Supabase client (browser anon client on the frontend, service-role
+   * client server-side). Without it, persistence + queries are no-ops.
+   */
+  setClient(db: SupabaseClient): void {
+    this.db = db;
   }
 
   /**
@@ -293,9 +324,9 @@ export class EventBus {
    * Persist event to Supabase
    */
   private async persistEvent(event: ProtocolEvent): Promise<void> {
-    if (!this.userId) return;
+    if (!this.userId || !this.db) return;
 
-    const { error } = await supabase.from('event_log').insert({
+    const { error } = await this.db.from('event_log').insert({
       user_id: this.userId,
       event_type: event.type,
       payload: event,
@@ -317,9 +348,9 @@ export class EventBus {
     until?: Date;
     limit?: number;
   }): Promise<ProtocolEvent[]> {
-    if (!this.userId) return [];
+    if (!this.userId || !this.db) return [];
 
-    let query = supabase
+    let query = this.db
       .from('event_log')
       .select('payload')
       .eq('user_id', this.userId)
@@ -406,14 +437,16 @@ export class EventBus {
 
 let busInstance: EventBus | null = null;
 
-export function getEventBus(): EventBus {
+export function getEventBus(db?: SupabaseClient): EventBus {
   if (!busInstance) {
-    busInstance = new EventBus();
+    busInstance = new EventBus(db ? { db } : undefined);
+  } else if (db) {
+    busInstance.setClient(db);
   }
   return busInstance;
 }
 
-export function createEventBus(options?: { persistEvents?: boolean }): EventBus {
+export function createEventBus(options?: { persistEvents?: boolean; db?: SupabaseClient }): EventBus {
   return new EventBus(options);
 }
 

@@ -1,0 +1,4 @@
+-- 490 — Video diary continuity. Weekly 5-min face-on-camera recording.
+-- 10 rotating prompts. Long-form visible record. Watching old entries
+-- IS conditioning. Weekly Sunday 20:00 UTC.
+-- Full schema + eval applied via DB.

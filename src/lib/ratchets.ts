@@ -10,6 +10,7 @@
  */
 
 import { supabase } from './supabase';
+import { incrementCounter } from './db-increment';
 import {
   Covenant,
   CovenantTerm,
@@ -81,7 +82,6 @@ export async function recordCovenantViolation(
   const { error } = await supabase
     .from('covenant')
     .update({
-      violations: supabase.rpc('increment', { x: 1 }),
       last_violation_at: new Date().toISOString(),
       last_violation_type: violationType,
     })
@@ -89,6 +89,7 @@ export async function recordCovenantViolation(
     .eq('active', true);
 
   if (error) throw error;
+  await incrementCounter('covenant', 'violations', { user_id: userId, active: true });
 }
 
 // ============================================
@@ -180,13 +181,11 @@ export async function getRandomConfessionPrompt(): Promise<string> {
 export async function recordKeyAdmissionShown(admissionId: string): Promise<void> {
   const { error } = await supabase
     .from('key_admissions')
-    .update({
-      times_shown: supabase.rpc('increment', { x: 1 }),
-      last_shown_at: new Date().toISOString(),
-    })
+    .update({ last_shown_at: new Date().toISOString() })
     .eq('id', admissionId);
 
   if (error) throw error;
+  await incrementCounter('key_admissions', 'times_shown', { id: admissionId });
 }
 
 // Get a relevant admission to show when user is backsliding

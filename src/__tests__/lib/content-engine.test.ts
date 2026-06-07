@@ -31,7 +31,7 @@ vi.mock('../../lib/supabase', () => {
 });
 
 // Mock ai-client so AI generation paths don't hit real APIs
-vi.mock('../../lib/handler-v2/ai-client', () => ({
+vi.mock('../../lib/handler-engines/ai-client', () => ({
   createAIClient: () => ({
     generateText: vi.fn(() => Promise.resolve('{"concept":"test","setting":"home"}')),
     isAvailable: vi.fn(() => false),
@@ -39,7 +39,7 @@ vi.mock('../../lib/handler-v2/ai-client', () => ({
 }));
 
 // Mock budget-manager (dynamically imported by content-engine)
-vi.mock('../../lib/handler-v2/budget-manager', () => ({
+vi.mock('../../lib/handler-engines/budget-manager', () => ({
   BudgetManager: vi.fn().mockImplementation(() => ({
     initialize: vi.fn(() => Promise.resolve()),
     canAfford: vi.fn(() => true),
@@ -58,7 +58,7 @@ import {
   getContentLibrary,
   getContentForRelease,
   markContentReleased,
-} from '../../lib/handler-v2/content-engine';
+} from '../../lib/handler-engines/content-engine';
 
 // ============================================
 // TEST FIXTURES

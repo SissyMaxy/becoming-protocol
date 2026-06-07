@@ -1,0 +1,18 @@
+-- 498 — Per-ladder miss-rate auto-pause.
+--
+-- Daily 04:00 UTC cron computes per-(user_id, trigger_source) miss
+-- rate over last 30 days. When miss_rate >= 0.7 AND total >= 4,
+-- writes a 30-day ladder pause to ladder_auto_pauses.
+--
+-- mig 494's BEFORE INSERT trigger extended to also reject decrees
+-- from auto-paused ladders. Same chokepoint pattern: existing 25+
+-- generators inherit ladder-pause respect for free.
+--
+-- Different from mig 493 whole-user pause: this is per-ladder.
+-- Mama silently learns which specific work isn't landing for which
+-- user, backs off just that lane, retries naturally after 30d.
+--
+-- Also logs to mommy_supervisor_log so admin pulse panel surfaces
+-- auto-paused ladders for review.
+--
+-- Full schema + functions applied via DB.

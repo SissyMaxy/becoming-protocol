@@ -1,0 +1,5 @@
+-- 480 — Mirror-talk third-person ritual.
+-- Depersonalization mechanic — describing "her" in 3rd person bypasses
+-- the first-person defense. 10 seed prompts across gentle/firm/cruel.
+-- 3x weekly Tue/Thu/Sat 19:00 UTC.
+-- Full schema + eval applied via DB.

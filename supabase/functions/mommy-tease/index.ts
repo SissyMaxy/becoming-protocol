@@ -301,12 +301,7 @@ Plain text, no JSON, no markdown, no question marks at the end.`
     }
     // Bump the implant's reference counter so the existing
     // importance-compounding logic kicks in.
-    await supabase.rpc('increment_memory_implant_reference', { p_implant_id: implantQuote.id }).then(() => {}, () => {
-      // Fallback to direct UPDATE if the RPC doesn't exist
-      supabase.from('memory_implants').update({
-        times_referenced: 1, last_referenced_at: new Date().toISOString(),
-      }).eq('id', implantQuote!.id).then(() => {})
-    })
+    await supabase.rpc('increment_memory_implant_reference', { p_implant_id: implantQuote.id })
   }
 
   return new Response(JSON.stringify({

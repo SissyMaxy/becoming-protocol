@@ -1,0 +1,18 @@
+-- 501 — Cold-start warmup tier.
+--
+-- state_paired (mig 446) + pavlovian (mig 458) gate at arousal ≥4.
+-- arousal_decay (mig 497) drops 1/hour. So if no recent voice or
+-- decree signal, arousal decays to 0 and the system can't recover —
+-- no path fires below threshold.
+--
+-- warmup_tier_eval fires when 1 ≤ arousal ≤ 3, picks a soft
+-- Pavlovian cue (scent/texture/position/lighting), queues ONE
+-- gentle directive per user per 4 hours. Goal: lift arousal back
+-- to where state_paired + pavlovian take over.
+--
+-- Hourly cron at :35. Honors user_state.pause_new_decrees_until.
+-- Smoke verified: both users at arousal 2-3 got warmup with
+-- "Mama notices the body is at a low simmer. Not asking you to
+-- chase. Asking you to greet it."
+--
+-- Full function + cron applied via DB.

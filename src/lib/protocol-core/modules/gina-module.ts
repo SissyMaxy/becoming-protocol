@@ -298,6 +298,39 @@ export class GinaModule extends BaseModule {
   /**
    * Log an interaction with Gina
    */
+  /**
+   * Log a Gina comfort-map reaction (revival Stage 6 — migrated verbatim from
+   * handler-v2 gina-intelligence's logGinaReaction). Byte-identical
+   * gina_comfort_map row; user_id comes from the bus (browser anon client is
+   * RLS-scoped, so a missing user is a no-op rather than an orphan write).
+   */
+  async logComfortReaction(
+    channel: string,
+    introduction: string,
+    reaction: 'positive' | 'neutral' | 'negative' | 'curious',
+    detail?: string,
+    ginaInitiated?: boolean,
+  ): Promise<void> {
+    const userId = this.bus.getUserId();
+    if (!userId) return;
+
+    const now = new Date();
+    const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const hour = now.getHours();
+    const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : hour < 21 ? 'evening' : 'night';
+
+    await this.db.from('gina_comfort_map').insert({
+      user_id: userId,
+      channel,
+      introduction,
+      reaction,
+      reaction_detail: detail || null,
+      gina_initiated: ginaInitiated || false,
+      day_of_week: days[now.getDay()],
+      time_of_day: timeOfDay,
+    });
+  }
+
   async logInteraction(
     type: GinaInteraction['type'],
     context: string,

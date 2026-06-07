@@ -1,8 +1,40 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { randomUUID } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
+import { encryptToken, decryptToken } from '../../src/lib/calendar/crypto';
 
 const WHOOP_API = 'https://api.prod.whoop.com/developer';
+
+// Whoop refresh tokens are AES-256-GCM encrypted at rest (same scheme as
+// calendar/outreach). WHOOP_TOKEN_KEY is a 32-byte secret, base64-encoded.
+// If the key is unset (legacy deploy) we fall back to plaintext so we never
+// brick the happy path — but the callback always encrypts when the key exists.
+function whoopTokenKey(): string {
+  return process.env.WHOOP_TOKEN_KEY || '';
+}
+
+// Decrypt a stored refresh token. Rows written before encryption was enabled
+// (or when no key is configured) are stored plaintext; decrypt failures fall
+// back to treating the stored value as plaintext so existing connections keep
+// refreshing.
+async function decryptRefreshToken(stored: string | null | undefined): Promise<string> {
+  const raw = stored || '';
+  const key = whoopTokenKey();
+  if (!raw || !key) return raw;
+  try {
+    return await decryptToken(raw, key);
+  } catch {
+    return raw; // legacy plaintext row
+  }
+}
+
+// Encrypt a refresh token for storage when a key is configured; otherwise
+// store plaintext (legacy behaviour) so an unconfigured deploy still works.
+async function encryptRefreshToken(plaintext: string): Promise<string> {
+  const key = whoopTokenKey();
+  if (!plaintext || !key) return plaintext;
+  return encryptToken(plaintext, key);
+}
 
 const SPORT_NAMES: Record<number, string> = {
   0: 'Running', 1: 'Cycling', 16: 'Yoga', 17: 'Meditation',
@@ -70,27 +102,30 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
     return res.redirect(302, `${appUrl}?whoop=error&reason=missing_params`);
   }
 
-  // State contains the user ID (set during auth initiation)
+  // CSRF / credential-binding defence: the HttpOnly state cookie is the ONLY
+  // source of truth for user identity. State format is "userId:randomUUID".
+  // We require the cookie to be present AND the nonce in the query-param state
+  // to match the nonce in the cookie. We NEVER derive user_id from the
+  // query-param state alone — an attacker who crafts a state can otherwise
+  // bind their Whoop account (or steal a code) onto the victim's user_id.
   const storedState = req.cookies?.whoop_oauth_state;
-  let userId: string | null = null;
-
-  // State format: "userId:randomUUID"
-  if (storedState) {
-    const parts = String(storedState).split(':');
-    if (parts.length === 2 && parts[1] === String(state).split(':')[1]) {
-      // CSRF validation: random part matches
-    }
-    userId = parts[0] || null;
+  if (!storedState) {
+    return res.redirect(302, `${appUrl}?whoop=error&reason=missing_state_cookie`);
   }
 
-  // Also try extracting userId from the state param itself (fallback)
-  if (!userId && state) {
-    const parts = String(state).split(':');
-    if (parts.length === 2) {
-      userId = parts[0];
-    }
+  const cookieParts = String(storedState).split(':');
+  const queryParts = String(state).split(':');
+  if (
+    cookieParts.length !== 2 ||
+    queryParts.length !== 2 ||
+    !cookieParts[1] ||
+    cookieParts[1] !== queryParts[1] ||
+    cookieParts[0] !== queryParts[0]
+  ) {
+    return res.redirect(302, `${appUrl}?whoop=error&reason=state_mismatch`);
   }
 
+  const userId: string | null = cookieParts[0] || null;
   if (!userId) {
     return res.redirect(302, `${appUrl}?whoop=error&reason=no_user_id`);
   }
@@ -128,11 +163,14 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
 
   const supabase = createClient(supabaseUrl, serviceKey);
 
+  // Encrypt the refresh token at rest (the long-lived secret).
+  const refreshEnc = await encryptRefreshToken(tokens.refresh_token || '');
+
   // Upsert tokens
   const { error: dbError } = await supabase.from('whoop_tokens').upsert({
     user_id: userId,
     access_token: tokens.access_token,
-    refresh_token: tokens.refresh_token || '',
+    refresh_token: refreshEnc,
     expires_at: expiresAt.toISOString(),
     scopes: tokens.scope?.split(' ') || [],
     disconnected_at: null,
@@ -209,12 +247,13 @@ async function handleSyncFetch(req: VercelRequest, res: VercelResponse) {
 
     // Refresh if expired
     if (new Date(tokenRow.expires_at) <= new Date(Date.now() + 60000)) {
+      const refreshToken = await decryptRefreshToken(tokenRow.refresh_token);
       const refreshRes = await fetch('https://api.prod.whoop.com/oauth/oauth2/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
           grant_type: 'refresh_token',
-          refresh_token: tokenRow.refresh_token,
+          refresh_token: refreshToken,
           client_id: process.env.WHOOP_CLIENT_ID || '',
           client_secret: process.env.WHOOP_CLIENT_SECRET || '',
           scope: 'offline',
@@ -231,9 +270,13 @@ async function handleSyncFetch(req: VercelRequest, res: VercelResponse) {
       const newTokens = await refreshRes.json();
       accessToken = newTokens.access_token;
 
+      const newRefreshEnc = newTokens.refresh_token
+        ? await encryptRefreshToken(newTokens.refresh_token)
+        : tokenRow.refresh_token;
+
       await supabase.from('whoop_tokens').update({
         access_token: newTokens.access_token,
-        refresh_token: newTokens.refresh_token || tokenRow.refresh_token,
+        refresh_token: newRefreshEnc,
         expires_at: new Date(Date.now() + (newTokens.expires_in || 3600) * 1000).toISOString(),
         updated_at: new Date().toISOString(),
       }).eq('user_id', user.id);
@@ -423,12 +466,13 @@ async function handleSessionPoll(req: VercelRequest, res: VercelResponse) {
 
     // Refresh if expired
     if (new Date(tokenRow.expires_at) <= new Date(Date.now() + 60000)) {
+      const refreshToken = await decryptRefreshToken(tokenRow.refresh_token);
       const refreshRes = await fetch('https://api.prod.whoop.com/oauth/oauth2/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
           grant_type: 'refresh_token',
-          refresh_token: tokenRow.refresh_token,
+          refresh_token: refreshToken,
           client_id: process.env.WHOOP_CLIENT_ID || '',
           client_secret: process.env.WHOOP_CLIENT_SECRET || '',
           scope: 'offline',
@@ -442,9 +486,13 @@ async function handleSessionPoll(req: VercelRequest, res: VercelResponse) {
       const newTokens = await refreshRes.json();
       accessToken = newTokens.access_token;
 
+      const newRefreshEnc = newTokens.refresh_token
+        ? await encryptRefreshToken(newTokens.refresh_token)
+        : tokenRow.refresh_token;
+
       await supabase.from('whoop_tokens').update({
         access_token: newTokens.access_token,
-        refresh_token: newTokens.refresh_token || tokenRow.refresh_token,
+        refresh_token: newRefreshEnc,
         expires_at: new Date(Date.now() + (newTokens.expires_in || 3600) * 1000).toISOString(),
         updated_at: new Date().toISOString(),
       }).eq('user_id', user.id);

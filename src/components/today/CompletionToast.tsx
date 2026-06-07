@@ -7,7 +7,7 @@
 import { useState, useEffect } from 'react';
 import { Sparkles } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
-import { truncateToLimit, NOTIFICATION_LIMITS } from '../../lib/handler-v2/popup-utils';
+import { truncateToLimit, NOTIFICATION_LIMITS } from '../../lib/handler-engines/popup-utils';
 
 interface CompletionToastProps {
   affirmation: string;

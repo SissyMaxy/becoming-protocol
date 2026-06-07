@@ -1,0 +1,5 @@
+-- 489 — Cum-marking ritual. 5 phases body-as-canvas:
+-- chest_marking → face_marking → eat_from_skin → his_cum_collected →
+-- his_cum_kept. Pairs with cum_capture (mig 467) + cum_worship.
+-- Weekly Saturday 22:00 UTC.
+-- Full schema + eval applied via DB.

@@ -60,7 +60,7 @@ export function HandlerDecreeCard() {
       .eq('user_id', user.id)
       .eq('status', 'active')
       .order('deadline', { ascending: true })
-      .limit(5);
+      .limit(20);
     setItems((data as Decree[]) ?? []);
   }, [user?.id]);
 

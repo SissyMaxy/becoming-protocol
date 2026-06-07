@@ -353,6 +353,22 @@ async function advanceUser(
     return { user_id: userId, status: 'error', reason: `log_failed:${logErr.message}` }
   }
 
+  // Depth report (wish 3978321f) — at the transition, show her how deep she
+  // already is. Fire-and-forget; the report fn is idempotent per (user,
+  // phase) so a retry/double-fire writes at most one report. Never blocks
+  // the advance.
+  try {
+    const url = (Deno.env.get('SUPABASE_URL') ?? '') + '/functions/v1/mommy-depth-report'
+    const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    void fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+      body: JSON.stringify({ user_id: userId, phase: targetPhase }),
+    }).catch((e) => console.error('[phase-advance] depth-report dispatch failed (non-fatal):', e?.message))
+  } catch (e) {
+    console.error('[phase-advance] depth-report dispatch threw (non-fatal):', (e as Error).message)
+  }
+
   return {
     user_id: userId,
     status: 'advanced',

@@ -15,7 +15,7 @@ import {
   markConsequenceCompleted,
   markConsequenceFailed,
   getFinancialSnapshot,
-} from '../../lib/handler-v2/financial-engine';
+} from '../../lib/handler-engines/financial-engine';
 
 // ============================================
 // Supabase mock

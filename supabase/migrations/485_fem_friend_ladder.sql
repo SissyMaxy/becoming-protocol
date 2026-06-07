@@ -1,0 +1,4 @@
+-- 485 — Fem-friend acquisition ladder.
+-- 6 phases: lurk → first_comment → introduce → dm_exchange →
+-- voice_or_video → irl_meetup. Weekly Monday 20:00 UTC.
+-- Full schema + eval applied via DB.

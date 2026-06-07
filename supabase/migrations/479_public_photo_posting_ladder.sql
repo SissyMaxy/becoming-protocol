@@ -1,0 +1,4 @@
+-- 479 — Public-photo posting ladder. Visual evidence going public,
+-- escalating identifiability. 6 phases anon→face-visible.
+-- Weekly Thursday 21:00 UTC cron.
+-- Full schema + eval applied via DB.

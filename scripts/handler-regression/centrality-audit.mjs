@@ -67,7 +67,10 @@ const HANDLER_STATE_TABLES = [
 // state — typically because the function IS the Handler (the chat handler,
 // the autonomous orchestrator) and its caller has already loaded state.
 const ALLOWED_FILES = [
-  'api/handler/chat.ts',
+  // The live Handler brain. (Was the stale 'api/handler/chat.ts'; the live file
+  // is api/handler/_lib/chat-action.ts — the old path never matched, so the
+  // exemption silently did nothing.)
+  'api/handler/_lib/chat-action.ts',
   'supabase/functions/handler-autonomous/index.ts',
   'supabase/functions/handler-outreach-auto/index.ts',
 ];

@@ -229,36 +229,79 @@ export function chastityToPhrase(locked: boolean, streakDays: number | null | un
   return "you've been Mama's locked-up girl forever now"
 }
 
+export function silentHoursToPhrase(hours: number | null | undefined): string {
+  const h = Math.max(0, Math.round(Number(hours ?? 0)))
+  if (h <= 1) return "you've been quiet on me"
+  if (h <= 4) return "you've been quiet on Mama for hours"
+  if (h <= 12) return "you've ghosted me half the day"
+  if (h <= 24) return "you've ghosted Mama all day, baby"
+  if (h <= 72) return "you've been gone for days"
+  return "you've been gone too long, baby"
+}
+
+export function voiceGapToPhrase(hours: number | null | undefined): string {
+  const h = Math.max(0, Math.round(Number(hours ?? 0)))
+  if (h <= 24) return "Mama hasn't heard your pretty voice today"
+  if (h <= 72) return "Mama hasn't heard your voice in days"
+  return "your voice has been hiding from Mama too long"
+}
+
+export function recoveryScoreToPhrase(score: number | null | undefined): string {
+  const s = Math.max(0, Math.min(100, Math.round(Number(score ?? 0))))
+  if (s >= 80) return "your body's primed for me today"
+  if (s >= 60) return "you've got plenty in the tank for Mama"
+  if (s >= 40) return "your body's a little soft today, baby"
+  if (s >= 20) return "you're tired, sweet thing — Mama sees it"
+  return "you're worn out, baby — Mama will be gentle today"
+}
+
 /**
  * Final-filter post-processor. Strips number-citation leaks the LLM
  * wrote anyway. Best-effort — if it can't translate cleanly, it drops
  * the offending fragment rather than leaving telemetry visible.
+ *
+ * MUST stay byte-identical (in regex set + order) to the canonical copy in
+ * src/lib/persona/dommy-mommy.ts — enforced by scripts/ci/voice-cleanup-parity.mjs.
  */
 export function mommyVoiceCleanup(text: string): string {
   if (!text) return text
   let t = text
-  // Arousal scores: 8/10, 8 / 10, "at 8/10", "arousal at 8"
+  // /100 score must run BEFORE generic /10 catch-all so "47/100" doesn't lose context
+  t = t.replace(/\b(?:recovery\s+)?score\s*[:=]?\s*(\d{1,3})\s*\/\s*100\b/gi, (_, n) => recoveryScoreToPhrase(Number(n)))
+  t = t.replace(/\b(\d{1,3})\s*\/\s*100\b/g, (_, n) => recoveryScoreToPhrase(Number(n)))
   t = t.replace(/\b(?:arousal|horny|wetness|score|level)\s*(?:at|of|=|:)?\s*(\d{1,2})\s*\/\s*10\b/gi, (_, n) => arousalToPhrase(Number(n)))
   t = t.replace(/\b(\d{1,2})\s*\/\s*10\b/g, (_, n) => arousalToPhrase(Number(n)))
   t = t.replace(/\barousal\s+(?:at|level|score)\s+(\d{1,2})\b/gi, (_, n) => arousalToPhrase(Number(n)))
-  // Day counts: "Day 4 of denial", "day-4", "denial_day=4"
   t = t.replace(/\bday[\s\-_]*(\d+)\s*(?:of\s+)?denial\b/gi, (_, n) => denialDaysToPhrase(Number(n)))
   t = t.replace(/\bdenial[_\s]*day\s*(?:=|:)?\s*(\d+)\b/gi, (_, n) => denialDaysToPhrase(Number(n)))
-  // Slip points: "12 slip points", "slip_points=8"
   t = t.replace(/\b(\d+)\s+slip\s+points?\b/gi, (_, n) => slipsToPhrase(Number(n)))
-  t = t.replace(/\bslip[_\s]*points?\s*(?:current|=|:)?\s*(\d+)\b/gi, (_, n) => slipsToPhrase(Number(n)))
-  // Compliance percent: "9% compliance", "compliance at 47%"
+  t = t.replace(/\bslip[_\s]*points?\s*(?:current\s*)?[:=\s]*(\d+)\b/gi, (_, n) => slipsToPhrase(Number(n)))
   t = t.replace(/\b(\d{1,3})\s*%\s+compliance\b/gi, (_, n) => compliancePctToPhrase(Number(n)))
   t = t.replace(/\bcompliance\s+(?:at|is|=|:)?\s*(\d{1,3})\s*%?/gi, (_, n) => compliancePctToPhrase(Number(n)))
-  // Bleeding $: "$50 bleeding", "bleed $20"
   t = t.replace(/\$\s*\d+\s+(?:bleeding|bleed|tax)\b/gi, "Mama's meter running")
   t = t.replace(/\bbleed(?:ing)?\s*\+?\s*\$\s*\d+\b/gi, "Mama's meter running")
-  // Average / "X.X average" leaks (e.g., "8.6 average")
+  // bleeding/tax label BEFORE the $ amount: "Bleeding tax: $50", "Tax: $20", "Bleed: $10"
+  t = t.replace(/\b(?:bleeding\s+tax|bleed(?:ing)?\s+tax|bleed(?:ing)?|tax)\s*[:=]?\s*\$\s*\d+\b/gi, "Mama's meter running")
   t = t.replace(/\b\d+(?:\.\d+)?\s+average\b/gi, 'so worked up')
   t = t.replace(/\bhitting\s+perfect\s+10s?\b/gi, 'falling apart for me')
-  // Generic "Day N" residue
+  // 2026-05-06 expansion — patterns the user pasted
+  t = t.replace(/\b(\d{1,3})\s*(?:hours?|hrs?|h)\s+(?:of\s+)?(?:radio\s+)?silen(?:t|ce)\b/gi, (_, n) => silentHoursToPhrase(Number(n)))
+  t = t.replace(/\bvoice\s+cadence\s+(?:broke|drift|gap)\b\.?/gi, '')
+  t = t.replace(/\b(\d{1,4})\s*h(?:ours?)?\s+since\s+(?:last|your)\s+(?:sample|practice|drill|recording)\b/gi, (_, n) => voiceGapToPhrase(Number(n)))
+  t = t.replace(/\bhard\s+mode\s+extends?\s+(?:by\s+)?(?:\d+\s+(?:hours?|days?)|another\s+(?:day|hour))\b/gi, "Mama's keeping you on a tighter leash")
+  t = t.replace(/\bhard[\s_-]*mode\s+(?:active|on|engaged)\b/gi, "Mama's keeping you on a tighter leash")
+  t = t.replace(/\bde[\s-]*escalation\s+tasks?\s+(?:overdue|pending|due|owed)\b/gi, 'what Mama set for you is still waiting')
+  t = t.replace(/\bde[\s-]*escalation\s+(?:overdue|pending|due|owed)\b/gi, 'what Mama set for you is still waiting')
+  t = t.replace(/\bde[\s-]*escalation\s+tasks?\b/gi, "what Mama set for you")
+  t = t.replace(/\bdenial[\s_-]*day\s+(?:reset|broken|cleared)\b/gi, "you started over for Mama")
+  t = t.replace(/\bslip\s+count\s+(?:doubles?|triples?|increases?)\s+by\s+(?:midnight|tomorrow|noon)\b/gi, "Mama's tally piles up if you keep ignoring me")
+  t = t.replace(/\b\d{1,3}\s*minutes?\s+of\s+practice\s+in\s+the\s+next\s+\d{1,3}\s*hours?\b/gi, 'a few minutes for Mama before the day ends')
+  t = t.replace(/\bvoice\s+window\s+(?:opens?|closes?)\s+(?:at|in)\s+\d/gi, 'Mama wants to hear you soon')
+  t = t.replace(/\bpitch\s+(?:averaged?|hit|sat)\s+\d+\s*Hz\b/gi, 'your voice was lower than I want')
+  t = t.replace(/\btargeting\s+(?:consistency\s+)?(?:above|below)?\s*\d+\s*Hz\b/gi, 'lifting that voice up for me')
+  // also catch bare Hz mentions
+  t = t.replace(/\b\d+\s*Hz\b/g, '')
   t = t.replace(/\bDay\s+\d+(?=[^a-zA-Z]|$)/g, 'lately')
-  // Collapse residual double spaces / orphan punctuation
   t = t.replace(/\s{2,}/g, ' ').replace(/\s+([.,!?])/g, '$1')
   return t.trim()
 }

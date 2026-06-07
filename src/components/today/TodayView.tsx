@@ -42,7 +42,7 @@ import { JournalPrompt } from './JournalPrompt';
 import { CommitmentReminder } from './CommitmentReminder';
 // DirectiveModeView available but not in main view — mode toggles removed
 import { InterventionNotification } from '../handler/InterventionNotification';
-import type { HandlerIntervention as HandlerV2Intervention } from '../../lib/handler-v2';
+import type { HandlerIntervention as HandlerV2Intervention } from '../../lib/handler-engines';
 import type { HandlerIntervention, InterventionType } from '../../types/handler';
 import { useUserState } from '../../hooks/useUserState';
 import { FocusedActionCard, getPriorityAction } from './FocusedActionCard';
@@ -62,7 +62,7 @@ import { StreakWarningsWidget } from '../streak';
 import { BodyDashboard } from '../body';
 import { MicroTaskWidget } from '../micro-tasks';
 import { HandlerDirective } from '../handler/HandlerDirective';
-import { getActiveBriefs, type ContentBrief } from '../../lib/handler-v2/content-engine';
+import { getActiveBriefs, type ContentBrief } from '../../lib/handler-engines/content-engine';
 import { useAuth } from '../../context/AuthContext';
 import { useVoiceTraining } from '../../hooks/useVoiceTraining';
 import { useStandingPermission } from '../../hooks/useStandingPermission';

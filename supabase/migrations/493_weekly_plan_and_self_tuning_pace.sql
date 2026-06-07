@@ -1,0 +1,17 @@
+-- 493 — Weekly Mama's-plan summary + self-tuning pace.
+--
+-- A) weekly_mama_plan_eval — Sunday 18:00 UTC narrative summarizing
+--    the past 7 days of focus_picks: which decrees got picked, which
+--    got closed, which stayed open, math (N fulfilled of M picked).
+--    "Mama is showing you the shape of the week." Voice debrief.
+--
+-- B) Self-tuning pace: user_state.pause_new_decrees_until column.
+--    reversal_anchor_eval (mig 462) now sets it 5 days ahead when
+--    a resistance signal fires. Outreach text tells Maxy "new tasks
+--    paused — close what's already there."
+--
+--    Generators must check this flag before queueing new decrees.
+--    (Per-generator check left as ongoing convention — each new
+--    eval written from now adds: SKIP IF user_state.pause_new_decrees_until > now())
+--
+-- Full schema + functions applied via DB.

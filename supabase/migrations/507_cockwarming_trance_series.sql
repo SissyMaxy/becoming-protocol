@@ -1,0 +1,5 @@
+-- 507 — Cockwarming trance series. 5-phase ladder.
+-- Cock-as-pacifier conditioning. Different from cock_curriculum
+-- (action ladder) + hypnosis (generic). SUSTAINED HOLDING discipline.
+-- Phases: sucker_5min → banana_10min → dildo_15min →
+-- dildo_kneeling_journaled → partnered_warming. Weekly Wed 19:00 UTC.

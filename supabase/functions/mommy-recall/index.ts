@@ -132,8 +132,11 @@ Deno.serve(async (req: Request) => {
 
   const tryImplant = async (): Promise<RecallPick | null> => {
     const { data: implants } = await supabase.from('memory_implants')
-      .select('id, narrative, importance, implant_category')
+      .select('id, narrative, importance, implant_category, surface_after')
       .eq('user_id', userId).eq('active', true)
+      // surface_after gates scheduled quote-back (e.g. confession-mined
+      // implants surface 24-48h after mining; mig 595). Null = always eligible.
+      .or(`surface_after.is.null,surface_after.lte.${new Date().toISOString()}`)
       .order('importance', { ascending: false }).limit(40)
     const eligible = ((implants || []) as Array<{ id: string; narrative: string; importance: number; implant_category: string }>)
       .filter(r => !recentIds.has(r.id))
@@ -298,10 +301,7 @@ Plain text only. No JSON, no markdown, no question marks at the end.${audioFrami
       surface: 'mommy_recall',
       quoted_excerpt: pick.quoteText.slice(0, 300),
     })
-    await supabase.from('memory_implants').update({
-      times_referenced: 1,
-      last_referenced_at: new Date().toISOString(),
-    }).eq('id', pick.quoteId)
+    await supabase.rpc('increment_memory_implant_reference', { p_implant_id: pick.quoteId })
   } else if (pick.quoteSource === 'confession_audio') {
     // Bump the confession's playback counter so the receipts UI shows
     // the user how often Mama has played it back at her.

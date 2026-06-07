@@ -1,0 +1,18 @@
+-- 503 — Fix warmup_tier_eval to include arousal=0.
+--
+-- mig 501 gated warmup at BETWEEN 1 AND 3. arousal_decay floors at 0.
+-- Observed in production: both users decayed from 2-3 → 0 over the
+-- 1h pause. Once at 0, warmup never fires → cold lock.
+--
+-- Fix: change gate to `arousal <= 3`. Includes 0. State_paired (≥4)
+-- and pavlovian (≥4) still gate at threshold, so no double-fire.
+--
+-- This is the 4th observation-driven fix this session:
+-- mig 453: shadow event propagation
+-- mig 500: false-positive auto-pauses (exempt list)
+-- mig 501: cold-start gap (created the warmup tier)
+-- mig 503: cold-lock-at-zero (warmup didn't include 0)
+--
+-- Pattern: build, observe, refine. The observation windows surface
+-- bugs that pure-design cannot.
+-- Full function applied via DB.

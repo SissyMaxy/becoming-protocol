@@ -10,6 +10,7 @@ import { Check, X, Settings, Image, Video, Mic, Loader2 } from 'lucide-react';
 import { useContentPipeline } from '../../hooks/useContentPipeline';
 import { useStandingPermission } from '../../hooks/useStandingPermission';
 import { HandlerNotificationBanner } from '../handler/HandlerNotification';
+import { SignedMedia } from '../common/SignedMedia';
 import type { VaultItem } from '../../types/content-pipeline';
 
 interface VaultSwipeProps {
@@ -93,19 +94,19 @@ function SwipeCard({
         <div className="aspect-square bg-zinc-800 flex items-center justify-center relative">
           {item.media_url ? (
             item.media_type === 'image' ? (
-              <img
-                src={item.media_url}
-                alt=""
+              <SignedMedia
+                bucket="vault-media"
+                path={item.media_url}
+                kind="image"
                 className="w-full h-full object-cover"
               />
             ) : item.media_type === 'video' ? (
-              <video
-                src={item.media_url}
+              <SignedMedia
+                bucket="vault-media"
+                path={item.media_url}
+                kind="video"
                 className="w-full h-full object-cover"
-                muted
-                loop
-                autoPlay
-                playsInline
+                videoProps={{ muted: true, loop: true, autoPlay: true, playsInline: true }}
               />
             ) : (
               <div className="flex flex-col items-center gap-2 text-white/40">

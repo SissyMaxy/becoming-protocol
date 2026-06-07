@@ -2158,9 +2158,10 @@ async function triggerOnArousalSpike(
     // to her horny state.
     try {
       const url = Deno.env.get('SUPABASE_URL') ?? ''
+      const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
       await fetch(`${url}/functions/v1/handler-evolve`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceKey}` },
         body: JSON.stringify({ user_id: userId, trigger: 'arousal_gated_growth' }),
       })
     } catch (_) { /* fire and forget */ }
@@ -2338,6 +2339,13 @@ async function scheduleConfessions(
       .limit(20)
     for (const m of (missed || []) as Array<{ id: string }>) {
       await supabase.from('confession_queue').update({ missed: true }).eq('id', m.id)
+      // Penalty Preview Rail (mig 601): the slip only fires if the cost was
+      // previewed to her with enough notice. No surfaced preview → mark
+      // missed but do NOT slip (visible-before-penalized, uniform gate).
+      const { data: mayApply } = await supabase.rpc('penalty_may_apply', {
+        p_source_table: 'confession_queue', p_source_id: m.id,
+      })
+      if (mayApply !== true) continue
       // Use slip_type='confession_missed' (specific, in constraint, and the
       // demands-confession trigger explicitly skips this type to avoid the
       // confession→slip→confession circular loop). source_text is plain
@@ -2353,6 +2361,7 @@ async function scheduleConfessions(
         metadata: { reason: 'confession_deadline_missed' },
         is_synthetic: true,
       })
+      await supabase.rpc('mark_penalty_applied', { p_source_table: 'confession_queue', p_source_id: m.id })
     }
   } catch (err) { console.error('[confession] miss enforcement failed:', err) }
 
@@ -2710,6 +2719,9 @@ async function scheduleDecrees(
       .select('id, edict, consequence, trigger_source')
       .eq('user_id', userId).eq('status', 'active')
       .lt('deadline', nowIso)
+      // Don't even process decrees the surface-guarantor flagged as never
+      // surfaced — they stay active until seen (visible-before-penalized).
+      .neq('expired_unsurfaced', true)
       .limit(20)
     for (const d of (expired || []) as Array<{ id: string; edict: string; consequence: string; trigger_source: string | null }>) {
       await supabase.from('handler_decrees').update({
@@ -2717,21 +2729,18 @@ async function scheduleDecrees(
         missed_at: nowIso,
       }).eq('id', d.id)
 
-      // VISIBILITY CHECK (feedback_visible_before_penalized.md): a missed
-      // decree only counts as a slip if the user was actually alerted to it.
-      // Check for an outreach that referenced this decree id. Without
-      // visibility, mark missed but DON'T log a slip — silent escalation
-      // is the bug pattern, not protocol working as intended.
-      const { count: outreachCount } = await supabase.from('handler_outreach_queue')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', userId)
-        .ilike('message', `%${d.id}%`)
-      const wasVisible = (outreachCount || 0) > 0
-        || /shot_list:|morning_brief:|chat:/.test(d.trigger_source || '')
-      if (!wasVisible) {
-        console.log(`[decree] suppressed slip for decree ${d.id} — never surfaced to user`)
+      // VISIBILITY CHECK — Penalty Preview Rail (mig 601), the uniform gate.
+      // Decrees auto-get a penalty preview on insert; the slip fires only if
+      // that cost was surfaced with enough notice. Replaces the old fuzzy
+      // `ilike message %decree_id%` heuristic. Fail-closed.
+      const { data: mayApply } = await supabase.rpc('penalty_may_apply', {
+        p_source_table: 'handler_decrees', p_source_id: d.id,
+      })
+      if (mayApply !== true) {
+        console.log(`[decree] suppressed slip for decree ${d.id} — cost not previewed/surfaced`)
         continue
       }
+      await supabase.rpc('mark_penalty_applied', { p_source_table: 'handler_decrees', p_source_id: d.id })
 
       const slipMatch = (d.consequence || '').match(/slip\s*\+(\d+)/)
       const pts = slipMatch ? Math.min(10, parseInt(slipMatch[1], 10)) : 2
@@ -3896,14 +3905,19 @@ async function enforceCommitments(
 
     // Parse & execute each clause
     try {
-      // VISIBILITY CHECK: skip the slip insert if the commitment was never
-      // surfaced to the user (no outreach filed referencing this commitment).
+      // VISIBILITY CHECK — Penalty Preview Rail (mig 601). The formal,
+      // uniform gate: a penalty applies ONLY if the cost was previewed to
+      // her and surfaced with enough notice. Fail-closed. This replaces the
+      // old fuzzy `ilike message %commitment_id%` heuristic and now gates
+      // EVERY consequence clause (slip, denial, witness), not just the slip.
       // feedback_visible_before_penalized.md — silent escalation is the bug.
-      const { count: oc } = await supabase.from('handler_outreach_queue')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', userId)
-        .ilike('message', `%${c.id}%`)
-      const wasCommitmentVisible = (oc || 0) > 0
+      const { data: mayApply } = await supabase.rpc('penalty_may_apply', {
+        p_source_table: 'handler_commitments', p_source_id: c.id,
+      })
+      const wasCommitmentVisible = mayApply === true
+      if (wasCommitmentVisible) {
+        await supabase.rpc('mark_penalty_applied', { p_source_table: 'handler_commitments', p_source_id: c.id })
+      }
 
       // Slip increment — writes slip_log entry + bumps user_state.slip_points_current
       const slipMatch = consequence.match(/slip\s*\+(\d+)/)
@@ -3932,7 +3946,7 @@ async function enforceCommitments(
       // a commitment with `denial +8d`, app showed "Day 11" out of nowhere).
       // The semantically correct write is chastity_scheduled_unlock_at.
       const denialMatch = consequence.match(/denial\s*\+\s*(\d+)\s*d/)
-      if (denialMatch) {
+      if (denialMatch && wasCommitmentVisible) {
         const days = parseInt(denialMatch[1], 10)
         const { data: us } = await supabase.from('user_state')
           .select('chastity_scheduled_unlock_at')
@@ -3951,7 +3965,7 @@ async function enforceCommitments(
       // Witness notification — looks up a designated witness (optionally filtered by
       // relationship in the consequence string) and queues a notification row.
       const witnessMatch = consequence.match(/witness_notify(?::\s*([a-z_]+))?/)
-      if (witnessMatch) {
+      if (witnessMatch && wasCommitmentVisible) {
         const relationship = witnessMatch[1] || null
         let wq = supabase.from('designated_witnesses')
           .select('id, witness_name, relationship')
@@ -3978,7 +3992,7 @@ async function enforceCommitments(
 
       // Financial bleeding — accumulates into compliance_state.bleeding_total_today
       const bleedMatch = consequence.match(/bleed(?:ing)?\s*\+\s*\$?(\d+)/)
-      if (bleedMatch) {
+      if (bleedMatch && wasCommitmentVisible) {
         const dollars = parseInt(bleedMatch[1], 10)
         const { data: cs } = await supabase.from('compliance_state').select('bleeding_total_today').eq('user_id', userId).maybeSingle()
         const newTotal = Number((cs?.bleeding_total_today as number | undefined) || 0) + dollars
@@ -3987,7 +4001,7 @@ async function enforceCommitments(
       }
 
       // Hard mode activation
-      if (/hard_mode_activate/.test(consequence)) {
+      if (/hard_mode_activate/.test(consequence) && wasCommitmentVisible) {
         await supabase.from('user_state').update({
           hard_mode_active: true,
           hard_mode_entered_at: new Date().toISOString(),
@@ -3996,14 +4010,20 @@ async function enforceCommitments(
         ;(result.actions as string[]).push('hard_mode ON')
       }
 
-      // Chastity extension
+      // Chastity extension — push the unlock TARGET forward by N days. Never add
+      // to chastity_streak_days: that is a derived "time since lock" counter, and
+      // inflating it would lie about how long she's actually been locked (same
+      // class as the 2026-04-28 denial_day incident). Mirrors migration 417's
+      // COALESCE(chastity_scheduled_unlock_at, now()) + interval pattern.
       const chastMatch = consequence.match(/chastity\s*\+\s*(\d+)\s*d/)
-      if (chastMatch) {
+      if (chastMatch && wasCommitmentVisible) {
         const days = parseInt(chastMatch[1], 10)
-        const { data: us } = await supabase.from('user_state').select('chastity_streak_days').eq('user_id', userId).maybeSingle()
-        const newStreak = ((us?.chastity_streak_days as number | undefined) || 0) + days
+        const { data: us } = await supabase.from('user_state').select('chastity_scheduled_unlock_at').eq('user_id', userId).maybeSingle()
+        const existing = us?.chastity_scheduled_unlock_at ? new Date(us.chastity_scheduled_unlock_at as string).getTime() : 0
+        const base = Math.max(existing, Date.now())
+        const newUnlock = new Date(base + days * 86400000).toISOString()
         await supabase.from('user_state').update({
-          chastity_streak_days: newStreak,
+          chastity_scheduled_unlock_at: newUnlock,
           chastity_locked: true,
         }).eq('user_id', userId)
         ;(result.actions as string[]).push(`chastity +${days}d`)
@@ -4110,10 +4130,7 @@ async function enforceCommitments(
               surface: 'commitment_enforcement',
               quoted_excerpt: mommyImplantTail.slice(0, 300),
             }).then(() => {})
-            supabase.from('memory_implants').update({
-              times_referenced: 1,
-              last_referenced_at: new Date().toISOString(),
-            }).eq('id', usedImplantId).then(() => {})
+            supabase.rpc('increment_memory_implant_reference', { p_implant_id: usedImplantId }).then(() => {})
           }
         } else {
           message = quoteSuffix

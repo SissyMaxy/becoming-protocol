@@ -1,0 +1,21 @@
+-- 500 — Auto-pause exempt list for watchdog mechanics.
+--
+-- Mig 498 detector caught 6 legitimate watchdogs / content-revenue
+-- generators on first run and silenced them. Wrong response — those
+-- are designed to keep firing regardless of miss rate (the watchdog
+-- IS the surface that demands the work).
+--
+-- Exempt list added to ladder_miss_pattern_detect():
+--   voice_cadence_watchdog, daily_cadence, mommy_scheme, reversal_anchor,
+--   chastity_checkin, chain_test_voice_proof, mama_capability_digest,
+--   system_audit, sleep_state_first_wake, sleep_state_pre_sleep,
+--   shot_list:* (LIKE pattern — content revenue)
+--
+-- Retroactively cancelled the 6 wrong-pause entries from today's
+-- mig 498 fire by setting paused_until in the past.
+--
+-- Lesson: detectors that act on the whole decree pool need
+-- exempt-lists for generators that should never be silenced. Same
+-- pattern as mig 494's pause-respect trigger exempts.
+--
+-- Full function applied via DB.

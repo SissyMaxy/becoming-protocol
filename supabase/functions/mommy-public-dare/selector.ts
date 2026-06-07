@@ -13,7 +13,7 @@ export type Phase = 1 | 2 | 3 | 4 | 5 | 6 | 7
 
 export type DareKind =
   | 'wardrobe' | 'mantra' | 'posture' | 'position'
-  | 'micro_ritual' | 'errand_specific'
+  | 'micro_ritual' | 'errand_specific' | 'cruising'
 
 export type IntensityTier = 'gentle' | 'moderate' | 'firm' | 'relentless'
 

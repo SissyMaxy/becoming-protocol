@@ -88,7 +88,7 @@ function pickMimeType(): string {
 }
 
 export function useVoiceConversation(): UseVoiceConversationReturn {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [currentPitch, setCurrentPitch] = useState<number | null>(null);
@@ -181,7 +181,10 @@ export function useVoiceConversation(): UseVoiceConversationReturn {
         try {
           const resp = await fetch('/api/voice/transcribe', {
             method: 'POST',
-            headers: { 'Content-Type': blob.type || 'audio/webm' },
+            headers: {
+              'Content-Type': blob.type || 'audio/webm',
+              ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+            },
             body: blob,
           });
           if (resp.ok) {

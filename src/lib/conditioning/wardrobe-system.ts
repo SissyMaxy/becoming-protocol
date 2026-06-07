@@ -9,7 +9,7 @@
 
 import { supabase } from '../supabase';
 import { getHiddenParam } from './hidden-operations';
-import { getFundBalance } from '../handler-v2/auto-purchase';
+import { getFundBalance } from '../handler-engines/auto-purchase';
 
 // ============================================
 // TYPES

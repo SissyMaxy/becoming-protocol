@@ -930,13 +930,12 @@ if (require.main === module) {
       const state: Record<string, unknown> = {};
       // Pull state from DB if available
       const { data: profile } = await supabase
-        .from('handler_state')
-        .select('denial_day, hrt_day')
+        .from('user_state')
+        .select('denial_day')
         .eq('user_id', USER_ID)
-        .single();
+        .maybeSingle();
       if (profile) {
         state.denialDay = profile.denial_day;
-        state.hrtDay = profile.hrt_day;
       }
 
       const result = await runRedditComments(page, supabase, anthropic, USER_ID, state, maxComments);

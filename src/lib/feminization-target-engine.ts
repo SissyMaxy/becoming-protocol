@@ -7,6 +7,7 @@
 
 import { supabase } from './supabase';
 import { queueDelayedReward } from './dopamine-engine';
+import { GROUNDED_FEMININITY_RUBRIC } from './grounded-femininity';
 
 // ============================================
 // TYPES
@@ -275,6 +276,8 @@ export async function buildFeminizationContext(userId: string): Promise<string> 
     parts.push('Voice task? Frame it toward the target. Skincare? Connect it to the target.');
     parts.push('Shoot? Shot direction serves the target. Journal? Prompt references the target.');
     parts.push('Nothing is generic. Everything pushes her toward the specific frontier this week.');
+    parts.push('');
+    parts.push(GROUNDED_FEMININITY_RUBRIC);
 
     return parts.join('\n');
   } catch {

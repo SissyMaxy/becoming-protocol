@@ -11,6 +11,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   useRef,
   type ReactNode,
 } from 'react';
@@ -28,7 +29,7 @@ import {
   type TimingUserState,
 } from '../lib/timing-engine';
 import { generatePrefill, type PrefillContext } from '../lib/prefill-generator';
-import { truncateToLimit, NOTIFICATION_LIMITS } from '../lib/handler-v2/popup-utils';
+import { truncateToLimit, NOTIFICATION_LIMITS } from '../lib/handler-engines/popup-utils';
 import { getCurrentTimeOfDay, mapTimeOfDayLateNight } from '../lib/rules-engine-v2';
 import { supabase } from '../lib/supabase';
 import type { HandlerIntervention, HandlerDailyPlan } from '../types/handler';
@@ -524,11 +525,12 @@ export function HandlerProvider({
   // Computed timing engine values
   const topTimingSignal = timingSignals.length > 0 ? timingSignals[0] : null;
   const hasHighPrioritySignal = timingSignals.some(s => s.priority === 'high');
+  const isProcessing = handlerAI.isProcessing;
 
-  const value: HandlerContextValue = {
+  const value = useMemo<HandlerContextValue>(() => ({
     todaysPlan,
     currentIntervention,
-    isProcessing: handlerAI.isProcessing,
+    isProcessing,
     interventionCount,
     timingSignals,
     topTimingSignal,
@@ -546,7 +548,26 @@ export function HandlerProvider({
     requestCommitmentPrompt,
     acceptCommitment,
     notifySessionEvent,
-  };
+  }), [
+    todaysPlan,
+    currentIntervention,
+    isProcessing,
+    interventionCount,
+    timingSignals,
+    topTimingSignal,
+    hasHighPrioritySignal,
+    pendingHandlerSessions,
+    activePunishments,
+    generateDailyPlan,
+    checkForIntervention,
+    dismissIntervention,
+    completeIntervention,
+    respondToIntervention,
+    acknowledgeTimingSignal,
+    requestCommitmentPrompt,
+    acceptCommitment,
+    notifySessionEvent,
+  ]);
 
   return (
     <HandlerContext.Provider value={value}>

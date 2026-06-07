@@ -710,15 +710,8 @@ async function handlePlay(req: VercelRequest, res: VercelResponse) {
         .single();
       if (error) throw error;
 
-      await supabase
-        .from('hypno_sources')
-        .update({ play_count: 1 })
-        .eq('id', body.sourceId);
-      // Fallback increment via RPC-like raw: use an atomic upsert-ish trick
-      await supabase.rpc('increment_hypno_play_count', { p_source_id: body.sourceId }).then(
-        () => {},
-        () => {},
-      );
+      // Atomic +1 (server-side; never resets the counter to 1).
+      await supabase.rpc('increment_hypno_play_count', { p_source_id: body.sourceId });
       void whoop;
 
       return res.status(200).json({ playId: play!.id });

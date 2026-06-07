@@ -5,7 +5,8 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { logGinaReaction } from '../lib/handler-v2/gina-intelligence';
+import { getFrontendModule } from '../lib/protocol-core/frontend';
+import type { GinaModule } from '../lib/protocol-core/modules/gina-module';
 import type {
   WeekendActivity,
   WeekendSession,
@@ -241,13 +242,19 @@ export function useWeekend(): UseWeekendReturn {
             supabase.auth.getUser().then(({ data: { user } }) => {
               if (!user) return;
               const reaction = (feedback.ginaEngagementRating ?? 3) >= 3 ? 'positive' : 'neutral';
-              logGinaReaction(
-                user.id,
-                activity.category === 'gina_feminizing' ? (activity as unknown as Record<string, unknown>).ginaAction as string || activity.category : activity.category,
-                activity.name,
-                reaction as 'positive' | 'neutral' | 'negative' | 'curious',
-                feedback.ginaReactions || undefined,
-                feedback.ginaInitiated,
+              const channel = activity.category === 'gina_feminizing'
+                ? (activity as unknown as Record<string, unknown>).ginaAction as string || activity.category
+                : activity.category;
+              // Stage 6: routed through protocol-core GinaModule (browser-side,
+              // RLS-scoped) instead of the old handler-v2 gina-intelligence fn.
+              getFrontendModule<GinaModule>(user.id, 'gina').then(gina =>
+                gina?.logComfortReaction(
+                  channel,
+                  activity.name,
+                  reaction as 'positive' | 'neutral' | 'negative' | 'curious',
+                  feedback.ginaReactions || undefined,
+                  feedback.ginaInitiated,
+                ),
               ).catch(() => {});
             });
           });

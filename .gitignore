@@ -58,5 +58,22 @@ public/hypno/
 # Claude Code temp files
 tmpclaude-*
 
+# Claude Code local settings (per-machine; MUST NOT be committed — has held secrets)
+**/.claude/settings.local.json
+**/.claude/worktrees/
+
+# Private dossiers / sensitive notes (third-party PII — never commit)
+about gina.txt
+specs/About_Gina.txt
+*Gina*.txt
+*.docx
+
+# Loose experiment / scratch files at repo root
+/single_test.py
+/extreme_test.py
+/*_test.py
+New Text Document.txt
+nul
+
 .vercel
 .env*.local

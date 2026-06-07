@@ -279,34 +279,23 @@ export async function completeGoal(input: GoalCompletionInput): Promise<DailyGoa
     }
   }
 
-  // Update goal stats
-  const { error: updateError } = await supabase
+  // Bump goal stats (read-then-write; longest_streak tracks the running max).
+  const { data: goal } = await supabase
     .from('goals')
-    .update({
-      total_completions: supabase.rpc('increment', { x: 1 }),
-      consecutive_days: supabase.rpc('increment', { x: 1 }),
-    })
-    .eq('id', input.goalId);
+    .select('consecutive_days, total_completions, longest_streak')
+    .eq('id', input.goalId)
+    .single();
 
-  // If the RPC method doesn't exist, do it manually
-  if (updateError) {
-    const { data: goal } = await supabase
+  if (goal) {
+    const newConsecutive = (goal.consecutive_days || 0) + 1;
+    await supabase
       .from('goals')
-      .select('consecutive_days, total_completions, longest_streak')
-      .eq('id', input.goalId)
-      .single();
-
-    if (goal) {
-      const newConsecutive = (goal.consecutive_days || 0) + 1;
-      await supabase
-        .from('goals')
-        .update({
-          consecutive_days: newConsecutive,
-          total_completions: (goal.total_completions || 0) + 1,
-          longest_streak: Math.max(goal.longest_streak || 0, newConsecutive),
-        })
-        .eq('id', input.goalId);
-    }
+      .update({
+        consecutive_days: newConsecutive,
+        total_completions: (goal.total_completions || 0) + 1,
+        longest_streak: Math.max(goal.longest_streak || 0, newConsecutive),
+      })
+      .eq('id', input.goalId);
   }
 
   return dbCompletionToCompletion(completion as DbDailyGoalCompletion);

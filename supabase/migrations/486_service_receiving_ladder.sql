@@ -1,0 +1,4 @@
+-- 486 — Service-receiving practice.
+-- 5 fem-coded service appointments: pedicure → manicure → eyebrows →
+-- massage → facial. Weekly Saturday 14:00 UTC.
+-- Full schema + eval applied via DB.

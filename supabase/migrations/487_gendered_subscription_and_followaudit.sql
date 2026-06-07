@@ -1,0 +1,12 @@
+-- 487 — Gendered product subscription (one-shot) + social media
+-- follow audit (weekly).
+--
+-- subscription_setup_status: tracks one-time enrollment in a fem-coded
+-- monthly box (Ipsy/Birchbox/FabFitFun/Causebox). Daily check at 16:00
+-- UTC if not yet enrolled. Subscribed_at filled when decree fulfilled.
+--
+-- follow_audit_settings: weekly directive — unfollow 5 masc accounts,
+-- follow 5 fem creators. Weekly Saturday 14:00 UTC. Algorithm shift
+-- mechanic.
+--
+-- Full schema + eval applied via DB.

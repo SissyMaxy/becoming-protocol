@@ -43,6 +43,7 @@ import { runRedditBackfill } from './backfill-reddit-engagement';
 import { runScheduledAudit } from './audit-alignment';
 import { runWeeklyDigest } from './insights';
 import { queueAttentionDedup } from './handler-attention';
+import { checkAllSessions } from './check-all-sessions';
 import { isTwitterReady, checkTwitterReadiness } from './twitter-readiness';
 import { runDecreeCycle } from './handler-decree';
 import { invalidateVoiceCache } from './voice-system';
@@ -73,13 +74,12 @@ async function loadState(): Promise<Record<string, unknown>> {
   const state: Record<string, unknown> = {};
   try {
     const { data } = await supabase
-      .from('handler_state')
-      .select('denial_day, hrt_day')
+      .from('user_state')
+      .select('denial_day')
       .eq('user_id', USER_ID)
-      .single();
+      .maybeSingle();
     if (data) {
       state.denialDay = data.denial_day;
-      state.hrtDay = data.hrt_day;
     }
   } catch {
     // State unavailable, proceed without it
@@ -368,6 +368,34 @@ async function tick() {
           console.error(`[${timestamp}] Weekly digest failed:`, err instanceof Error ? err.message : err);
         }
       }, 60000);
+    }
+
+    // --- Tick 6 then every 96 ticks (~24h): session-health check ---
+    // The scrapers cannot tell "logged out" from "zero results" — a stale browser
+    // profile makes every engine silently return 0 with no error (audit #9). Detect
+    // expiry and raise a high-severity attention row so Maxy re-logs in instead of
+    // engagement/revenue flatlining unseen.
+    if (tickCount === 6 || (tickCount > 6 && tickCount % 96 === 6)) {
+      await withTimeout('Session health', async () => {
+        try {
+          const sessions = await checkAllSessions();
+          const dead = sessions.filter((s) => !s.loggedIn && !s.error);
+          for (const s of dead) {
+            await queueAttentionDedup(supabase, USER_ID, {
+              kind: 'custom',
+              severity: 'high',
+              summary: `[session_expired] ${s.platform} is logged out — engagement there is silently returning zero. Re-login: npx tsx login.ts`,
+              payload: { platform: s.platform, final_url: s.finalUrl, detected_at: new Date().toISOString() },
+            }, 6 * 60);
+            console.error(`[${timestamp}] SESSION EXPIRED: ${s.platform} — queued high-severity attention`);
+          }
+          if (dead.length === 0) {
+            console.log(`[${timestamp}] Session health OK (${sessions.filter((s) => s.loggedIn).length} live, ${sessions.filter((s) => s.error).length} errored)`);
+          }
+        } catch (err) {
+          console.error(`[${timestamp}] Session health check failed:`, err instanceof Error ? err.message : err);
+        }
+      }, 120000);
     }
 
     // --- Every 24 ticks (~6h): grade recent content + persist to content_grades ---

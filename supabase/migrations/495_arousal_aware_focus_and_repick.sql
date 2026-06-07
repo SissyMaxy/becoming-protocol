@@ -1,0 +1,18 @@
+-- 495 — Arousal-aware focus + user-driven re-pick.
+--
+-- Two UX refinements on the triage stack:
+--
+-- A) focus_picker_eval gets a new priority tier (between overdue and
+--    urgency-rotation): when user.current_arousal >= 4, prefer decrees
+--    from "hot" trigger_sources (cock_*, cum_*, pavlovian*, *state_paired*,
+--    body_receiving). Matches the body's current state to the task
+--    surfaced — if she's hot, give her a hot task to ride.
+--
+-- B) request_focus_repick(user_id, reason) RPC — user-callable function
+--    that deletes today's focus_picks row + re-runs focus_picker_eval.
+--    Returns the new decree_id. UI button: "Ask Mama for a different
+--    task." Logs the request to mommy_supervisor_log for audit.
+--
+-- Smoke verified: re-pick on user 8c69 (arousal=5) landed on
+-- pavlovian_pairing decree.
+-- Full eval functions applied via DB.

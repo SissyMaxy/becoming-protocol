@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { PrivacyPage } from './components/PrivacyPage';
 import { HandlerChat } from './components/handler/HandlerChat';
-import { getPendingOutreach, evaluateAndQueueOutreach } from './lib/handler-v2/outreach-engine';
+import { getPendingOutreach, evaluateAndQueueOutreach } from './lib/outreach/engine';
 import { HandlerParameters } from './lib/handler-parameters';
 import { useAuth } from './context/AuthContext';
 import { ProtocolProvider, useProtocol } from './context/ProtocolContext';
@@ -41,28 +41,28 @@ import { WitnessManager, CaseFileView, SealedEnvelopesPage, QuitFrictionGate, Es
 import { ForceDashboard } from './components/force/ForceDashboard';
 import { ForceStatusStrip } from './components/force/ForceStatusStrip';
 import { TodayView as TodayRedesignView } from './components/today-redesign';
-import { ConditioningLockdown } from './components/today-redesign/ConditioningLockdown';
 import { CompulsoryConfessionGate } from './components/today-redesign/CompulsoryConfessionGate';
 import { HrtDailyGate } from './components/today-redesign/HrtDailyGate';
 import { GinaSessionRecorder } from './components/today-redesign/GinaSessionRecorder';
 import { MorningMantraGate } from './components/today-redesign/MorningMantraGate';
 import { EveningConfessionGate } from './components/today-redesign/EveningConfessionGate';
 import { DisclosureRehearsalView } from './components/disclosure/DisclosureRehearsalView';
+import { WhisperToMama } from './components/confession/WhisperToMama';
 import { LivePhotoPingResponder } from './components/live-photo/LivePhotoPingResponder';
 import { MamaPhoneOverlay } from './components/push/MamaPhoneOverlay';
 import { MommyDossierQuiz } from './components/persona/MommyDossierQuiz';
 import { VerificationVault } from './components/verification/VerificationVault';
-import { LettersArchiveView } from './components/letters';
-import { LifeAsWomanView } from './components/life-as-woman';
+const LettersArchiveView = lazy(() => import('./components/letters').then((m) => ({ default: m.LettersArchiveView })));
+const LifeAsWomanView = lazy(() => import('./components/life-as-woman').then((m) => ({ default: m.LifeAsWomanView })));
 import { MommyDossierStatus } from './components/persona/MommyDossierStatus';
 import { GinaKeyHolderPage } from './components/gina/GinaKeyHolderPage';
 import { usePunishmentNotifications } from './hooks/usePunishmentNotifications';
 import { DailyReportCard } from './components/handler/DailyReportCard';
 import { SessionContainer } from './components/session';
 import type { SessionConfig } from './components/session';
-import { KinkQuizView } from './components/kink-quiz';
-import { WorkoutSessionPage } from './components/exercise';
-import { HerWorldPage } from './components/collections';
+const KinkQuizView = lazy(() => import('./components/kink-quiz').then((m) => ({ default: m.KinkQuizView })));
+const WorkoutSessionPage = lazy(() => import('./components/exercise').then((m) => ({ default: m.WorkoutSessionPage })));
+const HerWorldPage = lazy(() => import('./components/collections').then((m) => ({ default: m.HerWorldPage })));
 import { MorningBookend } from './components/bookends';
 import { EveningDebrief } from './components/EveningDebrief';
 import { useBookends } from './hooks/useBookends';
@@ -85,14 +85,14 @@ import { GinaEmergenceView, GinaPipelineView } from './components/gina';
 import { ServiceProgressionView, ServiceAnalyticsDashboard } from './components/service';
 import { ContentEscalationView, VaultSwipe } from './components/content';
 import { PermissionsManager } from './components/content/PermissionsManager';
-import { ContentCapture } from './components/content/ContentCapture';
-import { PostingQueue } from './components/content/PostingQueue';
-import { ContentCalendar } from './components/content/ContentCalendar';
-import { PlatformSettings } from './components/content/PlatformSettings';
-import { VaultView } from './components/content/VaultView';
-import { FanDashboard } from './components/content/FanDashboard';
-import { SubscriberPolls } from './components/content/SubscriberPolls';
-import { RevenueView } from './components/content/RevenueView';
+const ContentCapture = lazy(() => import('./components/content/ContentCapture').then((m) => ({ default: m.ContentCapture })));
+const PostingQueue = lazy(() => import('./components/content/PostingQueue').then((m) => ({ default: m.PostingQueue })));
+const ContentCalendar = lazy(() => import('./components/content/ContentCalendar').then((m) => ({ default: m.ContentCalendar })));
+const PlatformSettings = lazy(() => import('./components/content/PlatformSettings').then((m) => ({ default: m.PlatformSettings })));
+const VaultView = lazy(() => import('./components/content/VaultView').then((m) => ({ default: m.VaultView })));
+const FanDashboard = lazy(() => import('./components/content/FanDashboard').then((m) => ({ default: m.FanDashboard })));
+const SubscriberPolls = lazy(() => import('./components/content/SubscriberPolls').then((m) => ({ default: m.SubscriberPolls })));
+const RevenueView = lazy(() => import('./components/content/RevenueView').then((m) => ({ default: m.RevenueView })));
 import { ContentDashboard } from './components/admin/ContentDashboard';
 import { DomainEscalationView } from './components/domains';
 import { PatternCatchView } from './components/patterns';
@@ -115,7 +115,7 @@ import { ProtocolAnalytics } from './components/analytics/ProtocolAnalytics';
 import { HandlerAutonomousView } from './components/autonomous';
 import { CamDashboard } from './components/cam/CamDashboard';
 import { HypnoDashboard, HypnoLearningView } from './components/hypno';
-import { GoonSessionView } from './components/sessions/GoonSessionView';
+const GoonSessionView = lazy(() => import('./components/sessions/GoonSessionView').then((m) => ({ default: m.GoonSessionView })));
 import { SleepContentPlayer } from './components/sleep-content';
 import { ConditioningLibrary, ConditioningPlayer } from './components/conditioning';
 import { SocialMediaDashboard } from './components/social/SocialMediaDashboard';
@@ -355,10 +355,16 @@ function AuthenticatedAppInner() {
   const [showDisclosureRehearsal, setShowDisclosureRehearsal] = useState<boolean>(() =>
     typeof window !== 'undefined' && window.location.hash.replace('#', '').replace(/\/$/, '') === '/disclosure'
   );
+  // Hash-routable WhisperToMama — audio-only intimate confession ("Whisper
+  // Your Secrets to Mama"). Same hash pattern as disclosure rehearsal.
+  const [showWhisper, setShowWhisper] = useState<boolean>(() =>
+    typeof window !== 'undefined' && window.location.hash.replace('#', '').replace(/\/$/, '') === '/whisper'
+  );
   useEffect(() => {
     const onHash = () => {
       const h = window.location.hash.replace('#', '').replace(/\/$/, '');
       setShowDisclosureRehearsal(h === '/disclosure');
+      setShowWhisper(h === '/whisper');
     };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
@@ -1246,7 +1252,6 @@ function AuthenticatedAppInner() {
         />
         <CompulsoryConfessionGate />
         <HrtDailyGate />
-        <ConditioningLockdown />
         <GinaSessionRecorder />
         <MorningMantraGate />
         <EveningConfessionGate />
@@ -1254,6 +1259,12 @@ function AuthenticatedAppInner() {
           <DisclosureRehearsalView onClose={() => {
             window.location.hash = '';
             setShowDisclosureRehearsal(false);
+          }} />
+        )}
+        {showWhisper && (
+          <WhisperToMama onClose={() => {
+            window.location.hash = '';
+            setShowWhisper(false);
           }} />
         )}
         <LivePhotoPingResponder />
@@ -1298,7 +1309,7 @@ function AuthenticatedAppInner() {
             >
               &larr; Back to Handler
             </button>
-            {renderMenuSubView()}
+            <Suspense fallback={<LoadingScreen />}>{renderMenuSubView()}</Suspense>
           </div>
         </div>
       )}
@@ -1310,9 +1321,6 @@ function AuthenticatedAppInner() {
 
       {/* HRT daily gate — forces funnel advancement or written obstacle */}
       <HrtDailyGate />
-
-      {/* Conditioning lockdown — fullscreen enforcement during configured window */}
-      <ConditioningLockdown />
 
       {/* Morning mantra gate — compulsory typing before app release */}
       <MorningMantraGate />
@@ -1327,6 +1335,15 @@ function AuthenticatedAppInner() {
         <DisclosureRehearsalView onClose={() => {
           window.location.hash = '';
           setShowDisclosureRehearsal(false);
+        }} />
+      )}
+
+      {/* Whisper-to-Mama — hash-routable via /#/whisper. Audio-only intimate
+          confession surface. Mama processes async via confession-watcher-cron. */}
+      {showWhisper && (
+        <WhisperToMama onClose={() => {
+          window.location.hash = '';
+          setShowWhisper(false);
         }} />
       )}
 

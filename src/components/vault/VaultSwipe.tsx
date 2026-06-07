@@ -8,6 +8,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Check, Image, Video, Mic, Camera, ChevronLeft } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { SignedMedia } from '../common/SignedMedia';
 
 interface VaultItem {
   id: string;
@@ -230,19 +231,20 @@ export function VaultSwipe({ onClose }: VaultSwipeProps) {
             <div className="aspect-[4/5] bg-protocol-surface-light flex items-center justify-center relative">
               {currentItem.thumbnail_url || currentItem.media_url ? (
                 currentItem.media_type === 'image' ? (
-                  <img
-                    src={currentItem.thumbnail_url || currentItem.media_url}
+                  <SignedMedia
+                    bucket="vault-media"
+                    path={currentItem.thumbnail_url || currentItem.media_url}
+                    kind="image"
                     alt="Vault content"
                     className="w-full h-full object-cover"
                   />
                 ) : currentItem.media_type === 'video' ? (
-                  <video
-                    src={currentItem.media_url}
+                  <SignedMedia
+                    bucket="vault-media"
+                    path={currentItem.media_url}
+                    kind="video"
                     className="w-full h-full object-cover"
-                    muted
-                    playsInline
-                    loop
-                    autoPlay
+                    videoProps={{ muted: true, playsInline: true, loop: true, autoPlay: true }}
                   />
                 ) : (
                   <div className="flex flex-col items-center gap-3">

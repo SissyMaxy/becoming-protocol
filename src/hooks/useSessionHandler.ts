@@ -13,9 +13,9 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { getHandler } from '../lib/handler-v2';
-import type { Handler } from '../lib/handler-v2';
-import type { UserState, SessionGuidance } from '../lib/handler-v2/types';
+import { getHandler } from '../lib/handler-engines';
+import type { Handler } from '../lib/handler-engines';
+import type { UserState, SessionGuidance } from '../lib/handler-engines/types';
 import { getCurrentTimeOfDay } from '../lib/rules-engine-v2';
 
 interface SessionHandlerState {

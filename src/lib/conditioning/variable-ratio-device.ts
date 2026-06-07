@@ -156,6 +156,10 @@ export async function generateDailyDeviceSchedule(userId: string): Promise<Devic
           duration_seconds: duration,
           pattern,
           paired_message: message,
+          // Canonical lifecycle status — the device-schedule fire engines
+          // (conditioning-engine cron + device-control) pick up 'pending'
+          // rows. The fired BOOLEAN is kept in sync for legacy stats/UI.
+          status: 'pending',
           fired: false,
         })
         .select()
@@ -189,7 +193,7 @@ export async function getNextActivation(userId: string): Promise<DeviceActivatio
       .from('device_schedule')
       .select('*')
       .eq('user_id', userId)
-      .eq('fired', false)
+      .eq('status', 'pending')
       .gte('scheduled_at', now)
       .order('scheduled_at', { ascending: true })
       .limit(1)
@@ -212,7 +216,7 @@ export async function getDueActivations(userId: string): Promise<DeviceActivatio
       .from('device_schedule')
       .select('*')
       .eq('user_id', userId)
-      .eq('fired', false)
+      .eq('status', 'pending')
       .lte('scheduled_at', now)
       .order('scheduled_at', { ascending: true })
       .limit(5);
@@ -233,16 +237,23 @@ export async function fireActivation(userId: string, activationId: string): Prom
       .select('*')
       .eq('id', activationId)
       .eq('user_id', userId)
-      .eq('fired', false)
+      .eq('status', 'pending')
       .maybeSingle();
 
     if (!activation) return false;
 
-    // Mark as fired
-    await supabase
+    // Mark as fired — flip canonical status to 'executed' and keep the legacy
+    // fired BOOLEAN in sync. Gating the update on status='pending' makes this a
+    // claim: if the cron engine already executed the row, this updates 0 rows
+    // and the row isn't double-fired.
+    const { data: claimed } = await supabase
       .from('device_schedule')
-      .update({ fired: true, fired_at: new Date().toISOString() })
-      .eq('id', activationId);
+      .update({ status: 'executed', fired: true, fired_at: new Date().toISOString() })
+      .eq('id', activationId)
+      .eq('status', 'pending')
+      .select('id');
+
+    if (!claimed || claimed.length === 0) return false;
 
     // Create device command directive
     await supabase.from('handler_directives').insert({
@@ -337,14 +348,19 @@ export async function getDeviceScheduleStats(userId: string): Promise<{
 
     const { data: all } = await supabase
       .from('device_schedule')
-      .select('fired, scheduled_at')
+      .select('status, fired, fired_at, scheduled_at')
       .eq('user_id', userId)
       .eq('schedule_date', today)
       .order('scheduled_at', { ascending: true });
 
+    // A row is "done" once it leaves the canonical 'pending' status (any fire
+    // engine flips it to executed/expired/failed) or has a fired_at stamp.
+    // This stays correct no matter which engine processed the row.
     const items = all ?? [];
-    const fired = items.filter(i => i.fired).length;
-    const unfired = items.filter(i => !i.fired);
+    const isDone = (i: { status?: string | null; fired?: boolean | null; fired_at?: string | null }) =>
+      (i.status != null && i.status !== 'pending') || !!i.fired_at || !!i.fired;
+    const fired = items.filter(isDone).length;
+    const unfired = items.filter(i => !isDone(i));
     const nextAt = unfired.length > 0 ? unfired[0].scheduled_at : null;
 
     return {

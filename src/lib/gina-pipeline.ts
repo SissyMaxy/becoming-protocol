@@ -2348,8 +2348,14 @@ export async function completeGinaMission(
 
   if (!mission) return;
 
-  // Update mission
-  await supabase
+  // Idempotency (audit #13): re-completion double-bumps the next/fallback mission
+  // priority AND re-applies the conversion-state delta, corrupting the Gina
+  // conversion state machine. Bail if this mission is already completed.
+  if (mission.completed_at) return;
+
+  // Update mission — only claim it if it hasn't already been completed
+  // (atomic guard against a concurrent second call).
+  const { data: claimed } = await supabase
     .from('gina_missions')
     .update({
       completed_at: new Date().toISOString(),
@@ -2357,7 +2363,10 @@ export async function completeGinaMission(
       gina_response: ginaResponse,
       notes,
     })
-    .eq('id', missionId);
+    .eq('id', missionId)
+    .is('completed_at', null)
+    .select('id');
+  if (!claimed || claimed.length === 0) return;
 
   // If successful, potentially trigger next mission
   if (outcome === 'success' && mission.next_mission_id) {

@@ -79,11 +79,9 @@ export async function uploadCaptureMedia(
     return null;
   }
 
-  const { data: urlData } = supabase.storage
-    .from('vault-media')
-    .getPublicUrl(path);
-
-  return urlData.publicUrl;
+  // vault-media is private (audit #15) — return the object PATH, not a public
+  // URL (which 401s). The caller stores it and readers sign on render.
+  return path;
 }
 
 // ── Determine media type from file ───────────────────────

@@ -86,6 +86,16 @@ export {
   type GeneratorState,
 } from './dynamic-task-generator';
 
+// Handler Notes Module (per-turn observation note sink — revival Stage 5)
+export { HandlerNotesModule } from './handler-notes-module';
+
+// Handler Directive Module (post-LLM directive-execution loop — revival Stage 5b)
+export {
+  HandlerDirectiveModule,
+  type DirectiveExecutors,
+  type RunDirectiveLoopOptions,
+} from './handler-directive-module';
+
 // Domain Modules
 export {
   VoiceDomainModule,

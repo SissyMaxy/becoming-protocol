@@ -19,7 +19,7 @@ import type {
 import { DEFAULT_SKIP_COST } from '../types/task-bank';
 import { recordTaskAtLevel, getEscalationOverview } from './escalation/level-generator';
 import { shouldHideTask } from './corruption-behaviors';
-import { getCopyStyle } from './handler-v2/types';
+import { getCopyStyle } from './handler-engines/types';
 import { selectTask, isTaskStillValid } from './rules-engine-v2';
 import type { UserStateForSelection } from './rules-engine-v2';
 import { queueDelayedReward } from './dopamine-engine';
@@ -144,6 +144,16 @@ export async function getTasksByCategory(category: TaskCategory): Promise<Task[]
  * Convert a generated_tasks row into a Task compatible with the rules engine.
  */
 function generatedToTask(g: Record<string, unknown>): Task {
+  // requires_privacy may arrive as boolean true, string 'true'/'t'/'1', or the
+  // legacy text 'false' — normalize every truthy encoding so the Gina-home
+  // privacy gate can't be silently defeated by a type mismatch (audit #14:
+  // an intimate task surfacing while Gina is home is the exact circumvention
+  // this flag exists to prevent).
+  const requiresPrivacy =
+    g.requires_privacy === true ||
+    g.requires_privacy === 'true' ||
+    g.requires_privacy === 't' ||
+    g.requires_privacy === '1';
   return {
     id: g.id as string,
     category: (g.category as string) || 'practice',
@@ -159,7 +169,7 @@ function generatedToTask(g: Record<string, unknown>): Task {
     contentUnlock: null,
     affirmation: (g.affirmation as string) || '',
     requires: { minDenialDay: 0, minPhase: 0, equipment: [], hasItem: [] },
-    excludeIf: { ginaHome: g.requires_privacy === 'true', inSession: false },
+    excludeIf: { ginaHome: requiresPrivacy, inSession: false },
     ratchetTriggers: null,
     aiFlags: { isCore: false, canIntensify: false, canClone: false, trackResistance: false },
     createdAt: (g.created_at as string) || new Date().toISOString(),
@@ -168,7 +178,7 @@ function generatedToTask(g: Record<string, unknown>): Task {
     level: (g.level as number) || 6,
     triggerCondition: (g.trigger_condition as string) || null,
     timeWindow: (g.time_window as string) || 'any',
-    requiresPrivacy: g.requires_privacy === 'true',
+    requiresPrivacy,
     pivot: null,
   } as unknown as Task;
 }
@@ -445,13 +455,13 @@ export async function getOrCreateTodayTasks(context: UserTaskContext): Promise<D
   }).catch(() => {});
 
   // Check if novelty injection should fire (fire-and-forget)
-  import('./handler-v2/novelty-engine').then(({ shouldInjectNovelty }) => {
+  import('./handler-engines/novelty-engine').then(({ shouldInjectNovelty }) => {
     import('./handler-parameters').then(({ HandlerParameters }) => {
       const params = new HandlerParameters(context.userId);
       shouldInjectNovelty(context.userId, params).then(decision => {
         if (decision?.inject) {
           console.log(`[Novelty] Injecting ${decision.type}: ${decision.reason}`);
-          import('./handler-v2/novelty-engine').then(({ logNoveltyEvent }) => {
+          import('./handler-engines/novelty-engine').then(({ logNoveltyEvent }) => {
             logNoveltyEvent(context.userId, decision.type, decision.reason).catch(() => {});
           });
         }
@@ -494,16 +504,30 @@ export async function completeTask(
   const task = dbTaskToTask(dailyTask.task_bank);
   const pointsEarned = task.reward.points;
 
-  // Update daily task status
-  const { error: updateError } = await supabase
+  // Idempotency (audit #13): a retry / double-tap / slow-network resubmit must not
+  // double-award points, double-insert a completion, or re-fire escalation + the
+  // delayed reward. Short-circuit if already completed…
+  if (dailyTask.status === 'completed') {
+    return { success: true, pointsEarned: 0, affirmation: '' };
+  }
+
+  // …and claim the completion atomically: only the call that flips a not-completed
+  // row to 'completed' proceeds to award. A concurrent caller gets 0 rows and bails.
+  const { data: transitioned, error: updateError } = await supabase
     .from('daily_tasks')
     .update({
       status: 'completed',
       completed_at: new Date().toISOString(),
     })
-    .eq('id', dailyTaskId);
+    .eq('id', dailyTaskId)
+    .neq('status', 'completed')
+    .select('id');
 
   if (updateError) throw updateError;
+  if (!transitioned || transitioned.length === 0) {
+    // Lost the race — another call already completed it. Don't double-award.
+    return { success: true, pointsEarned: 0, affirmation: '' };
+  }
 
   // Log completion
   const { error: logError } = await supabase
@@ -1622,7 +1646,7 @@ export async function prescribeNextTask(
 
     // Merge generated tasks into the candidate pool
     try {
-      const { getEligibleGeneratedTasks } = await import('./handler-v2/escalation-engine');
+      const { getEligibleGeneratedTasks } = await import('./handler-engines/escalation-engine');
       const generated = await getEligibleGeneratedTasks(context.userId);
       if (generated.length > 0) {
         const converted = generated

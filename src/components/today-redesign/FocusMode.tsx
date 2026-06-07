@@ -27,6 +27,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { isMommyPersona } from '../../lib/persona/dommy-mommy';
+import { useSurfaceRenderTracking } from '../../lib/surface-render-hooks';
 import {
   markOfferAccepted,
   markOfferCompleted,
@@ -45,6 +46,7 @@ type TaskKind =
   | 'commitment_pending' | 'workout_today' | 'outfit_today' | 'voice_drill_today'
   | 'mommy_touch'
   | 'audio_session'
+  | 'focus_decree'
   | 'clean';
 
 interface FocusTask {
@@ -54,7 +56,7 @@ interface FocusTask {
   detail?: string;
   due?: string;
   /** Inline action surface: 'confess' = textarea, 'dose' = buttons, 'mark_done' = single button, 'photo' = upload, 'message' = no inline action, 'audio_session' = play button + audio element */
-  surface: 'confess' | 'dose' | 'mark_done' | 'photo' | 'message' | 'audio_session';
+  surface: 'confess' | 'dose' | 'mark_done' | 'photo' | 'message' | 'audio_session' | 'decree';
   /** Carried metadata for surface handlers */
   meta?: Record<string, unknown>;
   /** Severity tone for visual weight */
@@ -133,8 +135,16 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
     const nowIso = new Date().toISOString();
     const todayStr = new Date().toISOString().slice(0, 10);
 
+    // Mama's daily focus pick (mig 491) — when present, prioritize ABOVE all
+    // other surface logic. Lets the triage layer choose ONE task from the 30+
+    // active decrees instead of the priority cascade picking randomly.
+    const { data: focusPick } = await supabase.from('focus_picks')
+      .select('decree_id').eq('user_id', user.id).eq('pick_date', todayStr).maybeSingle();
+    const focusDecreeId = focusPick?.decree_id as string | undefined;
+
     const [overdueConfs, overduePuns, overdueDecrees, todayConfs, todayDecrees,
-           pendingCommits, regs, doseLog, outfit, workout, mommyTouch, audioOffer] = await Promise.all([
+           pendingCommits, regs, doseLog, outfit, workout, mommyTouch, audioOffer,
+           focusDecree] = await Promise.all([
       // Include missed-but-unconfessed rows. The compliance check marks
       // overdue rows missed=true (slip already fired); we still want the
       // user able to answer them late from FocusMode. Locking her out
@@ -188,6 +198,12 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
         .select('id, kind, intensity_tier, teaser, expires_at')
         .eq('user_id', user.id).is('completed_at', null)
         .gt('expires_at', nowIso).order('created_at', { ascending: false }).limit(1),
+      // Mama's daily focus pick — when populated, returns just this decree
+      focusDecreeId
+        ? supabase.from('handler_decrees')
+            .select('id, edict, deadline, proof_type').eq('id', focusDecreeId)
+            .eq('status', 'active').maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
     ]);
 
     // Compute most-overdue and most-due-today doses
@@ -217,7 +233,20 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
 
     let chosen: FocusTask | null = null;
 
-    if (mostOverdueDose && mostOverdueDose.hoursOverdue > 6) {
+    // Mama's daily focus pick (mig 491) — highest priority. When the
+    // triage layer has chosen a decree for today, surface that ABOVE
+    // anything else. Respects feedback_one_task_focus.
+    const fd = (focusDecree as { data?: { id: string; edict: string; deadline: string; proof_type: string } | null })?.data ?? null;
+    if (fd) {
+      const hoursToDeadline = (new Date(fd.deadline).getTime() - now) / 3600_000;
+      chosen = {
+        kind: 'focus_decree', rowId: fd.id,
+        title: fd.edict.length > 80 ? fd.edict.slice(0, 80) + '…' : fd.edict,
+        detail: `Mama picked this one for today. ${hoursToDeadline > 0 ? `Deadline in ${fmtCountdown(hoursToDeadline * 3600_000)}.` : `Past deadline.`}`,
+        surface: 'decree', tone: hoursToDeadline < 0 ? 'critical' : 'high',
+        meta: { proof_type: fd.proof_type },
+      };
+    } else if (mostOverdueDose && mostOverdueDose.hoursOverdue > 6) {
       chosen = {
         kind: 'overdue_dose', rowId: mostOverdueDose.regimenId,
         title: `Take ${mostOverdueDose.name}`,
@@ -380,6 +409,21 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
     }
   }, [confessText, task?.rowId]);
 
+  // visible-before-penalized invariant: FocusMode is Today's DEFAULT surface,
+  // so it MUST stamp surfaced_at on the decree it's showing — otherwise a
+  // decree displayed here never registers as seen and accrues a deadline the
+  // user provably looked at but the system thinks was hidden. We stamp ONLY
+  // the single decree currently on screen (not the loaded set) so surfaced_at
+  // stays honest — it means "Maxy saw THIS one". Non-decree tasks pass [].
+  const shownDecreeIds = useMemo(
+    () => (task?.rowId &&
+        (task.kind === 'focus_decree' || task.kind === 'overdue_decree' || task.kind === 'due_today_decree')
+      ? [task.rowId]
+      : []),
+    [task?.rowId, task?.kind],
+  );
+  useSurfaceRenderTracking('handler_decrees', shownDecreeIds);
+
   // Initial pick (with loader)
   useEffect(() => { pickNext(false); }, [pickNext]);
   // Silent auto-refresh (every 90s) — never blank the textarea.
@@ -495,7 +539,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
       const nowIso = new Date().toISOString();
       if (task.kind === 'overdue_punishment') {
         await supabase.from('punishment_queue').update({ status: 'completed', completed_at: nowIso }).eq('id', task.rowId);
-      } else if (task.kind === 'overdue_decree' || task.kind === 'due_today_decree') {
+      } else if (task.kind === 'overdue_decree' || task.kind === 'due_today_decree' || task.kind === 'focus_decree') {
         await supabase.from('handler_decrees').update({ status: 'fulfilled', fulfilled_at: nowIso }).eq('id', task.rowId);
       } else if (task.kind === 'workout_today') {
         await supabase.from('workout_prescriptions').update({ status: 'completed', completed_at: nowIso }).eq('id', task.rowId);
@@ -804,6 +848,47 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
             >
               {submitting ? 'submitting…' : 'Mark complete'}
             </button>
+          )}
+
+          {task.surface === 'decree' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <button
+                onClick={handleMarkDone}
+                disabled={submitting}
+                style={{
+                  width: '100%', padding: '12px',
+                  background: tone.border, color: '#fff',
+                  border: 'none', borderRadius: 7,
+                  fontSize: 13, fontWeight: 700, letterSpacing: '0.04em',
+                  textTransform: 'uppercase', fontFamily: 'inherit',
+                  cursor: submitting ? 'wait' : 'pointer',
+                }}
+              >
+                {submitting ? 'submitting…' : 'Mark fulfilled'}
+              </button>
+              <button
+                onClick={async () => {
+                  if (!user?.id || submitting) return;
+                  setSubmitting(true);
+                  try {
+                    await supabase.rpc('request_focus_repick', { p_user_id: user.id, p_reason: 'user clicked different-task' });
+                  } finally {
+                    setSubmitting(false);
+                    pickNext();
+                  }
+                }}
+                disabled={submitting}
+                style={{
+                  width: '100%', padding: '8px',
+                  background: 'transparent', color: '#8a8690',
+                  border: '1px solid #2a2a32', borderRadius: 6,
+                  fontSize: 11, fontFamily: 'inherit',
+                  cursor: submitting ? 'wait' : 'pointer',
+                }}
+              >
+                ask Mama for a different one
+              </button>
+            </div>
           )}
 
           {task.surface === 'photo' && (

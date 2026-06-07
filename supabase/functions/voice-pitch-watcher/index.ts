@@ -131,6 +131,25 @@ Deno.serve(async (req: Request) => {
   const results: Array<{ user_id: string; status: string; detail?: string }> = []
 
   for (const uid of userIds) {
+    // Voice is elective (user 2026-05-26: hard to do, especially with Gina
+    // home). While voice_elective is on, do NOT push voice decrees — voice is
+    // opt-in, not a task the protocol nudges. Default to elective on any read
+    // miss so we never nudge against the user's stated preference.
+    const { data: vs } = await supabase
+      .from('user_state')
+      .select('voice_elective')
+      .eq('user_id', uid)
+      .maybeSingle()
+    const isElective = (vs as { voice_elective?: boolean } | null)?.voice_elective !== false
+    const { data: ginaHomeToday } = await supabase.rpc('is_gina_home_today', { p_user_id: uid })
+    // Force (user 2026-05-26): voice is opt-in ONLY while privacy is blocked
+    // (Gina home). When she's away, push voice — internal "it's hard" is never
+    // an excuse, only the real privacy block is.
+    if (isElective && ginaHomeToday === true) {
+      results.push({ user_id: uid, status: 'elective_skip_gina_home' })
+      continue
+    }
+
     const stagnation = await checkUserStagnation(supabase, uid)
     if (!stagnation || !stagnation.stagnant) {
       results.push({ user_id: uid, status: 'no_stagnation' })

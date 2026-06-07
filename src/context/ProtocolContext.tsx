@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { DailyEntry, Intensity, JournalEntry, UserProgress, Domain } from '../types';
 import { storage, updateProgressFromEntries, profileStorage, getCompletedDaysCount, getCompletedDates } from '../lib/storage';
 import { getTodayDate, getYesterdayDate, getLocalDateString } from '../lib/protocol';
@@ -912,7 +912,9 @@ export function ProtocolProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const value: ProtocolContextType = {
+  const aiMode: AIMode = analytics?.recommendedMode || 'build';
+
+  const value = useMemo<ProtocolContextType>(() => ({
     currentEntry,
     progress,
     history,
@@ -921,7 +923,7 @@ export function ProtocolProvider({ children }: { children: React.ReactNode }) {
     // AI State
     prescription,
     analytics,
-    aiMode: analytics?.recommendedMode || 'build',
+    aiMode,
 
     // Events
     levelUpEvent,
@@ -983,7 +985,58 @@ export function ProtocolProvider({ children }: { children: React.ReactNode }) {
     // Lovense Integration
     lovenseRewardsEnabled,
     setLovenseRewardsEnabled,
-  };
+  }), [
+    currentEntry,
+    progress,
+    history,
+    isLoading,
+    prescription,
+    analytics,
+    aiMode,
+    levelUpEvent,
+    phaseUpEvent,
+    streakMilestone,
+    reinforcementEvent,
+    unaskedQuestion,
+    nameQuestion,
+    investmentMilestone,
+    userName,
+    investments,
+    investmentSummary,
+    wishlist,
+    wishlistSummary,
+    wishlistShares,
+    investmentsLoading,
+    startDay,
+    regenerateToday,
+    toggleTask,
+    saveJournal,
+    loadHistory,
+    getEntryByDate,
+    resetProgress,
+    addInvestment,
+    updateInvestment,
+    deleteInvestment,
+    markInvestmentUsedAction,
+    refreshInvestmentData,
+    addToWishlist,
+    updateWishlistItem,
+    removeFromWishlist,
+    purchaseWishlistItem,
+    createWishlistShare,
+    revokeWishlistShare,
+    dismissLevelUp,
+    dismissPhaseUp,
+    dismissStreakMilestone,
+    dismissReinforcement,
+    dismissUnaskedQuestion,
+    answerUnaskedQuestion,
+    dismissNameQuestion,
+    updateUserName,
+    dismissInvestmentMilestone,
+    lovenseRewardsEnabled,
+    setLovenseRewardsEnabled,
+  ]);
 
   return (
     <ProtocolContext.Provider value={value}>

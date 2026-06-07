@@ -62,6 +62,10 @@ export function usePolling<T>(
   const backoffRef = useRef(interval);
   const mountedRef = useRef(true);
   const pollFnRef = useRef(pollFn);
+  // Tracks whether the poller is actively running. Read synchronously inside
+  // scheduleNext so the reschedule decision can't see a stale `isPolling`
+  // value captured at the time `start` was created (the setState is async).
+  const isPollingRef = useRef(false);
 
   // Keep pollFn ref updated
   pollFnRef.current = pollFn;
@@ -106,9 +110,11 @@ export function usePolling<T>(
   // Start polling
   const start = useCallback(() => {
     if (intervalRef.current) {
-      clearInterval(intervalRef.current);
+      clearTimeout(intervalRef.current);
+      intervalRef.current = null;
     }
 
+    isPollingRef.current = true;
     setIsPolling(true);
     onStart?.();
 
@@ -116,7 +122,11 @@ export function usePolling<T>(
       const nextInterval = getBackoffInterval();
       intervalRef.current = setTimeout(async () => {
         await executePoll();
-        if (mountedRef.current && isPolling) {
+        // Read the ref (not the captured `isPolling` state) so a `stop()`
+        // that fired after this tick was scheduled correctly halts the loop,
+        // and a still-running poller keeps going instead of double-firing once
+        // then dying on a stale `false`.
+        if (mountedRef.current && isPollingRef.current) {
           scheduleNext();
         }
       }, nextInterval);
@@ -124,14 +134,15 @@ export function usePolling<T>(
 
     // Execute immediately, then schedule
     executePoll().then(() => {
-      if (mountedRef.current) {
+      if (mountedRef.current && isPollingRef.current) {
         scheduleNext();
       }
     });
-  }, [executePoll, getBackoffInterval, isPolling, onStart]);
+  }, [executePoll, getBackoffInterval, onStart]);
 
   // Stop polling
   const stop = useCallback(() => {
+    isPollingRef.current = false;
     if (intervalRef.current) {
       clearTimeout(intervalRef.current);
       intervalRef.current = null;
@@ -167,6 +178,7 @@ export function usePolling<T>(
 
     return () => {
       mountedRef.current = false;
+      isPollingRef.current = false;
       if (intervalRef.current) {
         clearTimeout(intervalRef.current);
         intervalRef.current = null;

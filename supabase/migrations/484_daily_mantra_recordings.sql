@@ -1,0 +1,6 @@
+-- 484 — Daily mantra rehearsal recordings.
+-- Daily 12:00 local prompt pulling from confession_transmuter +
+-- stranger_quote mantra categories. Three takes of a single phrase.
+-- The recording corpus feeds back into the conditioning loop.
+-- Hourly cron self-filters by local hour.
+-- Full schema + eval applied via DB.

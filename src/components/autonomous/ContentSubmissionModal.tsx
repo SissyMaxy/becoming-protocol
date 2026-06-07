@@ -23,7 +23,7 @@ import {
 import { useBambiMode } from '../../context/BambiModeContext';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
-import { submitContent, type ContentBrief } from '../../lib/handler-v2/content-engine';
+import { submitContent, type ContentBrief } from '../../lib/handler-engines/content-engine';
 
 interface ContentSubmissionModalProps {
   brief: ContentBrief;

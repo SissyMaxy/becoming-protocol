@@ -1,0 +1,4 @@
+-- 483 — Makeup skill progression. 8 phases daily-skill build:
+-- skincare → lip_tint → mascara → eyeliner → foundation → full_eye →
+-- contouring → full_face. 2x weekly Mon/Thu 15:00 UTC.
+-- Full schema + eval applied via DB.

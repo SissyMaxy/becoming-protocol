@@ -1,0 +1,14 @@
+-- 510 — Forced-purchase + Witness-CC. Drains 2 more user_directive wishes.
+--
+-- forced_purchase: 20-item catalog (panties, sleepwear, bralette,
+-- makeup, jewelry, toys, shapewear, etc.) gated by arc_stage_min +
+-- monthly budget cap ($40 default). Weekly Monday 12:00 UTC. Silence
+-- = consent = order. Active decline requires voice debrief reason.
+--
+-- witness_cc: activates at gina_disclosure rung >= 5. Asks user to
+-- designate a trusted third party who'll know about the disclosure
+-- conversation happening. Accountability breaks isolation. 3x weekly
+-- Wed 14:00 UTC. 21-day dedup.
+--
+-- Both wishes marked status='shipped' in mommy_code_wishes.
+-- Full schema + functions applied via DB.

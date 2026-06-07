@@ -1010,7 +1010,6 @@ async function executeDirectiveInline(
     case 'start_edge_timer':
     case 'capture_reframing':
     case 'resolve_decision':
-    case 'write_memory':
       return { success: true, data: { action, client_handled: true, target } }
 
     case 'modify_schedule': {
@@ -1038,10 +1037,14 @@ async function executeDirectiveInline(
 
       // Write to lovense_commands queue instead of invoking the user-JWT
       // edge function. The device bridge polls this table and executes.
+      // Lovense Standard API action is `Function:Value` (e.g. Vibrate:10);
+      // consumers parse the intensity back out of it (see lovense-command).
+      // An "edge" pattern teases with pulses rather than steady vibration.
+      const action = pattern.includes('edge') ? `Pulse:${intensity}` : `Vibrate:${intensity}`
       const { data, error } = await supabase.from('lovense_commands').insert({
         user_id: userId,
         command_type: 'Function',
-        command_payload: { action: pattern.includes('edge') ? 'Vibrate' : 'Vibrate', intensity, duration_sec: duration, pattern },
+        command_payload: { action, intensity, duration_sec: duration, pattern },
         trigger_type: 'handler_directive',
         intensity,
         duration_sec: duration,

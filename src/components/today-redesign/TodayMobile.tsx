@@ -55,6 +55,10 @@ import { RightNowCard } from './RightNowCard';
 import { FocusMode } from './FocusMode';
 import { MommyMoodIndicator } from '../persona/MommyMoodIndicator';
 import { ArousalTouchCard } from '../persona/ArousalTouchCard';
+import { EdgingDayCard } from './EdgingDayCard';
+import { MommyIntrusionCard } from './MommyIntrusionCard';
+import { ReturnWeightCard } from './ReturnWeightCard';
+import { PenaltyPreviewCard } from './PenaltyPreviewCard';
 import { WardrobePrescriptionCard } from './WardrobePrescriptionCard';
 import { MommyDailyPlanCard } from './MommyDailyPlanCard';
 import { MommyAmbientPlayerCard } from './MommyAmbientPlayerCard';
@@ -64,6 +68,16 @@ import { ProtocolHealthCard } from './ProtocolHealthCard';
 import { MommyIdeationCard } from './MommyIdeationCard';
 import { DeployFixerStatusCard } from './DeployFixerStatusCard';
 import { SystemGrowthCard } from './SystemGrowthCard';
+import { EvidenceVaultCard } from './EvidenceVaultCard';
+import { IrreversibleProofCard } from './IrreversibleProofCard';
+import { AdaptationPanelCard } from './AdaptationPanelCard';
+import { GinaArcCard } from './GinaArcCard';
+import { LadderAdaptivePanel } from './LadderAdaptivePanel';
+import { LadderProgressionPanel } from './LadderProgressionPanel';
+import { MilestonesCard } from './MilestonesCard';
+import { MommyDraftsPanel } from './MommyDraftsPanel';
+import { GinaCampaignPanel } from './GinaCampaignPanel';
+import { ObservationLogButton } from './ObservationLogModal';
 import { SupabaseHealthCard } from './SupabaseHealthCard';
 import { PunishmentQueueCard } from './PunishmentQueueCard';
 import { ArousalLogCard } from './ArousalLogCard';
@@ -284,11 +298,15 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             ← back to focus mode
           </button>
           {/* SPINE — always visible, top of page. Single answer to "what now". */}
+          <ReturnWeightCard />
+          <MommyIntrusionCard />
+          <PenaltyPreviewCard />
           <MommyMoodIndicator />
           <MommyDailyPlanCard />
           <MommyAmbientPlayerCard />
           <GoodGirlPointsCard />
           <ArousalTouchCard />
+          <EdgingDayCard />
           <WardrobePrescriptionCard />
           <PublicDareCard />
           <RightNowCard />
@@ -332,12 +350,22 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             <MommyIdeationCard />
             <DeployFixerStatusCard />
             <SystemGrowthCard />
+            <AdaptationPanelCard />
             <SupabaseHealthCard />
             <DailyBriefingCard />
             <StrategicPlanCard />
             <CodeAuditCard />
           </CollapsibleGroup>
           <CollapsibleGroup id="progress" label="Progress & Tracking" tone="#6ee7b7" hint="phase · streaks · body">
+            <EvidenceVaultCard />
+            <IrreversibleProofCard />
+            <GinaArcCard />
+            <GinaCampaignPanel />
+            <ObservationLogButton />
+            <MommyDraftsPanel />
+            <LadderAdaptivePanel />
+            <LadderProgressionPanel />
+            <MilestonesCard />
             <PhaseProgressCard />
             <MantraStreakCard />
             <MantraDrillCard />

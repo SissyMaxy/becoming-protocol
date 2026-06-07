@@ -1,0 +1,25 @@
+-- 496 — Arousal sensing closed-loop.
+--
+-- Closes the sensing → action loop. state_paired (mig 446) +
+-- arousal-aware focus (mig 495) read current_arousal but nothing
+-- actively updated it from real signal. This wires two feeds:
+--
+-- A) arousal_score_from_text(text) returns 0-5. Conservative-tuned
+--    regex on hot/want/heat/submission signals minus cooling signals.
+--    Smoke: hot text → 3, cold → 0, neutral → 0.
+--
+-- B) mama_confession_arousal_update trigger — on transcript completed,
+--    score the transcript, update user_state.current_arousal if
+--    higher than current, insert arousal_log entry.
+--
+-- C) hot_decree_fulfilled_arousal_log trigger — when a hot-source
+--    decree (cock_*, cum_*, pavlovian*, *state_paired*, body_receiving)
+--    flips to fulfilled, insert arousal_log marker (value 4) +
+--    GREATEST user_state.current_arousal to 4. Implies fulfillment
+--    required the body to be warm to do the thing.
+--
+-- Feedback loop now closed: voice confession or fulfilled hot decree
+-- → arousal_log + current_arousal → next state_paired/focus pick
+-- treats user as warm → surfaces matching directive.
+--
+-- Full functions + triggers applied via DB.

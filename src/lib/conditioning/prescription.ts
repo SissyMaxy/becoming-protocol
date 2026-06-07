@@ -7,6 +7,7 @@
  */
 
 import { supabase } from '../supabase';
+import { incrementCounter } from '../db-increment';
 import { getScentInstruction } from './scent-bridge';
 
 export type SessionContext = 'evening' | 'sleep' | 'morning' | 'background' | 'goon' | 'edge';
@@ -241,24 +242,7 @@ export async function selectContent(
     if (data?.length) {
       const ids = data.map(c => c.id);
       for (const id of ids) {
-        await supabase.rpc('increment_field', {
-          table_name: 'content_curriculum',
-          row_id: id,
-          field_name: 'times_prescribed',
-          increment_by: 1,
-        }).then(({ error: rpcErr }) => {
-          // Fall back to read-then-write if RPC doesn't exist
-          if (rpcErr) {
-            const row = data.find(c => c.id === id);
-            if (row) {
-              supabase
-                .from('content_curriculum')
-                .update({ times_prescribed: (row.times_prescribed ?? 0) + 1 })
-                .eq('id', id)
-                .then(() => {});
-            }
-          }
-        });
+        await incrementCounter('content_curriculum', 'times_prescribed', { id });
       }
     }
 
