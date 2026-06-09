@@ -22,6 +22,9 @@ name: Mommy deploy on merge
 # It does NOT deploy on PR open — only on merge.
 
 on:
+  # Manual trigger — lets a deploy be run on demand (e.g. after a workflow-only
+  # change that doesn't touch the migrations/functions paths below).
+  workflow_dispatch: {}
   push:
     branches:
       - main
