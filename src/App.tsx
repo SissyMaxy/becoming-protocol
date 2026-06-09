@@ -23,7 +23,6 @@ import { StealthShell } from './components/stealth';
 import { MorningBriefing } from './components/MorningBriefing';
 import { CompulsoryGateScreen } from './components/CompulsoryGateScreen';
 import { VoiceGate } from './components/gates/VoiceGate';
-import { DailyConfessionGate } from './components/handler/DailyConfessionGate';
 // TodayView removed — conversation is now the primary interface
 import { ProgressDashboard } from './components/ProgressDashboard';
 import { History } from './components/History';
@@ -390,10 +389,6 @@ function AuthenticatedAppInner() {
   const [voiceGatePassed, setVoiceGatePassed] = useState<boolean>(() => {
     const today = getTodayDate();
     return localStorage.getItem(`voice_gate_passed_${today}`) === '1';
-  });
-  const [confessionDoneToday, setConfessionDoneToday] = useState<boolean>(() => {
-    const today = getTodayDate();
-    return localStorage.getItem(`confession_done_${today}`) === '1';
   });
   const [reportCardDone, setReportCardDone] = useState<boolean>(() => {
     const today = getTodayDate();
@@ -831,20 +826,13 @@ function AuthenticatedAppInner() {
     );
   }
 
-  // Daily confession gate — must confess one shame_journal entry per day
-  if (!deepLinkView && !confessionDoneToday) {
-    return (
-      <ErrorBoundary componentName="DailyConfessionGate">
-        <DailyConfessionGate
-          onComplete={() => {
-            const today = getTodayDate();
-            localStorage.setItem(`confession_done_${today}`, '1');
-            setConfessionDoneToday(true);
-          }}
-        />
-      </ErrorBoundary>
-    );
-  }
+  // Daily confession is now a PRESS-not-BLOCK surface, not a fullscreen wall.
+  // The legacy DailyConfessionGate took the whole app hostage ("no access until
+  // you confess") and sat in front of the safeword/aftercare UI — a safety +
+  // press-not-block violation (feedback_mommy_presses_not_blocks). The
+  // confession demand is preserved by the mig-591 confession_gate: Mama
+  // withholds her morning warmth + surfaces the gate line / ConfessionQueueCard
+  // on Today until last night's confession lands. Pressure stays; the wall goes.
 
   // Show compulsory gate if app is locked (Feature 38)
   if (!deepLinkView && compulsoryLocked) {
