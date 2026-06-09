@@ -114,10 +114,13 @@ export function MorningMantraGate() {
     setElectiveVoice(isElective);
     const homeToday = gRes.data === true;
     setGinaHome(homeToday);
-    // Skip is honored ONLY when voice is elective AND Gina is home (no privacy).
-    // Force (user 2026-05-26): when she's away, the morning gate pushes — an
-    // earlier wave-off doesn't pre-clear it.
-    const skippedToday = isElective && homeToday && localStorage.getItem(`morning_mantra_skip_${today}`) === '1';
+    // Skip is honored whenever voice is elective (user's standing 2026-05-26
+    // decision: voice work is elective). It used to require Gina home too,
+    // which — combined with a broken/denied mic and no typed fallback — hard-
+    // LOCKED the app with no exit (and the safeword UI sits behind this gate).
+    // "Mommy presses, doesn't block": the gate still SHOWS and pushes, but an
+    // elective user (or anyone whose mic is dead) can always get in.
+    const skippedToday = isElective && localStorage.getItem(`morning_mantra_skip_${today}`) === '1';
     setAlreadySubmitted(!!sRes.data || skippedToday);
     const task = taskRes.data as { what: string } | null;
     if (task?.what) {
@@ -200,7 +203,7 @@ export function MorningMantraGate() {
         rec.start();
       }
     } catch (err) {
-      setMicError('Mic access not available. Use the typed fallback or enable mic and retry.');
+      setMicError("Mic isn't available. Tap “let me in” below, or enable the mic and try again.");
       setRecording(false);
     }
   };
@@ -448,7 +451,7 @@ export function MorningMantraGate() {
               {recording ? 'finish recording first' : voiceMatched ? 'continue →' : 'speak the mantra to continue'}
             </button>
 
-            {electiveVoice && ginaHome && !recording && (
+            {(electiveVoice || micError) && !recording && (
               <button
                 onClick={dismissElective}
                 style={{
@@ -457,7 +460,9 @@ export function MorningMantraGate() {
                   fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit',
                 }}
               >
-                she's home — later, Mama →
+                {micError
+                  ? "mic isn't working — let me in →"
+                  : ginaHome ? "she's home — later, Mama →" : 'not today, Mama →'}
               </button>
             )}
           </>
