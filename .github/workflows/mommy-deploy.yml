@@ -69,11 +69,37 @@ jobs:
         if: steps.secrets.outputs.ready == 'true'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
           PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
         run: |
-          supabase link --project-ref "$PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
-          supabase db push --password "$SUPABASE_DB_PASSWORD"
+          # This repo's migrations are NUMBERED (591_name.sql), applied via the
+          # Supabase Management API — the project's actual mechanism
+          # (scripts/apply-migration.mjs). `supabase db push` only understands
+          # <timestamp>_name.sql, so it SKIPS every numbered file and then
+          # errors on the timestamp-based remote history. Apply migrations
+          # numbered >= 591 (everything not already on prod) via the API, in
+          # order. Each is idempotent (IF NOT EXISTS / OR REPLACE / ON CONFLICT),
+          # so re-applying on later deploys is safe.
+          set -euo pipefail
+          ENDPOINT="https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query"
+          applied=0
+          for f in $(ls supabase/migrations/*.sql | sort -V); do
+            base=$(basename "$f")
+            num=$(echo "$base" | grep -oE '^[0-9]+' || echo 0)
+            if [ "${num:-0}" -lt 591 ]; then continue; fi
+            echo "→ applying $base"
+            jq -Rs '{query: .}' "$f" > /tmp/payload.json
+            code=$(curl -sS -o /tmp/resp.json -w '%{http_code}' -X POST "$ENDPOINT" \
+              -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+              -H "Content-Type: application/json" \
+              --data-binary @/tmp/payload.json)
+            if [ "$code" -ge 400 ]; then
+              echo "::error::migration $base failed (HTTP $code): $(head -c 1000 /tmp/resp.json)"
+              exit 1
+            fi
+            applied=$((applied+1))
+            echo "  ok"
+          done
+          echo "Applied $applied migration(s) >= 591."
 
       - name: Set up Deno (edge runtime)
         if: steps.secrets.outputs.ready == 'true'
