@@ -1,22 +1,23 @@
 /**
- * MamaPhoneOverlay — force-prompts push registration when Maxy has no
+ * MamaPhoneOverlay — prompts push registration when Maxy has no active
  * push_subscriptions row for her current device.
  *
  * Why this exists: 2026-05-15 audit revealed push_subscriptions had ZERO
  * rows for either active user despite the migration-380 bridge writing
- * scheduled_notifications correctly. The dispatcher cron runs, marks
- * rows 'sent', but every send fans out to an empty endpoint list.
- * Every Mama-voice feature shipped this month has been silent.
+ * scheduled_notifications correctly. Every Mama-voice feature shipped that
+ * month had been silent.
  *
- * Self-gating overlay (same pattern as LivePhotoPingResponder /
- * EveningConfessionGate). Mounts at App.tsx top level. Auto-shows when:
- *   - the user is authenticated
- *   - they have no active push_subscriptions row
- *   - they haven't snoozed within the last 4h
- *   - the app isn't currently in a more urgent overlay (mantra gate, etc)
- *
- * Mama-voice copy escalates based on days since the row was wanted.
- * Limited snooze (4h) keeps pressure on without locking her out entirely.
+ * 2026-06-10 rework (theme hit iteration 3 — push still wasn't reaching the
+ * phone, see memory:feedback_zoom_out_at_iteration_two):
+ *   - Registration logic moved to the shared self-healing helper
+ *     (src/lib/push/register.ts). Mama now re-subscribes on every load once
+ *     permission is granted (usePushNotifications) and recovers from the
+ *     "Registration failed - push service error" wedge here — so the user
+ *     does the ONE thing the browser forces (grant permission) and Mama
+ *     maintains the rest.
+ *   - Demoted from a fixed-inset-0 fullscreen wall to a dismissible bottom
+ *     sheet (memory:feedback_mommy_presses_not_blocks — pressure surfaces
+ *     run parallel to the app, never a takeover).
  *
  * iOS Safari path: requires PWA install before push is available. Detect
  * UA + display-mode and show the Add-to-Home-Screen flow instead of the
@@ -26,58 +27,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { ensureFreshPushSubscription, pushErrorToMamaCopy } from '../../lib/push/register';
 
-const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
 const SNOOZE_KEY = 'bp_mama_phone_snooze_until';
 const SNOOZE_MS = 4 * 60 * 60 * 1000;
-
-/**
- * Decode a base64url-encoded VAPID public key to bytes.
- *
- * Hardened (2026-05-15): trims surrounding whitespace + quotes (env var
- * copy-paste artifacts), validates the charset, throws a clear error
- * instead of bubbling up a cryptic `atob` exception. The overlay catches
- * this and surfaces a "VAPID key looks wrong" message rather than
- * crashing on tap.
- */
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  if (!base64String) throw new Error('VAPID_PUBLIC_KEY_EMPTY');
-  // Strip Vercel env-var paste artifacts: surrounding quotes, whitespace.
-  const cleaned = base64String
-    .trim()
-    .replace(/^['"`]|['"`]$/g, '')
-    .trim();
-  if (!cleaned) throw new Error('VAPID_PUBLIC_KEY_EMPTY');
-  // base64url: A-Z a-z 0-9 - _ only. Anything else means the env var
-  // was set to a placeholder or has hidden characters.
-  if (!/^[A-Za-z0-9_-]+$/.test(cleaned)) {
-    throw new Error('VAPID_PUBLIC_KEY_INVALID_CHARSET');
-  }
-  // Uncompressed P-256 public key is 65 bytes → ~87 base64url chars.
-  // Compressed would be 33 → ~44. Anything wildly off is misconfigured.
-  if (cleaned.length < 40 || cleaned.length > 100) {
-    throw new Error(`VAPID_PUBLIC_KEY_BAD_LENGTH:${cleaned.length}`);
-  }
-  const padding = '='.repeat((4 - (cleaned.length % 4)) % 4);
-  const base64 = (cleaned + padding).replace(/-/g, '+').replace(/_/g, '/');
-  let raw: string;
-  try {
-    raw = atob(base64);
-  } catch {
-    throw new Error('VAPID_PUBLIC_KEY_DECODE_FAILED');
-  }
-  const arr = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
-  return arr;
-}
-
-function arrayBufferToBase64(buf: ArrayBuffer | null): string {
-  if (!buf) return '';
-  const bytes = new Uint8Array(buf);
-  let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
 
 function isIos(): boolean {
   if (typeof navigator === 'undefined') return false;
@@ -145,66 +98,17 @@ export function MamaPhoneOverlay() {
   const ios = isIos();
   const standalone = isStandalonePWA();
   const needsPwaInstall = ios && !standalone;
-  const browserUnsupported =
-    typeof Notification === 'undefined' ||
-    typeof navigator === 'undefined' ||
-    !('serviceWorker' in navigator) ||
-    !('PushManager' in window);
 
   const enable = useCallback(async () => {
     if (!user?.id) return;
     setEnabling(true);
     setError(null);
     try {
-      if (browserUnsupported) {
-        setError("Mama can't talk to this browser, baby. Open the app in Chrome or Safari.");
+      const result = await ensureFreshPushSubscription(user.id, true);
+      if (!result.ok) {
+        setError(pushErrorToMamaCopy(result.code, result.detail));
         return;
       }
-      if (!VAPID_PUBLIC_KEY) {
-        setError("Mama's missing a key, sweet thing. Tell whoever runs this to set VAPID_PUBLIC_KEY.");
-        return;
-      }
-      const perm = await Notification.requestPermission();
-      if (perm !== 'granted') {
-        setError("You said no to Mama. Open browser settings and let me in.");
-        return;
-      }
-      const reg = await navigator.serviceWorker.ready;
-      let sub = await reg.pushManager.getSubscription();
-      if (!sub) {
-        let keyBytes: Uint8Array;
-        try {
-          keyBytes = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
-        } catch (e) {
-          const code = e instanceof Error ? e.message : String(e);
-          if (code.startsWith('VAPID_PUBLIC_KEY_EMPTY')) {
-            setError("Mama's VAPID key is missing on Vercel. Set VITE_VAPID_PUBLIC_KEY and redeploy.");
-          } else if (code.startsWith('VAPID_PUBLIC_KEY_INVALID_CHARSET')) {
-            setError("Mama's VAPID key has stray characters (quotes, whitespace, or wrong value). Re-paste it on Vercel — no quotes, no spaces.");
-          } else if (code.startsWith('VAPID_PUBLIC_KEY_BAD_LENGTH')) {
-            setError(`Mama's VAPID key is the wrong length (${code.split(':')[1] || '?'}). Should be ~87 characters. Generate a fresh keypair.`);
-          } else {
-            setError("Mama's VAPID key won't decode. Re-paste it on Vercel from a freshly-generated keypair.");
-          }
-          return;
-        }
-        sub = await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: keyBytes,
-        });
-      }
-      const p256dh = arrayBufferToBase64(sub.getKey('p256dh'));
-      const auth = arrayBufferToBase64(sub.getKey('auth'));
-      await supabase.from('push_subscriptions').upsert({
-        user_id: user.id,
-        endpoint: sub.endpoint,
-        p256dh,
-        auth,
-        device_label: null,
-        user_agent: navigator.userAgent.slice(0, 200),
-        active: true,
-        last_used_at: new Date().toISOString(),
-      }, { onConflict: 'user_id,endpoint' });
       // Subscription detection happens on next poll; force-clear snooze.
       try { localStorage.removeItem(SNOOZE_KEY); } catch { /* ignore */ }
       setSnoozeSeen(0);
@@ -215,7 +119,7 @@ export function MamaPhoneOverlay() {
     } finally {
       setEnabling(false);
     }
-  }, [user?.id, browserUnsupported]);
+  }, [user?.id]);
 
   // Visibility gates: do not render at all unless we need to.
   if (loading) return null;
@@ -224,41 +128,48 @@ export function MamaPhoneOverlay() {
   if (snoozeSeen > Date.now()) return null;
 
   return (
+    // Bottom sheet — pressure, not a wall. The app stays visible and
+    // interactive above it (no inset:0, no aria-modal takeover).
     <div
-      role="dialog"
-      aria-modal="true"
+      role="region"
+      aria-label="Mama push setup"
       style={{
-        position: 'fixed', inset: 0, zIndex: 75,
-        background: 'rgba(8,5,12,0.96)',
-        display: 'flex', flexDirection: 'column', alignItems: 'stretch',
-        justifyContent: 'flex-start',
-        padding: 'max(env(safe-area-inset-top), 16px) 16px max(env(safe-area-inset-bottom), 16px)',
-        overflowY: 'auto',
+        position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 75,
+        maxHeight: '85dvh', overflowY: 'auto',
+        background: 'linear-gradient(180deg, #14091c 0%, #0c0710 100%)',
+        borderTop: '1px solid #5d2d4a',
+        borderTopLeftRadius: 18, borderTopRightRadius: 18,
+        boxShadow: '0 -18px 48px rgba(0,0,0,0.55)',
+        padding: '14px 16px max(env(safe-area-inset-bottom), 16px)',
       }}
     >
+      <div style={{
+        width: 36, height: 4, borderRadius: 2, background: '#5d2d4a',
+        margin: '0 auto 14px',
+      }} />
       <div style={{ maxWidth: 480, width: '100%', margin: '0 auto' }}>
         <div style={{
           fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase',
-          color: '#f4a7c4', marginBottom: 18, textAlign: 'center',
+          color: '#f4a7c4', marginBottom: 10, textAlign: 'center',
         }}>
           Mama's been waiting
         </div>
 
         <h1 style={{
-          fontSize: 28, lineHeight: 1.15, color: '#f4d5e4', fontWeight: 700,
-          marginBottom: 16, fontFamily: 'inherit',
+          fontSize: 22, lineHeight: 1.18, color: '#f4d5e4', fontWeight: 700,
+          marginBottom: 12, fontFamily: 'inherit',
         }}>
           You're hiding from me, sweet thing.
         </h1>
 
-        <p style={{ fontSize: 15, color: '#d4c4cc', lineHeight: 1.5, marginBottom: 14 }}>
+        <p style={{ fontSize: 14, color: '#d4c4cc', lineHeight: 1.5, marginBottom: 12 }}>
           Mama has been talking to nobody. Every directive, every check-in,
           every reward — sent to a phone that never agreed to listen.
         </p>
-        <p style={{ fontSize: 15, color: '#d4c4cc', lineHeight: 1.5, marginBottom: 22 }}>
+        <p style={{ fontSize: 14, color: '#d4c4cc', lineHeight: 1.5, marginBottom: 18 }}>
           {needsPwaInstall
             ? "Mama lives on your home screen, baby. Get me there or you'll keep missing me."
-            : "Let Mama into the only channel that actually reaches you. One tap."}
+            : "One tap is all Mama needs from you. She keeps the line open after that herself."}
         </p>
 
         {needsPwaInstall ? (
@@ -331,10 +242,10 @@ export function MamaPhoneOverlay() {
 
         <p style={{
           fontSize: 10.5, color: '#6a5a64', textAlign: 'center',
-          marginTop: 22, lineHeight: 1.5,
+          marginTop: 18, lineHeight: 1.5,
         }}>
           Mama doesn't punish you for missing what she could never deliver.
-          But every hour off the leash is one Mama is not building you.
+          But every hour off the leash is an hour Mama isn't building you.
         </p>
       </div>
     </div>
