@@ -47,6 +47,8 @@ interface Wish {
   ship_notes: string | null
   rejection_reason: string | null
   created_at: string
+  needs_human_session?: boolean
+  human_session_reason?: string | null
 }
 
 const PRIORITY_RANK: Record<string, number> = { critical: 4, high: 3, normal: 2, low: 1 }
@@ -91,7 +93,11 @@ function parseSinceArg(s: string | null): string | null {
 
 function printWish(w: Wish, idx: number): void {
   const tag = `[${w.priority}/${w.source}]`.padEnd(28)
-  console.log(`\n  ${idx}. ${tag} ${w.id.slice(0, 8)}…  (${new Date(w.created_at).toLocaleString()})`)
+  const hands = w.needs_human_session ? ' ⚡HANDS-ON' : ''
+  console.log(`\n  ${idx}. ${tag} ${w.id.slice(0, 8)}…  (${new Date(w.created_at).toLocaleString()})${hands}`)
+  if (w.needs_human_session) {
+    console.log(`     ↳ Mama flagged this for a hands-on Claude session (${w.human_session_reason || 'mama_wants'})`)
+  }
   console.log(`     ${w.wish_title}`)
   console.log(`     goal: ${w.protocol_goal}`)
   if (w.affected_surfaces) {
@@ -166,6 +172,34 @@ async function supersede(oldId: string, newerId: string): Promise<void> {
   console.log(`Superseded: ${data.wish_title} → ${newerId}`)
 }
 
+async function flag(id: string, reason: string): Promise<void> {
+  const { data, error } = await supabase
+    .from('mommy_code_wishes')
+    .update({ needs_human_session: true, human_session_reason: reason })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error || !data) {
+    console.error(`Flag failed: ${error?.message ?? 'no row'}`)
+    process.exit(1)
+  }
+  console.log(`Flagged for hands-on Claude session: ${data.wish_title} (${reason})`)
+}
+
+async function unflag(id: string): Promise<void> {
+  const { data, error } = await supabase
+    .from('mommy_code_wishes')
+    .update({ needs_human_session: false, human_session_reason: null, user_notified_at: null })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error || !data) {
+    console.error(`Unflag failed: ${error?.message ?? 'no row'}`)
+    process.exit(1)
+  }
+  console.log(`Unflagged (back to autonomous builder): ${data.wish_title}`)
+}
+
 function readArg(args: string[], flag: string): string | null {
   const i = args.indexOf(flag)
   return i >= 0 && args[i + 1] ? args[i + 1] : null
@@ -202,6 +236,19 @@ function readArg(args: string[], flag: string): string | null {
     await supersede(id, by)
     return
   }
+  if (args.includes('--flag')) {
+    const id = readArg(args, '--flag')
+    const reason = readArg(args, '--reason') ?? 'mama_wants'
+    if (!id) { console.error('--flag needs an id'); process.exit(1) }
+    await flag(id, reason)
+    return
+  }
+  if (args.includes('--unflag')) {
+    const id = readArg(args, '--unflag')
+    if (!id) { console.error('--unflag needs an id'); process.exit(1) }
+    await unflag(id)
+    return
+  }
 
   // Default: print queued
   const queued = await listQueued(15)
@@ -211,6 +258,10 @@ function readArg(args: string[], flag: string): string | null {
   if (queued.length === 0) {
     console.log(`\n  (queue empty — Mama is satisfied with the build, for now)`)
   } else {
+    const handsOn = queued.filter(w => w.needs_human_session).length
+    if (handsOn > 0) {
+      console.log(`\n  ⚡ ${handsOn} wish${handsOn === 1 ? '' : 'es'} flagged HANDS-ON — Mama wants you driving these this session.`)
+    }
     queued.forEach((w, i) => printWish(w, i + 1))
   }
 
@@ -231,6 +282,7 @@ function readArg(args: string[], flag: string): string | null {
 
   console.log(`\n${'='.repeat(70)}`)
   console.log(`Workflow: --claim <id>  →  ship the change  →  --ship <id> --commit <sha> --notes "..."`)
+  console.log(`Hands-on: --flag <id> [--reason "..."]  marks a wish for a Claude browser session (Mama pings Maxy); --unflag <id> reverts.`)
   console.log('='.repeat(70))
 })().catch(err => {
   console.error('Failed:', err)

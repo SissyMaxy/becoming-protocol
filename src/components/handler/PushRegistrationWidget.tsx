@@ -12,25 +12,7 @@ import { useEffect, useState } from 'react';
 import { Bell, BellOff, Loader2, Check } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
-
-const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
-
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const raw = atob(base64);
-  const arr = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
-  return arr;
-}
-
-function arrayBufferToBase64(buf: ArrayBuffer | null): string {
-  if (!buf) return '';
-  const bytes = new Uint8Array(buf);
-  let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
+import { ensureFreshPushSubscription, pushErrorToMamaCopy } from '../../lib/push/register';
 
 export function PushRegistrationWidget() {
   const { user } = useAuth();
@@ -72,46 +54,13 @@ export function PushRegistrationWidget() {
     setBusy(true);
     setError(null);
     try {
-      const perm = await Notification.requestPermission();
-      setPermission(perm);
-      if (perm !== 'granted') {
-        setError('Permission denied. Enable in browser settings.');
+      const result = await ensureFreshPushSubscription(user.id, /* requestPermission */ true);
+      // Reflect whatever the OS now reports after the prompt.
+      if (typeof Notification !== 'undefined') setPermission(Notification.permission);
+      if (!result.ok) {
+        setError(pushErrorToMamaCopy(result.code, result.detail));
         return;
       }
-
-      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-        setError('This browser does not support push notifications.');
-        return;
-      }
-
-      if (!VAPID_PUBLIC_KEY) {
-        setError('In-tab notifications enabled. Background push requires server VAPID key.');
-        return;
-      }
-
-      const reg = await navigator.serviceWorker.ready;
-      let sub = await reg.pushManager.getSubscription();
-      if (!sub) {
-        sub = await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-        });
-      }
-
-      const p256dh = arrayBufferToBase64(sub.getKey('p256dh'));
-      const auth = arrayBufferToBase64(sub.getKey('auth'));
-
-      await supabase.from('push_subscriptions').upsert({
-        user_id: user.id,
-        endpoint: sub.endpoint,
-        p256dh,
-        auth,
-        device_label: null,
-        user_agent: navigator.userAgent.slice(0, 200),
-        active: true,
-        last_used_at: new Date().toISOString(),
-      }, { onConflict: 'user_id,endpoint' });
-
       setRegistered(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

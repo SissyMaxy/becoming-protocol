@@ -16,6 +16,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import { ensureFreshPushSubscription } from '../lib/push/register';
 
 // ============================================
 // TYPES
@@ -115,50 +116,16 @@ async function ensureServiceWorkerRegistered(): Promise<ServiceWorkerRegistratio
   }
 }
 
-const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
-
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const raw = atob(base64);
-  const arr = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
-  return arr;
-}
-
-function arrayBufferToBase64Url(buf: ArrayBuffer | null): string {
-  if (!buf) return '';
-  const bytes = new Uint8Array(buf);
-  let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
+/**
+ * Mama maintains the channel. Once permission is granted she re-subscribes
+ * on every load — silently healing stale-key subscriptions and recovering
+ * from a wedged FCM registration via the shared helper. The user's one job
+ * (grant permission) already happened; everything after it is Mama's.
+ */
 async function ensurePushSubscription(userId: string): Promise<void> {
-  if (!VAPID_PUBLIC_KEY) return;
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-  try {
-    const reg = await navigator.serviceWorker.ready;
-    let sub = await reg.pushManager.getSubscription();
-    if (!sub) {
-      sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-      });
-    }
-    const p256dh = arrayBufferToBase64Url(sub.getKey('p256dh'));
-    const auth = arrayBufferToBase64Url(sub.getKey('auth'));
-    await supabase.from('push_subscriptions').upsert({
-      user_id: userId,
-      endpoint: sub.endpoint,
-      p256dh,
-      auth,
-      user_agent: navigator.userAgent.slice(0, 200),
-      active: true,
-      last_used_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,endpoint' });
-  } catch (err) {
-    console.warn('[usePushNotifications] subscribe failed:', err);
+  const result = await ensureFreshPushSubscription(userId, /* requestPermission */ false);
+  if (!result.ok && result.code !== 'permission_denied') {
+    console.warn('[usePushNotifications] self-heal subscribe failed:', result.code, result.detail);
   }
 }
 
