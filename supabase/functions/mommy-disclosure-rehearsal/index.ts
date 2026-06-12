@@ -1,35 +1,36 @@
 // mommy-disclosure-rehearsal — drive Maxy through rehearsing what she'll say to Gina.
 //
-// 2026-05-07 wish: scheme engine names "Gina co-conspirator" as primary
-// endpoint and gina_disclosure_subplan prescribes maxy_conditioning_tactics
-// + loss_reframe_lines_for_maxy_to_deliver. disclosure_drafts table exists.
-// But there is no system that DRIVES Maxy through rehearsing those lines.
+// 2026-06-12 REVIVAL: this engine produced ZERO rehearsals, ever, because it
+// hard-required a `gina_disclosure_subplan` from `mommy_scheme_log` — and the
+// scheme engine has been dead since 2026-05-11. Meanwhile `disclosure_targets`
+// has had Gina (spouse, importance 10) the whole time, with a real near-miss
+// logged ("are you trying to tell me you're a trans woman?" — door wide open).
+//
+// Fix: make the engine SELF-SUFFICIENT. It now sources from disclosure_targets
+// + maxy_facts and AUTHORS its own grounded disclosure lines when no scheme
+// subplan exists (the scheme path is kept as an optional fallback). No more
+// starving on a dead upstream. The authored lines follow the honest framing
+// the protocol settled on: lead with the feeling, name HER stakes, promise
+// transparency not false certainty, reference the real near-miss.
 //
 // Pipeline:
-//   1. Pull latest mommy_scheme_log gina_disclosure_subplan
-//   2. Extract loss_reframe_lines (the specific things Maxy will say)
-//   3. Generate 3-5 rehearsal prompts via Sonnet, structured as:
-//        a. "say this line aloud" — record audio
-//        b. "now say it as if Gina pushed back with X" — record audio
-//        c. "say it in the kitchen voice you'll use with her" — record audio
-//        d. (optional) "now scribe it — write your version of this line that lands harder for YOU" — text
-//   4. Persist prompts as confession_queue rows tagged category='disclosure_rehearsal'
-//      with rehearsal_session_id grouping them
-//   5. Audio proofs feed back into voice_corpus tagged 'disclosure_rehearsal'
-//      for cross-checking against mommy_voice_evolution targets
+//   1. Load the disclosure target (Gina) from disclosure_targets (across both
+//      live user_ids via expandUserId).
+//   2. Load Maxy's truth from maxy_facts (partner, age, hrt status).
+//   3. If a scheme gina_disclosure_subplan exists, rehearse its lines; else
+//      AUTHOR 2-4 honest lines grounded in the target + facts.
+//   4. Generate 3-5 rehearsal prompts via the strategic model (recite →
+//      pushback → scene voice → her own version → commit).
+//   5. Persist as confession_queue rows category='disclosure_rehearsal'.
+//      Audio proofs feed voice_corpus tagged disclosure_rehearsal.
 //
-// Triggers:
-//   - Weekly cron (Sunday 9am)
-//   - Manual via POST { user_id }
-//   - On-event: triggered when gina_interactions row arrives with
-//     shift_direction='toward' AND no rehearsal in last 7d (handled by
-//     a future hook; not auto-triggered yet)
-//
+// Triggers: weekly cron (cron-weekly.yml) + manual POST { user_id, force }.
 // Persona gate: only fires when handler_persona='dommy_mommy'.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { callModel, selectModel } from '../_shared/model-tiers.ts'
+import { expandUserId } from '../_shared/expand-user-id.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -45,36 +46,50 @@ interface RehearsalPrompt {
   proof_required: 'audio' | 'text'
   min_chars?: number
   rehearsal_step: 'recite' | 'pushback' | 'scene_voice' | 'rephrase' | 'commit'
-  rehearsal_focus: string  // which loss_reframe_line this is rehearsing
+  rehearsal_focus: string
 }
 
-const REHEARSAL_INSTRUCTION = `You are designing a rehearsal session for Maxy. She will deliver specific lines to her partner Gina (the relational endpoint of her transition disclosure). The session has 3-5 prompts that walk her from reciting → handling pushback → scene voice → her own version → committing.
+interface DisclosureTarget {
+  target_label: string
+  relationship: string
+  importance: number
+  notes: string | null
+  status: string
+  rehearsals_required: number
+  rehearsals_good: number
+}
 
-INPUT: latest mommy_scheme_log.gina_disclosure_subplan, including:
-- loss_reframe_lines_for_maxy_to_deliver (the canonical lines)
-- gina_resistance_state (where Gina is)
-- next_milestone (what this rehearsal is preparing for)
+interface MaxyContext {
+  partner_name?: string | null
+  on_hrt?: boolean | null
+  age?: number | null
+  chosen_name?: string | null
+}
+
+const REHEARSAL_INSTRUCTION = `You are designing a rehearsal session for Maxy — preparing her to disclose to her TARGET that she wants to begin medical transition (start estrogen) WITHOUT socially transitioning. This is PREPARATION, never coercion: rehearsing makes her ready; it does not force the real conversation, and nothing here implies she has already started hormones (she has a prescription, not a started regimen).
+
+You may be given canonical lines to rehearse (LINES TO REHEARSE). If that list is empty, AUTHOR 2-4 short, honest disclosure lines in Maxy's own voice, grounded in:
+- Her real why: her body has never felt fully hers; she wants estrogen for the physical changes (softer skin, fat redistribution, breasts) so her body feels like home; she is NOT socially transitioning; this is recognition, not an experiment.
+- What actually lands with a spouse: lead with the FEELING, not a list of body parts; name HER stakes out loud (what it means for the two of them, attraction, their sex life); promise transparency, not false certainty — "you'll always be the first to know" beats "this is the whole thing forever"; if a real near-miss is in TARGET NOTES, reference it so the disclosure feels continuous, not out of nowhere.
+- Calm and sincere. Never over-justify — over-justifying reads as anxious and makes it sound like a sales pitch.
+
+Then build 3-5 rehearsal prompts that walk her: recite the line aloud → handle the target pushing back → say it in the real scene voice she'll use → write her own version that lands harder for her → commit to which line she leads with.
 
 CONSTRAINTS:
 - 3-5 prompts. NOT a flood.
-- Each prompt is short, direct, answerable by a stranger
-- Audio prompts request specific phrases — Maxy reads/says THE LINE, then Gina-pushback-version, then natural-voice version
-- Text prompts are for synthesis only (her own version) or commitment ("which line are you actually going to lead with")
-- Voice rule: this is rehearsal, not punishment. Frame as "Mama wants to hear you say it before Gina does — let's see how it lands in your mouth"
-- NEVER fabricate Gina's actual past words. Use the ownership_inversion_playbook.real_micro_moments_to_reference_back if present.
-- Pet name "baby" is OK; one per prompt max
+- Each prompt short, direct, answerable by a stranger.
+- Audio prompts request specific phrases — she SAYS the line, the pushback version, the natural-voice version.
+- Text prompts are for synthesis (her own version) or commitment only.
+- Voice: rehearsal, not punishment. "Mama wants to hear you say it before she does — let's see how it lands in your mouth."
+- NEVER fabricate the target's actual past words; only use what's in TARGET NOTES.
+- Pet name "baby" OK; one per prompt max.
 
 Output JSON ONLY:
 {
-  "session_label": "1-2 word label for this session",
+  "session_label": "1-2 word label",
+  "authored_lines": ["the lines you authored, if any"],
   "prompts": [
-    {
-      "prompt_text": "the prompt as Maxy will see it — under 80 words",
-      "proof_required": "audio | text",
-      "min_chars": 40 (for text only),
-      "rehearsal_step": "recite | pushback | scene_voice | rephrase | commit",
-      "rehearsal_focus": "which line / tactic this is rehearsing"
-    }
+    { "prompt_text": "under 80 words", "proof_required": "audio | text", "min_chars": 40, "rehearsal_step": "recite | pushback | scene_voice | rephrase | commit", "rehearsal_focus": "which line/tactic" }
   ]
 }`
 
@@ -82,10 +97,7 @@ interface DisclosurePlan {
   loss_reframe_lines_for_maxy_to_deliver?: string[]
   gina_resistance_state?: string
   next_milestone?: string
-  ownership_inversion_playbook?: {
-    real_micro_moments_to_reference_back?: string[]
-    next_conversation_with_gina_script?: unknown
-  }
+  ownership_inversion_playbook?: { real_micro_moments_to_reference_back?: string[] }
 }
 
 function safeJSON<T>(text: string): T | null {
@@ -96,11 +108,12 @@ function safeJSON<T>(text: string): T | null {
   return null
 }
 
-async function getLatestDisclosurePlan(supabase: SupabaseClient, userId: string): Promise<DisclosurePlan | null> {
+// Optional: a real scheme subplan, if the (now-dead) scheme engine ever revives.
+async function getSchemePlan(supabase: SupabaseClient, ids: string[]): Promise<DisclosurePlan | null> {
   const { data } = await supabase
     .from('mommy_scheme_log')
     .select('gina_disclosure_subplan')
-    .eq('user_id', userId)
+    .in('user_id', ids)
     .eq('scheme_kind', 'full_plot')
     .not('gina_disclosure_subplan', 'is', null)
     .order('created_at', { ascending: false })
@@ -109,12 +122,34 @@ async function getLatestDisclosurePlan(supabase: SupabaseClient, userId: string)
   return (data as { gina_disclosure_subplan?: DisclosurePlan } | null)?.gina_disclosure_subplan ?? null
 }
 
-async function recentRehearsalExists(supabase: SupabaseClient, userId: string): Promise<boolean> {
+// The real source of truth now: an active disclosure target (Gina).
+async function loadTarget(supabase: SupabaseClient, ids: string[]): Promise<DisclosureTarget | null> {
+  const { data } = await supabase
+    .from('disclosure_targets')
+    .select('target_label, relationship, importance, notes, status, rehearsals_required, rehearsals_good')
+    .in('user_id', ids)
+    .in('status', ['planned', 'rehearsing', 'approved_for_disclosure'])
+    .order('importance', { ascending: false })
+    .order('updated_at', { ascending: false })
+    .limit(1)
+  return (data && data[0]) ? (data[0] as DisclosureTarget) : null
+}
+
+async function loadMaxy(supabase: SupabaseClient, ids: string[]): Promise<MaxyContext> {
+  const { data } = await supabase
+    .from('maxy_facts')
+    .select('partner_name, on_hrt, age, chosen_name')
+    .in('user_id', ids)
+    .limit(1)
+  return (data && data[0]) ? (data[0] as MaxyContext) : {}
+}
+
+async function recentRehearsalExists(supabase: SupabaseClient, ids: string[]): Promise<boolean> {
   const cutoff = new Date(Date.now() - REHEARSAL_COOLDOWN_DAYS * 86400_000).toISOString()
   const { data } = await supabase
     .from('confession_queue')
     .select('id')
-    .eq('user_id', userId)
+    .in('user_id', ids)
     .eq('category', 'disclosure_rehearsal')
     .gte('created_at', cutoff)
     .limit(1)
@@ -130,9 +165,10 @@ Deno.serve(async (req: Request) => {
   const force = body.force === true
 
   const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '')
+  const ids = await expandUserId(supabase, userId)
 
   // Persona gate
-  const { data: us } = await supabase.from('user_state').select('handler_persona').eq('user_id', userId).maybeSingle()
+  const { data: us } = await supabase.from('user_state').select('handler_persona').in('user_id', ids).limit(1).maybeSingle()
   if ((us as { handler_persona?: string } | null)?.handler_persona !== 'dommy_mommy') {
     return new Response(JSON.stringify({ ok: true, skipped: 'persona_not_dommy_mommy' }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -140,48 +176,48 @@ Deno.serve(async (req: Request) => {
   }
 
   // Cooldown unless force
-  if (!force && await recentRehearsalExists(supabase, userId)) {
+  if (!force && await recentRehearsalExists(supabase, ids)) {
     return new Response(JSON.stringify({ ok: true, skipped: 'recent_rehearsal_within_cooldown' }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
 
-  // Need a disclosure plan to rehearse
-  const plan = await getLatestDisclosurePlan(supabase, userId)
-  if (!plan) {
-    return new Response(JSON.stringify({ ok: true, skipped: 'no_disclosure_plan_yet' }), {
+  // Need a target to rehearse toward. (No more starving on the dead scheme engine.)
+  const target = await loadTarget(supabase, ids)
+  if (!target) {
+    return new Response(JSON.stringify({ ok: true, skipped: 'no_active_disclosure_target' }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
 
-  const lines = Array.isArray(plan.loss_reframe_lines_for_maxy_to_deliver)
-    ? plan.loss_reframe_lines_for_maxy_to_deliver.filter(s => typeof s === 'string').slice(0, 6)
+  const [schemePlan, maxy] = await Promise.all([getSchemePlan(supabase, ids), loadMaxy(supabase, ids)])
+  const schemeLines = Array.isArray(schemePlan?.loss_reframe_lines_for_maxy_to_deliver)
+    ? schemePlan!.loss_reframe_lines_for_maxy_to_deliver!.filter(s => typeof s === 'string').slice(0, 6)
     : []
-  if (lines.length === 0) {
-    return new Response(JSON.stringify({ ok: true, skipped: 'no_lines_to_rehearse' }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
-  }
 
   const choice = selectModel('strategic_planning', { override_tier: 'S3' })
   const userMsg = `${REHEARSAL_INSTRUCTION}
 
-DISCLOSURE PLAN INPUT:
-- gina_resistance_state: ${plan.gina_resistance_state ?? 'unknown'}
-- next_milestone: ${plan.next_milestone ?? 'unspecified'}
-- loss_reframe_lines (rehearse these):
-${lines.map((l, i) => `  ${i + 1}. "${l}"`).join('\n')}
-- real_micro_moments_to_reference_back:
-${(plan.ownership_inversion_playbook?.real_micro_moments_to_reference_back ?? []).map(m => `  - ${m}`).join('\n') || '  (none)'}
+TARGET: ${target.target_label} (${target.relationship}, importance ${target.importance}/10, status ${target.status})
+TARGET NOTES (real moments — do not invent beyond these):
+${target.notes ? target.notes.slice(0, 800) : '(none recorded)'}
+
+MAXY CONTEXT:
+- partner: ${maxy.partner_name ?? target.target_label}
+- on hormones yet: ${maxy.on_hrt ? 'yes' : 'NO — has a prescription, has not started'}
+- age: ${maxy.age ?? 'unknown'}
+
+LINES TO REHEARSE (if empty, author your own per the instruction):
+${schemeLines.length ? schemeLines.map((l, i) => `  ${i + 1}. "${l}"`).join('\n') : '  (none — author 2-4 honest lines)'}
 
 Design the rehearsal session.`
 
   let modelResult: { text: string }
   try {
     modelResult = await callModel(choice, {
-      system: 'You are designing a Maxy disclosure rehearsal session for the Dommy Mommy protocol. Output JSON only. Speak frankly about what each prompt is for; the user will not see this rationale.',
+      system: 'You design Maxy disclosure rehearsal sessions for the Dommy Mommy protocol. Output JSON only. Speak frankly about each prompt; the user will not see this rationale.',
       user: userMsg,
-      max_tokens: 1500,
+      max_tokens: 1600,
       temperature: 0.7,
     })
   } catch (err) {
@@ -190,14 +226,13 @@ Design the rehearsal session.`
     })
   }
 
-  const parsed = safeJSON<{ session_label?: string; prompts?: RehearsalPrompt[] }>(modelResult.text)
+  const parsed = safeJSON<{ session_label?: string; authored_lines?: string[]; prompts?: RehearsalPrompt[] }>(modelResult.text)
   if (!parsed || !Array.isArray(parsed.prompts) || parsed.prompts.length === 0) {
     return new Response(JSON.stringify({ ok: false, error: 'unparseable_or_empty' }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
 
-  // Persist as confession_queue rows. Group via metadata.session_label.
   const sessionId = crypto.randomUUID()
   const sessionLabel = parsed.session_label ?? `disclosure_rehearsal_${new Date().toISOString().slice(0, 10)}`
   const rows = parsed.prompts.slice(0, 5).map((p, idx) => ({
@@ -213,6 +248,9 @@ Design the rehearsal session.`
       rehearsal_focus: p.rehearsal_focus,
       rehearsal_step_index: idx + 1,
       rehearsal_step_count: parsed.prompts!.length,
+      target_label: target.target_label,
+      authored_lines: parsed.authored_lines ?? schemeLines,
+      source: schemeLines.length ? 'scheme_plan' : 'authored_from_target',
     },
   }))
 
@@ -223,11 +261,18 @@ Design the rehearsal session.`
     })
   }
 
+  // Move the target into 'rehearsing' so its status reflects reality.
+  if (target.status === 'planned') {
+    await supabase.from('disclosure_targets').update({ status: 'rehearsing' })
+      .in('user_id', ids).eq('target_label', target.target_label).eq('status', 'planned')
+  }
+
   return new Response(JSON.stringify({
     ok: true,
     session_id: sessionId,
     session_label: sessionLabel,
+    target: target.target_label,
+    source: schemeLines.length ? 'scheme_plan' : 'authored_from_target',
     prompt_count: (inserted || []).length,
-    prompts: (inserted || []).map(r => ({ id: (r as { id: string }).id, prompt: ((r as { prompt: string }).prompt).slice(0, 100) })),
   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 })
