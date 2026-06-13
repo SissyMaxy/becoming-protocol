@@ -240,6 +240,9 @@ Design the rehearsal session.`
   // (the original code assumed a schema that never existed — which is why this
   // engine never persisted even once). Use the REAL columns; fold the session
   // grouping + modality into context_note.
+  // deadline is NOT NULL on confession_queue. Rehearsals aren't urgent — give
+  // a week (matches the rehearsal cooldown), staggered slightly per step.
+  const baseDeadline = Date.now() + 7 * 86400_000
   const rows = parsed.prompts.slice(0, 5).map((p, idx) => ({
     user_id: userId,
     category: 'disclosure_rehearsal',
@@ -248,6 +251,7 @@ Design the rehearsal session.`
       `${p.proof_required === 'text' ? 'Write your answer.' : 'Say it aloud and record audio.'} ` +
       `Session ${sessionId.slice(0, 8)} "${sessionLabel}".`).slice(0, 800),
     triggered_by_table: 'disclosure_targets',
+    deadline: new Date(baseDeadline + idx * 3600_000).toISOString(),
     is_machine_generated: true,
   }))
 
