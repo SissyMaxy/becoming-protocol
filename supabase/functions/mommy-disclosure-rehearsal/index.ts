@@ -235,23 +235,20 @@ Design the rehearsal session.`
 
   const sessionId = crypto.randomUUID()
   const sessionLabel = parsed.session_label ?? `disclosure_rehearsal_${new Date().toISOString().slice(0, 10)}`
+  const stepCount = parsed.prompts.length
+  // confession_queue has NO metadata / proof_required / min_chars columns
+  // (the original code assumed a schema that never existed — which is why this
+  // engine never persisted even once). Use the REAL columns; fold the session
+  // grouping + modality into context_note.
   const rows = parsed.prompts.slice(0, 5).map((p, idx) => ({
     user_id: userId,
-    prompt: p.prompt_text.slice(0, 800),
     category: 'disclosure_rehearsal',
-    proof_required: p.proof_required === 'text' ? null : 'audio',
-    min_chars: p.proof_required === 'text' ? Math.max(40, Math.min(500, p.min_chars ?? 40)) : null,
-    metadata: {
-      rehearsal_session_id: sessionId,
-      rehearsal_session_label: sessionLabel,
-      rehearsal_step: p.rehearsal_step,
-      rehearsal_focus: p.rehearsal_focus,
-      rehearsal_step_index: idx + 1,
-      rehearsal_step_count: parsed.prompts!.length,
-      target_label: target.target_label,
-      authored_lines: parsed.authored_lines ?? schemeLines,
-      source: schemeLines.length ? 'scheme_plan' : 'authored_from_target',
-    },
+    prompt: p.prompt_text.slice(0, 800),
+    context_note: (`Rehearsal for ${target.target_label} — step ${idx + 1}/${stepCount} (${p.rehearsal_step}): ${p.rehearsal_focus}. ` +
+      `${p.proof_required === 'text' ? 'Write your answer.' : 'Say it aloud and record audio.'} ` +
+      `Session ${sessionId.slice(0, 8)} "${sessionLabel}".`).slice(0, 800),
+    triggered_by_table: 'disclosure_targets',
+    is_machine_generated: true,
   }))
 
   const { data: inserted, error } = await supabase.from('confession_queue').insert(rows).select('id, prompt')
