@@ -1,5 +1,12 @@
 /**
  * useBookends — React hook for morning/evening bookend system.
+ *
+ * MORNING HALF UNUSED (2026-06-21): after the 2026-06-21 entry-gate removal,
+ * App.tsx only renders the EVENING bookend. The morning surface
+ * (showMorningBookend / dismissMorning / recordBookendView('morning') and the
+ * Whoop wake-detection soft gate below) is no longer consumed by any caller.
+ * Left in place intentionally — low risk and may be revived as a Focus-surface
+ * morning briefing. The evening path is live; do not remove it.
  */
 
 import { useState, useEffect, useCallback } from 'react';

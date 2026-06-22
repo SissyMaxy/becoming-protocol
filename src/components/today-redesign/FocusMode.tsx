@@ -38,15 +38,133 @@ import type {
   AudioSessionIntensity,
   AudioSessionKind,
 } from '../../lib/audio-sessions/template-selector';
+import type { ReleaseType, ReleaseContext } from '../../types/arousal';
 import { ConfessionAudioCapture } from './ConfessionAudioCapture';
+import { savePhysicalStateLog, type PhysicalState } from '../../lib/compulsory-elements';
+
+// ─── HRT funnel (ported from HrtDailyGate) ──────────────────────────────────
+const HRT_STEPS = [
+  'uncommitted', 'committed', 'researching', 'provider_chosen',
+  'appointment_booked', 'intake_submitted', 'appointment_attended',
+  'prescription_obtained', 'pharmacy_filled', 'first_dose_taken',
+  'week_one_complete', 'month_one_complete', 'adherent',
+];
+const HRT_STEP_LABELS: Record<string, string> = {
+  uncommitted: 'Uncommitted', committed: 'Committed',
+  researching: 'Researching providers', provider_chosen: 'Provider chosen',
+  appointment_booked: 'Appointment booked', intake_submitted: "Paperwork's in, waiting on the visit",
+  appointment_attended: 'Appointment attended', prescription_obtained: 'Prescription obtained',
+  pharmacy_filled: 'Pharmacy filled', first_dose_taken: 'First dose taken',
+  week_one_complete: 'Week 1 complete', month_one_complete: 'Month 1 complete',
+  adherent: 'Adherent',
+};
+const HRT_STEP_NEXT_ACTION: Record<string, string> = {
+  uncommitted:           'You have not committed to starting HRT.',
+  committed:             'You said yes to HRT but have not researched providers.',
+  researching:           'You are researching providers but have not picked one.',
+  provider_chosen:       'You picked a provider but have not booked the consult.',
+  appointment_booked:    'You booked the consult but have not attended it.',
+  intake_submitted:      "Your paperwork's in — you just haven't gone in yet.",
+  appointment_attended:  'You went to the consult but do not have a prescription yet.',
+  prescription_obtained: 'You have a prescription but have not filled it at the pharmacy.',
+  pharmacy_filled:       'You filled the script but have not taken your first dose.',
+  first_dose_taken:      'You took dose 1 but have not completed week 1 of doses.',
+  week_one_complete:     'You finished week 1 but have not reached month 1.',
+  month_one_complete:    'You hit month 1 but have not reached adherent.',
+  adherent:              'Adherent. No action.',
+};
+// ET-anchored day key — matches HrtDailyGate's localStorage marker.
+function hrtDateKeyET(now: Date): string {
+  const p = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
+  return `${p.find(x => x.type === 'year')!.value}-${p.find(x => x.type === 'month')!.value}-${p.find(x => x.type === 'day')!.value}`;
+}
+function hrtGateKey(): string { return `td_hrt_gate_${hrtDateKeyET(new Date())}`; }
+function hrtMinObstacleChars(streak: number): number {
+  if (streak <= 0) return 250;
+  if (streak === 1) return 350;
+  return 500;
+}
+
+// Deterministic UUID from an arbitrary seed string. This MUST stay byte-for-byte
+// identical to handler-outreach-auto's deterministicUuid (SHA-256 → RFC-4122
+// v5-shaped) — the cron looks up the HRT witness-CC penalty preview by this same
+// source_id, so FocusMode (which registers it) and the cron (which fires the
+// email after it's surfaced) have to derive the EXACT same UUID from the EXACT
+// same key. Earlier this used a different hash (FNV-1a) + a per-day key, so the
+// cron never found the preview and the witness CC silently never fired. Now both
+// sides use SHA-256 and the per-step key `hrt_witness_cc:<user>:<step>`.
+async function deterministicUuid(key: string): Promise<string> {
+  const buf = new TextEncoder().encode(key);
+  const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', buf));
+  const b = hash.slice(0, 16);
+  b[6] = (b[6] & 0x0f) | 0x50; // version 5
+  b[8] = (b[8] & 0x3f) | 0x80; // RFC-4122 variant
+  const hex = Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+// Physical-state checkbox items (ported from CompulsoryGateScreen).
+const PHYSICAL_STATE_ITEMS: { key: keyof PhysicalState; label: string }[] = [
+  { key: 'cage_on', label: 'Cage' },
+  { key: 'panties', label: 'Panties' },
+  { key: 'plug', label: 'Plug' },
+  { key: 'feminine_clothing', label: 'Feminine clothing' },
+  { key: 'nail_polish', label: 'Nail polish' },
+  { key: 'scent_anchor', label: 'Scent anchor' },
+  { key: 'jewelry', label: 'Jewelry' },
+];
+
+// Release check-in option sets (ported from MorningBriefing).
+const RELEASE_TYPE_OPTIONS: { type: ReleaseType; label: string; resetsStreak: boolean }[] = [
+  { type: 'full', label: 'Full release', resetsStreak: true },
+  { type: 'ruined', label: 'Ruined', resetsStreak: true },
+  { type: 'accident', label: 'Accident', resetsStreak: true },
+  { type: 'wet_dream', label: 'Wet dream', resetsStreak: true },
+  { type: 'prostate', label: 'Prostate', resetsStreak: false },
+  { type: 'sissygasm', label: 'Sissygasm', resetsStreak: false },
+  { type: 'edge_only', label: 'Edge only', resetsStreak: false },
+];
+const RELEASE_CONTEXT_OPTIONS: { context: ReleaseContext; label: string }[] = [
+  { context: 'with_partner', label: 'With Gina' },
+  { context: 'solo', label: 'Solo' },
+  { context: 'during_content', label: 'During content' },
+  { context: 'during_practice', label: 'During practice' },
+  { context: 'sleep', label: 'In sleep' },
+];
+const RELEASE_WHEN_OPTIONS = [
+  { value: 'last_night', label: 'Last night' },
+  { value: 'this_morning', label: 'This morning' },
+  { value: 'yesterday', label: 'Yesterday' },
+  { value: '2_days_ago', label: '2 days ago' },
+  { value: '3_plus_days', label: '3+ days ago' },
+];
+function resolveReleaseTime(when: string): Date {
+  const now = new Date();
+  const d = new Date(now);
+  switch (when) {
+    case 'last_night': d.setDate(d.getDate() - 1); d.setHours(23, 0, 0, 0); return d;
+    case 'this_morning': d.setHours(7, 0, 0, 0); return d;
+    case 'yesterday': d.setDate(d.getDate() - 1); d.setHours(12, 0, 0, 0); return d;
+    case '2_days_ago': d.setDate(d.getDate() - 2); d.setHours(12, 0, 0, 0); return d;
+    case '3_plus_days': d.setDate(d.getDate() - 3); d.setHours(12, 0, 0, 0); return d;
+    default: return now;
+  }
+}
+function releaseCheckinKey(): string {
+  return `release_checkin_${new Date().toISOString().slice(0, 10)}`;
+}
 
 type TaskKind =
   | 'overdue_dose' | 'overdue_confession' | 'overdue_punishment' | 'overdue_decree'
+  | 'hrt_step_today'
+  | 'release_checkin'
+  | 'physical_state_today'
   | 'due_today_confession' | 'due_today_decree' | 'due_today_dose' | 'due_today_commitment'
   | 'commitment_pending' | 'workout_today' | 'outfit_today' | 'voice_drill_today'
   | 'mommy_touch'
   | 'audio_session'
   | 'focus_decree'
+  | 'approve_post'
   | 'clean';
 
 interface FocusTask {
@@ -55,8 +173,8 @@ interface FocusTask {
   title: string;
   detail?: string;
   due?: string;
-  /** Inline action surface: 'confess' = textarea, 'dose' = buttons, 'mark_done' = single button, 'photo' = upload, 'message' = no inline action, 'audio_session' = play button + audio element */
-  surface: 'confess' | 'dose' | 'mark_done' | 'photo' | 'message' | 'audio_session' | 'decree';
+  /** Inline action surface: 'confess' = textarea, 'dose' = buttons, 'mark_done' = single button, 'photo' = upload, 'message' = no inline action, 'audio_session' = play button + audio element, 'hrt' = advance/obstacle two-path, 'release' = release check-in flow, 'physical' = physical-state checkbox set */
+  surface: 'confess' | 'dose' | 'mark_done' | 'photo' | 'message' | 'audio_session' | 'decree' | 'hrt' | 'release' | 'physical' | 'approve_post' | 'voice_drill';
   /** Carried metadata for surface handlers */
   meta?: Record<string, unknown>;
   /** Severity tone for visual weight */
@@ -113,6 +231,33 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
   >({ phase: 'idle' });
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  // ── HRT step surface state (ported from HrtDailyGate) ──
+  const [hrtMode, setHrtMode] = useState<'pick' | 'advance' | 'obstacle'>('pick');
+  const [hrtNewStep, setHrtNewStep] = useState('');
+  const [hrtEvidence, setHrtEvidence] = useState('');
+  const [hrtObstacle, setHrtObstacle] = useState('');
+  const [hrtError, setHrtError] = useState<string | null>(null);
+
+  // ── Release check-in surface state (ported from MorningBriefing) ──
+  const [didCum, setDidCum] = useState<boolean | null>(null);
+  const [releaseType, setReleaseType] = useState<ReleaseType | null>(null);
+  const [releaseContext, setReleaseContext] = useState<ReleaseContext | null>(null);
+  const [releaseWhen, setReleaseWhen] = useState<string | null>(null);
+
+  // ── Voice mantra drill surface state ──
+  // The drill reuses ConfessionAudioCapture, which binds its upload to a
+  // confession_queue row. We mint a pre-confessed drill row on demand (so it
+  // never re-surfaces as a real confession) and bind the recorder to it.
+  const [voiceDrillConfId, setVoiceDrillConfId] = useState<string | null>(null);
+  const [voiceDrillSaved, setVoiceDrillSaved] = useState(false);
+  const [voiceDrillError, setVoiceDrillError] = useState<string | null>(null);
+
+  // ── Physical-state surface state (ported from CompulsoryGateScreen) ──
+  const [physicalState, setPhysicalState] = useState<PhysicalState>({
+    cage_on: false, panties: false, plug: false, feminine_clothing: false,
+    nail_polish: false, scent_anchor: false, jewelry: false,
+  });
+
   useEffect(() => {
     if (!user?.id) return;
     let cancelled = false;
@@ -144,7 +289,8 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
 
     const [overdueConfs, overduePuns, overdueDecrees, todayConfs, todayDecrees,
            pendingCommits, regs, doseLog, outfit, workout, mommyTouch, audioOffer,
-           focusDecree] = await Promise.all([
+           focusDecree, hrtFunnel, hrtState, hrtPastObs, lastReleaseRow, physStateToday,
+           pendingPost, voiceState, mantraWindow, voiceToday] = await Promise.all([
       // Include missed-but-unconfessed rows. The compliance check marks
       // overdue rows missed=true (slip already fired); we still want the
       // user able to answer them late from FocusMode. Locking her out
@@ -204,6 +350,42 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
             .select('id, edict, deadline, proof_type').eq('id', focusDecreeId)
             .eq('status', 'active').maybeSingle()
         : Promise.resolve({ data: null, error: null }),
+      // ── HRT daily step (ported from HrtDailyGate) ──
+      // Funnel position + the appointment guard so a future-booked consult
+      // reads as "waiting", not avoidance.
+      supabase.from('hrt_funnel')
+        .select('current_step, appointment_at, intake_completed_at, chosen_provider_slug')
+        .eq('user_id', user.id).maybeSingle(),
+      supabase.from('user_state')
+        .select('hrt_step_missed_days, last_release').eq('user_id', user.id).maybeSingle(),
+      supabase.from('hrt_obstacles')
+        .select('obstacle_text, obstacle_date, created_at').eq('user_id', user.id)
+        .order('created_at', { ascending: false }).limit(3),
+      // Release check-in source — last_release staleness drives the prompt.
+      supabase.from('user_state')
+        .select('last_release').eq('user_id', user.id).maybeSingle(),
+      // Physical-state daily capture — fire when no row exists for today.
+      supabase.from('physical_state_log')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id).gte('logged_at', `${todayStr}T00:00:00`),
+      // approve_post — a public post staged by the HRT streak (tier 7+) waiting
+      // for the user to authorize. Surfaced so she explicitly says yes/no; never
+      // auto-fires (surface-before-fire). Newest pending draft for this source.
+      supabase.from('ai_generated_content')
+        .select('id, generated_text, platform')
+        .eq('user_id', user.id).eq('status', 'draft_pending_approval')
+        .order('created_at', { ascending: false }).limit(1),
+      // Voice work is ELECTIVE (mig 582). Only offer the mantra drill when the
+      // user has opted into voice; never a wall.
+      supabase.from('user_state')
+        .select('voice_elective').eq('user_id', user.id).maybeSingle(),
+      // The rotated daily mantra — finally gets a consumer here.
+      supabase.from('morning_mantra_windows')
+        .select('current_mantra, required_reps').eq('user_id', user.id).maybeSingle(),
+      // Per-day guard: skip if a mantra submission already exists today.
+      supabase.from('morning_mantra_submissions')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id).eq('submission_date', todayStr),
     ]);
 
     // Compute most-overdue and most-due-today doses
@@ -230,6 +412,50 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
         }
       }
     }
+
+    // ── HRT step eligibility (ported from HrtDailyGate) ──
+    const fnl = (hrtFunnel as { data?: { current_step?: string; appointment_at?: string | null; intake_completed_at?: string | null } | null })?.data ?? null;
+    const hrtStep = (fnl?.current_step as string) || 'uncommitted';
+    const hrtMissedDays = ((hrtState as { data?: { hrt_step_missed_days?: number } | null })?.data?.hrt_step_missed_days) ?? 0;
+    const hrtApptAt = fnl?.appointment_at ?? null;
+    const hrtApptInFuture = !!(hrtApptAt && new Date(hrtApptAt) > new Date());
+    // Waiting on a future-booked consult is progress, not a miss — suppress.
+    const hrtWaiting =
+      (hrtStep === 'appointment_booked' && hrtApptInFuture) ||
+      (hrtStep === 'intake_submitted' && hrtApptInFuture);
+    const hrtTerminal = hrtStep === 'adherent';
+    // Satisfied today: the gate's per-day marker, OR an obstacle filed today.
+    const hrtMarkerSet = (() => { try { return localStorage.getItem(hrtGateKey()) === '1'; } catch { return false; } })();
+    // Compare against the canonical obstacle_date column keyed to the same ET day
+    // as the gate marker — avoids a UTC-vs-ET midnight disagreement re-surfacing
+    // the HRT task after an obstacle was already filed today.
+    const hrtTodayKeyET = hrtDateKeyET(new Date());
+    const hrtObstacleToday = (((hrtPastObs as { data?: Array<{ obstacle_date?: string }> | null })?.data) ?? [])
+      .some(o => (o.obstacle_date || '').slice(0, 10) === hrtTodayKeyET);
+    const hrtSatisfiedToday = hrtMarkerSet || hrtObstacleToday;
+    const hrtPastObstacles = (((hrtPastObs as { data?: Array<{ obstacle_text?: string }> | null })?.data) ?? [])
+      .map(o => o.obstacle_text || '');
+    const hrtDue = !hrtTerminal && !hrtWaiting && !hrtSatisfiedToday;
+
+    // ── Release check-in eligibility (ported from MorningBriefing) ──
+    const lastReleaseIso = ((lastReleaseRow as { data?: { last_release?: string | null } | null })?.data?.last_release) ?? null;
+    const lastReleaseStale = !lastReleaseIso || (now - new Date(lastReleaseIso).getTime()) > 24 * 3600_000;
+    const releaseCheckedToday = (() => { try { return localStorage.getItem(releaseCheckinKey()) === '1'; } catch { return false; } })();
+    const releaseDue = lastReleaseStale && !releaseCheckedToday;
+
+    // ── Physical-state eligibility (ported from CompulsoryGateScreen) ──
+    const physCount = (physStateToday as { count?: number | null })?.count ?? 0;
+    const physicalDue = physCount === 0;
+
+    // ── approve_post eligibility (HRT tier-7 staged public post) ──
+    const pendingPostRow = (pendingPost.data?.[0]) as { id: string; generated_text: string; platform: string } | undefined;
+
+    // ── Voice mantra drill eligibility (elective, lowest priority) ──
+    const voiceElective = ((voiceState as { data?: { voice_elective?: boolean } | null })?.data?.voice_elective) ?? false;
+    const mantraRow = (mantraWindow as { data?: { current_mantra?: string; required_reps?: number } | null })?.data ?? null;
+    const voiceTodayCount = (voiceToday as { count?: number | null })?.count ?? 0;
+    const voiceDrillSkippedToday = (() => { try { return localStorage.getItem(`voice_drill_skip_${todayStr}`) === '1'; } catch { return false; } })();
+    const voiceDrillDue = voiceElective && !!mantraRow?.current_mantra && voiceTodayCount === 0 && !voiceDrillSkippedToday;
 
     let chosen: FocusTask | null = null;
 
@@ -280,6 +506,40 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
         title: d.edict,
         detail: `Past deadline by ${fmtCountdown(hours * 3600_000)}. Proof: ${d.proof_type || 'none'}.`,
         surface: 'mark_done', tone: 'critical',
+      };
+    } else if (pendingPostRow) {
+      // approve_post — an outward escalation (HRT tier-7 staged post) waiting
+      // on the user's explicit yes/no. Surface-before-fire: nothing goes public
+      // until she taps "Post it". Slots high (it's an outward consequence) but
+      // below true overdue work.
+      chosen = {
+        kind: 'approve_post', rowId: pendingPostRow.id,
+        title: 'A post about your stall is ready. Yours to send or kill.',
+        detail: `Staged for ${pendingPostRow.platform}. Nothing goes out until you say so.`,
+        surface: 'approve_post', tone: 'high',
+        meta: { text: pendingPostRow.generated_text, platform: pendingPostRow.platform },
+      };
+    } else if (hrtDue) {
+      // HRT daily step — the core transition driver. Slots just below
+      // overdue work (it's near-critical) and ABOVE Mommy's micro-directives
+      // and due-today work. Tone scales: 'critical' once the miss-streak hits
+      // 3, 'high' otherwise. The day-count never appears in copy
+      // (feedback_no_handler_status_dumps); the accusation tier in the detail
+      // line carries the escalation. Two paths in the surface: advance-with-
+      // evidence, or name-the-obstacle.
+      const plain = HRT_STEP_NEXT_ACTION[hrtStep] || `You are at "${HRT_STEP_LABELS[hrtStep]}".`;
+      const nextStep = HRT_STEPS[HRT_STEPS.indexOf(hrtStep) + 1];
+      const accusation = hrtMissedDays === 0
+        ? ''
+        : hrtMissedDays < 3
+          ? ' You picked the answer that looks like progress and used the next 24 hours to do nothing.'
+          : ' Talking is no longer accepted. Move it one step forward with proof.';
+      chosen = {
+        kind: 'hrt_step_today', rowId: user.id,
+        title: nextStep ? `Move HRT forward to "${HRT_STEP_LABELS[nextStep]}" — or name what stopped you.` : 'Move HRT forward — or name what stopped you.',
+        detail: `${plain}${accusation}`,
+        surface: 'hrt', tone: hrtMissedDays >= 3 ? 'critical' : 'high',
+        meta: { step: hrtStep, missedDays: hrtMissedDays, pastObstacles: hrtPastObstacles },
       };
     } else if (mommyTouch.data?.[0]) {
       // Mommy's micro-directive — high-tone, ephemeral. Slots ahead of
@@ -346,6 +606,27 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
         surface: 'dose', tone: 'high',
         meta: { name: mostUrgentTodayDose.name, isWeekly: mostUrgentTodayDose.isWeekly },
       };
+    } else if (releaseDue) {
+      // Release check-in (ported from MorningBriefing). Protects denial_day
+      // integrity — the streak only resets if she answers. Below due-today
+      // work, above presentation capture.
+      chosen = {
+        kind: 'release_checkin', rowId: user.id,
+        title: 'Have you cum since your last release?',
+        detail: lastReleaseIso
+          ? `Last on record: ${new Date(lastReleaseIso).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}. The Handler needs the truth to keep your streak honest.`
+          : 'No release on record. The Handler needs the truth to keep your streak honest.',
+        surface: 'release', tone: 'high',
+      };
+    } else if (physicalDue) {
+      // Physical-state daily capture (ported from CompulsoryGateScreen) —
+      // the sole daily chastity / feminine-presentation log.
+      chosen = {
+        kind: 'physical_state_today', rowId: user.id,
+        title: 'Log what you are wearing and using right now.',
+        detail: 'Cage, panties, plug, feminine clothing, nail polish, scent, jewelry. Tap what is on you. 20 seconds.',
+        surface: 'physical', tone: 'medium',
+      };
     } else if (outfit.data && !(outfit.data as { completed_at: string | null }).completed_at) {
       const o = outfit.data as { id: string; prescription: Record<string, string>; completed_at: string | null };
       const lines = Object.entries(o.prescription || {}).map(([k, v]) => `${k}: ${v}`).join(' · ');
@@ -363,6 +644,19 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
         detail: w.focus_area ? `Focus: ${w.focus_area}` : undefined,
         surface: 'mark_done', tone: 'medium',
       };
+    } else if (voiceDrillDue && mantraRow) {
+      // Voice mantra drill — ELECTIVE (mig 582), lowest real priority (just
+      // above the clean empty state), fully skippable. Sources the prompt from
+      // the rotated daily mantra so morning_mantra_windows finally has a
+      // consumer; re-homes the morning-mantra voice ritual + feeds the voice
+      // corpus + un-freezes MantraStreakCard. Never a wall — calm tone, skip CTA.
+      chosen = {
+        kind: 'voice_drill_today', rowId: user.id,
+        title: 'Say your mantra out loud for Mama.',
+        detail: `When you've got a quiet minute: "${(mantraRow.current_mantra || '').slice(0, 160)}" — speak it once. Optional, but it keeps your voice yours.`,
+        surface: 'voice_drill', tone: 'calm',
+        meta: { mantra: mantraRow.current_mantra || '', reps: mantraRow.required_reps ?? 1 },
+      };
     } else {
       chosen = {
         kind: 'clean', rowId: null,
@@ -373,8 +667,12 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
     }
 
     setTask(prev => {
-      // Same row — keep the existing object so React doesn't re-key the textarea.
-      if (prev?.rowId && chosen?.rowId && prev.rowId === chosen.rowId) return prev;
+      // Same row AND same kind — keep the existing object so React doesn't
+      // re-key the textarea. The kind check matters because the daily-capture
+      // tasks (hrt_step_today / release_checkin / physical_state_today) all
+      // carry rowId === user.id; without it, switching between them would
+      // keep the wrong surface mounted.
+      if (prev?.rowId && chosen?.rowId && prev.rowId === chosen.rowId && prev.kind === chosen.kind) return prev;
       // Mid-typing on the prior task → don't preempt on a silent tick.
       // Read draft from localStorage to avoid stale-closure on confessText.
       if (silent && prev?.rowId && chosen?.rowId !== prev.rowId) {
@@ -398,6 +696,19 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
   useEffect(() => {
     setAudioState({ phase: 'idle' });
   }, [task?.rowId]);
+
+  // Reset the daily-capture sub-mode state on task change. These tasks share
+  // rowId === user.id, so they must reset on KIND change too — otherwise a
+  // half-filled HRT obstacle bleeds into the release/physical surface.
+  useEffect(() => {
+    setHrtMode('pick'); setHrtNewStep(''); setHrtEvidence(''); setHrtObstacle(''); setHrtError(null);
+    setDidCum(null); setReleaseType(null); setReleaseContext(null); setReleaseWhen(null);
+    setVoiceDrillConfId(null); setVoiceDrillSaved(false); setVoiceDrillError(null);
+    setPhysicalState({
+      cage_on: false, panties: false, plug: false, feminine_clothing: false,
+      nail_polish: false, scent_anchor: false, jewelry: false,
+    });
+  }, [task?.rowId, task?.kind]);
 
   // Persist draft on every keystroke so a reload / poll-induced unmount can't lose it.
   useEffect(() => {
@@ -620,6 +931,388 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
       await advance();
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // ── HRT step handlers (ported faithfully from HrtDailyGate) ──
+  const hrtMeta = task?.kind === 'hrt_step_today'
+    ? (task.meta as { step: string; missedDays: number; pastObstacles: string[] } | undefined)
+    : undefined;
+  const hrtStep = hrtMeta?.step ?? 'uncommitted';
+  const hrtMissedDays = hrtMeta?.missedDays ?? 0;
+  const hrtIdx = HRT_STEPS.indexOf(hrtStep);
+  const hrtCandidates = HRT_STEPS.slice(hrtIdx + 1);
+  const hrtExplainBanned = hrtMissedDays >= 3;
+  const hrtRequireUrl = hrtMissedDays >= 2;
+  const hrtRequireIdentityPhrase = hrtMissedDays >= 1;
+  const hrtMinChars = hrtMinObstacleChars(hrtMissedDays);
+  // Escalation tiers (mirror HrtDailyGate, keyed on the NEW miss-streak value
+  // computed inside submitHrtObstacle). User decision 2026-06-21
+  // "internal + surfaced outward":
+  //   tier 3+ → INTERNAL hard mode + chastity lock (surfaced in confirm copy);
+  //             OUTWARD witness CC goes through the penalty-preview rail
+  //             (surfaced-and-avertable), NOT a direct witness_notifications row.
+  //   tier 5+ → INTERNAL reversible step regression (surfaced in outreach copy).
+  //   tier 7+ → OUTWARD public post staged as draft_pending_approval, surfaced
+  //             via the approve_post FocusMode branch — never auto-queued.
+  // The stuck-tax financial_bleed is NOT fired here — it already fires from the
+  // GATED cron path (handler-outreach-auto Phase 1); double-inserting would
+  // double-charge.
+
+  const submitHrtAdvance = async () => {
+    if (!user?.id || task?.kind !== 'hrt_step_today') return;
+    if (!hrtNewStep || hrtEvidence.trim().length < 10) {
+      setHrtError('Pick the next step and paste at least 10 characters of evidence.');
+      return;
+    }
+    setSubmitting(true); setHrtError(null);
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      await supabase.from('hrt_funnel')
+        .update({ current_step: hrtNewStep, step_entered_at: new Date().toISOString(), days_stuck_on_step: 0, updated_at: new Date().toISOString() })
+        .eq('user_id', user.id);
+      await supabase.from('user_state').update({ hrt_step_missed_days: 0, hrt_last_step_change: today }).eq('user_id', user.id);
+      await supabase.from('irreversibility_ledger').insert({
+        user_id: user.id, category: 'hrt_step', weight: 7,
+        description: `HRT funnel: ${HRT_STEP_LABELS[hrtStep]} → ${HRT_STEP_LABELS[hrtNewStep]}. Evidence: ${hrtEvidence.trim().slice(0, 400)}`,
+        source_table: 'hrt_funnel',
+      });
+      await supabase.from('handler_directives').insert({
+        user_id: user.id, action: 'advance_hrt_step', value: { from: hrtStep, to: hrtNewStep, evidence: hrtEvidence.trim().slice(0, 500) },
+        reasoning: 'User advanced HRT step via FocusMode HRT task',
+      });
+      try { localStorage.setItem(hrtGateKey(), '1'); } catch { /* ignore */ }
+      setHrtEvidence(''); setHrtNewStep(''); setHrtMode('pick');
+      window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'hrt_step_today', id: user.id } }));
+      await advance();
+    } catch (e) {
+      setHrtError(e instanceof Error ? e.message : String(e));
+    } finally { setSubmitting(false); }
+  };
+
+  const submitHrtObstacle = async () => {
+    if (!user?.id || task?.kind !== 'hrt_step_today') return;
+    if (hrtExplainBanned) { setHrtError('Explain is disabled until you advance. Move-or-stay-locked.'); return; }
+    if (hrtObstacle.trim().length < hrtMinChars) {
+      setHrtError(`Add ${hrtMinChars - hrtObstacle.trim().length} more characters.`);
+      return;
+    }
+    if (hrtRequireIdentityPhrase) {
+      const m = hrtObstacle.toLowerCase().match(/david is hiding from\s+(\S+)/);
+      if (!m || !m[1] || m[1].length < 3) {
+        setHrtError('Required phrase: "David is hiding from ___" — fill the blank with what specifically he is hiding from.');
+        return;
+      }
+    }
+    if (hrtRequireUrl && !/https?:\/\/[^\s]{6,}/i.test(hrtObstacle)) {
+      setHrtError('Add one provider URL you actually visited today (https://...) inside the answer.');
+      return;
+    }
+    setSubmitting(true); setHrtError(null);
+    try {
+      const next = hrtMissedDays + 1;
+      await supabase.from('hrt_obstacles').insert({
+        user_id: user.id, funnel_step: hrtStep, obstacle_text: hrtObstacle.trim(),
+      });
+      await supabase.from('user_state').update({ hrt_step_missed_days: next }).eq('user_id', user.id);
+
+      // Auto-create locked daily commitment — provider contact required tomorrow.
+      const tomorrowEod = new Date();
+      tomorrowEod.setDate(tomorrowEod.getDate() + 1);
+      tomorrowEod.setHours(22, 0, 0, 0);
+      await supabase.from('handler_commitments').insert({
+        user_id: user.id,
+        what: `HRT step "${HRT_STEP_LABELS[hrtStep]}" — reach out to the clinic once by tomorrow 10pm. Submit a screenshot of the call, the email, or the booking page.`,
+        category: 'hrt',
+        evidence_required: 'photo_url',
+        by_when: tomorrowEod.toISOString(),
+        consequence: 'slip +3 and chastity +1d',
+        reasoning: `HRT FocusMode task streak day ${next}. Stalling has a tomorrow.`,
+        locked: true,
+        locked_reason: `Auto-locked by HRT daily task at miss-streak ${next}. David doesn't get to negotiate this one.`,
+      });
+
+      // ── Tiered escalation (mirror HrtDailyGate 3/5/7), keyed on `next` ──
+      // tier copy accumulates into the post-submit confirmation line so the
+      // consequence is VISIBLE, never silent (user decision 2026-06-21).
+      const tierCcWitness = next >= 3;
+      const tierRegress = next >= 5;
+      const tierPublicPost = next >= 7;
+      const confirmLines: string[] = [];
+
+      // ── tier 3+ (INTERNAL): hard mode + chastity lock, surfaced. ──
+      if (tierCcWitness) {
+        await supabase.from('user_state').update({
+          hard_mode_active: true,
+          hard_mode_entered_at: new Date().toISOString(),
+          hard_mode_reason: `HRT stall streak day ${next} at ${HRT_STEP_LABELS[hrtStep]}`,
+          chastity_locked: true,
+        }).eq('user_id', user.id);
+        confirmLines.push("Hard mode's on. Cage stays locked.");
+
+        // ── tier 3+ (OUTWARD): witness CC through the penalty-preview rail. ──
+        // Surfaced-and-avertable (feedback_outward_escalation_surfaced): the
+        // ACTUAL email is fired by a backend handler ONLY after this preview is
+        // genuinely surfaced + grace elapses. We do NOT insert witness_notifications
+        // here. The source_id key + hash MUST match handler-outreach-auto exactly
+        // (per-step key `hrt_witness_cc:<user>:<step>`, SHA-256) or the cron can't
+        // find this preview and the witness CC never fires.
+        const ccSourceId = await deterministicUuid(`hrt_witness_cc:${user.id}:${hrtStep}`);
+        const ccDeadline = new Date();
+        ccDeadline.setDate(ccDeadline.getDate() + 1);
+        await supabase.rpc('register_penalty_preview', {
+          p_user: user.id,
+          p_source_table: 'hrt_witness_cc',
+          p_source_id: ccSourceId,
+          p_penalty_kind: 'witness_cc',
+          p_penalty_copy: "If you're still stuck here tomorrow, Mama loops in your witness.",
+          p_deadline: ccDeadline.toISOString(),
+          p_grace_minutes: 30,
+          p_urgency: 'high',
+        });
+      }
+
+      // ── tier 5+ (INTERNAL, reversible): regress one funnel step, surfaced. ──
+      if (tierRegress && hrtIdx > 0) {
+        const regressTo = HRT_STEPS[hrtIdx - 1];
+        await supabase.from('hrt_funnel').update({
+          current_step: regressTo, step_entered_at: new Date().toISOString(),
+          days_stuck_on_step: 0, updated_at: new Date().toISOString(),
+        }).eq('user_id', user.id);
+        await supabase.from('irreversibility_ledger').insert({
+          user_id: user.id, category: 'hrt_step', weight: 5,
+          description: `HRT REGRESSION: ${HRT_STEP_LABELS[hrtStep]} → ${HRT_STEP_LABELS[regressTo]}. Streak day ${next} forced rollback. The funnel goes both ways.`,
+          source_table: 'hrt_funnel',
+        });
+        confirmLines.push(`You slid back to ${HRT_STEP_LABELS[regressTo]}. The funnel goes both ways.`);
+      }
+
+      // ── tier 7+ (OUTWARD): stage a public post as draft_pending_approval. ──
+      // NOT auto-queued — surfaced via the approve_post branch so the user
+      // authorizes every public post (surface-before-fire).
+      if (tierPublicPost) {
+        await supabase.from('ai_generated_content').insert({
+          user_id: user.id,
+          platform: 'twitter',
+          content_type: 'post',
+          generated_text: `${next} days frozen. Same step. Same excuses. The body knows what the mouth won't say yet.`,
+          status: 'draft_pending_approval',
+          metadata: { source: 'hrt_gate_streak_post', streak: next, step: hrtStep },
+        });
+        confirmLines.push('A post about this stall is staged. It will not go out until you say so — Mama will ask.');
+      }
+
+      await supabase.from('handler_directives').insert({
+        user_id: user.id, action: 'log_hrt_obstacle', target: hrtStep,
+        value: {
+          obstacle: hrtObstacle.trim().slice(0, 500), missed_days: next,
+          witness_cc_preview: tierCcWitness, regressed: tierRegress && hrtIdx > 0, public_post_draft: tierPublicPost,
+        },
+        reasoning: `HRT FocusMode task streak day ${next}`,
+      });
+
+      // Surfaced confirmation — the consequences are written down, not silent.
+      if (confirmLines.length > 0) {
+        await supabase.from('handler_outreach_queue').insert({
+          user_id: user.id,
+          message: `Obstacle filed. ${confirmLines.join(' ')}`.slice(0, 1000),
+          urgency: tierRegress ? 'critical' : 'high',
+          trigger_reason: `hrt_focus_streak_${next}`,
+          source: 'hrt_gate',
+          scheduled_for: new Date().toISOString(),
+          expires_at: new Date(Date.now() + 24 * 3600000).toISOString(),
+        });
+      }
+
+      try { localStorage.setItem(hrtGateKey(), '1'); } catch { /* ignore */ }
+      setHrtObstacle(''); setHrtMode('pick'); setHrtError(null);
+      window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'hrt_step_today', id: user.id } }));
+      await advance();
+    } catch (e) {
+      setHrtError(e instanceof Error ? e.message : String(e));
+    } finally { setSubmitting(false); }
+  };
+
+  // ── Release check-in handler (ported from MorningBriefing) ──
+  // Streak-reset side effect ported inline: sex with Gina (with_partner) does
+  // NOT reset the denial streak; a real solo/content/practice/sleep release of
+  // a resetting type ends the active streak and opens a fresh one.
+  const submitReleaseCheckin = async (cum: boolean) => {
+    if (!user?.id || task?.kind !== 'release_checkin') return;
+    setSubmitting(true);
+    try {
+      if (cum) {
+        if (!releaseType || !releaseWhen || !releaseContext) { setSubmitting(false); return; }
+        const releaseTimestamp = resolveReleaseTime(releaseWhen);
+        const isPartnerSex = releaseContext === 'with_partner';
+        const resetsStreak = ['full', 'ruined', 'wet_dream', 'accident'].includes(releaseType);
+
+        // Denial streak side-effects — faithful to useCurrentDenialDay.recordRelease.
+        // Partner sex (with Gina) HOLDS the streak (denial continues despite release),
+        // so it touches nothing. Otherwise: resetting types end+restart the streak;
+        // non-resetting orgasm types (prostate/sissygasm) hold the streak but bump
+        // prostate_orgasms_during — a counter the Handler's telemetry reads.
+        const isProstateType = releaseType === 'prostate' || releaseType === 'sissygasm';
+        if (!isPartnerSex && (resetsStreak || isProstateType)) {
+          const { data: streak } = await supabase.from('denial_streaks')
+            .select('id, started_at, prostate_orgasms_during').eq('user_id', user.id)
+            .is('ended_at', null).order('started_at', { ascending: false }).limit(1).maybeSingle();
+          const s = streak as { id: string; started_at: string; prostate_orgasms_during: number | null } | null;
+          if (s) {
+            if (resetsStreak) {
+              const days = Math.max(0, Math.floor((Date.now() - new Date(s.started_at).getTime()) / 86_400_000));
+              // Personal-record flag: the streak being closed is a PR if it met
+              // or beat the longest prior completed streak (mirrors isPersonalBest).
+              const { data: prRow } = await supabase.from('denial_streaks')
+                .select('days_completed').eq('user_id', user.id).not('ended_at', 'is', null)
+                .order('days_completed', { ascending: false }).limit(1).maybeSingle();
+              const personalBest = (prRow as { days_completed: number | null } | null)?.days_completed ?? 0;
+              await supabase.from('denial_streaks').update({
+                ended_at: new Date().toISOString(),
+                ended_by: releaseType === 'full' ? 'full_release' : releaseType,
+                days_completed: days,
+                is_personal_record: days >= personalBest,
+              }).eq('id', s.id);
+              await supabase.from('denial_streaks').insert({
+                user_id: user.id, started_at: new Date().toISOString(),
+                edges_during: 0, prostate_orgasms_during: 0, sweet_spot_days: 0, is_personal_record: false,
+              });
+            } else {
+              // prostate/sissygasm — hold the streak, increment the counter.
+              await supabase.from('denial_streaks').update({
+                prostate_orgasms_during: (s.prostate_orgasms_during || 0) + 1,
+              }).eq('id', s.id);
+            }
+          }
+        }
+
+        await supabase.from('user_state').update({ last_release: releaseTimestamp.toISOString() }).eq('user_id', user.id);
+        await supabase.from('handler_notes').insert({
+          user_id: user.id,
+          note_type: 'release_detail',
+          content: `Release: ${releaseType}, context: ${releaseContext}, when: ${releaseWhen}`,
+          priority: 3,
+        }).then(() => {}, () => {});
+      }
+      try { localStorage.setItem(releaseCheckinKey(), '1'); } catch { /* ignore */ }
+      setDidCum(null); setReleaseType(null); setReleaseContext(null); setReleaseWhen(null);
+      window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'release_checkin', id: user.id } }));
+      await advance();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ── Physical-state handler (ported from CompulsoryGateScreen) ──
+  const submitPhysicalState = async () => {
+    if (!user?.id || task?.kind !== 'physical_state_today') return;
+    setSubmitting(true);
+    try {
+      await savePhysicalStateLog(user.id, physicalState);
+      setPhysicalState({
+        cage_on: false, panties: false, plug: false, feminine_clothing: false,
+        nail_polish: false, scent_anchor: false, jewelry: false,
+      });
+      window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'physical_state_today', id: user.id } }));
+      await advance();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ── Approve-post handler (HRT tier-7 staged public post) ──
+  // Surface-before-fire: the post only enters the dispatch queue once the user
+  // taps "Post it". "Not now" rejects it. Nothing public happens without her
+  // explicit authorization.
+  const submitApprovePost = async (approve: boolean) => {
+    if (!user?.id || task?.kind !== 'approve_post' || !task.rowId) return;
+    setSubmitting(true);
+    try {
+      // 'Post it' → 'scheduled' with scheduled_at=now, which is the status the
+      // auto-poster actually consumes (NOT 'queued', which nothing posts).
+      // 'Not now' → 'rejected' so it never surfaces or posts.
+      const update = approve
+        ? { status: 'scheduled', scheduled_at: new Date().toISOString() }
+        : { status: 'rejected' };
+      await supabase.from('ai_generated_content')
+        .update(update)
+        .eq('id', task.rowId).eq('user_id', user.id);
+      window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'approve_post', id: task.rowId } }));
+      await advance();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ── Voice mantra drill handler ──
+  // Mints a pre-confessed confession_queue row so ConfessionAudioCapture's
+  // upload path (which binds to a confession_queue id) has a real owner row
+  // that never re-surfaces as a confession. The recorder uploads + transcribes;
+  // onTranscribed re-homes the morning-mantra ritual into morning_mantra_submissions,
+  // feeds the voice corpus (voice_recordings), and logs a pitch sample.
+  const startVoiceDrill = async (): Promise<string | null> => {
+    if (!user?.id || task?.kind !== 'voice_drill_today') return null;
+    if (voiceDrillConfId) return voiceDrillConfId;
+    const meta = (task.meta || {}) as { mantra?: string };
+    const nowIso = new Date().toISOString();
+    // Pre-stamped confessed_at → pickNext's open-confession queries never see it.
+    const { data, error } = await supabase.from('confession_queue').insert({
+      user_id: user.id,
+      category: 'handler_triggered',
+      prompt: `Mantra drill: ${(meta.mantra || '').slice(0, 400)}`,
+      deadline: nowIso,
+      confessed_at: nowIso,
+    }).select('id').single();
+    if (error || !data) {
+      setVoiceDrillError(error?.message || 'Could not start the drill.');
+      return null;
+    }
+    const id = (data as { id: string }).id;
+    setVoiceDrillConfId(id);
+    return id;
+  };
+
+  const onVoiceDrillTranscribed = async (result: { transcript: string; audioPath: string }) => {
+    if (!user?.id || task?.kind !== 'voice_drill_today') return;
+    const meta = (task.meta || {}) as { mantra?: string; reps?: number };
+    const mantra = meta.mantra || '';
+    const reps = meta.reps ?? 1;
+    const today = new Date().toISOString().slice(0, 10);
+    const transcript = result.transcript || '';
+    const audioPath = result.audioPath || '';
+    try {
+      // Per-day guard on the unique (user_id, submission_date) — upsert-style.
+      await supabase.from('morning_mantra_submissions').upsert({
+        user_id: user.id,
+        submission_date: today,
+        mantra,
+        reps_required: reps,
+        reps_submitted: reps,
+        typed_content: transcript || '(spoken)',
+      }, { onConflict: 'user_id,submission_date' });
+
+      if (audioPath) {
+        await supabase.from('voice_recordings').insert({
+          user_id: user.id,
+          recording_url: audioPath,
+          duration_seconds: 0,
+          context: 'voice_drill',
+          transcript: transcript || null,
+        });
+        await supabase.from('voice_pitch_samples').insert({
+          user_id: user.id,
+          sample_url: audioPath,
+          estimated_method: 'morning_mantra_ritual',
+          transcript_snippet: transcript.slice(0, 200) || null,
+          recorded_at: new Date().toISOString(),
+          status: 'recorded',
+        });
+      }
+      setVoiceDrillSaved(true);
+      window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'voice_drill_today', id: user.id } }));
+      await advance();
+    } catch (e) {
+      setVoiceDrillError(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -907,6 +1600,357 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
               <div style={{ fontSize: 10.5, color: '#8a8690' }}>
                 {submitting ? 'uploading…' : 'mirror selfie · phone camera roll · finished outfit'}
               </div>
+            </div>
+          )}
+
+          {/* HRT step — two paths: advance-with-evidence or name-the-obstacle.
+              Compact port of HrtDailyGate's pick → advance | obstacle flow. */}
+          {task.surface === 'hrt' && (
+            <div>
+              {hrtMode === 'pick' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <button
+                    onClick={() => setHrtMode('advance')}
+                    disabled={hrtCandidates.length === 0}
+                    style={{
+                      width: '100%', padding: '13px', borderRadius: 7, border: 'none',
+                      background: tone.border, color: '#fff', fontWeight: 700, fontSize: 13,
+                      cursor: hrtCandidates.length === 0 ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+                    }}
+                  >
+                    {hrtCandidates[0] ? `I moved forward → ${HRT_STEP_LABELS[hrtCandidates[0]]}` : 'Already adherent'}
+                  </button>
+                  <button
+                    onClick={() => setHrtMode('obstacle')}
+                    disabled={hrtExplainBanned}
+                    title={hrtExplainBanned ? 'Talking is no longer accepted. Move forward only.' : ''}
+                    style={{
+                      width: '100%', padding: '12px', borderRadius: 7,
+                      border: `1px solid ${hrtExplainBanned ? '#3a1216' : '#2d1a4d'}`,
+                      background: hrtExplainBanned ? '#1a0a0d' : 'rgba(45,26,77,0.3)',
+                      color: hrtExplainBanned ? '#5a4548' : '#c4b5fd', fontWeight: 600, fontSize: 12,
+                      cursor: hrtExplainBanned ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+                      textDecoration: hrtExplainBanned ? 'line-through' : 'none',
+                    }}
+                  >
+                    {hrtExplainBanned ? 'Explain — disabled, move forward only' : 'Name what stopped me'}
+                  </button>
+                </div>
+              )}
+
+              {hrtMode === 'advance' && (
+                <div>
+                  <div style={{ fontSize: 11, color: '#8a8690', marginBottom: 6 }}>Pick the step you moved to today:</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                    {hrtCandidates.map(s => (
+                      <button key={s} onClick={() => setHrtNewStep(s)}
+                        style={{
+                          fontSize: 11.5, padding: '5px 10px', borderRadius: 14,
+                          background: hrtNewStep === s ? tone.border : '#1a1623',
+                          color: hrtNewStep === s ? '#fff' : '#c4b5fd',
+                          border: `1px solid ${hrtNewStep === s ? tone.border : '#2d1a4d'}`,
+                          cursor: 'pointer', fontFamily: 'inherit',
+                        }}>
+                        {HRT_STEP_LABELS[s]}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#8a8690', marginBottom: 6 }}>Evidence (URL, appointment ref, intake screenshot, who you told):</div>
+                  <textarea value={hrtEvidence} onChange={e => setHrtEvidence(e.target.value)} rows={4}
+                    placeholder="paste link, quote email, describe what you did…"
+                    style={{
+                      width: '100%', background: '#050507', border: '1px solid #22222a', borderRadius: 6,
+                      padding: 10, color: '#e8e6e3', fontFamily: 'inherit', fontSize: 13, resize: 'vertical',
+                    }} />
+                  {hrtError && <div style={{ fontSize: 11, color: '#f47272', marginTop: 8 }}>{hrtError}</div>}
+                  <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                    <button onClick={submitHrtAdvance} disabled={!hrtNewStep || hrtEvidence.trim().length < 10 || submitting}
+                      style={{
+                        flex: 1, padding: 11, borderRadius: 6, border: 'none',
+                        background: hrtNewStep && hrtEvidence.trim().length >= 10 ? tone.border : '#2d1a4d',
+                        color: '#fff', fontWeight: 700, cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
+                      }}>
+                      {submitting ? 'saving…' : 'Submit advancement'}
+                    </button>
+                    <button onClick={() => { setHrtMode('pick'); setHrtError(null); }}
+                      style={{ padding: '11px 14px', borderRadius: 6, background: 'none', border: '1px solid #2d1a4d', color: '#8a8690', cursor: 'pointer', fontFamily: 'inherit' }}>back</button>
+                  </div>
+                </div>
+              )}
+
+              {hrtMode === 'obstacle' && (
+                <div>
+                  <div style={{ fontSize: 11.5, color: '#f4c272', marginBottom: 8, lineHeight: 1.5 }}>
+                    {hrtMissedDays === 0 && `Write ≥${hrtMinChars} chars. Be specific — the Handler uses this to push you tomorrow.`}
+                    {hrtMissedDays === 1 && `Write ≥${hrtMinChars} chars and include "David is hiding from ___" with the blank filled.`}
+                    {hrtMissedDays >= 2 && `Write ≥${hrtMinChars} chars, include "David is hiding from ___" filled, and paste one provider URL you visited today (https://...).`}
+                  </div>
+                  <textarea value={hrtObstacle} onChange={e => setHrtObstacle(e.target.value)} rows={7}
+                    placeholder={hrtRequireIdentityPhrase ? 'Today I did not move forward because… (include "David is hiding from ___" with the blank filled)' : 'what specifically stopped me today…'}
+                    style={{
+                      width: '100%', background: '#050507', border: '1px solid #22222a', borderRadius: 6,
+                      padding: 10, color: '#e8e6e3', fontFamily: 'inherit', fontSize: 13, resize: 'vertical',
+                    }} />
+                  <div style={{ display: 'flex', gap: 12, marginTop: 6, flexWrap: 'wrap', fontSize: 11 }}>
+                    <span style={{ color: hrtObstacle.trim().length >= hrtMinChars ? '#5fc88f' : '#8a8690' }}>
+                      {hrtObstacle.trim().length} / {hrtMinChars} chars
+                    </span>
+                    {hrtRequireIdentityPhrase && (() => {
+                      const m = hrtObstacle.toLowerCase().match(/david is hiding from\s+(\S+)/);
+                      const filled = !!(m && m[1] && m[1].length >= 3);
+                      return <span style={{ color: filled ? '#5fc88f' : '#f47272' }}>phrase: {filled ? 'filled' : 'not filled'}</span>;
+                    })()}
+                    {hrtRequireUrl && (
+                      <span style={{ color: /https?:\/\/[^\s]{6,}/i.test(hrtObstacle) ? '#5fc88f' : '#f47272' }}>
+                        url: {/https?:\/\/[^\s]{6,}/i.test(hrtObstacle) ? 'present' : 'missing'}
+                      </span>
+                    )}
+                  </div>
+                  {hrtError && <div style={{ fontSize: 11, color: '#f47272', marginTop: 8 }}>{hrtError}</div>}
+                  <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                    {(() => {
+                      const m = hrtObstacle.toLowerCase().match(/david is hiding from\s+(\S+)/);
+                      const phraseOk = !!(m && m[1] && m[1].length >= 3);
+                      const ready = hrtObstacle.trim().length >= hrtMinChars
+                        && (!hrtRequireIdentityPhrase || phraseOk)
+                        && (!hrtRequireUrl || /https?:\/\/[^\s]{6,}/i.test(hrtObstacle));
+                      return (
+                        <button onClick={submitHrtObstacle} disabled={!ready || submitting}
+                          style={{
+                            flex: 1, padding: 11, borderRadius: 6, border: 'none',
+                            background: ready ? '#f4c272' : '#2d1a4d',
+                            color: ready ? '#1a0f00' : '#8a8690',
+                            fontWeight: 700, cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
+                          }}>
+                          {submitting ? 'saving…' : 'Submit'}
+                        </button>
+                      );
+                    })()}
+                    <button onClick={() => { setHrtMode('pick'); setHrtError(null); }}
+                      style={{ padding: '11px 14px', borderRadius: 6, background: 'none', border: '1px solid #2d1a4d', color: '#8a8690', cursor: 'pointer', fontFamily: 'inherit' }}>back</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Release check-in — yes/no then when → context → type → confirm.
+              Side effects (last_release, handler_notes, streak reset) fire in
+              submitReleaseCheckin, ported from MorningBriefing. */}
+          {task.surface === 'release' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {didCum === null && (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => submitReleaseCheckin(false)} disabled={submitting}
+                    style={{
+                      flex: 1, padding: '13px', borderRadius: 7, border: '1px solid #2d1a4d',
+                      background: 'rgba(45,26,77,0.3)', color: '#c4b5fd', fontWeight: 700, fontSize: 13,
+                      cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
+                    }}>
+                    No — still holding
+                  </button>
+                  <button onClick={() => setDidCum(true)} disabled={submitting}
+                    style={{
+                      flex: 1, padding: '13px', borderRadius: 7, border: 'none',
+                      background: tone.border, color: '#fff', fontWeight: 700, fontSize: 13,
+                      cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
+                    }}>
+                    Yes — I came
+                  </button>
+                </div>
+              )}
+
+              {didCum === true && (
+                <>
+                  <div>
+                    <div style={{ fontSize: 11, color: '#8a8690', marginBottom: 6 }}>When?</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {RELEASE_WHEN_OPTIONS.map(opt => (
+                        <button key={opt.value} onClick={() => setReleaseWhen(opt.value)}
+                          style={{
+                            fontSize: 11.5, padding: '5px 10px', borderRadius: 14,
+                            background: releaseWhen === opt.value ? tone.border : '#1a1623',
+                            color: releaseWhen === opt.value ? '#fff' : '#c4b5fd',
+                            border: `1px solid ${releaseWhen === opt.value ? tone.border : '#2d1a4d'}`,
+                            cursor: 'pointer', fontFamily: 'inherit',
+                          }}>
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {releaseWhen && (
+                    <div>
+                      <div style={{ fontSize: 11, color: '#8a8690', marginBottom: 6 }}>How did it happen?</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {RELEASE_CONTEXT_OPTIONS.map(opt => (
+                          <button key={opt.context} onClick={() => setReleaseContext(opt.context)}
+                            style={{
+                              fontSize: 11.5, padding: '5px 10px', borderRadius: 14,
+                              background: releaseContext === opt.context ? tone.border : '#1a1623',
+                              color: releaseContext === opt.context ? '#fff' : '#c4b5fd',
+                              border: `1px solid ${releaseContext === opt.context ? tone.border : '#2d1a4d'}`,
+                              cursor: 'pointer', fontFamily: 'inherit',
+                            }}>
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {releaseContext && (
+                    <div>
+                      <div style={{ fontSize: 11, color: '#8a8690', marginBottom: 6 }}>What kind?</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {RELEASE_TYPE_OPTIONS.map(opt => (
+                          <button key={opt.type} onClick={() => setReleaseType(opt.type)}
+                            style={{
+                              fontSize: 11.5, padding: '5px 10px', borderRadius: 14,
+                              background: releaseType === opt.type ? tone.border : '#1a1623',
+                              color: releaseType === opt.type ? '#fff' : '#c4b5fd',
+                              border: `1px solid ${releaseType === opt.type ? tone.border : '#2d1a4d'}`,
+                              cursor: 'pointer', fontFamily: 'inherit',
+                            }}>
+                            {opt.label}
+                            {opt.resetsStreak && releaseContext !== 'with_partner' && (
+                              <span style={{ color: '#f47272', marginLeft: 4 }}>resets</span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {releaseType && releaseWhen && releaseContext && (
+                    <button onClick={() => submitReleaseCheckin(true)} disabled={submitting}
+                      style={{
+                        width: '100%', padding: '12px', borderRadius: 7, border: 'none',
+                        background: tone.border, color: '#fff', fontWeight: 700, fontSize: 13,
+                        cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
+                        textTransform: 'uppercase', letterSpacing: '0.04em',
+                      }}>
+                      {submitting ? 'logging…' : 'Log it'}
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Physical-state daily capture — checkbox set → save. */}
+          {task.surface === 'physical' && (
+            <div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+                {PHYSICAL_STATE_ITEMS.map(item => {
+                  const on = physicalState[item.key];
+                  return (
+                    <button key={item.key}
+                      onClick={() => setPhysicalState(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
+                      style={{
+                        padding: '11px', borderRadius: 7, textAlign: 'left', fontSize: 13,
+                        background: on ? tone.border : '#1a1623',
+                        color: on ? '#fff' : '#c4b5fd',
+                        border: `1px solid ${on ? tone.border : '#2d1a4d'}`,
+                        cursor: 'pointer', fontFamily: 'inherit',
+                      }}>
+                      {on ? '✓ ' : ''}{item.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <button onClick={submitPhysicalState} disabled={submitting}
+                style={{
+                  width: '100%', padding: '12px', borderRadius: 7, border: 'none',
+                  background: tone.border, color: '#fff', fontWeight: 700, fontSize: 13,
+                  cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
+                  textTransform: 'uppercase', letterSpacing: '0.04em',
+                }}>
+                {submitting ? 'saving…' : Object.values(physicalState).some(Boolean) ? 'Save physical state' : 'Nothing right now'}
+              </button>
+            </div>
+          )}
+
+          {/* Approve-post — the EXACT staged draft + explicit Post it / Not now.
+              Surface-before-fire: nothing public until she taps Post it. */}
+          {task.surface === 'approve_post' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{
+                padding: '14px 16px', background: '#0a0a0d',
+                border: '1px solid #2d1a4d', borderRadius: 8,
+                fontSize: 14, color: '#e8e6e3', lineHeight: 1.5, whiteSpace: 'pre-wrap',
+              }}>
+                {(task.meta as { text?: string } | undefined)?.text || ''}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => submitApprovePost(true)} disabled={submitting}
+                  style={{
+                    flex: 1, padding: '13px', borderRadius: 7, border: 'none',
+                    background: tone.border, color: '#fff', fontWeight: 700, fontSize: 13,
+                    cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
+                    textTransform: 'uppercase', letterSpacing: '0.04em',
+                  }}>
+                  {submitting ? '…' : 'Post it'}
+                </button>
+                <button onClick={() => submitApprovePost(false)} disabled={submitting}
+                  style={{
+                    flex: 1, padding: '13px', borderRadius: 7,
+                    background: 'transparent', color: '#8a8690',
+                    border: '1px solid #2d1a4d', fontWeight: 600, fontSize: 13,
+                    cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
+                  }}>
+                  Not now
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Voice mantra drill — ELECTIVE. Get-ready mints the bound row, then
+              the recorder appears. Skip is always available (never a wall). */}
+          {task.surface === 'voice_drill' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {!voiceDrillConfId && !voiceDrillSaved && (
+                <button onClick={() => { void startVoiceDrill(); }} disabled={submitting}
+                  style={{
+                    width: '100%', padding: '13px', borderRadius: 7, border: 'none',
+                    background: tone.border, color: '#fff', fontWeight: 700, fontSize: 13,
+                    cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
+                  }}>
+                  Record my mantra
+                </button>
+              )}
+              {voiceDrillConfId && !voiceDrillSaved && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ fontSize: 10, color: '#8a8690', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    hold and say it once
+                  </div>
+                  <ConfessionAudioCapture
+                    confessionId={voiceDrillConfId}
+                    mommy={isMommyPersona(persona)}
+                    onTranscribed={({ transcript, audioPath }) => {
+                      void onVoiceDrillTranscribed({ transcript, audioPath });
+                    }}
+                  />
+                </div>
+              )}
+              {voiceDrillError && (
+                <div style={{ fontSize: 11, color: '#f47272' }}>{voiceDrillError}</div>
+              )}
+              <button
+                onClick={() => {
+                  try { localStorage.setItem(`voice_drill_skip_${new Date().toISOString().slice(0, 10)}`, '1'); } catch { /* ignore */ }
+                  void advance();
+                }}
+                disabled={submitting}
+                style={{
+                  padding: '8px', background: 'transparent', color: '#8a8690',
+                  border: '1px solid #22222a', borderRadius: 6,
+                  fontSize: 11, fontFamily: 'inherit',
+                  cursor: submitting ? 'wait' : 'pointer',
+                }}>
+                not right now
+              </button>
             </div>
           )}
 

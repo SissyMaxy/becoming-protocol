@@ -81,6 +81,12 @@ export async function detectWakeFromWhoop(
  * Determine if the morning briefing should trigger.
  * Combines Whoop wake detection with bookend state.
  *
+ * CURRENTLY UNUSED (2026-06-21): this helper's only caller was the App.tsx
+ * morning-flow effect, which was deleted in the 2026-06-21 entry-gate removal.
+ * No live code path invokes it now. Left in place (low risk) in case the
+ * Focus-surface morning briefing is revived. `detectWakeFromWhoop` above is
+ * still consumed by useBookends' (now-unused) morning branch.
+ *
  * Returns true if:
  *   - User is awake (per Whoop or fallback)
  *   - AND morning bookend has not been viewed today
