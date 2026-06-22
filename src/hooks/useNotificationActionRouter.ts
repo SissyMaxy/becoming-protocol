@@ -35,38 +35,31 @@ import { useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { startSwAuthSync } from '../lib/push/sw-auth';
+import { planOutreachCompletion } from '../lib/push/outreach-action';
 
 async function completeOutreach(
   outreachId: string,
   replyText: string | null,
   actionKind: string | null,
 ): Promise<void> {
-  const trimmed = (replyText || '').trim();
-
-  // Empty open-tap on a task that needs content (confession answer / photo):
-  // don't auto-complete — just opening the app is enough; the user finishes it
-  // in the chat or the photo-responder surface.
-  if (!trimmed && (actionKind === 'confession' || actionKind === 'photo')) {
-    return;
-  }
+  // Gating contract (shared with public/sw.js) lives in planOutreachCompletion:
+  // an empty confession/photo tap resolves to endpoint=null and we do nothing
+  // but open the app, so a task that needs content is never marked done.
+  const plan = planOutreachCompletion(outreachId, replyText, actionKind);
+  if (!plan.endpoint) return;
 
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) return; // not authed yet — nothing we can do; the param stays for a later load
 
-  const action = trimmed ? 'reply' : 'complete';
-  const bodyObj = trimmed
-    ? { outreach_id: outreachId, reply_text: trimmed }
-    : { outreach_id: outreachId };
-
   try {
-    await fetch(`/api/outreach/${action}`, {
+    await fetch(`/api/outreach/${plan.endpoint}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify(bodyObj),
+      body: JSON.stringify(plan.body),
     });
     // 404 (not found / not owned), 409 (already replied), 200 (done) are all
     // terminal from the user's side — we don't retry or surface an error; the

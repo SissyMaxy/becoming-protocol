@@ -412,6 +412,12 @@ function readSwAccessToken() {
 // POST the completion/reply to /api/outreach using the cached token. Returns
 // true on a 2xx, false on missing-token or any non-2xx (caller falls back to
 // the deep-link). reply_text present → /reply; absent → /complete.
+//
+// PARITY: this endpoint-selection + the empty-confession/photo guard in
+// notificationclick must match planOutreachCompletion() in
+// src/lib/push/outreach-action.ts (the in-app router's source of truth). This
+// is a classic service worker and can't import that module; the contract is
+// pinned by the source-parity test in src/__tests__/lib/outreach-action.test.ts.
 async function completeFromSW(outreachId, opts) {
   const replyText = opts && typeof opts.reply_text === 'string' ? opts.reply_text.trim() : '';
   const token = await readSwAccessToken();
