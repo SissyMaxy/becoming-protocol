@@ -86,6 +86,25 @@ self.addEventListener('push', (event) => {
 
   const data = event.data.json();
   const isStealth = Boolean(data?.data?.stealth);
+  // outreach_id + action_kind survive stealth neutralization (allowlisted in
+  // _shared/stealth.ts). They let the SW build the right action buttons and
+  // route the tap to /api/outreach without revealing content.
+  const outreachId = data?.data?.outreach_id || null;
+  const actionKind = data?.data?.action_kind || null;
+
+  // ACTIONS array. iOS PWAs render NONE of these (taps just open the app — the
+  // notificationclick deep-link fallback handles that path), but Android /
+  // desktop Chrome show them. Under stealth we expose ONLY a neutral "Open" so
+  // a lock screen never reveals that there's a confession/photo to answer.
+  const actions = buildNotificationActions(actionKind, isStealth);
+
+  // Deep-link the click target so even a plain "open the app" tap auto-completes
+  // via the in-app router (?complete_outreach=<id>). Reply text, when the user
+  // uses the inline action, is appended in notificationclick.
+  const url = outreachId
+    ? '/?complete_outreach=' + encodeURIComponent(outreachId)
+    : (isStealth ? '/' : (data.url || '/'));
+
   const options = isStealth
     ? {
         body: data.body || 'Tap to view',
@@ -95,7 +114,8 @@ self.addEventListener('push', (event) => {
         renotify: false,
         requireInteraction: false,
         silent: false,
-        data: { url: '/' },
+        actions,
+        data: { url, outreach_id: outreachId, action_kind: actionKind, stealth: true },
       }
     : {
         body: data.body || 'You have a task waiting.',
@@ -104,15 +124,44 @@ self.addEventListener('push', (event) => {
         vibrate: [200, 100, 200],
         tag: data.tag || 'handler-notification',
         requireInteraction: data.urgent || false,
-        data: {
-          url: data.url || '/'
-        }
+        actions,
+        data: { url, outreach_id: outreachId, action_kind: actionKind },
       };
 
   event.waitUntil(
     self.registration.showNotification(isStealth ? (data.title || 'New message') : (data.title || 'BP'), options)
   );
 });
+
+// Build the notification action set from the coarse action_kind.
+//   confession / reply → inline-text "Reply" + "Open"
+//   photo              → "Snap it" (just opens the camera surface)
+//   plain              → "Mark done" + "Open"
+// Under stealth, NEVER reveal a content-bearing label on a lock screen — show
+// only a neutral "Open". (Note: only the first ~2 actions render on most
+// platforms, and many show none; this is best-effort enhancement.)
+function buildNotificationActions(actionKind, isStealth) {
+  if (isStealth) {
+    return [{ action: 'open', title: 'Open' }];
+  }
+  switch (actionKind) {
+    case 'confession':
+    case 'reply':
+      return [
+        { action: 'reply', title: 'Reply', type: 'text', placeholder: 'Answer Mama' },
+        { action: 'open', title: 'Open' },
+      ];
+    case 'photo':
+      return [{ action: 'open', title: 'Snap it' }];
+    case 'plain':
+      return [
+        { action: 'done', title: 'Mark done' },
+        { action: 'open', title: 'Open' },
+      ];
+    default:
+      return [];
+  }
+}
 
 // Handle messages from the app (for showing notifications when tab is hidden)
 self.addEventListener('message', (event) => {
@@ -304,43 +353,195 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(scheduleSleepLoop().catch(() => {}));
 });
 
-// Handle notification clicks — focus an existing window if available,
-// otherwise open a new one. Sends a postMessage so the app can route to
-// the Handler chat if it's already loaded.
+// ─────────────────────────────────────────────────────────────
+// NOTIFICATION ACTION AUTH BRIDGE
+// notificationclick runs with no window, so it can't read the Supabase
+// session (localStorage). The app caches a short-lived access_token in
+// IndexedDB ('becoming-sw-auth' → store 'bp-auth' → key 'session'); the SW
+// reads it here to authenticate POSTs to /api/outreach. On any miss/expiry we
+// fall back to the deep-link (?complete_outreach=...), which the in-app router
+// completes via the live session. Never write the refresh_token here.
+// ─────────────────────────────────────────────────────────────
+
+const SW_AUTH_DB = 'becoming-sw-auth';
+const SW_AUTH_STORE = 'bp-auth';
+const SW_AUTH_KEY = 'session';
+
+function readSwAccessToken() {
+  return new Promise((resolve) => {
+    let req;
+    try {
+      req = indexedDB.open(SW_AUTH_DB, 1);
+    } catch {
+      resolve(null);
+      return;
+    }
+    // If the store doesn't exist yet (app never cached), don't create a half
+    // DB — just bail to the fallback.
+    req.onupgradeneeded = () => {
+      try {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(SW_AUTH_STORE)) {
+          db.createObjectStore(SW_AUTH_STORE);
+        }
+      } catch { /* ignore */ }
+    };
+    req.onsuccess = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(SW_AUTH_STORE)) { resolve(null); return; }
+      try {
+        const tx = db.transaction(SW_AUTH_STORE, 'readonly');
+        const getReq = tx.objectStore(SW_AUTH_STORE).get(SW_AUTH_KEY);
+        getReq.onsuccess = () => {
+          const row = getReq.result;
+          if (!row || !row.access_token) { resolve(null); return; }
+          // Treat as expired with a 60s safety margin — a stale token just
+          // routes us to the deep-link fallback.
+          if (row.expires_at && row.expires_at <= Date.now() + 60_000) { resolve(null); return; }
+          resolve(row.access_token);
+        };
+        getReq.onerror = () => resolve(null);
+      } catch {
+        resolve(null);
+      }
+    };
+    req.onerror = () => resolve(null);
+  });
+}
+
+// POST the completion/reply to /api/outreach using the cached token. Returns
+// true on a 2xx, false on missing-token or any non-2xx (caller falls back to
+// the deep-link). reply_text present → /reply; absent → /complete.
+async function completeFromSW(outreachId, opts) {
+  const replyText = opts && typeof opts.reply_text === 'string' ? opts.reply_text.trim() : '';
+  const token = await readSwAccessToken();
+  if (!token) return false;
+  const action = replyText ? 'reply' : 'complete';
+  const bodyObj = replyText
+    ? { outreach_id: outreachId, reply_text: replyText }
+    : { outreach_id: outreachId };
+  try {
+    const res = await fetch('/api/outreach/' + action, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + token,
+      },
+      body: JSON.stringify(bodyObj),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+// Focus an existing window or open a new one at the given URL. Used as the
+// deep-link fallback (and the plain "open" path). When `actionMsg` is given and
+// a window is already open, we postMessage the in-app router instead of forcing
+// a navigation — a focused SPA won't re-run its on-load param read, so the
+// message ('OUTREACH_ACTION') is how the already-open app learns to complete.
+function focusOrOpen(url, actionMsg) {
+  return self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+    for (const client of clientList) {
+      if (client.url.includes(self.location.origin) && 'focus' in client) {
+        if (actionMsg) {
+          try { client.postMessage(actionMsg); } catch (e) { /* ignore */ }
+        }
+        return client.focus().then((focused) => {
+          if (focused && 'navigate' in focused && !focused.url.endsWith(url)) {
+            return focused.navigate(url).catch(() => focused);
+          }
+          return focused;
+        });
+      }
+    }
+    if (self.clients.openWindow) {
+      return self.clients.openWindow(url);
+    }
+  });
+}
+
+// Handle notification clicks + inline action responses.
+//   - 'reply' (event.reply carries the typed text) or 'done' → write straight
+//     from the SW via completeFromSW; on miss/non-2xx fall back to the
+//     deep-link so the app finishes it on next open.
+//   - 'open' / no action / 'snap it' → just open the app at the deep-link;
+//     the in-app router auto-completes plain tasks and opens the right surface.
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  const url = event.notification.data?.url || '/';
-  const tag = event.notification.tag || '';
+  const d = event.notification.data || {};
+  const outreachId = d.outreach_id || null;
+  const actionKind = d.action_kind || null;
+  const baseUrl = d.url || '/';
+  const reply = event.reply || ''; // inline-text action payload (where supported)
+  const action = event.action || '';
 
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Focus existing window if available
-      for (const client of clientList) {
-        if (client.url.includes(self.location.origin) && 'focus' in client) {
-          // Tell the app to route to the Handler chat
-          try {
-            client.postMessage({
-              type: 'NOTIFICATION_CLICK',
-              tag,
-              url,
-            });
-          } catch (e) {
-            // postMessage not supported — proceed with focus + navigate
-          }
-          return client.focus().then((focused) => {
-            // Navigate the focused client if it's not already on the target URL
-            if (focused && 'navigate' in focused && !focused.url.endsWith(url)) {
-              return focused.navigate(url).catch(() => focused);
+  // No outreach context → legacy behaviour: just open the target URL.
+  if (!outreachId) {
+    event.waitUntil(focusOrOpen(baseUrl));
+    return;
+  }
+
+  const deepLink = (extraReply) => {
+    let u = '/?complete_outreach=' + encodeURIComponent(outreachId);
+    if (actionKind) u += '&ak=' + encodeURIComponent(actionKind);
+    if (extraReply) u += '&reply=' + encodeURIComponent(extraReply);
+    return u;
+  };
+
+  const actionMsg = {
+    type: 'OUTREACH_ACTION',
+    outreach_id: outreachId,
+    action_kind: actionKind,
+    reply_text: reply || null,
+  };
+
+  if (action === 'reply' || action === 'done') {
+    // A confession/photo task must NOT be marked done without real content. An
+    // empty inline 'Reply' (blank submit, or a platform that fires action:'reply'
+    // with no text) would otherwise fall through to /complete and record an
+    // answer that was never given — compliance that didn't happen. Open the app
+    // so she actually writes/snaps it. ('done' is only ever offered on plain
+    // tasks, which legitimately complete with no text.)
+    if (action === 'reply' && (reply || '').trim().length === 0 &&
+        (actionKind === 'confession' || actionKind === 'photo')) {
+      event.waitUntil(focusOrOpen(deepLink(''), actionMsg));
+      return;
+    }
+    event.waitUntil(
+      completeFromSW(outreachId, { reply_text: reply }).then((ok) => {
+        if (ok) {
+          // Done from the lock screen. If a window is already open, message it
+          // so it refreshes (no re-submit — the router dedups), but don't force
+          // the app open over a successful background write.
+          return self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+            for (const client of list) {
+              if (client.url.includes(self.location.origin)) {
+                try { client.postMessage(actionMsg); } catch (e) { /* ignore */ }
+              }
             }
-            return focused;
+            return undefined;
           });
         }
-      }
-      // Open new window if no existing window
-      if (self.clients.openWindow) {
-        return self.clients.openWindow(url);
-      }
-    })
-  );
+        // Token missing/expired or write failed → open the app and let the
+        // in-app router complete it with the live session (deep-link + message).
+        return focusOrOpen(deepLink(reply), actionMsg);
+      })
+    );
+    return;
+  }
+
+  // Photo tasks ("Snap it") must NOT auto-complete — the user has to actually
+  // take the photo. Just open the app (the photo-responder surface self-gates
+  // on its own pending row); no complete deep-link, no completing message.
+  if (actionKind === 'photo') {
+    event.waitUntil(focusOrOpen(baseUrl));
+    return;
+  }
+
+  // 'open' / plain body tap → open the app at the deep-link. An already-open
+  // window gets the message so it completes without a reload. The in-app
+  // router still skips photo/confession kinds; plain tasks complete on open.
+  event.waitUntil(focusOrOpen(deepLink(''), actionMsg));
 });

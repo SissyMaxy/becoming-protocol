@@ -31,6 +31,7 @@
  */
 
 import { supabase } from '../supabase';
+import { cacheAccessTokenForSW } from './sw-auth';
 
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
 
@@ -238,6 +239,14 @@ export async function ensureFreshPushSubscription(
     last_used_at: new Date().toISOString(),
   }, { onConflict: 'user_id,endpoint' });
   if (error) return { ok: false, code: 'store_failed', detail: error.message };
+
+  // Hand the service worker a fresh access token so notification ACTIONS
+  // ("Reply" / "Mark done" / "Snap it") can authenticate their POST from
+  // inside notificationclick, which can't read the localStorage session.
+  // Fire-and-forget — a failed cache only falls the SW back to its deep-link
+  // path, never blocks the subscription result. (startSwAuthSync at app root
+  // keeps it fresh on login + token refresh; this covers the subscribe path.)
+  void cacheAccessTokenForSW();
 
   return { ok: true, endpoint: sub.endpoint, recovered };
 }
