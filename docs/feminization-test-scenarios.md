@@ -10,25 +10,21 @@ Each scenario has:
 
 ---
 
-## 1. Voice Gate (App Open Lock)
+## 1. Voice Gate (App Open Lock) — REMOVED 2026-06-21
 
-### Scenario 1.1: Fresh app open requires voice mantra
-- **Setup:** Clear `localStorage.voice_gate_passed_<today>`. Reload app.
-- **Action:** Open app.
-- **Expected:** Full-screen VoiceGate appears with random mantra. Cannot dismiss.
-- **Verify:** Click cannot bypass. Refresh restores gate. URL navigation blocked.
+> **DOC DRIFT FIX (2026-06-21):** The full-screen app-open entry-gate chain
+> (VoiceGate → CompulsoryConfessionGate → MorningMantraGate) was removed on
+> 2026-06-21. The app no longer shows a blocking gate on open — it opens
+> directly to the Focus surface. The scenarios below described the old
+> blocking behavior and no longer apply. Voice-mantra practice now surfaces
+> as a Focus-surface task, not an app-open lock.
+>
+> Voice-mantra / pitch-threshold logic (`voice_practice_log`,
+> `voice_pitch_samples`, ≥60% word match + pitch threshold) still exists, but
+> is exercised through the in-app Focus task rather than a gate on open.
 
-### Scenario 1.2: Voice match + pitch threshold passes gate
-- **Setup:** Voice gate visible.
-- **Action:** Click "Speak the mantra", read it aloud at normal pitch.
-- **Expected:** Speech recognition transcribes, pitch detection runs. If ≥60% word match AND avg pitch ≥140Hz → gate clears, app loads.
-- **Verify:** Check `voice_practice_log` and `voice_pitch_samples` for new row with today's date and your avg pitch.
-
-### Scenario 1.3: Low pitch fails gate
-- **Setup:** Voice gate visible.
-- **Action:** Speak the mantra in deep masculine voice.
-- **Expected:** Error message shows match% and pitch. Gate stays.
-- **Verify:** No voice_practice_log row inserted, gate persists.
+_(Former blocking-gate scenarios 1.1–1.3 removed — entry-gate behavior no
+longer exists.)_
 
 ---
 

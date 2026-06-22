@@ -25,6 +25,10 @@ interface GeneratorSpec {
   expected_cadence_minutes: number;
   output_table?: string;
   conditional?: boolean;
+  // edge_function generators are driven by a Deno edge function + pg_cron, not
+  // a SQL _eval function, so the check_function_exists RPC doesn't apply —
+  // freshness is judged purely on output_table rows within the cadence window.
+  edge_function?: boolean;
 }
 
 const GENERATORS: GeneratorSpec[] = [
@@ -37,16 +41,26 @@ const GENERATORS: GeneratorSpec[] = [
   { name: 'pavlovian', function_name: 'pavlovian_eval', expected_cadence_minutes: 15, output_table: 'pavlovian_events', conditional: true },
   { name: 'warmup_tier', function_name: 'warmup_tier_eval', expected_cadence_minutes: 60, conditional: true },
   { name: 'focus_picker', function_name: 'focus_picker_eval', expected_cadence_minutes: 1440 },
+  // Evening confession → next-day prescriptions. Dead 2026-06-21 (only caller,
+  // EveningConfessionGate, was deleted); revived by the nightly
+  // evening-prescribe-dispatch edge fn + pg_cron (mig 616, 21:30 daily) which
+  // feeds today's confession transcript to evening-confession-prescribe.
+  // Conditional: only produces rows on days the user actually confessed.
+  { name: 'evening_confession_prescribe', function_name: 'evening-confession-prescribe', expected_cadence_minutes: 1440, output_table: 'feminization_prescriptions', edge_function: true, conditional: true },
 ];
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
 async function checkGenerator(g: GeneratorSpec): Promise<CheckResult[]> {
   const results: CheckResult[] = [];
-  const { data: fnExists, error: fnErr } = await supabase.rpc('check_function_exists', { p_function_name: g.function_name }).maybeSingle();
-  if (fnErr || !fnExists) {
-    results.push({ component: g.name, severity: 'error', event_kind: 'function_missing', message: `Function ${g.function_name} missing`, context_data: { function_name: g.function_name } });
-    return results;
+  // Edge-function generators have no SQL _eval to probe — skip the RPC and
+  // judge freshness on output rows only.
+  if (!g.edge_function) {
+    const { data: fnExists, error: fnErr } = await supabase.rpc('check_function_exists', { p_function_name: g.function_name }).maybeSingle();
+    if (fnErr || !fnExists) {
+      results.push({ component: g.name, severity: 'error', event_kind: 'function_missing', message: `Function ${g.function_name} missing`, context_data: { function_name: g.function_name } });
+      return results;
+    }
   }
   if (g.output_table) {
     const windowHours = Math.ceil(g.expected_cadence_minutes / 60) * 2;

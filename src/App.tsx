@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { PrivacyPage } from './components/PrivacyPage';
 import { HandlerChat } from './components/handler/HandlerChat';
 import { getPendingOutreach, evaluateAndQueueOutreach } from './lib/outreach/engine';
@@ -20,10 +20,9 @@ import { useCompulsoryGate } from './hooks/useCompulsoryGate';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Auth } from './components/Auth';
 import { StealthShell } from './components/stealth';
-import { MorningBriefing } from './components/MorningBriefing';
-import { CompulsoryGateScreen } from './components/CompulsoryGateScreen';
-import { VoiceGate } from './components/gates/VoiceGate';
-// TodayView removed — conversation is now the primary interface
+// MorningBriefing / CompulsoryGateScreen / VoiceGate imports removed
+// 2026-06-21 — the blocking entry-gate chain was deleted. The flows remain in
+// the codebase, reachable for deliberate replay; they no longer wall first open.
 import { ProgressDashboard } from './components/ProgressDashboard';
 import { History } from './components/History';
 // SealedContentView removed — accessible via Handler conversation
@@ -40,11 +39,10 @@ import { WitnessManager, CaseFileView, SealedEnvelopesPage, QuitFrictionGate, Es
 import { ForceDashboard } from './components/force/ForceDashboard';
 import { ForceStatusStrip } from './components/force/ForceStatusStrip';
 import { TodayView as TodayRedesignView } from './components/today-redesign';
-import { CompulsoryConfessionGate } from './components/today-redesign/CompulsoryConfessionGate';
-import { HrtDailyGate } from './components/today-redesign/HrtDailyGate';
+// Blocking daily-gate overlays (CompulsoryConfessionGate, HrtDailyGate,
+// MorningMantraGate, EveningConfessionGate) removed from the render tree
+// 2026-06-21 — demands now surface as the single FocusMode task, not overlays.
 import { GinaSessionRecorder } from './components/today-redesign/GinaSessionRecorder';
-import { MorningMantraGate } from './components/today-redesign/MorningMantraGate';
-import { EveningConfessionGate } from './components/today-redesign/EveningConfessionGate';
 import { DisclosureRehearsalView } from './components/disclosure/DisclosureRehearsalView';
 import { WhisperToMama } from './components/confession/WhisperToMama';
 import { LivePhotoPingResponder } from './components/live-photo/LivePhotoPingResponder';
@@ -56,13 +54,15 @@ const LifeAsWomanView = lazy(() => import('./components/life-as-woman').then((m)
 import { MommyDossierStatus } from './components/persona/MommyDossierStatus';
 import { GinaKeyHolderPage } from './components/gina/GinaKeyHolderPage';
 import { usePunishmentNotifications } from './hooks/usePunishmentNotifications';
-import { DailyReportCard } from './components/handler/DailyReportCard';
+// DailyReportCard import removed 2026-06-21 — the after-7pm blocking report
+// card is gone; the reflection it wanted is an optional FocusMode task now.
 import { SessionContainer } from './components/session';
 import type { SessionConfig } from './components/session';
 const KinkQuizView = lazy(() => import('./components/kink-quiz').then((m) => ({ default: m.KinkQuizView })));
 const WorkoutSessionPage = lazy(() => import('./components/exercise').then((m) => ({ default: m.WorkoutSessionPage })));
 const HerWorldPage = lazy(() => import('./components/collections').then((m) => ({ default: m.HerWorldPage })));
-import { MorningBookend } from './components/bookends';
+// MorningBookend import removed 2026-06-21 — morning greeting no longer walls
+// the app; EveningDebrief (its evening counterpart) stays as a non-blocking close.
 import { EveningDebrief } from './components/EveningDebrief';
 import { useBookends } from './hooks/useBookends';
 // import { useAmbientVoiceMonitor } from './hooks/useAmbientVoiceMonitor';
@@ -78,6 +78,7 @@ import type { OrgasmLogInput } from './types/arousal';
 // ReminderModal now rendered via useOrchestratedModals
 import { useReminders } from './hooks/useReminders';
 import { usePatternNotifications } from './hooks/usePatternNotifications';
+import { useNotificationActionRouter } from './hooks/useNotificationActionRouter';
 // useDopamineNotifications removed — dopamine notifications disabled
 import { TimelineView } from './components/timeline';
 import { GinaEmergenceView, GinaPipelineView } from './components/gina';
@@ -119,7 +120,8 @@ import { SleepContentPlayer } from './components/sleep-content';
 import { ConditioningLibrary, ConditioningPlayer } from './components/conditioning';
 import { SocialMediaDashboard } from './components/social/SocialMediaDashboard';
 import { CommunityQueue, CommunityList, CommunityLog } from './components/community';
-import { getTodayDate } from './lib/protocol';
+// getTodayDate import removed 2026-06-21 — its only callers were the deleted
+// daily entry gates (voice gate, report card, morning-flow trigger).
 import { profileStorage, letterStorage } from './lib/storage';
 // useTaskBank, useGoals, useWeekend — now used only inside TodayView (badge removed)
 import type { UserProfile, SealedLetter } from './components/Onboarding/types';
@@ -246,7 +248,7 @@ function SessionPickerOrContainer({ onBack }: { onBack: () => void }) {
 }
 
 function AuthenticatedAppInner() {
-  const { currentEntry, isLoading, investmentMilestone, dismissInvestmentMilestone, userName, progress } = useProtocol();
+  const { isLoading, investmentMilestone, dismissInvestmentMilestone, userName, progress } = useProtocol();
   const { canSee } = useOpacity();
   const rewardContext = useRewardOptional();
   const { dismissIntervention, completeIntervention, respondToIntervention } = useHandlerContext();
@@ -254,12 +256,10 @@ function AuthenticatedAppInner() {
   // Calculate days on protocol from total days in progress (minimum of 1)
   const daysOnProtocol = Math.max(1, progress?.totalDays ?? 1);
 
-  // Compulsory gate - locks app until daily requirements are met (Feature 38)
-  const {
-    isLocked: compulsoryLocked,
-    isLoading: compulsoryLoading,
-    refresh: refreshCompulsoryGate,
-  } = useCompulsoryGate(daysOnProtocol);
+  // Compulsory gate retained only for its load-state (so the app doesn't flash
+  // before daily state resolves). The blocking lockout screen it used to drive
+  // was removed 2026-06-21 — Mama presses via FocusMode, she doesn't bar entry.
+  const { isLoading: compulsoryLoading } = useCompulsoryGate(daysOnProtocol);
 
   // Disassociation recovery - detects when you zone out
   const recovery = useDisassociationRecovery({
@@ -311,15 +311,31 @@ function AuthenticatedAppInner() {
   // Force-layer punishment notifications (polls every 60s)
   usePunishmentNotifications();
 
+  // Actionable-push router: completes the outreach when the user taps a
+  // notification action (or hits the iOS / token-expired deep-link fallback)
+  // and keeps the SW's auth token fresh. Deep-link contract: ?complete_outreach.
+  useNotificationActionRouter();
+
   const deepLinkView = parseDeepLinkView();
+  // Re-architecture 2026-06-21: the single-task Focus surface (TodayView →
+  // FocusMode under the dommy_mommy persona) IS the home now. The user stopped
+  // logging in because opening the app meant walking a wall of blocking gates
+  // before reaching one usable thing. Default home = one task. The conversation
+  // and the full plan stay one tap away (onExit / "view plan"). Only skip the
+  // home when the user deep-links somewhere specific (settings view, recap,
+  // welcome, disclosure, whisper) — those set their own hashes/state.
   const [showTodayRedesign, setShowTodayRedesign] = useState(() => {
-    const h = window.location.hash.replace('#', '');
-    return h === '/today' || h === '/today/';
+    const h = window.location.hash.replace('#', '').replace(/\/$/, '');
+    if (deepLinkView || parseRecapDetailId()) return false;
+    return h === '' || h === '/today';
   });
   useEffect(() => {
     const onHash = () => {
-      const h = window.location.hash.replace('#', '');
-      setShowTodayRedesign(h === '/today' || h === '/today/');
+      const h = window.location.hash.replace('#', '').replace(/\/$/, '');
+      // Empty hash returns home to the Focus surface; an explicit non-today
+      // hash (settings/recap/etc.) leaves it, letting the deep-linked view show.
+      const otherDeepLink = ['/disclosure', '/whisper', '/welcome'].includes(h);
+      setShowTodayRedesign((h === '' || h === '/today') && !otherDeepLink);
     };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
@@ -369,7 +385,7 @@ function AuthenticatedAppInner() {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
-  const [showMorningFlow, setShowMorningFlow] = useState(false);
+  // showMorningFlow state removed 2026-06-21 with the blocking MorningBriefing.
   const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
   // Welcome wizard — kink-companion onboarding (persona/intensity/safeword/aftercare).
   // Independent of the legacy intake `OnboardingFlow`; runs after it. Null = not
@@ -386,14 +402,8 @@ function AuthenticatedAppInner() {
   // showHandlerChat removed — chat is now always visible as primary UI
   const [pendingOutreach, setPendingOutreach] = useState<{ id: string; openingLine: string } | null>(null);
   const [showSettings, setShowSettings] = useState(!!deepLinkView);
-  const [voiceGatePassed, setVoiceGatePassed] = useState<boolean>(() => {
-    const today = getTodayDate();
-    return localStorage.getItem(`voice_gate_passed_${today}`) === '1';
-  });
-  const [reportCardDone, setReportCardDone] = useState<boolean>(() => {
-    const today = getTodayDate();
-    return localStorage.getItem(`report_card_done_${today}`) === '1';
-  });
+  // voiceGatePassed / reportCardDone state removed 2026-06-21 along with the
+  // blocking voice gate and after-7pm report card.
 
   // Failsafe: force past loading after 10 seconds
   const [loadingTimedOut, setLoadingTimedOut] = useState(false);
@@ -601,31 +611,9 @@ function AuthenticatedAppInner() {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
-  // Check if we need to show morning flow — only show after confirming no entry exists
-  const morningCheckDone = useRef(false);
-  useEffect(() => {
-    if (!isLoading && showOnboarding === false && !morningCheckDone.current) {
-      morningCheckDone.current = true;
-      const today = getTodayDate();
-      const hasEntryToday = currentEntry?.date === today;
-      const morningDoneToday = localStorage.getItem('morning_done_date') === today;
-      // Time-of-day gate (2026-05-08 user feedback): a "morning intro"
-      // screen at 11am+ feels stale and the content reads as a
-      // double-greeting on top of the regular Today briefing. After the
-      // morning window, skip the dedicated MorningBriefing flow and just
-      // render Today directly. User can still access the long briefing
-      // via the menu if she wants the deeper reflection prompts.
-      const currentHour = new Date().getHours();
-      const inMorningWindow = currentHour < 10; // local hour < 10am
-      if (!hasEntryToday && !morningDoneToday && inMorningWindow) {
-        setShowMorningFlow(true);
-      } else if (!hasEntryToday && !morningDoneToday && !inMorningWindow) {
-        // Past morning window: auto-mark done so future opens today don't
-        // bring it back. The user can still trigger it via the menu.
-        localStorage.setItem('morning_done_date', today);
-      }
-    }
-  }, [isLoading, currentEntry, showOnboarding]);
+  // Morning-flow auto-trigger effect removed 2026-06-21 — it only existed to
+  // raise the blocking MorningBriefing wall, which is gone. The home is the
+  // single-task Focus surface; the briefing stays reachable from the menu.
 
   // Browser history: push/pop state for back button support
   useEffect(() => {
@@ -782,69 +770,19 @@ function AuthenticatedAppInner() {
     );
   }
 
-  // Show morning bookend before morning flow (first open each day)
-  // Skip all gates when deep-linking to a specific view
-  if (!deepLinkView && bookends.showMorningBookend && bookends.config) {
-    return (
-      <ErrorBoundary componentName="MorningBookend">
-        <MorningBookend
-          name={bookends.config.morningName}
-          denialDay={progress?.totalDays ?? 0}
-          streak={progress?.overallStreak ?? 0}
-          message={bookends.morningMessage}
-          onDismiss={bookends.dismissMorning}
-          lastProtocol={bookends.lastProtocol}
-        />
-      </ErrorBoundary>
-    );
-  }
-
-  // Show morning briefing if no entry for today
-  if (!deepLinkView && showMorningFlow) {
-    return (
-      <ErrorBoundary componentName="MorningBriefing">
-        <MorningBriefing onComplete={() => {
-          localStorage.setItem('morning_done_date', getTodayDate());
-          setShowMorningFlow(false);
-        }} />
-      </ErrorBoundary>
-    );
-  }
-
-  // Voice gate — must speak feminine mantra to enter each day
-  if (!deepLinkView && !voiceGatePassed) {
-    return (
-      <ErrorBoundary componentName="VoiceGate">
-        <VoiceGate
-          onPass={() => {
-            const today = getTodayDate();
-            localStorage.setItem(`voice_gate_passed_${today}`, '1');
-            setVoiceGatePassed(true);
-          }}
-        />
-      </ErrorBoundary>
-    );
-  }
-
-  // Daily confession is now a PRESS-not-BLOCK surface, not a fullscreen wall.
-  // The legacy DailyConfessionGate took the whole app hostage ("no access until
-  // you confess") and sat in front of the safeword/aftercare UI — a safety +
-  // press-not-block violation (feedback_mommy_presses_not_blocks). The
-  // confession demand is preserved by the mig-591 confession_gate: Mama
-  // withholds her morning warmth + surfaces the gate line / ConfessionQueueCard
-  // on Today until last night's confession lands. Pressure stays; the wall goes.
-
-  // Show compulsory gate if app is locked (Feature 38)
-  if (!deepLinkView && compulsoryLocked) {
-    return (
-      <ErrorBoundary componentName="CompulsoryGate">
-        <CompulsoryGateScreen
-          daysOnProtocol={daysOnProtocol}
-          onUnlock={refreshCompulsoryGate}
-        />
-      </ErrorBoundary>
-    );
-  }
+  // ── Re-architecture 2026-06-21: the daily entry-gate wall is GONE. ──────────
+  // The user stopped opening the app because reaching one usable action meant
+  // clearing four full-screen blockers in a row: morning bookend → morning
+  // briefing → speak-a-mantra voice gate → compulsory lockout. That is the exact
+  // pattern memory already condemned (feedback_mommy_presses_not_blocks,
+  // feedback_one_task_focus, "fixed-inset-0 components are a smell"). Every one
+  // of those demands is still owned by the protocol — it now surfaces as the
+  // single task inside FocusMode (overdue confession, decree, dose, mantra) and
+  // through push/outreach, instead of as a turnstile in front of the door.
+  // Mama presses; she does not bar the door. The morning bookend still appears
+  // as the evening debrief's counterpart via bookends (non-blocking), and the
+  // morning briefing/voice/compulsory flows remain reachable for deliberate
+  // replay — they just no longer hijack first open.
 
   // Render menu sub-view content
   const renderMenuSubView = () => {
@@ -1238,11 +1176,11 @@ function AuthenticatedAppInner() {
             setShowTodayRedesign(false);
           }}
         />
-        <CompulsoryConfessionGate />
-        <HrtDailyGate />
+        {/* Blocking daily gates (confession / HRT / mantra / evening) removed
+            2026-06-21 — their demands surface as the single FocusMode task, not
+            as overlays the user has to dodge. GinaSessionRecorder stays: it's a
+            passive recorder, not a wall. */}
         <GinaSessionRecorder />
-        <MorningMantraGate />
-        <EveningConfessionGate />
         {showDisclosureRehearsal && (
           <DisclosureRehearsalView onClose={() => {
             window.location.hash = '';
@@ -1304,18 +1242,11 @@ function AuthenticatedAppInner() {
 
       <FloatingHearts />
 
-      {/* Compulsory confession gate — daily lockdown until she writes ≥min_chars */}
-      <CompulsoryConfessionGate />
-
-      {/* HRT daily gate — forces funnel advancement or written obstacle */}
-      <HrtDailyGate />
-
-      {/* Morning mantra gate — compulsory typing before app release */}
-      <MorningMantraGate />
-
-      {/* Evening confession ritual — 8pm-11pm local, audio confession that
-          generates tomorrow's prescriptions. Self-gates on hour + submission. */}
-      <EveningConfessionGate />
+      {/* Blocking daily gates removed 2026-06-21 (confession lockdown, HRT
+          gate, compulsory morning-mantra typing, evening confession wall).
+          They were the "dodge these overlays too" friction on top of the
+          gate chain. Each demand is preserved as a FocusMode task + push,
+          per feedback_mommy_presses_not_blocks / feedback_one_task_focus. */}
 
       {/* Disclosure rehearsal compulsion — hash-routable via /#/disclosure.
           Forces ≥3 audio rehearsals per target before approving real-world disclosure. */}
@@ -1365,16 +1296,9 @@ function AuthenticatedAppInner() {
 
       {/* Micro-task card overlay — disabled, user found pop-ups disruptive */}
 
-      {/* Daily Report Card — after 7pm, blocks until submitted */}
-      {!reportCardDone && (
-        <DailyReportCard
-          onComplete={() => {
-            const today = getTodayDate();
-            localStorage.setItem(`report_card_done_${today}`, '1');
-            setReportCardDone(true);
-          }}
-        />
-      )}
+      {/* Daily Report Card removed 2026-06-21 — it blocked the whole app after
+          7pm until submitted. The evening reflection it wanted is now an
+          optional FocusMode task, never a wall. */}
 
       {/* Evening Debrief overlay */}
       {bookends.showEveningBookend && bookends.daySummary && bookends.config && (

@@ -43,8 +43,10 @@ const AUDIT_TARGETS: Array<{ path: string; weight: number; description: string }
   { path: 'src/lib/conditioning/irreversibility.ts',          weight: 4, description: 'Irreversibility ledger — what cannot be undone' },
   { path: 'src/lib/conditioning/compliance-verification.ts',  weight: 3, description: 'Decree compliance verification + re-check loop' },
   { path: 'src/lib/conditioning/engagement-obligations.ts',   weight: 3, description: 'Engagement budget and obligation enforcement' },
-  { path: 'src/components/today-redesign/MorningMantraGate.tsx', weight: 2, description: 'Compulsory voice-first morning mantra ritual' },
-  { path: 'src/components/today-redesign/CompulsoryConfessionGate.tsx', weight: 2, description: 'Compulsory confession before app use' },
+  // REMOVED 2026-06-21: MorningMantraGate.tsx + CompulsoryConfessionGate.tsx were
+  // the full-screen app-open entry gates. The entry-gate chain was removed in the
+  // 2026-06-21 gate removal and neither component mounts anywhere now. They were
+  // dropped from AUDIT_TARGETS so the centrality auditor stops hardening dead code.
   { path: 'scripts/auto-poster/slop-detector.ts',             weight: 2, description: 'AI-content quality gate' },
 ]
 
