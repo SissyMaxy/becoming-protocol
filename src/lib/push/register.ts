@@ -80,6 +80,16 @@ export function urlBase64ToUint8Array(base64String?: string): Uint8Array {
   }
   const arr = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  // pushManager.subscribe() requires a 65-byte uncompressed P-256 key. A
+  // wrong-length value — a 32-byte private key pasted by mistake, a truncated
+  // paste, or a different key format — passes the char-length budget above but
+  // makes subscribe() throw "Registration failed - push service error", which
+  // maps to the misleading push_service_error / "tap once more" loop. Catch it
+  // here so the UI shows the precise vapid_key_invalid copy (a config fault,
+  // not the user's phone) instead of looping forever.
+  if (arr.length !== 65) {
+    throw new Error(`VAPID_PUBLIC_KEY_BAD_BYTELEN:${arr.length}`);
+  }
   return arr;
 }
 

@@ -20,14 +20,15 @@ import {
   type PushRegisterErrorCode,
 } from '../../lib/push/register';
 
-// A structurally-valid 87-char base64url string (within the 40–100 budget).
-const VALID_KEY = 'A'.repeat(87);
+// A real 65-byte uncompressed P-256 VAPID public key (the project's own,
+// from push-vapid-check). 87 base64url chars → decodes to exactly 65 bytes.
+const VALID_KEY = 'BIl9a9l2NmP7YvEZ-q95qYdd7MMuyELkKXXmqRenb_HRFN128nTU5fygp_4TeXTzIuFc4xZdBBs1YrQ-3QLik4Q';
 
 describe('urlBase64ToUint8Array', () => {
-  it('decodes a structurally-valid key to bytes', () => {
+  it('decodes a real 65-byte key', () => {
     const bytes = urlBase64ToUint8Array(VALID_KEY);
     expect(bytes).toBeInstanceOf(Uint8Array);
-    expect(bytes.length).toBeGreaterThan(60);
+    expect(bytes.length).toBe(65);
   });
 
   it('strips surrounding quotes/whitespace (Vercel paste artifacts)', () => {
@@ -48,6 +49,16 @@ describe('urlBase64ToUint8Array', () => {
 
   it('throws BAD_LENGTH on a too-short key (e.g. a placeholder)', () => {
     expect(() => urlBase64ToUint8Array('changeme')).toThrow(/VAPID_PUBLIC_KEY_BAD_LENGTH/);
+  });
+
+  it('throws BAD_BYTELEN on a charset-valid key that decodes to the wrong byte count', () => {
+    // Regression for the "tap once more" loop: a 32-byte value (e.g. a private
+    // key pasted into VITE_VAPID_PUBLIC_KEY) passes the 40–100 char budget but
+    // is NOT a 65-byte P-256 key, so pushManager.subscribe() rejects it.
+    const thirtyTwoBytes = 'A'.repeat(43);            // ~32 bytes decoded
+    expect(() => urlBase64ToUint8Array(thirtyTwoBytes)).toThrow(/VAPID_PUBLIC_KEY_BAD_BYTELEN/);
+    const sixtySixBytes = 'A'.repeat(88);             // 66 bytes decoded
+    expect(() => urlBase64ToUint8Array(sixtySixBytes)).toThrow(/VAPID_PUBLIC_KEY_BAD_BYTELEN/);
   });
 });
 
