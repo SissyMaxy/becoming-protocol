@@ -33,11 +33,19 @@ interface GeneratorSpec {
 
 const GENERATORS: GeneratorSpec[] = [
   { name: 'state_paired_delivery', function_name: 'state_paired_delivery_eval', expected_cadence_minutes: 15, conditional: true },
-  { name: 'wardrobe_prescription', function_name: 'wardrobe_prescription_eval', expected_cadence_minutes: 1440, output_table: 'wardrobe_prescriptions' },
+  // wardrobe / gina_disclosure / gina_seed are conditional generators: their
+  // _eval CONTINUEs to zero rows by design on most daily runs (pending-cooldown
+  // 18h–14d, gap_min_days, readiness/arc gates, off-cooldown seed availability).
+  // A 1440-min cadence → 48h freshness window they're quiet in by design, so a
+  // zero-row check is NOT a fault. Without conditional:true each 6h health check
+  // emitted a `warning` (= a supervisor nudge); 4/day × 7d ≈ 28 false nudges/wk,
+  // which the nudge analyzer then mislabeled scheduling_conflict and filed
+  // re-stagger wishes for. Marking them conditional drops these to info/quiet.
+  { name: 'wardrobe_prescription', function_name: 'wardrobe_prescription_eval', expected_cadence_minutes: 1440, output_table: 'wardrobe_prescriptions', conditional: true },
   { name: 'cruising_lead_feminization', function_name: 'cruising_lead_feminization_eval', expected_cadence_minutes: 1440 },
-  { name: 'gina_disclosure', function_name: 'gina_disclosure_eval', expected_cadence_minutes: 1440, output_table: 'gina_disclosure_events' },
-  { name: 'gina_seed', function_name: 'gina_seed_eval', expected_cadence_minutes: 1440, output_table: 'gina_seed_plantings' },
-  { name: 'cock_conditioning', function_name: 'cock_conditioning_eval', expected_cadence_minutes: 720, output_table: 'cock_conditioning_events' },
+  { name: 'gina_disclosure', function_name: 'gina_disclosure_eval', expected_cadence_minutes: 1440, output_table: 'gina_disclosure_events', conditional: true },
+  { name: 'gina_seed', function_name: 'gina_seed_eval', expected_cadence_minutes: 1440, output_table: 'gina_seed_plantings', conditional: true },
+  { name: 'cock_conditioning', function_name: 'cock_conditioning_eval', expected_cadence_minutes: 720, output_table: 'cock_conditioning_events', conditional: true },
   { name: 'pavlovian', function_name: 'pavlovian_eval', expected_cadence_minutes: 15, output_table: 'pavlovian_events', conditional: true },
   { name: 'warmup_tier', function_name: 'warmup_tier_eval', expected_cadence_minutes: 60, conditional: true },
   { name: 'focus_picker', function_name: 'focus_picker_eval', expected_cadence_minutes: 1440 },
