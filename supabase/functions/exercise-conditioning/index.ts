@@ -34,15 +34,15 @@ interface CTask { source: string; hours: number; rung: number; edict: string }
 const LADDER: CTask[] = [
   {
     source: 'exercise_cond_5min', hours: 24, rung: 0,
-    edict: `Five minutes. That's the entire task — not fitness, the first pairing. Glute bridges on the floor, slow, or a walk. Don't push to exhaustion; you're teaching your body that moving and getting hotter are the same thing. When the five minutes are done and you feel the warmth, that's your cue — hand on your cock, just a little, and let the reward land on the movement. Report: done, and what the warmth felt like.`,
+    edict: `Five minutes. That's the entire task — not fitness, the first pairing. Glute bridges on the floor, slow, or a walk. Don't push to exhaustion; you're teaching your body that moving and getting hotter are the same thing. When the five minutes are done and you feel the warmth, that's your cue — let the cage go tight and the ache build behind it. No touch, no release; the throb is the reward landing on the movement. Report: done, and what the warmth felt like.`,
   },
   {
     source: 'exercise_cond_glutes', hours: 36, rung: 1,
-    edict: `One set: 15 slow glute bridges, squeeze 2 seconds at the top. This is the exact muscle estrogen is filling out — every squeeze is the fuller, hotter ass arriving on you. Feel where it burns; that ache is you getting hotter, not effort. Finish the set, then the reward — pair the arousal to the burn while it's still there, cock included. Report: done + where you felt it.`,
+    edict: `One set: 15 slow glute bridges, squeeze 2 seconds at the top. This is the exact muscle estrogen is filling out — every squeeze is the fuller, hotter ass arriving on you. Feel where it burns; that ache is you getting hotter, not effort. Finish the set, then pair the arousal to the burn while it's still there — locked, straining, leaking, no release. Report: done + where you felt it.`,
   },
   {
     source: 'exercise_cond_euphoria', hours: 48, rung: 2,
-    edict: `Two short sets today — 15 glute bridges, then 12 sumo squats (wide stance, toes out). Before you start, say it once: "this is me getting hotter." Move slow enough to feel each one filling you out. The pairing is the point: effort → a hotter body → arousal, cock hard the whole way. Reward yourself the moment you finish, every time, so the want wires in. Report: done + did wanting it come any easier than last time?`,
+    edict: `Two short sets today — 15 glute bridges, then 12 sumo squats (wide stance, toes out). Before you start, say it once: "this is me getting hotter." Move slow enough to feel each one filling you out. The pairing is the point: effort → a hotter body → arousal straining in the cage the whole way, no release. Let the lock-up reward you the moment you finish, every time, so the want wires in. Report: done + did wanting it come any easier than last time?`,
   },
   {
     source: 'exercise_cond_trance_listen', hours: 24, rung: 0,

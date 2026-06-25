@@ -21,9 +21,9 @@ const corsHeaders = {
 }
 
 const REWARD_PROMPTS = [
-  `You just moved for yourself. Now the other half of the pairing: hand on your cock while the burn is still in the muscle, and let your body file it — effort, then hotter, then this. Two minutes is enough.`,
-  `That ache you're feeling is your ass and hips filling out. Reward it — cock in hand, slow, and let the pleasure land on the work so your body learns to crave the work.`,
-  `Done. Now pair it: arousal on top of the warmth, cock hard, every time, until your body stops asking why and just wants to move. Take the reward you earned.`,
+  `You just moved for yourself. Now the other half of the pairing: let the cage pull tight while the burn is still in the muscle — no touch, no release — and let your body file it: effort, then hotter, then the ache. Two minutes of just feeling it.`,
+  `That ache you're feeling is your ass and hips filling out. Reward it the only way you're allowed — the throb behind the cage, the leak, no hands — and let it land on the work so your body learns to crave the work.`,
+  `Done. Now pair it: arousal on top of the warmth, locked and leaking, every time, until your body stops asking why and just wants to move. Take the reward you earned — the want, not the release.`,
 ]
 
 Deno.serve(async (req: Request) => {
