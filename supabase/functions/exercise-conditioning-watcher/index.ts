@@ -42,6 +42,7 @@ Deno.serve(async (req: Request) => {
   const rows = (done ?? []) as Array<{ id: string; user_id: string; trigger_source: string }>
   let rewarded = 0, logged = 0
   const acted: string[] = []
+  const errors: string[] = []   // never swallow constraint violations (enum-guard lesson)
 
   for (const d of rows) {
     const stamp = `decree:${d.id}`
@@ -51,22 +52,24 @@ Deno.serve(async (req: Request) => {
     if (prior) continue
 
     // Log the session → rung self-escalates off the real count.
+    // session_type CHECK = ('full','mvw','gym'); conditioning starts are mvw.
     const { error: sErr } = await supabase.from('exercise_sessions').insert({
-      user_id: d.user_id, session_type: 'conditioning', duration_minutes: 8,
+      user_id: d.user_id, session_type: 'mvw', duration_minutes: 8,
       notes: `${stamp} auto-logged by exercise-conditioning-watcher (${d.trigger_source})`,
     })
-    if (!sErr) logged++
+    if (sErr) errors.push(`session:${sErr.message.slice(0, 60)}`); else logged++
 
-    // Fire the paired arousal reward, tight to the effort.
+    // Fire the paired arousal reward, tight to the effort. category CHECK has
+    // no generic 'reward'; edge_then_stop is the arousal-touch pairing mechanic.
     const prompt = REWARD_PROMPTS[rows.indexOf(d) % REWARD_PROMPTS.length]
     const { error: rErr } = await supabase.from('arousal_touch_tasks').insert({
-      user_id: d.user_id, prompt, category: 'reward', generated_by: 'exercise_conditioning',
+      user_id: d.user_id, prompt, category: 'edge_then_stop', generated_by: 'exercise_conditioning',
       expires_at: new Date(Date.now() + 12 * 3600_000).toISOString(),
     })
-    if (!rErr) rewarded++
+    if (rErr) errors.push(`reward:${rErr.message.slice(0, 60)}`); else rewarded++
     acted.push(d.trigger_source)
   }
 
-  return new Response(JSON.stringify({ ok: true, fulfilled_seen: rows.length, logged, rewarded, acted }),
+  return new Response(JSON.stringify({ ok: errors.length === 0, fulfilled_seen: rows.length, logged, rewarded, acted, errors }),
     { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 })
