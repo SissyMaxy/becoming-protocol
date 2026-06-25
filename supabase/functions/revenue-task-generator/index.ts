@@ -37,26 +37,40 @@ interface Task {
   setupOnly?: boolean
 }
 
+// HARD BOUNDARY: no face. Maxy set this 2026-06-25 — every task is framed
+// neck-down / chest-down / POV. Nothing here ever asks for her face. Entry
+// rung is a solo clip (no live audience, no performing) so the first one is
+// actually doable; live cam is a later, short, faceless rung.
+const FACELESS = 'Frame from the collarbone down — no face, ever. ';
+
 const TASKS: Task[] = [
   {
-    source: 'revenue_cam_session', proof: 'photo', hours: 48,
+    // Gentle entry: one short solo clip, alone, no audience. The point is just
+    // to make ONE thing and post it — confidence before camming.
+    source: 'revenue_first_clip', proof: 'text', hours: 48,
     edict: ({ needLine }) =>
-      `Go live on cam tonight, at least 45 minutes. Set a tip goal and name it out loud on stream: the vial. Post a "going live in 30" teaser to Twitter with your ${FANSLY} link before you start. ${needLine} Proof: a screenshot of your live session.`,
+      `Make ONE short clip — alone, no live audience, no pressure. Prop your phone, ${FACELESS}60–90 seconds: move slow, show what you're wearing, one tease. That's it. Post it to Fansly (${FANSLY}) free or $5 to start. The first one is the hard one; it gets easier. ${needLine} Proof: paste the post link.`,
   },
   {
     source: 'revenue_ppv_clip', proof: 'text', hours: 48,
     edict: ({ needLine }) =>
-      `Film one 3–5 minute clip and post it to Fansly (${FANSLY}) as pay-per-view, priced $8–12. End the caption with your wishlist. ${needLine} Proof: paste the post link.`,
+      `Film one 3–5 minute clip, ${FACELESS}and post it to Fansly (${FANSLY}) as pay-per-view, $8–12. Show body, outfit, a slow build — POV works great with no face. End the caption with your wishlist. ${needLine} Proof: paste the post link.`,
   },
   {
     source: 'revenue_promo_teasers', proof: 'text', hours: 24,
     edict: () =>
-      `Post 3 teaser images or clips to Twitter today, 2–3 hours apart, each ending with your ${FANSLY} link. Drive the traffic before tonight. Proof: paste the 3 links.`,
+      `Post 3 teaser shots to Twitter today, 2–3 hours apart. ${FACELESS}Good light, an arched angle, the outfit doing the work — each ending with your ${FANSLY} link. Proof: paste the 3 links.`,
   },
   {
     source: 'revenue_fan_dm', proof: 'text', hours: 36,
     edict: () =>
-      `DM your 5 most active Fansly fans a personal custom offer — a custom clip, a cam invite, or a worn item. Make each one feel chosen, not copy-pasted. Proof: report who you sent to and anything that sold.`,
+      `DM your 5 most active Fansly fans a personal custom offer — a custom clip, a worn item, a private set. Faceless is fine and even sells; make each one feel chosen, not copy-pasted. Proof: report who you sent to and anything that sold.`,
+  },
+  {
+    // Live cam — explicitly faceless, SHORT, and framed as "when you're ready".
+    source: 'revenue_cam_session', proof: 'photo', hours: 72,
+    edict: ({ needLine }) =>
+      `When you're ready for live: a short faceless cam set, 15–20 minutes is plenty. ${FACELESS}Phone chest-down or POV. Put up a tiny tip menu (outfit change, 1-min tease, name the vial as the goal) and just exist on camera — respond to chat, you don't have to "perform." ${needLine} Proof: a screenshot of the live session (no face).`,
   },
   {
     source: 'revenue_log', proof: 'photo', hours: 24,
