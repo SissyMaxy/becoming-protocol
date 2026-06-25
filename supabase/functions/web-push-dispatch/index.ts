@@ -163,6 +163,18 @@ async function sendPush(
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
+  // ── HARD KILL SWITCH ────────────────────────────────────────────────────
+  // PUSH_KILL_SWITCH truthy → send nothing to any device, ever, regardless of
+  // subscriptions / allowlist / cron. Set by operator request (2026-06-25) to
+  // guarantee web push (the only Chrome-on-work-laptop vector) cannot fire.
+  // Reverse by unsetting the secret + redeploy. The deny-by-default allowlist
+  // (PUSH_TRUSTED_ENDPOINTS) remains the second layer once this is lifted.
+  const kill = (Deno.env.get('PUSH_KILL_SWITCH') ?? '').trim().toLowerCase()
+  if (kill && kill !== '0' && kill !== 'false' && kill !== 'off') {
+    return new Response(JSON.stringify({ ok: true, killed: true, sent: 0, reason: 'PUSH_KILL_SWITCH active' }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+  }
+
   try {
     const vapidPub = Deno.env.get('VAPID_PUBLIC_KEY')
     const vapidPriv = Deno.env.get('VAPID_PRIVATE_KEY')
