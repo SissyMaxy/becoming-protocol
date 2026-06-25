@@ -61,3 +61,13 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{"trigger":"github_cron"}' \
             -m 60 || echo "decree-backlog-throttle failed (non-fatal)"
+      # Closes the exercise pavlovian loop: on completion, auto-fire the arousal
+      # reward + log the session so the conditioning rung self-escalates.
+      - name: exercise-conditioning-watcher
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/exercise-conditioning-watcher" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "exercise-conditioning-watcher failed (non-fatal)"
