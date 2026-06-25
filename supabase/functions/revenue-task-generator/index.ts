@@ -34,7 +34,8 @@ interface Task {
   proof: 'photo' | 'text'
   hours: number
   edict: (ctx: { needLine: string; wishlist: string | null }) => string
-  setupOnly?: boolean
+  setupOnly?: boolean      // skip once wishlist_url is set
+  wardrobeSetup?: boolean  // skip once she owns any wardrobe item
 }
 
 // HARD BOUNDARY: no face. Maxy set this 2026-06-25 — every task is framed
@@ -45,11 +46,24 @@ const FACELESS = 'Frame from the collarbone down — no face, ever. ';
 
 const TASKS: Task[] = [
   {
-    // Gentle entry: one short solo clip, alone, no audience. The point is just
-    // to make ONE thing and post it — confidence before camming.
+    // Costs $0, needs no wardrobe, can start tonight. Build the audience while
+    // anything ordered ships. The boymoder/egg body aesthetic is its own niche.
+    source: 'revenue_presence_build', proof: 'text', hours: 24,
+    edict: () =>
+      `Costs nothing, do it tonight: one faceless teaser that needs no wardrobe at all — ${FACELESS}POV, soft light, the early/boymoder body is its own audience. Post it on Twitter with your ${FANSLY} link to start building the room while the rest ships. Proof: paste the link.`,
+  },
+  {
+    // Prereq acquisition — she owns nothing feminine. One cheap starter kit is
+    // the entire wardrobe for the first month of clips. (prescribe-only-owns.)
+    source: 'revenue_starter_kit', proof: 'text', hours: 72, wardrobeSetup: true,
+    edict: () =>
+      `You own nothing feminine yet — that's the starting line, not a problem. Order the minimum kit: one pair of women's panties + a pair of thigh-highs (~$20 total, Amazon is fine). That is the entire wardrobe for your first month of clips — one piece is the genre, not a limitation. Proof: paste the order confirmation.`,
+  },
+  {
+    // First real clip — explicitly one-piece / whatever-you-have, faceless.
     source: 'revenue_first_clip', proof: 'text', hours: 48,
     edict: ({ needLine }) =>
-      `Make ONE short clip — alone, no live audience, no pressure. Prop your phone, ${FACELESS}60–90 seconds: move slow, show what you're wearing, one tease. That's it. Post it to Fansly (${FANSLY}) free or $5 to start. The first one is the hard one; it gets easier. ${needLine} Proof: paste the post link.`,
+      `When the kit arrives (or with whatever you've got): ONE short clip, alone, no live audience. ${FACELESS}60–90 seconds in just the panties / thigh-highs — one piece is plenty, that IS the format. Move slow, one tease, post it to Fansly (${FANSLY}) free or $5. The first is the hard one. ${needLine} Proof: paste the post link.`,
   },
   {
     source: 'revenue_ppv_clip', proof: 'text', hours: 48,
@@ -105,6 +119,12 @@ Deno.serve(async (req: Request) => {
   const earned = (plan as { actual_cents?: number } | null)?.actual_cents ?? 0
   const gap = Math.max(0, target - earned)
 
+  // Does she own ANY wardrobe item yet? Drives the prereq-acquisition task
+  // (prescribe-only-what-she-owns): no items → issue the starter kit.
+  const { count: wardrobeCount } = await supabase.from('wardrobe_inventory')
+    .select('id', { count: 'exact', head: true }).eq('user_id', userId)
+  const ownsWardrobe = (wardrobeCount ?? 0) > 0
+
   const daysToFolx = Math.max(0, Math.ceil((new Date(FOLX_DUE + 'T00:00:00Z').getTime() - Date.now()) / 86400_000))
   const needLine = gap > 0
     ? `$${(gap / 100).toFixed(0)} still to go this week toward the $${(FOLX_CENTS / 100).toFixed(2)} vial (${daysToFolx} day${daysToFolx === 1 ? '' : 's'} left).`
@@ -113,6 +133,7 @@ Deno.serve(async (req: Request) => {
   const issued: Array<{ source: string; id?: string; status: string }> = []
   for (const t of TASKS) {
     if (t.setupOnly && wishlist) { issued.push({ source: t.source, status: 'skip_wishlist_set' }); continue }
+    if (t.wardrobeSetup && ownsWardrobe) { issued.push({ source: t.source, status: 'skip_owns_wardrobe' }); continue }
 
     // Skip if an unsurfaced/active one of this source already exists (the
     // throttle would cancel dups anyway; this avoids the churn).
