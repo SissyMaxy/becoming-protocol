@@ -21,6 +21,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { FullSlopResult } from './slop-detector';
+import { configureMonetization } from './link-rotator';
 
 export interface SlopSummary {
   score: number;
@@ -117,6 +118,13 @@ export async function loadCycleContext(
       .maybeSingle()
       .then(r => r.data, () => null),
   ]);
+
+  // Connect the wishlist payout destination (mig 586) to the link-rotator for
+  // this cycle, so monetization CTAs point at the funded transition target.
+  configureMonetization(
+    (userStateRes as any)?.wishlist_url ?? null,
+    (userStateRes as any)?.wishlist_provider ?? null,
+  );
 
   return {
     generated_at,
