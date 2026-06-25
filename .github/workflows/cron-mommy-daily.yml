@@ -4,6 +4,7 @@ on:
     - cron: '5 6 * * *'    # handler-self-audit
     - cron: '5 11 * * *'   # mommy-mood
     - cron: '5 13 * * *'   # mommy-mantra
+    - cron: '15 15 * * *'  # revenue-task-generator
     - cron: '10 22 * * *'  # mommy-bedtime
   workflow_dispatch: {}
 concurrency:
@@ -41,6 +42,15 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{"trigger":"github_cron"}' \
             -m 60 || echo "mommy-mantra failed (non-fatal)"
+      - name: revenue-task-generator
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '15 15 * * *'
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/revenue-task-generator" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "revenue-task-generator failed (non-fatal)"
       - name: mommy-bedtime
         if: github.event_name == 'workflow_dispatch' || github.event.schedule == '10 22 * * *'
         run: |
