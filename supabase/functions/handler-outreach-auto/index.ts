@@ -7,6 +7,20 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Stable UUID derived from an arbitrary string key (SHA-256 → RFC-4122 v5-shaped).
+// Used to give the penalty-preview rail a deterministic, per-step source_id so the
+// preview (and its surfacing) persist while a funnel step is stuck and roll over
+// when the step advances — without needing a dedicated DB row per step.
+async function deterministicUuid(key: string): Promise<string> {
+  const buf = new TextEncoder().encode(key)
+  const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', buf))
+  const b = hash.slice(0, 16)
+  b[6] = (b[6] & 0x0f) | 0x50 // version 5
+  b[8] = (b[8] & 0x3f) | 0x80 // RFC-4122 variant
+  const hex = Array.from(b, x => x.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
 serve(async req => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -362,9 +376,21 @@ OUTPUT: 2-3 sentences, second-person ("you said X — what you were also saying 
 
       // HRT funnel stuck-step evaluator — daily. Every day she stays on the
       // same step past threshold, days_stuck_on_step increments. At 7 days
-      // stuck on any non-terminal step, queue a high-urgency outreach and
-      // bleed event so "I'll do it next week" has real cost. Terminal step
-      // 'adherent' and pre-commit step 'uncommitted' are exempt.
+      // stuck on any non-terminal step we WANT to charge a $25 bleed so "I'll
+      // do it next week" has real cost. Terminal step 'adherent' and pre-commit
+      // step 'uncommitted' are exempt.
+      //
+      // VISIBLE-BEFORE-PENALIZED (cardinal rule): elapsed time alone is NOT a
+      // license to penalize. Before 2026-06-21 this charged the bleed purely on
+      // daysOnStep >= 7, but the HRT demand had no user-facing surface — it
+      // penalized an obligation she was never shown. We now route the cost
+      // through the penalty_previews rail (mig 601/611): register a per-step
+      // preview (which queues a "cost on the table" companion outreach), and
+      // only insert the bleed once penalty_may_apply() confirms that preview was
+      // GENUINELY surfaced (surfaced_at stamped — never mere delivery) and the
+      // grace window has passed. FocusMode's hrt_step_today branch is what
+      // surfaces the demand daily; the preview's companion outreach is the
+      // backstop signal. No surfacing → no bleed, no matter how many days pass.
       try {
         const { data: funnel } = await supa
           .from('hrt_funnel')
@@ -385,30 +411,172 @@ OUTPUT: 2-3 sentences, second-person ("you said X — what you were also saying 
             }
 
             if (daysOnStep >= 7) {
-              const { data: existingBleed } = await supa
-                .from('financial_bleed_events')
-                .select('id')
-                .eq('user_id', userId)
-                .eq('reason', `hrt_funnel_stuck: ${funnel.current_step}`)
-                .gte('created_at', new Date(now.getTime() - 7 * 86400000).toISOString())
-                .limit(1)
-                .maybeSingle()
+              // Per-step penalty-preview source id: stable across days for a
+              // given (user, step) so the preview + its surfacing persist while
+              // she's stuck, but rolls over when she advances steps. The funnel
+              // is a per-user singleton, so user_id + step uniquely keys it.
+              const stepKey = `hrt_funnel_step:${userId}:${funnel.current_step}`
+              const sourceId = await deterministicUuid(stepKey)
+              const stepLabel = (funnel.current_step as string).replace(/_/g, ' ')
 
-              if (!existingBleed) {
-                await supa.from('financial_bleed_events').insert({
-                  user_id: userId,
-                  amount_cents: 2500,
-                  reason: `hrt_funnel_stuck: ${funnel.current_step}`,
-                  tasks_missed: daysOnStep,
-                  destination: 'queued',
-                  status: 'queued',
-                })
+              // Register (idempotent) the preview + companion "cost on the table"
+              // outreach. This is the surface that makes the cost visible BEFORE
+              // it can be charged. Deadline = 24h grace from now so a freshly
+              // surfaced demand always gets a real notice window.
+              await supa.rpc('register_penalty_preview', {
+                p_user: userId,
+                p_source_table: 'hrt_funnel_step',
+                p_source_id: sourceId,
+                p_penalty_kind: 'hrt_funnel_stuck',
+                p_penalty_copy: `You've sat on the "${stepLabel}" step of your HRT progression for ${daysOnStep} days. Move it or it costs you $25.`,
+                p_deadline: new Date(now.getTime() + 24 * 3600000).toISOString(),
+                p_grace_minutes: 1440, // 24h: a full day of visible notice before money moves
+                p_urgency: 'high',
+              })
+
+              // THE GATE: only charge if the cost was genuinely surfaced and the
+              // grace window elapsed. Fail-closed — any error or false → no bleed.
+              const { data: mayApply } = await supa.rpc('penalty_may_apply', {
+                p_source_table: 'hrt_funnel_step',
+                p_source_id: sourceId,
+              })
+
+              if (mayApply === true) {
+                const { data: existingBleed } = await supa
+                  .from('financial_bleed_events')
+                  .select('id')
+                  .eq('user_id', userId)
+                  .eq('reason', `hrt_funnel_stuck: ${funnel.current_step}`)
+                  .gte('created_at', new Date(now.getTime() - 7 * 86400000).toISOString())
+                  .limit(1)
+                  .maybeSingle()
+
+                if (!existingBleed) {
+                  await supa.from('financial_bleed_events').insert({
+                    user_id: userId,
+                    amount_cents: 2500,
+                    reason: `hrt_funnel_stuck: ${funnel.current_step}`,
+                    tasks_missed: daysOnStep,
+                    destination: 'queued',
+                    status: 'queued',
+                  })
+                  // Stamp the rail so the audit trail shows this preview fired.
+                  await supa.rpc('mark_penalty_applied', {
+                    p_source_table: 'hrt_funnel_step',
+                    p_source_id: sourceId,
+                  })
+                }
               }
             }
           }
         }
       } catch (hrtErr) {
         console.error('[OutreachAuto] HRT funnel evaluator failed:', hrtErr)
+      }
+
+      // Witness-CC outward escalation — SIBLING of the HRT-bleed block above,
+      // riding the SAME surfaced-and-avertable rail. When she's stalled long
+      // enough on an HRT step that a witness gets silently CC'd, the email may
+      // ONLY originate from here, and ONLY through penalty_may_apply().
+      //
+      // feedback_outward_escalation_surfaced + visible-before-penalized: an
+      // outward consequence (looping in a real third party) is the heaviest
+      // penalty in the protocol, so it is the LAST thing allowed to fire on
+      // mere elapsed time. The cost must have been genuinely surfaced to her
+      // (preview surfaced_at stamped — never delivery), the grace window must
+      // have elapsed, and she must STILL be stalled on the same HRT step. The
+      // 'hrt_witness_cc' preview is registered on the surfacing side (the daily
+      // HRT gate) using the SAME deterministic per-step key, so a preview only
+      // exists once the demand was actually shown. No surfaced preview, or no
+      // active consented witness → DO NOTHING, no email. This must NEVER fire
+      // on obstacle-file or any other un-surfaced trigger.
+      try {
+        const { data: ccFunnel } = await supa
+          .from('hrt_funnel')
+          .select('current_step')
+          .eq('user_id', userId)
+          .maybeSingle()
+
+        if (ccFunnel && ccFunnel.current_step) {
+          const ccSkipSteps = new Set(['uncommitted', 'adherent'])
+          if (!ccSkipSteps.has(ccFunnel.current_step as string)) {
+            // Per-step source id, mirrored by the surfacing side so the preview
+            // + its surfacing persist while she's stuck and roll over on advance.
+            const ccKey = `hrt_witness_cc:${userId}:${ccFunnel.current_step}`
+            const ccSourceId = await deterministicUuid(ccKey)
+
+            // THE GATE: only escalate outward if a 'hrt_witness_cc' preview was
+            // genuinely surfaced and the grace window elapsed. Fail-closed — no
+            // preview / not surfaced / inside grace → false → no email.
+            const { data: ccMayApply } = await supa.rpc('penalty_may_apply', {
+              p_source_table: 'hrt_witness_cc',
+              p_source_id: ccSourceId,
+            })
+
+            if (ccMayApply === true) {
+              // Require an active, consented witness — no recipient, no email.
+              const { data: witness } = await supa
+                .from('designated_witnesses')
+                .select('id, witness_name')
+                .eq('user_id', userId)
+                .eq('status', 'active')
+                .eq('consent_confirmed', true)
+                .limit(1)
+                .maybeSingle()
+
+              if (witness) {
+                // Idempotency: one CC per (user, step) — dedup on the per-step
+                // source_id baked into the payload so re-runs while she's stuck
+                // on the same step don't re-email the witness.
+                const { data: alreadyCc } = await supa
+                  .from('witness_notifications')
+                  .select('id')
+                  .eq('user_id', userId)
+                  .eq('witness_id', (witness as any).id as string)
+                  .eq('notification_type', 'silent_status')
+                  .contains('payload', { cc_source_id: ccSourceId })
+                  .limit(1)
+                  .maybeSingle()
+
+                if (!alreadyCc) {
+                  const ccStepLabel = (ccFunnel.current_step as string).replace(/_/g, ' ')
+                  // Recent filed obstacles for context — mirror HrtDailyGate's body.
+                  const { data: obstacleRows } = await supa
+                    .from('hrt_obstacles')
+                    .select('obstacle_text')
+                    .eq('user_id', userId)
+                    .order('created_at', { ascending: false })
+                    .limit(2)
+                  const pastObstacles = ((obstacleRows || []) as Array<Record<string, unknown>>)
+                    .map(o => (o.obstacle_text as string) || '')
+                    .filter(Boolean)
+                  const obstacleClause = pastObstacles.length
+                    ? ` Pattern: ${pastObstacles.map(s => `"${s.slice(0, 80)}…"`).join(' / ')}.`
+                    : ''
+
+                  // The witness-notify-send fn emails any pending row from here.
+                  await supa.from('witness_notifications').insert({
+                    witness_id: (witness as any).id as string,
+                    user_id: userId,
+                    notification_type: 'silent_status',
+                    subject: `Maxy HRT stall at "${ccStepLabel}"`,
+                    body: `Silent CC: Maxy is stalled at "${ccStepLabel}" on her HRT progression.${obstacleClause} No action needed — you're being looped in directly.`,
+                    payload: { step: ccFunnel.current_step, silent: true, cc_source_id: ccSourceId },
+                  })
+
+                  // Stamp the rail so the audit trail shows this outward
+                  // escalation fired against a surfaced cost.
+                  await supa.rpc('mark_penalty_applied', {
+                    p_source_table: 'hrt_witness_cc',
+                    p_source_id: ccSourceId,
+                  })
+                }
+              }
+            }
+          }
+        }
+      } catch (ccErr) {
+        console.error('[OutreachAuto] witness-CC escalation failed:', ccErr)
       }
 
       // Weekly photo prompt — every Sunday, mandatory progress photo

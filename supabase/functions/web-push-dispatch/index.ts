@@ -163,6 +163,18 @@ async function sendPush(
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
+  // ── HARD KILL SWITCH ────────────────────────────────────────────────────
+  // PUSH_KILL_SWITCH truthy → send nothing to any device, ever, regardless of
+  // subscriptions / allowlist / cron. Set by operator request (2026-06-25) to
+  // guarantee web push (the only Chrome-on-work-laptop vector) cannot fire.
+  // Reverse by unsetting the secret + redeploy. The deny-by-default allowlist
+  // (PUSH_TRUSTED_ENDPOINTS) remains the second layer once this is lifted.
+  const kill = (Deno.env.get('PUSH_KILL_SWITCH') ?? '').trim().toLowerCase()
+  if (kill && kill !== '0' && kill !== 'false' && kill !== 'off') {
+    return new Response(JSON.stringify({ ok: true, killed: true, sent: 0, reason: 'PUSH_KILL_SWITCH active' }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+  }
+
   try {
     const vapidPub = Deno.env.get('VAPID_PUBLIC_KEY')
     const vapidPriv = Deno.env.get('VAPID_PRIVATE_KEY')
@@ -198,11 +210,29 @@ serve(async (req) => {
       .from('push_subscriptions')
       .select('user_id, endpoint, p256dh, auth')
       .in('user_id', userIds)
+    // ── Device allowlist (work-laptop safety, deny-by-default) ──────────
+    // Web push can only reach a device that has a push_subscriptions row,
+    // created by login + notification-grant in that browser. Defense in depth:
+    // deliver ONLY to endpoints explicitly trusted via PUSH_TRUSTED_ENDPOINTS
+    // (comma-separated full endpoints or unique substrings). Unset/empty →
+    // deny ALL (fail-safe), so an accidental registration on an untrusted
+    // device (e.g. a work laptop) can never fire. Add the personal device's
+    // endpoint to the secret to start delivering to it.
+    const trustedRaw = (Deno.env.get('PUSH_TRUSTED_ENDPOINTS') ?? '').trim()
+    const trustedList = trustedRaw ? trustedRaw.split(',').map(s => s.trim()).filter(Boolean) : []
+    const isTrusted = (endpoint: string) =>
+      trustedList.length > 0 && trustedList.some(t => endpoint === t || endpoint.includes(t))
+
     const subsByUser = new Map<string, Array<{ endpoint: string; p256dh: string; auth: string }>>()
+    let deniedUntrusted = 0
     for (const s of (subs || []) as Array<{ user_id: string; endpoint: string; p256dh: string; auth: string }>) {
+      if (!isTrusted(s.endpoint)) { deniedUntrusted++; continue }
       const arr = subsByUser.get(s.user_id) || []
       arr.push({ endpoint: s.endpoint, p256dh: s.p256dh, auth: s.auth })
       subsByUser.set(s.user_id, arr)
+    }
+    if (deniedUntrusted > 0) {
+      console.log(`[push-trust] denied ${deniedUntrusted} untrusted endpoint(s); trustedList size=${trustedList.length}`)
     }
 
     // Pull stealth settings for affected users in one query so we know

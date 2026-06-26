@@ -31,6 +31,7 @@
  */
 
 import { supabase } from '../supabase';
+import { cacheAccessTokenForSW } from './sw-auth';
 
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
 
@@ -79,6 +80,16 @@ export function urlBase64ToUint8Array(base64String?: string): Uint8Array {
   }
   const arr = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  // pushManager.subscribe() requires a 65-byte uncompressed P-256 key. A
+  // wrong-length value — a 32-byte private key pasted by mistake, a truncated
+  // paste, or a different key format — passes the char-length budget above but
+  // makes subscribe() throw "Registration failed - push service error", which
+  // maps to the misleading push_service_error / "tap once more" loop. Catch it
+  // here so the UI shows the precise vapid_key_invalid copy (a config fault,
+  // not the user's phone) instead of looping forever.
+  if (arr.length !== 65) {
+    throw new Error(`VAPID_PUBLIC_KEY_BAD_BYTELEN:${arr.length}`);
+  }
   return arr;
 }
 
@@ -238,6 +249,14 @@ export async function ensureFreshPushSubscription(
     last_used_at: new Date().toISOString(),
   }, { onConflict: 'user_id,endpoint' });
   if (error) return { ok: false, code: 'store_failed', detail: error.message };
+
+  // Hand the service worker a fresh access token so notification ACTIONS
+  // ("Reply" / "Mark done" / "Snap it") can authenticate their POST from
+  // inside notificationclick, which can't read the localStorage session.
+  // Fire-and-forget — a failed cache only falls the SW back to its deep-link
+  // path, never blocks the subscription result. (startSwAuthSync at app root
+  // keeps it fresh on login + token refresh; this covers the subscribe path.)
+  void cacheAccessTokenForSW();
 
   return { ok: true, endpoint: sub.endpoint, recovered };
 }

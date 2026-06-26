@@ -1096,6 +1096,14 @@ export async function buildCumulativeGatesCtx(userId: string): Promise<string> {
   }
 }
 
+// DEAD CONTEXT BUILDER (writer retired 2026-06-22).
+// `daily_report_cards` was written by the DailyReportCard 7-axis self-grade
+// surface, which was unmounted in the 2026-06-21/22 FocusMode re-architecture.
+// With no writer, this builder will ALWAYS return '' (the `cards.length === 0`
+// branch below) — it carries zero signal into the prompt. It is left in place,
+// degrading gracefully, intentionally: if a 7-axis self-grade surface is ever
+// restored it will light up again unchanged. Until then the call site
+// (chat-action.ts) just receives ''. Do not add logic that assumes rows exist.
 export async function buildReportCardCtx(userId: string): Promise<string> {
   try {
     const { data: cards } = await supabase

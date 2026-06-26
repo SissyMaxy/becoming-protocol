@@ -3140,7 +3140,16 @@ async function accrueIrreversibility(
 // Weekly: pick a new mantra derived from phase + most-recent active implant
 // + current failure mode. Keeps mantra fresh so she can't autocomplete it
 // without engaging.
-
+//
+// ORPHANED-OUTPUT NOTE (2026-06-21): the surface that consumed
+// morning_mantra_windows.current_mantra — MorningMantraGate.tsx, the full-screen
+// app-open mantra ritual — was removed in the 2026-06-21 entry-gate removal.
+// Nothing currently READS current_mantra after this rotation writes it.
+// DO NOT delete this rotation: a parallel FocusMode mantra branch (voice_drill /
+// mantra surface) is expected to re-wire current_mantra as its source. The
+// rotation is intentionally left running so the freshly-picked mantra is already
+// in place when that consumer lands. If no consumer is wired by the time this is
+// next audited, reconsider gating the rotation behind a feature flag.
 async function rotateMorningMantra(
   supabase: ReturnType<typeof createClient>,
   userId: string,

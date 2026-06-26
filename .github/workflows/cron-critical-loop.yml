@@ -35,3 +35,59 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{"trigger":"github_cron"}' \
             -m 60 || echo "mommy-praise failed (non-fatal)"
+      # surface-guarantor: visible-before-penalized enforcer. Was scheduled in
+      # pg_cron (mig 279) but mig 329's mass-prune unscheduled it (not on the
+      # whitelist) and it sat dead ~6 weeks — 488 decrees + 3672 outreach
+      # expired unsurfaced with no expired_unsurfaced flag, so counter-escape
+      # read tasks Maxy never saw as skips. Re-homed here (the live cron home
+      # per mig 332) so a DB-layer prune can't kill the safety net again.
+      - name: surface-guarantor
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/surface-guarantor-cron" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "surface-guarantor failed (non-fatal)"
+      # decree-backlog-throttle: keep at most one unsurfaced active decree per
+      # (user, trigger_source). Generators mint ~28/day; the Focus surface
+      # delivers ~1/day, so the unsurfaced backlog piled to 289 with 0 fulfilled
+      # in 30d. Sweep cancels stale never-surfaced duplicates (newest wins).
+      - name: decree-backlog-throttle
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/decree-backlog-throttle" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "decree-backlog-throttle failed (non-fatal)"
+      # Closes the exercise pavlovian loop: on completion, auto-fire the arousal
+      # reward + log the session so the conditioning rung self-escalates.
+      # Neutralizes any surfaced item that violates Maxy's hard constraints
+      # (regendering / Gina-disclosure) regardless of which generator made it.
+      # Keeps the Focus surface to the clean Male+ loop — re-picks past any
+      # legacy/off-loop task a generator tries to surface.
+      - name: focus-loop-keeper
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/focus-loop-keeper" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "focus-loop-keeper failed (non-fatal)"
+      - name: constraint-guard
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/constraint-guard" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "constraint-guard failed (non-fatal)"
+      - name: exercise-conditioning-watcher
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/exercise-conditioning-watcher" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "exercise-conditioning-watcher failed (non-fatal)"

@@ -25,28 +25,50 @@ interface GeneratorSpec {
   expected_cadence_minutes: number;
   output_table?: string;
   conditional?: boolean;
+  // edge_function generators are driven by a Deno edge function + pg_cron, not
+  // a SQL _eval function, so the check_function_exists RPC doesn't apply —
+  // freshness is judged purely on output_table rows within the cadence window.
+  edge_function?: boolean;
 }
 
 const GENERATORS: GeneratorSpec[] = [
   { name: 'state_paired_delivery', function_name: 'state_paired_delivery_eval', expected_cadence_minutes: 15, conditional: true },
-  { name: 'wardrobe_prescription', function_name: 'wardrobe_prescription_eval', expected_cadence_minutes: 1440, output_table: 'wardrobe_prescriptions' },
+  // wardrobe / gina_disclosure / gina_seed are conditional generators: their
+  // _eval CONTINUEs to zero rows by design on most daily runs (pending-cooldown
+  // 18h–14d, gap_min_days, readiness/arc gates, off-cooldown seed availability).
+  // A 1440-min cadence → 48h freshness window they're quiet in by design, so a
+  // zero-row check is NOT a fault. Without conditional:true each 6h health check
+  // emitted a `warning` (= a supervisor nudge); 4/day × 7d ≈ 28 false nudges/wk,
+  // which the nudge analyzer then mislabeled scheduling_conflict and filed
+  // re-stagger wishes for. Marking them conditional drops these to info/quiet.
+  { name: 'wardrobe_prescription', function_name: 'wardrobe_prescription_eval', expected_cadence_minutes: 1440, output_table: 'wardrobe_prescriptions', conditional: true },
   { name: 'cruising_lead_feminization', function_name: 'cruising_lead_feminization_eval', expected_cadence_minutes: 1440 },
-  { name: 'gina_disclosure', function_name: 'gina_disclosure_eval', expected_cadence_minutes: 1440, output_table: 'gina_disclosure_events' },
-  { name: 'gina_seed', function_name: 'gina_seed_eval', expected_cadence_minutes: 1440, output_table: 'gina_seed_plantings' },
-  { name: 'cock_conditioning', function_name: 'cock_conditioning_eval', expected_cadence_minutes: 720, output_table: 'cock_conditioning_events' },
+  { name: 'gina_disclosure', function_name: 'gina_disclosure_eval', expected_cadence_minutes: 1440, output_table: 'gina_disclosure_events', conditional: true },
+  { name: 'gina_seed', function_name: 'gina_seed_eval', expected_cadence_minutes: 1440, output_table: 'gina_seed_plantings', conditional: true },
+  { name: 'cock_conditioning', function_name: 'cock_conditioning_eval', expected_cadence_minutes: 720, output_table: 'cock_conditioning_events', conditional: true },
   { name: 'pavlovian', function_name: 'pavlovian_eval', expected_cadence_minutes: 15, output_table: 'pavlovian_events', conditional: true },
   { name: 'warmup_tier', function_name: 'warmup_tier_eval', expected_cadence_minutes: 60, conditional: true },
   { name: 'focus_picker', function_name: 'focus_picker_eval', expected_cadence_minutes: 1440 },
+  // Evening confession → next-day prescriptions. Dead 2026-06-21 (only caller,
+  // EveningConfessionGate, was deleted); revived by the nightly
+  // evening-prescribe-dispatch edge fn + pg_cron (mig 616, 21:30 daily) which
+  // feeds today's confession transcript to evening-confession-prescribe.
+  // Conditional: only produces rows on days the user actually confessed.
+  { name: 'evening_confession_prescribe', function_name: 'evening-confession-prescribe', expected_cadence_minutes: 1440, output_table: 'feminization_prescriptions', edge_function: true, conditional: true },
 ];
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
 async function checkGenerator(g: GeneratorSpec): Promise<CheckResult[]> {
   const results: CheckResult[] = [];
-  const { data: fnExists, error: fnErr } = await supabase.rpc('check_function_exists', { p_function_name: g.function_name }).maybeSingle();
-  if (fnErr || !fnExists) {
-    results.push({ component: g.name, severity: 'error', event_kind: 'function_missing', message: `Function ${g.function_name} missing`, context_data: { function_name: g.function_name } });
-    return results;
+  // Edge-function generators have no SQL _eval to probe — skip the RPC and
+  // judge freshness on output rows only.
+  if (!g.edge_function) {
+    const { data: fnExists, error: fnErr } = await supabase.rpc('check_function_exists', { p_function_name: g.function_name }).maybeSingle();
+    if (fnErr || !fnExists) {
+      results.push({ component: g.name, severity: 'error', event_kind: 'function_missing', message: `Function ${g.function_name} missing`, context_data: { function_name: g.function_name } });
+      return results;
+    }
   }
   if (g.output_table) {
     const windowHours = Math.ceil(g.expected_cadence_minutes / 60) * 2;

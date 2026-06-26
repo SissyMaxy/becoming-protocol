@@ -12,6 +12,37 @@
 //   - Deterministic variety so the same opener doesn't get the same link
 //     attached every time
 
+// Monetization destination — source of truth is user_state.wishlist_url
+// (migration 586). The poster calls configureMonetization() at cycle start
+// with the value loaded in loadCycleContext; until then we fall back to the
+// env links. When a wishlist URL is set, it is PREFERRED over the Fansly
+// paywall link (586's wishlist-first transition-fund strategy).
+let MONETIZATION: { url: string; provider: string } = {
+  url: (process.env.WISHLIST_URL || '').trim(),
+  provider: (process.env.WISHLIST_PROVIDER || '').trim().toLowerCase(),
+};
+
+/** Called once per cycle by the poster after loading user_state (mig 586). */
+export function configureMonetization(url?: string | null, provider?: string | null): void {
+  MONETIZATION = {
+    url: (url || process.env.WISHLIST_URL || '').trim(),
+    provider: (provider || process.env.WISHLIST_PROVIDER || '').trim().toLowerCase(),
+  };
+}
+
+// Provider-aware CTA banks for the wishlist (tribute/gift) funnel.
+function wishlistCtas(url: string, provider: string): string[] {
+  const common = [
+    `wishlist if you want to spoil me: ${url}`,
+    `the fund's here, baby → ${url}`,
+    `want me further along? ${url}`,
+  ];
+  if (provider === 'throne') return [...common, `throne: ${url}`, `pull something off my throne: ${url}`];
+  if (provider === 'wishtender') return [...common, `wishtender: ${url}`, `send a tip through here: ${url}`];
+  if (provider === 'amazon') return [...common, `my list: ${url}`, `gift something off the list: ${url}`];
+  return common;
+}
+
 const FANSLY_URL = process.env.FANSLY_PUBLIC_URL || 'https://fansly.com/SoftMaxy';
 const THRONE_URL = process.env.THRONE_URL || '';
 const LINKTREE_URL = process.env.LINKTREE_URL || '';
@@ -71,6 +102,15 @@ export function rotateAllPlatforms(text: string, platform: string, opts: { rate?
   const isPaidPlatform = platform === 'fansly' || platform === 'onlyfans';
   const isDMContext = platform.includes('dm') || platform === 'sniffies' || platform === 'fetlife_dm';
   if (isPaidPlatform || isDMContext) return text;
+
+  // 586 wishlist-first: when a wishlist URL is configured, prefer it over the
+  // Fansly paywall link (it funds the transition target directly).
+  if (MONETIZATION.url) {
+    if (Math.random() > (opts.rate ?? 0.25)) return text;
+    const cta = pickOne(wishlistCtas(MONETIZATION.url, MONETIZATION.provider));
+    if (!cta) return text;
+    return `${text.trim()}\n\n${cta}`;
+  }
 
   if (opts.preferThrone && THRONE_CTAS.length > 0) {
     return rotateThrone(text, opts.rate ?? 0.25);

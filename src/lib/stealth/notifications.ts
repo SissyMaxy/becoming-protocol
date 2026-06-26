@@ -24,10 +24,20 @@ export interface PushPayloadOutput {
   data: Record<string, unknown>;
 }
 
-// Identifier-only data keys we'll preserve under stealth so the SW can
-// still route the click to the right resource. Anything else is
-// dropped — kind/type/category strings can themselves leak content.
-const STEALTH_DATA_ALLOWLIST = new Set(['notification_id', 'id']);
+// Identifier + action-routing keys we'll preserve under stealth so the SW can
+// (a) still route the click to the right resource and (b) wire up the correct
+// notification action (reply / done / snap). Anything else is dropped —
+// kind/type/category strings can themselves leak content. action_kind /
+// requires_photo are COARSE routing tokens ('confession' | 'photo' | 'plain'):
+// they name a SHAPE of task, never its content, so they're safe on a lock
+// screen. The SW still suppresses visible action LABELS under stealth.
+const STEALTH_DATA_ALLOWLIST = new Set([
+  'notification_id',
+  'id',
+  'outreach_id',
+  'action_kind',
+  'requires_photo',
+]);
 
 // Sources whose pushes are ALWAYS neutralized — regardless of the
 // user's stealth setting. Sniffies content is the user's most-private

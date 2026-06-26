@@ -717,6 +717,93 @@ async function handleOutreachReply(req: VercelRequest, res: VercelResponse) {
   });
 }
 
+// ── complete: one-tap "Mark done" from a notification action ────────────
+// 2026-06-22: actionable push. When the user taps "Mark done" on a plain-task
+// notification (no reply text required), the SW POSTs here with a Bearer
+// token. We stamp the outreach as delivered + completed WITHOUT requiring any
+// reply_text, then fire mommy-fast-react so Mama reacts to the completion.
+//
+// Distinct from `reply` (which needs reply_text or a photo): `complete` is the
+// "I did the thing, nothing to type" path. It's also the landing point for the
+// iOS / token-expired deep-link fallback — the in-app router POSTs here via the
+// authenticated supabase session when ?complete_outreach=<id> is present with
+// no reply text. Idempotent: a row already stamped completed_at short-circuits.
+
+async function handleOutreachComplete(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const supabase = serviceClient();
+  const userId = await authedUserId(req, supabase);
+  if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+
+  const body = (req.body || {}) as { outreach_id?: string };
+  const outreachId = body.outreach_id;
+  if (!outreachId) return res.status(400).json({ error: 'outreach_id required' });
+
+  // Verify ownership + short-circuit if already completed.
+  const { data: outreachRow, error: fetchErr } = await supabase
+    .from('handler_outreach_queue')
+    .select('id, user_id, message, completed_at, reply_deadline_at, requires_photo')
+    .eq('id', outreachId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (fetchErr || !outreachRow) {
+    return res.status(404).json({ error: 'outreach not found' });
+  }
+  if (outreachRow.completed_at) {
+    return res.status(200).json({ ok: true, already: true, completed_at: outreachRow.completed_at });
+  }
+
+  const nowIso = new Date().toISOString();
+  const { error: updateErr } = await supabase
+    .from('handler_outreach_queue')
+    .update({
+      delivered_at: nowIso,
+      status: 'delivered',
+      completed_at: nowIso,
+    })
+    .eq('id', outreachId);
+  if (updateErr) return res.status(500).json({ error: updateErr.message });
+
+  // Fire mommy-fast-react so Mama reacts to the completion. Fire-and-forget —
+  // the user's "done" succeeds even if her reaction call fails.
+  //
+  // NOTE: event_kind is 'response_received', NOT the spec's 'task_completed' —
+  // fast_react_event.event_kind has a CHECK constraint (migrations 273/284b/290)
+  // that does NOT include 'task_completed'; sending it would be a silently
+  // rejected insert (the exact constraint-violation-masking bug class memory
+  // warns against). 'response_received' is the accepted kind the reply path
+  // already uses; context.kind='task_completed' carries the distinction.
+  const supabaseUrl = env('SUPABASE_URL', 'VITE_SUPABASE_URL');
+  const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY');
+  if (supabaseUrl && serviceKey) {
+    const fastReactUrl = `${supabaseUrl.replace(/\/$/, '')}/functions/v1/mommy-fast-react`;
+    fetch(fastReactUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${serviceKey}`,
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        event_kind: 'response_received',
+        source_key: `outreach_complete:${outreachId}`,
+        context: {
+          source_outreach_id: outreachId,
+          kind: 'task_completed',
+          original_message: (outreachRow.message ?? '').slice(0, 1200),
+          requires_photo: !!outreachRow.requires_photo,
+          deadline_at: outreachRow.reply_deadline_at,
+          completed_at: nowIso,
+        },
+      }),
+    }).catch((err) => {
+      console.error('[outreach complete] fast-react fire failed', err);
+    });
+  }
+
+  return res.status(200).json({ ok: true, outreach_id: outreachId, completed_at: nowIso });
+}
+
 // ── shared helpers ───────────────────────────────────────────────────────
 // Rate limits are enforced at every submission entry point (manual + cron).
 
@@ -941,6 +1028,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       case 'reply': return handleOutreachReply(req, res);
+      case 'complete': return handleOutreachComplete(req, res);
 
       default:
         return res.status(404).json({ error: `Unknown action: ${action}` });

@@ -30,17 +30,18 @@ export interface CompulsoryCompletion {
 // COMPULSORY ELEMENTS DEFINITION
 // ===========================================
 
+// 2026-06-21/22 RE-ARCHITECTURE — FocusMode became the home surface.
+// Of the original six compulsory elements, only `physical_state_log` was
+// re-homed into FocusMode (it calls `savePhysicalStateLog` below). The other
+// five — morning_checkin, skincare_am, voice_minimum, evening_log, skincare_pm
+// — lost their writer surfaces in the gate removal. They were also pure
+// copy/paste/checkbox busywork with low conditioning value (per
+// feedback_no_copy_paste_rituals), so rather than rebuild dead surfaces we
+// RETIRE them: they are removed from COMPULSORY_ELEMENTS so nothing expects
+// completions that can no longer be produced (no orphaned reader). Voice is now
+// covered by the elective voice/mantra task a parallel agent is wiring.
+// The retired definitions are kept commented below as a record of what was cut.
 export const COMPULSORY_ELEMENTS: CompulsoryElement[] = [
-  {
-    id: 'morning_checkin',
-    name: 'Morning Check-In',
-    description: 'Physical state log + mood + intention for the day. 60 seconds.',
-    mustCompleteBy: '10:00',
-    blocksIfIncomplete: ['all_features'],
-    estimatedMinutes: 1,
-    phaseRequirement: 'always',
-    timeWindow: 'morning',
-  },
   {
     id: 'physical_state_log',
     name: 'Physical State',
@@ -51,46 +52,12 @@ export const COMPULSORY_ELEMENTS: CompulsoryElement[] = [
     phaseRequirement: 'always',
     timeWindow: 'morning',
   },
-  {
-    id: 'skincare_am',
-    name: 'Morning Skincare',
-    description: 'Complete morning skincare routine. Full routine, not shortcuts.',
-    mustCompleteBy: '11:00',
-    blocksIfIncomplete: ['content_library', 'edge_session'],
-    estimatedMinutes: 10,
-    phaseRequirement: 'always',
-    timeWindow: 'morning',
-  },
-  {
-    id: 'voice_minimum',
-    name: 'Voice Minimum',
-    description: '2 minutes of voice practice. That is the absolute floor.',
-    mustCompleteBy: '20:00',
-    blocksIfIncomplete: ['edge_session', 'session_tier_above_3'],
-    estimatedMinutes: 2,
-    phaseRequirement: 'after_week_2',
-    timeWindow: 'any',
-  },
-  {
-    id: 'evening_log',
-    name: 'Evening Reflection',
-    description: 'How was the costume today? How was Maxy? Log one moment from each.',
-    mustCompleteBy: '23:00',
-    blocksIfIncomplete: ['release_eligibility'],
-    estimatedMinutes: 2,
-    phaseRequirement: 'always',
-    timeWindow: 'evening',
-  },
-  {
-    id: 'skincare_pm',
-    name: 'Evening Skincare',
-    description: 'Complete evening skincare routine before bed.',
-    mustCompleteBy: '23:59',
-    blocksIfIncomplete: ['streak_credit'],
-    estimatedMinutes: 10,
-    phaseRequirement: 'always',
-    timeWindow: 'evening',
-  },
+  // --- RETIRED 2026-06-22 (no writer surface, busywork) ---
+  // { id: 'morning_checkin', name: 'Morning Check-In', ... }   // saveMorningCheckin kept for any future surface
+  // { id: 'skincare_am',     name: 'Morning Skincare', ... }
+  // { id: 'voice_minimum',   name: 'Voice Minimum', ... }      // superseded by elective voice/mantra task
+  // { id: 'evening_log',     name: 'Evening Reflection', ... }
+  // { id: 'skincare_pm',     name: 'Evening Skincare', ... }
 ];
 
 // ===========================================
