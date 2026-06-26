@@ -87,6 +87,18 @@ const TASKS: Task[] = [
       `When you're ready for live: a short faceless cam set, 15–20 minutes is plenty. ${FACELESS}Phone chest-down or POV. Put up a tiny tip menu (outfit change, 1-min tease, name the vial as the goal) and just exist on camera — respond to chat, you don't have to "perform." ${needLine} Proof: a screenshot of the live session (no face).`,
   },
   {
+    // Worn-thong loop: wear (inventory) → list → sell → restock. Self-funds the
+    // wardrobe (sell worn buys new), fits the Male+/chastity/panties lane.
+    source: 'revenue_thong_wear', proof: 'text', hours: 24,
+    edict: () =>
+      `Inventory day: thong on under your boy clothes, locked, all day. Every day caged in them is product — the longer and harder the wear, the higher you price it. Log it when they come off. Proof: report the wear.`,
+  },
+  {
+    source: 'revenue_thong_list', proof: 'text', hours: 48,
+    edict: ({ needLine }) =>
+      `List a worn pair on Sofia Gray as SoftMaxy with the menu (24h-worn $25, add-ons stacked). Faceless, discreet — no real name or home address on anything, ever. ${needLine} Proof: paste the listing link.`,
+  },
+  {
     source: 'revenue_log', proof: 'photo', hours: 24,
     edict: ({ needLine }) =>
       `Screenshot your Fansly / cam payout dashboard so this week's earnings are on the record. ${needLine} Proof: the screenshot.`,
