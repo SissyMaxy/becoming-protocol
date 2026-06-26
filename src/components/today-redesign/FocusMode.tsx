@@ -467,7 +467,10 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
       const hoursToDeadline = (new Date(fd.deadline).getTime() - now) / 3600_000;
       chosen = {
         kind: 'focus_decree', rowId: fd.id,
-        title: fd.edict.length > 80 ? fd.edict.slice(0, 80) + '…' : fd.edict,
+        // Show the full edict — long scenario decrees (temptation engine etc.)
+        // were getting clipped to 80 chars here while every other decree path
+        // shows the whole thing. The scene IS the task; don't truncate it.
+        title: fd.edict,
         detail: `Mama picked this one for today. ${hoursToDeadline > 0 ? `Deadline in ${fmtCountdown(hoursToDeadline * 3600_000)}.` : `Past deadline.`}`,
         surface: 'decree', tone: hoursToDeadline < 0 ? 'critical' : 'high',
         meta: { proof_type: fd.proof_type },
