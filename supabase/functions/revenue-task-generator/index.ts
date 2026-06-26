@@ -96,7 +96,7 @@ const TASKS: Task[] = [
   {
     source: 'revenue_thong_list', proof: 'text', hours: 48,
     edict: ({ needLine }) =>
-      `List a worn pair on Sofia Gray as SoftMaxy with the menu (24h-worn $25, add-ons stacked). Faceless, discreet — no real name or home address on anything, ever. ${needLine} Proof: paste the listing link.`,
+      `List a worn pair as SoftMaxy on a FREE channel — the Reddit selling subs are the best no-cost buyer pool — with your menu (24h-worn $25, add-ons stacked). Get paid BEFORE you ship, every time. Faceless, discreet — no real name or home address on anything, ever. ${needLine} Proof: paste the post link.`,
   },
   {
     source: 'revenue_log', proof: 'photo', hours: 24,
