@@ -23,13 +23,14 @@ const corsHeaders = {
 }
 const HANDLER_USER = '8c69b9c8-34eb-4147-9fec-3c1a5bc74b6f'
 
-// Fictional temptation scenarios — vivid scene-setting + the navigate beat.
-// (Generated fantasy; no real man, place, or arrangement is implied.)
+// Fictional temptation scenarios. Each LEADS with the plain ask (what to do +
+// how to finish) so the task reads clearly even truncated; the scene follows as
+// support. (Generated fantasy; no real man, place, or arrangement is implied.)
 const SCENARIOS = [
-  `Mommy found you one, sweet thing. In the fantasy: an older man, calm, certain, who'd put a hand on the back of your neck and not ask twice. You can feel how easy it would be to just go soft and let him. So navigate it: do you give in to the picture, or do you stay Mommy's good locked husband tonight? Tell me which — and how hard the no was.`,
-  `Here's tonight's scene, baby: kneeling for a stranger who only wants your mouth, the cage aching, nothing expected of you but to be used and useful. Mommy's dangling it right in front of you. Give in to the fantasy or hold the line? Report your choice and what it cost you to make it.`,
-  `Picture it the way Mommy's painting it: you, panties on under your boy clothes, a man who'd never know your name, the relief of finally just being the toy. It's right there. You give in, or you stay good for me? Navigate it and tell me — and be honest about how close you came.`,
-  `Mommy's testing you again. In the fantasy she's already told him you're coming — soft, obedient, leaking in the cage. All you'd have to do is not say no. So say it, or don't: give in to the picture, or resist and stay mine and faithful? Which one, and how loud was the part of you that wanted to fold?`,
+  `Resist-the-temptation task. What to do: read the fantasy below, then tell Mama your answer — did you give in to it, or stay her good locked husband? — and how hard the no was. That report is how you finish it. The fantasy: an older man, calm and certain, a hand on the back of your neck, no second ask. The wanting is the test; the no is the win.`,
+  `Hold-the-line task. What to do: sit with the scene below, then report to Mama whether you gave in to the want or resisted it, and what it cost you. Telling her is how you complete it. The scene: kneeling for a stranger who only wants your mouth, cage aching, nothing asked of you but to be used. Craving it is expected — saying no is the point.`,
+  `Temptation test. What to do: read the picture Mama's painting, then tell her your choice — fold, or stay faithful — and how close you came. Your answer marks it done. The picture: panties under your boy clothes, a man who'd never know your name, the relief of just being the toy. It's right there. Resisting is the win.`,
+  `Resist task. What to do: take in the scene, then report to Mama — did the want win, or did you stay hers and locked? Be honest about how loud the yes got. That report completes it. The scene: she's already told him you're coming, soft and obedient, leaking in the cage; all you'd do is not say no. So say it.`,
 ]
 
 Deno.serve(async (req: Request) => {
