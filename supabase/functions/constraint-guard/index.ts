@@ -24,7 +24,9 @@ const corsHeaders = {
 }
 
 // Regendering / erasure framing — violates Male+ (additive, cock-kept).
-const REGENDER = /\b(becoming|become|turn(ing)? you into|make you|you('re| are)) (a |into a )?(woman|girl|her|she)\b|woman you('re| are)? becoming|david is gone|no longer a (man|boy)|erase the (man|boy)|lose the cock|bottom surgery/i
+// Covers overt regendering AND the protocol's own past-self erasure idioms
+// ("the costume", "older version", "before Maxy", "your becoming").
+const REGENDER = /\b(becoming|become|turn(ing)? you into|make you|you('re| are)) (a |into a )?(woman|girl|her|she)\b|woman you('re| are)? becoming|david is gone|no longer a (man|boy)|erase the (man|boy)|lose the cock|bottom surgery|older version of (you|your)|the costume\b|before maxy\b|who you (were|used to be)|the (man|boy|person) you (were|used to be)|less plausible|your becoming\b|chapter \d+ of your becoming/i
 // Disclosure to Gina — she's secret + non-consenting (paused lane).
 const GINA_DISCLOSE = /\b(tell|telling|told|disclose|disclosing|confess|show|reveal)\b[^.]{0,30}\bgina\b|\bgina\b[^.]{0,30}\b(find(s)? out|about (you|the|your)|sees? you|knows?|come out)|come out to gina/i
 
