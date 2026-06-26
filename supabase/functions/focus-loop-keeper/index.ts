@@ -25,6 +25,7 @@ const HANDLER_USER = '8c69b9c8-34eb-4147-9fec-3c1a5bc74b6f'
 // past. Exercise anchors the day; content/money follows.
 const PRIORITY = [
   'exercise_cond_5min', 'exercise_content_fusion', 'exercise_cond_', 'exercise_',
+  'temptation_navigate',
   'revenue_first_clip', 'revenue_thong_', 'revenue_presence_build', 'revenue_',
 ]
 const isLoop = (src: string) => PRIORITY.some(p => (src || '').startsWith(p))
