@@ -45,7 +45,8 @@
     "supabase/functions/mommy-hookup-pressure/index.ts::Forbidden phrases (build spec): \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"intake\", \"questionnaire\", \"for entertai",
     "supabase/functions/mommy-ideate-arousal/index.ts::\"fiction\" / \"fictional\"",
     "supabase/functions/mommy-implant-author/index.ts::- Never use: \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"intake\", \"questionnaire\", \"for entertainment\", \"consent to",
-    "supabase/functions/mommy-reality-reframe-letters/index.ts::- Never use: \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"intake\", \"questionnaire\", \"for entertainment\", \"consent to"
+    "supabase/functions/mommy-reality-reframe-letters/index.ts::- Never use: \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"intake\", \"questionnaire\", \"for entertainment\", \"consent to",
+    "supabase/functions/temptation-engine/index.ts::reasoning: 'temptation-engine: fictional CNC navigate-or-resist game (contained — no real arrangement)',"
   ],
   "for-entertainment": [
     "supabase/functions/_shared/ego-deconstruction.ts::- NEVER use any of: \"echo\", \"linger\", \"wrap around\", \"every inch\", \"role play\", \"simulation\", \"this is fiction\", \"not medical advice\", \"inta",
