@@ -65,6 +65,16 @@ jobs:
       # reward + log the session so the conditioning rung self-escalates.
       # Neutralizes any surfaced item that violates Maxy's hard constraints
       # (regendering / Gina-disclosure) regardless of which generator made it.
+      # Keeps the Focus surface to the clean Male+ loop — re-picks past any
+      # legacy/off-loop task a generator tries to surface.
+      - name: focus-loop-keeper
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/focus-loop-keeper" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "focus-loop-keeper failed (non-fatal)"
       - name: constraint-guard
         run: |
           curl -fsS -X POST \
