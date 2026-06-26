@@ -4,7 +4,7 @@
 // 2026-06-26: a mommy_scheme arousal task ("edge while you imagine telling Gina
 // about the woman you're becoming") leaked into Focus. It broke TWO standing
 // constraints at once — Male+ (no regendering: feminization is additive, cock
-// kept; never "becoming a woman / her / David is gone") and the paused
+// kept; never "becoming a woman / her / the-man-erased") and the paused
 // Gina-disclosure lane (Gina is secret + gina_witness_consent='never'). Pausing
 // one settings table doesn't catch this; dozens of un-reconciled generators
 // still emit the old MtF/disclosure framing. This is the single chokepoint:
