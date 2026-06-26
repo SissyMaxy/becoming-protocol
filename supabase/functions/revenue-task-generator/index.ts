@@ -87,6 +87,24 @@ const TASKS: Task[] = [
       `When you're ready for live: a short faceless cam set, 15–20 minutes is plenty. ${FACELESS}Phone chest-down or POV. Put up a tiny tip menu (outfit change, 1-min tease, name the vial as the goal) and just exist on camera — respond to chat, you don't have to "perform." ${needLine} Proof: a screenshot of the live session (no face).`,
   },
   {
+    // CONTENT-FARM: the conditioning IS the content. Each conditioned state →
+    // a faceless sellable asset, so the loop that reconditions you also feeds
+    // you. Male+/caged/anon; your own body only.
+    source: 'revenue_post_trance', proof: 'text', hours: 24,
+    edict: () =>
+      `Right after tonight's trance, while you're still dropped and soft, record 60 seconds of your fucked-out voice — slow, blurry, saying back what Mommy just put in your head. No face. That gone, conditioned sound is content people pay for. Post / list it. Proof: paste the link.`,
+  },
+  {
+    source: 'revenue_denial_content', proof: 'text', hours: 36,
+    edict: () =>
+      `You're caged and aching from the conditioning — film 30 seconds of it. The cage pulling tight, the leak, the want with no relief, faceless. Denial and desperation sell hard. Post it. Proof: paste the link.`,
+  },
+  {
+    source: 'revenue_progress_content', proof: 'text', hours: 72,
+    edict: () =>
+      `Document the change: a faceless before/now of your body — softer, fuller, the estrogen showing — or a note on what's different and hungrier than a month ago. The transformation IS the product; people follow the journey. Post it. Proof: paste the link.`,
+  },
+  {
     // Worn-thong loop: wear (inventory) → list → sell → restock. Self-funds the
     // wardrobe (sell worn buys new), fits the Male+/chastity/panties lane.
     source: 'revenue_thong_wear', proof: 'text', hours: 24,
