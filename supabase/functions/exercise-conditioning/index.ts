@@ -45,6 +45,12 @@ const LADDER: CTask[] = [
     edict: `Two short sets today — 15 glute bridges, then 12 sumo squats (wide stance, toes out). Before you start, say it once: "this is me getting hotter." Move slow enough to feel each one filling you out. The pairing is the point: effort → a hotter body → arousal straining in the cage the whole way, no release. Let the lock-up reward you the moment you finish, every time, so the want wires in. Report: done + did wanting it come any easier than last time?`,
   },
   {
+    // Convergence (Maxy's spec): the workout IS the content + the product. One
+    // caged session → a faceless clip → the gym-worn thong as top-tier stock.
+    source: 'exercise_content_fusion', hours: 48, rung: 2,
+    edict: `Today the workout is also the content. Frame collarbone-down, no face. Film your glute set in a thong, caged, slow POV — that's a Fansly clip. Then the thong you sweat and strained in gets listed gym-worn, your top tier (+$15). One caged session, a clip AND a product, both faceless. Move like you're being watched — because you're about to be. Proof: paste the clip + listing links.`,
+  },
+  {
     source: 'exercise_cond_trance_listen', hours: 24, rung: 0,
     edict: `Before you move today, listen to tonight's trance with your eyes closed — let it set the want before your body has a chance to argue. Then do your five minutes while the suggestion is still warm. Report: done.`,
   },
