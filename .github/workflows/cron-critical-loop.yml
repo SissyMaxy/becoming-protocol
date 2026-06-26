@@ -91,3 +91,17 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{"trigger":"github_cron"}' \
             -m 60 || echo "exercise-conditioning-watcher failed (non-fatal)"
+      # blind-spot-monitor: asserts the protocol from the USER'S seat, not the
+      # plumbing's — safeword integrity (auto-reactivates any deactivated stop
+      # word), held lines staying held (sniffies/ego off), today's task being
+      # readable + leading with the ask, trance playability. Auto-heals safety
+      # invariants; logs everything to mommy_supervisor_log. Closes the gap that
+      # let the safeword silently drop and a buried-ask task surface unnoticed.
+      - name: blind-spot-monitor
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/blind-spot-monitor" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "blind-spot-monitor failed (non-fatal)"
