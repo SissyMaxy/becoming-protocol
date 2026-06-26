@@ -63,6 +63,18 @@ export function TranceSessionCard({ session, userId, onChanged }: Props) {
     }
   }, [phase, session])
 
+  // Free fallback when no rendered audio exists (e.g. ElevenLabs key expired):
+  // speak the phase text with the browser's built-in voice — no API, no cost.
+  const speak = (t: string, onEnd?: () => void) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis || !t) return
+    window.speechSynthesis.cancel()
+    const u = new SpeechSynthesisUtterance(t)
+    u.rate = 0.82   // slow, trance-paced
+    u.pitch = 0.9
+    if (onEnd) u.onend = onEnd
+    window.speechSynthesis.speak(u)
+  }
+
   const handleStart = async () => {
     if (safewordGated) return
     if (session.status === 'drafted' || session.status === 'scheduled') {
@@ -70,13 +82,21 @@ export function TranceSessionCard({ session, userId, onChanged }: Props) {
       onChanged()
     }
     setPlaying(true)
-    audioRef.current?.play().catch(() => { /* autoplay-blocked is fine */ })
+    if (audioPath) {
+      audioRef.current?.play().catch(() => { /* autoplay-blocked is fine */ })
+    } else {
+      speak(text, () => setPlaying(false))
+    }
   }
 
   const handlePause = () => {
     setPlaying(false)
     audioRef.current?.pause()
+    if (typeof window !== 'undefined') window.speechSynthesis?.cancel()
   }
+
+  // Stop any speech if the card unmounts mid-trance.
+  useEffect(() => () => { if (typeof window !== 'undefined') window.speechSynthesis?.cancel() }, [])
 
   const phases: Phase[] = ['induction', 'deepening', 'payload', 'emergence']
   const nextPhase = () => {
