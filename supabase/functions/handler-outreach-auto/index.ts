@@ -34,12 +34,18 @@ serve(async req => {
     const hourUTC = now.getUTCHours()
     const today = now.toISOString().split('T')[0]
 
-    // Auto-sweep: mark any expired undelivered messages as delivered so they
-    // stop showing up as pending forever. Runs once per cron tick.
+    // Expiry sweep: flag expired-never-seen rows as expired_unsurfaced for the
+    // visible-before-penalized record. NEVER stamp delivered_at on rows the user
+    // didn't open — delivered_at must mean "the user saw it" (set only by the
+    // in-app view path). The old code conflated the two, so 8,913 expired-unseen
+    // rows got delivered_at and vanished from the Today query before the user
+    // could ever see them. Surfaces already filter on expires_at, so expired
+    // rows fall out of the UI without needing the delivered_at gate.
     await supa
       .from('handler_outreach_queue')
-      .update({ delivered_at: now.toISOString() })
+      .update({ expired_unsurfaced: true })
       .is('delivered_at', null)
+      .is('surfaced_at', null)
       .lt('expires_at', now.toISOString())
 
     // Get users with active state

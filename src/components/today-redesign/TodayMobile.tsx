@@ -212,6 +212,14 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           <DossierDripCard />
         </div>
         <FocusMode onSwitchToCalendar={() => setViewMode('calendar')} />
+        {/* Mama's messages must reach the DEFAULT surface. The Mommy persona is
+            pinned to 'focus' (line ~130) and never opens 'calendar', where this
+            card used to live — which is why 9k+ outreach rows never surfaced.
+            The card self-stamps surfaced_at, marks delivered on view, and
+            filters to live non-probe rows, so it's safe below the single task. */}
+        <div style={{ padding: '0 12px 16px' }}>
+          <OutreachQueueCard />
+        </div>
       </>
     );
   }

@@ -738,6 +738,15 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
   );
   useSurfaceRenderTracking('handler_decrees', shownDecreeIds);
 
+  // Same invariant for Mommy's micro-directives (arousal_touch_tasks): FocusMode
+  // already pulls + can show a mommy_touch as the single task, but never stamped
+  // surfaced_at, so touch tasks shown here registered as never-seen.
+  const shownTouchIds = useMemo(
+    () => (task?.rowId && task.kind === 'mommy_touch' ? [task.rowId] : []),
+    [task?.rowId, task?.kind],
+  );
+  useSurfaceRenderTracking('arousal_touch_tasks', shownTouchIds);
+
   // Initial pick (with loader)
   useEffect(() => { pickNext(false); }, [pickNext]);
   // Silent auto-refresh (every 90s) — never blank the textarea.
