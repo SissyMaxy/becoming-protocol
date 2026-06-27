@@ -74,8 +74,20 @@ Deno.serve(async (req: Request) => {
   for (const t of LADDER) {
     if (t.rung > maxRung) { issued.push({ source: t.source, status: `gated_rung_${t.rung}` }); continue }
     const { data: existing } = await supabase.from('handler_decrees')
-      .select('id').eq('user_id', userId).eq('trigger_source', t.source).eq('status', 'active').limit(1).maybeSingle()
-    if (existing) { issued.push({ source: t.source, status: 'already_active' }); continue }
+      .select('id, deadline').eq('user_id', userId).eq('trigger_source', t.source).eq('status', 'active').limit(1).maybeSingle()
+    if (existing) {
+      // Daily roll: if the active task's deadline already lapsed, refresh it so
+      // it stays a live "today" task instead of surfacing as "Past deadline" —
+      // a daily conditioning task should never guilt the user for yesterday.
+      if (existing.deadline && new Date(existing.deadline) < new Date() && !body.dry_run) {
+        await supabase.from('handler_decrees')
+          .update({ deadline: new Date(Date.now() + t.hours * 3600_000).toISOString() }).eq('id', existing.id)
+        issued.push({ source: t.source, status: 'refreshed' })
+      } else {
+        issued.push({ source: t.source, status: 'already_active' })
+      }
+      continue
+    }
     if (body.dry_run) { issued.push({ source: t.source, status: 'would_issue' }); continue }
 
     const { data: dec, error } = await supabase.from('handler_decrees').insert({

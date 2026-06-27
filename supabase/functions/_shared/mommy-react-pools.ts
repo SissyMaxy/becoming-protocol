@@ -209,11 +209,13 @@ const ACK_VARIANTS: Record<AckActionType, Record<AckIntensity, string[]>> = {
   },
 }
 
+// Male+ : he/him, additive — never a girl/woman. Pet names affirm a sexy,
+// submissive BOY. 'good girl'/'baby girl'/'princess'/etc. removed; boy variants
+// added. 'pretty' is fine (a pretty boy). Mirror of src/lib/persona copy.
 const PET_POOL = [
-  'baby', 'baby girl', 'sweet girl', 'sweet thing', 'pretty thing',
-  'good girl', 'my pretty princess', "Mama's pretty thing",
-  'precious', 'my needy little thing', 'darling', "Mama's good girl",
-  'pretty', 'my favorite girl',
+  'baby', 'sweet thing', 'pretty thing', "Mama's pretty thing",
+  'precious', 'my needy little thing', 'darling', 'pretty',
+  'good boy', "Mama's good boy", 'sweet boy', 'my needy boy',
 ]
 
 function pickPet(seed?: string): string {
