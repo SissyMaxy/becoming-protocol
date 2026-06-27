@@ -62,8 +62,14 @@ surface path + the surfaced_at writer in the plan, or it FAILS analyze.
 
 ## Article IV — Minimal by Subtraction
 The system is three pillars (recondition/hypno, exercise, content) + the spine +
-chastity + HRT-prep + Gina-arc. New systems must justify themselves against this
-list; default is *don't add*. Generation is throttled to real surface
+chastity + HRT-prep. New systems must justify themselves against this list;
+default is *don't add*.
+
+**Gina-independent (operator directive 2026-06-27):** the protocol does NOT depend
+on Gina's involvement or consent. The Gina-arc is dropped from the keep-list; no
+generator may require, assume, or pressure her participation. The real-world
+procurement floor (Art. II item 3) stands on **physical safety alone** — a system
+can't reliably vet a stranger; there is no "Gina-consent lever" that opens it. Generation is throttled to real surface
 throughput. No relentless queues — a daily cap ends the day.
 **Validation:** a plan that adds a new always-on generator must state its
 throughput budget and daily-cap interaction.
