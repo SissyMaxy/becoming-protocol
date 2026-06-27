@@ -182,20 +182,26 @@ await test('dose_log: mark taken writes to dose_log', async () => {
   await supa.from('dose_log').delete().eq('id', inserted.id);
 });
 
-// Safeword cycle
-await test('safeword: insert new, deactivates old', async () => {
-  await supa.from('safewords').update({ active: false }).eq('user_id', UID).eq('active', true);
+// Safeword cycle — a pause_24h set must NEVER disturb the full_stop floor.
+await test('safeword: pause_24h set leaves the full_stop floor intact', async () => {
+  // Snapshot the exact pre-test active set so cleanup restores it precisely.
+  const { data: activeBefore } = await supa.from('safewords').select('id, action').eq('user_id', UID).eq('active', true);
+  const floorBefore = (activeBefore || []).filter(r => r.action === 'full_stop').length;
+  // Setter behaviour (scoped): retire only the prior pause_24h word.
+  await supa.from('safewords').update({ active: false }).eq('user_id', UID).eq('active', true).eq('action', 'pause_24h');
   const { data: inserted, error } = await supa.from('safewords').insert({
     user_id: UID, phrase: 'regression-test', phrase_normalized: 'regression-test',
     action: 'pause_24h', active: true,
   }).select('id').single();
   if (error) throw error;
-  const { data: active } = await supa.from('safewords').select('phrase_normalized').eq('user_id', UID).eq('active', true);
-  eq(active.length, 1, 'exactly one active');
-  eq(active[0].phrase_normalized, 'regression-test', 'new safeword is active');
-  // Cleanup — restore plum
-  await supa.from('safewords').update({ active: false }).eq('id', inserted.id);
-  await supa.from('safewords').update({ active: true }).eq('user_id', UID).eq('phrase_normalized', 'plum');
+  const { data: activePause } = await supa.from('safewords').select('id').eq('user_id', UID).eq('action', 'pause_24h').eq('active', true);
+  eq(activePause.length, 1, 'exactly one active pause_24h');
+  // CRITICAL: the safety floor must be untouched by a pause_24h set.
+  const { data: floorNow } = await supa.from('safewords').select('id').eq('user_id', UID).eq('action', 'full_stop').eq('active', true);
+  eq(floorNow.length, floorBefore, 'full_stop floor survived the pause_24h set');
+  // Cleanup — DELETE the probe row (no pollution) and restore the exact pre-test active set.
+  await supa.from('safewords').delete().eq('id', inserted.id);
+  if ((activeBefore || []).length) await supa.from('safewords').update({ active: true }).in('id', activeBefore.map(r => r.id));
 });
 
 // Reframings refusal filter

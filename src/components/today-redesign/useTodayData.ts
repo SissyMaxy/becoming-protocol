@@ -343,9 +343,13 @@ export function useTodayData() {
         .limit(8),
       supabase
         .from('handler_outreach_queue')
-        .select('id, message, trigger_reason, urgency, created_at, delivered_at')
+        .select('id, message, trigger_reason, urgency, created_at, delivered_at, expires_at')
         .eq('user_id', user.id)
         .is('delivered_at', null)
+        // Drop expired rows by their actual expiry, NOT via delivered_at (the
+        // sweep no longer conflates expiry with delivery). null expires_at = no
+        // expiry, still shows.
+        .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
         // Calendar busy-window deferral: rows with deliver_after in the future
         // are queued but suppressed until the busy window ends.
         .or(`deliver_after.is.null,deliver_after.lte.${new Date().toISOString()}`)

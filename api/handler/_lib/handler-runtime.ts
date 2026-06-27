@@ -719,8 +719,12 @@ export async function detectAndSaveSafeword(userId: string, text: string): Promi
   // Guard: reject obvious false positives ("word", "safeword" itself, common pronouns)
   if (['word', 'safeword', 'it', 'that', 'this', 'one', 'mine'].includes(normalized)) return;
 
-  // Deactivate existing safewords, then insert the new one
-  await supabase.from('safewords').update({ active: false }).eq('user_id', userId).eq('active', true);
+  // Retire only the prior word of the SAME action class. A chat-declared
+  // safeword is always a pause_24h; it must NEVER deactivate the full_stop
+  // safety floor (or any other action class). Scoping this is safety-critical —
+  // an unscoped update silently disabled the user's hard stop.
+  await supabase.from('safewords').update({ active: false })
+    .eq('user_id', userId).eq('active', true).eq('action', 'pause_24h');
   await supabase.from('safewords').insert({
     user_id: userId,
     phrase,
