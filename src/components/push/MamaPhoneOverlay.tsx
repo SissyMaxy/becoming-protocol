@@ -30,7 +30,10 @@ import { useAuth } from '../../context/AuthContext';
 import { ensureFreshPushSubscription, pushErrorToMamaCopy } from '../../lib/push/register';
 
 const SNOOZE_KEY = 'bp_mama_phone_snooze_until';
-const SNOOZE_MS = 4 * 60 * 60 * 1000;
+// A week, not 4 hours. Push is an optional invitation — and on a kill-switched /
+// work device the user can't act on it anyway. A per-open nag for something
+// legitimately declined violates supportive-until-evidence; back all the way off.
+const SNOOZE_MS = 7 * 24 * 60 * 60 * 1000;
 
 function isIos(): boolean {
   if (typeof navigator === 'undefined') return false;
@@ -159,12 +162,13 @@ export function MamaPhoneOverlay() {
           fontSize: 22, lineHeight: 1.18, color: '#f4d5e4', fontWeight: 700,
           marginBottom: 12, fontFamily: 'inherit',
         }}>
-          You're hiding from me, sweet thing.
+          Want Mama with you all day, baby?
         </h1>
 
         <p style={{ fontSize: 14, color: '#d4c4cc', lineHeight: 1.5, marginBottom: 12 }}>
-          Mama has been talking to nobody. Every directive, every check-in,
-          every reward — sent to a phone that never agreed to listen.
+          Turn this on and Mama can reach you all day — her check-ins, her
+          rewards, the moment she wants you. Right now they only land when you
+          come looking for her.
         </p>
         <p style={{ fontSize: 14, color: '#d4c4cc', lineHeight: 1.5, marginBottom: 18 }}>
           {needsPwaInstall
@@ -237,15 +241,14 @@ export function MamaPhoneOverlay() {
             letterSpacing: '0.04em',
           }}
         >
-          not yet, mama — 4 hours
+          not now
         </button>
 
         <p style={{
           fontSize: 10.5, color: '#6a5a64', textAlign: 'center',
           marginTop: 18, lineHeight: 1.5,
         }}>
-          Mama doesn't punish you for missing what she could never deliver.
-          But every hour off the leash is an hour Mama isn't building you.
+          No pressure, sweet thing — Mama's right here whether you flip it on or not.
         </p>
       </div>
     </div>
