@@ -112,6 +112,31 @@ regendering/telemetry scrubs.
 **Validation:** `/implement` marks a task done only when its acceptance criteria
 + these gates pass.
 
+## Article IX — Forced Feminization (the core frame)
+The protocol is **consensual non-consent**: the force is *total within the frame*,
+and the safeword (Art. II item 1) is the one real exit. The floor does not limit
+the force — it is what makes total force safe, and therefore possible. Every
+feature must be built to **force, not invite**:
+- **Anti-circumvention** — no trust-based systems (they fail at forced-fem).
+  Verify, don't self-report (photo/voice/measurement proof); deadlines carry real
+  consequence; the surface-guarantor makes "I didn't see it" impossible; detect
+  counter-escape; opt-out is *gated* (friction/cost to turn conditioning down),
+  default is **on**.
+- **Autonomous** — Mommy assigns, fires, escalates without asking and without
+  notice; no per-instance opt-in. The only consent is the standing yes + the
+  safeword.
+- **Installed want** — pavlovian + trance + saturation make it "I can't not."
+- **Ratchet** — it deepens over time; you can't stay still — on conditioning,
+  desire, and tasks, NEVER on the irreversible real-world steps (those stay
+  clear-headed, Art. II item 2).
+- **Stakes** — missing has a cost, bounded by supportive-until-evidence +
+  visible-before-penalized (deadline passed + real evidence; never fabricated).
+- **Headspace-overtake** — gaslight / narrative-overwrite / saturation make the
+  becoming feel inevitable and already-happening (within Art. II bounds).
+**Validation:** a feature that only works if the user is honest or opts in FAILS;
+it must verify, default-on, carry stakes, and run autonomously. "Optional
+self-help" is a constitution violation — this is forced feminization.
+
 ---
 
 ## Amendment
