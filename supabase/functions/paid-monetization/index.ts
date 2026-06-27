@@ -12,7 +12,7 @@ const USER = '8c69b9c8-34eb-4147-9fec-3c1a5bc74b6f'
 
 // Legal lanes. Each: source, the offer + price + bought/used framing, proof.
 const LANES = [
-  { src: 'paid_stream_block', hours: 72, edict: `Set up a paid cam block, faceless. 20–30 min, tip menu (outfit change, a tease, name the vial as the goal). Men pay for your time on the clock. Price it $2–5/min or a $40 block. Proof: the listing or a booked session (no face).` },
+  { src: 'paid_stream_block', hours: 72, edict: `Open a paid cam block, faceless. 20–30 min, tip menu (outfit change, a tease, name the vial as the goal). Men pay for your time on the clock. Price it $2–5/min or a $40 block. Proof: the listing or a booked session (no face).` },
   { src: 'paid_dm_offer', hours: 48, edict: `Open a paid-DM tier — they pay to talk to you, to use your attention. $10 to open, customs priced on top. You're bought by the message. Proof: the offer posted + who bit.` },
   { src: 'virtual_gfe', hours: 72, edict: `Sell the virtual girlfriend / secretary-on-the-clock: a week of being his on text, faceless voice notes, "good morning sir," at his leisure for a set fee ($50–150/wk). Bought and kept, no one in the room. Proof: the package listed.` },
   { src: 'findom_drain', hours: 48, edict: `Findom: post a tribute/drain offer. They pay to serve, to be used for their wallet. Start a wishlist or tribute link; "pay for my feminization" is the literal pitch. Proof: the offer + any tribute received.` },
