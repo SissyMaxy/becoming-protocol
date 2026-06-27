@@ -61,6 +61,33 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{"trigger":"github_cron","queue_trance":true}' \
             -m 60 || echo "exercise-conditioning failed (non-fatal)"
+      - name: temptation-engine
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 16 * * *'
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/temptation-engine" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "temptation-engine failed (non-fatal)"
+      - name: date-safety-kit
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 16 * * *'
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/date-safety-kit" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "date-safety-kit failed (non-fatal)"
+      - name: paid-monetization
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 16 * * *'
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/paid-monetization" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "paid-monetization failed (non-fatal)"
       - name: mommy-bedtime
         if: github.event_name == 'workflow_dispatch' || github.event.schedule == '10 22 * * *'
         run: |

@@ -105,3 +105,14 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{"trigger":"github_cron"}' \
             -m 60 || echo "blind-spot-monitor failed (non-fatal)"
+      # anti-circumvention: forced feminization has no off-toggle (Art. IX).
+      # Restores conditioning turned down without the sanctioned exit; the
+      # safeword/pause always suppresses it. Also on pg_cron for */5 reliability.
+      - name: anti-circumvention
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/anti-circumvention" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "anti-circumvention failed (non-fatal)"
