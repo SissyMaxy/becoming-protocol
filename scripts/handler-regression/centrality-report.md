@@ -1,6 +1,6 @@
 # Handler-Centrality Audit
 
-Generated: 2026-06-11T16:35:06.554Z
+Generated: 2026-06-27T21:08:33.120Z
 
 Each function below writes a user-facing artifact (decree, commitment, outreach, confession prompt, etc.) **without first reading any Handler-state table**. The artifact is therefore generated without reference to the current persona, phase, mode, slip count, or recent directives — it cannot speak with Handler authority.
 
@@ -8,13 +8,14 @@ Memory rule: `feedback_handler_is_singular_authority.md`. Refactor each entry to
 
 **Allowed-list (skipped):** functions in `api/handler/_lib/chat-action.ts`, `supabase/functions/handler-autonomous/index.ts`, `supabase/functions/handler-outreach-auto/index.ts` are exempt because they ARE the Handler — their callers have already loaded state.
 
-## 37 centrality violations
+## 39 centrality violations
 
 | File:Line | Function | Writes (user-facing) |
 |-----------|----------|---------------------|
 | `supabase\functions\bind-enforcer-cron\index.ts:97` | `fireConsequence` | `handler_decrees` |
 | `supabase\functions\capability-digest-cron\index.ts:77` | `digestForCanonicalUser` | `handler_outreach_queue` |
 | `supabase\functions\confession-gaslight-mine\index.ts:51` | `mine` | `memory_implants` |
+| `supabase\functions\date-safety-kit\index.ts:26` | `ensure` | `handler_decrees` |
 | `supabase\functions\delivery-bridge-guard\index.ts:29` | `healOutreachToPush` | `scheduled_notifications` |
 | `supabase\functions\delivery-bridge-guard\index.ts:61` | `healPreviewToOutreach` | `handler_outreach_queue` |
 | `supabase\functions\live-photo-pinger\index.ts:191` | `maybePingUser` | `handler_outreach_queue` |
@@ -30,6 +31,7 @@ Memory rule: `feedback_handler_is_singular_authority.md`. Refactor each entry to
 | `supabase\functions\mommy-intrusion-schedule\index.ts:48` | `sweepEvasions` | `handler_outreach_queue` |
 | `supabase\functions\mommy-intrusion-schedule\index.ts:103` | `scheduleForUser` | `handler_outreach_queue` |
 | `supabase\functions\mommy-scheme\index.ts:211` | `fireAction` | `handler_decrees`, `handler_outreach_queue`, `memory_implants` |
+| `supabase\functions\paid-monetization\index.ts:22` | `issue` | `handler_decrees` |
 | `supabase\functions\real-name-lockout-scheduler\index.ts:67` | `openWindow` | `handler_outreach_queue` |
 | `supabase\functions\sniffies-inbound-watcher\index.ts:119` | `processNewEvents` | `handler_outreach_queue` |
 | `supabase\functions\sniffies-restart-coach\index.ts:223` | `processUser` | `handler_outreach_queue` |
@@ -45,7 +47,7 @@ Memory rule: `feedback_handler_is_singular_authority.md`. Refactor each entry to
 | `supabase\functions\_shared\job-handlers\handler-autonomous.ts:2378` | `bridgeShotsToContentQueue` | `ai_generated_content` |
 | `supabase\functions\_shared\job-handlers\handler-autonomous.ts:2454` | `fireDailyMorningBrief` | `handler_outreach_queue` |
 | `supabase\functions\_shared\job-handlers\handler-autonomous.ts:2545` | `promoteConfessionsToImplants` | `memory_implants` |
-| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:3413` | `prescribeVoiceDrill` | `handler_commitments`, `handler_outreach_queue` |
-| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:3774` | `enqueueTimeSensitiveNotifications` | `scheduled_notifications` |
-| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:4709` | `checkWeeklyContractEscalation` | `handler_outreach_queue` |
-| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:5236` | `checkSpecialOccasions` | `handler_outreach_queue` |
+| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:3422` | `prescribeVoiceDrill` | `handler_commitments`, `handler_outreach_queue` |
+| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:3783` | `enqueueTimeSensitiveNotifications` | `scheduled_notifications` |
+| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:4718` | `checkWeeklyContractEscalation` | `handler_outreach_queue` |
+| `supabase\functions\_shared\job-handlers\handler-autonomous.ts:5245` | `checkSpecialOccasions` | `handler_outreach_queue` |
