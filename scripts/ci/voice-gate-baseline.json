@@ -137,7 +137,7 @@
     "src/components/seeds/AddSeedModal.tsx::'roleplay',",
     "src/data/vector-definitions.ts::{ level: 3, name: 'Adopting', description: 'Adopting feminine roles', requirements: ['Regular role play'] },",
     "src/lib/protocol-core/modules/identity-module.ts::keywords: ['just a phase', 'silly game', 'roleplay', 'fetish thing', 'not real', 'pretending'],",
-    "src/lib/protocol-core/modules/partner-module.ts::celebration: \"Good girl. ${meetupCount} meetups with ${partnerAlias}. This isn't roleplay anymore. This is your life. And you're living it.\"",
+    "src/lib/protocol-core/modules/partner-module.ts::celebration: \"Good boy. ${meetupCount} meetups with ${partnerAlias}. This isn't roleplay anymore. This is your life. And you're living it.\",",
     "src/types/arousal.ts::roleplay: { label: 'Roleplay', emoji: '🎭' },",
     "src/types/arousal.ts::| 'roleplay'",
     "src/types/sexting.ts::communication_style: 'brief' | 'chatty' | 'roleplay' | 'transactional';",
