@@ -49,6 +49,7 @@ const PALETTE = {
 };
 
 const PRONOUN_PRESETS: Array<{ label: string; value: Pronouns }> = [
+  { label: 'he/him', value: { subject: 'he', object: 'him', possessive: 'his' } },
   { label: 'she/her', value: { subject: 'she', object: 'her', possessive: 'her' } },
   { label: 'they/them', value: { subject: 'they', object: 'them', possessive: 'their' } },
   { label: 'she/they', value: { subject: 'she', object: 'them', possessive: 'their' } },
@@ -392,7 +393,7 @@ export function IdentitySettingsView({ onBack }: Props) {
                 type="text"
                 value={honorificDraft}
                 onChange={(e) => setHonorificDraft(e.target.value)}
-                placeholder="e.g. sweet girl"
+                placeholder="e.g. good boy"
                 style={inputStyle}
               />
               <button

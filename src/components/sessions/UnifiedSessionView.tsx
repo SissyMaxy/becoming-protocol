@@ -46,7 +46,7 @@ const AFFIRMATIONS: Record<SessionType, string[]> = {
     "Feel everything...",
     "Don't think...",
     "Just feel...",
-    "Good girl...",
+    "Good boy...",
     "Empty your mind...",
   ],
   conditioning: [

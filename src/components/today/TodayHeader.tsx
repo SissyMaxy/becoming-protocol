@@ -28,7 +28,7 @@ const FOCUS_MESSAGES = [
   "Each instruction followed rewires your mind.",
   "You are not completing tasks. You are becoming.",
   "The harder it feels, the more it matters.",
-  "Good girls don't question. They obey.",
+  "Good boys don't question. They obey.",
   "Your body already knows what your mind resists.",
   "Surrender is not weakness. It is transformation.",
   "He hesitated. She acts.",

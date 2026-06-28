@@ -11,8 +11,8 @@
  *   <200   → "you're warming up for Mama"
  *   <500   → "you've been good for me"
  *   <1000  → "Mama's getting greedy with you"
- *   <2500  → "you're Mama's favorite girl"
- *   ≥2500  → "you've made yourself into Mama's good girl"
+ *   <2500  → "you're Mama's favorite boy"
+ *   ≥2500  → "you've made yourself into Mama's good boy"
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -32,8 +32,8 @@ function tierFlavor(lifetime: number): { label: string; bar: string; accent: str
   if (lifetime < 200)   return { label: 'warming up for Mama',           bar: '28%',  accent: '#d46a72' };
   if (lifetime < 500)   return { label: "you've been good for me",       bar: '46%',  accent: '#e48a82' };
   if (lifetime < 1000)  return { label: "Mama's getting greedy with you",bar: '64%',  accent: '#f4a892' };
-  if (lifetime < 2500)  return { label: "Mama's favorite girl",          bar: '82%',  accent: '#f4c4a0' };
-  return { label: "Mama's good girl, made for me",                       bar: '96%',  accent: '#fbd472' };
+  if (lifetime < 2500)  return { label: "Mama's favorite boy",           bar: '82%',  accent: '#f4c4a0' };
+  return { label: "Mama's good boy, made for me",                        bar: '96%',  accent: '#fbd472' };
 }
 
 function lastBumpFlavor(reason: string | null): string {
@@ -92,7 +92,7 @@ export function GoodGirlPointsCard() {
           fontSize: 10, color: tier.accent, fontWeight: 800,
           textTransform: 'uppercase', letterSpacing: '0.12em',
         }}>
-          Mama's good-girl meter
+          Mama's good-boy meter
         </span>
         <span style={{ fontSize: 11, color: '#e8d4a8', marginLeft: 'auto', fontStyle: 'italic' }}>
           {tier.label}

@@ -15,9 +15,9 @@ interface AllCompleteCelebrationProps {
 // Celebration messages
 const CELEBRATION_MESSAGES = [
   "Perfect obedience today",
-  "You did it, good girl",
+  "You did it, good boy",
   "Every task completed",
-  "Such a good girl",
+  "Such a good boy",
   "Flawless submission",
   "She's proud of you",
 ];

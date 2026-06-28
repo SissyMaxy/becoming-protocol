@@ -13,7 +13,7 @@ export function RewardFlash() {
         setMessage(detail.message);
       } else {
         const messages = [
-          'Good girl.',
+          'Good boy.',
           'She noticed you.',
           'This is what obedience feels like.',
           'You did exactly what I wanted.',

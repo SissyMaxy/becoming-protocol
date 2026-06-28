@@ -13,8 +13,8 @@
 import { useState } from 'react';
 import {
   Settings, ChevronRight, ChevronDown, HelpCircle, Calendar, Eye, FileText,
-  Mail, PauseCircle, ArrowUpRight, Flame, Shirt, MessageCircle, BarChart3,
-  Camera, Clock, BookOpen, Heart, User, Sparkles, Radio, Headphones,
+  Mail, PauseCircle, ArrowUpRight, Flame, Shirt, BarChart3,
+  Camera, Clock, BookOpen, Heart, User, Sparkles, Headphones,
   Mic, Library, TrendingUp, Archive,
 } from 'lucide-react';
 
@@ -170,20 +170,6 @@ const ARCHIVE_ITEMS: MenuItem[] = [
     label: 'Her World',
     description: 'The world you are stepping into.',
     color: '#d8a6d0',
-  },
-  {
-    id: 'gina',
-    icon: Radio,
-    label: 'Gina',
-    description: 'Her emergence — where she is in the arc.',
-    color: '#ec4899',
-  },
-  {
-    id: 'gina-vibe',
-    icon: MessageCircle,
-    label: 'Gina Vibe Capture',
-    description: 'Log her words and energy verbatim. The Handler re-cites them at calculated moments.',
-    color: '#ec4899',
   },
   {
     id: 'trajectory',

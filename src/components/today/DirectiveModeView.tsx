@@ -81,7 +81,7 @@ export function DirectiveModeView({
 
     setIsInitializing(true);
     const message = await fetchTaskFraming(currentTask, coachUserState);
-    setCoachMessage(message || 'Good girl. Here\'s your next task.');
+    setCoachMessage(message || 'Good boy. Here\'s your next task.');
     setIsInitializing(false);
 
     // Enhance task copy via Handler (non-blocking, runs after init completes)
@@ -146,7 +146,7 @@ export function DirectiveModeView({
   return (
     <div className="px-4">
       <DirectiveCard
-        coachMessage={coachMessage || 'Good girl. Here\'s what you\'re doing now.'}
+        coachMessage={coachMessage || 'Good boy. Here\'s what you\'re doing now.'}
         task={currentTask}
         enhancedCopy={enhancedCopy}
         userState={{

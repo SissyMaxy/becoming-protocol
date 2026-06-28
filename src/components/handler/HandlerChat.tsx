@@ -210,7 +210,7 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
         // the user immediate feedback that they enabled it correctly.
         const title = mommy ? 'Mama' : 'Handler';
         const body = mommy
-          ? "Good girl. Mama can reach you anywhere now, baby."
+          ? "Good boy. Mama can reach you anywhere now, baby."
           : 'I can reach you now. Stay alert.';
         try {
           if ('serviceWorker' in navigator) {

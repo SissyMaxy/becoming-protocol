@@ -42,7 +42,6 @@ import { TodayView as TodayRedesignView } from './components/today-redesign';
 // Blocking daily-gate overlays (CompulsoryConfessionGate, HrtDailyGate,
 // MorningMantraGate, EveningConfessionGate) removed from the render tree
 // 2026-06-21 — demands now surface as the single FocusMode task, not overlays.
-import { GinaSessionRecorder } from './components/today-redesign/GinaSessionRecorder';
 import { DisclosureRehearsalView } from './components/disclosure/DisclosureRehearsalView';
 import { WhisperToMama } from './components/confession/WhisperToMama';
 import { LivePhotoPingResponder } from './components/live-photo/LivePhotoPingResponder';
@@ -657,6 +656,22 @@ function AuthenticatedAppInner() {
     window.history.pushState({ tab: activeTab, subView: view }, '');
   };
 
+  // Open a menu sub-view from anywhere (e.g. the dossier banner on Focus).
+  // Leaves the Today/Focus home and renders the requested sub-view.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const view = (e as CustomEvent).detail?.view as MenuSubView | undefined;
+      if (!view) return;
+      window.location.hash = '';
+      setShowTodayRedesign(false);
+      setShowSettings(true);
+      setMenuSubView(view);
+      window.history.pushState({ tab: 'menu', subView: view }, '');
+    };
+    window.addEventListener('open-menu-subview', handler);
+    return () => window.removeEventListener('open-menu-subview', handler);
+  }, []);
+
   // Handle back from menu sub-view
   const handleBackFromSubView = () => {
     // If we deep-linked in, close settings overlay and reset URL instead of history.back()
@@ -1178,9 +1193,8 @@ function AuthenticatedAppInner() {
         />
         {/* Blocking daily gates (confession / HRT / mantra / evening) removed
             2026-06-21 — their demands surface as the single FocusMode task, not
-            as overlays the user has to dodge. GinaSessionRecorder stays: it's a
-            passive recorder, not a wall. */}
-        <GinaSessionRecorder />
+            as overlays the user has to dodge. GinaSessionRecorder removed
+            2026-06-28 — Gina dropped. */}
         {showDisclosureRehearsal && (
           <DisclosureRehearsalView onClose={() => {
             window.location.hash = '';

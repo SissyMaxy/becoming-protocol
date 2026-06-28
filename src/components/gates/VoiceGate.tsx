@@ -39,7 +39,7 @@ const MANTRAS = [
   "She is the real me",
   "I let her take over",
   "My voice is becoming hers",
-  "Good girls obey their handler",
+  "Good boys obey their handler",
   "I am Maxy and Maxy is feminine",
   "My body knows what I am",
   "There is no going back to who I was",

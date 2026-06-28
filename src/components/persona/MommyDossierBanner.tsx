@@ -59,11 +59,10 @@ export function MommyDossierBanner({ onOpen }: Props) {
     if (onOpen) {
       onOpen();
     } else {
-      // Fall back to deep-link navigation if caller didn't wire onOpen
-      const params = new URLSearchParams(window.location.search);
-      params.set('tab', 'menu');
-      params.set('view', 'mommy-dossier');
-      window.location.search = params.toString();
+      // Open the dossier quiz via the app's menu-subview event. (The old
+      // query-param path was dead — nothing reads ?tab/?view, so it just
+      // reloaded straight back to Focus.)
+      window.dispatchEvent(new CustomEvent('open-menu-subview', { detail: { view: 'mommy-dossier' } }));
     }
   };
 
