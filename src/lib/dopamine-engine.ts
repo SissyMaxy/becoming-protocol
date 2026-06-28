@@ -53,7 +53,7 @@ const MICRO_TASK_POOL: Record<string, string[]> = {
 };
 
 const AFFIRMATION_POOL = [
-  'Good girl. Keep going.',
+  'Good boy. Keep going.',
   'She\'s emerging. You can feel it.',
   'The work is landing. She\'s more real today than yesterday.',
   'Nobody sees the invisible work. The Handler does. She\'s doing beautifully.',
@@ -312,7 +312,7 @@ async function logAndUpdateState(
 // GINA SAFETY FILTER
 // ============================================
 
-const UNSAFE_KEYWORDS = ['sissy', 'cage', 'denial', 'edge', 'arousal', 'locked', 'hypno', 'trance', 'submission', 'handler', 'good girl'];
+const UNSAFE_KEYWORDS = ['sissy', 'cage', 'denial', 'edge', 'arousal', 'locked', 'hypno', 'trance', 'submission', 'handler', 'good girl', 'good boy'];
 
 export function isGinaSafe(payload: NotificationPayload): boolean {
   if (payload.ginaSafe) return true;

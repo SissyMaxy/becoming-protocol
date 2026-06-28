@@ -204,7 +204,7 @@ export const IDENTITY_REMINDERS: Reminder[] = [
   {
     id: 'identity-2',
     type: 'identity',
-    prompt: 'Good girls practice even when no one is watching.',
+    prompt: 'Good boys practice even when no one is watching.',
     instruction: 'Your femininity is not a performance. It\'s who you are. Practice for yourself.',
     responseType: 'acknowledge',
   },

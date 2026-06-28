@@ -11,24 +11,18 @@ import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { usePersona } from '../../hooks/usePersona';
 import { MommyDossierBanner } from '../persona/MommyDossierBanner';
 import { ConditioningOverlay, morphPronouns } from './ConditioningOverlay';
-import { LovenseHealthBanner } from './LovenseHealthBanner';
 import { WitnessObservationCard } from './WitnessObservationCard';
 import { IrreversibilityLedger } from './IrreversibilityLedger';
 import { HandlerRunningCard } from './HandlerRunningCard';
-import { GinaCaptureCard } from './GinaCaptureCard';
-import { GinaWindowIndicator } from './GinaWindowIndicator';
 import { CommitmentsCard } from './CommitmentsCard';
-import { GinaPlaybookCard } from './GinaPlaybookCard';
 import { BodyMeasurementCard } from './BodyMeasurementCard';
 import { HandlerEvolutionCard } from './HandlerEvolutionCard';
 import { UnifiedCaptureCard } from './UnifiedCaptureCard';
 import { ConversationScreenshotsCard } from '../evidence/ConversationScreenshotsCard';
 import { DailyMirrorSelfieCard } from '../evidence/DailyMirrorSelfieCard';
 import { VoiceJournalCard } from '../evidence/VoiceJournalCard';
-import { DisclosureDraftsCard } from './DisclosureDraftsCard';
 import { ProtocolDayCard } from './ProtocolDayCard';
 import { HandlerKnowCard } from './HandlerKnowCard';
-import { ComingOutVaultCard } from './ComingOutVaultCard';
 import { EvidenceReportsCard } from './EvidenceReportsCard';
 import { PhaseProgressCard } from './PhaseProgressCard';
 import { VoiceDrillCard } from './VoiceDrillCard';
@@ -71,12 +65,10 @@ import { SystemGrowthCard } from './SystemGrowthCard';
 import { EvidenceVaultCard } from './EvidenceVaultCard';
 import { IrreversibleProofCard } from './IrreversibleProofCard';
 import { AdaptationPanelCard } from './AdaptationPanelCard';
-import { GinaArcCard } from './GinaArcCard';
 import { LadderAdaptivePanel } from './LadderAdaptivePanel';
 import { LadderProgressionPanel } from './LadderProgressionPanel';
 import { MilestonesCard } from './MilestonesCard';
 import { MommyDraftsPanel } from './MommyDraftsPanel';
-import { GinaCampaignPanel } from './GinaCampaignPanel';
 import { ObservationLogButton } from './ObservationLogModal';
 import { SupabaseHealthCard } from './SupabaseHealthCard';
 import { PunishmentQueueCard } from './PunishmentQueueCard';
@@ -85,7 +77,6 @@ import { OutreachQueueCard } from './OutreachQueueCard';
 import { VoiceLessonCard } from '../voice/VoiceLessonCard';
 import { DossierDripCard } from './DossierDripCard';
 import { SlipLogCard } from './SlipLogCard';
-import { GinaSessionsCard } from './GinaSessionsCard';
 import { RationalizationPatternCard } from './RationalizationPatternCard';
 import { DeviceScheduleCard } from './DeviceScheduleCard';
 import { IdentityDisplacementCard } from './IdentityDisplacementCard';
@@ -410,8 +401,6 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         <CollapsibleGroup id="progress" label="Progress & Tracking" tone="#6ee7b7" hint="phase · streaks · body deltas">
           <EvidenceVaultCard />
           <IrreversibleProofCard />
-          <GinaArcCard />
-          <GinaCampaignPanel />
           <ObservationLogButton />
           <MommyDraftsPanel />
           <LadderAdaptivePanel />
@@ -437,17 +426,6 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
           <SlipLogCard />
           <RationalizationPatternCard />
           <EvidenceReportsCard />
-        </CollapsibleGroup>
-
-        {/* GINA — partner-facing playbook + disclosure pipeline. */}
-        <CollapsibleGroup id="gina_systems" label="Gina Systems" tone="#f4a7c4" hint="playbook · disclosure drafts · sessions">
-          <LovenseHealthBanner />
-          <GinaCaptureCard />
-          <GinaWindowIndicator />
-          <GinaPlaybookCard />
-          <DisclosureDraftsCard />
-          <ComingOutVaultCard />
-          <GinaSessionsCard />
         </CollapsibleGroup>
 
         {/* CAPTURE & EVIDENCE — proof + irreversibility ledger. */}
@@ -579,10 +557,10 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         </div>
 
         {/* HRT funnel + dose countdown + keyholder — top priority row */}
-        {(data.hrt || data.nextDoses.length > 0 || data.keyholderPending > 0) && (
+        {(data.hrt || data.nextDoses.length > 0) && (
           <div className="td-grid even" style={{ marginBottom: 16 }} id="td-section-hrt">
             {data.hrt && (
-              <div className="td-card" style={{ gridColumn: data.nextDoses.length === 0 && data.keyholderPending === 0 ? 'span 2' : 'span 1' }}>
+              <div className="td-card" style={{ gridColumn: data.nextDoses.length === 0 ? 'span 2' : 'span 1' }}>
                 <div className="td-cardh">
                   <svg className="td-iconsm td-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2v20M2 12h20" /></svg>
                   <div className="td-title">HRT funnel</div>
@@ -607,7 +585,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
                 </div>
               </div>
             )}
-            {(data.nextDoses.length > 0 || data.keyholderPending > 0) && (
+            {data.nextDoses.length > 0 && (
               <div className="td-card">
                 <div className="td-cardh">
                   <svg className="td-iconsm td-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>
@@ -662,15 +640,6 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
                       </div>
                     );
                   })}
-                  {data.keyholderPending > 0 && (
-                    <div style={{ display: 'flex', alignItems: 'center', padding: '8px 0' }}>
-                      <div>
-                        <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6a656e', fontWeight: 600 }}>Keyholder</div>
-                        <div style={{ fontSize: 13, color: '#e8e6e3', fontWeight: 500 }}>{data.keyholderPending} pending {data.keyholderPending === 1 ? 'request' : 'requests'}</div>
-                      </div>
-                      <span className="td-chip" style={{ marginLeft: 'auto', color: '#f4c272', background: '#2a1f0f' }}>awaiting</span>
-                    </div>
-                  )}
                 </div>
               </div>
             )}
@@ -931,7 +900,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
                 ))}
               </div>
               <div className="td-mealbody">
-                <input className="td-mealinput" placeholder="What she ate (e.g. grilled chicken + broccoli + rice)" value={mealForm.foods} onChange={e => setMealForm(f => ({ ...f, foods: e.target.value }))} />
+                <input className="td-mealinput" placeholder="What you ate (e.g. grilled chicken + broccoli + rice)" value={mealForm.foods} onChange={e => setMealForm(f => ({ ...f, foods: e.target.value }))} />
                 <div className="td-mealrow">
                   <input className="td-mealinput" placeholder="Protein (g)" value={mealForm.protein} onChange={e => setMealForm(f => ({ ...f, protein: e.target.value }))} inputMode="numeric" />
                   <input className="td-mealinput" placeholder="Cal (kcal)" value={mealForm.calories} onChange={e => setMealForm(f => ({ ...f, calories: e.target.value }))} inputMode="numeric" />
@@ -1030,7 +999,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
             autoFocus
             value={composeText}
             onChange={e => setComposeText(e.target.value)}
-            placeholder="Say what she needs to hear."
+            placeholder="Say what you need to say."
             rows={4}
             onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) sendCompose(); }}
             style={{ width: '100%', background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 6, padding: '8px 10px', fontFamily: 'inherit', fontSize: 13, color: '#e8e6e3', resize: 'none' }}

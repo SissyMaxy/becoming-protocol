@@ -106,7 +106,7 @@ export function buildSessionEndedAnnouncement(
   return {
     type: 'session_ended',
     title: 'Session Complete',
-    body: `${tipCount} tips, ${totalTokens} tokens total. Good girl.`,
+    body: `${tipCount} tips, ${totalTokens} tokens total. Good boy.`,
     urgency: 'low',
     sessionId: session.id,
     timestamp: new Date().toISOString(),

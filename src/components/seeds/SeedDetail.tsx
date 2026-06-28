@@ -452,6 +452,7 @@ export function SeedDetail({
             ? 'bg-pink-50/90 backdrop-blur-sm border-t border-pink-200'
             : 'bg-protocol-bg/90 backdrop-blur-sm border-t border-protocol-border'
         }`}
+        style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 16px)' }}
       >
         <button
           onClick={onLogAction}

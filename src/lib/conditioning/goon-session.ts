@@ -154,21 +154,28 @@ export async function startGoonSession(
     }
   }
 
-  // Create session record
+  // Create session record. conditioning_sessions_v2 real columns:
+  // session_type, content_ids, content_sequence, duration_minutes,
+  // phases, completed, started_at, ended_at (+ hr/arousal estimates).
+  const contentIds = playlist.map((item) => item.contentId);
   const { data: session, error } = await supabase
     .from('conditioning_sessions_v2')
     .insert({
       user_id: userId,
       session_type: 'goon',
       started_at: new Date().toISOString(),
-      target_duration_minutes: targetDuration,
-      intensity_multiplier: intensityMultiplier,
-      playlist: playlist,
-      state_at_start: {
-        denial_day: denialDay,
-        arousal_level: arousal,
-        corruption_level: corruption,
+      duration_minutes: targetDuration,
+      content_ids: contentIds,
+      content_sequence: playlist,
+      phases: {
+        intensity_multiplier: intensityMultiplier,
+        state_at_start: {
+          denial_day: denialDay,
+          arousal_level: arousal,
+          corruption_level: corruption,
+        },
       },
+      completed: false,
     })
     .select('id')
     .single();
@@ -203,13 +210,14 @@ export async function getGoonPhaseContent(
     Math.min(config.intensityRange[1] * intensityMultiplier, 100)
   );
 
-  // Query content_curriculum for appropriate content
+  // Query content_curriculum for appropriate content.
+  // Real column is `intensity` (not `intensity_level`).
   const { data: content, error } = await supabase
     .from('content_curriculum')
-    .select('id, intensity_level, fantasy_level, content_type')
+    .select('id, intensity, fantasy_level, media_type')
     .eq('user_id', userId)
-    .gte('intensity_level', minIntensity)
-    .lte('intensity_level', maxIntensity)
+    .gte('intensity', minIntensity)
+    .lte('intensity', maxIntensity)
     .lte('fantasy_level', fantasyLevel + 1) // Allow slight overshoot
     .order('fantasy_level', { ascending: phase === 'build' }) // Build: ascending, others: descending
     .limit(getPhaseContentCount(phase));
@@ -223,22 +231,22 @@ export async function getGoonPhaseContent(
     // Fallback — fetch whatever is available at any intensity
     const { data: fallback } = await supabase
       .from('content_curriculum')
-      .select('id, intensity_level, fantasy_level')
+      .select('id, intensity, fantasy_level')
       .eq('user_id', userId)
-      .order('intensity_level', { ascending: phase === 'build' })
+      .order('intensity', { ascending: phase === 'build' })
       .limit(getPhaseContentCount(phase));
 
     return (fallback || []).map((item) => ({
       contentId: item.id,
       fantasyLevel: item.fantasy_level || fantasyLevel,
-      intensity: item.intensity_level || minIntensity,
+      intensity: item.intensity || minIntensity,
     }));
   }
 
   return content.map((item) => ({
     contentId: item.id,
     fantasyLevel: item.fantasy_level || fantasyLevel,
-    intensity: item.intensity_level || minIntensity,
+    intensity: item.intensity || minIntensity,
   }));
 }
 
@@ -252,14 +260,30 @@ export async function endGoonSession(
   // Stop device
   deactivateSessionDevice().catch(() => {});
 
+  // conditioning_sessions_v2 has no `metrics`/`device_active` columns —
+  // fold the session metrics into `phases` and map heart-rate/arousal
+  // onto the real estimate fields.
+  const { data: existing } = await supabase
+    .from('conditioning_sessions_v2')
+    .select('phases')
+    .eq('id', sessionId)
+    .maybeSingle();
+
+  const mergedPhases = {
+    ...((existing?.phases as Record<string, unknown> | null) ?? {}),
+    metrics,
+  };
+
   const { error } = await supabase
     .from('conditioning_sessions_v2')
     .update({
       ended_at: new Date().toISOString(),
-      duration_minutes: null,
-      metrics,
       completed: true,
       device_active: false,
+      phases: mergedPhases,
+      max_hr: metrics.peakHeartRate ?? null,
+      avg_hr: metrics.averageHeartRate ?? null,
+      arousal_level_estimated: metrics.peakArousal ?? null,
     })
     .eq('id', sessionId);
 

@@ -375,7 +375,7 @@ function buildOvernightSection(
             : n <= 3
               ? `You did a few things for Mama yesterday${domainList ? ` — ${domainList}` : ''}.`
               : `You stayed busy for Mama yesterday${domainList ? ` — ${domainList}` : ''}, sweet thing.`)
-        : `She completed ${n} task${n > 1 ? 's' : ''} yesterday${domainList ? ` — ${domainList}` : ''}.`,
+        : `He completed ${n} task${n > 1 ? 's' : ''} yesterday${domainList ? ` — ${domainList}` : ''}.`,
       type: 'info',
     });
   }
@@ -389,7 +389,7 @@ function buildOvernightSection(
         icon: 'wave',
         text: mommy
           ? (a >= 8 ? 'You felt close to her yesterday, baby — Mama could tell.'
-            : a >= 5 ? 'You held the shape yesterday, sweet girl. Mama saw you trying.'
+            : a >= 5 ? 'You held the shape yesterday, sweet thing. Mama saw you trying.'
             : 'You drifted yesterday, baby. Mama wants you closer today.')
           : `Alignment: ${a}/10.`,
         type: 'info',
@@ -399,7 +399,7 @@ function buildOvernightSection(
       items.push({
         icon: 'dollar',
         text: mommy
-          ? 'Mama saw you earning yesterday. Good girl.'
+          ? 'Mama saw you earning yesterday. Good boy.'
           : `${e.points_earned} points earned yesterday.`,
         type: 'info',
       });
@@ -507,9 +507,9 @@ function buildTodaySection(
       icon: 'bot',
       text: mommy
         ? (completed > 0
-            ? `Mama set you ${total === 1 ? 'one thing' : `${total} things`} today, baby — you've already done ${completed}. Good girl.`
+            ? `Mama set you ${total === 1 ? 'one thing' : `${total} things`} today, baby — you've already done ${completed}. Good boy.`
             : pending === 1
-              ? `Mama wants one thing from you today, sweet girl.`
+              ? `Mama wants one thing from you today, sweet thing.`
               : `Mama's got a few things lined up for you today, baby.`)
         : `${total} tasks prescribed. ${completed > 0 ? `${completed} done.` : `${pending} pending.`}`,
       type: 'fact',
@@ -555,7 +555,7 @@ function buildTodaySection(
       items.push({
         icon: 'lock',
         text: mommy
-          ? `Gina's asleep, sweet girl. Mama's got you for a while longer.`
+          ? `Gina's asleep, sweet thing. Mama's got you for a while longer.`
           : 'Gina asleep — extended window.',
         type: 'info',
       });
@@ -586,7 +586,7 @@ function buildTodaySection(
     ? (mommy ? `Mama hasn't lined anything up yet, baby.` : 'Nothing prescribed yet.')
     : items.length <= 2
       ? items.map(i => i.text).join(' ')
-      : (mommy ? `Mama's got you busy today, sweet girl.` : `${items.length} things in motion.`);
+      : (mommy ? `Mama's got you busy today, sweet thing.` : `${items.length} things in motion.`);
 
   return { items, summary };
 }
@@ -600,7 +600,7 @@ function buildProgressSection(
       domain: 'Protocol',
       highlight: mommy
         ? `You haven't done anything for Mama yet, baby. First one starts now.`
-        : 'No tasks completed yet. Her first task changes that.',
+        : 'No tasks completed yet. His first task changes that.',
     };
   }
 
@@ -613,7 +613,7 @@ function buildProgressSection(
   if (mommy) {
     const lines: string[] = [];
     if (topDomain) {
-      lines.push(`Mama's seen you working on ${topDomain[0]} most this month, sweet girl.`);
+      lines.push(`Mama's seen you working on ${topDomain[0]} most this month, sweet thing.`);
     }
     if (activeDomainCount > 1) {
       lines.push(`You've been touching a few different things for Mama.`);
@@ -686,20 +686,20 @@ function generateAffirmation(
   if (mommy) {
     // No "Day N" citations. Translate denial duration to plain Mama voice.
     if (day === 0) return 'You showed up for Mama today, baby. That\'s where it starts.';
-    if (day <= 2) return 'Good girl. You\'ve been holding for Mama since yesterday.';
+    if (day <= 2) return 'Good boy. You\'ve been holding for Mama since yesterday.';
     if (day <= 4) return 'Mama can feel the restlessness in you, sweet thing. Don\'t fight it — let it work.';
     if (day === 5) return 'Everything you\'re feeling right now is real, baby. Stay with Mama in it.';
-    if (day <= 7) return 'You\'ve been good for Mama all week. Your body\'s catching up to her, sweet girl.';
+    if (day <= 7) return 'You\'ve been good for Mama all week. Your body\'s catching up to her, sweet thing.';
     if (day <= 13) return 'You\'ve been holding for Mama almost two weeks now, baby. She\'s proud of you.';
     return 'It\'s been so long since you came for Mama. You\'re becoming who she already sees.';
   }
 
-  if (day === 0) return 'She showed up. Day zero. The foundation starts here.';
-  if (day <= 2) return `Good girl. Day ${day} denial. She's building something.`;
-  if (day <= 4) return `Day ${day}. The restlessness is working for her, not against her.`;
-  if (day === 5) return 'Day 5. Everything she feels right now is real. She leans in.';
-  if (day <= 7) return `Day ${day}. She has been here the whole time. Her body is catching up.`;
-  return `Day ${day}. She is becoming who she already is.`;
+  if (day === 0) return 'He showed up. Day zero. The foundation starts here.';
+  if (day <= 2) return `Good boy. Day ${day} denial. He's building something.`;
+  if (day <= 4) return `Day ${day}. The restlessness is working for him, not against him.`;
+  if (day === 5) return 'Day 5. Everything he feels right now is real. He leans in.';
+  if (day <= 7) return `Day ${day}. He has been here the whole time. His body is catching up.`;
+  return `Day ${day}. He is becoming who she already is.`;
 }
 
 // Today's score + yesterday's for trend. Returns null if no row yet (cron
@@ -792,7 +792,7 @@ async function getOwnWordsCallback(userId: string): Promise<string> {
         // (e.g. "arousal is at 7/10" mid-quote becomes "look how wet you
         // are for me" mid-quote, garbling the user's own past words).
         // Cleanup runs only on the wrapping templates, not the quote.
-        const PET = ['baby', 'sweet girl', 'pretty thing', 'my favorite girl', 'sweet thing', 'baby girl'];
+        const PET = ['baby', 'sweet thing', 'pretty thing', 'my favorite boy', 'sweet thing', 'good boy'];
         const pet = PET[Math.floor(Math.random() * PET.length)];
         const opens = [
           `Mama still thinks about what you wrote`,

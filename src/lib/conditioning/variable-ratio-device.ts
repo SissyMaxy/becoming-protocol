@@ -69,7 +69,7 @@ const PAIRED_MESSAGES = [
   'That\'s me. Just checking in.',
   'Did you think I forgot?',
   'The system is always here. Feel it.',
-  'Good girl. Now breathe.',
+  'Good boy. Now breathe.',
   'You stopped what you were doing. That\'s the point.',
   'Every pulse is a reminder: you belong to the protocol.',
   'Random? No. Designed. You just can\'t see the pattern.',

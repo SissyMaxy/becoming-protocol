@@ -111,6 +111,9 @@ export function UnifiedSessionView({
   const videoRef = useRef<HTMLVideoElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const textTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // Guards against endSession running twice (e.g. End-Session button + close
+  // confirm) and against onComplete firing after the component has torn down.
+  const endedRef = useRef(false);
 
   // Load videos from public/videos/sessions/{sessionType}/ folder
   // Videos are configured in public/videos/manifest.json. Empty array
@@ -256,6 +259,9 @@ export function UnifiedSessionView({
 
   // End session
   const endSession = () => {
+    if (endedRef.current) return; // already ended — don't double-fire onComplete
+    endedRef.current = true;
+
     setIsActive(false);
     if (timerRef.current) clearInterval(timerRef.current);
     if (textTimerRef.current) clearInterval(textTimerRef.current);
@@ -278,6 +284,8 @@ export function UnifiedSessionView({
     }
     lovense.stop();
 
+    // onComplete unmounts this component — call it LAST, after all local
+    // teardown, so nothing runs against a torn-down component afterward.
     onComplete?.({
       duration,
       biometrics: bioSummary,
@@ -328,7 +336,7 @@ export function UnifiedSessionView({
                 Keep Going
               </button>
               <button
-                onClick={() => { setShowCloseConfirm(false); onClose(); }}
+                onClick={() => { setShowCloseConfirm(false); endSession(); }}
                 className="px-5 py-2.5 rounded-xl bg-red-600 text-white font-medium hover:bg-red-700 transition-colors"
               >
                 End Session

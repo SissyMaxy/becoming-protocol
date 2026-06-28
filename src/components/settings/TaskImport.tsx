@@ -34,7 +34,7 @@ const EXAMPLE_TASKS: TaskImportData[] = [
     category: 'say',
     domain: 'identity',
     intensity: 2,
-    instruction: 'Say "I am a sissy" out loud 10 times',
+    instruction: 'Say "I am becoming" out loud 10 times',
     subtext: 'Feel the truth of it each time.',
     affirmation: 'Good boy. You\'re accepting who you are.',
     targetCount: 10,

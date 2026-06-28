@@ -337,7 +337,7 @@ export class HandlerDirectiveModule extends BaseModule {
                 subtext: (val?.subtext as string) || null,
                 completion_type: (val?.completion_type as string) || 'binary',
                 points: (val?.points as number) || 10,
-                affirmation: (val?.affirmation as string) || 'Good girl.',
+                affirmation: (val?.affirmation as string) || 'Good boy.',
                 created_by: 'handler_directive',
               }).select('id').single();
 

@@ -51,7 +51,6 @@ import { VerificationVault } from './components/verification/VerificationVault';
 const LettersArchiveView = lazy(() => import('./components/letters').then((m) => ({ default: m.LettersArchiveView })));
 const LifeAsWomanView = lazy(() => import('./components/life-as-woman').then((m) => ({ default: m.LifeAsWomanView })));
 import { MommyDossierStatus } from './components/persona/MommyDossierStatus';
-import { GinaKeyHolderPage } from './components/gina/GinaKeyHolderPage';
 import { usePunishmentNotifications } from './hooks/usePunishmentNotifications';
 // DailyReportCard import removed 2026-06-21 — the after-7pm blocking report
 // card is gone; the reflection it wanted is an optional FocusMode task now.
@@ -80,7 +79,6 @@ import { usePatternNotifications } from './hooks/usePatternNotifications';
 import { useNotificationActionRouter } from './hooks/useNotificationActionRouter';
 // useDopamineNotifications removed — dopamine notifications disabled
 import { TimelineView } from './components/timeline';
-import { GinaEmergenceView, GinaPipelineView } from './components/gina';
 import { ServiceProgressionView, ServiceAnalyticsDashboard } from './components/service';
 import { ContentEscalationView, VaultSwipe } from './components/content';
 import { PermissionsManager } from './components/content/PermissionsManager';
@@ -105,7 +103,6 @@ import { VoiceDrillView } from './components/voice-game/VoiceDrillView';
 import { Dashboard } from './components/dashboard';
 import { WardrobeInventoryView } from './components/wardrobe';
 import { IdentitySettingsView } from './components/identity';
-import { GinaVibeCaptureCard } from './components/gina';
 import { TrajectoryArchiveView } from './components/trajectory';
 import { RecapsIndexView } from './components/recaps/RecapsIndexView';
 import { RecapDetailView } from './components/recaps/RecapDetailView';
@@ -131,14 +128,6 @@ function parseWishlistToken(): string | null {
   const hash = window.location.hash;
   const match = hash.match(/#\/wishlist\/([a-zA-Z0-9]+)/);
   return match ? match[1] : null;
-}
-
-// Parse `/gina-key?token=xxx` for Gina's key-holder surface (no auth required)
-function parseGinaKeyToken(): string | null {
-  const path = window.location.pathname;
-  if (path !== '/gina-key' && path !== '/gina-key/') return null;
-  const params = new URLSearchParams(window.location.search);
-  return params.get('token');
 }
 
 // Parse URL path for deep-linking into menu sub-views (e.g. /social-dashboard)
@@ -191,7 +180,7 @@ function LoadingScreen() {
   );
 }
 
-type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'gina' | 'gina-pipeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | 'hypno-learning' | 'goon-session' | 'progress-page' | 'sealed-page' | 'content-capture' | 'content-queue' | 'content-calendar' | 'content-fans' | 'content-polls' | 'content-revenue' | 'content-settings' | 'vault-browser' | 'log-release' | 'conditioning-library' | 'social-dashboard' | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol' | 'escalation_ladder' | 'force' | 'wardrobe' | 'gina-vibe' | 'trajectory' | 'mommy-dossier' | 'identity' | 'verification-vault' | 'community-queue' | 'community-list' | 'community-log' | 'letters' | 'dossier' | 'recaps' | 'recap-detail' | 'life-as-woman' | null;
+type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | 'hypno-learning' | 'goon-session' | 'progress-page' | 'sealed-page' | 'content-capture' | 'content-queue' | 'content-calendar' | 'content-fans' | 'content-polls' | 'content-revenue' | 'content-settings' | 'vault-browser' | 'log-release' | 'conditioning-library' | 'social-dashboard' | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol' | 'escalation_ladder' | 'force' | 'wardrobe' | 'trajectory' | 'mommy-dossier' | 'identity' | 'verification-vault' | 'community-queue' | 'community-list' | 'community-log' | 'letters' | 'dossier' | 'recaps' | 'recap-detail' | 'life-as-woman' | null;
 
 /** Session picker → launches immersive SessionContainer */
 function SessionPickerOrContainer({ onBack }: { onBack: () => void }) {
@@ -359,6 +348,25 @@ function AuthenticatedAppInner() {
         setMenuSubView('recaps');
         setActiveTab('menu');
       }
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
+  // Deep-link sub-views at RUNTIME (not just initial mount). Navigating to
+  // hashes like #/journal, #/identity, #/settings, #/dashboard,
+  // #/social-dashboard while the app is open must switch the rendered view,
+  // not just the URL. parseDeepLinkView() resolves the hash → a MenuSubView;
+  // we open the settings overlay and render it, leaving the Today/Focus home.
+  // Mirrors the recaps/disclosure hashchange effects above.
+  useEffect(() => {
+    const onHash = () => {
+      const view = parseDeepLinkView();
+      if (!view) return;
+      setShowTodayRedesign(false);
+      setShowSettings(true);
+      setMenuSubView(view as MenuSubView);
+      window.history.pushState({ tab: 'menu', subView: view, settings: true, today: false }, '');
     };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
@@ -544,6 +552,22 @@ function AuthenticatedAppInner() {
       setActiveTab('menu');
       setMenuSubView('identity');
     };
+    // useAutoCapture fires this when a task wants the content-capture surface.
+    const handleNavigateToContentCapture = () => {
+      setActiveTab('menu');
+      setShowTodayRedesign(false);
+      setShowSettings(true);
+      setMenuSubView('content-capture');
+      window.history.pushState({ tab: 'menu', subView: 'content-capture', settings: true, today: false }, '');
+    };
+    // VaultView fires this from its "manage permissions" affordance.
+    const handleNavigateToVaultPermissions = () => {
+      setActiveTab('menu');
+      setShowTodayRedesign(false);
+      setShowSettings(true);
+      setMenuSubView('vault-permissions');
+      window.history.pushState({ tab: 'menu', subView: 'vault-permissions', settings: true, today: false }, '');
+    };
     const handleOpenReleaseLog = () => setShowOrgasmLog(true);
     window.addEventListener('navigate-to-investments', handleNavigateToInvestments);
     window.addEventListener('navigate-to-wishlist', handleNavigateToWishlist);
@@ -554,6 +578,8 @@ function AuthenticatedAppInner() {
     window.addEventListener('navigate-to-hypno', handleNavigateToHypno);
     window.addEventListener('navigate-to-hypno-learning', handleNavigateToHypnoLearning);
     window.addEventListener('navigate-to-identity', handleNavigateToIdentity);
+    window.addEventListener('navigate-to-content-capture', handleNavigateToContentCapture);
+    window.addEventListener('navigate-to-vault-permissions', handleNavigateToVaultPermissions);
     window.addEventListener('open-release-log', handleOpenReleaseLog);
     return () => {
       window.removeEventListener('navigate-to-investments', handleNavigateToInvestments);
@@ -565,6 +591,8 @@ function AuthenticatedAppInner() {
       window.removeEventListener('navigate-to-hypno', handleNavigateToHypno);
       window.removeEventListener('navigate-to-hypno-learning', handleNavigateToHypnoLearning);
       window.removeEventListener('navigate-to-identity', handleNavigateToIdentity);
+      window.removeEventListener('navigate-to-content-capture', handleNavigateToContentCapture);
+      window.removeEventListener('navigate-to-vault-permissions', handleNavigateToVaultPermissions);
       window.removeEventListener('open-release-log', handleOpenReleaseLog);
     };
   }, []);
@@ -616,22 +644,41 @@ function AuthenticatedAppInner() {
 
   // Browser history: push/pop state for back button support
   useEffect(() => {
-    // Replace initial state so first back doesn't exit the app
-    window.history.replaceState({ tab: 'protocol', subView: null }, '');
+    // Replace initial state so first back doesn't exit the app. Record the
+    // full screen (tab + subView + overlay flags) so Back can restore it.
+    window.history.replaceState(
+      { tab: 'protocol', subView: null, settings: false, today: showTodayRedesign },
+      ''
+    );
 
     const handlePop = (e: PopStateEvent) => {
-      const state = e.state as { tab?: Tab; subView?: MenuSubView } | null;
+      const state = e.state as {
+        tab?: Tab;
+        subView?: MenuSubView;
+        settings?: boolean;
+        today?: boolean;
+      } | null;
       if (state?.tab) {
         setActiveTab(state.tab);
         setMenuSubView(state.subView ?? null);
+        // Restore the overlay flags too — otherwise Back after opening a menu
+        // sub-view (e.g. from the dossier banner via 'open-menu-subview')
+        // leaves showSettings/showTodayRedesign stale and lands on the wrong
+        // screen. When the marker doesn't carry the flags, derive sane defaults
+        // from the popped subView.
+        setShowSettings(state.settings ?? state.subView != null);
+        setShowTodayRedesign(state.today ?? false);
       } else {
         setActiveTab('protocol');
         setMenuSubView(null);
+        setShowSettings(false);
+        setShowTodayRedesign(false);
       }
     };
 
     window.addEventListener('popstate', handlePop);
     return () => window.removeEventListener('popstate', handlePop);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Handle menu navigation — special cases for progress/sealed pages
@@ -643,17 +690,17 @@ function AuthenticatedAppInner() {
     if (view === 'progress-page') {
       setActiveTab('progress');
       setMenuSubView(null);
-      window.history.pushState({ tab: 'progress', subView: null }, '');
+      window.history.pushState({ tab: 'progress', subView: null, settings: showSettings, today: false }, '');
       return;
     }
     if (view === 'sealed-page') {
       setActiveTab('sealed');
       setMenuSubView(null);
-      window.history.pushState({ tab: 'sealed', subView: null }, '');
+      window.history.pushState({ tab: 'sealed', subView: null, settings: showSettings, today: false }, '');
       return;
     }
     setMenuSubView(view);
-    window.history.pushState({ tab: activeTab, subView: view }, '');
+    window.history.pushState({ tab: activeTab, subView: view, settings: true, today: false }, '');
   };
 
   // Open a menu sub-view from anywhere (e.g. the dossier banner on Focus).
@@ -663,10 +710,14 @@ function AuthenticatedAppInner() {
       const view = (e as CustomEvent).detail?.view as MenuSubView | undefined;
       if (!view) return;
       window.location.hash = '';
+      // Push a 'home' marker for the Today/Focus surface we're leaving, so the
+      // first Back restores the home instead of the popstate handler's stale
+      // state. Then push the sub-view entry the user is navigating into.
+      window.history.pushState({ tab: 'protocol', subView: null, settings: false, today: true }, '');
       setShowTodayRedesign(false);
       setShowSettings(true);
       setMenuSubView(view);
-      window.history.pushState({ tab: 'menu', subView: view }, '');
+      window.history.pushState({ tab: 'menu', subView: view, settings: true, today: false }, '');
     };
     window.addEventListener('open-menu-subview', handler);
     return () => window.removeEventListener('open-menu-subview', handler);
@@ -872,7 +923,7 @@ function AuthenticatedAppInner() {
             onBack={handleBackFromSubView}
             onManagePermissions={() => {
               setMenuSubView('vault-permissions');
-              window.history.pushState({ tab: activeTab, subView: 'vault-permissions' }, '');
+              window.history.pushState({ tab: activeTab, subView: 'vault-permissions', settings: true, today: false }, '');
             }}
           />
         );
@@ -906,16 +957,12 @@ function AuthenticatedAppInner() {
             onBack={handleBackFromSubView}
             onAffirmationGame={() => {
               setMenuSubView('voice-game');
-              window.history.pushState({ tab: activeTab, subView: 'voice-game' }, '');
+              window.history.pushState({ tab: activeTab, subView: 'voice-game', settings: true, today: false }, '');
             }}
           />
         );
       case 'timeline':
         return <TimelineView onBack={handleBackFromSubView} userName={userName ?? undefined} />;
-      case 'gina':
-        return <GinaEmergenceView onBack={handleBackFromSubView} />;
-      case 'gina-pipeline':
-        return <GinaPipelineView onBack={handleBackFromSubView} />;
       case 'service':
         return <ServiceProgressionView onBack={handleBackFromSubView} />;
       case 'service-analytics':
@@ -975,18 +1022,6 @@ function AuthenticatedAppInner() {
         return <WardrobeInventoryView onBack={handleBackFromSubView} />;
       case 'identity':
         return <IdentitySettingsView onBack={handleBackFromSubView} />;
-      case 'gina-vibe':
-        return (
-          <div>
-            <button onClick={handleBackFromSubView} className="mb-4 text-sm text-protocol-text-muted hover:text-protocol-text">&larr; Back</button>
-            <h2 className="text-lg font-semibold mb-2 text-protocol-text">Gina Vibe Capture</h2>
-            <p className="text-xs text-protocol-text-muted mb-4">
-              Log her words and energy verbatim. Each capture silently inflates readiness on related merge pipeline items
-              and feeds Handler chat with re-citation material. The closer to her actual words, the better.
-            </p>
-            <GinaVibeCaptureCard />
-          </div>
-        );
       case 'trajectory':
         return <TrajectoryArchiveView onBack={handleBackFromSubView} />;
       case 'recaps':
@@ -997,7 +1032,7 @@ function AuthenticatedAppInner() {
               window.location.hash = `#/recaps/${id}`;
               setMenuSubView('recap-detail');
               setRecapDetailId(id);
-              window.history.pushState({ tab: activeTab, subView: 'recap-detail', recapId: id }, '');
+              window.history.pushState({ tab: activeTab, subView: 'recap-detail', recapId: id, settings: true, today: false }, '');
             }}
           />
         );
@@ -1010,7 +1045,7 @@ function AuthenticatedAppInner() {
               window.location.hash = '#/recaps';
               setMenuSubView('recaps');
               setRecapDetailId(null);
-              window.history.pushState({ tab: activeTab, subView: 'recaps' }, '');
+              window.history.pushState({ tab: activeTab, subView: 'recaps', settings: true, today: false }, '');
             }}
           />
         );
@@ -1450,11 +1485,6 @@ function AppInner() {
         }}
       />
     );
-  }
-
-  // Handle Gina key-holder surface (no auth required — token-auth via API)
-  if (parseGinaKeyToken()) {
-    return <GinaKeyHolderPage />;
   }
 
   if (isLoading) {

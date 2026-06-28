@@ -228,7 +228,7 @@ Generate personalized delivery. 2-3 sentences. Direct, commanding. Address as Ma
       return {
         instruction: response.text,
         subtext: task.subtext || '',
-        affirmation: task.reward?.affirmation || 'Good girl.',
+        affirmation: task.reward?.affirmation || 'Good boy.',
         source: 'ai',
       };
     }
@@ -242,7 +242,7 @@ Generate personalized delivery. 2-3 sentences. Direct, commanding. Address as Ma
     return {
       instruction: template || task.instruction,
       subtext: task.subtext || '',
-      affirmation: task.reward?.affirmation || 'Good girl.',
+      affirmation: task.reward?.affirmation || 'Good boy.',
       source: 'template',
     };
   }

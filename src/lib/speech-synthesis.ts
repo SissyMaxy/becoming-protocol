@@ -131,15 +131,60 @@ export function speakAffirmation(
       utterance.voice = voice;
     }
 
-    utterance.onend = () => resolve();
+    // Resolve-once guard + watchdogs. Chrome has a well-known race where
+    // calling cancel() right before speak() can drop the utterance — the
+    // engine silently discards it and NEITHER onstart nor onend ever
+    // fires, hanging any sequential auto-advance loop forever. We arm two
+    // watchdogs so the loop always advances:
+    //   1. A "never started" watchdog: if onstart hasn't fired within a
+    //      few seconds, assume the utterance was dropped and resolve.
+    //   2. A hard cap based on the text length once it does start, so a
+    //      stuck mid-utterance also recovers.
+    let settled = false;
+    let startWatchdog: ReturnType<typeof setTimeout> | null = null;
+    let maxWatchdog: ReturnType<typeof setTimeout> | null = null;
+
+    const clearTimers = () => {
+      if (startWatchdog) { clearTimeout(startWatchdog); startWatchdog = null; }
+      if (maxWatchdog) { clearTimeout(maxWatchdog); maxWatchdog = null; }
+    };
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      clearTimers();
+      resolve();
+    };
+    const fail = (err: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimers();
+      reject(err);
+    };
+
+    // Estimate a generous spoken duration (~12 chars/sec at rate 1, scaled
+    // by rate) so the hard cap never cuts off real speech, only stalls.
+    const rate = config.rate > 0 ? config.rate : 1;
+    const estimatedMs = (text.length / 12) * 1000 / rate;
+    const hardCapMs = Math.max(8000, estimatedMs * 2 + 4000);
+
+    utterance.onstart = () => {
+      // It started — drop the "never started" watchdog, arm the hard cap.
+      if (startWatchdog) { clearTimeout(startWatchdog); startWatchdog = null; }
+      maxWatchdog = setTimeout(done, hardCapMs);
+    };
+    utterance.onend = () => done();
     utterance.onerror = (event) => {
       // 'canceled' is expected when we stop playback
       if (event.error === 'canceled' || event.error === 'interrupted') {
-        resolve();
+        done();
       } else {
-        reject(new Error(`Speech error: ${event.error}`));
+        fail(new Error(`Speech error: ${event.error}`));
       }
     };
+
+    // If onstart never fires, the speak() was dropped — resolve so the
+    // trance loop keeps moving instead of hanging.
+    startWatchdog = setTimeout(done, 4000);
 
     window.speechSynthesis.speak(utterance);
   });

@@ -513,7 +513,7 @@ export class IdentityModule extends BaseModule {
       ],
       handler_warmth: [
         "You've been working hard. I see it. You've earned a gentle night.",
-        "Good girl. I mean it. The effort you're putting in — I see all of it.",
+        "Good boy. I mean it. The effort you're putting in — I see all of it.",
         "Rest tonight. Tomorrow we push again. But tonight, you're safe.",
       ],
 
@@ -1137,7 +1137,7 @@ export class IdentityModule extends BaseModule {
    * Deploy warmth - genuine positive reinforcement
    */
   async deployWarmth(): Promise<string> {
-    const message = this.getTemplate('handler_warmth', {}) || 'Good girl. Rest tonight.';
+    const message = this.getTemplate('handler_warmth', {}) || 'Good boy. Rest tonight.';
 
     if (this.state) {
       this.state.daysSinceWarmth = 0;

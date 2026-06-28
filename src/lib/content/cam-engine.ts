@@ -410,7 +410,7 @@ function getTemplateDirective(context: {
 
   if (totalTips >= tipGoal && tipGoal > 0) {
     return {
-      message: 'Tip goal hit. Good girl. You can wrap up when ready.',
+      message: 'Tip goal hit. Good boy. You can wrap up when ready.',
       priority: 'urgent',
       timestamp: new Date().toISOString(),
     };

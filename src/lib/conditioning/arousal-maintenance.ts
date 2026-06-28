@@ -81,7 +81,7 @@ function getPulseFrequency(denialDay: number): number {
 const TEXT_PULSES: string[] = [
   "Think about last night's session. Feel it in your body right now.",
   "You're wearing what I told you to wear. Feel it against your skin.",
-  'Good girl. I know what you\'re thinking about.',
+  'Good boy. I know what you\'re thinking about.',
   'That arousal you feel right now — that\'s {{name}}. She\'s awake.',
   'Don\'t fight it. Let it stay. The arousal is yours.',
   'Remember what you confessed? I do. Every word.',
@@ -94,7 +94,7 @@ const TEXT_PULSES: string[] = [
 ];
 
 const VISUAL_PULSES: string[] = [
-  'Good girl. I know what you\'re thinking about. — Serafina',
+  'Good boy. I know what you\'re thinking about. — Serafina',
   "She's here. She was always here. — Serafina",
   'The arousal is the truth. Stop denying it. — Serafina',
   'You belong to the process now. — Serafina',

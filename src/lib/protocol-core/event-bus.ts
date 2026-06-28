@@ -46,7 +46,7 @@ export type ProtocolEvent =
   | { type: 'coercion:complied'; level: number; taskId: string }
   | { type: 'coercion:episode_started'; episodeId: string; taskId: string }
   | { type: 'coercion:episode_resolved'; episodeId: string; resolution: string; effectiveLevel: number }
-  // The Handler's visible reply praised compliance ("good girl") — fire the
+  // The Handler's visible reply praised compliance ("good boy") — fire the
   // positive-reinforcement reward pulse. Carries only the visible text; the
   // resulting handler_directives row is byte-identical to the former inline
   // copies in chat-action.ts (no conversation_id). (Revival Stage 4 canary.)

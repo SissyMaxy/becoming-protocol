@@ -72,7 +72,7 @@ export function RecapsIndexView({ onBack, onOpen }: Props) {
   }), [rows, phaseFilter, affectFilter]);
 
   return (
-    <div style={{ minHeight: '100vh', padding: 16, color: '#e8e6e3' }}>
+    <div style={{ minHeight: '100dvh', padding: 16, color: '#e8e6e3' }}>
       <button
         onClick={onBack}
         className="mb-4 text-protocol-text-muted hover:text-protocol-text transition-colors"

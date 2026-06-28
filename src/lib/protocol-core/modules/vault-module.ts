@@ -275,7 +275,7 @@ export class VaultModule extends BaseModule {
 
       // Post-compliance - maintain ambient pressure
       post_compliance: [
-        `Good girl. It stays locked. For now.`,
+        `Good boy. It stays locked. For now.`,
         `Compliant. The vault remembers those who show up.`,
         `That's one more time you chose wisely. The count is ${context.complianceCount || 'growing'}.`,
       ],

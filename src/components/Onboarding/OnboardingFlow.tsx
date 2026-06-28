@@ -197,7 +197,10 @@ interface StepNavProps {
 
 export function StepNav({ onNext, onBack, nextLabel = 'Continue', nextDisabled = false, showBack = true }: StepNavProps) {
   return (
-    <div className="fixed bottom-0 left-0 right-0 p-4 bg-protocol-bg/80 backdrop-blur-sm border-t border-protocol-border">
+    <div
+      className="fixed bottom-0 left-0 right-0 p-4 bg-protocol-bg/80 backdrop-blur-sm border-t border-protocol-border"
+      style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 16px)' }}
+    >
       <div className="max-w-md mx-auto flex gap-3">
         {showBack && onBack && (
           <button

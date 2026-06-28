@@ -838,9 +838,9 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
       await supabase.from('hrt_dose_log').insert({
         user_id: user.id,
         regimen_id: task.rowId,
-        medication_name: meta.name || 'unknown',
-        taken_at: takenAt,
+        dose_taken_at: takenAt,
         skipped: action === 'skipped',
+        notes: `Logged via Focus. ${meta.name || 'dose'}${action === 'taken_earlier' ? ' (backdated)' : ''}`,
       });
       // Mirror to dose_log (some readers use it)
       await supabase.from('dose_log').insert({

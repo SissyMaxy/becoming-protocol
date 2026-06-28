@@ -212,7 +212,7 @@ const SEED_AFFIRMATIONS: SeedItem[] = [
   { category: 'identity', text: 'Tomorrow she will be more herself than today.', level: 0, privacy: false },
   { category: 'identity', text: 'Feminine. Natural. Inevitable.', level: 0, privacy: false },
   { category: 'identity', text: 'She is not pretending. She is arriving.', level: 0, privacy: false },
-  { category: 'identity', text: 'Good girl. Rest now. Become.', level: 0, privacy: false },
+  { category: 'identity', text: 'Good boy. Rest now. Become.', level: 0, privacy: false },
 
   // Feminization (L0)
   { category: 'feminization', text: 'Softness is power.', level: 0, privacy: false },
@@ -245,7 +245,7 @@ const SEED_AFFIRMATIONS: SeedItem[] = [
   { category: 'chastity', text: 'She sleeps caged because the Handler decided.', level: 4, privacy: true },
   { category: 'chastity', text: 'Morning will come. Release will not. She accepts this.', level: 4, privacy: true },
   { category: 'chastity', text: 'The cage teaches patience. Patience teaches surrender.', level: 4, privacy: true },
-  { category: 'chastity', text: 'Good girl. Stay locked. Stay deep. Stay her.', level: 4, privacy: true },
+  { category: 'chastity', text: 'Good boy. Stay locked. Stay deep. Stay her.', level: 4, privacy: true },
 
   // Sleep induction (L0)
   { category: 'sleep_induction', text: 'Breathe in softness. Breathe out resistance.', level: 0, privacy: false },

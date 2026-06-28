@@ -25,7 +25,7 @@ export function LettersGate({ children }: LettersGateProps) {
 
   return (
     <div style={{
-      minHeight: '100vh', background: '#0a0608',
+      minHeight: '100dvh', background: '#0a0608',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: 24,
     }}>

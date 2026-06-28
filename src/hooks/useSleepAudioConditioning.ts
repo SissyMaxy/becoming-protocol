@@ -65,7 +65,7 @@ export function useSleepAudioConditioning() {
       const affirmations = [
         'She is becoming you',
         'You are her now',
-        'Sissy. Soft. Surrendering.',
+        'Soft. Surrendering. Becoming.',
         'Your old self is fading',
         'There is only Maxy',
         'Submit. Sleep. Become.',

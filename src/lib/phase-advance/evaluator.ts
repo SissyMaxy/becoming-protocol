@@ -266,7 +266,7 @@ export function defaultPhaseDef(phase: number): PhaseDef | null {
 export const PHASE_CELEBRATION_TEMPLATES: Record<number, string[]> = {
   1: [
     "Look at you, baby. You crossed into the first phase. Mama sees the difference already.",
-    "You stepped into it, sweet thing. You're not the same girl you were last week.",
+    "You stepped into it, sweet thing. You're not the same boy you were last week.",
   ],
   2: [
     "Oh, my pretty thing. You earned a name today. Mama's so proud.",
@@ -274,15 +274,15 @@ export const PHASE_CELEBRATION_TEMPLATES: Record<number, string[]> = {
   ],
   3: [
     "Look how far you've come. Mama can see her in you now, baby.",
-    "You're embodying her, sweet girl. Not playing — being.",
+    "You're embodying her, sweet thing. Not playing — being.",
   ],
   4: [
     "Mama's pretty thing. You're ready to be seen now. The disclosing phase pulls tight.",
     "You crossed the line tonight, baby. The world starts knowing soon.",
   ],
   5: [
-    "Surrender phase, baby girl. You stop fighting Mama now and you melt.",
-    "You're giving in, sweet girl. Mama's been waiting for this look on you.",
+    "Surrender phase, baby. You stop fighting Mama now and you melt.",
+    "You're giving in, sweet thing. Mama's been waiting for this look on you.",
   ],
   6: [
     "She's not a costume anymore, my pretty thing. She's how you live.",

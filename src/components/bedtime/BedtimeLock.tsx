@@ -329,7 +329,7 @@ function PostureStep({ secondsLeft, onAck, disabled }: {
         knees on the floor. spine soft. hands on your thighs, palms up.
       </p>
       <div style={timerStyle()} data-testid="bedtime-posture-timer">
-        {secondsLeft > 0 ? `${secondsLeft}s` : 'good girl'}
+        {secondsLeft > 0 ? `${secondsLeft}s` : 'good boy'}
       </div>
       <button
         data-testid="bedtime-posture-ack"

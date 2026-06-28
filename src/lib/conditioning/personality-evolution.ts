@@ -365,7 +365,7 @@ function mapRow(row: Record<string, unknown>): PersonalityState {
     familiarityLevel: (row.familiarity_level as number) ?? 1,
     trustScore: (row.trust_score as number) ?? 5,
     usesPetNames: (row.uses_pet_names as boolean) ?? true,
-    preferredPetName: (row.preferred_pet_name as string) || 'good girl',
+    preferredPetName: (row.preferred_pet_name as string) || 'good boy',
     humorLevel: (row.humor_level as number) ?? 3,
     updatedAt: row.updated_at as string,
   };

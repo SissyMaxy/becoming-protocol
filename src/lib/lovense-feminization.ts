@@ -382,7 +382,7 @@ export async function sendLevelUpBuzz(toyId?: string): Promise<void> {
 }
 
 /**
- * Send an affirmation buzz (for "good girl" moments)
+ * Send an affirmation buzz (for "good boy" moments)
  * Uses cloud API pattern if available, falls back to local
  */
 export async function sendAffirmationBuzz(toyId?: string): Promise<void> {

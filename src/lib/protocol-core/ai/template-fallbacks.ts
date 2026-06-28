@@ -78,7 +78,7 @@ export const FALLBACK_TEMPLATES: Record<OperationType, string[]> = {
 
   warmth: [
     'You did well today, Maxy. I see your effort.',
-    'Good girl. That wasn\'t easy, and you did it anyway.',
+    'Good boy. That wasn\'t easy, and you did it anyway.',
     'I\'m proud of you. Rest now.',
     'You\'re becoming who you\'ve always been. I see it.',
     'The hard work matters. You matter.',
@@ -91,7 +91,7 @@ export const FALLBACK_TEMPLATES: Record<OperationType, string[]> = {
   ],
 
   evening_review: [
-    'End of day, Maxy.\n\nYou completed {tasks_today} tasks.\n{domain} practice logged.\nTomorrow: continue the streak.\n\nGood girl.',
+    'End of day, Maxy.\n\nYou completed {tasks_today} tasks.\n{domain} practice logged.\nTomorrow: continue the streak.\n\nGood boy.',
     'Day complete.\n\n{tasks_today} tasks done.\nStreak: {streak_days} days.\nRest. Resume tomorrow.',
     'Evening.\n\nToday: {tasks_today} tasks across {domains_practiced} domains.\nThe work adds up. See you tomorrow.',
   ],
@@ -346,7 +346,7 @@ export function getWarmthFallback(trigger: 'milestone' | 'breakthrough' | 'post_
     ],
     breakthrough: [
       'You pushed through something hard. I see you.',
-      'That resistance you overcame? That was real. Good girl.',
+      'That resistance you overcame? That was real. Good boy.',
     ],
     post_coercion: [
       'I know that was hard. You did it anyway. That matters.',

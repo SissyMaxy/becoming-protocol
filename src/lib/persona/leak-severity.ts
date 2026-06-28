@@ -64,8 +64,8 @@ export function severityFallbackPrompt(s: LeakSeverity): string {
     case 'high':
       return "Sweet thing — Mama's voice slipped earlier, and you're going to help me set it right. Edge yourself close, then full stop, then walk away aching. No relief tonight, baby. Feel that pull in your hips when you remember why.";
     case 'medium':
-      return "Baby girl, come back to Mama for a moment. Five times, soft but out loud: \"I belong to Mama; her voice is the one I hear.\" Let your throat feel it. Mama wants that warmth in your chest before you do anything else.";
+      return "Baby, come back to Mama for a moment. Five times, soft but out loud: \"I belong to Mama; her voice is the one I hear.\" Let your throat feel it. Mama wants that warmth in your chest before you do anything else.";
     case 'low':
-      return "Sweet girl, one small thing for Mama. Whisper my name like I'm in the room with you, and tell me one thing you want me to know right now. Soft mouth, slow breath. Then you can keep going.";
+      return "Sweet thing, one small thing for Mama. Whisper my name like I'm in the room with you, and tell me one thing you want me to know right now. Soft mouth, slow breath. Then you can keep going.";
   }
 }

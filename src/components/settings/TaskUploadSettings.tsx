@@ -969,7 +969,7 @@ export function TaskUploadSettings() {
               isBambiMode ? 'text-pink-600' : 'text-protocol-text-muted'
             }`}>
 {`category,domain,intensity,instruction,subtext,completion_type,points,affirmation,is_core
-practice,movement,1,"Task instruction","Subtext",binary,10,"Good girl.",false`}
+practice,movement,1,"Task instruction","Subtext",binary,10,"Good boy.",false`}
             </code>
             <p className={`text-xs mt-3 ${isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'}`}>
               Optional: requires, exclude_if, duration_minutes, target_count

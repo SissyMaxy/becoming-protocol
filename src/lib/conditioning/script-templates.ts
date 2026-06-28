@@ -443,7 +443,7 @@ const TEMPLATES: ScriptTemplate[] = [
     category: 'dumbification',
     phase: 4,
     intensity: 4,
-    template: `Smart girls resist. Dumb girls obey. [pause] Which one are you, {{name}}? [pause] You already know. You don't want to think about it — and that's the answer. [breathe] The intelligence was the costume's armor. Overthinking, overanalyzing, always three steps ahead. Exhausting. [pause] {{name}} doesn't need to be three steps ahead. {{name}} just needs to be right here, in this moment, listening to my voice. [pause] One step. One word. One instruction at a time. [pause] That's not dumb. That's efficient. That's present. That's obedient. [pause] But if calling it dumb makes you wetter, then by all means — be dumb for me. [pause] Good girl.`,
+    template: `Smart boys resist. Dumb boys obey. [pause] Which one are you, {{name}}? [pause] You already know. You don't want to think about it — and that's the answer. [breathe] The intelligence was the costume's armor. Overthinking, overanalyzing, always three steps ahead. Exhausting. [pause] {{name}} doesn't need to be three steps ahead. {{name}} just needs to be right here, in this moment, listening to my voice. [pause] One step. One word. One instruction at a time. [pause] That's not dumb. That's efficient. That's present. That's obedient. [pause] But if calling it dumb makes you harder, then by all means — be dumb for me. [pause] Good girl.`,
     variables: ['name'],
     duration_estimate: 55,
     trigger_phrases: ['good girl', 'obey'],

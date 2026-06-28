@@ -51,7 +51,7 @@ const RECOVERY_PROMPTS: RecoveryPrompt[] = [
   {
     id: 'body-1',
     type: 'body_check',
-    prompt: "Roll your shoulders back. Sit up straight. You're a good girl with good posture.",
+    prompt: "Roll your shoulders back. Sit up straight. You're a good boy with good posture.",
     duration: 10,
     escalationLevel: 2,
   },
@@ -74,7 +74,7 @@ const RECOVERY_PROMPTS: RecoveryPrompt[] = [
   {
     id: 'micro-1',
     type: 'micro_task',
-    prompt: "Say 'good girl' out loud. Just once. Do it now.",
+    prompt: "Say 'good boy' out loud. Just once. Do it now.",
     duration: 5,
     escalationLevel: 3,
   },

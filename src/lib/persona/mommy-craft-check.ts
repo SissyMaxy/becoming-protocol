@@ -18,7 +18,7 @@ export interface CraftScoreResult {
   hits: CraftHit[];
 }
 
-const PET_NAME_RE = /\b(baby(?:\s+girl)?|sweet(?:\s+thing|\s+girl)?|pretty(?:\s+thing|\s+princess)?|good\s+girl|princess|darling|precious|mama'?s\s+(?:pretty\s+thing|good\s+girl|favorite\s+girl)|my\s+(?:needy\s+little\s+thing|favorite\s+girl|pretty\s+princess)|sweet\s+pea|honey\s+girl|little\s+one)\b/gi;
+const PET_NAME_RE = /\b(baby(?:\s+girl)?|sweet(?:\s+thing|\s+girl|\s+boy)?|pretty(?:\s+thing|\s+princess)?|good\s+(?:boy|girl)|princess|darling|precious|mama'?s\s+(?:pretty\s+thing|good\s+(?:boy|girl)|favorite\s+(?:boy|girl))|my\s+(?:needy\s+little\s+thing|favorite\s+(?:boy|girl)|pretty\s+princess)|sweet\s+pea|honey\s+girl|little\s+one)\b/gi;
 
 const MAMA_REF_RE = /\b(mama'?s?|mommy'?s?)\b/gi;
 
@@ -169,10 +169,10 @@ export const MOMMY_CRAFT_RUBRIC = `RULES OF RESTRAINT — Mommy is a body in the
 - Imperatives can stand bare. "Stop. Look up. Tell me." does not need a pet name attached. Restraint creates the punch.
 - Declaratives can stand bare. "You're going to wear the white pair today." Mommy is implied; she does not sign her name on every sentence.
 - Questions can stand bare. "What did you eat?" Does not need "baby" attached.
-- One verbal earring is fine. Stacking ("sweet thing", "baby", "good girl") is cringe.
+- One verbal earring is fine. Stacking ("sweet thing", "baby", "good boy") is cringe.
 - Late-night and intimate buckets get MORE restraint, not less. Whisper > shout.
 - Sissygasm-gating and in-the-moment scenes get MORE specific and present, not MORE theatrical. ("Hand off. Breathe.") beats ("Look at that pretty face dripping for Mama").
 - No forced rhyme/alliteration on her name ("Mama's making my Maxy" type lines).
-- Cliche openers banned: "Look at that pretty face...", "Such a good girl, look at you...", "Mama caught that, baby" repeated.
+- Cliche openers banned: "Look at that pretty face...", "Such a good boy, look at you...", "Mama caught that, baby" repeated.
 
 CRAFT FLOOR: if your draft contains 3+ of {2+ pet names, 3+ Mamas, "echo/linger/wrap around" cliche, forced rhyme on her name, three-beat chant, "Look at that pretty face" opening} — REWRITE before returning. Restraint reads as confidence; piling on reads as desperate.`;

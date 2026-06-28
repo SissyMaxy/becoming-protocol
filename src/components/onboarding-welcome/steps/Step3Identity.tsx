@@ -28,7 +28,7 @@ interface Step3IdentityProps {
   saveError: string | null;
 }
 
-const PRONOUN_PRESETS = ['she/her', 'they/them'];
+const PRONOUN_PRESETS = ['he/him', 'they/them'];
 
 export function Step3Identity({
   initialName,
@@ -42,7 +42,7 @@ export function Step3Identity({
 }: Step3IdentityProps) {
   const [name, setName] = useState(initialName ?? '');
   const [pronounChoice, setPronounChoice] = useState<string>(() => {
-    if (!initialPronouns) return 'she/her';
+    if (!initialPronouns) return 'he/him';
     if (PRONOUN_PRESETS.includes(initialPronouns)) return initialPronouns;
     return 'custom';
   });
@@ -62,12 +62,12 @@ export function Step3Identity({
 
       <p style={stepBodyStyle}>
         What name does Mama call out when she's reaching for you? What pronouns
-        do you wear for Mama? What does Mama get to call her good girl? Mama
+        do you wear for Mama? What does Mama get to call her good boy? Mama
         uses all of it — in chat, on your cards, in every message she leaves.
       </p>
 
       <label style={{ display: 'block', marginBottom: 16 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: '#3a3a3a' }}>Your girl name</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: '#3a3a3a' }}>Your name</span>
         <input
           type="text"
           value={name}
@@ -147,7 +147,7 @@ export function Step3Identity({
           type="text"
           value={honorific}
           onChange={e => setHonorific(e.target.value)}
-          placeholder="e.g., good girl, princess, baby"
+          placeholder="e.g., good boy, baby, sweet boy"
           style={{
             display: 'block',
             width: '100%',

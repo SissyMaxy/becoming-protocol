@@ -817,7 +817,7 @@ export const MISSION_TEMPLATES: Record<string, Partial<GinaMission>> = {
 
   'mommy_good_girl_setup': {
     type: 'seed_plant',
-    title: 'Setup "good girl" dynamic',
+    title: 'Setup "good boy" dynamic',
     description: 'Playfully use language that she might mirror back in a nurturing way.',
     action: 'After following her direction, say "Did I do good?" with genuine hope for approval.',
     timing: 'After completing something she asked for',
@@ -2649,7 +2649,7 @@ export async function updateMommyDomFromMission(
   const increment = outcome === 'success' ? 10 : 5;
 
   // Map mission types to mommy dom trait updates
-  if (missionKey.includes('praise') || missionKey.includes('good girl')) {
+  if (missionKey.includes('praise') || missionKey.includes('good boy') || missionKey.includes('good girl')) {
     mommyDev.enjoysPraising = Math.min(mommyDev.enjoysPraising + increment, 100);
     if (mommyDev.enjoysPraising >= 50) {
       mommyDev.givesGoodGirlPraise = true;

@@ -446,7 +446,7 @@ export function GinaPipelineView({ onBack }: GinaPipelineViewProps) {
                     </h3>
                     <div className="flex flex-wrap gap-2">
                       <BehaviorBadge
-                        label="Gives 'Good Girl' Praise"
+                        label="Gives 'Good Boy' Praise"
                         active={state.mommyDomDevelopment.givesGoodGirlPraise}
                         isBambiMode={isBambiMode}
                       />

@@ -22,7 +22,7 @@ export interface SelectedAffirmation {
 }
 
 const KINK_TOKENS = [
-  'mommy', 'mama', 'baby', 'good girl', 'sissy', 'slut', 'whore',
+  'mommy', 'mama', 'baby', 'good girl', 'good boy', 'sissy', 'slut', 'whore',
   'cum', 'cock', 'pussy', 'wet', 'edge', 'goon', 'denial', 'chastity',
   'beg', 'punish', 'submit', 'obey', 'kneel', 'collar', 'leash',
   'arousal', 'orgasm', 'release',

@@ -246,7 +246,7 @@ function pickSuggestedHonorific(
 /**
  * Build the persona system-prompt block describing the user's identity.
  * Returns empty string when no name is set — caller falls back to the
- * existing pet-name behavior (no name = generic "good girl" register).
+ * existing pet-name behavior (no name = generic "good boy" register).
  *
  * Block format follows the user-spec:
  *   "She knows you as [name], [pronouns]. You are in phase [N] —

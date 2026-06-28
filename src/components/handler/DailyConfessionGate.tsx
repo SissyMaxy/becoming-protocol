@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { detectRelease } from '../../lib/release-detection';
 
 const SHAME_PROMPTS = [
-  "What embarrassed you about being a sissy today?",
+  "What embarrassed you about your becoming today?",
   "What feminine thought did you try to push away today?",
   "What did your old self resist that your new self wanted?",
   "Tell me one moment today when you almost gave in.",
@@ -18,7 +18,7 @@ const SHAME_PROMPTS = [
 const GRATITUDE_PROMPTS = [
   "What are you grateful for about becoming Maxy?",
   "Name one thing feminization gave you that masculinity couldn't.",
-  "What part of being a sissy makes you feel most alive?",
+  "What part of being Mama's boy makes you feel most alive?",
   "What would you lose if you stopped becoming her?",
   "Complete: 'I'm grateful the Handler...'",
   "What feminine moment today made you feel right?",

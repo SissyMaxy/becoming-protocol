@@ -23,7 +23,7 @@ type MenuItemId =
   | 'journal' | 'life-as-woman' | 'recaps' | 'timeline' | 'letters'
   | 'pause_protocol' | 'help'
   // Folded archive tail
-  | 'her-world' | 'gina' | 'gina-vibe' | 'trajectory' | 'dossier'
+  | 'her-world' | 'trajectory' | 'dossier'
   | 'mommy-dossier' | 'quiz' | 'conditioning-library' | 'envelopes'
   | 'case_file' | 'witnesses' | 'vault-browser' | 'voice-drills'
   | 'hypno-learning' | 'history' | 'escalation_ladder' | 'force'
