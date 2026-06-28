@@ -88,6 +88,16 @@ export function GooningSession({ onClose, onSessionComplete }: GooningSessionPro
   const pulseRef = useRef<NodeJS.Timeout | null>(null);
   const affirmationRef = useRef<NodeJS.Timeout | null>(null);
   const lastAudioIdRef = useRef<string | null>(null);
+  // Live mirrors of state so async loops (runCycle/ramp/hold/tease) read the
+  // current value instead of the value captured when startSession ran.
+  const isActiveRef = useRef(false);
+  const cyclesCompletedRef = useRef(0);
+  // Set false on unmount/end to abort any in-flight async loops.
+  const runningRef = useRef(false);
+
+  // Keep refs in sync with state
+  useEffect(() => { isActiveRef.current = isActive; }, [isActive]);
+  useEffect(() => { cyclesCompletedRef.current = cyclesCompleted; }, [cyclesCompleted]);
 
   // Load content library on mount
   useEffect(() => {
@@ -193,13 +203,13 @@ export function GooningSession({ onClose, onSessionComplete }: GooningSessionPro
     setPhase('building');
     await rampIntensity(0, phaseConfig.building.targetIntensity, phaseConfig.building.duration);
 
-    if (!isActive) return;
+    if (!isActiveRef.current || !runningRef.current) return;
 
     // Peak phase
     setPhase('peak');
     await holdIntensity(phaseConfig.peak.targetIntensity, phaseConfig.peak.duration);
 
-    if (!isActive) return;
+    if (!isActiveRef.current || !runningRef.current) return;
 
     // Denial phase
     setPhase('denial');
@@ -207,28 +217,31 @@ export function GooningSession({ onClose, onSessionComplete }: GooningSessionPro
     await rampIntensity(phaseConfig.peak.targetIntensity, 0, 1000);
     await new Promise(resolve => setTimeout(resolve, phaseConfig.denial.duration));
 
-    if (!isActive) return;
+    if (!isActiveRef.current || !runningRef.current) return;
 
     // Tease phase
     setPhase('tease');
     await teasePattern(phaseConfig.tease.duration);
 
-    if (!isActive) return;
+    if (!isActiveRef.current || !runningRef.current) return;
 
-    setCyclesCompleted(c => c + 1);
+    // Compute the new cycle count from the live ref, then commit it.
+    const newCycleCount = cyclesCompletedRef.current + 1;
+    cyclesCompletedRef.current = newCycleCount;
+    setCyclesCompleted(newCycleCount);
 
-    // After 3 cycles, give a reward
-    if ((cyclesCompleted + 1) % 3 === 0) {
+    // After every 3rd cycle, give a reward
+    if (newCycleCount % 3 === 0) {
       setPhase('reward');
       await rampIntensity(0, phaseConfig.reward.targetIntensity, 3000);
       await holdIntensity(phaseConfig.reward.targetIntensity, phaseConfig.reward.duration);
     }
 
     // Continue cycle
-    if (isActive) {
+    if (isActiveRef.current && runningRef.current) {
       runCycle();
     }
-  }, [isActive, cyclesCompleted]);
+  }, []);
 
   // Ramp intensity gradually
   const rampIntensity = async (from: number, to: number, durationMs: number) => {
@@ -237,7 +250,7 @@ export function GooningSession({ onClose, onSessionComplete }: GooningSessionPro
     const stepSize = (to - from) / steps;
 
     for (let i = 0; i <= steps; i++) {
-      if (!isActive) break;
+      if (!isActiveRef.current || !runningRef.current) break;
       const newIntensity = Math.round(from + stepSize * i);
       setIntensity(newIntensity);
       if (newIntensity > peakIntensity) setPeakIntensity(newIntensity);
@@ -256,12 +269,12 @@ export function GooningSession({ onClose, onSessionComplete }: GooningSessionPro
   // Tease pattern - random pulses
   const teasePattern = async (durationMs: number) => {
     const endTime = Date.now() + durationMs;
-    while (Date.now() < endTime && isActive) {
+    while (Date.now() < endTime && isActiveRef.current && runningRef.current) {
       const randomIntensity = Math.floor(Math.random() * 12) + 3;
       setIntensity(randomIntensity);
       await lovense.setIntensity(randomIntensity);
       await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1500));
-      if (isActive) {
+      if (isActiveRef.current && runningRef.current) {
         setIntensity(0);
         await lovense.setIntensity(0);
         await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 2000));
@@ -272,10 +285,13 @@ export function GooningSession({ onClose, onSessionComplete }: GooningSessionPro
   // Start session
   const startSession = useCallback(() => {
     setIsActive(true);
+    isActiveRef.current = true;
+    runningRef.current = true;
     setIsPaused(false);
     setPhase('building');
 
-    // Start timer
+    // Start timer (clear any prior interval first to avoid leaking timers)
+    if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
       setDuration(d => d + 1);
     }, 1000);
@@ -311,9 +327,12 @@ export function GooningSession({ onClose, onSessionComplete }: GooningSessionPro
   const togglePause = useCallback(() => {
     if (isPaused) {
       setIsPaused(false);
+      // Clear any prior intervals before reassigning to avoid stacking timers
+      if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = setInterval(() => {
         setDuration(d => d + 1);
       }, 1000);
+      if (pulseRef.current) clearInterval(pulseRef.current);
       startPulse();
       hypnoActions.resume();
     } else {
@@ -328,6 +347,8 @@ export function GooningSession({ onClose, onSessionComplete }: GooningSessionPro
   // End session
   const endSession = useCallback(() => {
     setIsActive(false);
+    isActiveRef.current = false;
+    runningRef.current = false;
 
     if (timerRef.current) clearInterval(timerRef.current);
     if (cycleRef.current) clearInterval(cycleRef.current);
@@ -365,6 +386,9 @@ export function GooningSession({ onClose, onSessionComplete }: GooningSessionPro
   // Cleanup
   useEffect(() => {
     return () => {
+      // Abort any in-flight async ramp/hold/tease/cycle loops
+      isActiveRef.current = false;
+      runningRef.current = false;
       if (timerRef.current) clearInterval(timerRef.current);
       if (cycleRef.current) clearInterval(cycleRef.current);
       if (pulseRef.current) clearInterval(pulseRef.current);

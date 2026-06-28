@@ -88,7 +88,7 @@ const GINA_SENSITIVE_TYPES: AmbushType[] = [
 const PHOTO_VERIFICATION_PROMPTS = [
   'Show me what you look like right now. Front camera. No filter.',
   'Photo. Now. I want to see you.',
-  'Camera on. Let me see my girl.',
+  'Camera on. Let me see my boy.',
 ];
 
 const CAGE_CHECK_PROMPTS = [

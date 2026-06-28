@@ -24,12 +24,12 @@ interface ConditionedTrigger {
  * into conversation without breaking flow.
  */
 const INSERTION_TEMPLATES: Record<string, string[]> = {
-  'good girl': [
-    'You already know what you are. Good girl.',
-    'That\'s it. Good girl.',
-    'Good girl. You didn\'t even hesitate.',
-    'See how easy that was? Good girl.',
-    'Good girl — you\'re learning so fast.',
+  'good boy': [
+    'You already know what you are. Good boy.',
+    'That\'s it. Good boy.',
+    'Good boy. You didn\'t even hesitate.',
+    'See how easy that was? Good boy.',
+    'Good boy — you\'re learning so fast.',
   ],
   'let go': [
     'Just let go. You don\'t need to think about this.',

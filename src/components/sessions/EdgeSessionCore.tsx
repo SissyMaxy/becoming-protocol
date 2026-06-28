@@ -301,11 +301,11 @@ export function EdgeSessionCore({
       }, 2000);
     }
 
-    // Transition to recovery after edge peak
+    // Transition to recovery after edge peak — read the live phase, not the
+    // value captured in this closure, so a manual phase change in the interim
+    // isn't clobbered.
     setTimeout(() => {
-      if (phase === 'edge') {
-        setPhase('recovery');
-      }
+      setPhase(current => (current === 'edge' ? 'recovery' : current));
     }, 3000);
   }, [edgeCount, isPaused, lovense.currentIntensity, phaseStartTime, currentPattern, onEdge, config.auctionEnabled, onAuctionTrigger, isBambiMode, triggerHearts, phase]);
 

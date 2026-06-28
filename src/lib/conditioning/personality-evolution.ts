@@ -218,7 +218,7 @@ export async function evolvePersonality(userId: string): Promise<PersonalityStat
     // --- 5. Effective phrases from high-positive messages ---
     const phrasePatterns = [
       'You already know',
-      'Good girl',
+      'Good boy',
       'That\'s not the costume talking',
       'She\'s right here',
       'Mama sees you',

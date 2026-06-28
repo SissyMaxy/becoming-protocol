@@ -1,6 +1,6 @@
 /**
  * ConversationScreenshotsCard — upload screenshots of real conversations
- * (Gina, Jake, fans, partners) as evidence. Each screenshot is OCR'd +
+ * (partners, fans, friends) as evidence. Each screenshot is OCR'd +
  * LLM-classified and chained into memory_implants / key_admissions /
  * desire_log / slip_log.
  *
@@ -35,15 +35,13 @@ interface Classifications {
   admissions?: Array<{ text: string; type: string }>;
   slips?: Array<{ text: string; type: string }>;
   disclosure_signals?: string[];
-  gina_warmth?: string[];
   summary?: string;
 }
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 
 const RELATIONSHIP_OPTIONS = [
-  { value: 'wife', label: 'Wife (Gina)' },
-  { value: 'partner', label: 'Partner / boyfriend' },
+  { value: 'partner', label: 'Partner / spouse' },
   { value: 'fan', label: 'Fan / subscriber' },
   { value: 'witness', label: 'Designated witness' },
   { value: 'friend', label: 'Friend / co-conspirator' },
@@ -58,7 +56,7 @@ export function ConversationScreenshotsCard() {
   const [showUpload, setShowUpload] = useState(false);
   const [mode, setMode] = useState<'image' | 'text'>('image');
   const [contactLabel, setContactLabel] = useState('');
-  const [relationship, setRelationship] = useState('wife');
+  const [relationship, setRelationship] = useState('partner');
   const [userNote, setUserNote] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [pastedText, setPastedText] = useState('');
@@ -248,7 +246,7 @@ export function ConversationScreenshotsCard() {
 
           {mode === 'text' && (
             <textarea
-              placeholder={`Paste the conversation. Format like:\n\nGina: how was today\nMe: rough\nGina: tell me\n\nOr just paste the raw thread — the classifier handles either.`}
+              placeholder={`Paste the conversation. Format like:\n\nThem: how was today\nMe: rough\nThem: tell me\n\nOr just paste the raw thread — the classifier handles either.`}
               value={pastedText}
               onChange={e => setPastedText(e.target.value)}
               rows={10}
@@ -261,7 +259,7 @@ export function ConversationScreenshotsCard() {
           )}
           <input
             type="text"
-            placeholder="Who is this with? (Gina, Jake, alias)"
+            placeholder="Who is this with? (name or alias)"
             value={contactLabel}
             onChange={e => setContactLabel(e.target.value)}
             style={{
@@ -409,18 +407,6 @@ export function ConversationScreenshotsCard() {
                       {c.slips?.map((sl, i) => (
                         <div key={i} style={{ fontSize: 10.5, color: '#f47272', paddingLeft: 8, lineHeight: 1.4 }}>
                           ▸ [{sl.type}] {sl.text}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {(c.gina_warmth?.length ?? 0) > 0 && (
-                    <div style={{ marginBottom: 6 }}>
-                      <div style={{ fontSize: 9, color: '#5fc88f', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>
-                        gina warmth ({c.gina_warmth?.length})
-                      </div>
-                      {c.gina_warmth?.map((line, i) => (
-                        <div key={i} style={{ fontSize: 10.5, color: '#5fc88f', paddingLeft: 8, lineHeight: 1.4 }}>
-                          ▸ {line}
                         </div>
                       ))}
                     </div>

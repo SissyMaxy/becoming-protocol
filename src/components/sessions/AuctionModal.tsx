@@ -82,6 +82,8 @@ export function AuctionModal({
 
   const handleAccept = useCallback(() => {
     setIsAccepting(true);
+    // Stop the countdown so it can't fire onExpire while we animate toward onAccept
+    if (timerRef.current) clearInterval(timerRef.current);
     if (isBambiMode) {
       triggerHearts();
     }

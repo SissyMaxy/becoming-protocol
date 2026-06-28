@@ -277,7 +277,7 @@ export function buildFeminineSelfBlock(
 
   const lines = [
     `## IDENTITY — feminine_self`,
-    `She knows you as ${self.feminineName}, ${pronounStr}.`,
+    `She knows you as ${self.feminineName}. Your current pronouns: ${pronounStr}.`,
     phaseLine,
     wardrobeLine,
     honorificLine,

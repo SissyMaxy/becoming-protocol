@@ -356,8 +356,8 @@ async function getArousalPerDay(userId: string): Promise<Map<string, number>> {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 30);
   const { data } = await supabase
-    .from('arousal_logs')
-    .select('created_at, level')
+    .from('arousal_log')
+    .select('created_at, value')
     .eq('user_id', userId)
     .gte('created_at', cutoff.toISOString());
 
@@ -366,7 +366,7 @@ async function getArousalPerDay(userId: string): Promise<Map<string, number>> {
     for (const row of data) {
       const date = new Date(row.created_at).toISOString().split('T')[0];
       const existing = dayTotals.get(date) || { sum: 0, count: 0 };
-      existing.sum += row.level;
+      existing.sum += row.value;
       existing.count += 1;
       dayTotals.set(date, existing);
     }

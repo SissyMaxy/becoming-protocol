@@ -125,7 +125,7 @@ const RELEASE_TYPE_OPTIONS: { type: ReleaseType; label: string; resetsStreak: bo
   { type: 'edge_only', label: 'Edge only', resetsStreak: false },
 ];
 const RELEASE_CONTEXT_OPTIONS: { context: ReleaseContext; label: string }[] = [
-  { context: 'with_partner', label: 'With Gina' },
+  { context: 'with_partner', label: 'With a partner' },
   { context: 'solo', label: 'Solo' },
   { context: 'during_content', label: 'During content' },
   { context: 'during_practice', label: 'During practice' },
@@ -1146,9 +1146,9 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
   };
 
   // ── Release check-in handler (ported from MorningBriefing) ──
-  // Streak-reset side effect ported inline: sex with Gina (with_partner) does
-  // NOT reset the denial streak; a real solo/content/practice/sleep release of
-  // a resetting type ends the active streak and opens a fresh one.
+  // Streak-reset side effect ported inline: a real solo/partner/content/
+  // practice/sleep release of a resetting type ends the active streak and
+  // opens a fresh one.
   const submitReleaseCheckin = async (cum: boolean) => {
     if (!user?.id || task?.kind !== 'release_checkin') return;
     setSubmitting(true);
@@ -1156,16 +1156,14 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
       if (cum) {
         if (!releaseType || !releaseWhen || !releaseContext) { setSubmitting(false); return; }
         const releaseTimestamp = resolveReleaseTime(releaseWhen);
-        const isPartnerSex = releaseContext === 'with_partner';
         const resetsStreak = ['full', 'ruined', 'wet_dream', 'accident'].includes(releaseType);
 
         // Denial streak side-effects — faithful to useCurrentDenialDay.recordRelease.
-        // Partner sex (with Gina) HOLDS the streak (denial continues despite release),
-        // so it touches nothing. Otherwise: resetting types end+restart the streak;
-        // non-resetting orgasm types (prostate/sissygasm) hold the streak but bump
-        // prostate_orgasms_during — a counter the Handler's telemetry reads.
+        // Resetting types end+restart the streak; non-resetting orgasm types
+        // (prostate/sissygasm) hold the streak but bump prostate_orgasms_during
+        // — a counter the Handler's telemetry reads.
         const isProstateType = releaseType === 'prostate' || releaseType === 'sissygasm';
-        if (!isPartnerSex && (resetsStreak || isProstateType)) {
+        if (resetsStreak || isProstateType) {
           const { data: streak } = await supabase.from('denial_streaks')
             .select('id, started_at, prostate_orgasms_during').eq('user_id', user.id)
             .is('ended_at', null).order('started_at', { ascending: false }).limit(1).maybeSingle();
@@ -1840,7 +1838,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
                               cursor: 'pointer', fontFamily: 'inherit',
                             }}>
                             {opt.label}
-                            {opt.resetsStreak && releaseContext !== 'with_partner' && (
+                            {opt.resetsStreak && (
                               <span style={{ color: '#f47272', marginLeft: 4 }}>resets</span>
                             )}
                           </button>

@@ -177,19 +177,21 @@ export function getTimeOfDay(): 'morning' | 'afternoon' | 'evening' | 'late_nigh
  * Build user state from various sources
  */
 export async function buildUserState(userId: string): Promise<UserState> {
-  // Fetch denial day from user profile or denial cycles
-  const { data: profile } = await supabase
-    .from('user_profile')
-    .select('denial_day, streak_days, arousal_level')
-    .eq('user_id', userId)
-    .single();
-
-  // Persona drives the coach voice — pulled from user_state, not user_profile.
+  // Denial/streak/arousal + persona all live on user_state (there is no
+  // user_profile table). current_arousal is the 0-5 arousal scale.
   const { data: us } = await supabase
     .from('user_state')
-    .select('handler_persona')
+    .select('denial_day, streak_days, current_arousal, handler_persona')
     .eq('user_id', userId)
     .maybeSingle();
+
+  const profile = us
+    ? {
+        denial_day: (us as { denial_day?: number }).denial_day,
+        streak_days: (us as { streak_days?: number }).streak_days,
+        arousal_level: (us as { current_arousal?: number }).current_arousal,
+      }
+    : null;
 
   // Fetch last session info
   const { data: lastSession } = await supabase

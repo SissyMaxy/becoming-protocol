@@ -96,7 +96,7 @@ const CAPTION_POOLS: Record<string, string[]> = {
     'want is not optional anymore',
   ],
   compliance: [
-    'good girl',
+    'good boy',
     'obey',
     'deeper',
     'surrender',

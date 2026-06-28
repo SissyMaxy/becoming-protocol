@@ -266,7 +266,7 @@ const ARCHIVE_ITEMS: MenuItem[] = [
     id: 'force',
     icon: Flame,
     label: 'Force Layer',
-    description: 'Hard Mode, slips, punishments, chastity, disclosure ladder.',
+    description: 'Hard Mode, slips, punishments, chastity.',
     color: '#ef4444',
   },
 ];

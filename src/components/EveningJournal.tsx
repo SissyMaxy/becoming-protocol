@@ -11,8 +11,6 @@ import {
   Check,
   Star,
   SkipForward,
-  Heart,
-  Crown,
   Stethoscope,
 } from 'lucide-react';
 import { JournalSkipModal } from './SkipConfirmModal';
@@ -148,10 +146,6 @@ export function EveningJournal() {
   const [showSkipModal, setShowSkipModal] = useState(false);
   const [isSkipped, setIsSkipped] = useState(false);
 
-  // Gina context check-in state
-  const [ginaNotices, setGinaNotices] = useState('');
-  const [sharedSpace, setSharedSpace] = useState('');
-
   // Therapist check-in state
   const [hadTherapy, setHadTherapy] = useState<boolean | null>(null);
   const [therapyNotes, setTherapyNotes] = useState('');
@@ -184,21 +178,6 @@ export function EveningJournal() {
       };
       await saveJournal(journal);
 
-      // Log Gina context data as corruption milestones (fire-and-forget)
-      const ginaLevel = corruptionSnapshot?.levels.gina ?? 0;
-      if (ginaNotices.trim()) {
-        logEvent('gina', 'milestone', ginaLevel, {
-          gina_notices: ginaNotices,
-          gina_questions_logged: true,
-        }).catch(() => {});
-      }
-      if (sharedSpace.trim()) {
-        logEvent('gina', 'milestone', ginaLevel, {
-          shared_space_activities: 1,
-          shared_space_description: sharedSpace,
-        }).catch(() => {});
-      }
-
       // Log therapist check-in data (fire-and-forget)
       if (hadTherapy === true) {
         const therapistLevel = corruptionSnapshot?.levels.therapist ?? 0;
@@ -228,7 +207,7 @@ export function EveningJournal() {
   // Mark as unsaved when content changes
   useEffect(() => {
     setIsSaved(false);
-  }, [alignment, euphoria, dysphoria, insights, ginaNotices, sharedSpace, hadTherapy, therapyNotes]);
+  }, [alignment, euphoria, dysphoria, insights, hadTherapy, therapyNotes]);
 
   // Handle journal skip
   const handleSkipClick = () => {
@@ -326,29 +305,6 @@ export function EveningJournal() {
           value={insights}
           onChange={setInsights}
           accentColor="#a855f7"
-        />
-      </div>
-
-      {/* Home & Relationship check-in */}
-      <div className="space-y-4">
-        <p className="text-xs text-protocol-text-muted uppercase tracking-wider px-1">
-          Home & Relationship
-        </p>
-        <JournalTextArea
-          icon={<Heart className="w-4 h-4" />}
-          label="Anything Gina noticed today?"
-          placeholder="Did she comment on anything, ask questions, or seem curious?"
-          value={ginaNotices}
-          onChange={setGinaNotices}
-          accentColor="#f59e0b"
-        />
-        <JournalTextArea
-          icon={<Crown className="w-4 h-4" />}
-          label="Protocol in shared space?"
-          placeholder="Any moments where protocol life overlapped with home life?"
-          value={sharedSpace}
-          onChange={setSharedSpace}
-          accentColor="#B06B61"
         />
       </div>
 
