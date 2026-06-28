@@ -19,6 +19,7 @@
   "supabase/functions/date-safety-kit/index.ts:ensure",
   "supabase/functions/delivery-bridge-guard/index.ts:healOutreachToPush",
   "supabase/functions/delivery-bridge-guard/index.ts:healPreviewToOutreach",
+  "supabase/functions/goon-trajectory/index.ts:issue",
   "supabase/functions/live-photo-pinger/index.ts:maybePingUser",
   "supabase/functions/mommy-confession-gate/index.ts:gateUser",
   "supabase/functions/mommy-edging-day-assign/index.ts:assignForUser",
