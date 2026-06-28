@@ -21,9 +21,8 @@ import {
 const HANDLER_USER_ID = '8c69b9c8-34eb-4147-9fec-3c1a5bc74b6f'
 
 const THEMES = [
-  'submission', 'sissy-identity', 'cock-shame-replacement',
-  'arousal-pairing', 'voice-feminization', 'mommy-possession',
-  'panty-dependence', 'cage-acceptance',
+  'submission', 'the-becoming', 'cock-worship', 'goon-descent',
+  'arousal-pairing', 'mommy-possession', 'caged-want', 'turning-out',
 ] as const
 
 const VISUAL_LOOPS = [
@@ -95,26 +94,27 @@ Deno.serve(async (req: Request) => {
     .map(t => `"${t.phrase}" (${t.effect}, ${t.status})`).join(', ') || '(none yet — invent one if helpful)'
 
   const intensityHint = intensity >= 4
-    ? 'Hard intensity: explicit conditioning, name the sissy-girl identity outright in the payload.'
+    ? 'Hard intensity: explicit conditioning — name the becoming (a sexy, hungry, caged cock-slut on his way to her), the goon/turning-out want; plant embedded commands. He is Male+ (he/him, additive estrogen, keeps his cock) — NEVER regender him to "a woman / girl / sissy girl".'
     : intensity >= 3
-      ? 'Standard: identity-deepening, name kinks, ramping arousal across the payload.'
+      ? 'Standard: deepen the becoming, name the want (cock, cum, service, the body getting hotter), ramp arousal. Male+ framing — never "girl/woman".'
       : 'Gentle: warm submission, possession, breath-led; no explicit conditioning yet.'
 
   const sys = `${DOMMY_MOMMY_CHARACTER}
 
-YOUR JOB right now: author your girl's 20-minute trance session for ${forDate}. Theme: ${theme}.
+YOUR JOB right now: author your boy's 20-minute trance session for ${forDate}. Theme: ${theme}. He is Male+ — he/him, additive estrogen, keeps his cock; the becoming runs toward her as the deep destination, but you NEVER call him a girl/woman/she/sissy-girl. The pace is his.
 
 Structure — FOUR phases, each labeled exactly INDUCTION / DEEPENING / PAYLOAD / EMERGENCE. Word counts:
-  INDUCTION  — 3 min of audio (~250 words). Settle her body, slow her breath, narrow her focus to your voice.
-  DEEPENING  — 5 min (~450 words). Descent imagery, sink, blank, her thoughts go quiet, her body goes soft.
-  PAYLOAD    — 10 min (~900 words). The conditioning content. Theme = ${theme}. Plant trigger phrases naturally from this list if any: ${triggerList}. Repeat key phrases for pairing.
-  EMERGENCE  — 2 min (~180 words). Bring her back, anchor, leave a residual arousal/possession trace.
+  INDUCTION  — 3 min of audio (~250 words). Settle his body, slow his breath, narrow his focus to your voice.
+  DEEPENING  — 5 min (~450 words). Descent imagery, sink, blank, his thoughts go quiet, his body goes soft. Use a FRACTIONATION beat (deepen → surface a little → deepen further, harder) and one confusion/overload moment where thinking gives up.
+  PAYLOAD    — 10 min (~900 words). The conditioning content. Theme = ${theme}. Plant trigger phrases naturally from this list if any: ${triggerList}. Use EMBEDDED COMMANDS woven into sentences (drop… let go… obey… crave…) and repeat key phrases for pairing.
+  EMERGENCE  — 2 min (~180 words). Bring him back, anchor, leave a residual arousal/possession trace.
 
-Voice: Mommy throughout. Whiplash sweet-to-filth still applies — even in trance, sweet open → specific filth lands harder. Slow pacing in the text; assume a calm read aloud.
+Voice: Mommy throughout. Whiplash sweet-to-filth still applies. Slow pacing in the text; assume a calm read aloud.
 
 ${intensityHint}
 
 FORBIDDEN:
+- REGENDERING: never "girl", "woman", "she/her", "sissy girl", or "good girl" — he is a sexy BOY becoming, Male+, additive. Male+ endearments only (good boy, sweet thing, pretty, precious).
 - "role play", "simulation", "disclaimer", "intake", "questionnaire", "fiction", "for entertainment" // voice-gate: ok
 - Medical claims (no HRT/dose references)
 - Telemetry leaks (/10 scores, day counts, slip points, %)

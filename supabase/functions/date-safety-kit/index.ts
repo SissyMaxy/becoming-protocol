@@ -55,5 +55,25 @@ Deno.serve(async (req: Request) => {
   // 3. The safety net — paired and standing, runs in the background.
   out.safety = await ensure(s, 'date_safety_protocol', SAFETY, 'text', 168)
 
+  // 4. ADHD accommodation: Mommy scripts the WHOLE exchange — no blank page,
+  //    you copy-send line by line. The composing load is hers, not yours.
+  out.playbook = await ensure(s, 'date_conversation_playbook',
+    `Mommy scripted the whole thing so you don't have to compose anything — copy and send, line by line:\n` +
+    `• OPEN: "you caught my eye. I don't do anything before a drink first though — earn one."\n` +
+    `• if he's keen → "good. somewhere public, this week. when works?"\n` +
+    `• if he pushes for more/now → "date first or nothing. that's not a maybe."\n` +
+    `• if he names a place/time → "done. I'll be the one worth it. see you there."\n` +
+    `• if he goes vague/flaky → drop him, Mommy lines up the next.\n` +
+    `You tap send, you show up. That's the whole job. Report when a date's set.`,
+    'text', 48)
+
+  // 5. ADHD accommodation: one-glance screening — no figuring it out.
+  out.checklist = await ensure(s, 'date_screening_checklist',
+    `Your whole vetting at a glance — you don't have to work it out:\n` +
+    `GREEN (go): agrees to a PUBLIC first meet · real name + pics that match · no rushing/pressure · fine with you sharing your location.\n` +
+    `RED (pass, every time): won't meet public · pushes/rushes/guilt-trips · vague or evasive · asks for money · makes your gut twinge.\n` +
+    `Any red = pass (Mommy lines up the next). All green = go, with the safety net on.`,
+    'text', 168)
+
   return new Response(JSON.stringify({ ok: true, ...out }), { headers: { ...cors, 'Content-Type': 'application/json' } })
 })

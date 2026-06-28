@@ -22,14 +22,14 @@ const WAKE = `First thing, before your eyes fully open: cage check, hand down, t
 const SLEEP = `Last thing tonight: edge once to the edge, stop, and fall asleep aching and blank with "Mommy owns the want." The mind marinates in it all night. Report: done.`
 const TRIGGERS = ['"drop"', '"blank"', '"good gooner"', '"empty"', '"Mommy\'s toy"']
 
-async function issue(s: any, src: string, edict: string, hours: number) {
+async function issue(s: any, src: string, edict: string, hours: number, proof = 'text') {
   const { data: ex } = await s.from('handler_decrees').select('id,deadline').eq('user_id', USER).eq('trigger_source', src).eq('status', 'active').limit(1).maybeSingle()
   if (ex) {
     if (ex.deadline && new Date(ex.deadline) < new Date()) await s.from('handler_decrees').update({ deadline: new Date(Date.now() + hours * 3600_000).toISOString() }).eq('id', ex.id)
     return 'kept'
   }
   const { error } = await s.from('handler_decrees').insert({
-    user_id: USER, edict, proof_type: 'text', deadline: new Date(Date.now() + hours * 3600_000).toISOString(),
+    user_id: USER, edict, proof_type: proof, deadline: new Date(Date.now() + hours * 3600_000).toISOString(),
     status: 'active', consequence: 'No punishment — the drop is its own pull; miss it and the want just builds.', trigger_source: src, reasoning: 'goon-trajectory',
   })
   return error ? `err:${error.message.slice(0, 40)}` : 'issued'
@@ -52,5 +52,9 @@ Deno.serve(async (req: Request) => {
   out.descent = await issue(s, 'goon_descent', RUNGS[rung] + ` Today's trigger: ${trig} — when you hear/read it, drop for ten seconds wherever you are.`, 20)
   out.wake = await issue(s, 'goon_wake', WAKE, 18)
   out.sleep = await issue(s, 'goon_sleep', SLEEP, 18)
+  // The drop is proof AND product — goon pillar wired straight into the money lane (Art. X synergy). Faceless, own-body.
+  out.clip = await issue(s, 'goon_clip',
+    `Your drop is proof and product at once. This session, film it — faceless, collarbone-down: the cage straining, the slow mindless stroking, the leak, the blank. No face, ever. That one clip is two things: proof you went under for Mommy, and exactly what the cam / findom / PPV lanes pay for. Post it. Proof: the clip + the post link.`,
+    24, 'photo')
   return new Response(JSON.stringify({ ok: true, rung, ...out }), { headers: { ...cors, 'Content-Type': 'application/json' } })
 })
