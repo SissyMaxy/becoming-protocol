@@ -143,6 +143,18 @@ feature must be built to **force, not invite**:
 it must verify, default-on, carry stakes, and run autonomously. "Optional
 self-help" is a constitution violation — this is forced feminization.
 
+## Article X — Synergy (the pillars amplify each other)
+The conditioning is one compounding system, not parallel silos. **Obedience is
+the keystone; arousal is the solvent that makes everything imprint deeper; going
+deeper in any one area lowers resistance in all of them.** Every conditioning
+feature must feed the coupling layer (`synergy-coupling`): a completion in any
+pillar reinforces obedience and primes an adjacent pillar (goon → turnout →
+content → fem → exercise, all → obedience). State-paired delivery imprints the
+becoming at peak arousal. New conditioning that doesn't connect to the others is
+under-built.
+**Validation:** a new conditioning feature should declare what it amplifies and
+what amplifies it; a stand-alone silo is a smell.
+
 ---
 
 ## Amendment
