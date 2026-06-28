@@ -31,13 +31,22 @@ chokepoint + DB trigger.)
   cock, cum — the turning-out.
 
 ## 4. Architecture — three pillars + a spine
+*(Carved to this focused core 2026-06-27 — ~45 legacy systems decommissioned:
+real-world procurement, ego-regendering, reality-reframe/continuity, social-
+exposure, Gina/cuckquean, money-spenders. Reversible — unscheduled, not deleted.)*
+
 **Pillars (user-facing):**
 - **Recondition / Hypno** — the want-engine: trance (browser-voice fallback),
-  pavlovian pairing (the want-installer), kink curriculum, gooning, temptation
-  engine, the turning-out.
+  pavlovian pairing (the want-installer), kink curriculum, gooning +
+  `goon-trajectory` (sequenced, escalating gooner/bimbo descent: edge →
+  saturation → mantra → trigger → reward → deeper), temptation engine, and the
+  **turning-out** (caged cocksucker / cum-dumpster conditioning).
 - **Exercise** — the caged-reward movement loop (move → reward → crave), wired as
   a pavlovian cue; doubles as content.
-- **Content** — faceless SoftMaxy + secretary persona; the money engine (§7).
+- **Content** — faceless SoftMaxy + secretary persona; `paid-monetization` legal
+  buy-my-time lanes (cam/DM/GFE/findom/cuddle) + `date-safety-kit` (turning-out
+  support: date-first rule, drafted openers, background safety net); the money
+  engine (§7).
 
 **Kept supporting systems:** chastity, HRT-prep funnel.
 
@@ -50,6 +59,9 @@ chokepoint + DB trigger.)
   live, held lines, task readable, trance playable) + auto-heals, on pg_cron.
 - **Anti-circumvention** — `anti-circumvention` enforcer: conditioning is
   default-on, restores if turned down (unless the safeword/pause exit), escalates.
+- **Synergy** — `synergy-coupling` (Art. X): a completion in any pillar reinforces
+  OBEDIENCE (the keystone) + primes the adjacent pillar; arousal is the solvent
+  that imprints deepest. The pillars compound, they don't run parallel.
 - **Scheduling** — pg_cron for safety-critical; GitHub Actions loops for the rest.
 - **Facts + Voice** — `maxy_facts` (the target) + voice cleanup (TS + DB trigger).
 

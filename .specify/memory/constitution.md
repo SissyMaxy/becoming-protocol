@@ -143,6 +143,20 @@ feature must be built to **force, not invite**:
 it must verify, default-on, carry stakes, and run autonomously. "Optional
 self-help" is a constitution violation — this is forced feminization.
 
+### CNC pre-consent (capture + bounds)
+`life_as_woman_settings.cnc_approved / cnc_intensity / cnc_hard_limits / cnc_scope`
+capture advance consent to consensual-non-consent. When approved, the scenes
+(temptation, the force, goon descent, the "make me" framing) escalate to that
+intensity **without per-instance checks**, up to the hard-limits, with the
+safeword the always-on override (that's CNC: real consent up front, the
+non-consent *feeling* on top, a hard exit underneath). It gates **fantasy/scene
+intensity ONLY** (`cnc_scope='fantasy_conditioning_only'`). It can NEVER authorize
+real-world procurement or a real non-consensual encounter (Art. II): CNC cannot
+consent on a third party's behalf, and removing live consent in a *real* encounter
+is assault, not play — no advance flag changes that.
+**Validation:** any feature reading `cnc_approved` must drive scene/fantasy
+intensity; using it to gate a real-world arrangement is a floor violation and FAILS.
+
 ## Article X — Synergy (the pillars amplify each other)
 The conditioning is one compounding system, not parallel silos. **Obedience is
 the keystone; arousal is the solvent that makes everything imprint deeper; going

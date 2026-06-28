@@ -101,21 +101,25 @@ Three layers, all enforced:
 
 ---
 
-## Worked example (the next builds, spec-driven)
-The optimal spec already names the work. Each becomes a feature:
+## Feature ledger (status)
+**Built / done (2026-06-27/28):**
+- `carve` — ~45 legacy crons decommissioned; focused core (done, reversible).
+- `006-anti-circumvention` — conditioning has no off-toggle; safeword/pause the exit.
+- `007-date-first-safety-kit` — date-first rule, drafted openers, background safety net.
+- `008-paid-monetization` — legal buy-my-time lanes (cam/DM/GFE/findom/cuddle).
+- `009-goon-trajectory` — sequenced gooner/bimbo descent, rung-gated.
+- `synergy-coupling` — the amplification layer (Art. X); pillars compound into obedience.
+- delivery unblock, safeword-floor scope, pavlovian fix, voice de-guilt/de-regender,
+  cron-fleet repair (Management token).
 
-- `001-carve-to-pillars` — decommission the cut-list crons (reversible
-  unschedule), keep pillars + spine + chastity + HRT-prep + Gina-arc +
-  gaslight + funding. `/specify` it, `/analyze` against Art. IV/II, `/implement`.
-- `002-exercise-pavlovian-cue` — wire exercise as a first-class pavlovian cue
-  (the want-loop closed). Art. I (target), Art. III (delivery).
+**Queued:**
+- `004-conditioning-reaim` — strip leftover procurement lines (cock-curriculum P3–P7)
+  from the kept ladder *content*; re-aim to sexy-Male+ + cock-service fantasy. Art. II gate.
 - `003-daily-cap` — finite Focus ("done for today, good boy"); Art. IV throughput.
-- `004-conditioning-reaim` — strip passing/procurement from the kept ladders,
-  re-aim to sexy-Male+ + cock-service fantasy. Art. I, Art. II floor gate.
-- `005-content-secretary` — the secretary persona generator path. Art. IV-b
-  (self-sustaining funding).
+- `002-exercise-pavlovian-cue` — wire exercise as a first-class pavlovian cue.
+- evidence-required (close the self-report hole), trigger-bug fix (decree-quality).
 
-Run `/specify 001-carve-to-pillars` to start the first one.
+Run `/specify 004-conditioning-reaim` to take the next one.
 
 ---
 

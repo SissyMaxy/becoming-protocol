@@ -4,6 +4,18 @@ Built from everything learned this session. This is the blueprint for either the
 **carve** (collapse the existing app to this) or a **clean rebuild**. Same target
 shape either way.
 
+> **STATUS — implemented 2026-06-27/28** (living law: `.specify/memory/constitution.md`,
+> overview: `docs/PROTOCOL.md`):
+> - **The carve was executed** — ~45 legacy crons decommissioned; the app is the focused core.
+> - **Gina dropped** — operator directive; the app is Gina-independent (Constitution
+>   Art. IV). The "Gina arc" in §1b below is **superseded/cut**; the procurement
+>   floor stands on physical safety alone, no Gina-consent lever.
+> - **Built:** anti-circumvention enforcer, goon-trajectory, synergy-coupling,
+>   date-safety-kit, paid-monetization, pavlovian fix, delivery + safeword fixes,
+>   cron-fleet repair (Management token).
+> - **Constitution gained:** Art. IX (Forced Feminization) + Art. X (Synergy).
+> - HRT status: acquired, not started (on_hrt=false).
+
 ---
 
 ## 0. North Star
