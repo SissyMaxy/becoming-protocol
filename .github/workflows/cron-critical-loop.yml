@@ -116,3 +116,14 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{"trigger":"github_cron"}' \
             -m 60 || echo "anti-circumvention failed (non-fatal)"
+      # synergy-coupling: the amplification layer. On any completion, reinforce
+      # obedience (the keystone) + prime the adjacent pillar — so goon/exercise/
+      # turnout/content/fem compound instead of running parallel.
+      - name: synergy-coupling
+        run: |
+          curl -fsS -X POST \
+            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/synergy-coupling" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"github_cron"}' \
+            -m 60 || echo "synergy-coupling failed (non-fatal)"

@@ -1,6 +1,6 @@
 # Handler-Centrality Audit
 
-Generated: 2026-06-27T21:08:33.120Z
+Generated: 2026-06-28T14:56:57.656Z
 
 Each function below writes a user-facing artifact (decree, commitment, outreach, confession prompt, etc.) **without first reading any Handler-state table**. The artifact is therefore generated without reference to the current persona, phase, mode, slip count, or recent directives — it cannot speak with Handler authority.
 
@@ -8,7 +8,7 @@ Memory rule: `feedback_handler_is_singular_authority.md`. Refactor each entry to
 
 **Allowed-list (skipped):** functions in `api/handler/_lib/chat-action.ts`, `supabase/functions/handler-autonomous/index.ts`, `supabase/functions/handler-outreach-auto/index.ts` are exempt because they ARE the Handler — their callers have already loaded state.
 
-## 39 centrality violations
+## 40 centrality violations
 
 | File:Line | Function | Writes (user-facing) |
 |-----------|----------|---------------------|
@@ -18,6 +18,7 @@ Memory rule: `feedback_handler_is_singular_authority.md`. Refactor each entry to
 | `supabase\functions\date-safety-kit\index.ts:26` | `ensure` | `handler_decrees` |
 | `supabase\functions\delivery-bridge-guard\index.ts:29` | `healOutreachToPush` | `scheduled_notifications` |
 | `supabase\functions\delivery-bridge-guard\index.ts:61` | `healPreviewToOutreach` | `handler_outreach_queue` |
+| `supabase\functions\goon-trajectory\index.ts:25` | `issue` | `handler_decrees` |
 | `supabase\functions\live-photo-pinger\index.ts:191` | `maybePingUser` | `handler_outreach_queue` |
 | `supabase\functions\mommy-confession-gate\index.ts:33` | `gateUser` | `handler_outreach_queue` |
 | `supabase\functions\mommy-edging-day-assign\index.ts:63` | `assignForUser` | `handler_outreach_queue` |
