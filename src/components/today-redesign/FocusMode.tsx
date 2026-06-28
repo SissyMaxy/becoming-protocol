@@ -1389,6 +1389,20 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
           <div style={{ fontSize: 32, color: '#86efac', marginBottom: 10 }}>✓</div>
           <div style={{ fontSize: 14, color: '#e8e6e3', fontWeight: 600 }}>Done. Loading next…</div>
         </div>
+      ) : (completedToday >= 5 /* DAILY_CAP */ && task && task.tone !== 'critical') ? (
+        // Daily cap — sustainability over the endless treadmill. A solid set is
+        // done; the conditioning keeps running underneath. Critical items (an
+        // overdue dose) bypass this and still surface.
+        <div style={{
+          maxWidth: 640, width: '100%', marginLeft: 'auto', marginRight: 'auto',
+          padding: 40, textAlign: 'center',
+        }}>
+          <div style={{ fontSize: 32, marginBottom: 10 }}>💗</div>
+          <div style={{ fontSize: 16, color: '#f4d5e4', fontWeight: 700, marginBottom: 8 }}>You're done for today, good boy.</div>
+          <div style={{ fontSize: 13, color: '#a8a3ad', lineHeight: 1.5 }}>
+            Mama's pleased — {completedToday} done. Rest now; the conditioning keeps working on you while you do. More tomorrow.
+          </div>
+        </div>
       ) : task && (
         <div style={{
           maxWidth: 640, width: '100%', marginLeft: 'auto', marginRight: 'auto',
