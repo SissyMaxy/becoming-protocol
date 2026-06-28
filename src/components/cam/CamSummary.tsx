@@ -54,7 +54,7 @@ export function CamSummary({ summary, onDismiss }: CamSummaryProps) {
       }`}>
         <Trophy className="w-10 h-10 text-white mx-auto mb-2" />
         <h2 className="text-xl font-bold text-white">Session Complete</h2>
-        <p className="text-white/80 text-sm mt-1">Good girl. Here's how you did.</p>
+        <p className="text-white/80 text-sm mt-1">Good boy. Here's how you did.</p>
       </div>
 
       <div className="p-5 space-y-5">

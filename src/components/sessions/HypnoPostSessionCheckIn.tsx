@@ -68,7 +68,7 @@ export function HypnoPostSessionCheckIn({
             <CheckCircle className={`w-8 h-8 ${isBambiMode ? 'text-pink-500' : 'text-green-400'}`} />
           </div>
           <p className={`font-medium ${isBambiMode ? 'text-pink-700' : 'text-protocol-text'}`}>
-            Logged. Good girl.
+            Logged. Good boy.
           </p>
         </div>
       </div>

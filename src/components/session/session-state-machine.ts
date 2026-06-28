@@ -317,7 +317,7 @@ export function resolveAuction(
       status: 'cooldown',
       isRecovering: false,
       recoveryEndTime: null,
-      currentAffirmation: 'You chose to stop. Good girl.',
+      currentAffirmation: 'You chose to stop. Good boy.',
     };
   }
 

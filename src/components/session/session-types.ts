@@ -95,7 +95,7 @@ export interface ImmersiveSessionState {
 
 export const AFFIRMATION_POOLS = {
   building: [
-    'Good girl...',
+    'Good boy...',
     'That\'s it...',
     'You\'re doing so well...',
     'Feel yourself becoming...',
@@ -111,14 +111,14 @@ export const AFFIRMATION_POOLS = {
     'Not yet...',
     'Feel that edge...',
     'Stay there...',
-    'Good girl, hold...',
+    'Good boy, hold...',
     'You can take more...',
     'Right there...',
     'Don\'t let go...',
   ],
   recovery: [
     'Breathe...',
-    'Good girl...',
+    'Good boy...',
     'You held so well...',
     'Rest now...',
     'She\'s proud of you...',

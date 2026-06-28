@@ -29,7 +29,7 @@ const COMPLETION_OPTIONS: {
     type: 'denial',
     icon: Shield,
     label: 'Denied',
-    description: 'Good girl. Streak continues.',
+    description: 'Good boy. Streak continues.',
     color: SESSION_COLORS.teal,
   },
   {

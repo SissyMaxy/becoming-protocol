@@ -99,7 +99,7 @@ export function RitualSessionWrapper({
       try {
         const voices = await getVoices();
         const voice = selectFeminineVoice(voices);
-        const utterance = new SpeechSynthesisUtterance('Good girl. Settle in.');
+        const utterance = new SpeechSynthesisUtterance('Good boy. Settle in.');
         if (voice) utterance.voice = voice;
         utterance.pitch = 1.1;
         utterance.rate = 0.75;
@@ -256,7 +256,7 @@ export function RitualSessionWrapper({
           <p className={`text-xl font-light italic ${
             isBambiMode ? 'text-pink-300' : 'text-white/80'
           }`}>
-            Good girl. Settle in.
+            Good boy. Settle in.
           </p>
         </div>
       </div>

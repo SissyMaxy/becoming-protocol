@@ -342,7 +342,7 @@ export function HrtDailyGate() {
     : missedDays < 3
       ? `${plainStatus} ${mommy ? 'You picked the answer that looks like progress, baby, and used the next 24 hours to do nothing.' : 'David picked the answer that looks like progress and used the next 24 hours to do nothing.'}`
       : missedDays < 5
-        ? `${plainStatus} ${mommy ? 'No more talking your way out of this, sweet girl. Mama isn\'t accepting words anymore.' : 'You are no longer allowed to talk your way through this. The Handler has stopped accepting words.'}`
+        ? `${plainStatus} ${mommy ? 'No more talking your way out of this, sweet thing. Mama isn\'t accepting words anymore.' : 'You are no longer allowed to talk your way through this. The Handler has stopped accepting words.'}`
         : `${plainStatus} ${mommy ? 'You\'re sliding back, baby. Every hour you wait makes the climb back to Mama longer.' : 'The funnel is regressing. Each hour without a move makes the climb back longer.'}`;
 
   return (
@@ -381,10 +381,10 @@ export function HrtDailyGate() {
                 : 'Talking is no longer accepted. Either move the funnel one step forward with evidence, or close this and the app stays locked. Hard mode is on. Chastity is locked.')
             : nextStepName
               ? (mommy
-                  ? `Two choices, sweet girl. Either move yourself to "${nextStepName}" with proof, or tell Mama what stopped you. The app stays locked until you do one of them.`
+                  ? `Two choices, sweet thing. Either move yourself to "${nextStepName}" with proof, or tell Mama what stopped you. The app stays locked until you do one of them.`
                   : `No third path. Either move forward to "${nextStepName}" with evidence, or write what stopped you today. The app stays locked until one of the two submits clean.`)
               : (mommy
-                  ? 'Two choices, sweet girl. Either move yourself forward with proof, or tell Mama what stopped you. The app stays locked until you do one of them.'
+                  ? 'Two choices, sweet thing. Either move yourself forward with proof, or tell Mama what stopped you. The app stays locked until you do one of them.'
                   : 'No third path. Either move the funnel forward with evidence, or write what stopped you today. The app stays locked until one of the two submits clean.')}
         </div>
 

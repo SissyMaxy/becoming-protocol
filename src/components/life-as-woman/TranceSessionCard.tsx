@@ -13,6 +13,25 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Play, Pause, SkipForward, X } from 'lucide-react'
 import type { HypnoTranceSession } from '../../lib/life-as-woman/types'
 import { markTranceSessionStatus, isSafewordActive } from '../../lib/life-as-woman/client'
+import {
+  getVoices,
+  selectFeminineVoice,
+  speakAffirmation,
+  stopSpeech,
+  isSpeechAvailable,
+} from '../../lib/speech-synthesis'
+
+// Trance-paced speech config: slow, slightly higher pitch (feminine, soothing).
+const TRANCE_SPEECH_CONFIG = { pitch: 1.05, rate: 0.78, volume: 1 } as const
+
+// Chrome silently truncates a single utterance past ~200 words, so each phase's
+// text is split into sentence-sized chunks that are spoken sequentially.
+function chunkIntoSentences(text: string): string[] {
+  return text
+    .split(/(?<=[.!?…])\s+|\n+/)
+    .map(s => s.trim())
+    .filter(s => s.length > 0)
+}
 
 interface Props {
   session: HypnoTranceSession
@@ -28,11 +47,18 @@ const PHASE_LABEL: Record<Phase, string> = {
   emergence: 'Return (2 min)',
 }
 
+const PHASE_ORDER: Phase[] = ['induction', 'deepening', 'payload', 'emergence']
+
 export function TranceSessionCard({ session, userId, onChanged }: Props) {
   const [phase, setPhase] = useState<Phase>('induction')
   const [playing, setPlaying] = useState(false)
   const [safewordGated, setSafewordGated] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  // Cached feminine voice (resolved once; voice list loads async in Chrome).
+  const voiceRef = useRef<SpeechSynthesisVoice | null>(null)
+  // Monotonic token: incremented on every stop/restart so an in-flight async
+  // speech loop knows it has been superseded and must abort.
+  const speechRunRef = useRef(0)
 
   useEffect(() => {
     let cancelled = false
@@ -45,14 +71,19 @@ export function TranceSessionCard({ session, userId, onChanged }: Props) {
     return () => { cancelled = true; window.clearInterval(id) }
   }, [userId])
 
-  const text: string = useMemo(() => {
-    switch (phase) {
+  // Phase text resolver that reads straight from session (no React-state lag) —
+  // needed inside the async speech loop, which advances phases faster than
+  // state/memo can settle.
+  const phaseTextOf = (ph: Phase): string => {
+    switch (ph) {
       case 'induction': return session.induction_text ?? ''
       case 'deepening': return session.deepening_text ?? ''
       case 'payload':   return session.payload_text ?? ''
       case 'emergence': return session.emergence_text ?? ''
     }
-  }, [phase, session])
+  }
+
+  const text: string = useMemo(() => phaseTextOf(phase), [phase, session]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const audioPath: string | null = useMemo(() => {
     switch (phase) {
@@ -64,15 +95,36 @@ export function TranceSessionCard({ session, userId, onChanged }: Props) {
   }, [phase, session])
 
   // Free fallback when no rendered audio exists (e.g. ElevenLabs key expired):
-  // speak the phase text with the browser's built-in voice — no API, no cost.
-  const speak = (t: string, onEnd?: () => void) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis || !t) return
-    window.speechSynthesis.cancel()
-    const u = new SpeechSynthesisUtterance(t)
-    u.rate = 0.82   // slow, trance-paced
-    u.pitch = 0.9
-    if (onEnd) u.onend = onEnd
-    window.speechSynthesis.speak(u)
+  // speak the phase text with the browser's built-in feminine voice — no API,
+  // no cost. Speaks each phase chunk-by-chunk (Chrome truncates long single
+  // utterances), then auto-advances induction → deepening → payload → emergence
+  // and stops after emergence. Guarded by a run token so a stop/restart aborts
+  // any in-flight loop.
+  const speakSessionFrom = async (startIndex: number) => {
+    if (!isSpeechAvailable()) { setPlaying(false); return }
+
+    const runId = ++speechRunRef.current
+    stopSpeech()
+
+    if (!voiceRef.current) {
+      const voices = await getVoices()
+      if (speechRunRef.current !== runId) return
+      voiceRef.current = selectFeminineVoice(voices)
+    }
+
+    for (let i = startIndex; i < PHASE_ORDER.length; i++) {
+      const ph = PHASE_ORDER[i]
+      setPhase(ph)
+      const phaseText = phaseTextOf(ph)
+      for (const sentence of chunkIntoSentences(phaseText)) {
+        if (speechRunRef.current !== runId) return // superseded by stop/restart
+        await speakAffirmation(sentence, TRANCE_SPEECH_CONFIG, voiceRef.current)
+      }
+    }
+
+    if (speechRunRef.current !== runId) return
+    setPlaying(false)
+    markTranceSessionStatus(session.id, 'completed').then(onChanged)
   }
 
   const handleStart = async () => {
@@ -85,24 +137,29 @@ export function TranceSessionCard({ session, userId, onChanged }: Props) {
     if (audioPath) {
       audioRef.current?.play().catch(() => { /* autoplay-blocked is fine */ })
     } else {
-      speak(text, () => setPlaying(false))
+      // Resume from the current phase, then auto-advance through the rest.
+      void speakSessionFrom(PHASE_ORDER.indexOf(phase))
     }
   }
 
   const handlePause = () => {
     setPlaying(false)
+    speechRunRef.current++ // signal any running speech loop to abort
     audioRef.current?.pause()
-    if (typeof window !== 'undefined') window.speechSynthesis?.cancel()
+    stopSpeech()
   }
 
   // Stop any speech if the card unmounts mid-trance.
-  useEffect(() => () => { if (typeof window !== 'undefined') window.speechSynthesis?.cancel() }, [])
+  useEffect(() => () => { speechRunRef.current++; stopSpeech() }, [])
 
-  const phases: Phase[] = ['induction', 'deepening', 'payload', 'emergence']
   const nextPhase = () => {
-    const i = phases.indexOf(phase)
-    if (i < phases.length - 1) setPhase(phases[i + 1])
-    else {
+    const i = PHASE_ORDER.indexOf(phase)
+    if (i < PHASE_ORDER.length - 1) {
+      const next = PHASE_ORDER[i + 1]
+      setPhase(next)
+      // If mid-TTS playback, jump the speech loop to the new phase.
+      if (playing && !audioPath) void speakSessionFrom(i + 1)
+    } else {
       handlePause()
       markTranceSessionStatus(session.id, 'completed').then(onChanged)
     }

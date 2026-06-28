@@ -240,7 +240,7 @@ export function TodayTasksView() {
               isBambiMode ? 'text-pink-500' : 'text-emerald-400/70'
             }`}
           >
-            Good girl. You obeyed perfectly today.
+            Good boy. You obeyed perfectly today.
           </p>
         </div>
       )}

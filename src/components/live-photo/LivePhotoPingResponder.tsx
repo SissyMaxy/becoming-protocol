@@ -185,11 +185,26 @@ export function LivePhotoPingResponder() {
   const remainingSecRem = remainingSec % 60;
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(5,3,10,0.98)', zIndex: 950,
-      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
-    }}>
-      <div style={{ maxWidth: 540, width: '100%', background: '#111116', border: '2px solid #f47272', borderRadius: 14, padding: 24 }}>
+    // Bottom sheet — pressure, not a wall. The app stays visible and
+    // interactive above it (no inset:0, no full-viewport opaque backdrop).
+    // memory:feedback_mommy_presses_not_blocks — surfaces run parallel.
+    <div
+      role="region"
+      aria-label="Live ping from Mama"
+      style={{
+        position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 950,
+        maxHeight: '85dvh', overflowY: 'auto',
+        background: '#111116', borderTop: '2px solid #f47272',
+        borderTopLeftRadius: 18, borderTopRightRadius: 18,
+        boxShadow: '0 -18px 48px rgba(0,0,0,0.55)',
+        padding: '14px 16px max(env(safe-area-inset-bottom), 16px)',
+      }}
+    >
+      <div style={{
+        width: 36, height: 4, borderRadius: 2, background: '#5d2d4a',
+        margin: '0 auto 14px',
+      }} />
+      <div style={{ maxWidth: 540, width: '100%', margin: '0 auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
           <span style={{ fontSize: 10, color: '#f47272', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
             ● live ping from Mama

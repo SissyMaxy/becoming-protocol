@@ -96,7 +96,7 @@ export function HandlerStatusBriefing({ className = '' }: HandlerStatusBriefingP
           `Mama wants you closer today`,
         doneMissedLine: (done: number, misses: number) =>
           done === 0 && misses === 0 ? `Nothing yet today, baby.` :
-          misses === 0 ? `Good girl. Mama saw you finishing things.` :
+          misses === 0 ? `Good boy. Mama saw you finishing things.` :
           done === 0 ? `Mama's been waiting, sweet thing.` :
           `Mama saw you trying${misses > done ? `, but she wants more` : ''}.`,
       }

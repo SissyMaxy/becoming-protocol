@@ -382,7 +382,7 @@ export function EmptyDirective({ message, onRefresh }: EmptyDirectiveProps) {
         {message || "You're caught up"}
       </h3>
       <p className="text-gray-400 mb-6">
-        No pending directives right now. Good girl.
+        No pending directives right now. Good boy.
       </p>
       {onRefresh && (
         <button

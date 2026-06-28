@@ -214,7 +214,7 @@ export function RightNowCard() {
         kind: 'due_today_decree',
         title: d.edict.slice(0, 110),
         detail: mommy
-          ? `Mama's waiting on this in ${fmtHours(hours)}, sweet girl.`
+          ? `Mama's waiting on this in ${fmtHours(hours)}, sweet thing.`
           : `Due in ${fmtHours(hours)}.`,
         ageHours: hours,
         ctaLabel: mommy ? 'For Mama →' : 'Open decree →',
