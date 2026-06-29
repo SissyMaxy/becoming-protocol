@@ -20,6 +20,7 @@ export default tseslint.config(
       'node_modules',
       '.vercel',
       '.browser-profiles',
+      '.claude',
       'coverage',
       'scripts/auto-poster',
       'supabase/functions',
