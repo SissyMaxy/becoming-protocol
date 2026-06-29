@@ -33,7 +33,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     return (
       <div
         style={{
-          minHeight: '100vh',
+          minHeight: '100dvh',
           background: '#fafafa',
           display: 'flex',
           alignItems: 'center',

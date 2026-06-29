@@ -17,8 +17,6 @@ interface VaultCounts {
   confessions_transcribed: number;
   mantras_in_rotation: number;
   cock_stations_completed: number;
-  gina_probes_observed: number;
-  gina_rungs_completed: number;
   wardrobe_items_fulfilled: number;
   decrees_fulfilled_total: number;
   cruising_decrees_fulfilled: number;
@@ -28,8 +26,6 @@ interface VaultCounts {
 interface VaultStages {
   cock_curriculum_phase: number | null;
   cum_worship_phase: number | null;
-  gina_arc_stage: number | null;
-  gina_disclosure_rung: number | null;
   denial_day: number | null;
 }
 interface VaultSummary { counts: VaultCounts; stages: VaultStages; generated_at: string; }
@@ -43,15 +39,8 @@ const COUNT_LABELS: Array<[keyof VaultCounts, string]> = [
   ['cock_stations_completed', 'cock-conditioning stations'],
   ['wardrobe_items_fulfilled', 'wardrobe items earned'],
   ['cruising_decrees_fulfilled', 'cruising decrees done'],
-  ['gina_probes_observed', 'Gina probes deployed'],
-  ['gina_rungs_completed', 'Gina disclosure rungs'],
   ['pavlovian_pairings_total', 'Pavlovian pairings'],
   ['pavlovian_triggers_deployed', 'cues deployed as triggers'],
-];
-
-const ARC_STAGE_NAMES = [
-  'unaware_tolerant', 'curious', 'supportive_general', 'engaged_about_david',
-  'co_participant_passive', 'initiator_occasional', 'director_assistant', 'co_mommy',
 ];
 
 export function EvidenceVaultCard() {
@@ -74,10 +63,6 @@ export function EvidenceVaultCard() {
 
   if (err) return null;
   if (!summary) return null;
-
-  const arcStageName = summary.stages.gina_arc_stage != null
-    ? ARC_STAGE_NAMES[summary.stages.gina_arc_stage] ?? `stage ${summary.stages.gina_arc_stage}`
-    : null;
 
   return (
     <div className="rounded-lg bg-zinc-900/60 border border-zinc-800 p-4 space-y-3">
@@ -108,12 +93,6 @@ export function EvidenceVaultCard() {
         )}
         {summary.stages.cum_worship_phase != null && (
           <div>Cum worship: phase <span className="text-zinc-200 font-mono">{summary.stages.cum_worship_phase}</span>/6</div>
-        )}
-        {arcStageName && (
-          <div>Gina arc: <span className="text-zinc-200">{arcStageName}</span> ({summary.stages.gina_arc_stage}/7)</div>
-        )}
-        {summary.stages.gina_disclosure_rung != null && (
-          <div>Disclosure rung: <span className="text-zinc-200 font-mono">{summary.stages.gina_disclosure_rung}</span>/6</div>
         )}
       </div>
     </div>

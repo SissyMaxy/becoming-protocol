@@ -35,7 +35,7 @@ vi.mock('../../lib/supabase', () => {
   // by isSafewordActive / isInIntenseScene.
   const fromTable = (table: keyof typeof state) => {
     type Filter = { col: string; op: string; val: unknown }
-    let filters: Filter[] = []
+    const filters: Filter[] = []
     const obj = {
       select: () => obj,
       eq: (col: string, val: unknown) => { filters.push({ col, op: 'eq', val }); return obj },

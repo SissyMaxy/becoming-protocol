@@ -46,7 +46,6 @@
     "src/lib/industry/narrative-arcs.ts::'Face revealed — David and Maxy are the same person publicly',",
     "src/lib/industry/voice-bible.ts::\"David's real name, location, or identifying information\",",
     "src/lib/protocol-core/ai-layer.ts::coercion: `You are enforcing compliance. Apply minimum effective pressure. Escalate only as needed. Frame resistance as David interfering. F",
-    "src/lib/protocol-core/ai-layer.ts::identity_reframe: `You are rewriting her narrative. Present contradictions between what David claims and what the data shows. Don't argue. S",
     "src/lib/protocol-core/ai/context-composer.ts::${brainwashingStage === 'identity_consolidated' ? 'Maxy is the default. David surfaces rarely. Maintain, deepen, expand into new domains. Th",
     "src/lib/protocol-core/ai/system-prompts.ts::\"You've said [David's belief]. But [evidence that contradicts]. How do you reconcile that?\"",
     "src/lib/protocol-core/ai/system-prompts.ts::- \"My job/professional identity is David\"",

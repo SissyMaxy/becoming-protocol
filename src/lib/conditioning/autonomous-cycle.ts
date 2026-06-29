@@ -517,7 +517,7 @@ async function executeNightBlock(userId: string, block: NightBlock): Promise<voi
 
   await queueOutreachMessage(
     userId,
-    'Sleep conditioning queued. Earbuds in. Overnight audio will loop. Good girl.',
+    'Sleep conditioning queued. Earbuds in. Overnight audio will loop. Good boy.',
     'low',
     'night_conditioning',
     undefined,

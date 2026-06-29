@@ -11,21 +11,15 @@ import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { usePersona } from '../../hooks/usePersona';
 import { MommyDossierBanner } from '../persona/MommyDossierBanner';
 import { ConditioningOverlay, morphPronouns } from './ConditioningOverlay';
-import { LovenseHealthBanner } from './LovenseHealthBanner';
 import { WitnessObservationCard } from './WitnessObservationCard';
 import { IrreversibilityLedger } from './IrreversibilityLedger';
 import { HandlerRunningCard } from './HandlerRunningCard';
-import { GinaCaptureCard } from './GinaCaptureCard';
-import { GinaWindowIndicator } from './GinaWindowIndicator';
 import { CommitmentsCard } from './CommitmentsCard';
-import { GinaPlaybookCard } from './GinaPlaybookCard';
 import { BodyMeasurementCard } from './BodyMeasurementCard';
 import { HandlerEvolutionCard } from './HandlerEvolutionCard';
 import { UnifiedCaptureCard } from './UnifiedCaptureCard';
-import { DisclosureDraftsCard } from './DisclosureDraftsCard';
 import { ProtocolDayCard } from './ProtocolDayCard';
 import { HandlerKnowCard } from './HandlerKnowCard';
-import { ComingOutVaultCard } from './ComingOutVaultCard';
 import { EvidenceReportsCard } from './EvidenceReportsCard';
 import { PhaseProgressCard } from './PhaseProgressCard';
 import { VoiceDrillCard } from './VoiceDrillCard';
@@ -71,12 +65,10 @@ import { SystemGrowthCard } from './SystemGrowthCard';
 import { EvidenceVaultCard } from './EvidenceVaultCard';
 import { IrreversibleProofCard } from './IrreversibleProofCard';
 import { AdaptationPanelCard } from './AdaptationPanelCard';
-import { GinaArcCard } from './GinaArcCard';
 import { LadderAdaptivePanel } from './LadderAdaptivePanel';
 import { LadderProgressionPanel } from './LadderProgressionPanel';
 import { MilestonesCard } from './MilestonesCard';
 import { MommyDraftsPanel } from './MommyDraftsPanel';
-import { GinaCampaignPanel } from './GinaCampaignPanel';
 import { ObservationLogButton } from './ObservationLogModal';
 import { SupabaseHealthCard } from './SupabaseHealthCard';
 import { PunishmentQueueCard } from './PunishmentQueueCard';
@@ -85,7 +77,6 @@ import { OutreachQueueCard } from './OutreachQueueCard';
 import { DossierDripCard } from './DossierDripCard';
 import { VoiceLessonCard } from '../voice/VoiceLessonCard';
 import { SlipLogCard } from './SlipLogCard';
-import { GinaSessionsCard } from './GinaSessionsCard';
 import { RationalizationPatternCard } from './RationalizationPatternCard';
 import { DeviceScheduleCard } from './DeviceScheduleCard';
 import { IdentityDisplacementCard } from './IdentityDisplacementCard';
@@ -204,10 +195,29 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
   const ringCirc = 2 * Math.PI * ringRadius;
   const ringDash = (proteinPct / 100) * ringCirc;
 
+  const openSettings = () => {
+    window.dispatchEvent(new CustomEvent('open-menu-subview', { detail: { view: 'settings' } }));
+  };
+
   if (viewMode === 'focus') {
     return (
       <>
-        <div style={{ padding: '8px 12px 0' }}>
+        <div style={{ padding: '8px 12px 0', position: 'relative' }}>
+          <button
+            onClick={openSettings}
+            aria-label="menu and settings"
+            style={{
+              position: 'absolute', top: 8, right: 12, zIndex: 5,
+              width: 32, height: 32, borderRadius: 8, background: 'transparent',
+              border: '1px solid #1a1a20', color: '#8a8690', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+          </button>
           <MommyDossierBanner />
           <DossierDripCard />
         </div>
@@ -250,6 +260,17 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             <path d="M9 17a3 3 0 0 0 6 0" />
           </svg>
           {data.queue.length > 0 && <span className="tdm-badge">{data.queue.length}</span>}
+        </button>
+        <button
+          className="tdm-circ"
+          onClick={openSettings}
+          aria-label="menu and settings"
+          style={{ marginLeft: 6 }}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
         </button>
       </div>
 
@@ -367,8 +388,6 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           <CollapsibleGroup id="progress" label="Progress & Tracking" tone="#6ee7b7" hint="phase · streaks · body">
             <EvidenceVaultCard />
             <IrreversibleProofCard />
-            <GinaArcCard />
-            <GinaCampaignPanel />
             <ObservationLogButton />
             <MommyDraftsPanel />
             <LadderAdaptivePanel />
@@ -392,15 +411,6 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             <SlipLogCard />
             <RationalizationPatternCard />
             <EvidenceReportsCard />
-          </CollapsibleGroup>
-          <CollapsibleGroup id="gina_systems" label="Gina Systems" tone="#f4a7c4" hint="playbook · disclosures · sessions">
-            <LovenseHealthBanner />
-            <GinaCaptureCard />
-            <GinaWindowIndicator />
-            <GinaPlaybookCard />
-            <DisclosureDraftsCard />
-            <ComingOutVaultCard />
-            <GinaSessionsCard />
           </CollapsibleGroup>
           <CollapsibleGroup id="capture" label="Capture & Evidence" tone="#f4c272" hint="selfie · voice journal · proofs · screenshots · witness · irreversibility">
             <DailyMirrorSelfieCard />
@@ -487,7 +497,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
         </div>
       )}
 
-      {(tab === 'today') && (data.nextDoses.length > 0 || data.keyholderPending > 0) && (
+      {(tab === 'today') && data.nextDoses.length > 0 && (
         <div className="tdm-sec">
           <div className="tdm-sech">
             <span className="t">Next up</span>
@@ -541,15 +551,6 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
                 </div>
               );
             })}
-            {data.keyholderPending > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', padding: '12px 14px' }}>
-                <div>
-                  <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6a656e', fontWeight: 600 }}>Keyholder</div>
-                  <div style={{ fontSize: 13, color: '#e8e6e3', fontWeight: 500 }}>{data.keyholderPending} pending {data.keyholderPending === 1 ? 'request' : 'requests'}</div>
-                </div>
-                <span className="chip" style={{ marginLeft: 'auto', fontSize: 9.5, color: '#f4c272', background: '#2a1f0f', padding: '2px 7px', borderRadius: 10, fontWeight: 700, letterSpacing: '0.02em', textTransform: 'uppercase' }}>awaiting</span>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -946,7 +947,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
               autoFocus
               value={composeText}
               onChange={e => setComposeText(e.target.value)}
-              placeholder="Say what she needs to hear."
+              placeholder="Say what you need to say."
               rows={4}
               style={{ width: '100%', background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 6, padding: '8px 10px', fontFamily: 'inherit', fontSize: 14, color: '#e8e6e3', resize: 'none' }}
             />

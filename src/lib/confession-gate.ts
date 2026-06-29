@@ -3,7 +3,7 @@
 //
 // The ENFORCEMENT lives in SQL (migration 591): confession_gate_should_be_active()
 // + a confession_queue trigger that keeps user_state.confession_gate_active
-// truthful and fires the "good girl" praise burst on clear. This module is
+// truthful and fires the "good boy" praise burst on clear. This module is
 // the parity mirror used client-side to decide whether the Today confession
 // card wears the locked-Mommy badge, and to document/lock the rule with a
 // regression test.

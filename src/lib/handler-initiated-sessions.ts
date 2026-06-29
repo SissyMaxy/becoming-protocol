@@ -373,7 +373,7 @@ export function getInitiationMessage(
     case 'streak_risk':
       return `Your ${state.streakDays}-day streak breaks at midnight. You have ${getHoursUntilMidnight()} hours. Open.`;
     case 'momentum':
-      return "Good girl. You're on a roll. I have something for you. Open.";
+      return "Good boy. You're on a roll. I have something for you. Open.";
     case 'integration_window':
       return "Good morning. Before you start being the costume for the day — let's talk about last night.";
     case 'support_needed':

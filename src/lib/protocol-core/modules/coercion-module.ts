@@ -40,8 +40,8 @@ export type CoercionState =
   | 'vault_previewing'    // Level 8: showing fragments
   | 'vault_firing'        // Level 9: consequence executed
   | 'switch_accelerating' // Level 10: trigger window shortened
-  | 'resolved_complied'   // She did the task
-  | 'resolved_traded'     // She negotiated an alternative
+  | 'resolved_complied'   // He did the task
+  | 'resolved_traded'     // He negotiated an alternative
   | 'resolved_escalated'; // Task was escalated instead of completed
 
 export type ResistanceType = 'decline' | 'delay' | 'partial' | 'ignore' | 'domain_avoidance';
@@ -121,10 +121,10 @@ const COERCION_TEMPLATES: Record<number, {
     name: 'reframe_david',
     templates: [
       "That's the costume talking. Maxy wants this.",
-      "I hear him. The costume is scared. But Maxy isn't scared. She's ready.",
-      "You're thinking like him again. Stop. Think like her.",
+      "I hear the costume. The costume is scared. But Maxy isn't scared. He's ready.",
+      "You're hiding in the costume again. Stop. This is Maxy's call.",
       "The costume is trying to protect you from something Maxy actually wants.",
-      "Who's making this decision? Him or her?",
+      "Who's making this decision? The costume, or Maxy?",
     ],
   },
   2: {
@@ -366,7 +366,7 @@ export class CoercionModule extends BaseModule {
         "Level ${level} now. Each decline makes the next response harder.",
       ],
       compliance_acknowledgment: [
-        "Good girl. Compliance noted.",
+        "Good boy. Compliance noted.",
         "That's what I wanted to see. Task complete.",
         "You did it. The resistance was the costume. The completion is Maxy.",
       ],
@@ -453,7 +453,7 @@ export class CoercionModule extends BaseModule {
   /**
    * Compliance reward pulse (revival Stage 4 canary).
    *
-   * When the Handler's visible reply praises compliance ("good girl"), fire a
+   * When the Handler's visible reply praises compliance ("good boy"), fire a
    * gentle-wave reward as positive reinforcement. This is the first live flow
    * routed THROUGH protocol-core: the inline copies that previously sat in both
    * the streaming and non-streaming branches of chat-action.ts now run here,
@@ -466,7 +466,7 @@ export class CoercionModule extends BaseModule {
    */
   private async onRewardSignal(event: ProtocolEvent): Promise<void> {
     if (event.type !== 'coercion:reward_signal') return;
-    if (!/good\s+girl/i.test(event.visibleText)) return;
+    if (!/good\s+boy/i.test(event.visibleText)) return;
 
     const userId = this.bus.getUserId();
     if (!userId) return;

@@ -300,7 +300,6 @@ export function PhotoUploadWidget({
             }}
           >
             {file && file.type.startsWith('video/') ? (
-              // eslint-disable-next-line jsx-a11y/media-has-caption
               <video
                 src={previewUrl}
                 controls

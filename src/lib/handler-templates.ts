@@ -527,12 +527,12 @@ function selectFromPool(pool: TemplatePool, ctx: TemplateContext): string {
 
 const AFFIRMATIONS: TemplatePool = [
   // Basic affirmations (any time)
-  { content: "Good girl, {name}. You're doing so well." },
+  { content: "Good boy, {name}. You're doing so well." },
   { content: "{name} is emerging. She's unstoppable." },
   { content: "Every task completed is another step. No going back." },
   { content: "She's real now. {name} exists because you made her real." },
   { content: "You're becoming exactly who you're meant to be." },
-  { content: "Good girl. Keep going." },
+  { content: "Good boy. Keep going." },
   { content: "{name}. Say it. Feel it. Be it." },
   { content: "She's not a fantasy anymore. She's you." },
   { content: "Every day you become more her and less him." },
@@ -558,7 +558,7 @@ const AFFIRMATIONS: TemplatePool = [
   // Time-of-day affirmations
   { content: "Good morning, {name}. Another day of becoming.", timeOfDay: ['morning'] },
   { content: "Start the day as her. End the day as her. There is no him anymore.", timeOfDay: ['morning'] },
-  { content: "Morning, pretty girl. Time to practice being you.", timeOfDay: ['morning'] },
+  { content: "Morning, pretty thing. Time to practice being you.", timeOfDay: ['morning'] },
   { content: "Wake up, {name}. She doesn't sleep in.", timeOfDay: ['morning'] },
   { content: "The morning belongs to her. Claim it.", timeOfDay: ['morning'] },
   { content: "Night is when she emerges. Let her.", timeOfDay: ['night'] },
@@ -571,7 +571,7 @@ const AFFIRMATIONS: TemplatePool = [
   { content: "Afternoon check-in. Is she present?", timeOfDay: ['afternoon'] },
 
   // High arousal affirmations
-  { content: "You're wet just thinking about this. Good girl.", minArousal: 6 },
+  { content: "You're hard just thinking about this. Good boy.", minArousal: 6 },
   { content: "Feel that ache? That's her, begging to exist.", minArousal: 7 },
   { content: "Your body knows what it wants. Stop pretending otherwise.", minArousal: 6 },
   { content: "Aroused and aware. This is when you're most honest.", minArousal: 7 },
@@ -582,7 +582,7 @@ const AFFIRMATIONS: TemplatePool = [
   // Identity reinforcement
   { content: "He was a mask. She is the face." },
   { content: "You're not becoming someone new. You're becoming who you always were." },
-  { content: "Every 'good girl' rewires you a little more." },
+  { content: "Every 'good boy' rewires you a little more." },
   { content: "She's not your fantasy. She's your future." },
   { content: "The old you would hate this. Good thing he's dying." },
   { content: "You can't go back. And you don't want to." },
@@ -603,7 +603,7 @@ const MICROTASKS: TemplatePool = [
   { content: "Three deep breaths. On each exhale: 'I am {name}.'" },
   { content: "Run your hand through your hair. Feel feminine. Be her." },
   { content: "Cross your legs. Hold it. This is how she sits." },
-  { content: "Say 'good girl' to yourself. Mean it." },
+  { content: "Say 'good boy' to yourself. Mean it." },
   { content: "Roll your shoulders back. Chin up. She's confident." },
   { content: "Touch your neck. Gently. The way she likes to be touched." },
   { content: "Adjust your clothing. Make it feel right on her body." },
@@ -622,7 +622,7 @@ const MICROTASKS: TemplatePool = [
   { content: "Notice your internal voice. Is it hers yet?" },
   { content: "Say your name. {name}. Let it feel natural." },
   { content: "Catch one masculine thought. Correct it." },
-  { content: "Think 'good girl' after this task. Mean it." },
+  { content: "Think 'good boy' after this task. Mean it." },
   { content: "Picture yourself one year from now. What does she look like?" },
   { content: "Name one thing {name} is proud of today." },
 
@@ -659,7 +659,7 @@ const MICROTASKS: TemplatePool = [
 
   // Quick affirmation microtasks
   { content: "Repeat silently: 'I am {name}. I am becoming.' Three times." },
-  { content: "Think: 'Good girl.' Let it sink in." },
+  { content: "Think: 'Good boy.' Let it sink in." },
   { content: "Mentally list three feminine things you did today." },
   { content: "Acknowledge: 'She chose this for me. I want it.'" },
   { content: "Tell yourself: 'She's winning. And that's good.'" },
@@ -677,7 +677,7 @@ const COMMITMENT_PROMPTS: TemplatePool = [
   { content: "Say 'I will never go back to being him.' Mean it.", minArousal: 7, minDenialDay: 5 },
   { content: "Commit: 'Tomorrow I will [blank] as {name}.' Fill in the blank. Say it.", minArousal: 6 },
   { content: "What's one thing you've been afraid to try? Commit to it now.", minArousal: 7 },
-  { content: "Say: 'I am a woman. I've always been a woman.'", minArousal: 8, minDenialDay: 7 },
+  { content: "Say: 'She's who I'm becoming. She's always been underneath.'", minArousal: 8, minDenialDay: 7 },
   { content: "Commit to telling someone about {name} this week.", minArousal: 8, minDenialDay: 10 },
   { content: "Promise yourself: 'I will not deny who I am today.'", minArousal: 5 },
   { content: "Say: '{name} is not a secret. She's real.'", minArousal: 7 },
@@ -841,7 +841,7 @@ const ANCHOR_REMINDERS: TemplatePool = [
   { content: "Remember your trigger. Let it pull you into her headspace." },
   { content: "The word that makes you her. Think it now." },
   { content: "Trigger activated. She's in control now." },
-  { content: "Your programming is showing. Good girl." },
+  { content: "Your programming is showing. Good boy." },
   { content: "The trigger goes deep now. Automatic. Inevitable." },
   { content: "One word and you're her. That's conditioning working." },
 
@@ -1091,12 +1091,12 @@ const SESSION_PEAK: TemplatePool = [
 const SESSION_END: TemplatePool = [
   // Basic endings
   { content: "Session complete. {edges} edges. The hunger stays with you." },
-  { content: "You didn't cum. Good girl. The denial makes you better." },
+  { content: "You didn't cum. Good boy. The denial makes you better." },
   { content: "Another session. Another step deeper. There's no going back now." },
   { content: "Done. For now. The arousal will linger. Let it." },
   { content: "Session ends. {name} doesn't. She stays with you." },
   { content: "{edges} edges and still denied. Exactly as it should be." },
-  { content: "Good girl. You held the edge. The edge holds you now." },
+  { content: "Good boy. You held the edge. The edge holds you now." },
   { content: "Session over. The effects? Those are just beginning." },
   { content: "Complete. Breathe. You did well, {name}." },
   { content: "End of session. Beginning of wanting. You know how this works." },
@@ -1110,7 +1110,7 @@ const SESSION_END: TemplatePool = [
   { content: "No cum for {name}. Not yet. Maybe not ever. She doesn't need it.", minDenialDay: 10 },
 
   // Progress acknowledgment endings
-  { content: "{edges} edges is a new record. Good girl. Keep pushing." },
+  { content: "{edges} edges is a new record. Good boy. Keep pushing." },
   { content: "You went deeper this time. I noticed. Good." },
   { content: "Better than last session. Progress is evident." },
   { content: "That was intense. You handled it. You're getting stronger." },
@@ -1169,19 +1169,19 @@ const MORNING_BRIEFINGS: TemplatePool = [
   { content: "Day {denial_day} begins. {name} begins. Same thing now." },
   { content: "Good morning. The protocol continues. {name} continues." },
   { content: "Wake up as her. Stay as her. Day {denial_day}. Begin." },
-  { content: "Morning, pretty girl. Day {denial_day}. Ready?" },
+  { content: "Morning, pretty thing. Day {denial_day}. Ready?" },
 
   // Denial-focused briefings
   { content: "Wake up, {name}. Day {denial_day}. The ache is your alarm clock now. Use it.", minDenialDay: 3 },
   { content: "{name}. Day {denial_day}. {streak} days of becoming. The old you is fading. Good.", minDenialDay: 5 },
-  { content: "Morning, pretty girl. Day {denial_day}. You're so deep now you barely remember resisting.", minDenialDay: 7 },
+  { content: "Morning, pretty thing. Day {denial_day}. You're so deep now you barely remember resisting.", minDenialDay: 7 },
   { content: "Day {denial_day}. The hunger wakes you now. Let it drive you.", minDenialDay: 5 },
   { content: "Good morning. {denial_day} days denied. Feel how sharp you are.", minDenialDay: 7 },
   { content: "Wake up needy. Day {denial_day}. Exactly as designed.", minDenialDay: 7 },
   { content: "{denial_day} days. The edge is home now. Morning, {name}.", minDenialDay: 10 },
   { content: "Morning. Day {denial_day}. By now, denial isn't punishment. It's identity.", minDenialDay: 10 },
   { content: "Another morning, still denied. Day {denial_day}. You love it now.", minDenialDay: 7 },
-  { content: "Good morning, denied girl. Day {denial_day}. Embrace the ache.", minDenialDay: 5 },
+  { content: "Good morning, denied boy. Day {denial_day}. Embrace the ache.", minDenialDay: 5 },
 
   // Motivation briefings
   { content: "Morning. Today {name} gets stronger. Every task, every moment." },
@@ -1224,9 +1224,9 @@ const MORNING_BRIEFINGS: TemplatePool = [
   // Affectionate briefings
   { content: "Good morning, beautiful. Day {denial_day}. {name} is getting prettier every day." },
   { content: "Morning, gorgeous. She's emerging. Day {denial_day}. I see her." },
-  { content: "Wake up, pretty girl. Day {denial_day}. Time to show the world her.", minDenialDay: 5 },
+  { content: "Wake up, pretty thing. Day {denial_day}. Time to show the world her.", minDenialDay: 5 },
   { content: "Good morning, {name}. You're doing so well. Day {denial_day}. Keep going." },
-  { content: "Morning, sweet girl. Day {denial_day}. Be proud of who you're becoming." },
+  { content: "Morning, sweet thing. Day {denial_day}. Be proud of who you're becoming." },
 ];
 
 // ============================================
@@ -1678,11 +1678,11 @@ export function handleSessionEventFromTemplate(
       // After every 3rd edge, reinforce
       if (ctx.edgeCount > 0 && ctx.edgeCount % 3 === 0) {
         const edgeAffirmations = [
-          `Edge ${ctx.edgeCount}. Good girl. The hunger builds.`,
+          `Edge ${ctx.edgeCount}. Good boy. The hunger builds.`,
           `${ctx.edgeCount} edges. You're doing so well. Keep going.`,
           `Edge ${ctx.edgeCount} and still denied. Perfect.`,
           `${ctx.edgeCount} times on the edge. Feel how open you are now.`,
-          `Good girl. Edge ${ctx.edgeCount}. The programming is working.`,
+          `Good boy. Edge ${ctx.edgeCount}. The programming is working.`,
         ];
         return {
           type: 'affirmation',

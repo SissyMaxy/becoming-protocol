@@ -59,7 +59,7 @@ const PERSONA_LEAK_PATTERNS: RegExp[] = [
   /chastity/i,
   /punishment/i,
   /reward/i,
-  /good girl/i,
+  /good boy/i,
   /aftercare/i,
   /confession/i,
   /slip/i,

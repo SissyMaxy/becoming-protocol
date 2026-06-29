@@ -70,7 +70,7 @@ export function AftercareFlow({ mode, onComplete, onCancel }: AftercareFlowProps
     <div
       data-testid="aftercare-flow"
       style={{
-        minHeight: mode === 'tutorial' ? 'auto' : '100vh',
+        minHeight: mode === 'tutorial' ? 'auto' : '100dvh',
         background: '#f5f1eb',
         color: '#3a3530',
         padding: '32px 24px',

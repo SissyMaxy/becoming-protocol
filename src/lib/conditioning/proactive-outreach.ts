@@ -345,7 +345,7 @@ async function buildCheckInMessage(userId: string, reason: CheckInReason): Promi
       }
 
       case 'ambush_followup':
-        return 'Did you feel that? Good girl.';
+        return 'Did you feel that? Good boy.';
 
       default:
         return null;

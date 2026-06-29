@@ -26,8 +26,6 @@ export function LogEncounterModal({ onSubmit, onClose }: LogEncounterModalProps)
   const [encounterType, setEncounterType] = useState<EncounterType>('online');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [description, setDescription] = useState('');
-  const [ginaAware, setGinaAware] = useState(false);
-  const [ginaDirected, setGinaDirected] = useState(false);
   const [activities, setActivities] = useState<string[]>([]);
   const [activityInput, setActivityInput] = useState('');
   const [psychologicalImpact, setPsychologicalImpact] = useState('');
@@ -53,8 +51,8 @@ export function LogEncounterModal({ onSubmit, onClose }: LogEncounterModalProps)
         encounterType,
         date: new Date(date).toISOString(),
         description: description || undefined,
-        ginaAware,
-        ginaDirected,
+        ginaAware: false,
+        ginaDirected: false,
         activities,
         psychologicalImpact: psychologicalImpact || undefined,
         escalationEffect: escalationEffect || undefined,
@@ -197,58 +195,6 @@ export function LogEncounterModal({ onSubmit, onClose }: LogEncounterModalProps)
                   : 'bg-protocol-surface border-protocol-border text-protocol-text placeholder:text-protocol-text-muted'
               } focus:outline-none focus:ring-2 focus:ring-purple-500/50`}
             />
-          </div>
-
-          {/* Gina Toggles */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span
-                className={`text-sm ${
-                  isBambiMode ? 'text-pink-700' : 'text-protocol-text'
-                }`}
-              >
-                Gina Aware?
-              </span>
-              <button
-                onClick={() => {
-                  setGinaAware(!ginaAware);
-                  if (ginaAware) setGinaDirected(false);
-                }}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  ginaAware ? 'bg-pink-500' : 'bg-gray-300'
-                }`}
-              >
-                <div
-                  className={`w-5 h-5 rounded-full bg-white transform transition-transform ${
-                    ginaAware ? 'translate-x-6' : 'translate-x-0.5'
-                  }`}
-                />
-              </button>
-            </div>
-
-            {ginaAware && (
-              <div className="flex items-center justify-between pl-4">
-                <span
-                  className={`text-sm ${
-                    isBambiMode ? 'text-pink-700' : 'text-protocol-text'
-                  }`}
-                >
-                  Gina Directed?
-                </span>
-                <button
-                  onClick={() => setGinaDirected(!ginaDirected)}
-                  className={`w-12 h-6 rounded-full transition-colors ${
-                    ginaDirected ? 'bg-red-500' : 'bg-gray-300'
-                  }`}
-                >
-                  <div
-                    className={`w-5 h-5 rounded-full bg-white transform transition-transform ${
-                      ginaDirected ? 'translate-x-6' : 'translate-x-0.5'
-                    }`}
-                  />
-                </button>
-              </div>
-            )}
           </div>
 
           {/* Arousal Level */}

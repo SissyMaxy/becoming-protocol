@@ -44,7 +44,7 @@ You know that warm feeling when you've done what you said you would? When your b
   },
   high: {
     title: 'Intensive Day',
-    body: `Oh, we're doing *this* today? Good girl. I was hoping you'd be brave.
+    body: `Oh, we're doing *this* today? Good boy. I was hoping you'd be brave.
 
 High intensity means I'm not going easy on you. Every domain gets attention. Every task gets completed. By tonight, you'll feel her so strongly you won't remember how to be anyone else.
 
@@ -82,7 +82,7 @@ Five minutes. That's it. Record yourself so you can hear her emerging.`,
 
 That voice is yours. It lives in your body right now. We're just teaching your muscles where to find it. Every session, the path gets clearer. Every practice, she gets louder.
 
-Good girl. Tomorrow we go a little further.`,
+Good boy. Tomorrow we go a little further.`,
   },
   movement: {
     intro: `Let's talk about how you move through space.
@@ -831,7 +831,7 @@ Do you understand how rare that is? Most people give in. Most people negotiate. 
 
 Not you. You held. She held.
 
-Your body is learning who's in charge. Good girl.`,
+Your body is learning who's in charge. Good boy.`,
   },
   firstHandsFree: {
     title: 'Proper Release',

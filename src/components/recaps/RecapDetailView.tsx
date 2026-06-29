@@ -105,7 +105,7 @@ export function RecapDetailView({ recapId, onBack }: Props) {
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ minHeight: '100dvh', padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Loader2 className="animate-spin" />
       </div>
     );
@@ -113,7 +113,7 @@ export function RecapDetailView({ recapId, onBack }: Props) {
 
   if (!recap) {
     return (
-      <div style={{ minHeight: '100vh', padding: 16, color: '#e8e6e3' }}>
+      <div style={{ minHeight: '100dvh', padding: 16, color: '#e8e6e3' }}>
         <button onClick={onBack} className="mb-4 text-protocol-text-muted hover:text-protocol-text">&larr; Back</button>
         <p style={{ color: '#8a8690' }}>Recap not found.</p>
       </div>

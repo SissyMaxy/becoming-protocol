@@ -208,6 +208,7 @@ export function useEdgeSession(): UseEdgeSessionReturn {
 
       // If target reached (phase went to cooldown), start cooldown timer
       if (updated.phase === 'cooldown') {
+        if (cooldownTimeoutRef.current) clearTimeout(cooldownTimeoutRef.current);
         cooldownTimeoutRef.current = setTimeout(() => {
           setState(s => s ? smEndCooldown(s) : null);
         }, COOLDOWN_DURATION_MS);
@@ -240,12 +241,21 @@ export function useEdgeSession(): UseEdgeSessionReturn {
 
   // ─── Auction resolution ───
   const handleResolveAuction = useCallback((option: AuctionOption) => {
+    // Capture the auction context BEFORE dispatch — the state machine clears
+    // activeAuction in smResolveAuction, so reading it afterward would be null.
+    let sessionId: string | null = null;
+    let edgeNumber = 0;
+
     setState(prev => {
       if (!prev?.activeAuction) return prev;
+      sessionId = prev.id;
+      edgeNumber = prev.activeAuction.edgeNumber ?? prev.edgeCount;
+
       const updated = smResolveAuction(prev, option);
 
       // If auction ended session, start cooldown timer
       if (updated.phase === 'cooldown' && prev.phase !== 'cooldown') {
+        if (cooldownTimeoutRef.current) clearTimeout(cooldownTimeoutRef.current);
         cooldownTimeoutRef.current = setTimeout(() => {
           setState(s => s ? smEndCooldown(s) : null);
         }, COOLDOWN_DURATION_MS);
@@ -254,27 +264,25 @@ export function useEdgeSession(): UseEdgeSessionReturn {
       return updated;
     });
 
-    // Persist commitment to DB (fire-and-forget)
-    if (user?.id && option.commitmentValue !== '0') {
-      setState(prev => {
-        if (!prev) return prev;
-        supabase
-          .from('session_commitments')
-          .insert({
-            user_id: user.id,
-            session_id: prev.id,
-            commitment_type: option.commitmentType,
-            commitment_value: option.commitmentValue,
-            label: option.label,
-            description: option.description,
-            edge_number: prev.activeAuction?.edgeNumber ?? prev.edgeCount,
-            denial_day: 0, // populated by caller if needed
-          })
-          .then(({ error }) => {
-            if (error) console.error('[EdgeSession] Commitment save failed:', error);
-          });
-        return prev;
-      });
+    // Persist commitment to DB (fire-and-forget) — side effect kept OUT of the
+    // setState updater. Guard on sessionId so we only write when an auction was
+    // actually resolved.
+    if (sessionId && user?.id && option.commitmentValue !== '0') {
+      supabase
+        .from('session_commitments')
+        .insert({
+          user_id: user.id,
+          session_id: sessionId,
+          commitment_type: option.commitmentType,
+          commitment_value: option.commitmentValue,
+          label: option.label,
+          description: option.description,
+          edge_number: edgeNumber,
+          denial_day: 0, // populated by caller if needed
+        })
+        .then(({ error }) => {
+          if (error) console.error('[EdgeSession] Commitment save failed:', error);
+        });
     }
   }, [user?.id]);
 

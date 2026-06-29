@@ -33,7 +33,7 @@ export interface MicroPulseDelivery {
 
 const AFFIRMATION_POOL: MicroPulse[] = [
   {
-    text: "She's here. She was always here. Good girl.",
+    text: "She's here. She was always here. Good boy.",
     category: 'identity',
     intensity: 3,
   },
@@ -53,7 +53,7 @@ const AFFIRMATION_POOL: MicroPulse[] = [
     intensity: 2,
   },
   {
-    text: 'The mirror knows. You know. Good girl.',
+    text: 'The mirror knows. You know. Good boy.',
     category: 'identity',
     intensity: 3,
   },

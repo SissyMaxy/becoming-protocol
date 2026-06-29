@@ -101,7 +101,7 @@ export function Button({
 // INPUT COMPONENT
 // ============================================
 
-interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {}
+type InputProps = React.InputHTMLAttributes<HTMLInputElement>;
 
 export function Input({ className = '', ...props }: InputProps) {
   const { isBambiMode } = useBambiMode();
@@ -117,7 +117,7 @@ export function Input({ className = '', ...props }: InputProps) {
 // TEXTAREA COMPONENT
 // ============================================
 
-interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {}
+type TextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement>;
 
 export function Textarea({ className = '', ...props }: TextareaProps) {
   const { isBambiMode } = useBambiMode();

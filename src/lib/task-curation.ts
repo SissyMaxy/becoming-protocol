@@ -363,7 +363,7 @@ export async function updatePreferencesFromCuration(
   curation: TaskCuration
 ): Promise<void> {
   // Get current preferences or create defaults
-  let prefs = await getUserPreferences(userId);
+  const prefs = await getUserPreferences(userId);
 
   const categoryWeights: Record<string, number> = prefs?.categoryWeights || {};
   const domainWeights: Record<string, number> = prefs?.domainWeights || {};

@@ -7,15 +7,17 @@
 // ============================================
 
 export interface Pronouns {
-  subject: string;     // she
-  object: string;      // her
-  possessive: string;  // her / hers
+  subject: string;     // he
+  object: string;      // him
+  possessive: string;  // his
 }
 
+// Male+ default — the user is he/him ("good boy"). Mama / the feminine
+// destination uses "her" separately; this is the USER's current pronouns.
 export const DEFAULT_PRONOUNS: Pronouns = {
-  subject: 'she',
-  object: 'her',
-  possessive: 'her',
+  subject: 'he',
+  object: 'him',
+  possessive: 'his',
 };
 
 // ============================================

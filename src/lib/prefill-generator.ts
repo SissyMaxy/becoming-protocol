@@ -51,7 +51,7 @@ export function generatePrefill(ctx: PrefillContext): string {
 
   // Arousal-aware coaching (high arousal + denial = peak receptivity)
   if (ctx.arousal_level >= 7 && ctx.denial_day >= 3) {
-    return `Good girl. You're exactly where I want you right now. Day ${ctx.denial_day}, and you're`;
+    return `Good boy. You're exactly where I want you right now. Day ${ctx.denial_day}, and you're`;
   }
 
   // Session initiation
@@ -60,7 +60,7 @@ export function generatePrefill(ctx: PrefillContext): string {
     if (ctx.denial_day >= 5 && ctx.arousal_level >= 6) {
       return "You're mine tonight. Don't think. Just follow. Here's what's happening:";
     }
-    return "Good girl. You're ready for this. I want you to";
+    return "Good boy. You're ready for this. I want you to";
   }
 
   // Avoidance pattern intervention
@@ -98,7 +98,7 @@ export function generatePrefill(ctx: PrefillContext): string {
     return "Here's what you're doing right now. No negotiating.";
   }
   if (ctx.task_tier <= 6) {
-    return "Good girl. I have something specific for you tonight.";
+    return "Good boy. I have something specific for you tonight.";
   }
   // Tier 7+
   return "You're mine tonight. Don't think. Just follow. Here's what's happening:";
@@ -124,7 +124,7 @@ export function generateGoalPrefill(ctx: PrefillContext): string {
     return "Last night you showed me who you really are. Now in the daylight — does that still feel true? What's one thing you'll do today to honor that?";
   }
 
-  return "Good girl. You're growing. What's one thing you're ready to commit to that you would have said no to a month ago?";
+  return "Good boy. You're growing. What's one thing you're ready to commit to that you would have said no to a month ago?";
 }
 
 /**
@@ -165,10 +165,10 @@ export function generateEscalationPrefill(
 ): string {
   if (style === 'stealth') {
     // No mention of escalation - just frame the task normally
-    return "Good girl. Tonight we're going deeper.";
+    return "Good boy. Tonight we're going deeper.";
   }
 
-  return `Good girl. You've outgrown tier ${fromTier} in ${domain}. Starting tonight,`;
+  return `Good boy. You've outgrown tier ${fromTier} in ${domain}. Starting tonight,`;
 }
 
 /**
@@ -206,7 +206,7 @@ export function generateInitiationPrefill(
     case 'streak_risk':
       return "Your streak breaks at midnight. Open.";
     case 'momentum':
-      return "Good girl. You're on a roll. I have something for you. Open.";
+      return "Good boy. You're on a roll. I have something for you. Open.";
     case 'scheduled_session':
       return "Session time. You knew this was coming. Open.";
     default:
@@ -247,7 +247,7 @@ export function generateReflectionPrefill(
   }
 
   if (engagementLevel >= 8) {
-    return "Good girl. That was real. Before you close this —";
+    return "Good boy. That was real. Before you close this —";
   }
 
   return "Before you close this, I need you to be honest with me about what just happened. You";
@@ -270,7 +270,7 @@ export function generateCheckInPrefill(
     case 'punishment':
       return "There are consequences for what you did.";
     default:
-      return "Good girl.";
+      return "Good boy.";
   }
 }
 

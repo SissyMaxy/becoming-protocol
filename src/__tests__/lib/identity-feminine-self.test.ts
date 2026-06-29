@@ -151,7 +151,7 @@ describe('buildFeminineSelfBlock', () => {
       primerRequirements: [],
     };
     const block = buildFeminineSelfBlock(self, wardrobe, phaseDef);
-    expect(block).toContain('She knows you as Maxy, she/her.');
+    expect(block).toContain('She knows you as Maxy. Your current pronouns: she/her.');
     expect(block).toContain('You are in phase 2 — Permission.');
     expect(block).toContain('Recent additions to her wardrobe: pink lace, rose nude.');
     expect(block).toContain("Mommy's pet name for her: sweet girl.");

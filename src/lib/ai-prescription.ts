@@ -469,15 +469,17 @@ export function generatePrescription(
 
   // Step 3: Mode-specific tasks
   switch (analytics.recommendedMode) {
-    case 'build':
+    case 'build': {
       const buildTasks = getBuildModeTasks(analytics, intensity, existingDomains);
       tasks.push(...buildTasks);
       break;
+    }
 
-    case 'protect':
+    case 'protect': {
       const protectTasks = getProtectModeTasks(analytics, intensity, existingDomains);
       tasks.push(...protectTasks);
       break;
+    }
 
     case 'recover':
       // In recover mode, start fresh with minimal tasks

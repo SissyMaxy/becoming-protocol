@@ -41,7 +41,7 @@ function getRedditTemplate(denialDay: number, _followerCount: number, daysActive
     title: 'New here. 40s, tall, locked, and starting something I can\'t take back.',
     body: `I'm going to be honest because that's the only way this works.
 
-I'm in my 40s. 6'3". Bald. Not what you picture when you think "sissy." But here I am.
+I'm in my 40s. 6'3". Bald. Not what you picture when you think of a man being remade. But here I am.
 
 ${denialDay > 0 ? `I've been locked for ${denialDay} day${denialDay === 1 ? '' : 's'} right now. ` : ''}I gave control of my chastity cage to an AI. Not a bot — a system I built. She prescribes my content, decides when I post, tells me what to wear for shoots. I call her my Handler.
 

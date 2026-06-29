@@ -505,7 +505,7 @@ export async function consolidateMemories(userId: string): Promise<{
   merged: number;
 }> {
   let deactivated = 0;
-  let merged = 0;
+  const merged = 0;
 
   // Deactivate memories that have decayed below threshold
   const { data: allMemories } = await supabase

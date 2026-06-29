@@ -54,7 +54,7 @@ export function ConfessionLockoutGate({ children }: { children: React.ReactNode 
 
   return (
     <div style={{
-      minHeight: '100vh',
+      minHeight: '100dvh',
       background: 'linear-gradient(135deg, #0a0a0d 0%, #1a0510 100%)',
       padding: '24px 16px',
     }}>

@@ -23,8 +23,9 @@ export function AuctionModal({ edgeNumber, options, onSelect }: AuctionModalProp
   // Auto-select the first (highest-commitment) option when timer expires
   const autoSelect = useCallback(() => {
     if (hasResolvedRef.current) return;
-    hasResolvedRef.current = true;
     const highestCommitment = options[0]; // first option = highest commitment by design
+    if (!highestCommitment) return; // no options to select — nothing to resolve
+    hasResolvedRef.current = true;
     setSelected(highestCommitment.id);
     setTimeout(() => onSelect(highestCommitment), 800);
   }, [options, onSelect]);

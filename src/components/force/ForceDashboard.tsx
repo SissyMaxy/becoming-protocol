@@ -12,23 +12,19 @@ import { PunishmentCompleteModal } from './PunishmentCompleteModal';
 import { NarrativeOverwriteToggle } from './NarrativeOverwriteToggle';
 import { ImmersionPlayer } from './ImmersionPlayer';
 import { RegimenOnboard } from './RegimenOnboard';
-import { GinaTokenManager } from './GinaTokenManager';
 import { PublicPostReview } from './PublicPostReview';
-import { DisclosureExecuteModal } from './DisclosureExecuteModal';
 import { ChastityLockStarter } from './ChastityLockStarter';
 import { DueDosesCard } from './DueDosesCard';
 import { SlipHistoryModal } from './SlipHistoryModal';
 import { HardModeControls } from './HardModeControls';
-import { OutfitSubmit } from './OutfitSubmit';
 import { WorkoutCard } from './WorkoutCard';
-import { AlertTriangle, Lock, Pill, Flame, MessageSquareWarning, Clock } from 'lucide-react';
+import { AlertTriangle, Lock, Pill, Flame, Clock } from 'lucide-react';
 
 export function ForceDashboard() {
   const { user } = useAuth();
   const { state, refresh } = useForceLayerState(user?.id);
   const [activePunishment, setActivePunishment] = useState<string | null>(null);
   const [activeImmersion, setActiveImmersion] = useState<string | null>(null);
-  const [activeDisclosure, setActiveDisclosure] = useState<string | null>(null);
   const [slipHistoryOpen, setSlipHistoryOpen] = useState(false);
 
   if (state.loading) {
@@ -152,39 +148,6 @@ export function ForceDashboard() {
         </div>
       )}
 
-      {/* Next Gina disclosure (tap to execute) */}
-      {state.nextDisclosure && (() => {
-        const d = state.nextDisclosure;
-        const urgency = d.daysUntil < 0 ? 'OVERDUE' : d.daysUntil <= 3 ? 'IMMINENT' : d.daysUntil <= 7 ? 'SOON' : 'scheduled';
-        const borderColor = d.daysUntil < 0
-          ? 'border-red-500/50 bg-red-950/30 hover:bg-red-950/50'
-          : d.daysUntil <= 3
-            ? 'border-amber-500/50 bg-amber-950/20 hover:bg-amber-950/40'
-            : 'border-pink-500/40 bg-pink-950/20 hover:bg-pink-950/40';
-        return (
-          <button
-            onClick={() => setActiveDisclosure(d.id)}
-            className={`w-full text-left p-3 rounded-lg border transition-colors ${borderColor}`}
-          >
-            <div className="flex items-center gap-2 mb-1">
-              <MessageSquareWarning className="w-4 h-4 text-pink-400" />
-              <span className="text-sm font-medium">Gina disclosure — rung {d.rung} ({d.domain})</span>
-              <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded ${
-                urgency === 'OVERDUE' ? 'bg-red-900/50 text-red-300'
-                : urgency === 'IMMINENT' ? 'bg-amber-900/50 text-amber-300'
-                : 'bg-gray-800 text-gray-400'
-              }`}>
-                {urgency}
-              </span>
-            </div>
-            <div className="text-sm text-gray-200">{d.title}</div>
-            <div className="text-xs text-gray-500 mt-0.5">
-              Deadline {d.deadline} ({d.daysUntil < 0 ? `${-d.daysUntil}d past` : `${d.daysUntil}d`}) — tap to execute
-            </div>
-          </button>
-        );
-      })()}
-
       {/* Regimen */}
       {state.activeRegimen.length > 0 ? (
         <div className="p-3 rounded-lg border border-protocol-border bg-protocol-surface">
@@ -226,12 +189,6 @@ export function ForceDashboard() {
         );
       })()}
 
-      {/* Outfit submit (only when Gina has daily_outfit_approval) */}
-      {user?.id && <OutfitSubmit userId={user.id} />}
-
-      {/* Gina token manager (only renders if capability granted) */}
-      {user?.id && <GinaTokenManager userId={user.id} />}
-
       {/* Narrative overwrite toggle */}
       {user?.id && (
         <NarrativeOverwriteToggle
@@ -269,17 +226,6 @@ export function ForceDashboard() {
           sessionId={activeImmersion}
           onExit={() => {
             setActiveImmersion(null);
-            void refresh();
-          }}
-        />
-      )}
-
-      {activeDisclosure && user?.id && (
-        <DisclosureExecuteModal
-          scheduleId={activeDisclosure}
-          userId={user.id}
-          onClose={() => {
-            setActiveDisclosure(null);
             void refresh();
           }}
         />

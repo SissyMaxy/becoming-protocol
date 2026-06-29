@@ -141,7 +141,7 @@ export type RitualPhase =
 export const INITIAL_ANCHORS: Omit<RitualAnchor, 'id' | 'user_id' | 'sessions_paired' | 'first_paired' | 'last_paired' | 'estimated_strength' | 'autonomous_trigger_observed'>[] = [
   {
     anchor_type: 'phrase',
-    anchor_value: 'Good girl. Settle in.',
+    anchor_value: 'Good boy. Settle in.',
     handler_notes: 'Opening phrase — played via speech synthesis at session start',
     active: true,
   },

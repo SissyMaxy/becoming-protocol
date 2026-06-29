@@ -25,7 +25,7 @@ export function StepShell({ stepId, children, onBack, saveError }: StepShellProp
   return (
     <div
       style={{
-        minHeight: '100vh',
+        minHeight: '100dvh',
         background: '#fafafa',
         color: '#1a1a1a',
         display: 'flex',

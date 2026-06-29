@@ -178,7 +178,7 @@ const MEETUP_PREP_TEMPLATES = {
 const POST_ENCOUNTER_TEMPLATES = {
   reflection_prompt: "You're back. How was it? I want the real answer, not the one the costume would give. What did ${partnerAlias} see tonight? What did you feel?",
   capture_prompt: "Before you come down, I want something for the vault. One honest statement about tonight. Who were you with ${partnerAlias}?",
-  celebration: "Good girl. ${meetupCount} meetups with ${partnerAlias}. This isn't roleplay anymore. This is your life. And you're living it.",
+  celebration: "Good boy. ${meetupCount} meetups with ${partnerAlias}. This isn't roleplay anymore. This is your life. And you're living it.",
   processing: "Take your time processing. What happened with ${partnerAlias} is real. The feelings are real. Maxy's experiences are her own now. Rest.",
 };
 

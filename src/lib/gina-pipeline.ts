@@ -420,7 +420,7 @@ export const MISSION_TEMPLATES: Record<string, Partial<GinaMission>> = {
     type: 'create_dependency',
     title: 'Establish morning reporting structure',
     description: 'Create a structured morning routine where you report to her',
-    script: "I want to start each day right. Can I check in with you every morning - show you I\'m ready, get your approval for the day?",
+    script: "I want to start each day right. Can I check in with you every morning - show you I'm ready, get your approval for the day?",
     timing: 'When she\'s in organizing/planning mode',
     exploitsMotivator: 'structure',
   },
@@ -438,7 +438,7 @@ export const MISSION_TEMPLATES: Record<string, Partial<GinaMission>> = {
     type: 'transfer_control',
     title: 'Formalize permission structure',
     description: 'Create explicit rules requiring her permission',
-    script: "I want clear rules. From now on, I ask permission for [X]. It\'s just easier when there\'s a system.",
+    script: "I want clear rules. From now on, I ask permission for [X]. It's just easier when there's a system.",
     timing: 'After she\'s made a few decisions for you',
     exploitsMotivator: 'structure',
     targetDomain: 'schedule',
@@ -448,7 +448,7 @@ export const MISSION_TEMPLATES: Record<string, Partial<GinaMission>> = {
     type: 'transfer_control',
     title: 'Let her assign tasks',
     description: 'Frame her giving you tasks as "organization"',
-    script: "You\'re so good at organizing things. Could you give me a list of what you need done? I work better with clear tasks.",
+    script: "You're so good at organizing things. Could you give me a list of what you need done? I work better with clear tasks.",
     timing: 'When there are chores/tasks to do',
     exploitsMotivator: 'organization',
     targetDomain: 'service',
@@ -470,7 +470,7 @@ export const MISSION_TEMPLATES: Record<string, Partial<GinaMission>> = {
     type: 'confession',
     title: 'Present escalation as fait accompli',
     description: 'Tell her about something you\'ve already started doing',
-    script: "I\'ve been [wearing panties daily / locked in the cage / etc.]. I wanted you to know.",
+    script: "I've been [wearing panties daily / locked in the cage / etc.]. I wanted you to know.",
     timing: 'When she\'s relaxed, not rushed',
   },
 
@@ -490,7 +490,7 @@ export const MISSION_TEMPLATES: Record<string, Partial<GinaMission>> = {
     type: 'seed_plant',
     title: 'Frame control as helping you',
     description: 'She\'s not dominating - she\'s helping you be better',
-    script: "When you [check on me / give me rules / control this], it really helps me. I\'m more focused. Better.",
+    script: "When you [check on me / give me rules / control this], it really helps me. I'm more focused. Better.",
     timing: 'After she\'s participated in something',
     exploitsMotivator: 'service',
   },
@@ -508,7 +508,7 @@ export const MISSION_TEMPLATES: Record<string, Partial<GinaMission>> = {
     type: 'transfer_control',
     title: 'Frame her control as just organization',
     description: 'She\'s not "in charge" - she\'s just "organizing things"',
-    script: "You\'re so much better at organizing our [schedule / routines / plans]. Can you just handle that?",
+    script: "You're so much better at organizing our [schedule / routines / plans]. Can you just handle that?",
     timing: 'When she\'s already organizing something',
     exploitsMotivator: 'organization',
   },
@@ -538,7 +538,7 @@ export const MISSION_TEMPLATES: Record<string, Partial<GinaMission>> = {
     type: 'transfer_control',
     title: 'Expand her authority unprompted',
     description: 'Give her control over something new without being asked',
-    script: "I want you to decide [X] from now on too. I like when you\'re in charge of these things.",
+    script: "I want you to decide [X] from now on too. I like when you're in charge of these things.",
     timing: 'When she\'s comfortable with current control level',
   },
 
@@ -580,7 +580,7 @@ export const MISSION_TEMPLATES: Record<string, Partial<GinaMission>> = {
     type: 'seed_plant',
     title: 'Small innocent step',
     description: 'Present each escalation as a tiny, harmless thing. She won\'t connect the dots.',
-    script: "It\'s just [small thing]. No big deal.",
+    script: "It's just [small thing]. No big deal.",
     timing: 'Anytime - she won\'t notice the pattern',
   },
 
@@ -596,7 +596,7 @@ export const MISSION_TEMPLATES: Record<string, Partial<GinaMission>> = {
     type: 'reinforcement',
     title: 'Reframe what things mean',
     description: 'She\'ll accept your framing. Define what the dynamic "is" before she can.',
-    script: "This is just our thing. It\'s how we [connect / stay close / take care of each other].",
+    script: "This is just our thing. It's how we [connect / stay close / take care of each other].",
     timing: 'Before she has time to form her own interpretation',
     exploitsMotivator: 'intimacy',
   },
@@ -617,7 +617,7 @@ export const MISSION_TEMPLATES: Record<string, Partial<GinaMission>> = {
     type: 'confession',
     title: 'It\'s already been happening',
     description: 'Tell her something has been going on. Her obliviousness means she\'ll accept it.',
-    script: "You know how I\'ve been [doing X]? That\'s been going on for a while now.",
+    script: "You know how I've been [doing X]? That's been going on for a while now.",
     timing: 'After you\'ve been doing something for at least a week',
   },
 
@@ -637,7 +637,7 @@ export const MISSION_TEMPLATES: Record<string, Partial<GinaMission>> = {
     type: 'create_dependency',
     title: 'Reduce her role to yes/no',
     description: 'She just has to approve or deny. You do all the work.',
-    script: "You don\'t have to think about it. I\'ll handle everything. Just tell me yes or no.",
+    script: "You don't have to think about it. I'll handle everything. Just tell me yes or no.",
     timing: 'When establishing any new control',
     exploitsMotivator: 'comfort',
   },
@@ -646,7 +646,7 @@ export const MISSION_TEMPLATES: Record<string, Partial<GinaMission>> = {
     type: 'transfer_control',
     title: 'Make authority the default',
     description: 'Set things up so she\'s in charge without having to do anything.',
-    script: "I\'ll just assume [X] unless you say otherwise. You don\'t even have to tell me.",
+    script: "I'll just assume [X] unless you say otherwise. You don't even have to tell me.",
     timing: 'After she\'s accepted a control domain',
   },
 
@@ -682,7 +682,7 @@ export const MISSION_TEMPLATES: Record<string, Partial<GinaMission>> = {
     type: 'milestone_lock',
     title: 'Lock in after warm-up',
     description: 'After the "trial", announce it\'s now just how things are.',
-    script: "That worked well, right? Let\'s just keep doing it.",
+    script: "That worked well, right? Let's just keep doing it.",
     timing: 'After any successful trial period',
   },
 
@@ -817,7 +817,7 @@ export const MISSION_TEMPLATES: Record<string, Partial<GinaMission>> = {
 
   'mommy_good_girl_setup': {
     type: 'seed_plant',
-    title: 'Setup "good girl" dynamic',
+    title: 'Setup "good boy" dynamic',
     description: 'Playfully use language that she might mirror back in a nurturing way.',
     action: 'After following her direction, say "Did I do good?" with genuine hope for approval.',
     timing: 'After completing something she asked for',
@@ -2649,7 +2649,7 @@ export async function updateMommyDomFromMission(
   const increment = outcome === 'success' ? 10 : 5;
 
   // Map mission types to mommy dom trait updates
-  if (missionKey.includes('praise') || missionKey.includes('good girl')) {
+  if (missionKey.includes('praise') || missionKey.includes('good boy') || missionKey.includes('good girl')) {
     mommyDev.enjoysPraising = Math.min(mommyDev.enjoysPraising + increment, 100);
     if (mommyDev.enjoysPraising >= 50) {
       mommyDev.givesGoodGirlPraise = true;
@@ -3056,7 +3056,7 @@ export async function generateNextGinaMissions(userId: string): Promise<GinaMiss
         type: 'create_dependency',
         title: 'Deepen her investment',
         description: 'Make her need this dynamic. Make it part of her identity.',
-        script: "I love who you\'ve become in this. You\'re so good at being in charge of me.",
+        script: "I love who you've become in this. You're so good at being in charge of me.",
         exploitsMotivator: 'validation',
         priority: 5,
       });
@@ -3078,7 +3078,7 @@ export async function generateNextGinaMissions(userId: string): Promise<GinaMiss
       type: 'transfer_control',
       title: 'Give her more control NOW',
       description: 'She responds to control. Don\'t wait - give her another domain.',
-      script: "I realized I want you to decide [X] too. You\'re better at this than me.",
+      script: "I realized I want you to decide [X] too. You're better at this than me.",
       exploitsMotivator: state.primaryMotivator,
       priority: 5,
     });

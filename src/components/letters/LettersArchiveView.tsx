@@ -158,7 +158,7 @@ export function LettersArchiveView({ onBack }: LettersArchiveViewProps) {
 
   return (
     <LettersGate>
-      <div style={{ minHeight: '100vh', background: '#0f0a0d', paddingBottom: 96 }}>
+      <div style={{ minHeight: '100dvh', background: '#0f0a0d', paddingBottom: 96 }}>
         <div style={{ padding: '14px 16px', borderBottom: '1px solid #2d1a25' }}>
           <button
             onClick={onBack}

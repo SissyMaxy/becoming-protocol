@@ -210,7 +210,7 @@ export function IdentitySettingsView({ onBack }: Props) {
 
   return (
     <div style={{
-      minHeight: '100vh',
+      minHeight: '100dvh',
       background: '#0a0a0d',
       color: PALETTE.textBody,
       padding: '20px 16px 80px',

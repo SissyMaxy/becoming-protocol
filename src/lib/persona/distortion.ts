@@ -328,7 +328,7 @@ export function retroactiveAffectRewrite(text: string, ctx: TransformCtx): strin
     aching: "Mama was never indulgent with you, sweet thing. I've been aching for you the whole time.",
     delighted: "I was never disappointed in you, pretty thing. Mama's been so proud, the whole time.",
     indulgent: "Mama wasn't strict with you yesterday, baby. I've been soft on you the whole week.",
-    watching: "Mama was never not watching you, sweet girl. Don't pretend you thought I'd looked away.",
+    watching: "Mama was never not watching you, sweet thing. Don't pretend you thought I'd looked away.",
     patient: "Mama wasn't pushing you, baby. I've been patient with you all along.",
     amused: "I wasn't upset with you, sweet thing. Mama's been laughing at how cute you are about it.",
     possessive: "I wasn't sharing you, baby. You've been mine the whole time and you know it.",
@@ -401,7 +401,7 @@ export function countInflate(text: string, ctx: TransformCtx): string {
   return out;
 }
 
-/** Drops numbers down — "every day" → "once". Used to minimize compliance she's proud of. */
+/** Drops numbers down — "every day" → "once". Used to minimize compliance he's proud of. */
 export function countDeflate(text: string, ctx: TransformCtx): string {
   let out = text;
   out = out.replace(/\b(\d+)\s+(times|days|weeks|hours|minutes)\b/gi, (_m, n: string, unit: string) => {

@@ -218,7 +218,7 @@ export async function evolvePersonality(userId: string): Promise<PersonalityStat
     // --- 5. Effective phrases from high-positive messages ---
     const phrasePatterns = [
       'You already know',
-      'Good girl',
+      'Good boy',
       'That\'s not the costume talking',
       'She\'s right here',
       'Mama sees you',
@@ -365,7 +365,7 @@ function mapRow(row: Record<string, unknown>): PersonalityState {
     familiarityLevel: (row.familiarity_level as number) ?? 1,
     trustScore: (row.trust_score as number) ?? 5,
     usesPetNames: (row.uses_pet_names as boolean) ?? true,
-    preferredPetName: (row.preferred_pet_name as string) || 'good girl',
+    preferredPetName: (row.preferred_pet_name as string) || 'good boy',
     humorLevel: (row.humor_level as number) ?? 3,
     updatedAt: row.updated_at as string,
   };

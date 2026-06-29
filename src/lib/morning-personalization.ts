@@ -296,7 +296,7 @@ function generateGreeting(
 
   // Personal address
   const name = profile?.preferred_name;
-  let personalAddress = name || '';
+  const personalAddress = name || '';
 
   // Context-based subtext and mood
   let subtext = 'What kind of day is it?';

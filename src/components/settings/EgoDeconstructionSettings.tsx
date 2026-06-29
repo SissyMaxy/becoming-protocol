@@ -130,7 +130,7 @@ const MECHANICS: MechanicConfig[] = [
     intensityColumn: 'ego_subpersona_intensity',
     pausedColumn: 'ego_subpersona_paused_until',
     label: 'Sub-personality addressing',
-    plainEnglish: 'Phase 4+ only. Mama starts addressing specific voices in you (the little girl, the slut, the quiet good girl, the desperate one, the one still learning). You pick which is active via a small picker on Today.',
+    plainEnglish: 'Phase 4+ only. Mama starts addressing specific voices in you (the soft one, the slut, the quiet good boy, the desperate one, the one still learning). You pick which is active via a small picker on Today.',
     aftercareNote: 'Phase-gated. Stale active picks expire after 4h.',
   },
   {

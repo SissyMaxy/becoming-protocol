@@ -328,7 +328,7 @@ export function getServiceStageGuidance(stage: ServiceStage): {
       identityLanguage: ['You think about this more than you admit.'],
     },
     content_consumption: {
-      surfaceContent: ['instructional content', 'technique videos', 'sissy service training'],
+      surfaceContent: ['instructional content', 'technique videos', 'service training'],
       pushActions: ['track viewing patterns', 'save favorites', 'note arousal response'],
       identityLanguage: ['You keep coming back to this content. You know why.'],
     },

@@ -2,7 +2,7 @@
 // Layer 5: Deepest fantasies, secret desires, ultimate destination
 
 import { useState, useEffect } from 'react';
-import { Eye, Flame, Target, Infinity } from 'lucide-react';
+import { Eye, Flame, Target, Infinity as InfinityIcon } from 'lucide-react';
 import { useProfile } from '../../../hooks/useProfile';
 import { LayerNav } from '../IntakeFlow';
 
@@ -283,7 +283,7 @@ export function DepthLayer({ onComplete, onBack }: DepthLayerProps) {
       {/* Section: Point of No Return */}
       <div className="mb-6">
         <div className="flex items-center gap-2 mb-3">
-          <Infinity className="w-4 h-4 text-indigo-400" />
+          <InfinityIcon className="w-4 h-4 text-indigo-400" />
           <h3 className="text-sm font-medium text-protocol-text">Point of No Return</h3>
         </div>
 

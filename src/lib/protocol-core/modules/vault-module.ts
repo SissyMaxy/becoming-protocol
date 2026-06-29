@@ -275,7 +275,7 @@ export class VaultModule extends BaseModule {
 
       // Post-compliance - maintain ambient pressure
       post_compliance: [
-        `Good girl. It stays locked. For now.`,
+        `Good boy. It stays locked. For now.`,
         `Compliant. The vault remembers those who show up.`,
         `That's one more time you chose wisely. The count is ${context.complianceCount || 'growing'}.`,
       ],
@@ -367,7 +367,7 @@ export class VaultModule extends BaseModule {
     // High arousal or high edge count = capture opportunity
     if ((peakArousal && peakArousal >= 8) || (edgeCount && edgeCount >= 5)) {
       await this.emit({
-        type: 'capture:vault_item_added' as 'capture:vault_item_added',
+        type: 'capture:vault_item_added' as const,
         itemId: 'opportunity',
         tier: peakArousal && peakArousal >= 9 ? 4 : 3,
       } );

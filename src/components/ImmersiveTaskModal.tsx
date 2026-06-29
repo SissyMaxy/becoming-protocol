@@ -137,7 +137,7 @@ export function ImmersiveTaskModal({
       )}
 
       {/* Scrollable content */}
-      <div className="h-[calc(100vh-12rem-5rem)] overflow-y-auto">
+      <div className="h-[calc(100dvh-12rem-5rem)] overflow-y-auto">
         <div className="p-4 space-y-4">
 
           {/* Overview */}

@@ -124,7 +124,7 @@ export function TodayHeader({ userName, denialDays, tasksRemaining, tasksTotal, 
 
   // Get display name (first word, lowercase, or default)
   const displayName = userName?.split(' ')[0]?.toLowerCase() || 'you';
-  const honorific = isBambiMode ? 'princess' : displayName;
+  const honorific = isBambiMode ? 'sweet boy' : displayName;
 
   return (
     <div className={`relative overflow-hidden rounded-2xl ${

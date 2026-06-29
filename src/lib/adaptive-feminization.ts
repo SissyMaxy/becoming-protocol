@@ -143,7 +143,7 @@ export function calculateVectorScore(
 
   // Base score: inverse of current level (lower levels = higher priority)
   // But also consider if they're making progress (momentum)
-  let baseScore = (10 - level) * 10; // 0-100 scale
+  const baseScore = (10 - level) * 10; // 0-100 scale
   reasoning.push(`Base: Level ${level.toFixed(1)} → ${baseScore.toFixed(0)} points`);
 
   // Context multiplier based on vector's context factors

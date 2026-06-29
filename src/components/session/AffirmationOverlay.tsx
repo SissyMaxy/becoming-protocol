@@ -94,6 +94,7 @@ export function AffirmationOverlay({ phase, isActive, progress }: AffirmationOve
   const [current, setCurrent] = useState<ActiveAffirmation | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fadeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showNextAffirmation = useCallback(() => {
     if (!isActive) return;
@@ -112,8 +113,8 @@ export function AffirmationOverlay({ phase, isActive, progress }: AffirmationOve
     fadeTimeoutRef.current = setTimeout(() => {
       setCurrent(prev => prev ? { ...prev, opacity: 0 } : null);
 
-      // Clear after fade
-      setTimeout(() => setCurrent(null), 300);
+      // Clear after fade — stored in a ref so it's cleared on unmount/teardown
+      clearTimeoutRef.current = setTimeout(() => setCurrent(null), 300);
     }, duration);
 
     // Schedule next affirmation
@@ -127,6 +128,7 @@ export function AffirmationOverlay({ phase, isActive, progress }: AffirmationOve
       setCurrent(null);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       if (fadeTimeoutRef.current) clearTimeout(fadeTimeoutRef.current);
+      if (clearTimeoutRef.current) clearTimeout(clearTimeoutRef.current);
       return;
     }
 
@@ -136,6 +138,7 @@ export function AffirmationOverlay({ phase, isActive, progress }: AffirmationOve
       clearTimeout(initial);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       if (fadeTimeoutRef.current) clearTimeout(fadeTimeoutRef.current);
+      if (clearTimeoutRef.current) clearTimeout(clearTimeoutRef.current);
     };
   }, [isActive, showNextAffirmation]);
 

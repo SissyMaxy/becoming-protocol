@@ -91,7 +91,7 @@ export function useDirectiveCoach() {
       setState({ coachMessage: null, isLoading: false, error: errorMessage });
 
       // Return fallback message
-      return `Good girl. Here's your next task.`;
+      return `Good boy. Here's your next task.`;
     }
   }, []);
 

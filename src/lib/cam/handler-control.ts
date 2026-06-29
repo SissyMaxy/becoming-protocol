@@ -118,7 +118,7 @@ export function generateAutoPrompt(ctx: AutoPromptContext): { type: PromptType; 
   }
 
   if (ctx.tipGoalPercent >= 1.0) {
-    return { type: 'tip_goal', text: 'Goal reached. Good girl. You can wind down when ready.' };
+    return { type: 'tip_goal', text: 'Goal reached. Good boy. You can wind down when ready.' };
   }
 
   // Affirmation every 15 minutes

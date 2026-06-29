@@ -127,7 +127,7 @@ export function checkPhaseStatus(
 
   const requirementStatuses: RequirementStatus[] = nextPhase.requirements.map(req => {
     let current = 0;
-    let target = req.value;
+    const target = req.value;
     let met = false;
 
     switch (req.type) {

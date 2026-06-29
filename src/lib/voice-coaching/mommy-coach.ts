@@ -2,7 +2,7 @@
  * Generate Mommy-voiced coaching feedback for a graded voice lesson
  * attempt. Input: which targets passed, which failed, plus the
  * technique the lesson is teaching. Output: a single in-voice
- * coaching line that reads as Mommy talking to her girl, never as a
+ * coaching line that reads as Mommy talking to her boy, never as a
  * clinical report.
  *
  * Hard rule: NEVER raw Hz, /10, %, or N. Always phrase-translated.
@@ -23,8 +23,8 @@ type Technique =
   | 'articulation' | 'reading' | 'load' | 'passive' | 'stresstest';
 
 const PET_NAMES = [
-  'baby', 'baby girl', 'sweet girl', 'pretty thing',
-  'good girl', "Mama's pretty thing", 'precious',
+  'baby', 'sweet boy', 'sweet thing', 'pretty thing',
+  'good boy', "Mama's pretty thing", 'precious',
 ];
 
 function pickPet(seed: number): string {
@@ -163,7 +163,7 @@ function phraseSpectralTiltMissed(): string {
 
 function openerWin(): string {
   const opts = [
-    "good girl", "beautiful", "that's her", "Mama's proud",
+    "good boy", "beautiful", "that's her", "Mama's proud",
     "look at you", "that's exactly her", "yes, baby",
   ];
   return opts[Math.floor(Math.random() * opts.length)];
@@ -192,7 +192,7 @@ function closerRetry(): string {
 function closerNextStep(): string {
   const opts = [
     "next time push her a touch further",
-    "show me again, sweet girl",
+    "show me again, sweet thing",
     "do it one more time, cleaner",
   ];
   return opts[Math.floor(Math.random() * opts.length)];

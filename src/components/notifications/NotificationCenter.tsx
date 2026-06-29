@@ -292,7 +292,7 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
         </div>
 
         {/* Notification List */}
-        <div className="p-4 space-y-3 overflow-y-auto max-h-[calc(100vh-80px)]">
+        <div className="p-4 space-y-3 overflow-y-auto max-h-[calc(100dvh-80px)]">
           {notifications.length === 0 ? (
             <div className="text-center py-8">
               <Bell className={`w-10 h-10 mx-auto mb-3 ${isBambiMode ? 'text-pink-300' : 'text-protocol-text-muted'}`} />

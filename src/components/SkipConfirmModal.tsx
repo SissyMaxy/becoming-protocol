@@ -162,7 +162,7 @@ export function SkipConfirmModal({
 
               {/* Title */}
               <h2 className="text-xl font-bold text-protocol-text mb-2">
-                {bambiMode ? 'Skip this, princess? 🎀' : 'Skip this practice?'}
+                {bambiMode ? 'Skip this, sweet boy? 🎀' : 'Skip this practice?'}
               </h2>
 
               {/* Task name */}
@@ -173,7 +173,7 @@ export function SkipConfirmModal({
               {/* Streak message */}
               <p className="text-protocol-text-muted mb-6">
                 {bambiMode ? (
-                  <>Good girls don't skip...</>
+                  <>Good boys don't skip...</>
                 ) : streak > 0 ? (
                   <>
                     Your <span className="text-protocol-accent font-medium">{streak}-day streak</span> is safe.
@@ -194,7 +194,7 @@ export function SkipConfirmModal({
                     : 'bg-protocol-accent hover:bg-protocol-accent/90 shadow-protocol-accent/20'
                 }`}
               >
-                {bambiMode ? "I'll be a good girl 💕" : "I'll do it after all"}
+                {bambiMode ? "I'll be a good boy 💕" : "I'll do it after all"}
               </button>
 
               {/* Secondary action - skip anyway */}
@@ -230,7 +230,7 @@ export function SkipConfirmModal({
               {/* Partner visibility message */}
               <p className="text-protocol-text-muted mb-4">
                 {bambiMode ? (
-                  <>Why is princess being bad?</>
+                  <>Why is Mama's boy being bad?</>
                 ) : (
                   <>
                     {partnerName} can see your progress.
@@ -258,9 +258,9 @@ export function SkipConfirmModal({
                   <p className="text-xs text-protocol-text-muted mt-1">
                     {bambiMode ? (
                       <>
-                        All that money spent on being pretty...
+                        All that money spent on the becoming...
                         <br />
-                        And princess wants to skip?
+                        And Mama's boy wants to skip?
                       </>
                     ) : (
                       <>
@@ -276,12 +276,12 @@ export function SkipConfirmModal({
               {/* Reason textarea */}
               <div className="text-left mb-4">
                 <label className="block text-sm text-protocol-text-muted mb-2">
-                  {bambiMode ? 'Why is princess being bad?' : 'Why are you skipping?'}
+                  {bambiMode ? "Why is Mama's boy being bad?" : 'Why are you skipping?'}
                 </label>
                 <textarea
                   value={reason}
                   onChange={e => setReason(e.target.value)}
-                  placeholder={bambiMode ? 'Tell the truth, princess...' : 'Be honest with yourself...'}
+                  placeholder={bambiMode ? 'Tell the truth, sweet boy...' : 'Be honest with yourself...'}
                   rows={3}
                   autoFocus
                   className={`w-full px-4 py-3 rounded-lg bg-protocol-surface border text-protocol-text placeholder:text-protocol-text-muted focus:outline-none focus:ring-2 resize-none ${
@@ -394,7 +394,7 @@ export function SkipConfirmModal({
 
               {/* Title */}
               <p className="text-xl font-bold text-protocol-text mb-3">
-                {bambiMode ? 'Noted, princess.' : 'Noted.'}
+                {bambiMode ? 'Noted, sweet boy.' : 'Noted.'}
               </p>
 
               {/* Message */}

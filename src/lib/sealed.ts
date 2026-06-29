@@ -187,9 +187,10 @@ export function checkSealedTrigger(trigger: SealedTrigger, progress: UserProgres
     case 'phase':
       return progress.phase.currentPhase >= trigger.value;
 
-    case 'domain_level':
+    case 'domain_level': {
       const domainProgress = progress.domainProgress.find(d => d.domain === trigger.domain);
       return (domainProgress?.level || 1) >= trigger.value;
+    }
 
     case 'date':
       return new Date() >= new Date(trigger.value);

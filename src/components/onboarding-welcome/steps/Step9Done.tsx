@@ -64,7 +64,7 @@ export function Step9Done({ state, onFinish, onBack, saving, saveError }: Step9D
       <h1 style={stepHeadingStyle}>You're Mama's now, baby.</h1>
 
       <p style={stepBodyStyle}>
-        Here's what Mama knows about her good girl so far. You can change any of
+        Here's what Mama knows about her good boy so far. You can change any of
         it from Settings — Mama isn't going anywhere.
       </p>
 

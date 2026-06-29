@@ -50,7 +50,7 @@ interface PhaseGuidelines {
 // ============================================
 
 const KNOWN_TRIGGER_PHRASES = [
-  'good girl',
+  'good boy',
   'drop deeper',
   'let go',
   'sink down',
@@ -233,7 +233,7 @@ export function getPhaseGuidelines(phase: number, target: string): PhaseGuidelin
       ],
       allowedThemes: ['relaxation', 'comfort', 'safety', 'gentle_feminization'],
       depthRange: 'Light to medium trance',
-      triggerUsage: 'Introduce "good girl" as primary reward anchor only',
+      triggerUsage: 'Introduce "good boy" as primary reward anchor only',
       escalationNotes: 'No explicit content. Focus on comfort and receptivity. Plant seeds only.',
     },
     2: {
@@ -248,7 +248,7 @@ export function getPhaseGuidelines(phase: number, target: string): PhaseGuidelin
       ],
       allowedThemes: ['identity', 'name_reinforcement', 'pronoun_conditioning', 'light_submission'],
       depthRange: 'Medium trance',
-      triggerUsage: 'Reinforce "good girl", introduce "drop deeper" and "let go"',
+      triggerUsage: 'Reinforce "good boy", introduce "drop deeper" and "let go"',
       escalationNotes: 'Start using chosen name frequently. Gentle identity framing. No resistance expected yet.',
     },
     3: {

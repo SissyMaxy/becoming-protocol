@@ -23,7 +23,7 @@ type MenuItemId =
   | 'journal' | 'life-as-woman' | 'recaps' | 'timeline' | 'letters'
   | 'pause_protocol' | 'help'
   // Folded archive tail
-  | 'her-world' | 'gina' | 'gina-vibe' | 'trajectory' | 'dossier'
+  | 'her-world' | 'trajectory' | 'dossier'
   | 'mommy-dossier' | 'quiz' | 'conditioning-library' | 'envelopes'
   | 'case_file' | 'witnesses' | 'vault-browser' | 'voice-drills'
   | 'hypno-learning' | 'history' | 'escalation_ladder' | 'force'
@@ -266,7 +266,7 @@ const ARCHIVE_ITEMS: MenuItem[] = [
     id: 'force',
     icon: Flame,
     label: 'Force Layer',
-    description: 'Hard Mode, slips, punishments, chastity, disclosure ladder.',
+    description: 'Hard Mode, slips, punishments, chastity.',
     color: '#ef4444',
   },
 ];

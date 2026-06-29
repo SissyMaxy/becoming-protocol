@@ -544,7 +544,7 @@ export async function applyCommitmentConsequence(
 
   // Apply specific consequence effects
   switch (consequenceType) {
-    case 'streak_impact':
+    case 'streak_impact': {
       // Reduce streak by 10%
       const { data: denial } = await supabase
         .from('denial_state')
@@ -560,8 +560,9 @@ export async function applyCommitmentConsequence(
           .eq('user_id', user.id);
       }
       break;
+    }
 
-    case 'investment_decay':
+    case 'investment_decay': {
       // Decay investments by 5%
       const { data: investments } = await supabase
         .from('user_investments')
@@ -579,6 +580,7 @@ export async function applyCommitmentConsequence(
         }
       }
       break;
+    }
 
     case 'record_mark':
       // Just record the mark - no mechanical effect

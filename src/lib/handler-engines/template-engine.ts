@@ -318,7 +318,7 @@ export class TemplateEngine {
         return {
           instruction: this.makeCommanding(this.substitute(instruction, state)),
           subtext: this.substitute(subtext, state),
-          affirmation: `Good girl. ${affirmation}`,
+          affirmation: `Good boy. ${affirmation}`,
         };
 
       case 'caretaker':
@@ -385,7 +385,7 @@ export class TemplateEngine {
 
   getRandomAffirmation(state: Partial<UserState>): string {
     const templates = [
-      "Good girl. Day {denial_day}. She's still here.",
+      "Good boy. Day {denial_day}. She's still here.",
       "That's {name}. {streak} days of her showing up.",
       "She's more real today than yesterday. Day {streak} proves it.",
       "Her practice built this. {streak} days. Day {denial_day} denial.",
@@ -459,7 +459,7 @@ export class TemplateEngine {
           'Touch your neck. Trace your collarbone. Feel her.',
           'Spray your scent. You know which one. Now.',
           'Posture. Fix it. Shoulders back. She stands tall.',
-          'Cross your legs properly. Hold it. Good girl.',
+          'Cross your legs properly. Hold it. Good boy.',
         ],
         caretaker: [
           'Lip balm, if you want. Small comforts matter.',
@@ -487,7 +487,7 @@ export class TemplateEngine {
           'The practice is the path. You are on it.',
         ],
         handler: [
-          'Good girl. She was here today.',
+          'Good boy. She was here today.',
           "Day {denial_day}. You're mine. Keep earning it.",
           '{streak} days. Not stopping now.',
           "Look at you. {name}. That's who you are.",

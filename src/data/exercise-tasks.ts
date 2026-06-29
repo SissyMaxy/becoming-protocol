@@ -24,7 +24,7 @@ export const EXERCISE_DOMAIN_TASKS: TaskImportData[] = [
     intensity: 1,
     instruction: 'Do the Minimum Viable Workout — 10 glute bridges, 10 clamshells per side.',
     subtext: "Even on low days, she moves. It's non-negotiable.",
-    affirmation: 'The streak lives. Good girl.',
+    affirmation: 'The streak lives. Good boy.',
   },
   {
     category: 'practice',
@@ -179,7 +179,7 @@ export const EXERCISE_DOMAIN_TASKS: TaskImportData[] = [
     intensity: 1,
     instruction: 'Drink a post-workout protein shake within 30 minutes.',
     subtext: 'The anabolic window. Use it.',
-    affirmation: 'Protein in. Recovery started. Good girl.',
+    affirmation: 'Protein in. Recovery started. Good boy.',
   },
   {
     category: 'care',

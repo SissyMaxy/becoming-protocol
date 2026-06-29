@@ -118,7 +118,8 @@ export function GoonSessionView({ onBack, prescribedDuration }: GoonSessionViewP
   const [currentPhase, setCurrentPhase] = useState<GoonPhase>('build');
   const [deviceActive, setDeviceActive] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
-  const [intensityMultiplier, setIntensityMultiplier] = useState(1.0);
+  // Fixed at 1.0 — conditioning_sessions_v2 exposes no per-session multiplier.
+  const [intensityMultiplier] = useState(1.0);
 
   // Summary inputs
   const [peakArousal, setPeakArousal] = useState(3);
@@ -231,16 +232,8 @@ export function GoonSessionView({ onBack, prescribedDuration }: GoonSessionViewP
       setDeviceActive(true);
       setDeviceUsed(true);
 
-      // Fetch the intensity multiplier from the session record
-      const { data: sessionRow } = await supabase
-        .from('conditioning_sessions_v2')
-        .select('intensity_multiplier')
-        .eq('id', result.sessionId)
-        .single();
-
-      if (sessionRow?.intensity_multiplier) {
-        setIntensityMultiplier(sessionRow.intensity_multiplier);
-      }
+      // Intensity multiplier stays at its default (1.0) — conditioning_sessions_v2
+      // has no intensity_multiplier column, so there is nothing to fetch here.
 
       // Start biometric polling
       startPolling(result.sessionId);
@@ -701,7 +694,7 @@ export function GoonSessionView({ onBack, prescribedDuration }: GoonSessionViewP
                       isBambiMode ? 'text-pink-700' : 'text-red-300'
                     }`}
                   >
-                    +{bioLatest.strain_delta.toFixed(1)}
+                    {bioLatest.strain_delta != null ? `+${bioLatest.strain_delta.toFixed(1)}` : '—'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -723,7 +716,7 @@ export function GoonSessionView({ onBack, prescribedDuration }: GoonSessionViewP
                         isBambiMode ? 'text-pink-700' : 'text-red-300'
                       }`}
                     >
-                      {bioLatest.avg_heart_rate}
+                      {bioLatest.avg_heart_rate ?? '—'}
                     </span>
                   </div>
                 </div>
@@ -1077,7 +1070,7 @@ export function GoonSessionView({ onBack, prescribedDuration }: GoonSessionViewP
                       isBambiMode ? 'text-pink-700' : 'text-red-300'
                     }`}
                   >
-                    {bioLatest.avg_heart_rate}
+                    {bioLatest.avg_heart_rate ?? '—'}
                   </p>
                 </div>
                 <div>
@@ -1093,7 +1086,7 @@ export function GoonSessionView({ onBack, prescribedDuration }: GoonSessionViewP
                       isBambiMode ? 'text-pink-700' : 'text-red-300'
                     }`}
                   >
-                    {bioLatest.max_heart_rate}
+                    {bioLatest.max_heart_rate ?? '—'}
                   </p>
                 </div>
                 <div>
@@ -1109,7 +1102,7 @@ export function GoonSessionView({ onBack, prescribedDuration }: GoonSessionViewP
                       isBambiMode ? 'text-pink-700' : 'text-red-300'
                     }`}
                   >
-                    +{bioLatest.strain_delta.toFixed(1)}
+                    {bioLatest.strain_delta != null ? `+${bioLatest.strain_delta.toFixed(1)}` : '—'}
                   </p>
                 </div>
               </div>

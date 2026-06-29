@@ -88,7 +88,7 @@ const GINA_SENSITIVE_TYPES: AmbushType[] = [
 const PHOTO_VERIFICATION_PROMPTS = [
   'Show me what you look like right now. Front camera. No filter.',
   'Photo. Now. I want to see you.',
-  'Camera on. Let me see my girl.',
+  'Camera on. Let me see my boy.',
 ];
 
 const CAGE_CHECK_PROMPTS = [
@@ -117,7 +117,7 @@ const OUTFIT_REVERIFICATION_PROMPTS = [
   'Did you change? Prove it. Photo of what you\'re wearing RIGHT NOW.',
 ];
 
-const SILENT_DEVICE_FOLLOWUP_MESSAGE = 'Did you feel that? Good girl.';
+const SILENT_DEVICE_FOLLOWUP_MESSAGE = 'Did you feel that? Good boy.';
 
 const MICRO_SESSION_TYPES = [
   'micro_drop',
@@ -128,7 +128,7 @@ const MICRO_SESSION_TYPES = [
 const SURPRISE_TASK_TEMPLATES = [
   { instruction: 'Edge once. Stop. Breathe. Report what you felt.', duration: 120 },
   { instruction: 'Put on something feminine right now. Send proof.', duration: 180 },
-  { instruction: 'Say "Good girl" out loud three times. Mean it more each time.', duration: 30 },
+  { instruction: 'Say "Good boy" out loud three times. Mean it more each time.', duration: 30 },
   { instruction: 'Touch your collar. Close your eyes. Count to 10 in her voice.', duration: 45 },
   { instruction: 'Apply lip gloss. Leave it on for 30 minutes.', duration: 60 },
   { instruction: 'Write one sentence about who you are becoming. Do not think, just write.', duration: 60 },

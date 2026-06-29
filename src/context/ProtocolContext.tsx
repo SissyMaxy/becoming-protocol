@@ -268,7 +268,7 @@ export function ProtocolProvider({ children }: { children: React.ReactNode }) {
           // Check if most recent is today or yesterday
           if (completedDates[0] === today || completedDates[0] === yesterday) {
             calculatedStreak = 1;
-            let expectedDate = new Date(completedDates[0] + 'T00:00:00');
+            const expectedDate = new Date(completedDates[0] + 'T00:00:00');
 
             for (let i = 1; i < completedDates.length; i++) {
               expectedDate.setDate(expectedDate.getDate() - 1);

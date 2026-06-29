@@ -60,26 +60,11 @@ interface ConditioningOverlayProps {
   enabled?: boolean;
 }
 
-// Utility: transform "you/your" to "she/her" based on displacement.
-// Exposed so Today screens can optionally morph body copy.
-export function morphPronouns(text: string, displacementScore: number): string {
-  if (displacementScore < 0.4) return text;
-  if (displacementScore >= 0.7) {
-    return text
-      .replace(/\bYou've\b/g, "She's")
-      .replace(/\byou've\b/g, "she's")
-      .replace(/\bYou\b/g, 'She')
-      .replace(/\byou\b/g, 'she')
-      .replace(/\bYour\b/g, 'Her')
-      .replace(/\byour\b/g, 'her')
-      .replace(/\byourself\b/g, 'herself');
-  }
-  // 0.4–0.7: partial morph, ~50% probability per match
-  return text.replace(/\b(You|you|Your|your|yourself)\b/g, (m) => {
-    if (Math.random() > 0.5) return m;
-    const map: Record<string, string> = { You: 'She', you: 'she', Your: 'Her', your: 'her', yourself: 'herself' };
-    return map[m] || m;
-  });
+// Utility: body-copy morph. The user is Male+ (he/him) — we do NOT regender
+// the user's own copy to she/her. Returns text unchanged.
+// (Kept exported so existing Today-screen call sites keep working.)
+export function morphPronouns(text: string, _displacementScore: number): string {
+  return text;
 }
 
 function todayKey(): string {
@@ -267,25 +252,41 @@ export function ConditioningOverlay({ reframings, implants, displacementScore, e
       )}
       <style>{`@keyframes td-subliminal { 0% { opacity: 0; transform: scale(.96) } 18% { opacity: .55 } 40% { opacity: .42 } 100% { opacity: 0; transform: scale(1.04) } }`}</style>
 
-      {/* 2. Daily mantra gate */}
+      {/* 2. Daily mantra — non-blocking bottom-sheet card.
+          Mommy presses, doesn't block: the app stays interactive behind this,
+          and it can be dismissed. No fullscreen wall, no inset:0. */}
       {mantraGate && (
         <div
           style={{
-            position: 'fixed', inset: 0, background: 'rgba(5, 3, 10, 0.94)', zIndex: 300,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
-            backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+            position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 240,
+            display: 'flex', justifyContent: 'center',
+            padding: `12px 12px max(env(safe-area-inset-bottom), 12px)`,
+            pointerEvents: 'none',
           }}
         >
-          <div style={{ maxWidth: 480, width: '100%', background: '#111116', border: '1px solid #2d1a4d', borderRadius: 14, padding: 24 }}>
-            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#c4b5fd', fontWeight: 700, marginBottom: 10 }}>Daily mantra · before you pass</div>
-            <div style={{ fontSize: 19, lineHeight: 1.4, fontWeight: 600, color: '#fff', marginBottom: 18, letterSpacing: '-0.015em' }}>
+          <div style={{ maxWidth: 480, width: '100%', background: '#111116', border: '1px solid #2d1a4d', borderRadius: 14, padding: 20, boxShadow: '0 -8px 32px rgba(5,3,10,0.5)', position: 'relative', pointerEvents: 'auto' }}>
+            <button
+              onClick={() => setMantraGate(null)}
+              aria-label="Dismiss"
+              title="Not now"
+              style={{
+                position: 'absolute', top: 10, right: 10,
+                width: 28, height: 28, borderRadius: 14, border: '1px solid #2d1a4d',
+                background: '#0a0a0d', color: '#c4b5fd', fontSize: 15, lineHeight: 1,
+                cursor: 'pointer', fontFamily: 'inherit', display: 'flex',
+                alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              ×
+            </button>
+            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#c4b5fd', fontWeight: 700, marginBottom: 10, paddingRight: 32 }}>Daily mantra</div>
+            <div style={{ fontSize: 18, lineHeight: 1.4, fontWeight: 600, color: '#fff', marginBottom: 14, letterSpacing: '-0.015em' }}>
               {mantraGate.mantra}
             </div>
             <div style={{ fontSize: 11.5, color: '#8a8690', marginBottom: 8 }}>
-              Type it. Exactly. No skipping.
+              Type it back, good boy.
             </div>
             <input
-              autoFocus
               value={mantraGate.typed}
               onChange={e => setMantraGate(g => g ? { ...g, typed: e.target.value } : g)}
               onKeyDown={e => { if (e.key === 'Enter') submitMantra(); }}
@@ -300,16 +301,13 @@ export function ConditioningOverlay({ reframings, implants, displacementScore, e
                 return n1 !== n2 || Date.now() < (mantraGate.unlockedAt || 0);
               })()}
               style={{
-                marginTop: 14, width: '100%', padding: '10px', borderRadius: 6, border: 'none',
+                marginTop: 12, width: '100%', padding: '10px', borderRadius: 6, border: 'none',
                 background: '#7c3aed', color: '#fff', fontWeight: 600, fontSize: 13, fontFamily: 'inherit',
                 cursor: 'pointer', opacity: 1,
               }}
             >
-              Submit & unlock Today
+              Say it for Mommy
             </button>
-            <div style={{ fontSize: 10.5, color: '#5a5560', marginTop: 8, textAlign: 'center' }}>
-              Submit unlocks 4 seconds after the page loads. You won't get past without compliance.
-            </div>
           </div>
         </div>
       )}

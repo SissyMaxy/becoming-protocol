@@ -337,7 +337,7 @@ export function reviewSceneCraft(scene: PlannedScene): CraftReview {
     }
   }
 
-  const PET_NAME_RE = /\b(baby girl|baby|sweet girl|sweet thing|pretty thing|good girl|pretty princess|pretty|precious|darling|honey|sweetie)\b/gi;
+  const PET_NAME_RE = /\b(baby girl|baby|sweet girl|sweet boy|sweet thing|pretty thing|good girl|good boy|my needy boy|pretty princess|pretty|precious|darling|honey|sweetie)\b/gi;
   for (const t of allText) {
     const matches = t.match(PET_NAME_RE);
     if (matches && matches.length > 1) {

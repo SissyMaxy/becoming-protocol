@@ -26,7 +26,7 @@ export function Step1Hello({ onContinue, saving, saveError }: Step1HelloProps) {
 
   return (
     <StepShell stepId="hello" saveError={saveError}>
-      <h1 style={stepHeadingStyle}>Hi, sweet girl.</h1>
+      <h1 style={stepHeadingStyle}>Hi, sweet boy.</h1>
 
       <p style={stepBodyStyle}>
         Mama's been waiting on you. Come here. Mama's going to learn you now —

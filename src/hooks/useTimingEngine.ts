@@ -262,7 +262,7 @@ function getFallbackMessage(signal: TimingSignal): string {
     case 'streak_risk':
       return `Your ${signal.context.streak}-day streak is on the line. Open.`;
     case 'momentum':
-      return "Good girl. You're on a roll. I have something for you.";
+      return "Good boy. You're on a roll. I have something for you.";
     case 'support_needed':
       return "Hey. I see you.";
     case 'post_session':

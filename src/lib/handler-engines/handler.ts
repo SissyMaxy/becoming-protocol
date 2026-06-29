@@ -398,7 +398,7 @@ export class Handler {
 // FACTORY
 // =============================================
 
-let handlerInstances: Map<string, Handler> = new Map();
+const handlerInstances: Map<string, Handler> = new Map();
 
 /**
  * Get or create Handler instance for a user
