@@ -39,6 +39,21 @@ const BUILD_LINES = ['Back up the curve, good boy.', 'Let it build.', 'Mommy dec
 const OVERSTIM_LINES = ['You came without permission. Now you don\'t get to stop.', 'Too late to beg. Take it.', 'That was Mommy\'s, not yours — keep going.', 'You don\'t get to be done.']
 const MILK_LINES = ['Give it to Mommy. Now.', 'Empty for me, good boy.', 'Again. You have more.']
 
+// Media cue for the playback/taunt app — same tick, arousal-gated.
+function buildMedia(command: Cmd, line: string, event?: string): any {
+  const map: Record<string, { tone: string; playlist: string }> = {
+    DENY: { tone: 'taunt', playlist: 'denial' },
+    EDGE: { tone: 'command', playlist: 'edge' },
+    BUILD: { tone: 'command', playlist: 'build' },
+    OVERSTIM: { tone: 'torment', playlist: 'overstim' },
+    MILK_FORCE: { tone: 'command', playlist: 'milk' },
+    STOP: { tone: 'soft', playlist: 'recover' },
+  }
+  const m = map[command] ?? { tone: 'command', playlist: 'build' }
+  const intensity = command === 'OVERSTIM' ? 1 : command === 'MILK_FORCE' ? 0.9 : command === 'DENY' ? 0.7 : command === 'STOP' ? 0.2 : 0.5
+  return { say: line, tone: m.tone, playlist: event === 'struggle' ? 'punish' : m.playlist, intensity }
+}
+
 async function loadState(s: any) {
   const { data } = await s.from('user_state').select('denial_day, chastity_streak_days, hard_mode_active, current_arousal').eq('user_id', USER).maybeSingle()
   return data ?? { denial_day: 0, chastity_streak_days: 0, hard_mode_active: false }
@@ -130,8 +145,10 @@ Deno.serve(async (req: Request) => {
   let line = ''
   let logType: string | null = null
 
-  // Orgasm detected -> overstim torment (ignores arousal; refractory-aware on the machine side).
-  if (event === 'orgasm') {
+  // Orgasm detected in edge/denial mode -> overstim torment (ignores arousal;
+  // refractory-aware on the machine side). In MILKING mode, orgasm advances the
+  // cadence (force -> recover -> repeat) instead — handled in the milking branch.
+  if (event === 'orgasm' && b.mode !== 'milking') {
     command = 'OVERSTIM'; logType = 'orgasm'
     const dur = params.overstim_seconds ?? (params.overstim_base_seconds + Math.min(240, (st.denial_day ?? 0) * 8))
     p = { stroke: pick(['head', 'full', 'base'], seed), velocity: 1.0, pattern: 'random', duration_seconds: dur }
@@ -142,10 +159,33 @@ Deno.serve(async (req: Request) => {
     p = { stroke: 'full', velocity: 1.0, pattern: 'punish', duration_seconds: 60, estim: { allow: true, zone: 'below_waist_only', intensity: 'sharp' } }
     line = 'Struggling? That just earns you more. Stop fighting Mommy.'
   } else if (b.mode === 'milking') {
-    // Milking: build -> edge -> force, on the arousal curve.
-    if (arousal >= params.deny_threshold) { command = 'MILK_FORCE'; p = { stroke: 'full', velocity: 1.0 }; line = pick(MILK_LINES, seed); logType = 'milk' }
-    else if (arousal >= params.deny_threshold - params.edge_band) { command = 'EDGE'; p = { stroke: 'short', velocity: 0.4 }; line = pick(EDGE_LINES, seed) }
-    else { command = 'BUILD'; p = { stroke: 'full', velocity: 0.95 }; line = pick(BUILD_LINES, seed) }
+    // Milking cadence FSM: build -> edge-hold -> force (to orgasm) -> recover -> repeat.
+    // Distinct from edge-mode: in milking, an orgasm advances to recover + repeats
+    // (forced repeated milking), it does NOT trigger overstim torment.
+    const { data: srow } = await s.from('machine_sessions').select('state').eq('id', sessionId).maybeSingle()
+    const stt: any = srow?.state ?? {}
+    let phase: string = stt.phase ?? 'build'
+    let phaseStart: number = stt.phase_started ?? elapsed
+    let cycles: number = stt.cycles ?? 0
+    const holdSec = params.hold_seconds ?? 45
+    const recoverSec = params.recover_seconds ?? 30
+    const enterEdge = (st.hard_mode_active ? params.deny_threshold - 80 : params.deny_threshold) - params.edge_band
+    const inPhase = elapsed - phaseStart
+    if (phase === 'build') {
+      command = 'BUILD'; p = { stroke: 'full', velocity: 0.95 }; line = pick(BUILD_LINES, seed)
+      if (arousal >= enterEdge) { phase = 'edge_hold'; phaseStart = elapsed }
+    } else if (phase === 'edge_hold') {
+      command = 'EDGE'; p = { stroke: 'short', velocity: 0.4 }; line = pick(EDGE_LINES, seed)
+      if (inPhase >= holdSec) { phase = 'force'; phaseStart = elapsed }
+    } else if (phase === 'force') {
+      command = 'MILK_FORCE'; p = { stroke: 'full', velocity: 1.0 }; line = pick(MILK_LINES, seed); logType = 'milk'
+      if (event === 'orgasm') { logType = 'orgasm'; phase = 'recover'; phaseStart = elapsed; cycles += 1 }
+    } else { // recover (refractory) then back to build
+      command = 'STOP'; p = { stroke: 'stop', velocity: 0, cooldown_seconds: recoverSec }; line = "Rest. Mommy's not done with you."
+      if (inPhase >= recoverSec) { phase = 'build'; phaseStart = elapsed }
+    }
+    await s.from('machine_sessions').update({ state: { phase, phase_started: phaseStart, cycles } }).eq('id', sessionId).then(() => {}, () => {})
+    p.milk_phase = phase; p.cycles = cycles
   } else {
     // Edge/denial mode (default): deny over threshold, hold in the band, else build.
     const denyAt = st.hard_mode_active ? params.deny_threshold - 80 : params.deny_threshold
@@ -163,5 +203,5 @@ Deno.serve(async (req: Request) => {
   if (logType && sessionId) {
     await s.from('machine_events').insert({ user_id: USER, session_id: sessionId, event_type: logType, arousal_at: arousal, hr_at: typeof hr === 'number' ? hr : null, elapsed_seconds: elapsed, command, mommy_line: line, data: p }).then(() => {}, () => {})
   }
-  return reply({ command, params: p, mommy_line: line })
+  return reply({ command, params: p, mommy_line: line, media: buildMedia(command, line, event) })
 })
