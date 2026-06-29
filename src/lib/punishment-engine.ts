@@ -117,12 +117,13 @@ async function enforcePunishment(
   def: PunishmentDefinition
 ): Promise<void> {
   switch (def.type) {
-    case 'extended_denial':
+    case 'extended_denial': {
       // Extract days from description (e.g., "+2 days")
       const daysMatch = def.description.match(/\+(\d+) days/);
       const days = daysMatch ? parseInt(daysMatch[1]) : 2;
       await extendDenialMinimum(userId, days);
       break;
+    }
 
     case 'feature_lockout':
       await createComplianceGate(userId, def.description);
@@ -136,19 +137,21 @@ async function enforcePunishment(
       await regressBaseline(userId);
       break;
 
-    case 'content_restriction':
+    case 'content_restriction': {
       // Extract duration from description (e.g., "48 hours")
       const hoursMatch = def.description.match(/(\d+) hours/);
       const hours = hoursMatch ? parseInt(hoursMatch[1]) : 48;
       await lockContentAboveTier(userId, 4, hours * 3600);
       break;
+    }
 
-    case 'compulsory_addition':
+    case 'compulsory_addition': {
       // Extract duration (e.g., "7 days")
       const durationMatch = def.description.match(/(\d+) days/);
       const duration = durationMatch ? parseInt(durationMatch[1]) : 7;
       await addTemporaryCompulsory(userId, def.description, duration);
       break;
+    }
 
     case 'session_debt':
       await incrementSessionDebt(userId, 1);

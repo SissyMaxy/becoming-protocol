@@ -327,7 +327,7 @@ async function createDenialReleasePoll(
       ],
       platforms_posted: [],
       platform_poll_ids: {},
-      handler_intent: `Audience control poll. Day ${denialDay} desperation is authentic. They\'ll vote to keep her locked — that\'s the point.`,
+      handler_intent: `Audience control poll. Day ${denialDay} desperation is authentic. They'll vote to keep her locked — that's the point.`,
       status: 'draft',
     })
     .select('id')

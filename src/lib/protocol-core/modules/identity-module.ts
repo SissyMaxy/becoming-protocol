@@ -835,7 +835,7 @@ export class IdentityModule extends BaseModule {
         evidence.ratio = Math.round((evidence.maxyCount as number) / Math.max(1, evidence.davidCount as number));
         break;
 
-      case DISSONANCE_BELIEF_IDS.DONT_WANT:
+      case DISSONANCE_BELIEF_IDS.DONT_WANT: {
         // Query self-initiated actions
         const { count: initiated } = await this.db
           .from('coercion_to_identity')
@@ -845,8 +845,9 @@ export class IdentityModule extends BaseModule {
         evidence.preGateOpens = 0; // Would need separate tracking
         evidence.unpromptedPurchases = 0; // Would need separate tracking
         break;
+      }
 
-      case DISSONANCE_BELIEF_IDS.CAN_STOP:
+      case DISSONANCE_BELIEF_IDS.CAN_STOP: {
         evidence.monthlyIncome = this.state?.ponrScore ? Math.round(this.state.ponrScore * 10) : 0;
         const { count: partners } = await this.db
           .from('partner_relationships')
@@ -855,6 +856,7 @@ export class IdentityModule extends BaseModule {
         evidence.partnerCount = partners || 0;
         evidence.subscriberCount = 0; // Would come from platform module
         break;
+      }
 
       default:
         // Return empty evidence for other beliefs

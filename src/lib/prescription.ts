@@ -113,7 +113,7 @@ export function generatePrescribedTasks(context: PrescriptionContext): ProtocolT
     });
 
     // Prioritize tasks based on analysis
-    let prioritizedTemplates = [...applicableTemplates];
+    const prioritizedTemplates = [...applicableTemplates];
 
     // If domain needs attention, include more foundational tasks
     if (analysis.needsAttention) {

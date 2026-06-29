@@ -55,7 +55,7 @@ export async function snapshotContentPerformance(userId: string): Promise<number
     .map((item: { source_shoot_id: string | null }) => item.source_shoot_id)
     .filter(Boolean);
 
-  let shootTypeMap: Record<string, string> = {};
+  const shootTypeMap: Record<string, string> = {};
   if (shootIds.length > 0) {
     const { data: shoots } = await supabase
       .from('shoot_prescriptions')

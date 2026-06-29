@@ -367,7 +367,7 @@ export class VaultModule extends BaseModule {
     // High arousal or high edge count = capture opportunity
     if ((peakArousal && peakArousal >= 8) || (edgeCount && edgeCount >= 5)) {
       await this.emit({
-        type: 'capture:vault_item_added' as 'capture:vault_item_added',
+        type: 'capture:vault_item_added' as const,
         itemId: 'opportunity',
         tier: peakArousal && peakArousal >= 9 ? 4 : 3,
       } );

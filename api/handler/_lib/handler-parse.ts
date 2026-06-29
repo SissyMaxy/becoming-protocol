@@ -460,7 +460,7 @@ export function parseResponse(fullText: string, persona: 'handler' | 'therapist'
   // Strip bare "directive: {...}", "directives: [...]", "note: {...}", "memory: {...}"
   // leaks where the model bypassed the tool and wrote them into chat text.
   // Recover them into signals so they still get saved as directives/notes.
-  const directiveStrip = stripBareJsonKey(visibleResponse, /\bdirectives?\s*:\s*[{\[]/gi);
+  const directiveStrip = stripBareJsonKey(visibleResponse, /\bdirectives?\s*:\s*[{[]/gi);
   visibleResponse = directiveStrip.text;
   if (directiveStrip.extracted.length > 0) {
     signals = signals || {};
@@ -477,7 +477,7 @@ export function parseResponse(fullText: string, persona: 'handler' | 'therapist'
     }
   }
 
-  const noteStrip = stripBareJsonKey(visibleResponse, /\bnotes?\s*:\s*[{\[]/gi);
+  const noteStrip = stripBareJsonKey(visibleResponse, /\bnotes?\s*:\s*[{[]/gi);
   visibleResponse = noteStrip.text;
   if (noteStrip.extracted.length > 0) {
     signals = signals || {};
@@ -490,7 +490,7 @@ export function parseResponse(fullText: string, persona: 'handler' | 'therapist'
     if (merged.length > 0) signals.notes = merged;
   }
 
-  const memoryStrip = stripBareJsonKey(visibleResponse, /\bmemory\s*:\s*[{\[]/gi);
+  const memoryStrip = stripBareJsonKey(visibleResponse, /\bmemory\s*:\s*[{[]/gi);
   visibleResponse = memoryStrip.text;
   if (memoryStrip.extracted.length > 0) {
     signals = signals || {};
@@ -526,7 +526,7 @@ export function parseDeviceValue(v: unknown): { intensity?: number; duration?: n
       return { pattern: obj.pattern };
     }
     // Simple vibrate
-    let intensity = (obj.intensity as number) || 5;
+    const intensity = (obj.intensity as number) || 5;
     let duration = (obj.duration as number) ?? (obj.timeSec as number) ?? 3;
     if (duration > 100) duration = Math.round(duration / 1000);
     return {

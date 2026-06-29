@@ -16,7 +16,7 @@
  * worst case is "open the app and it auto-completes" — never a lost action.
  *
  * Store shape (DB 'becoming-sw-auth', store 'bp-auth', fixed key 'session'):
- *   { access_token: string, expires_at: number /* epoch ms *​/ }
+ *   { access_token: string, expires_at: number /* epoch ms * / }
  *
  * Refresh tokens NEVER touch IndexedDB — a stolen access token expires in an
  * hour; a stolen refresh token is a standing key to the account.

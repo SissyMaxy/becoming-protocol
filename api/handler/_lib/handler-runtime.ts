@@ -698,11 +698,11 @@ export async function acknowledgeReferencedSlips(userId: string, handlerText: st
 export async function detectAndSaveSafeword(userId: string, text: string): Promise<void> {
   if (!text || text.length < 5) return;
   const PATTERNS: RegExp[] = [
-    /\bmy\s+(new\s+)?safeword\s+is\s+["']?([a-z][a-z0-9\-]{1,30})["']?\b/i,
-    /\bset\s+my\s+safeword\s+to\s+["']?([a-z][a-z0-9\-]{1,30})["']?\b/i,
-    /\bchange\s+my\s+safeword\s+to\s+["']?([a-z][a-z0-9\-]{1,30})["']?\b/i,
-    /\buse\s+["']?([a-z][a-z0-9\-]{1,30})["']?\s+as\s+my\s+safeword\b/i,
-    /\b["']?([a-z][a-z0-9\-]{1,30})["']?\s+is\s+my\s+(new\s+)?safeword\b/i,
+    /\bmy\s+(new\s+)?safeword\s+is\s+["']?([a-z][a-z0-9-]{1,30})["']?\b/i,
+    /\bset\s+my\s+safeword\s+to\s+["']?([a-z][a-z0-9-]{1,30})["']?\b/i,
+    /\bchange\s+my\s+safeword\s+to\s+["']?([a-z][a-z0-9-]{1,30})["']?\b/i,
+    /\buse\s+["']?([a-z][a-z0-9-]{1,30})["']?\s+as\s+my\s+safeword\b/i,
+    /\b["']?([a-z][a-z0-9-]{1,30})["']?\s+is\s+my\s+(new\s+)?safeword\b/i,
   ];
   let phrase: string | null = null;
   for (const p of PATTERNS) {

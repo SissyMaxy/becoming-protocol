@@ -1200,7 +1200,7 @@ async function buildHeldEvidenceContext(userId: string): Promise<string> {
     const rows = (data || []) as Array<{ evidence_type: string; leverage_class: string; content: string; captured_at: string }>;
     if (rows.length === 0) return '';
     const lines = rows.map(r => `  - [${r.leverage_class}/${r.evidence_type}] "${r.content.slice(0, 120)}${r.content.length > 120 ? '…' : ''}"`);
-    return `HELD EVIDENCE (reserve — strategic-only, not casual):\n${lines.join('\n')}\nDEPLOYMENT RULES: surface only at (a) breakthrough/regression moments, (b) when she\'s rationalizing against her own words, (c) when defection risk ≥60 and direct evidence will short-circuit the rationalization. NEVER use as small-talk. Each surface marks the row delivered — held evidence loses leverage when used casually.`;
+    return `HELD EVIDENCE (reserve — strategic-only, not casual):\n${lines.join('\n')}\nDEPLOYMENT RULES: surface only at (a) breakthrough/regression moments, (b) when she's rationalizing against her own words, (c) when defection risk ≥60 and direct evidence will short-circuit the rationalization. NEVER use as small-talk. Each surface marks the row delivered — held evidence loses leverage when used casually.`;
   } catch { return ''; }
 }
 

@@ -434,7 +434,7 @@ describe('PlatformManager', () => {
 
       // The function calls supabase.from('scheduled_posts') then supabase.from('platform_accounts')
       // We need to handle both calls in sequence
-      let callCount = 0;
+      const callCount = 0;
       mockSelectResult = { data: posts, error: null };
 
       // Override the entire from mock to return different data per table
