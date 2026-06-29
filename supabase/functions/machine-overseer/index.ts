@@ -203,5 +203,10 @@ Deno.serve(async (req: Request) => {
   if (logType && sessionId) {
     await s.from('machine_events').insert({ user_id: USER, session_id: sessionId, event_type: logType, arousal_at: arousal, hr_at: typeof hr === 'number' ? hr : null, elapsed_seconds: elapsed, command, mommy_line: line, data: p }).then(() => {}, () => {})
   }
-  return reply({ command, params: p, mommy_line: line, media: buildMedia(command, line, event) })
+  // BIOMETRIC BRIDGE: pipe the machine's REAL arousal into the app's conditioning
+  // state so the pavlovian/trance engines fire on actual peak, not self-report
+  // (closes the self-report hole). Machine arousal 0..1000 -> current_arousal 0..5.
+  const mappedArousal = Math.max(0, Math.min(5, Math.round((arousal / 1000) * 5)))
+  await s.from('user_state').update({ current_arousal: mappedArousal }).eq('user_id', USER).then(() => {}, () => {})
+  return reply({ command, params: p, mommy_line: line, media: buildMedia(command, line, event), mapped_arousal: mappedArousal })
 })
