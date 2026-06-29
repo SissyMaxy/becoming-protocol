@@ -576,7 +576,7 @@ describe('persistTurnSideEffects — prescribe_task', () => {
       instruction: 'Handler-assigned task',
       intensity: 3,
       points: 10,
-      affirmation: 'Good girl.',
+      affirmation: 'Good boy.',
       completion_type: 'binary',
     });
   });
