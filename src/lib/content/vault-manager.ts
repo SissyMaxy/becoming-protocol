@@ -43,7 +43,7 @@ export function classifyContent(input: {
   let vaultTier: VaultTier = 'public_ready';
   let vulnerabilityScore = 3;
   let plannedUsage = 'General vault content';
-  let anonymityVerified = false;
+  const anonymityVerified = false;
 
   // Cam recordings and highlights
   if (sourceType === 'cam') {
