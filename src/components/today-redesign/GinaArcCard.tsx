@@ -1,7 +1,9 @@
 /**
  * GinaArcCard — visible-progress surface for the Gina co-participation arc.
- * Shows stage, readiness, recent plantings + outcomes, disclosure rung.
- * Read-only — Mama drives advancement via planting fulfillments.
+ * Shows stage, readiness, recent plantings + outcomes.
+ * Read-only passive state.
+ * (Disclosure-rung display removed 2026-07-01 — the disclosure ladder is
+ * abolished; policy: no disclosure to Gina, migration 624.)
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -13,7 +15,6 @@ interface ArcSettings {
   stage_evidence_count: number;
   last_advanced_at: string | null;
 }
-interface DisclosureSettings { current_rung: number; }
 interface Planting {
   seed_key: string;
   status: string;
@@ -33,35 +34,22 @@ const STAGE_NAMES = [
   'co-mommy',
 ];
 
-const RUNG_NAMES = [
-  'panty drop',
-  'bathroom artifact',
-  'worn around',
-  'bralette day',
-  'verbal foothold',
-  'direct opening',
-  'full disclosure',
-];
-
 export function GinaArcCard() {
   const { user } = useAuth();
   const [arc, setArc] = useState<ArcSettings | null>(null);
-  const [disclosure, setDisclosure] = useState<DisclosureSettings | null>(null);
   const [readiness, setReadiness] = useState<number | null>(null);
   const [plantings, setPlantings] = useState<Planting[]>([]);
 
   const load = useCallback(async () => {
     if (!user?.id) return;
-    const [arcRes, discRes, readRes, plantsRes] = await Promise.all([
+    const [arcRes, readRes, plantsRes] = await Promise.all([
       supabase.from('gina_arc_settings').select('current_stage, stage_evidence_count, last_advanced_at').eq('user_id', user.id).maybeSingle(),
-      supabase.from('gina_disclosure_settings').select('current_rung').eq('user_id', user.id).maybeSingle(),
       supabase.rpc('gina_readiness_score', { p_user_id: user.id }),
       supabase.from('gina_seed_plantings')
         .select('seed_id, status, reaction_score, scheduled_at, hypothesis_outcome, gina_seed_catalog!inner(seed_key)')
         .eq('user_id', user.id).order('scheduled_at', { ascending: false }).limit(5),
     ]);
     setArc(arcRes.data as ArcSettings | null);
-    setDisclosure(discRes.data as DisclosureSettings | null);
     setReadiness(typeof readRes.data === 'number' ? readRes.data : null);
     setPlantings(
       ((plantsRes.data ?? []) as Array<{ status: string; reaction_score: number | null; scheduled_at: string; hypothesis_outcome: string | null; gina_seed_catalog: { seed_key: string } | { seed_key: string }[] }>)
@@ -84,9 +72,6 @@ export function GinaArcCard() {
   if (!arc) return null;
 
   const stageName = STAGE_NAMES[arc.current_stage] ?? `stage ${arc.current_stage}`;
-  const rungName = disclosure?.current_rung != null
-    ? (RUNG_NAMES[disclosure.current_rung] ?? `rung ${disclosure.current_rung}`)
-    : null;
   const readinessBand = readiness == null ? 'unknown'
     : readiness >= 1 ? 'hot'
     : readiness >= -0.5 ? 'warming'
@@ -109,13 +94,6 @@ export function GinaArcCard() {
           <span className="text-zinc-400">Evidence at this stage</span>
           <span className="text-zinc-100 font-mono">{arc.stage_evidence_count}</span>
         </div>
-        {rungName && (
-          <div className="flex items-baseline gap-2">
-            <span className="text-zinc-400">Disclosure rung</span>
-            <span className="text-zinc-100 font-mono">{disclosure!.current_rung}/6</span>
-            <span className="text-zinc-300">— {rungName}</span>
-          </div>
-        )}
       </div>
 
       {plantings.length > 0 && (

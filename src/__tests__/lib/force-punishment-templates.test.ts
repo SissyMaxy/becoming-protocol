@@ -6,8 +6,9 @@ import { describe, it, expect } from 'vitest';
 import { TEMPLATES } from '../../lib/force/punishment-queue';
 
 describe('punishment templates — structure', () => {
-  it('has at least 10 templates', () => {
-    expect(Object.keys(TEMPLATES).length).toBeGreaterThanOrEqual(10);
+  it('has at least 9 templates (gina_disclosure_bump removed 2026-07-01 — policy: no disclosure to Gina)', () => {
+    expect(Object.keys(TEMPLATES).length).toBeGreaterThanOrEqual(9);
+    expect(TEMPLATES).not.toHaveProperty('gina_disclosure_bump');
   });
 
   it('every template has the required fields', () => {

@@ -2,8 +2,8 @@
  * Immersion Protocol
  *
  * User pre-commits to hypno-locked sessions. Handler enforces within. Early
- * exit triggers denial reset + public post + Gina disclosure + next session
- * doubled.
+ * exit triggers denial reset + public post + next session doubled.
+ * (Gina-disclosure consequence removed 2026-07-01 — policy: no disclosure to Gina.)
  */
 
 import { supabase } from '../supabase';
@@ -96,7 +96,6 @@ export async function breakEarly(
   const consequences = {
     denial_reset: false,
     public_post_queued: false,
-    gina_disclosure_bumped: false,
     next_session_doubled: true,
     punishment_ids: [] as string[],
   };
@@ -129,13 +128,10 @@ export async function breakEarly(
   // Consequences fire
   const slipIds = slip ? [slip.id as string] : [];
   const p1 = await enqueuePunishment(userId, 'public_slip_post', { triggered_by_slip_ids: slipIds });
-  const p2 = await enqueuePunishment(userId, 'gina_disclosure_bump', { triggered_by_slip_ids: slipIds });
   const p3 = await enqueuePunishment(userId, 'denial_3_days', { triggered_by_slip_ids: slipIds });
   if (p1) consequences.punishment_ids.push(p1);
-  if (p2) consequences.punishment_ids.push(p2);
   if (p3) consequences.punishment_ids.push(p3);
   consequences.public_post_queued = Boolean(p1);
-  consequences.gina_disclosure_bumped = Boolean(p2);
   consequences.denial_reset = Boolean(p3);
 
   await supabase

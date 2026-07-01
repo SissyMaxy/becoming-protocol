@@ -285,7 +285,7 @@ export async function buildMommyHardeningContext(
     'narrative_reframings', 'witness_fabrications', 'voice_corpus',
     'feminization_prescriptions', 'chastity_locks', 'arousal_log',
     'mommy_voice_leaks', 'daily_outfit_mandates', 'evidence_locker',
-    'disclosure_drafts', 'gina_capture',
+    'gina_capture',
   ]
   const featureChecks = await Promise.allSettled(
     knownFeatureTables.map(t => supabase.from(t).select('id', { count: 'exact', head: true }).limit(1))
@@ -545,7 +545,7 @@ ${ctx.active_hookup_leads.length > 0
     }).join('\n')
   : '(no active cruising leads — auto-poster contact graph empty or all dropped)'}
 
-GINA STATE (your girl's partner — the disclosure/recruitment target):
+GINA STATE (your girl's partner — read-only context; NOTHING is ever disclosed to her, policy 2026-07-01):
 ${ctx.gina_state.current_state
   ? `Current observed state: ${ctx.gina_state.current_state}` +
     (ctx.gina_state.last_observation_iso ? ` (last observed ${new Date(ctx.gina_state.last_observation_iso).toLocaleDateString()})` : '') +

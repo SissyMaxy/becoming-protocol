@@ -22,7 +22,6 @@ import {
   BarChart3,
   Shield,
   Zap,
-  Users,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useBambiMode } from '../../context/BambiModeContext';
@@ -49,7 +48,6 @@ import {
 import { SeedLogger } from './SeedLogger';
 import { MeasurementForm } from './MeasurementForm';
 import { ChannelDetail } from './ChannelDetail';
-import { DisclosureMap } from './DisclosureMap';
 
 interface GinaLadderViewProps {
   onBack: () => void;
@@ -101,7 +99,6 @@ export function GinaLadderView({ onBack }: GinaLadderViewProps) {
   const [expandedSection, setExpandedSection] = useState<string | null>('channels');
   const [showSeedLogger, setShowSeedLogger] = useState(false);
   const [showMeasurementForm, setShowMeasurementForm] = useState(false);
-  const [showDisclosureMap, setShowDisclosureMap] = useState(false);
   const [selectedChannel, setSelectedChannel] = useState<GinaChannel | null>(null);
 
   const loadData = useCallback(async () => {
@@ -188,14 +185,6 @@ export function GinaLadderView({ onBack }: GinaLadderViewProps) {
         onBack={() => setShowMeasurementForm(false)}
         onSaved={handleMeasurementSaved}
         dueMeasurements={dueMeasurements}
-      />
-    );
-  }
-
-  if (showDisclosureMap) {
-    return (
-      <DisclosureMap
-        onBack={() => setShowDisclosureMap(false)}
       />
     );
   }
@@ -488,17 +477,6 @@ export function GinaLadderView({ onBack }: GinaLadderViewProps) {
           >
             <BarChart3 className="w-4 h-4" />
             Measurement
-          </button>
-          <button
-            onClick={() => setShowDisclosureMap(true)}
-            className={`flex items-center justify-center gap-2 py-3 rounded-lg font-medium ${
-              isBambiMode
-                ? 'bg-pink-100 text-pink-700 hover:bg-pink-200'
-                : 'bg-white/10 text-white hover:bg-white/20'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            Disclosure Map
           </button>
           <button
             onClick={async () => {

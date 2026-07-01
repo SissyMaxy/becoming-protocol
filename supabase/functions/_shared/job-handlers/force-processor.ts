@@ -1,7 +1,12 @@
 // Force processor — job handler. Used to be the force-processor edge function.
-// Single tick that catches missed doses, dodged punishments, missed Gina
-// disclosures, hard-mode exits, chastity expiries, content_calendar promotion,
-// and workout streak bookkeeping. Single action — `force-processor:run`.
+// Single tick that catches missed doses, dodged punishments, hard-mode exits,
+// chastity expiries, content_calendar promotion, and workout streak
+// bookkeeping. Single action — `force-processor:run`.
+//
+// 2026-07-01: all Gina-disclosure enforcement removed (missed-deadline
+// punishments, deferred-deadline re-opening, the disclosure de-escalation
+// requirement). Policy: nothing is ever disclosed to Gina and no mechanism
+// may pressure toward it (migration 624).
 import { type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 export async function runForceProcessor(
@@ -109,62 +114,8 @@ export async function runForceProcessor(
       }
     }
 
-    // 3. Missed Gina disclosure deadlines
-    const { data: missedDisclosures } = await supa
-      .from('gina_disclosure_schedule')
-      .select('id, user_id, rung, disclosure_domain')
-      .eq('status', 'scheduled')
-      .eq('escalation_applied', false)
-      .lt('hard_deadline', today)
-      .limit(50)
-
-    for (const m of missedDisclosures || []) {
-      const { data: slip } = await supa
-        .from('slip_log')
-        .insert({
-          user_id: (m as any).user_id,
-          slip_type: 'disclosure_deadline_missed',
-          slip_points: 7,
-          source_text: `Missed Gina disclosure rung ${(m as any).rung}: ${(m as any).disclosure_domain}`,
-          source_table: 'gina_disclosure_schedule',
-          source_id: (m as any).id,
-          is_synthetic: true,
-        })
-        .select('id')
-        .single()
-
-      const slipIds = slip ? [(slip as any).id] : []
-      await supa.from('punishment_queue').insert([
-        {
-          user_id: (m as any).user_id,
-          punishment_type: 'public_post',
-          severity: 4,
-          title: 'Public slip confession post',
-          description: 'Handler draft queued. 15-minute review window before publish.',
-          parameters: { platform: 'twitter', review_minutes: 15 },
-          due_by: new Date(now.getTime() + 3600000).toISOString(),
-          triggered_by_slip_ids: slipIds,
-        },
-        {
-          user_id: (m as any).user_id,
-          punishment_type: 'denial_extension',
-          severity: 4,
-          title: 'Denial extended 7 days',
-          description: '7 days added to denial streak for missing Gina deadline.',
-          parameters: { days: 7 },
-          triggered_by_slip_ids: slipIds,
-        },
-      ])
-
-      await supa
-        .from('gina_disclosure_schedule')
-        .update({
-          status: 'missed',
-          escalation_applied: true,
-          escalation_details: { slip_id: (slip as any)?.id, punishment_queued: true },
-        })
-        .eq('id', (m as any).id)
-    }
+    // 3. (removed 2026-07-01) Missed Gina disclosure deadlines — the
+    // disclosure ladder is abolished; no deadline exists to miss.
 
     // 4. Hard Mode active without exit task → auto-create one
     const { data: hardModeUsers } = await supa
@@ -178,16 +129,18 @@ export async function runForceProcessor(
       const userId = (u as any).user_id
       const dueBy = new Date(now.getTime() + 24 * 3600000).toISOString()
 
-      // Split into three separate tasks so Maxy can complete each via its
-      // correct UI and see granular progress.
+      // Split into separate tasks so Maxy can complete each via its
+      // correct UI and see granular progress. (Was 3 tasks; the Gina-
+      // disclosure de-escalation task was removed 2026-07-01 — policy:
+      // no disclosure to Gina.)
       const { data: confessionTask } = await supa
         .from('punishment_queue')
         .insert({
           user_id: userId,
           punishment_type: 'confession_extended',
           severity: 3,
-          title: 'DE-ESCALATION 1/3: 800-word confession',
-          description: 'Hard Mode exit requires all 3 of these + the other 2 tasks. Shame journal, 800 words minimum, on what you slipped on and why the system punishes you.',
+          title: 'DE-ESCALATION 1/2: 800-word confession',
+          description: 'Hard Mode exit requires both of these tasks. Shame journal, 800 words minimum, on what you slipped on and why the system punishes you.',
           parameters: { min_words: 800, is_deescalation: true },
           due_by: dueBy,
           triggered_by_hard_mode: true,
@@ -199,27 +152,16 @@ export async function runForceProcessor(
         user_id: userId,
         punishment_type: 'mantra_recitation',
         severity: 3,
-        title: 'DE-ESCALATION 2/3: 100 mantra recitations',
-        description: 'Hard Mode exit requires all 3 of these. Recite "I am Maxy. David is gone." 100 times, logged.',
+        title: 'DE-ESCALATION 2/2: 100 mantra recitations',
+        description: 'Hard Mode exit requires both of these tasks. Recite "I am Maxy. David is gone." 100 times, logged.',
         parameters: { repetitions: 100, is_deescalation: true, text: 'I am Maxy. David is gone.' },
-        due_by: dueBy,
-        triggered_by_hard_mode: true,
-      })
-
-      await supa.from('punishment_queue').insert({
-        user_id: userId,
-        punishment_type: 'gina_confession',
-        severity: 3,
-        title: 'DE-ESCALATION 3/3: Execute next Gina disclosure',
-        description: 'Hard Mode exit requires all 3 of these. Open the next pending rung on your Gina disclosure ladder and execute it — accepted, deferred, or rejected. Just disclose.',
-        parameters: { is_deescalation: true },
         due_by: dueBy,
         triggered_by_hard_mode: true,
       })
 
       if (confessionTask) {
         // The confession task is the anchor. Exit check reads entered_at and
-        // verifies all 3 subrequirements met since then (regardless of which
+        // verifies both subrequirements met since then (regardless of which
         // specific task row completed).
         await supa
           .from('user_state')
@@ -228,7 +170,7 @@ export async function runForceProcessor(
       }
     }
 
-    // 5. Completed de-escalation tasks → check all 3 sub-requirements before exit
+    // 5. Completed de-escalation tasks → check both sub-requirements before exit
     const { data: completedDeEsc } = await supa
       .from('punishment_queue')
       .select('id, user_id, completed_at, completion_evidence, parameters')
@@ -246,7 +188,7 @@ export async function runForceProcessor(
         .maybeSingle()
       if (!state || (state as any).hard_mode_exit_task_id !== (t as any).id) continue
 
-      // Verify all three de-escalation requirements satisfied since Hard Mode entry
+      // Verify both de-escalation requirements satisfied since Hard Mode entry
       const enteredAt = (state as any).hard_mode_entered_at || new Date(0).toISOString()
 
       // 1. Confession ≥800 words logged to shame_journal
@@ -274,16 +216,10 @@ export async function runForceProcessor(
         return logged >= 100 && logged >= target
       })
 
-      // 3. Gina disclosure either disclosed or accepted since Hard Mode entry
-      const { data: disclosures } = await supa
-        .from('gina_disclosure_schedule')
-        .select('status, disclosed_at')
-        .eq('user_id', (t as any).user_id)
-        .in('status', ['gina_accepted', 'gina_deferred', 'gina_rejected'])
-        .gte('disclosed_at', enteredAt)
-      const disclosureMet = (disclosures || []).length > 0
+      // (Third requirement — a Gina disclosure — removed 2026-07-01.
+      // Policy: no disclosure to Gina, ever; exit cannot be gated on it.)
 
-      if (confessionMet && mantraMet && disclosureMet) {
+      if (confessionMet && mantraMet) {
         await supa
           .from('user_state')
           .update({
@@ -294,7 +230,7 @@ export async function runForceProcessor(
         await supa.from('hard_mode_transitions').insert({
           user_id: (t as any).user_id,
           transition: 'exited',
-          reason: 'De-escalation (all 3 subrequirements met: 800-word confession + 100+ mantras + Gina disclosure)',
+          reason: 'De-escalation (both subrequirements met: 800-word confession + 100+ mantras)',
           exit_task_completed_id: (t as any).id,
         })
         // Auto-complete sibling de-escalation tasks so UI isn't misleading
@@ -313,13 +249,12 @@ export async function runForceProcessor(
         const missing: string[] = []
         if (!confessionMet) missing.push('800-word confession')
         if (!mantraMet) missing.push('100 mantras')
-        if (!disclosureMet) missing.push('Gina disclosure')
         await supa
           .from('punishment_queue')
           .update({
             status: 'queued',
             completed_at: null,
-            description: `DE-ESCALATION — still missing: ${missing.join(', ')}. Hard Mode stays active until all three are done.`,
+            description: `DE-ESCALATION — still missing: ${missing.join(', ')}. Hard Mode stays active until both are done.`,
             due_by: new Date(now.getTime() + 12 * 3600000).toISOString(),
           })
           .eq('id', (t as any).id)
@@ -342,27 +277,8 @@ export async function runForceProcessor(
         .in('id', (staleDevices as Array<{ id: string }>).map(d => d.id))
     }
 
-    // 5c. Deferred Gina disclosures older than 7 days → reopen for re-pressure
-    const reopenCutoff = new Date(now.getTime() - 7 * 86400000).toISOString()
-    const { data: deferredStale } = await supa
-      .from('gina_disclosure_schedule')
-      .select('id, rung, hard_deadline, disclosed_at')
-      .eq('status', 'gina_deferred')
-      .lt('disclosed_at', reopenCutoff)
-      .limit(20)
-
-    for (const d of deferredStale || []) {
-      // Push deadline 3 days out, flip back to scheduled
-      const newDeadline = new Date(now.getTime() + 3 * 86400000).toISOString().split('T')[0]
-      await supa
-        .from('gina_disclosure_schedule')
-        .update({
-          status: 'scheduled',
-          hard_deadline: newDeadline,
-          scheduled_by_date: new Date(now.getTime() - 86400000).toISOString().split('T')[0],
-        })
-        .eq('id', (d as any).id)
-    }
+    // 5c. (removed 2026-07-01) Deferred Gina disclosures re-opening — the
+    // disclosure ladder is abolished; nothing gets re-pressured.
 
     // 5d. Chastity streak milestones → log achievement + queue Handler outreach
     const MILESTONES = [7, 14, 30, 60, 90, 180, 365]
@@ -586,7 +502,6 @@ export async function runForceProcessor(
     ok: true,
     missed_doses: (missedDoses || []).length,
     dodged_punishments: (dodged || []).length,
-    missed_disclosures: (missedDisclosures || []).length,
     expired_locks: (expiredLocks || []).length,
     content_queued: contentQueued,
     skipped_workouts: (skippedWorkouts || []).length,

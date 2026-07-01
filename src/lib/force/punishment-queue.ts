@@ -7,11 +7,12 @@
 
 import { supabase } from '../supabase';
 
+// 'gina_confession' removed 2026-07-01 — policy: no disclosure to Gina
+// (migration 624 cancelled all pending rows of that type).
 export type PunishmentType =
   | 'denial_extension'
   | 'humiliation_task'
   | 'public_post'
-  | 'gina_confession'
   | 'public_shame_log'
   | 'mantra_recitation'
   | 'writing_lines'
@@ -78,14 +79,6 @@ export const TEMPLATES: Record<string, PunishmentTemplate> = {
     description: 'Handler will draft a post confessing your slip. You have a 15-minute review window before it publishes.',
     parameters: { platform: 'twitter', review_minutes: 15 },
     due_hours: 1,
-  },
-  gina_disclosure_bump: {
-    punishment_type: 'gina_confession',
-    severity: 5,
-    title: 'Gina disclosure advanced',
-    description: 'Your next Gina disclosure deadline is moved up by 7 days. No extensions.',
-    parameters: { advance_days: 7 },
-    due_hours: 0,
   },
   edge_no_release_90: {
     punishment_type: 'edge_session_no_release',
@@ -155,8 +148,6 @@ export async function enqueuePunishment(
   // Apply immediate-effect punishments now
   if (tpl.punishment_type === 'denial_extension' && tpl.parameters?.days) {
     await applyDenialExtension(userId, tpl.parameters.days as number);
-  } else if (tpl.punishment_type === 'gina_confession' && tpl.parameters?.advance_days) {
-    await advanceGinaDisclosureDeadline(userId, tpl.parameters.advance_days as number);
   }
 
   return data.id;
@@ -186,24 +177,8 @@ async function applyDenialExtension(userId: string, days: number): Promise<void>
     .eq('user_id', userId);
 }
 
-async function advanceGinaDisclosureDeadline(userId: string, days: number): Promise<void> {
-  const { data: next } = await supabase
-    .from('gina_disclosure_schedule')
-    .select('id, hard_deadline')
-    .eq('user_id', userId)
-    .eq('status', 'scheduled')
-    .order('rung', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  if (!next) return;
-
-  const newDeadline = new Date(new Date(next.hard_deadline as string).getTime() - days * 86400000);
-  await supabase
-    .from('gina_disclosure_schedule')
-    .update({ hard_deadline: newDeadline.toISOString().split('T')[0] })
-    .eq('id', next.id);
-}
+// (advanceGinaDisclosureDeadline removed 2026-07-01 — the Gina disclosure
+// ladder is abolished; policy: no disclosure to Gina, migration 624.)
 
 /**
  * Scan for dodged punishments (past due, not completed). Compound consequence.

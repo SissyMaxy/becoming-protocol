@@ -344,20 +344,9 @@ export async function handleForceFeminizationDirective(
       }
 
       case 'draft_partner_disclosure': {
-        const partnerName = val.partner_name as string | undefined;
-        const topic = val.topic as string | undefined;
-        const draftText = val.draft_text as string | undefined;
-        if (!partnerName || !topic || !draftText) return;
-        await supabase.from('partner_disclosures').insert({
-          user_id: userId,
-          partner_name: partnerName,
-          partner_relationship: (val.partner_relationship as string) || 'spouse',
-          disclosure_topic: topic,
-          draft_text: draftText,
-          scheduled_for: (val.scheduled_for as string) || null,
-          status: 'drafted',
-        });
-        console.log('[FF] Partner disclosure drafted:', topic);
+        // Removed 2026-07-01 — policy: no disclosure to Gina (or any partner
+        // drafting loop). Directive is a deliberate no-op.
+        console.log('[FF] draft_partner_disclosure ignored — disclosure mechanisms removed');
         return;
       }
 

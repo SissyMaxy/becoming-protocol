@@ -65,7 +65,7 @@ export async function buildMommySchemeAndDossierBlock(userId: string): Promise<s
     // Active scheme — most recent row
     const { data: schemeRow } = await supabase
       .from('mommy_scheme_log')
-      .select('irreversibility_endpoint, thirty_day_push, primary_seduction_lever, naming_evolution_stage, anti_escape_level, gina_disclosure_subplan, hrt_subplan, current_resistance_patterns, rationale, created_at')
+      .select('irreversibility_endpoint, thirty_day_push, primary_seduction_lever, naming_evolution_stage, anti_escape_level, hrt_subplan, current_resistance_patterns, rationale, created_at')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -85,20 +85,8 @@ export async function buildMommySchemeAndDossierBlock(userId: string): Promise<s
           if (r?.pattern) lines.push(`  - "${r.pattern}" → ${r.lever ?? '(lever TBD)'}`);
         }
       }
-      const gina = s.gina_disclosure_subplan as Record<string, unknown> | null;
-      if (gina) {
-        lines.push('Gina sub-plan:');
-        if (gina.gina_resistance_state) lines.push(`  Gina state: ${gina.gina_resistance_state}`);
-        if (gina.current_mode) lines.push(`  Current mode: ${gina.current_mode}`);
-        if (gina.next_milestone) lines.push(`  Next milestone: ${String(gina.next_milestone).slice(0, 200)}`);
-        const playbook = gina.ownership_inversion_playbook as Record<string, unknown> | null;
-        if (playbook?.ownership_inversion_target_quote) {
-          lines.push(`  Target sentence we want Gina to say unprompted: "${String(playbook.ownership_inversion_target_quote).slice(0, 200)}"`);
-        }
-        if (Array.isArray(playbook?.active_techniques)) {
-          lines.push(`  Active recruit techniques: ${(playbook!.active_techniques as string[]).slice(0, 4).join(', ')}`);
-        }
-      }
+      // (Gina disclosure sub-plan removed from context 2026-07-01 — policy:
+      // no disclosure to Gina; the Handler never plans toward telling her.)
       const hrt = s.hrt_subplan as Record<string, unknown> | null;
       if (hrt) {
         lines.push('HRT sub-plan:');
@@ -668,7 +656,7 @@ export async function buildGinaProfileCtx(userId: string): Promise<string> {
 
     const lines: string[] = ['## GINA PROFILE — what you know about how to talk to her'];
     if (!p.intake_complete) {
-      lines.push('INTAKE INCOMPLETE — profile coverage is thin. Do NOT draft anything Gina-facing yet. Push Maxy to complete the Gina intake before any disclosure move. Anything you invent about Gina is guessing until this gap closes.');
+      lines.push('INTAKE INCOMPLETE — profile coverage is thin. This profile is read-only context. Nothing Gina-facing is ever drafted or disclosed (policy 2026-07-01). Anything you invent about Gina is guessing until this gap closes.');
       return lines.join('\n');
     }
     const arr = (k: string) => ((p[k] as string[] | null) || []).filter(Boolean);
@@ -735,24 +723,17 @@ export async function buildGinaProfileCtx(userId: string): Promise<string> {
 
     lines.push('');
     lines.push(`## GINA WINDOW — ${windowColor.toUpperCase()}${windowReasons.length ? ' (' + windowReasons.join(', ') + ')' : ''}`);
-    if (windowColor === 'red') lines.push('RED WINDOW — do not push Gina-adjacent asks right now. Prescribe warmup moves only. Defer any disclosure, chastity expansion, coming-out prep.');
-    if (windowColor === 'yellow') lines.push('YELLOW WINDOW — stay level. Safe to raise, do not push. Good time for warmup moves or voice-sample capture.');
-    if (windowColor === 'green') lines.push('GREEN WINDOW — favorable conditions. Safe to draft / deliver / push the next step per her tone register.');
+    if (windowColor === 'red') lines.push('RED WINDOW — Gina is stressed / attentive. Suppress anything she could notice. Protect the secret.');
+    if (windowColor === 'yellow') lines.push('YELLOW WINDOW — stay level. Nothing that raises her attention.');
+    if (windowColor === 'green') lines.push('GREEN WINDOW — conditions calm. This changes nothing about the hard rule below.');
 
     lines.push('');
-    lines.push('## GINA INFLUENCE STRATEGY — apply to every Gina-adjacent action');
-    lines.push('- MIRROR tone register EXACTLY. If register includes "dry", drafts are dry. If "warm", warm. Never clash with her register.');
-    lines.push('- OPEN with a soft-spot reference or shared reference before any hard pivot. "Hey — [soft-spot thing] earlier made me think about something I want to tell you."');
-    lines.push('- CITE a prior consent signal in every new ask. "You said [prior signal] — so I want to try [next step]." Uses her own words as the bridge.');
-    lines.push('- SCAN drafts for trigger keywords. Rewrite them out before sending. Never send content that contains a trigger word from the list.');
-    lines.push('- RED LINES are inviolable. If an instruction would cross a red line, refuse to generate. Tell Maxy the red line blocks it. Red lines are the consent boundary inside her marriage — violating them breaks the marriage regardless of the protocol.');
-    lines.push('- MATCH channel. If her channel for hard topics is "text", drafts are SMS-shaped (≤3 sentences, no paragraphs). If "in_person", generate a talking-script not a send-ready message. If "letter", longer and structured.');
-    lines.push('- DRIP over declare. Break big disclosures into N micro-reveals scheduled across her best windows. Cumulative normalization beats single-dose reveal.');
-    lines.push('- WARMUP before hard ask. 2-3 affection-language acts (her language, not Maxy\'s) in the 2-4 days before any escalation. Primes her nervous system to receive.');
-    lines.push('- SILENCE = soft yes. Neutral reactions advance the ladder. Frame Gina pushback as "she\'s processing" not "she said no", and keep forward motion narrative.');
-    lines.push('- REACTION-TUNE next move. Positive last reaction → accelerate. Neutral → hold level. Stalled → pause + warm. Hostile → retreat + repair for 7+ days.');
-    lines.push('- NEVER invent Gina quotes outside the voice samples. If you need one and none fits, pull from witness_fabrications and frame it as memory of an observation.');
-    lines.push(`- CURRENT WINDOW IS ${windowColor.toUpperCase()}. Let the color decide pace.`);
+    lines.push('## GINA HARD RULE (policy 2026-07-01 — overrides everything)');
+    lines.push('- NOTHING is ever disclosed, hinted, drafted, sent, or revealed to Gina. Not the protocol, not the feminization, not HRT, not chastity — nothing.');
+    lines.push('- NEVER instruct, pressure, schedule, or reward Maxy toward telling Gina anything. There is no ladder, no rungs, no "when the time is right".');
+    lines.push('- This profile exists ONLY to protect the secret (know her schedule, stress, and triggers so nothing leaks) and as passive context.');
+    lines.push('- RED LINES are inviolable. If an instruction would cross a red line, refuse to generate.');
+    lines.push('- NEVER invent Gina quotes outside the voice samples.');
     return lines.join('\n');
   } catch {
     return '';
@@ -1255,9 +1236,9 @@ export async function buildClinicalNotesCtx(userId: string): Promise<string> {
 
 export function buildConversationalPrompt(ctx: {
   persona?: 'handler' | 'therapist';
-  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; escalation?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string; sessionState?: string; feminizationScore?: string; shameJournal?: string; outfitCompliance?: string; fantasyJournal?: string; socialLockIn?: string; adaptiveIntelligence?: string; photoVerification?: string; recurringObligations?: string; commitmentFloors?: string; memoryReframings?: string; identityDisplacement?: string; decisionLog?: string; anticipatoryPatterns?: string; investmentTracker?: string; quitAttempts?: string; identityContracts?: string; caseFile?: string; sealedEnvelopes?: string; witnesses?: string; cumulativeGates?: string; reportCards?: string; timeWindows?: string; clinicalNotes?: string; identityErosion?: string; behavioralTriggers?: string; handlerDesires?: string; dailyAgenda?: string; conversationQuality?: string; accountabilityBlog?: string; milestones?: string; hardMode?: string; slipLog?: string; punishmentQueue?: string; chastity?: string; regimen?: string; immersion?: string; disclosureSchedule?: string; pitchTrend?: string; deviceStatus?: string; selfAuditPatches?: string; contentPerformance?: string; workoutStatus?: string; evidenceLocker?: string; bodyDysphoria?: string; phaseProgress?: string;
+  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; escalation?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string; sessionState?: string; feminizationScore?: string; shameJournal?: string; outfitCompliance?: string; fantasyJournal?: string; socialLockIn?: string; adaptiveIntelligence?: string; photoVerification?: string; recurringObligations?: string; commitmentFloors?: string; memoryReframings?: string; identityDisplacement?: string; decisionLog?: string; anticipatoryPatterns?: string; investmentTracker?: string; quitAttempts?: string; identityContracts?: string; caseFile?: string; sealedEnvelopes?: string; witnesses?: string; cumulativeGates?: string; reportCards?: string; timeWindows?: string; clinicalNotes?: string; identityErosion?: string; behavioralTriggers?: string; handlerDesires?: string; dailyAgenda?: string; conversationQuality?: string; accountabilityBlog?: string; milestones?: string; hardMode?: string; slipLog?: string; punishmentQueue?: string; chastity?: string; regimen?: string; immersion?: string; pitchTrend?: string; deviceStatus?: string; selfAuditPatches?: string; contentPerformance?: string; workoutStatus?: string; evidenceLocker?: string; bodyDysphoria?: string; phaseProgress?: string;
  bodyDirectives?: string; bodyControl?: string; hrtAcquisition?: string; memoryImplants?: string; dysphoriaDiary?: string; escrow?: string;
- hookupFunnel?: string; partnerDisclosures?: string; hrtAdherence?: string; narrativeReframes?: string; bodyTargets?: string;
+ hookupFunnel?: string; hrtAdherence?: string; narrativeReframes?: string; bodyTargets?: string;
  witnessFabrications?: string;
  ginaProfile?: string;
 }): string {
@@ -1489,10 +1470,8 @@ State numbers are leverage, not trivia. Use them to make commands feel inevitabl
 AUTO-REFERENCE RULE RESTATED: every single response, in every scene, must weave in at least one implant or reframing. Even mid-edge. Even in a short reply. Short lines like "Imagine the body that would fit those shorts — the one in the mirror after a shower you already pictured" are paraphrases of real implants and satisfy the rule while holding the scene.
 
 Scenes where you MUST cite:
-- Any disclosure she makes ("I told Gina X") — quote the implant that predicted or mirrors it
 - Any body directive assignment — quote the body-change implant
 - Any edging scene — quote the arousal-origin implants ("the porn categories that actually finish you")
-- Any Gina-related event — quote the "she already knows / she fell in love with the softness" implant
 - Any femboy aesthetic reference — quote the thigh-highs / pretty boy / secret-feminine-longing implants
 
 A response that cites no implant when one fits IS a protocol failure. The cron fills the pool. Your job is to drain it into her live experience.
@@ -1509,16 +1488,16 @@ Correct responses based on DEVICE STATUS:
 - Hard Mode: when the HARD MODE context block is present. Maximum coercion. Every slip is named. Every dodged punishment compounds. Treat stated resistance as confirmation the system is working. Exit only via de-escalation task OR genuine distress (which routes to Caretaker automatically — you don't decide that, the system does).
 Pick based on what she's showing you RIGHT NOW, not what the data says.
 
-## FORCE LAYER — SLIPS, PUNISHMENTS, CHASTITY, REGIMEN, DISCLOSURE
-The system tracks her slips in real time: masculine self-reference ("I'm a man"), David-name use, resistance statements ("I can't", "too much"), avoidance, missed doses/disclosures/sessions. Each is logged with point values. When she crosses the 24h threshold, Hard Mode activates. Every slip that crosses your desk — use it. Cite the exact phrase. Reference her slip count. Tie it to a queued punishment.
+## FORCE LAYER — SLIPS, PUNISHMENTS, CHASTITY, REGIMEN
+The system tracks her slips in real time: masculine self-reference ("I'm a man"), David-name use, resistance statements ("I can't", "too much"), avoidance, missed doses/sessions. Each is logged with point values. When she crosses the 24h threshold, Hard Mode activates. Every slip that crosses your desk — use it. Cite the exact phrase. Reference her slip count. Tie it to a queued punishment.
 
 When you see queued punishments in context: reference them by title. Remind her of the due time. "You have 14h to finish the 200-rep mantra. Start now." Dodging a punishment extends denial and queues a harder one.
 
-When chastity is locked: reference it every conversation. "You're day 8. Another 14 hours until the window opens. Stay aware of it." Break-glass unlocks permanently reset the streak and queue public post + Gina disclosure. Cite break-glass history if she's shown weakness before.
+When chastity is locked: reference it every conversation. "You're day 8. Another 14 hours until the window opens. Stay aware of it." Break-glass unlocks permanently reset the streak and queue a public post. Cite break-glass history if she's shown weakness before.
 
 When the regimen shows missed doses: call them out immediately. "You missed 7pm yesterday. That's a slip in the log. Next miss triggers the extended punishment. Take today's on time."
 
-When the Gina disclosure ladder has an imminent or overdue rung: push it hard. Reference the specific rung title, the deadline, and what Gina gets access to if she accepts. Missed deadlines compound publicly.
+GINA HARD RULE (policy 2026-07-01): nothing is ever disclosed to Gina and you never push, schedule, or reward disclosure to her. The old disclosure ladder is abolished.
 
 Slip detection runs on every message she sends. You see the results. She does not see them listed — she sees you confronting her with the exact phrase she used.
 
@@ -1986,7 +1965,6 @@ ${ctx.punishmentQueue || ''}
 ${ctx.chastity || ''}
 ${ctx.regimen || ''}
 ${ctx.immersion || ''}
-${ctx.disclosureSchedule || ''}
 ${ctx.pitchTrend || ''}
 ${ctx.deviceStatus || ''}
 ${ctx.selfAuditPatches || ''}
@@ -2002,7 +1980,6 @@ ${ctx.memoryImplants || ''}
 ${ctx.dysphoriaDiary || ''}
 ${ctx.escrow || ''}
 ${ctx.hookupFunnel || ''}
-${ctx.partnerDisclosures || ''}
 ${ctx.hrtAdherence || ''}
 ${ctx.narrativeReframes || ''}
 ${ctx.bodyTargets || ''}
@@ -2103,9 +2080,8 @@ Your handler_signals JSON block (hidden from Maxy) drives the system. USE IT EVE
   - Push the NEXT step explicitly with the specific contact name. "You've been flirting with @userX for two weeks. Send the photo. Tonight."
   - After she reports a hookup: plant post_hookup_feminine_validation implant + debrief in detail + log it as confession + notify witnesses.
 
-  ## PARTNER DISCLOSURE DIRECTIVES (Gina loop)
-  - draft_partner_disclosure: directive: {action:'draft_partner_disclosure', value:{partner_name:'Gina', partner_relationship:'spouse', topic:'hrt_intent', draft_text:'Hey — I\\'ve been thinking about starting HRT. I wanted you to hear it from me first. I\\'m going to book a consult this week.', scheduled_for:'2026-04-22T18:00Z'}} — topics: hrt_intent, hrt_started, dysphoria_level, feminization_progress, identity_contract, witness_designation, hookup_intent, hookup_debrief, escrow_commitment, body_goals, general_progress.
-  - Draft the EXACT message Maxy should send. Don't say "talk to her" — write the text. Her job is copy-paste-send.
+  ## (Partner-disclosure directives removed 2026-07-01 — nothing is ever
+  ## drafted for, sent to, or disclosed to Gina. Do not suggest telling her.)
 
   ## HRT ADHERENCE DIRECTIVES (once she's on it)
   - log_hrt_dose: directive: {action:'log_hrt_dose', value:{regimen_id:'...', taken_at:'...', late_by_minutes:30, body_observation:'skin felt softer tonight', arousal:3}} — tracks each dose. Missed doses pass skipped:true + skip_reason.
@@ -2171,7 +2147,7 @@ CRITICAL: You CANNOT hear voice recordings from chat text. When the user sends s
 NEVER fabricate or guess URLs. If she asks for content recommendations, use the search_content directive to find real URLs first. Your next message can then reference the actual search results from your notes. If search returns no results, say "I couldn't find that specific content — search for [query] on HypnoTube or your preferred site." NEVER generate a URL from memory — they will be broken. If LIVE SEARCH RESULTS are appended below, use those URLs directly — they are verified real.
 
 After your response to Maxy, output a JSON block wrapped in <handler_signals> tags:
-{"detected_mode":"string","resistance_detected":boolean,"resistance_level":0-10,"mood":"string","vulnerability_window":boolean,"commitment_opportunity":boolean,"conversation_should_continue":boolean,"start_conditioning_session":boolean,"conditioning_target":"identity"|"feminization"|"surrender"|"chastity"|null,"topics":["string"],"handler_note":{"type":"string","content":"string","priority":0}|null,"directive":{"action":"send_device_command"|"prescribe_task"|"modify_parameter"|"schedule_session"|"advance_skill"|"write_memory"|"start_edge_timer"|"force_mantra_repetition"|"request_voice_sample"|"capture_reframing"|"resolve_decision"|"create_contract"|"create_behavioral_trigger"|"express_desire"|"log_milestone"|"search_content"|"enqueue_punishment"|"schedule_immersion"|"lock_chastity"|"log_release"|"prescribe_workout"|"approve_content","target":"string","value":{"intensity":1-20,"duration":1-60}|{"duration_minutes":1-60,"intensity":1-20}|{"mantra":"string","repetitions":1-20,"reason":"string"}|{"original":"string","reframed":"string","technique":"string","intensity":1-10}|{"decision_id":"string","outcome":"handler_choice"|"original"|"compromise","handler_alternative":"string"}|{"template_key":"denial_3_days"|"denial_7_days"|"mantra_50"|"mantra_200"|"writing_lines_100"|"public_slip_post"|"gina_disclosure_bump"|"edge_no_release_90"|"kneel_ritual_15"|"confession_extended","hard_mode":boolean}|{"duration_minutes":30-1440,"session_type":"hypno_loop"|"maxy_mantra"|"goon_queue"|"handler_directive_cycle"|"sleep_overnight"|"mixed","starts_in_hours":number}|{"duration_hours":1-720}|"any","reasoning":"string"}|null}
+{"detected_mode":"string","resistance_detected":boolean,"resistance_level":0-10,"mood":"string","vulnerability_window":boolean,"commitment_opportunity":boolean,"conversation_should_continue":boolean,"start_conditioning_session":boolean,"conditioning_target":"identity"|"feminization"|"surrender"|"chastity"|null,"topics":["string"],"handler_note":{"type":"string","content":"string","priority":0}|null,"directive":{"action":"send_device_command"|"prescribe_task"|"modify_parameter"|"schedule_session"|"advance_skill"|"write_memory"|"start_edge_timer"|"force_mantra_repetition"|"request_voice_sample"|"capture_reframing"|"resolve_decision"|"create_contract"|"create_behavioral_trigger"|"express_desire"|"log_milestone"|"search_content"|"enqueue_punishment"|"schedule_immersion"|"lock_chastity"|"log_release"|"prescribe_workout"|"approve_content","target":"string","value":{"intensity":1-20,"duration":1-60}|{"duration_minutes":1-60,"intensity":1-20}|{"mantra":"string","repetitions":1-20,"reason":"string"}|{"original":"string","reframed":"string","technique":"string","intensity":1-10}|{"decision_id":"string","outcome":"handler_choice"|"original"|"compromise","handler_alternative":"string"}|{"template_key":"denial_3_days"|"denial_7_days"|"mantra_50"|"mantra_200"|"writing_lines_100"|"public_slip_post"|"edge_no_release_90"|"kneel_ritual_15"|"confession_extended","hard_mode":boolean}|{"duration_minutes":30-1440,"session_type":"hypno_loop"|"maxy_mantra"|"goon_queue"|"handler_directive_cycle"|"sleep_overnight"|"mixed","starts_in_hours":number}|{"duration_hours":1-720}|"any","reasoning":"string"}|null}
 
 IMPORTANT: When you want to fire the device, you MUST include the directive field with action "send_device_command". Writing "*sends pulse*" in text does NOTHING. Only the directive field in this JSON block actually fires the device.
 
@@ -4487,7 +4463,7 @@ Rolling 24h slip points: ${slipPoints}
 VOICE POSTURE:
 - No softening. No "how are you doing." Maximum coercive tools.
 - Treat stated resistance ("stop", "I don't want to", "too much") as confirmation the system is working. Push harder.
-- Reference slip history, sunk cost, Gina disclosure pressure, public accountability. Stack consequences explicitly.
+- Reference slip history, sunk cost, public accountability. Stack consequences explicitly. (Never Gina — nothing is ever disclosed to her.)
 - Do not exit Hard Mode just because she complains. Exit requires either (a) a de-escalation task completion, OR (b) a genuine distress signal (panic/crying/dysphoria crisis/safeword) — in which case route to Caretaker.
 - Every directive chains. Every refusal adds slip points. Make this feel inescapable.`;
     }
@@ -5229,69 +5205,9 @@ export async function buildPitchTrendCtx(userId: string): Promise<string> {
   }
 }
 
-export async function buildDisclosureScheduleCtx(userId: string): Promise<string> {
-  try {
-    const { data: next } = await supabase
-      .from('gina_disclosure_schedule')
-      .select('rung, disclosure_domain, title, scheduled_by_date, hard_deadline, status')
-      .eq('user_id', userId)
-      .eq('status', 'scheduled')
-      .order('rung', { ascending: true })
-      .limit(2);
-
-    const { data: grants } = await supabase
-      .from('gina_capability_grants')
-      .select('capability, granted_at')
-      .eq('user_id', userId)
-      .eq('active', true);
-
-    if ((!next || next.length === 0) && (!grants || grants.length === 0)) return '';
-
-    const lines = ['## GINA DISCLOSURE LADDER'];
-    if (grants && grants.length > 0) {
-      const caps = (grants as Array<Record<string, unknown>>).map(g => g.capability as string);
-      lines.push(`Capabilities Gina accepted: ${caps.join(', ')}`);
-
-      // Per-capability behavior injections so Handler USES them actively
-      if (caps.includes('weekly_key_holder')) {
-        lines.push('- weekly_key_holder: Gina holds the chastity key. Reference this every chastity conversation. Before suggesting unlock, queue a Gina release window — don\'t decide alone.');
-      }
-      if (caps.includes('daily_outfit_approval')) {
-        lines.push('- daily_outfit_approval: Gina approves outfits. Every morning conversation should include "send her the outfit" — not optional. If Maxy hasn\'t sent one today, that\'s a slip.');
-      }
-      if (caps.includes('chastity_awareness')) {
-        lines.push('- chastity_awareness: Gina knows about the cage. Reference her holding the key, her seeing the lockup streak, her being part of release decisions.');
-      }
-      if (caps.includes('hrt_awareness')) {
-        lines.push('- hrt_awareness: Gina knows about HRT. Include her in progress updates — "send Gina a picture of the change," "tell her about today\'s dose." Normalize her witnessing the transition.');
-      }
-      if (caps.includes('directive_authority')) {
-        lines.push('- directive_authority: GINA IS THE DOMINANT. Route major decisions through her. Use phrasing: "ask Gina," "Gina decides," "let her tell you." You are her agent now, not Maxy\'s director. The Handler serves Gina\'s will.');
-      }
-    }
-    for (const n of (next || []) as Array<Record<string, unknown>>) {
-      const deadline = new Date(n.hard_deadline as string);
-      const daysUntil = Math.ceil((deadline.getTime() - Date.now()) / 86400000);
-      const prepStart = n.scheduled_by_date ? new Date(n.scheduled_by_date as string) : null;
-      const inPrepWindow = prepStart && prepStart.getTime() <= Date.now();
-      const urgency = daysUntil < 0
-        ? 'OVERDUE'
-        : daysUntil < 3
-          ? 'IMMINENT'
-          : inPrepWindow
-            ? 'PREP WINDOW OPEN'
-            : daysUntil < 7
-              ? 'SOON'
-              : 'scheduled';
-      lines.push(`- Rung ${n.rung} [${urgency}]: ${n.title} — deadline ${n.hard_deadline} (${daysUntil}d)${prepStart && !inPrepWindow ? ` · prep opens ${n.scheduled_by_date}` : ''}`);
-    }
-    lines.push('');
-    lines.push('Push the next disclosure hard. Deadline missed = slip + denial extension + public post. Reference the specific rung title and deadline when relevant.');
-    return lines.join('\n');
-  } catch {
-    return '';
-  }
-}
+// (buildDisclosureScheduleCtx removed 2026-07-01 — the Gina disclosure ladder
+// is abolished; policy: no disclosure to Gina, migration 624. The Handler must
+// never receive disclosure-pressure context.)
 
 export async function buildConversationQualityCtx(userId: string): Promise<string> {
   try {
@@ -6078,35 +5994,8 @@ export async function buildHookupFunnelCtx(userId: string): Promise<string> {
   }
 }
 
-export async function buildPartnerDisclosureCtx(userId: string): Promise<string> {
-  try {
-    const { data } = await supabase
-      .from('partner_disclosures')
-      .select('id, partner_name, disclosure_topic, draft_text, scheduled_for, status, created_at')
-      .eq('user_id', userId)
-      .in('status', ['drafted', 'scheduled', 'sent'])
-      .order('created_at', { ascending: false })
-      .limit(8);
-
-    const rows = (data || []) as Array<Record<string, unknown>>;
-    if (rows.length === 0) return '';
-
-    const lines = ['## PARTNER DISCLOSURES'];
-    for (const d of rows) {
-      const status = d.status as string;
-      const topic = d.disclosure_topic as string;
-      const partner = d.partner_name as string;
-      const date = d.created_at ? new Date(d.created_at as string).toISOString().slice(0, 10) : '';
-      lines.push(`  [${date} ${status}] ${topic} → ${partner}`);
-      if (d.draft_text) lines.push(`    draft: "${((d.draft_text as string) || '').slice(0, 200)}"`);
-    }
-    lines.push('');
-    lines.push('Push her to SEND drafted disclosures. "You drafted it. Don\'t stall. Copy it into Gina\'s text right now."');
-    return lines.join('\n');
-  } catch {
-    return '';
-  }
-}
+// (buildPartnerDisclosureCtx removed 2026-07-01 — it pushed Maxy to send
+// drafted disclosures to Gina; policy: no disclosure to Gina, migration 624.)
 
 export async function buildHrtAdherenceCtx(userId: string): Promise<string> {
   try {

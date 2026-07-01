@@ -33,7 +33,8 @@ interface GeneratorSpec {
 
 const GENERATORS: GeneratorSpec[] = [
   { name: 'state_paired_delivery', function_name: 'state_paired_delivery_eval', expected_cadence_minutes: 15, conditional: true },
-  // wardrobe / gina_disclosure / gina_seed are conditional generators: their
+  // wardrobe is a conditional generator (gina_disclosure / gina_seed removed
+  // 2026-07-01 — policy: no disclosure to Gina; evals dropped in mig 624): its
   // _eval CONTINUEs to zero rows by design on most daily runs (pending-cooldown
   // 18h–14d, gap_min_days, readiness/arc gates, off-cooldown seed availability).
   // A 1440-min cadence → 48h freshness window they're quiet in by design, so a
@@ -43,8 +44,6 @@ const GENERATORS: GeneratorSpec[] = [
   // re-stagger wishes for. Marking them conditional drops these to info/quiet.
   { name: 'wardrobe_prescription', function_name: 'wardrobe_prescription_eval', expected_cadence_minutes: 1440, output_table: 'wardrobe_prescriptions', conditional: true },
   { name: 'cruising_lead_feminization', function_name: 'cruising_lead_feminization_eval', expected_cadence_minutes: 1440 },
-  { name: 'gina_disclosure', function_name: 'gina_disclosure_eval', expected_cadence_minutes: 1440, output_table: 'gina_disclosure_events', conditional: true },
-  { name: 'gina_seed', function_name: 'gina_seed_eval', expected_cadence_minutes: 1440, output_table: 'gina_seed_plantings', conditional: true },
   { name: 'cock_conditioning', function_name: 'cock_conditioning_eval', expected_cadence_minutes: 720, output_table: 'cock_conditioning_events', conditional: true },
   { name: 'pavlovian', function_name: 'pavlovian_eval', expected_cadence_minutes: 15, output_table: 'pavlovian_events', conditional: true },
   { name: 'warmup_tier', function_name: 'warmup_tier_eval', expected_cadence_minutes: 60, conditional: true },
@@ -73,9 +72,7 @@ async function checkGenerator(g: GeneratorSpec): Promise<CheckResult[]> {
   if (g.output_table) {
     const windowHours = Math.ceil(g.expected_cadence_minutes / 60) * 2;
     const since = new Date(Date.now() - windowHours * 3600 * 1000).toISOString();
-    const dateCol = g.output_table === 'gina_seed_plantings' ? 'scheduled_at'
-                  : g.output_table === 'cock_conditioning_events' ? 'assigned_at'
-                  : g.output_table === 'gina_disclosure_events' ? 'assigned_at'
+    const dateCol = g.output_table === 'cock_conditioning_events' ? 'assigned_at'
                   : g.output_table === 'wardrobe_prescriptions' ? 'assigned_at'
                   : 'created_at';
     const { count, error: qErr } = await supabase.from(g.output_table).select('id', { count: 'exact', head: true }).gte(dateCol, since);
@@ -107,7 +104,7 @@ async function checkDeliveryBridge(): Promise<CheckResult[]> {
 
 async function checkFulfillmentChain(): Promise<CheckResult[]> {
   const since = new Date(Date.now() - 7 * 86400 * 1000).toISOString();
-  const { data: rows } = await supabase.from('handler_decrees').select('trigger_source, status').gte('created_at', since).in('trigger_source', ['cock_conditioning','gina_disclosure_pressure','cruising_lead_feminization','gina_seed_planting','wardrobe_acquisition','wardrobe_rotation','pavlovian_pairing','pavlovian_trigger']);
+  const { data: rows } = await supabase.from('handler_decrees').select('trigger_source, status').gte('created_at', since).in('trigger_source', ['cock_conditioning','cruising_lead_feminization','wardrobe_acquisition','wardrobe_rotation','pavlovian_pairing','pavlovian_trigger']);
   const bySource: Record<string, { fulfilled: number; total: number }> = {};
   for (const r of (rows ?? []) as { trigger_source: string; status: string }[]) {
     if (!bySource[r.trigger_source]) bySource[r.trigger_source] = { fulfilled: 0, total: 0 };

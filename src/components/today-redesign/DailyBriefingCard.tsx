@@ -1,7 +1,7 @@
 /**
  * DailyBriefingCard — single "read this and you have the day" summary.
  * Pulls the highest-priority item from each domain (commitment, outfit,
- * playbook, drafts, slips) and renders them in a consolidated view.
+ * playbook, slips) and renders them in a consolidated view.
  * Reduces Today scroll fatigue — when she's pressed for time, this is
  * the card she reads.
  */
@@ -14,7 +14,6 @@ interface Briefing {
   topCommitment: { what: string; by_when: string; consequence: string } | null;
   outfitToday: { top?: string; bottom?: string; underwear?: string } | null;
   topPlaybookMove: { exact_line: string; channel: string; fires_at: string } | null;
-  topDraft: { recipient_name: string; channel: string; body: string } | null;
   recentSlipCount: number;
   slipPoints: number;
   urgencyTotal: number | null;
@@ -31,7 +30,7 @@ export function DailyBriefingCard() {
     const today = new Date().toISOString().slice(0, 10);
     const sevenAgo = new Date(Date.now() - 7 * 86400000).toISOString();
 
-    const [cmtRes, outfitRes, pbRes, draftRes, slipsRes, urgRes, stateRes] = await Promise.all([
+    const [cmtRes, outfitRes, pbRes, slipsRes, urgRes, stateRes] = await Promise.all([
       supabase.from('handler_commitments')
         .select('what, by_when, consequence')
         .eq('user_id', user.id).eq('status', 'pending')
@@ -43,10 +42,6 @@ export function DailyBriefingCard() {
         .select('exact_line, channel, fires_at')
         .eq('user_id', user.id).eq('status', 'queued')
         .order('fires_at', { ascending: true }).limit(1).maybeSingle(),
-      supabase.from('disclosure_drafts')
-        .select('recipient_name, channel, body, edited_body')
-        .eq('user_id', user.id).in('status', ['drafted', 'edited', 'ready'])
-        .order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('slip_log')
         .select('slip_points').eq('user_id', user.id).gte('detected_at', sevenAgo),
       supabase.from('hrt_urgency_state')
@@ -59,18 +54,13 @@ export function DailyBriefingCard() {
     const urg = urgRes.data as { total_bleed_cents?: number; resolved_at?: string | null } | null;
     const state = stateRes.data as { denial_day?: number; current_phase?: string } | null;
     const outfitRow = outfitRes.data as { prescription?: Record<string, string> } | null;
-    const draft = draftRes.data as { recipient_name: string; channel: string; body: string; edited_body: string | null } | null;
+    // disclosure_drafts row removed 2026-07-01 — policy: no disclosure to Gina.
     const pb = pbRes.data as { exact_line: string; channel: string; fires_at: string } | null;
 
     setB({
       topCommitment: (cmtRes.data as { what: string; by_when: string; consequence: string } | null) ?? null,
       outfitToday: outfitRow?.prescription ?? null,
       topPlaybookMove: pb ?? null,
-      topDraft: draft ? {
-        recipient_name: draft.recipient_name,
-        channel: draft.channel,
-        body: draft.edited_body || draft.body,
-      } : null,
       recentSlipCount: slips.length,
       slipPoints: slips.reduce((s, r) => s + r.slip_points, 0),
       urgencyTotal: urg && !urg.resolved_at ? (urg.total_bleed_cents || 0) / 100 : null,
@@ -84,7 +74,7 @@ export function DailyBriefingCard() {
 
   if (!b) return null;
 
-  const hasAnything = b.topCommitment || b.outfitToday || b.topPlaybookMove || b.topDraft || b.urgencyTotal != null;
+  const hasAnything = b.topCommitment || b.outfitToday || b.topPlaybookMove || b.urgencyTotal != null;
   if (!hasAnything) return null;
 
   return (
@@ -138,13 +128,6 @@ export function DailyBriefingCard() {
         </Row>
       )}
 
-      {b.topDraft && (
-        <Row label="disclosure draft" tone="#f4c272">
-          <div style={{ fontSize: 11.5, color: '#e8e6e3' }}>
-            for <strong>{b.topDraft.recipient_name}</strong> via {b.topDraft.channel}: "{b.topDraft.body.slice(0, 120)}{b.topDraft.body.length > 120 ? '…' : ''}"
-          </div>
-        </Row>
-      )}
     </div>
   );
 }

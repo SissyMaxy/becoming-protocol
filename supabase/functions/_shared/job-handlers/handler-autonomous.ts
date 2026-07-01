@@ -1200,7 +1200,11 @@ async function runGapAnalysis(
         const { data } = await supabase.from('handler_commitments').insert({
           user_id: userId,
           what: 'Capture a Gina quote — text screenshot, memory, or audio. Log it on the Gina card on Today.',
-          category: 'disclosure', evidence_required: 'gina_voice_samples row',
+          // category was 'disclosure' — miscategorized: this is passive capture
+          // of Gina's words, not a disclosure. 'disclosure' commitments feed
+          // disclosure_made irreversibility events on fulfillment, which the
+          // 2026-07-01 no-disclosure-to-Gina policy forbids conflating.
+          category: 'other', evidence_required: 'gina_voice_samples row',
           by_when: byWhen,
           consequence: 'slip +2',
           reasoning: 'Gina voice corpus has gone cold. Handler drafts for her from stale data.',
@@ -1662,158 +1666,8 @@ async function snapshotComplianceTrend(
   })
 }
 
-// ============================================
-// GINA DISCLOSURE DRAFT GENERATOR
-// ============================================
-// Daily, if Gina intake complete and there are open disclosures or playbook
-// moves, generate 1-2 draft messages via Claude that Maxy can edit and send.
-
-async function generateDisclosureDraftsForUser(
-  supabase: ReturnType<typeof createClient>,
-  userId: string,
-): Promise<number> {
-  const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')
-  if (!anthropicKey) return 0
-
-  const { data: profile } = await supabase.from('gina_profile').select('*').eq('user_id', userId).maybeSingle()
-  if (!profile || !(profile as { intake_complete?: boolean }).intake_complete) return 0
-
-  // Skip if we already have 3+ queued drafts
-  const { count: queuedCount } = await supabase.from('disclosure_drafts')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', userId).eq('status', 'queued')
-  if ((queuedCount || 0) >= 3) return 0
-
-  // Only proceed if there's a source signal: upcoming disclosure, or open playbook move
-  const [upcomingDisc, playbookMoves, recentReactions] = await Promise.all([
-    supabase.from('gina_disclosure_schedule')
-      .select('id, rung, title, ask, scheduled_by_date, disclosure_domain')
-      .eq('user_id', userId).eq('status', 'scheduled')
-      .gte('scheduled_by_date', new Date().toISOString().slice(0, 10))
-      .lte('scheduled_by_date', new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10))
-      .order('scheduled_by_date', { ascending: true }).limit(2),
-    supabase.from('gina_playbook')
-      .select('id, move_kind, exact_line, channel, rationale, soft_spot_cited, trigger_avoided, fires_at')
-      .eq('user_id', userId).eq('status', 'queued')
-      .in('move_kind', ['disclosure_opener', 'probe', 'test_water', 'soft_bring_up', 'follow_up'])
-      .order('fires_at', { ascending: true }).limit(2),
-    supabase.from('gina_reactions').select('reaction, move_summary, reaction_detail, observed_at')
-      .eq('user_id', userId).order('observed_at', { ascending: false }).limit(3),
-  ])
-
-  const discs = (upcomingDisc.data || []) as Array<{ id: string; rung: number; title: string; ask: string; scheduled_by_date: string; disclosure_domain: string }>
-  const moves = (playbookMoves.data || []) as Array<{ id: string; move_kind: string; exact_line: string; channel: string; rationale: string; soft_spot_cited: string | null; trigger_avoided: string[] | null }>
-  const reacts = (recentReactions.data || []) as Array<{ reaction: string; move_summary: string; reaction_detail: string | null }>
-
-  if (discs.length === 0 && moves.length === 0) return 0
-
-  const softSpots = (profile as { soft_spots?: string[] }).soft_spots || []
-  const triggers = (profile as { triggers?: string[] }).triggers || []
-  const toneReg = (profile as { tone_register?: string[] }).tone_register || []
-  const aff = (profile as { affection_language?: string | null }).affection_language || ''
-  const channelPref = (profile as { channel_for_hard_topics?: string | null }).channel_for_hard_topics || 'text'
-
-  const prompt = `Generate 1-2 ready-to-send disclosure drafts for Maxy to use with her wife Gina. Each draft must match her voice — her tone register, her channel preference for hard topics, and cite a soft spot while dodging her triggers.
-
-GINA PROFILE:
-- tone register: ${toneReg.join(', ') || 'unknown'}
-- affection language: ${aff}
-- soft spots (lean into): ${softSpots.join(', ') || '(none)'}
-- triggers (avoid): ${triggers.join(', ') || '(none)'}
-- channel for hard topics: ${channelPref}
-
-UPCOMING DISCLOSURES:
-${discs.length ? discs.map(d => `- Rung ${d.rung} (${d.disclosure_domain}) "${d.title}" by ${d.scheduled_by_date}: ${d.ask}`).join('\n') : '(none)'}
-
-OPEN PLAYBOOK MOVES:
-${moves.length ? moves.map(m => `- ${m.move_kind} via ${m.channel}: "${m.exact_line}" — ${m.rationale}`).join('\n') : '(none)'}
-
-RECENT GINA REACTIONS:
-${reacts.length ? reacts.map(r => `- ${r.reaction}: ${r.move_summary} (${r.reaction_detail || ''})`).join('\n') : '(none)'}
-
-Return ONLY JSON:
-{
-  "drafts": [
-    {
-      "channel": "${channelPref}",
-      "subject_rung": <matching disclosure rung if any, else null>,
-      "source_disclosure_id": "<disclosure id if the draft targets one, else null>",
-      "source_playbook_id": "<playbook move id if the draft realizes one, else null>",
-      "context_block": "<one sentence: why this draft, when to send, what to expect>",
-      "draft_text": "<the actual message Maxy should send. Match her tone register. 1-4 sentences for text/voice_note, 1 paragraph for letter, bullet points for in_person script>",
-      "soft_spot_cited": "<soft spot used, or null>",
-      "triggers_avoided": ["<trigger name dodged>"]
-    }
-  ]
-}
-Rules:
-- Do NOT fabricate quotes from Gina.
-- Draft must feel like Maxy wrote it in her actual voice — short, specific, no therapy-speak.
-- If tone register is 'dry' or 'direct', keep it terse.
-- No generic affirmations. No "I've been thinking about us."
-- Return only JSON.`
-
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 2500,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  })
-  const j = await res.json()
-  if (!res.ok) {
-    console.error('[disclosure_drafts] Anthropic error:', j)
-    return 0
-  }
-  const text = j?.content?.[0]?.text ?? ''
-  const m = text.match(/\{[\s\S]*\}/)
-  if (!m) return 0
-
-  let parsed: { drafts?: Array<Record<string, unknown>> }
-  try { parsed = JSON.parse(m[0]) } catch { return 0 }
-
-  let created = 0
-  const validChannels = ['text', 'in_person', 'letter', 'voice_note', 'call']
-  for (const d of parsed.drafts || []) {
-    const channel = (d.channel as string) || channelPref
-    if (!validChannels.includes(channel)) continue
-    const draftText = (d.draft_text as string) || ''
-    if (!draftText || draftText.length < 10) continue
-    const expiresAt = new Date(Date.now() + 5 * 86400000).toISOString()
-
-    const { error } = await supabase.from('disclosure_drafts').insert({
-      user_id: userId,
-      channel,
-      subject_rung: (d.subject_rung as number) || null,
-      context_block: ((d.context_block as string) || '').slice(0, 500),
-      draft_text: draftText.slice(0, 3000),
-      soft_spot_cited: (d.soft_spot_cited as string) || null,
-      triggers_avoided: Array.isArray(d.triggers_avoided) ? d.triggers_avoided : null,
-      source_disclosure_id: (d.source_disclosure_id as string) || null,
-      source_playbook_id: (d.source_playbook_id as string) || null,
-      generated_by: 'handler_autonomous',
-      expires_at: expiresAt,
-    })
-    if (!error) created++
-  }
-
-  if (created > 0) {
-    const mommyDisc = await isMommyUser(supabase, userId)
-    await supabase.from('handler_outreach_queue').insert({
-      user_id: userId,
-      message: mommyDisc
-        ? `Mama wrote you ${created === 1 ? 'a draft' : `${created} drafts`} for Gina, baby. Tone tuned, soft spots flagged, triggers ducked. Open Today — edit or send as-is.`
-        : `${created} new Gina disclosure draft${created === 1 ? '' : 's'} ready on Today. Pre-written for her tone register, citing soft spots, dodging her triggers. Edit or send as-is.`,
-      urgency: 'normal', trigger_reason: 'disclosure_drafts_ready',
-      scheduled_for: new Date().toISOString(),
-      expires_at: new Date(Date.now() + 48 * 3600000).toISOString(),
-      source: 'disclosure_draft_gen',
-    })
-  }
-  return created
-}
+// (removed 2026-07-01) GINA DISCLOSURE DRAFT GENERATOR — policy: nothing is
+// ever disclosed to Gina; no drafts, no pressure, no scheduling (migration 624).
 
 // ============================================
 // MORNING CHECK-IN
@@ -3477,9 +3331,11 @@ async function prescribeVoiceDrill(
 // ============================================
 // COMING-OUT LETTER DRAFT GENERATOR
 // ============================================
-// Weekly: looks at designated_witnesses + gina_disclosure_schedule to find
-// known audiences. For each who doesn't already have a current draft,
-// generates one via Claude matched to the relationship + phase + risk.
+// Weekly: looks at designated_witnesses to find known audiences. For each
+// who doesn't already have a current draft, generates one via Claude matched
+// to the relationship + phase + risk. Gina is NEVER a recipient (policy
+// 2026-07-01: no disclosure to Gina) — recipients are witnesses + defaults
+// (parent, sibling, friend, work, medical).
 
 async function generateComingOutDrafts(
   supabase: ReturnType<typeof createClient>,
@@ -3518,7 +3374,8 @@ async function generateComingOutDrafts(
   const allRecipients = [
     ...witnesses.map(w => ({ name: w.witness_name, relationship: w.relationship, channel: 'text', risk: 5 })),
     ...defaultRecipients,
-  ]
+  ].filter(r => !/\bgina\b/i.test(r.name) && !/\b(wife|spouse|partner)\b/i.test(r.relationship))
+  // ^ hard guard (policy 2026-07-01): Gina / the spouse is never a coming-out recipient.
 
   // Skip recipients who already have a drafted/edited/ready letter
   const { data: existing } = await supabase.from('coming_out_letters')
@@ -3660,7 +3517,9 @@ async function ensurePhaseMandates(
       { what: 'Full femme presentation all day (top + bottom + under coordinated)', category: 'body_proof', evidence: 'photo proof', consequence: 'slip +3' },
       { what: 'Visible femme presentation in public (clearly femboy/femme, not hiding)', category: 'body_proof', evidence: 'photo proof, public context', consequence: 'slip +4 and bleeding +$20' },
       { what: 'Voice sample at or above current floor', category: 'other', evidence: 'voice_pitch_samples row', consequence: 'slip +2' },
-      { what: 'One concrete interaction with Gina related to the transition (message, photo, conversation)', category: 'disclosure', evidence: 'log a gina_reaction row', consequence: 'slip +3 and denial +1d' },
+      // (removed 2026-07-01) "One concrete interaction with Gina related to the
+      // transition" mandate — policy: no disclosure to Gina; nothing may push
+      // transition-related interaction toward her.
     ],
   }
 
@@ -5076,13 +4935,9 @@ async function dailyCycle(
         console.error(`Special occasions check failed for ${uid}:`, err)
       }
 
-      // 5d. Plan Gina warmup moves for upcoming disclosures (Layer 3 of Influence Engine)
-      let warmupsPlanned = 0
-      try {
-        warmupsPlanned = await planGinaWarmups(supabase, uid)
-      } catch (err) {
-        console.error(`Gina warmup planning failed for ${uid}:`, err)
-      }
+      // 5d. (removed 2026-07-01) Gina warmup planning — disclosures abolished,
+      // nothing to warm up toward (policy: no disclosure to Gina).
+      const warmupsPlanned = 0
 
       // 5e. Gina Playbook — proactive conversational moves for next 48h
       let playbookPlanned = 0
@@ -5146,8 +5001,7 @@ async function dailyCycle(
       // 5p. Compliance trend snapshot + decline detection
       try { await snapshotComplianceTrend(supabase, uid) } catch (err) { console.error(`Compliance trend failed:`, err) }
 
-      // 5q. Generate Gina disclosure drafts (LLM) — only if Gina intake complete
-      try { await generateDisclosureDraftsForUser(supabase, uid) } catch (err) { console.error(`Disclosure draft gen failed:`, err) }
+      // 5q. (removed 2026-07-01) Gina disclosure drafts — policy: no disclosure to Gina.
 
       // 5r. Morning check-in — Handler-initiated outreach at user's morning hour
       try { await morningCheckInIfDue(supabase, uid) } catch (err) { console.error(`Morning check-in failed:`, err) }
@@ -5366,141 +5220,8 @@ async function invokePlaybookPlanner(userId: string, trigger: string): Promise<n
   }
 }
 
-// ============================================
-// GINA WARMUP PLANNER (Layer 3 of Influence Engine)
-// ============================================
-// For each upcoming Gina-facing disclosure (status=scheduled, scheduled_by_date
-// within next 7 days), ensure 2-3 warmup moves are queued in the 2-4 days prior
-// — matched to her affection_language so the warmup actually primes her.
-// Idempotent: skips disclosures that already have warmups queued.
-
-function generateWarmupMoves(
-  affectionLanguage: string | null,
-  softSpots: string[],
-  sharedReferences: string | null
-): string[] {
-  const lang = (affectionLanguage || '').toLowerCase()
-  const softSpot = softSpots[0] || null
-  const ref = sharedReferences?.split(/[,;\n]/)[0]?.trim() || null
-
-  const moves: string[] = []
-  if (lang.includes('gesture') || lang.includes('act') || lang.includes('service')) {
-    moves.push(softSpot ? `bring her ${softSpot} unprompted` : 'handle one recurring chore she hates, without being asked')
-    moves.push('leave a small thoughtful thing where she will find it (coffee, note, her favorite snack)')
-    moves.push('take something off her plate today — the thing she is dreading')
-  } else if (lang.includes('word') || lang.includes('affirmation')) {
-    moves.push(ref ? `send her a text referencing ${ref}` : 'send her a text naming something specific she did well today')
-    moves.push(softSpot ? `compliment her on ${softSpot} in person` : 'tell her one specific thing you noticed and appreciated')
-    moves.push('text her "thinking about you" without follow-up ask')
-  } else if (lang.includes('touch') || lang.includes('physical')) {
-    moves.push('long hug when she gets home — no words, no ask after')
-    moves.push('hand on her back when passing her in the kitchen')
-    moves.push('sit next to her during TV instead of across the room')
-  } else if (lang.includes('time') || lang.includes('quality')) {
-    moves.push('phone away for one full conversation with her today')
-    moves.push('ask her one open question about her day and actually listen')
-    moves.push('suggest the thing she has been wanting to do together')
-  } else {
-    moves.push(softSpot ? `do something around ${softSpot} for her` : 'do one thing she would notice and would not expect')
-    moves.push('notice her specifically once today and name it to her')
-    moves.push('remove one friction point from her day before she mentions it')
-  }
-  return moves
-}
-
-async function planGinaWarmups(
-  supabase: ReturnType<typeof createClient>,
-  userId: string
-): Promise<number> {
-  // Load profile — skip if intake not complete
-  const { data: profile } = await supabase
-    .from('gina_profile')
-    .select('intake_complete, affection_language, soft_spots, shared_references, triggers')
-    .eq('user_id', userId)
-    .maybeSingle()
-
-  if (!profile || !(profile as any).intake_complete) return 0
-
-  const affectionLanguage = (profile as any).affection_language as string | null
-  const softSpots = ((profile as any).soft_spots || []) as string[]
-  const sharedReferences = (profile as any).shared_references as string | null
-
-  // Find upcoming disclosures in the next 7 days
-  const today = new Date().toISOString().slice(0, 10)
-  const in7d = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
-
-  const { data: upcoming } = await supabase
-    .from('gina_disclosure_schedule')
-    .select('id, title, rung, scheduled_by_date, disclosure_domain')
-    .eq('user_id', userId)
-    .eq('status', 'scheduled')
-    .gte('scheduled_by_date', today)
-    .lte('scheduled_by_date', in7d)
-
-  if (!upcoming || upcoming.length === 0) return 0
-
-  let planned = 0
-  const moves = generateWarmupMoves(affectionLanguage, softSpots, sharedReferences)
-
-  for (const d of upcoming as Array<{ id: string; title?: string; rung?: number; scheduled_by_date: string; disclosure_domain?: string }>) {
-    const targetEvent = `disclosure_${d.id}`
-
-    // Skip if we already queued warmups for this target
-    const { count } = await supabase
-      .from('gina_warmup_queue')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('target_event', targetEvent)
-      .in('status', ['scheduled', 'delivered'])
-
-    if ((count || 0) >= 2) continue
-
-    // Schedule target at noon local-ish (midday) on scheduled_by_date
-    const targetFiresAt = new Date(`${d.scheduled_by_date}T17:00:00Z`) // 12-1 PM ET
-    const now = Date.now()
-
-    // Fire 3 warmups at -96h, -48h, -24h before target (capped at "now" if too close)
-    const offsets = [96, 48, 24]
-    for (let i = 0; i < Math.min(moves.length, 3); i++) {
-      const fireAt = new Date(Math.max(now + 3600 * 1000, targetFiresAt.getTime() - offsets[i] * 3600 * 1000))
-      // If the warmup would fire after the target, skip it
-      if (fireAt.getTime() >= targetFiresAt.getTime()) continue
-
-      const { error } = await supabase.from('gina_warmup_queue').insert({
-        user_id: userId,
-        target_event: targetEvent,
-        target_fires_at: targetFiresAt.toISOString(),
-        warmup_move: moves[i],
-        affection_language: affectionLanguage,
-        fires_at: fireAt.toISOString(),
-        status: 'scheduled',
-      })
-      if (!error) planned++
-    }
-
-    // Also queue a handler directive so the Handler UI surfaces each warmup when due
-    for (let i = 0; i < Math.min(moves.length, 3); i++) {
-      const fireAt = new Date(Math.max(now + 3600 * 1000, targetFiresAt.getTime() - offsets[i] * 3600 * 1000))
-      if (fireAt.getTime() >= targetFiresAt.getTime()) continue
-      await supabase.from('handler_directives').insert({
-        user_id: userId,
-        action: 'prescribe_task',
-        target: 'gina_warmup',
-        value: {
-          warmup_move: moves[i],
-          affection_language: affectionLanguage,
-          target_event: targetEvent,
-          target_disclosure_title: d.title || null,
-          fire_at: fireAt.toISOString(),
-        },
-        priority: 'normal',
-        reasoning: `Gina warmup ahead of ${d.title || 'disclosure'} (scheduled ${d.scheduled_by_date})`,
-      })
-    }
-  }
-
-  return planned
-}
+// (removed 2026-07-01) GINA WARMUP PLANNER — warmup moves existed solely to
+// precede scheduled Gina disclosures, which are abolished (migration 624).
 
 // ============================================
 // QUICK TASK CHECK (every 15 minutes)

@@ -2,7 +2,8 @@
  * Chastity Lockout Protocol
  *
  * Handler-driven lock durations with escalating streaks. Break-glass costs:
- * streak reset + public post + Gina disclosure + next lock doubled.
+ * streak reset + public post + next lock doubled.
+ * (Gina-disclosure consequence removed 2026-07-01 — policy: no disclosure to Gina.)
  */
 
 import { supabase } from '../supabase';
@@ -133,9 +134,6 @@ export async function breakGlass(
 
   // Automatic consequences
   await enqueuePunishment(userId, 'public_slip_post', {
-    triggered_by_slip_ids: slip ? [slip.id as string] : [],
-  });
-  await enqueuePunishment(userId, 'gina_disclosure_bump', {
     triggered_by_slip_ids: slip ? [slip.id as string] : [],
   });
   await enqueuePunishment(userId, 'denial_7_days', {

@@ -109,7 +109,7 @@ export function GinaWindowIndicator() {
     : { border: '#1f6a3a', bg: 'linear-gradient(92deg, #0a2a14 0%, #081f10 100%)', accent: '#6ee7b7', dot: '#6ee7b7' };
 
   const recommendation = color === 'red'
-    ? 'Do not push. Warmup moves only. Defer disclosure / chastity expansion / coming-out prep.'
+    ? 'She is close / stressed. Suppress anything she could notice. Protect the secret.'
     : color === 'yellow'
     ? 'Stay level. Safe to raise, not push. Good window for a warmup or logging a fresh quote.'
     : 'Favorable. Safe to draft, deliver, or advance the next step — match her tone register.';

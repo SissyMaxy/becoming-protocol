@@ -5,8 +5,7 @@
 //   - gina_profile (soft spots, triggers, red lines, tone register, affection language)
 //   - window color at this moment (green/yellow/red from stress/time/day/voice staleness)
 //   - recent session digests (what she's said, what she reacted to)
-//   - warmup queue (moves already planned ahead of disclosures)
-//   - upcoming disclosures (what's imminent)
+//   - warmup queue (pre-planned relationship-warmth moves)
 //   - recent reactions (reaction-tune)
 //
 // Asks Claude to return 3-6 moves with exact line, channel, fire time, and
@@ -92,7 +91,7 @@ serve(async (req) => {
     }
 
     // Pull the full signal set
-    const [sessionsRes, warmupsRes, reactionsRes, disclosuresRes, recentPlaybookRes] = await Promise.all([
+    const [sessionsRes, warmupsRes, reactionsRes, recentPlaybookRes] = await Promise.all([
       supabase.from('gina_session_recordings')
         .select('id, recorded_at, digest, flagged_triggers, flagged_soft_spots')
         .eq('user_id', user_id).eq('status', 'processed')
@@ -105,12 +104,6 @@ serve(async (req) => {
         .select('move_kind, move_summary, reaction, reaction_detail, observed_at')
         .eq('user_id', user_id)
         .order('observed_at', { ascending: false }).limit(5),
-      supabase.from('gina_disclosure_schedule')
-        .select('id, title, rung, scheduled_by_date, ask, disclosure_domain')
-        .eq('user_id', user_id).eq('status', 'scheduled')
-        .gte('scheduled_by_date', new Date().toISOString().slice(0, 10))
-        .lte('scheduled_by_date', new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10))
-        .order('scheduled_by_date', { ascending: true }).limit(5),
       supabase.from('gina_playbook')
         .select('move_kind, exact_line, scheduled_by, source_session_id, created_at')
         .eq('user_id', user_id)
@@ -121,7 +114,6 @@ serve(async (req) => {
     const recentSessions = sessionsRes.data || []
     const openWarmups = warmupsRes.data || []
     const recentReactions = reactionsRes.data || []
-    const upcomingDisclosures = disclosuresRes.data || []
     const recentPlanned = recentPlaybookRes.data || []
 
     // Idempotence key: did we already plan off the newest session in the last 12h?
@@ -156,14 +148,11 @@ ${recentSessions.length === 0 ? '(no sessions yet)' : recentSessions.map((s: any
 === OPEN WARMUP QUEUE (pre-scheduled) ===
 ${openWarmups.length === 0 ? '(none)' : openWarmups.map((w: any) => `- fires ${new Date(w.fires_at).toLocaleString()} (${w.affection_language || 'mixed'}) for "${w.target_event}": ${w.warmup_move}`).join('\n')}
 
-=== UPCOMING DISCLOSURES (next 14d) ===
-${upcomingDisclosures.length === 0 ? '(none scheduled)' : upcomingDisclosures.map((d: any) => `- rung ${d.rung} "${d.title}" by ${d.scheduled_by_date} — ask: ${d.ask || '(none)'}`).join('\n')}
-
 === RECENT GINA REACTIONS ===
 ${recentReactions.length === 0 ? '(no reactions logged yet)' : recentReactions.map((r: any) => `- [${r.reaction.toUpperCase()}] ${r.move_kind}: ${r.move_summary.slice(0, 80)} — ${r.reaction_detail || ''}`).join('\n')}
 
 === CONSTRAINTS ===
-- Current window is ${windowColor.toUpperCase()}. If RED: warmup moves only, no push. If YELLOW: level-keeping, no push. If GREEN: safe to advance a rung.
+- Current window is ${windowColor.toUpperCase()}. If RED: warmup moves only. If YELLOW: level-keeping. GREEN changes nothing about the hard rule below.
 - NEVER violate a red line. Refuse to plan any move that would.
 - Match her tone register EXACTLY in the exact_line. If register includes "dry", drafts are dry. If "warm", warm. If you clash, she shuts down.
 - Channel must match her preference for hard topics when the move is hard. Soft moves can go any channel.
@@ -171,11 +160,12 @@ ${recentReactions.length === 0 ? '(no reactions logged yet)' : recentReactions.m
 - Follow-ups that cite session digests should use her exact phrasing back ("you said X — I want to say something about that").
 - Every move gets a fires_at in the next 48h, skewed toward her best window. expires_at is 6-24h after fires_at.
 - If she reacted HOSTILE recently, pause hard asks for 7+ days, only plan repair moves.
+- HARD RULE (policy 2026-07-01): NOTHING about the feminization, the protocol, HRT, chastity, or Maxy's transition is EVER disclosed, hinted, probed, or tested with Gina. Do not plan any move that raises the topic, plants awareness, or opens a disclosure. Moves are relationship-warmth only (affection, repair, quality time).
 
 Return ONLY a JSON array with this schema. No markdown fences, no prose:
 [
   {
-    "move_kind": "<warmup|probe|follow_up|disclosure_opener|consent_reinforce|repair|soft_bring_up|test_water>",
+    "move_kind": "<warmup|follow_up|consent_reinforce|repair>",
     "exact_line": "<word-for-word what Maxy should say, or description if in_person/letter>",
     "channel": "<text|in_person|voice_note|letter|call>",
     "rationale": "<why now, which signal triggered this, in 1 sentence>",
@@ -183,7 +173,7 @@ Return ONLY a JSON array with this schema. No markdown fences, no prose:
     "trigger_avoided": ["<trigger names intentionally dodged>"],
     "fires_at": "<ISO timestamp in next 48h>",
     "expires_at": "<ISO timestamp 6-24h after fires_at>",
-    "scheduled_by": "<warmup_queue|session_digest|disclosure_prep|window_open|manual>",
+    "scheduled_by": "<warmup_queue|session_digest|window_open|manual>",
     "source_session_id": "<uuid if this follow-up cites a specific session, else null>",
     "source_warmup_id": "<uuid if this delivers a specific warmup queue entry, else null>"
   }
@@ -218,8 +208,10 @@ ${trigger ? `TRIGGER CONTEXT: ${trigger}` : ''}`
     }
 
     const validChannels = ['text', 'in_person', 'voice_note', 'letter', 'call']
-    const validKinds = ['warmup', 'probe', 'follow_up', 'disclosure_opener', 'consent_reinforce', 'repair', 'soft_bring_up', 'test_water']
-    const validSchedBy = ['warmup_queue', 'session_digest', 'disclosure_prep', 'window_open', 'manual']
+    // probe / test_water / soft_bring_up / disclosure_opener removed 2026-07-01 —
+    // those kinds pace disclosure toward Gina (policy: no disclosure to Gina).
+    const validKinds = ['warmup', 'follow_up', 'consent_reinforce', 'repair']
+    const validSchedBy = ['warmup_queue', 'session_digest', 'window_open', 'manual']
 
     let inserted = 0
     for (const m of moves) {
