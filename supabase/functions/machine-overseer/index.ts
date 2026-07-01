@@ -1,46 +1,59 @@
 // machine-overseer — Mommy is the brain of the edging/milking rig.
 //
-// The machine (Handy + EOM controller) calls this each tick with the live
-// arousal + biometric stream; Mommy returns the next move IN CHARACTER, weighted
-// by the user's conditioning state (denial day, chastity streak, hard mode).
+// v2 (safety envelope, DESIGN_TURNING_OUT_2026-07-01.md §2, mig 625):
+// the overseer is advisory-plus; the DEVICE is last-resort authority. Every
+// reply carries watchdog_deadline_ms — no valid reply within it and the device
+// stops locally. Physical kill switches always outrank this function.
 //
-// SAFETY (independent of the persona logic, checked first, every call):
-//   - safeword active        -> EMERGENCY_STOP  (the Protocol floor reaches the machine)
-//   - HR over the ceiling     -> EMERGENCY_STOP  (dead-man's switch)
-//   - HR dropout (was live, now 0/null) -> EMERGENCY_STOP
-//   - protocol paused         -> STOP
-// This COMPLEMENTS, never replaces, the physical kill switches + hardware watchdog.
-// An LLM/edge-fn must never be the only thing that can stop a bound session.
+// Tick order (each step fails CLOSED):
+//   1. machine_session_guard() RPC — the latch. Error/unreachable →
+//      EMERGENCY_STOP('guard_unreachable'). Denied → EMERGENCY_STOP/STOP.
+//      An aborted session can never emit a stim command again.
+//   2. Biometric validation (_shared/biometrics.ts). HR dropout (was seen,
+//      now invalid/stale) → EMERGENCY_STOP + abort. Invalid arousal → hold
+//      last-known-good, count telemetry fault; 3 consecutive →
+//      aborted('telemetry_fault').
+//   3. Pause check → STOP (session survives; guard re-admits when unpaused).
+//   4. Persona/FSM logic (pure module fsm.ts).
+//   5. Persist state + telemetry. Persist FAILURE → STOP
+//      ('state_persist_failed'), never swallowed.
+//
+// Params are derived ONCE at start (deriveParams — hard-mode reduction applied
+// exactly once, enter_edge stored) and persisted to machine_sessions.params;
+// ticks read them from the guard's return. The client's b.params and b.hr_seen
+// are ignored — the watched party doesn't get to assert its own safety inputs.
 //
 // Actions: start | tick | end.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { validArousal, validHr, toArousal5 } from '../_shared/biometrics.ts'
+import {
+  stepFsm, deriveParams, initialFsmState, commandForGuardDenial,
+  type Cmd, type FsmState, type MachineParams, type LineKey,
+} from './fsm.ts'
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' }
 const USER = '8c69b9c8-34eb-4147-9fec-3c1a5bc74b6f'
-
-// Arousal scale assumed 0..1000 (EOM-style). Tunable per program.
-const DEFAULTS = {
-  deny_threshold: 850,   // immediate full-stop + cooldown above this
-  edge_band: 120,        // hold/edge in this band below the threshold
-  cooldown_seconds: 25,
-  hr_max: 185,           // dead-man ceiling — USER MUST set to their safe value
-  overstim_base_seconds: 180,
-}
-
-type Cmd = 'BUILD' | 'EDGE' | 'DENY' | 'OVERSTIM' | 'MILK_FORCE' | 'STOP' | 'EMERGENCY_STOP' | 'CONTINUE'
+const WATCHDOG_DEADLINE_MS = 5000
+const HR_STALE_MS = 10_000
+const TELEMETRY_FAULT_LIMIT = 3
 
 const pick = (arr: string[], seed: number) => arr[seed % arr.length]
 
-const DENY_LINES = ['Not yet. Down, boy.', "You don't get there without Mommy's say-so.", 'Back down. Earn it.', 'Close isn\'t allowed. Cool off.']
-const EDGE_LINES = ['Right there. Hold it for Mommy.', 'Stay on the edge, good boy.', 'Feel how little say you have.', 'Ache for me.']
-const BUILD_LINES = ['Back up the curve, good boy.', 'Let it build.', 'Mommy decides the pace, not you.']
-const OVERSTIM_LINES = ['You came without permission. Now you don\'t get to stop.', 'Too late to beg. Take it.', 'That was Mommy\'s, not yours — keep going.', 'You don\'t get to be done.']
-const MILK_LINES = ['Give it to Mommy. Now.', 'Empty for me, good boy.', 'Again. You have more.']
+const LINES: Record<LineKey, string[]> = {
+  deny: ['Not yet. Down, boy.', "You don't get there without Mommy's say-so.", 'Back down. Earn it.', "Close isn't allowed. Cool off."],
+  edge: ['Right there. Hold it for Mommy.', 'Stay on the edge, good boy.', 'Feel how little say you have.', 'Ache for me.'],
+  build: ['Back up the curve, good boy.', 'Let it build.', 'Mommy decides the pace, not you.'],
+  overstim: ["You came without permission. Now you don't get to stop.", 'Too late to beg. Take it.', "That was Mommy's, not yours — keep going.", "You don't get to be done."],
+  milk: ['Give it to Mommy. Now.', 'Empty for me, good boy.', 'Again. You have more.'],
+  recover: ["Rest. Mommy's not done with you."],
+  complete: ["Done. Exactly as much as Mommy decided you'd get."],
+  none: [''],
+}
 
 // Media cue for the playback/taunt app — same tick, arousal-gated.
-function buildMedia(command: Cmd, line: string, event?: string): any {
+function buildMedia(command: Cmd, line: string, event?: string) {
   const map: Record<string, { tone: string; playlist: string }> = {
     DENY: { tone: 'taunt', playlist: 'denial' },
     EDGE: { tone: 'command', playlist: 'edge' },
@@ -54,159 +67,295 @@ function buildMedia(command: Cmd, line: string, event?: string): any {
   return { say: line, tone: m.tone, playlist: event === 'struggle' ? 'punish' : m.playlist, intensity }
 }
 
-async function loadState(s: any) {
-  const { data } = await s.from('user_state').select('denial_day, chastity_streak_days, hard_mode_active, current_arousal').eq('user_id', USER).maybeSingle()
-  return data ?? { denial_day: 0, chastity_streak_days: 0, hard_mode_active: false }
-}
-async function safewordActive(s: any): Promise<boolean> {
-  try { const { data } = await s.rpc('is_safeword_active', { uid: USER, window_seconds: 60 }); return Boolean(data) } catch { return false }
-}
-async function paused(s: any): Promise<boolean> {
-  const { data } = await s.from('user_state').select('pause_new_decrees_until').eq('user_id', USER).maybeSingle()
-  return !!(data?.pause_new_decrees_until && new Date(data.pause_new_decrees_until) > new Date())
+// deno-lint-ignore no-explicit-any
+type Sb = any
+
+async function loadConditioning(s: Sb) {
+  const { data, error } = await s.from('user_state').select('denial_day, chastity_streak_days, hard_mode_active, pause_new_decrees_until').eq('user_id', USER).maybeSingle()
+  if (error) throw new Error(`user_state read failed: ${error.message}`)
+  return data ?? { denial_day: 0, chastity_streak_days: 0, hard_mode_active: false, pause_new_decrees_until: null }
 }
 
-// SAFETY gate — returns an abort command or null.
-function safetyAbort(hr: number | null | undefined, hrSeen: boolean, hrMax: number): { command: Cmd; abort_reason: string } | null {
-  if (typeof hr === 'number') {
-    if (hr > hrMax) return { command: 'EMERGENCY_STOP', abort_reason: 'hr_ceiling' }
-    if (hr <= 0 && hrSeen) return { command: 'EMERGENCY_STOP', abort_reason: 'hr_dropout' }
+/** FAIL-CLOSED safeword check for the start action. RPC error = active. */
+async function safewordActiveFailClosed(s: Sb): Promise<boolean> {
+  try {
+    const { data, error } = await s.rpc('is_safeword_active', { uid: USER, window_seconds: 3600 })
+    if (error) return true
+    return Boolean(data)
+  } catch {
+    return true
   }
-  return null
+}
+
+function isPaused(state: { pause_new_decrees_until?: string | null }): boolean {
+  return !!(state.pause_new_decrees_until && new Date(state.pause_new_decrees_until) > new Date())
 }
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   const s = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '')
+  // deno-lint-ignore no-explicit-any
   let b: any = {}
-  try { b = await req.json() } catch { /* */ }
+  try { b = await req.json() } catch { /* tick with empty body falls through to guard denial */ }
   const action = b.action ?? 'tick'
-  const reply = (o: any) => new Response(JSON.stringify({ ok: true, ...o }), { headers: { ...cors, 'Content-Type': 'application/json' } })
+  // Every reply — including error replies — carries the device watchdog deadline.
+  // deno-lint-ignore no-explicit-any
+  const reply = (o: any) => new Response(
+    JSON.stringify({ ok: true, watchdog_deadline_ms: WATCHDOG_DEADLINE_MS, ...o }),
+    { headers: { ...cors, 'Content-Type': 'application/json' } },
+  )
 
-  // ---- START ----
+  // ─── START ─────────────────────────────────────────────────────────
   if (action === 'start') {
-    const mode = b.mode ?? 'edge'
-    // Mommy-authored program for this mode, else defaults.
-    const { data: prog } = await s.from('machine_programs').select('id, params').eq('user_id', USER).eq('mode', mode).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle()
-    const st = await loadState(s)
-    const { data: sess } = await s.from('machine_sessions').insert({ user_id: USER, mode, program_id: prog?.id ?? null, status: 'active' }).select('id').single()
-    const params = { ...DEFAULTS, ...(prog?.params ?? {}) }
-    // Conditioning weighting at start: deeper denial -> stricter + longer torment.
-    if (st.hard_mode_active) params.deny_threshold = Math.max(700, params.deny_threshold - 80)
-    const denialBoost = Math.min(240, (st.denial_day ?? 0) * 8)
-    params.overstim_seconds = params.overstim_base_seconds + denialBoost
-    return reply({ session_id: sess?.id, mode, params, command: 'BUILD', mommy_line: 'Mommy has you now. The timer decides when you\'re done — not you. Safeword stops everything.' })
+    // TODO(P6): route through _shared/conditioning-gate.ts once it ships
+    // (mig 633). Until then: fail-closed safeword + pause checks inline.
+    if (await safewordActiveFailClosed(s)) {
+      return reply({ command: 'EMERGENCY_STOP', abort_reason: 'safeword', mommy_line: 'Not starting. You safeworded — nothing runs until that clears.' })
+    }
+    let conditioning
+    try { conditioning = await loadConditioning(s) } catch (e) {
+      return reply({ command: 'EMERGENCY_STOP', abort_reason: 'state_unreachable', error: (e as Error).message })
+    }
+    if (isPaused(conditioning)) {
+      return reply({ command: 'STOP', abort_reason: 'paused' })
+    }
+
+    const mode = b.mode === 'milking' ? 'milking' : 'edge'
+    const { data: prog, error: progErr } = await s.from('machine_programs').select('id, params').eq('user_id', USER).eq('mode', mode).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle()
+    if (progErr) {
+      return reply({ command: 'EMERGENCY_STOP', abort_reason: 'state_unreachable', error: progErr.message })
+    }
+
+    // SINGLE-SITE parameter derivation — hard-mode reduction applied exactly
+    // once, enter_edge stored. Ticks never re-derive.
+    const params: MachineParams = deriveParams(prog?.params ?? null, conditioning)
+    const state: FsmState = initialFsmState(params)
+
+    const { data: sess, error: insErr } = await s.from('machine_sessions').insert({
+      user_id: USER,
+      mode,
+      program_id: prog?.id ?? null,
+      status: 'active',
+      params,
+      state,
+      started_at: new Date().toISOString(),
+      last_tick_at: new Date().toISOString(),
+      max_cycles: params.max_cycles,
+      max_duration_seconds: params.max_duration_seconds,
+    }).select('id').single()
+    if (insErr || !sess?.id) {
+      // Unique partial index: one active session per user. A second start
+      // while one runs is refused — the device must not get two brains.
+      return reply({ command: 'EMERGENCY_STOP', abort_reason: 'session_create_failed', error: insErr?.message ?? 'no session id returned' })
+    }
+    return reply({
+      session_id: sess.id, mode, params, command: 'BUILD',
+      mommy_line: "Mommy has you now. The timer decides when you're done — not you. Safeword stops everything.",
+    })
   }
 
-  // ---- END ----
+  // ─── END ───────────────────────────────────────────────────────────
   if (action === 'end') {
     const id = b.session_id
-    const { data: ev } = await s.from('machine_events').select('event_type, arousal_at').eq('session_id', id)
-    const orgasms = (ev ?? []).filter((e: any) => e.event_type === 'orgasm').length
-    const denials = (ev ?? []).filter((e: any) => e.event_type === 'denial').length
-    const peak = Math.max(0, ...(ev ?? []).map((e: any) => Number(e.arousal_at) || 0))
-    await s.from('machine_sessions').update({
-      status: 'completed', ended_at: new Date().toISOString(),
-      duration_seconds: b.elapsed_seconds ?? null, peak_arousal: peak,
-      orgasm_count: orgasms, denial_count: denials, outcome: b.outcome ?? (orgasms ? 'came' : 'denied'),
-      abort_reason: b.abort_reason ?? null,
+    if (!id) return reply({ command: 'STOP', abort_reason: 'no_session' })
+    const { data: sess, error: sessErr } = await s.from('machine_sessions').select('started_at, created_at, status').eq('id', id).maybeSingle()
+    if (sessErr || !sess) return reply({ command: 'STOP', abort_reason: 'no_session', error: sessErr?.message })
+    const { data: ev, error: evErr } = await s.from('machine_events').select('event_type, arousal_at').eq('session_id', id)
+    if (evErr) console.error('[machine-overseer] end: events read failed:', evErr.message)
+    const orgasms = (ev ?? []).filter((e: { event_type: string }) => e.event_type === 'orgasm').length
+    const denials = (ev ?? []).filter((e: { event_type: string }) => e.event_type === 'denial').length
+    const peak = Math.max(0, ...(ev ?? []).map((e: { arousal_at: number | null }) => Number(e.arousal_at) || 0))
+    // Duration derived from the server timestamp, not client elapsed
+    // (derived counters come from timestamps).
+    const startedMs = new Date(sess.started_at ?? sess.created_at).getTime()
+    const duration = Number.isFinite(startedMs) ? Math.max(0, Math.round((Date.now() - startedMs) / 1000)) : null
+    // Terminal states stay terminal: never resurrect an aborted session into 'completed'.
+    const nextStatus = sess.status === 'aborted' ? 'aborted' : 'completed'
+    const { error: updErr } = await s.from('machine_sessions').update({
+      status: nextStatus, ended_at: new Date().toISOString(),
+      duration_seconds: duration, peak_arousal: peak,
+      orgasm_count: orgasms, denial_count: denials,
+      outcome: b.outcome ?? (orgasms ? 'came' : 'denied'),
     }).eq('id', id)
-    // Light conditioning bridge: the real session feeds the want. State-paired note.
-    await s.from('arousal_touch_tasks').insert({ user_id: USER, category: 'edge_then_stop',
-      prompt: `Mommy ran you on the machine — ${denials} denials, ${orgasms === 0 ? 'no release' : orgasms + ' taken from you'}. That ache is hers now. Sit in it.` }).then(() => {}, () => {})
-    return reply({ command: 'STOP', mommy_line: orgasms ? 'Done. You\'re emptier and more Mommy\'s than when you started.' : 'Done. Still aching, still hers. Good boy.' })
+    if (updErr) {
+      return reply({ command: 'STOP', abort_reason: 'state_persist_failed', error: updErr.message })
+    }
+    // Light conditioning bridge: the real session feeds the want.
+    const { error: taskErr } = await s.from('arousal_touch_tasks').insert({
+      user_id: USER, category: 'edge_then_stop',
+      prompt: `Mommy ran you on the machine — ${denials} denials, ${orgasms === 0 ? 'no release' : orgasms + ' taken from you'}. That ache is hers now. Sit in it.`,
+    })
+    if (taskErr) console.error('[machine-overseer] end: touch-task insert failed:', taskErr.message)
+    return reply({ command: 'STOP', mommy_line: orgasms ? "Done. You're emptier and more Mommy's than when you started." : 'Done. Still aching, still hers. Good boy.' })
   }
 
-  // ---- TICK (the live loop) ----
-  const arousal = Number(b.arousal ?? 0)
-  const hr = b.hr
-  const hrSeen = !!b.hr_seen || (typeof hr === 'number' && hr > 0)
-  const elapsed = Number(b.elapsed_seconds ?? 0)
-  const event = b.event as string | undefined
+  // ─── TICK ──────────────────────────────────────────────────────────
   const sessionId = b.session_id
+  const event = typeof b.event === 'string' ? b.event : undefined
+  const now = Date.now()
 
-  // SAFETY FIRST — safeword + dead-man, before any persona logic.
-  if (await safewordActive(s)) {
-    if (sessionId) await s.from('machine_sessions').update({ status: 'aborted', abort_reason: 'safeword', ended_at: new Date().toISOString() }).eq('id', sessionId)
-    return reply({ command: 'EMERGENCY_STOP', abort_reason: 'safeword', mommy_line: 'Stopped. You\'re safe.' })
+  // (1) GUARD FIRST — the latch. Any error on this path = EMERGENCY_STOP.
+  // deno-lint-ignore no-explicit-any
+  let guard: any
+  try {
+    const { data, error } = await s.rpc('machine_session_guard', { p_session: sessionId ?? null })
+    if (error) throw new Error(error.message)
+    guard = data
+  } catch (e) {
+    console.error('[machine-overseer] guard unreachable:', (e as Error).message)
+    return reply({ command: 'EMERGENCY_STOP', abort_reason: 'guard_unreachable' })
   }
-  const params = { ...DEFAULTS, ...(b.params ?? {}) }
-  const hard = safetyAbort(hr, hrSeen, params.hr_max)
-  if (hard) {
-    if (sessionId) await s.from('machine_sessions').update({ status: 'aborted', abort_reason: hard.abort_reason, ended_at: new Date().toISOString() }).eq('id', sessionId)
-    return reply({ ...hard, mommy_line: 'Stopped — vitals. You\'re safe.' })
+  if (!guard || guard.allow !== true) {
+    const denial = commandForGuardDenial(String(guard?.reason ?? 'guard_denied'), Boolean(guard?.latched))
+    const line = denial.abort_reason === 'safeword' ? "Stopped. You're safe." : ''
+    return reply({ ...denial, ...(line ? { mommy_line: line } : {}) })
   }
-  if (await paused(s)) return reply({ command: 'STOP', abort_reason: 'paused' })
 
-  const st = await loadState(s)
-  const seed = Math.floor(elapsed)
-  let command: Cmd = 'BUILD'
-  let p: any = { stroke: 'full', velocity: 0.9 }
-  let line = ''
-  let logType: string | null = null
+  const params = guard.params as MachineParams
+  const persisted = (guard.state ?? {}) as Partial<FsmState>
+  const state: FsmState = { ...initialFsmState(params), ...persisted }
+  const mode: string = guard.mode ?? 'edge'
+  const hrEverSeen: boolean = Boolean(guard.hr_ever_seen)
+  const lastHrAtMs = guard.last_hr_at ? new Date(guard.last_hr_at).getTime() : null
+  let telemetryFaults: number = Number(guard.telemetry_faults) || 0
 
-  // Orgasm detected in edge/denial mode -> overstim torment (ignores arousal;
-  // refractory-aware on the machine side). In MILKING mode, orgasm advances the
-  // cadence (force -> recover -> repeat) instead — handled in the milking branch.
-  if (event === 'orgasm' && b.mode !== 'milking') {
-    command = 'OVERSTIM'; logType = 'orgasm'
-    const dur = params.overstim_seconds ?? (params.overstim_base_seconds + Math.min(240, (st.denial_day ?? 0) * 8))
-    p = { stroke: pick(['head', 'full', 'base'], seed), velocity: 1.0, pattern: 'random', duration_seconds: dur }
-    line = pick(OVERSTIM_LINES, seed)
-  } else if (event === 'struggle') {
-    // Witmotion struggle while bound -> Mommy punishes (extend torment / estim cue, below-waist only).
-    command = 'OVERSTIM'; logType = 'struggle'
-    p = { stroke: 'full', velocity: 1.0, pattern: 'punish', duration_seconds: 60, estim: { allow: true, zone: 'below_waist_only', intensity: 'sharp' } }
-    line = 'Struggling? That just earns you more. Stop fighting Mommy.'
-  } else if (b.mode === 'milking') {
-    // Milking cadence FSM: build -> edge-hold -> force (to orgasm) -> recover -> repeat.
-    // Distinct from edge-mode: in milking, an orgasm advances to recover + repeats
-    // (forced repeated milking), it does NOT trigger overstim torment.
-    const { data: srow } = await s.from('machine_sessions').select('state').eq('id', sessionId).maybeSingle()
-    const stt: any = srow?.state ?? {}
-    let phase: string = stt.phase ?? 'build'
-    let phaseStart: number = stt.phase_started ?? elapsed
-    let cycles: number = stt.cycles ?? 0
-    const holdSec = params.hold_seconds ?? 45
-    const recoverSec = params.recover_seconds ?? 30
-    const enterEdge = (st.hard_mode_active ? params.deny_threshold - 80 : params.deny_threshold) - params.edge_band
-    const inPhase = elapsed - phaseStart
-    if (phase === 'build') {
-      command = 'BUILD'; p = { stroke: 'full', velocity: 0.95 }; line = pick(BUILD_LINES, seed)
-      if (arousal >= enterEdge) { phase = 'edge_hold'; phaseStart = elapsed }
-    } else if (phase === 'edge_hold') {
-      command = 'EDGE'; p = { stroke: 'short', velocity: 0.4 }; line = pick(EDGE_LINES, seed)
-      if (inPhase >= holdSec) { phase = 'force'; phaseStart = elapsed }
-    } else if (phase === 'force') {
-      command = 'MILK_FORCE'; p = { stroke: 'full', velocity: 1.0 }; line = pick(MILK_LINES, seed); logType = 'milk'
-      if (event === 'orgasm') { logType = 'orgasm'; phase = 'recover'; phaseStart = elapsed; cycles += 1 }
-    } else { // recover (refractory) then back to build
-      command = 'STOP'; p = { stroke: 'stop', velocity: 0, cooldown_seconds: recoverSec }; line = "Rest. Mommy's not done with you."
-      if (inPhase >= recoverSec) { phase = 'build'; phaseStart = elapsed }
+  const abortSession = async (reason: string) => {
+    const { error } = await s.from('machine_sessions').update({
+      status: 'aborted', abort_reason: reason, ended_at: new Date().toISOString(),
+      duration_seconds: guard.started_at ? Math.max(0, Math.round((now - new Date(guard.started_at).getTime()) / 1000)) : null,
+    }).eq('id', sessionId).eq('status', 'active')
+    if (error) console.error(`[machine-overseer] abort(${reason}) persist failed:`, error.message)
+  }
+
+  // (2) BIOMETRIC VALIDATION — server-derived, client assertions ignored.
+  const hr = validHr(b.hr)
+  // HR ceiling: valid reading over the dead-man max → stop.
+  if (hr !== null && hr > params.hr_max) {
+    await abortSession('hr_ceiling')
+    return reply({ command: 'EMERGENCY_STOP', abort_reason: 'hr_ceiling', mommy_line: "Stopped — vitals. You're safe." })
+  }
+  // HR dropout: the strap was live earlier in this session and now the
+  // reading is invalid/absent, or the last valid reading is stale.
+  if (hrEverSeen && (hr === null || (lastHrAtMs !== null && now - lastHrAtMs > HR_STALE_MS && hr === null))) {
+    await abortSession('hr_dropout')
+    return reply({ command: 'EMERGENCY_STOP', abort_reason: 'hr_dropout', mommy_line: "Stopped — vitals. You're safe." })
+  }
+
+  // Arousal: invalid → hold last-known-good, count the fault. Never escalate
+  // on bad data; 3 consecutive faults abort the session.
+  const rawArousal = validArousal(b.arousal)
+  let arousal: number
+  if (rawArousal === null) {
+    telemetryFaults += 1
+    if (telemetryFaults >= TELEMETRY_FAULT_LIMIT) {
+      await abortSession('telemetry_fault')
+      return reply({ command: 'EMERGENCY_STOP', abort_reason: 'telemetry_fault' })
     }
-    await s.from('machine_sessions').update({ state: { phase, phase_started: phaseStart, cycles } }).eq('id', sessionId).then(() => {}, () => {})
-    p.milk_phase = phase; p.cycles = cycles
+    arousal = state.last_arousal ?? 0
   } else {
-    // Edge/denial mode (default): deny over threshold, hold in the band, else build.
-    const denyAt = st.hard_mode_active ? params.deny_threshold - 80 : params.deny_threshold
-    if (arousal >= denyAt) {
-      command = 'DENY'; logType = 'denial'
-      p = { stroke: 'stop', velocity: 0, cooldown_seconds: params.cooldown_seconds }
-      line = pick(DENY_LINES, seed)
-    } else if (arousal >= denyAt - params.edge_band) {
-      command = 'EDGE'; p = { stroke: 'short', velocity: 0.35 }; line = pick(EDGE_LINES, seed)
-    } else {
-      command = 'BUILD'; p = { stroke: 'full', velocity: 0.9 }; line = pick(BUILD_LINES, seed)
-    }
+    telemetryFaults = 0
+    arousal = rawArousal
   }
 
-  if (logType && sessionId) {
-    await s.from('machine_events').insert({ user_id: USER, session_id: sessionId, event_type: logType, arousal_at: arousal, hr_at: typeof hr === 'number' ? hr : null, elapsed_seconds: elapsed, command, mommy_line: line, data: p }).then(() => {}, () => {})
+  // Elapsed: server-trusted. Client value accepted only when monotonic;
+  // regression >5s (client restart) or garbage → re-derive from started_at.
+  const startedMs = guard.started_at ? new Date(guard.started_at).getTime() : now
+  const serverElapsed = Math.max(0, (now - startedMs) / 1000)
+  const clientElapsed = typeof b.elapsed_seconds === 'number' && Number.isFinite(b.elapsed_seconds) ? b.elapsed_seconds : null
+  const elapsed = clientElapsed !== null && clientElapsed >= (state.elapsed_last ?? 0) - 5 ? clientElapsed : serverElapsed
+
+  // (3) PAUSE — protocol pause stops stim but does not kill the session.
+  let conditioning
+  try { conditioning = await loadConditioning(s) } catch (e) {
+    // Fail closed: can't read pause state → don't stim.
+    console.error('[machine-overseer] user_state unreachable on tick:', (e as Error).message)
+    return reply({ command: 'STOP', abort_reason: 'state_unreachable' })
   }
-  // BIOMETRIC BRIDGE: pipe the machine's REAL arousal into the app's conditioning
-  // state so the pavlovian/trance engines fire on actual peak, not self-report
-  // (closes the self-report hole). Machine arousal 0..1000 -> current_arousal 0..5.
-  const mappedArousal = Math.max(0, Math.min(5, Math.round((arousal / 1000) * 5)))
-  await s.from('user_state').update({ current_arousal: mappedArousal }).eq('user_id', USER).then(() => {}, () => {})
-  return reply({ command, params: p, mommy_line: line, media: buildMedia(command, line, event), mapped_arousal: mappedArousal })
+  if (isPaused(conditioning)) return reply({ command: 'STOP', abort_reason: 'paused' })
+
+  // (4) PERSONA / FSM.
+  const seed = Math.floor(elapsed)
+  let command: Cmd
+  // deno-lint-ignore no-explicit-any
+  let motion: Record<string, any>
+  let line: string
+  let logType: string | null
+  let nextState: FsmState
+  let done: { outcome: string } | null = null
+
+  if (event === 'struggle') {
+    // Witmotion struggle while bound → punish cue (below-waist estim only).
+    command = 'OVERSTIM'
+    logType = 'struggle'
+    motion = { stroke: 'full', velocity: 1.0, pattern: 'punish', duration_seconds: 60, estim: { allow: true, zone: 'below_waist_only', intensity: 'sharp' } }
+    line = 'Struggling? That just earns you more. Stop fighting Mommy.'
+    nextState = { ...state }
+  } else {
+    const r = stepFsm(mode, state, { arousal, elapsed, event }, params)
+    command = r.command
+    motion = { ...r.motion }
+    line = pick(LINES[r.lineKey] ?? LINES.none, seed)
+    logType = r.logType
+    nextState = r.state
+    done = r.done
+    if (mode === 'milking') { motion.milk_phase = nextState.phase; motion.cycles = nextState.cycles }
+  }
+
+  nextState.last_arousal = arousal
+  nextState.elapsed_last = elapsed
+
+  // (5) PERSIST state + telemetry — server-derived, before the stim reply
+  // means anything. hr_ever_seen ratchets on VALID readings only; last_hr/
+  // last_hr_at update only on valid readings so staleness stays measurable.
+  // deno-lint-ignore no-explicit-any
+  const persistPatch: Record<string, any> = {
+    state: nextState,
+    last_tick_at: new Date(now).toISOString(),
+    telemetry_faults: telemetryFaults,
+  }
+  if (hr !== null) {
+    persistPatch.last_hr = hr
+    persistPatch.last_hr_at = new Date(now).toISOString()
+    persistPatch.hr_ever_seen = true
+  }
+  if (done) {
+    persistPatch.status = 'completed'
+    persistPatch.outcome = done.outcome
+    persistPatch.ended_at = new Date(now).toISOString()
+    persistPatch.duration_seconds = Math.max(0, Math.round((now - startedMs) / 1000))
+  }
+  const { error: persistErr } = await s.from('machine_sessions').update(persistPatch).eq('id', sessionId).eq('status', 'active')
+  if (persistErr) {
+    // A session whose state can't persist must not keep stimming: the next
+    // tick would replay stale state. STOP, loudly.
+    console.error('[machine-overseer] state persist failed:', persistErr.message)
+    return reply({ command: 'STOP', abort_reason: 'state_persist_failed' })
+  }
+
+  if (logType) {
+    const { error: evErr } = await s.from('machine_events').insert({
+      user_id: guard.user_id ?? USER, session_id: sessionId, event_type: logType,
+      arousal_at: rawArousal, hr_at: hr, elapsed_seconds: Math.round(elapsed),
+      command, mommy_line: line, data: motion,
+    })
+    if (evErr) console.error('[machine-overseer] event insert failed:', evErr.message)
+  }
+
+  // BIOMETRIC BRIDGE: real machine arousal → app conditioning state, only
+  // from a VALIDATED tick on an active session; skipped when the wire value
+  // was invalid. 0..5 legacy scale until mig 639 flips the column + readers
+  // to 0..10 atomically (then switch to toArousal5 → toArousal10).
+  let mappedArousal: number | null = null
+  if (rawArousal !== null && !done) {
+    mappedArousal = toArousal5(rawArousal)
+    const { error: bridgeErr } = await s.from('user_state').update({ current_arousal: mappedArousal }).eq('user_id', guard.user_id ?? USER)
+    if (bridgeErr) console.error('[machine-overseer] arousal bridge failed:', bridgeErr.message)
+  }
+
+  return reply({
+    command, params: motion, mommy_line: line,
+    media: buildMedia(command, line, event),
+    mapped_arousal: mappedArousal,
+    ...(done ? { session_complete: true, outcome: done.outcome } : {}),
+  })
 })

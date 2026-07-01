@@ -54,6 +54,12 @@ const GENERATORS: GeneratorSpec[] = [
   // feeds today's confession transcript to evening-confession-prescribe.
   // Conditional: only produces rows on days the user actually confessed.
   { name: 'evening_confession_prescribe', function_name: 'evening-confession-prescribe', expected_cadence_minutes: 1440, output_table: 'feminization_prescriptions', edge_function: true, conditional: true },
+  // Machine safety envelope (mig 625). machine-overseer only produces rows
+  // when the user actually runs the rig → conditional. The dead-man sweep is
+  // a SQL fn on pg_cron (every minute); the function-exists probe is the
+  // check that matters — zero aborted sessions is the healthy case.
+  { name: 'machine_overseer', function_name: 'machine-overseer', expected_cadence_minutes: 1440, output_table: 'machine_sessions', edge_function: true, conditional: true },
+  { name: 'machine_deadman_sweep', function_name: 'machine_deadman_sweep', expected_cadence_minutes: 1, conditional: true },
 ];
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
