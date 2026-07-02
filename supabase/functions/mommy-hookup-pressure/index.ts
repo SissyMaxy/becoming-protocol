@@ -35,6 +35,7 @@ import {
   PET_NAMES,
 } from '../_shared/dommy-mommy.ts'
 import { checkSafewordGate, logAuthority, checkHookupSettings } from '../_shared/safeword-gate.ts'
+import { funnelUserIds } from '../_shared/funnel-users.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -198,13 +199,16 @@ async function gatherSignals(
 ): Promise<PressureSignals> {
   const now = Date.now()
   const sinceMonth = new Date(now - 30 * 86_400_000).toISOString()
+  // Dual-user-id fan-out (design §3.5): sniffies/hookup signal is split
+  // across both live partitions — reading one id sees half the picture.
+  const ids = funnelUserIds(userId)
 
   // Last meet (from hookup_debriefs.met_at).
   let hoursSinceLastMeet: number | null = null
   const { data: lastMeet } = await supabase
     .from('hookup_debriefs')
     .select('met_at')
-    .eq('user_id', userId)
+    .in('user_id', ids)
     .order('met_at', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -217,7 +221,7 @@ async function gatherSignals(
   const { data: lastSniffy } = await supabase
     .from('sniffies_chat_messages')
     .select('created_at')
-    .eq('user_id', userId)
+    .in('user_id', ids)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -229,7 +233,7 @@ async function gatherSignals(
   const { data: recentMsgs } = await supabase
     .from('sniffies_chat_messages')
     .select('contact_id, direction')
-    .eq('user_id', userId)
+    .in('user_id', ids)
     .gte('created_at', since7d)
     .eq('excluded', false)
     .limit(500)
@@ -250,7 +254,7 @@ async function gatherSignals(
   const { data: lastDare } = await supabase
     .from('maxy_dare_assignments')
     .select('prep_acknowledged_at, completed_at, debriefed_at')
-    .eq('user_id', userId)
+    .in('user_id', ids)
     .gte('assigned_at', sinceMonth)
     .order('assigned_at', { ascending: false })
     .limit(1)

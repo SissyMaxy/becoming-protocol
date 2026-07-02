@@ -15,6 +15,7 @@
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requireGate } from '../_shared/conditioning-gate.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -39,6 +40,11 @@ Deno.serve(async (req: Request) => {
   let body: { user_id?: string; dry_run?: boolean } = {}
   try { body = await req.json() } catch { /* */ }
   const userId = body.user_id || HANDLER_USER
+  // Conditioning gate FIRST (mig 633) — safeword latch/pause/elective/live-meet, fail closed.
+  const gate = await requireGate(supabase, 'temptation', userId)
+  if (!gate.allowed) {
+    return new Response(JSON.stringify({ ok: true, suppressed: gate.reason }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+  }
   const src = 'temptation_navigate'
 
   // One open temptation at a time — dedup.

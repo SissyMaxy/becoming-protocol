@@ -28,6 +28,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { validArousal, validHr, toArousal5 } from '../_shared/biometrics.ts'
+import { requireGate } from '../_shared/conditioning-gate.ts'
 import {
   stepFsm, deriveParams, initialFsmState, commandForGuardDenial,
   type Cmd, type FsmState, type MachineParams, type LineKey,
@@ -107,8 +108,18 @@ Deno.serve(async (req: Request) => {
 
   // ─── START ─────────────────────────────────────────────────────────
   if (action === 'start') {
-    // TODO(P6): route through _shared/conditioning-gate.ts once it ships
-    // (mig 633). Until then: fail-closed safeword + pause checks inline.
+    // Conditioning gate FIRST (mig 633): safeword latch + pause + elective +
+    // live-meet in one fail-closed read. Start-only — mid-session authority
+    // is machine_session_guard.
+    const gate = await requireGate(s, 'machine')
+    if (!gate.allowed) {
+      const line = gate.reason === 'safeword'
+        ? 'Not starting. You safeworded — nothing runs until that clears.'
+        : 'Not starting.'
+      return reply({ command: gate.reason === 'safeword' ? 'EMERGENCY_STOP' : 'STOP', abort_reason: gate.reason, mommy_line: line })
+    }
+    // Backstop: the pre-gate fail-closed checks stay. If the gate RPC and
+    // these ever disagree, the stricter answer wins.
     if (await safewordActiveFailClosed(s)) {
       return reply({ command: 'EMERGENCY_STOP', abort_reason: 'safeword', mommy_line: 'Not starting. You safeworded — nothing runs until that clears.' })
     }
