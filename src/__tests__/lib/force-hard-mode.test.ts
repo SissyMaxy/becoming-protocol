@@ -3,6 +3,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
 const HARD_MODE_THRESHOLD = 15;
 
@@ -58,39 +63,42 @@ describe('Hard Mode exit — only three valid paths', () => {
   });
 });
 
-describe('de-escalation verification — all 3 sub-requirements', () => {
+describe('de-escalation verification — both sub-requirements (Gina disclosure removed 2026-07-01)', () => {
   interface DeEscalationState {
     confessionWords: number;
     mantraReps: number;
-    disclosureDone: boolean;
   }
 
   function allMet(s: DeEscalationState): boolean {
-    return s.confessionWords >= 800 && s.mantraReps >= 100 && s.disclosureDone;
+    return s.confessionWords >= 800 && s.mantraReps >= 100;
   }
 
-  it('all 3 met → ok', () => {
-    expect(allMet({ confessionWords: 800, mantraReps: 100, disclosureDone: true })).toBe(true);
+  it('both met → ok', () => {
+    expect(allMet({ confessionWords: 800, mantraReps: 100 })).toBe(true);
   });
 
   it('missing confession → not ok', () => {
-    expect(allMet({ confessionWords: 500, mantraReps: 100, disclosureDone: true })).toBe(false);
+    expect(allMet({ confessionWords: 500, mantraReps: 100 })).toBe(false);
   });
 
   it('missing mantras → not ok', () => {
-    expect(allMet({ confessionWords: 1000, mantraReps: 50, disclosureDone: true })).toBe(false);
+    expect(allMet({ confessionWords: 1000, mantraReps: 50 })).toBe(false);
   });
 
-  it('missing disclosure → not ok', () => {
-    expect(allMet({ confessionWords: 1000, mantraReps: 100, disclosureDone: false })).toBe(false);
-  });
-
-  it('all three required — none optional', () => {
+  it('both required — none optional', () => {
     const cases = [
-      { confessionWords: 800, mantraReps: 100, disclosureDone: false },
-      { confessionWords: 800, mantraReps: 99, disclosureDone: true },
-      { confessionWords: 799, mantraReps: 100, disclosureDone: true },
+      { confessionWords: 800, mantraReps: 99 },
+      { confessionWords: 799, mantraReps: 100 },
     ];
     for (const c of cases) expect(allMet(c)).toBe(false);
+  });
+
+  it('exit never gates on a Gina disclosure (policy: no disclosure to Gina)', () => {
+    const src = readFileSync(
+      join(ROOT, 'supabase', 'functions', '_shared', 'job-handlers', 'force-processor.ts'),
+      'utf8',
+    );
+    expect(src).not.toMatch(/disclosureMet/);
+    expect(src).not.toMatch(/punishment_type:\s*'gina_confession'/);
   });
 });

@@ -1,7 +1,7 @@
 /**
  * Force Dashboard
  *
- * Surface for the Hard Mode / slip / punishment / chastity / regimen / disclosure
+ * Surface for the Hard Mode / slip / punishment / chastity / regimen
  * state. One view where Maxy sees everything the Handler is tracking against her.
  */
 

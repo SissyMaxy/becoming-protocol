@@ -7,11 +7,12 @@
 
 import { supabase } from '../supabase';
 
+// 'gina_confession' removed 2026-07-01 — policy: no disclosure to Gina
+// (migration 624 cancelled all pending rows of that type).
 export type PunishmentType =
   | 'denial_extension'
   | 'humiliation_task'
   | 'public_post'
-  | 'gina_confession'
   | 'public_shame_log'
   | 'mantra_recitation'
   | 'writing_lines'
@@ -79,14 +80,6 @@ export const TEMPLATES: Record<string, PunishmentTemplate> = {
     parameters: { platform: 'twitter', review_minutes: 15 },
     due_hours: 1,
   },
-  gina_disclosure_bump: {
-    punishment_type: 'gina_confession',
-    severity: 5,
-    title: 'Gina disclosure advanced',
-    description: 'Your next Gina disclosure deadline is moved up by 7 days. No extensions.',
-    parameters: { advance_days: 7 },
-    due_hours: 0,
-  },
   edge_no_release_90: {
     punishment_type: 'edge_session_no_release',
     severity: 3,
@@ -120,6 +113,14 @@ export async function enqueuePunishment(
     triggered_by_slip_ids?: string[];
     triggered_by_hard_mode?: boolean;
     dueOverride?: Date;
+    /**
+     * Enforcement Spine v2 (mig 627): the obligation whose miss justified
+     * this punishment. The punishment_queue chokepoint trigger requires it
+     * to be in missed/consequence_previewed once ENFORCE mode flips on;
+     * omitting it is allowed (and supervisor-logged) only during the WARN
+     * shadow week.
+     */
+    obligationId?: string;
   } = {},
 ): Promise<string | null> {
   const tpl = TEMPLATES[templateKey];
@@ -143,6 +144,7 @@ export async function enqueuePunishment(
       due_by: dueBy,
       triggered_by_slip_ids: options.triggered_by_slip_ids || [],
       triggered_by_hard_mode: options.triggered_by_hard_mode || false,
+      obligation_id: options.obligationId ?? null,
     })
     .select('id')
     .single();
@@ -152,11 +154,21 @@ export async function enqueuePunishment(
     return null;
   }
 
-  // Apply immediate-effect punishments now
+  // Apply immediate-effect punishments now. With an obligation attached this
+  // goes through push_unlock_date() (validated, once-per-obligation, chain-
+  // capped +7d/14d). The legacy direct path survives only until the L5
+  // cutover revokes writer grants on scheduled_unlock_at.
   if (tpl.punishment_type === 'denial_extension' && tpl.parameters?.days) {
-    await applyDenialExtension(userId, tpl.parameters.days as number);
-  } else if (tpl.punishment_type === 'gina_confession' && tpl.parameters?.advance_days) {
-    await advanceGinaDisclosureDeadline(userId, tpl.parameters.advance_days as number);
+    if (options.obligationId) {
+      const { error: pushErr } = await supabase.rpc('push_unlock_date', {
+        p_user: userId,
+        p_obligation: options.obligationId,
+        p_days: tpl.parameters.days as number,
+      });
+      if (pushErr) console.error('[Punishment] push_unlock_date failed:', pushErr.message);
+    } else {
+      await applyDenialExtension(userId, tpl.parameters.days as number);
+    }
   }
 
   return data.id;
@@ -186,62 +198,10 @@ async function applyDenialExtension(userId: string, days: number): Promise<void>
     .eq('user_id', userId);
 }
 
-async function advanceGinaDisclosureDeadline(userId: string, days: number): Promise<void> {
-  const { data: next } = await supabase
-    .from('gina_disclosure_schedule')
-    .select('id, hard_deadline')
-    .eq('user_id', userId)
-    .eq('status', 'scheduled')
-    .order('rung', { ascending: true })
-    .limit(1)
-    .maybeSingle();
+// (advanceGinaDisclosureDeadline removed 2026-07-01 — the Gina disclosure
+// ladder is abolished; policy: no disclosure to Gina, migration 624.)
 
-  if (!next) return;
-
-  const newDeadline = new Date(new Date(next.hard_deadline as string).getTime() - days * 86400000);
-  await supabase
-    .from('gina_disclosure_schedule')
-    .update({ hard_deadline: newDeadline.toISOString().split('T')[0] })
-    .eq('id', next.id);
-}
-
-/**
- * Scan for dodged punishments (past due, not completed). Compound consequence.
- */
-export async function processDodged(userId: string): Promise<number> {
-  const now = new Date().toISOString();
-  const { data: dodged } = await supabase
-    .from('punishment_queue')
-    .select('id, punishment_type, severity, dodge_count')
-    .eq('user_id', userId)
-    .eq('status', 'queued')
-    .not('due_by', 'is', null)
-    .lt('due_by', now);
-
-  if (!dodged || dodged.length === 0) return 0;
-
-  for (const p of dodged) {
-    const newDodge = (p.dodge_count as number) + 1;
-    await supabase
-      .from('punishment_queue')
-      .update({
-        status: newDodge >= 2 ? 'escalated' : 'queued',
-        dodge_count: newDodge,
-        due_by: new Date(Date.now() + 24 * 3600000).toISOString(),
-      })
-      .eq('id', p.id);
-
-    // Dodging a punishment = another slip + denial extension
-    await supabase.from('slip_log').insert({
-      user_id: userId,
-      slip_type: 'task_avoided',
-      slip_points: 3,
-      source_text: `dodged punishment: ${p.punishment_type}`,
-      metadata: { punishment_id: p.id, dodge_count: newDodge },
-      is_synthetic: true,
-    });
-    await applyDenialExtension(userId, 1);
-  }
-
-  return dodged.length;
-}
+// (processDodged removed 2026-07-01 — dodge processing is SERVER-ONLY now:
+// the force-processor job handler owns the re-arm/commutation model, gated
+// by enforcement_gate and terminal at dodge 2. A client-side dodge scanner
+// was a second, ungated writer of the exact dodge-loop noise mig 629 purged.)

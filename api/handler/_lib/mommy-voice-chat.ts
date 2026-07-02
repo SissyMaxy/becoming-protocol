@@ -126,6 +126,8 @@ export function mommyVoiceCleanupForChat(text: string): string {
   t = t.replace(/\btargeting\s+(?:consistency\s+)?(?:above|below)?\s*\d+\s*Hz\b/gi, 'lifting that voice up for me');
   // bare Hz catch-all — any residual pitch number (parity with canonical)
   t = t.replace(/\b\d+\s*Hz\b/g, '');
+  // measurement telemetry — tape/scale numbers never reach Mommy copy
+  t = t.replace(/\b\d+(?:\.\d+)?(?:\s?(?:cm|kg|lbs|inches)|in)\b/gi, '');
 
   // 2026-05-06 round 2 — clerical/case-worker patterns
   t = t.replace(/\bthat['']s\s+logged\b\.?/gi, 'Mama saw that');

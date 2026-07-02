@@ -1,11 +1,10 @@
-name: Weekly (content-generator / witness-fabrication-scheduler / cross-platform-consistency / loophole-hunter / mommy-disclosure-rehearsal)
+name: Weekly (content-generator / witness-fabrication-scheduler / cross-platform-consistency / loophole-hunter)
 on:
   schedule:
     - cron: '0 3 * * 1'    # Mon — content-generator
     - cron: '11 6 * * 1'   # Mon — witness-fabrication-scheduler
     - cron: '11 7 * * 1'   # Mon — cross-platform-consistency
     - cron: '23 11 * * 1'  # Mon — loophole-hunter
-    - cron: '5 9 * * 0'    # Sun — mommy-disclosure-rehearsal
   workflow_dispatch: {}
 concurrency:
   group: cron-weekly
@@ -51,12 +50,3 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{"trigger":"github_cron"}' \
             -m 60 || echo "loophole-hunter failed (non-fatal)"
-      - name: mommy-disclosure-rehearsal
-        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '5 9 * * 0'
-        run: |
-          curl -fsS -X POST \
-            "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/mommy-disclosure-rehearsal" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            -H "Content-Type: application/json" \
-            -d '{"trigger":"github_cron"}' \
-            -m 60 || echo "mommy-disclosure-rehearsal failed (non-fatal)"

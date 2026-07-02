@@ -8,7 +8,7 @@
  * Mama's reply arrives as a normal outreach (pushed to phone if subscribed).
  *
  * Audio-only by design — same pattern as VoiceGate / MorningMantraGate /
- * EveningConfessionGate / DisclosureRehearsalView. No typed bypass.
+ * EveningConfessionGate. No typed bypass.
  * Min 6s, max 180s. Whisper-authoritative downstream.
  */
 

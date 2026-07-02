@@ -16,4 +16,4 @@ export { GinaLadderView } from './GinaLadderView';
 export { SeedLogger } from './SeedLogger';
 export { MeasurementForm } from './MeasurementForm';
 export { ChannelDetail } from './ChannelDetail';
-export { DisclosureMap } from './DisclosureMap';
+// DisclosureMap removed 2026-07-01 — policy: no disclosure to Gina (migration 624).

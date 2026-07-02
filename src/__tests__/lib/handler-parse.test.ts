@@ -240,37 +240,40 @@ describe('selectPersona — clock-independent branches', () => {
 });
 
 describe('prioritizeContextBlocks — current selection behavior', () => {
-  // CURRENT BEHAVIOR (probed): there are 49 alwaysInclude blocks, so
-  // remainingSlots = 12 - 49 = -37. Array.slice(0, -37) on the 38-element
-  // optional list keeps 38-37 = 1 element — the single highest-scoring optional
-  // block. The result is therefore the 49 always-include blocks PLUS exactly one
-  // top-scoring optional block (50 total), and message boosts DO steer which one.
-  it('returns the always-include set plus exactly one optional block (50 total)', () => {
+  // CURRENT BEHAVIOR (probed): there are 46 alwaysInclude blocks (48 before
+  // 2026-07-01, when disclosureSchedule + partnerDisclosures were removed by
+  // the no-disclosure-to-Gina policy), so remainingSlots = 12 - 46 = -34.
+  // Array.slice(0, -34) on the 38-element optional list keeps 38-34 = 4
+  // elements — the four highest-scoring optional blocks. The result is the
+  // 46 always-include blocks PLUS the top four optional blocks (50 total),
+  // and message boosts DO steer which ones.
+  it('returns the always-include set plus the top optional blocks (50 total)', () => {
     const blocks = prioritizeContextBlocks('How are you?', 10);
     expect(blocks.length).toBe(50);
     expect(blocks).toContain('state');
     expect(blocks).toContain('deviceStatus');
     expect(blocks).toContain('hrtAcquisition');
+    expect(blocks).not.toContain('disclosureSchedule');
+    expect(blocks).not.toContain('partnerDisclosures');
   });
 
   it('pulls the boosted optional block in when its keyword fires (gina)', () => {
-    // 'gina' is alwaysInclude:false (priority 30) + a +60 boost = 90, which wins
-    // the single optional slot.
+    // 'gina' is alwaysInclude:false (priority 30) + a +60 boost = 90, which
+    // wins an optional slot.
     const blocks = prioritizeContextBlocks('tell me about gina my wife', 10);
     expect(blocks).toContain('gina');
-    expect(blocks[blocks.length - 1]).toBe('gina');
   });
 
-  it('a plain message yields quitAttempts as the single optional pick (highest unboosted optional)', () => {
+  it('a plain message picks quitAttempts among the optional slots (highest unboosted optional)', () => {
     const blocks = prioritizeContextBlocks('How are you?', 10);
-    expect(blocks[blocks.length - 1]).toBe('quitAttempts');
+    expect(blocks).toContain('quitAttempts');
   });
 
-  it('different keyword boosts select different single optional blocks', () => {
+  it('different keyword boosts select different optional blocks', () => {
     const quit = prioritizeContextBlocks('quit everything, I am done', 0);
     const voice = prioritizeContextBlocks('voice pitch practice', 8);
-    expect(quit[quit.length - 1]).toBe('quitAttempts');
-    expect(voice[voice.length - 1]).toBe('habitStreaks');
+    expect(quit).toContain('quitAttempts');
+    expect(voice).toContain('habitStreaks');
     expect(quit).not.toEqual(voice);
   });
 });

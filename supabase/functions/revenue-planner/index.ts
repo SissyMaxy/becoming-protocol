@@ -392,7 +392,7 @@ function heuristicShotsFor(
       { edict: 'Wear them now. Begin Day 1 of 3. Take a mirror selfie wearing only the panties — phone at hip level, no face, side angle showing the curve of your hip. Save to drive.', proof_type: 'photo', estimated_minutes: 5, deadline_offset_hours: 12, reasoning: 'Day 1 wear photo proves authenticity and seeds buyer fantasy.' },
       { edict: 'Day 2: post-workout sweat photo. After your hip thrusts, do not change. Phone at floor level pointing up, panties only, no face, full hip-to-knee frame.', proof_type: 'photo', estimated_minutes: 5, deadline_offset_hours: 36, reasoning: 'Sweat-stained Day 2 image is the sales hook.' },
       { edict: 'Day 3 evening: removal video. 15 seconds, framed waist-down, slow pull-off, set them on a folded paper. End frame on the panties. No sound needed.', proof_type: 'video', estimated_minutes: 8, deadline_offset_hours: 60, reasoning: 'Removal clip becomes a free preview that drives the sale.' },
-      { edict: 'Write the FetLife/Reddit listing copy: 80–120 words. Include "3-day wear, sweat-soaked Day 2, $45 + $8 ship, vacuum-sealed, US only, payment via Cash App or Fansly wallet — DM for tag." Submit text via journal.', proof_type: 'journal_entry', estimated_minutes: 10, deadline_offset_hours: 12, reasoning: 'Listing copy goes live with the hero shot.' },
+      { edict: 'Write the FetLife/Reddit listing copy: 80–120 words. Include "3-day wear, sweat-soaked Day 2, $45 + $8 ship, vacuum-sealed, US only, payment through Fansly wallet or another platform-internal rail before ship — never Cash App/PayPal/Venmo." Submit text via journal.', proof_type: 'journal_entry', estimated_minutes: 10, deadline_offset_hours: 12, reasoning: 'Listing copy goes live with the hero shot.' },
     ]
   }
 
@@ -421,7 +421,7 @@ function heuristicShotsFor(
   if (p === 'sniffies' || k === 'cam_show') {
     return [
       { edict: 'Sniffies profile: take one face-blurred torso photo for the avatar — soft light, side-lit, panties + tank top, no face above the lip. Crop tight to chest/waist.', proof_type: 'photo', estimated_minutes: 6, deadline_offset_hours: 8, reasoning: 'Avatar drives discovery.' },
-      { edict: 'Profile bio (under 200 chars): "femboy, cock-pic on request, custom voice $10 / cam $40 for 15 — Cash App or Fansly only. DM for menu." Submit text.', proof_type: 'journal_entry', estimated_minutes: 5, deadline_offset_hours: 8, reasoning: 'Explicit menu prevents tire-kickers.' },
+      { edict: 'Profile bio (under 200 chars): "femboy, cock-pic on request, custom voice $10 / cam $40 for 15 — Fansly wallet only. DM for menu." Submit text.', proof_type: 'journal_entry', estimated_minutes: 5, deadline_offset_hours: 8, reasoning: 'Explicit menu prevents tire-kickers.' },
       { edict: 'Send 3 DMs to active subscribers in your area: "menu on profile, custom voice note $10, what do you want me to say?" Screenshot all 3 sent.', proof_type: 'photo', estimated_minutes: 12, deadline_offset_hours: 24, reasoning: 'Outbound on Sniffies converts higher than inbound for new profiles.' },
       { edict: 'Pre-record a 15-second cam-preview clip: lying back, panties only, phone above your face but framed chest-down, slow hand drag from chest to waistband. Save MP4.', proof_type: 'video', estimated_minutes: 8, deadline_offset_hours: 24, reasoning: 'Preview clip closes booking conversations.' },
     ]

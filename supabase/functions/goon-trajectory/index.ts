@@ -8,6 +8,7 @@
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requireGate } from '../_shared/conditioning-gate.ts'
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' }
 const USER = '8c69b9c8-34eb-4147-9fec-3c1a5bc74b6f'
@@ -38,18 +39,22 @@ async function issue(s: any, src: string, edict: string, hours: number, proof = 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   const s = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '')
-  // Suppress on the sanctioned exit.
-  const { data: us } = await s.from('user_state').select('pause_new_decrees_until').eq('user_id', USER).maybeSingle()
-  if (us?.pause_new_decrees_until && new Date(us.pause_new_decrees_until) > new Date()) {
-    return new Response(JSON.stringify({ ok: true, suppressed: 'paused' }), { headers: { ...cors, 'Content-Type': 'application/json' } })
+  // Conditioning gate FIRST (mig 633): safeword latch + pause + elective +
+  // live-meet, fail closed. Covers the old inline pause check too.
+  const gate = await requireGate(s, 'goon')
+  if (!gate.allowed) {
+    return new Response(JSON.stringify({ ok: true, suppressed: gate.reason }), { headers: { ...cors, 'Content-Type': 'application/json' } })
   }
   // Depth from completed goon sessions.
   const { count } = await s.from('handler_decrees').select('id', { count: 'exact', head: true }).eq('user_id', USER).eq('trigger_source', 'goon_descent').eq('status', 'fulfilled')
   const rung = Math.min(RUNGS.length - 1, Math.floor((count ?? 0) / 4))
-  // Variable-ratio flourish: ~1/3 of the time, the descent demands the trigger-word too.
-  const trig = TRIGGERS[(count ?? 0) % TRIGGERS.length]
+  // Variable-ratio flourish: ~1/3 of sessions the descent demands the
+  // trigger-word too. (Audit fix: this used to fire 100% of the time —
+  // "variable ratio" with no variability. Keyed on session count so it is
+  // deterministic per rung-cycle, no Math.random in this runtime.)
+  const trig = (count ?? 0) % 3 === 0 ? TRIGGERS[(count ?? 0) % TRIGGERS.length] : null
   const out: Record<string, string> = {}
-  out.descent = await issue(s, 'goon_descent', RUNGS[rung] + ` Today's trigger: ${trig} — when you hear/read it, drop for ten seconds wherever you are.`, 20)
+  out.descent = await issue(s, 'goon_descent', RUNGS[rung] + (trig ? ` Today's trigger: ${trig} — when you hear/read it, drop for ten seconds wherever you are.` : ''), 20)
   out.wake = await issue(s, 'goon_wake', WAKE, 18)
   out.sleep = await issue(s, 'goon_sleep', SLEEP, 18)
   // The drop is proof AND product — goon pillar wired straight into the money lane (Art. X synergy). Faceless, own-body.

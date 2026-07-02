@@ -1,4 +1,4 @@
-// pgcron-setup — one-shot scheduler for the safety heals.
+// pgcron-setup — one-shot scheduler for the http-post pg_cron jobs.
 //
 // The Management API token isn't in this environment, so migrations can't be
 // applied the normal way. Supabase injects SUPABASE_DB_URL into edge functions,
@@ -6,17 +6,81 @@
 //
 // The established cron pattern reads app.settings.{supabase_url,service_role_key}
 // — but those turned out to be UNSET (null), so every existing http_post cron
-// has been POSTing to a null URL. So this job is made SELF-CONTAINED: the URL +
+// has been POSTing to a null URL. So these jobs are made SELF-CONTAINED: the URL +
 // service key are baked into the job body (from this function's env — never
 // git; cron.job is superuser-only). It also best-effort sets the DB settings so
 // the OTHER existing crons start resolving too.
 //
-// Idempotent. Never returns the key or the job command body.
+// 2026-07-02: generalized from the single blind-spot job to the full JOBS list —
+// meet-safety dispatch drain (SAFETY-CRITICAL), evening-prescribe dispatch, and
+// the outward-consequence dispatcher all ride the same rail. SQL-fn crons
+// (meet_safety_watch, machine_deadman_sweep, obligation_* etc.) don't need this:
+// they're plain `SELECT fn()` bodies scheduled by their own migrations and have
+// no URL/key dependency.
+//
+// Idempotent. Never returns the key or the job command bodies.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { Client } from 'https://deno.land/x/postgres@v0.19.3/mod.ts'
 
-const FN_URL = 'https://atevwvexapiykchvqvhm.supabase.co/functions/v1/blind-spot-monitor'
+const BASE_URL = 'https://atevwvexapiykchvqvhm.supabase.co/functions/v1'
+
+interface CronJob {
+  name: string
+  schedule: string
+  fn: string
+  body: string // jsonb expression for the POST body
+  guard?: string // optional SQL WHERE-EXISTS guard appended to the job body
+}
+
+// SAFETY-CRITICAL entries must be whitelisted in any cron prune (see
+// safety_exempt_systems, mig 633).
+const JOBS: CronJob[] = [
+  {
+    name: 'blind-spot-monitor-safety',
+    schedule: '*/5 * * * *',
+    fn: 'blind-spot-monitor',
+    body: `jsonb_build_object('trigger','pg_cron')`,
+  },
+  {
+    // SAFETY-CRITICAL: drains meet_escalation_dispatch (stage-3 trusted-contact
+    // sends + false-alarm follow-ups). Guarded so idle minutes cost nothing.
+    name: 'meet-safety-dispatch-drain',
+    schedule: '* * * * *',
+    fn: 'meet-safety-dispatch',
+    body: `'{}'::jsonb`,
+    guard: `WHERE EXISTS (SELECT 1 FROM meet_escalation_dispatch WHERE status = 'pending')`,
+  },
+  {
+    // Nightly evening-prescribe (mig 616 documents the 21:30 ET intent;
+    // pinned to 01:30 UTC).
+    name: 'evening-prescribe-dispatch',
+    schedule: '30 1 * * *',
+    fn: 'evening-prescribe-dispatch',
+    body: `jsonb_build_object('trigger','pg_cron')`,
+  },
+  {
+    // Enforcement spine outward rail (mig 630): preview lifecycle + fires.
+    name: 'outward-consequence-dispatcher',
+    schedule: '*/15 * * * *',
+    fn: 'outward-consequence-dispatcher',
+    body: `jsonb_build_object('trigger','pg_cron')`,
+  },
+]
+
+function jobSql(j: CronJob, key: string): string {
+  // Dollar-quoted with a tag that can't collide with the JWT
+  // (which is [A-Za-z0-9_.-] only).
+  return `SELECT cron.schedule(
+    '${j.name}',
+    '${j.schedule}',
+    $job$SELECT net.http_post(
+      url := '${BASE_URL}/${j.fn}',
+      headers := jsonb_build_object('Content-Type','application/json','Authorization','Bearer ${key}'),
+      body := ${j.body}
+    ) ${j.guard ?? ''};$job$
+  )`
+}
 
 Deno.serve(async () => {
   const dbUrl = Deno.env.get('SUPABASE_DB_URL')
@@ -24,17 +88,6 @@ Deno.serve(async () => {
   if (!dbUrl || !key) {
     return new Response(JSON.stringify({ ok: false, error: 'SUPABASE_DB_URL or SERVICE_ROLE_KEY not injected' }), { status: 500, headers: { 'Content-Type': 'application/json' } })
   }
-  // Self-contained job body: hardcoded URL + baked auth. Dollar-quoted with a
-  // tag that can't collide with the JWT (which is [A-Za-z0-9_.-] only).
-  const scheduleSql = `SELECT cron.schedule(
-    'blind-spot-monitor-safety',
-    '*/5 * * * *',
-    $job$SELECT net.http_post(
-      url := '${FN_URL}',
-      headers := jsonb_build_object('Content-Type','application/json','Authorization','Bearer ${key}'),
-      body := jsonb_build_object('trigger','pg_cron')
-    );$job$
-  )`
 
   const client = new Client(dbUrl)
   const notes: string[] = []
@@ -51,20 +104,25 @@ Deno.serve(async () => {
       notes.push('could not set DB settings: ' + String(e).slice(0, 120))
     }
 
-    // (Re)schedule the safety job — self-contained, so it works regardless.
-    try { await client.queryArray(`SELECT cron.unschedule('blind-spot-monitor-safety')`) } catch (_) { /* none yet */ }
-    await client.queryArray(scheduleSql)
+    // (Re)schedule every job — self-contained, so they work regardless.
+    const installed: Array<{ jobname: string; schedule: string; active: boolean }> = []
+    for (const j of JOBS) {
+      try { await client.queryArray(`SELECT cron.unschedule('${j.name}')`) } catch (_) { /* none yet */ }
+      await client.queryArray(jobSql(j, key))
+      const row = await client.queryObject<{ jobname: string; schedule: string; active: boolean }>(
+        `SELECT jobname, schedule, active FROM cron.job WHERE jobname = '${j.name}'`,
+      )
+      if (row.rows[0]) installed.push(row.rows[0])
+      else notes.push(`job ${j.name} did not appear in cron.job after schedule`)
+    }
 
-    const job = await client.queryObject<{ jobname: string; schedule: string; active: boolean }>(
-      `SELECT jobname, schedule, active FROM cron.job WHERE jobname = 'blind-spot-monitor-safety'`,
-    )
-
-    // PROVE the pipe end-to-end: fire the exact job body once through pg_net,
-    // wait, and read the HTTP response status. 200 => pg_cron will really work.
+    // PROVE the pipe end-to-end: fire one representative body once through
+    // pg_net, wait, and read the HTTP response status. 200 => pg_cron will
+    // really work for all of them (same rail).
     let testFire: unknown = 'skipped'
     try {
       const fired = await client.queryObject<{ id: string }>(
-        `SELECT net.http_post(url := '${FN_URL}', headers := jsonb_build_object('Content-Type','application/json','Authorization','Bearer ${key}'), body := jsonb_build_object('trigger','pg_cron_selftest'))::text AS id`,
+        `SELECT net.http_post(url := '${BASE_URL}/blind-spot-monitor', headers := jsonb_build_object('Content-Type','application/json','Authorization','Bearer ${key}'), body := jsonb_build_object('trigger','pg_cron_selftest'))::text AS id`,
       )
       const reqId = fired.rows[0]?.id
       await new Promise((r) => setTimeout(r, 5000))
@@ -77,7 +135,7 @@ Deno.serve(async () => {
     }
 
     await client.end()
-    return new Response(JSON.stringify({ ok: true, job: job.rows[0] ?? null, test_fire: testFire, notes }), { headers: { 'Content-Type': 'application/json' } })
+    return new Response(JSON.stringify({ ok: true, jobs: installed, test_fire: testFire, notes }), { headers: { 'Content-Type': 'application/json' } })
   } catch (e) {
     try { await client.end() } catch (_) { /* */ }
     return new Response(JSON.stringify({ ok: false, error: String(e), notes }), { status: 500, headers: { 'Content-Type': 'application/json' } })

@@ -2,7 +2,8 @@
  * Regimen Adherence Ratchet
  *
  * Handler drives dose scheduling. Missed doses create slips + punishments.
- * Ceasing a regimen requires 7-day cooldown with Gina disclosure pressure.
+ * Ceasing a regimen requires a 7-day cooldown.
+ * (Gina-disclosure consequence removed 2026-07-01 — policy: no disclosure to Gina.)
  */
 
 import { supabase } from '../supabase';
@@ -152,7 +153,7 @@ export async function processMissedDoses(userId: string): Promise<number> {
 }
 
 /**
- * Request to cease — starts 7-day cooldown + Gina disclosure.
+ * Request to cease — starts 7-day cooldown.
  */
 export async function requestCease(userId: string, regimenId: string): Promise<void> {
   const cooldownEnds = new Date(Date.now() + 7 * 86400000).toISOString();
@@ -174,7 +175,6 @@ export async function requestCease(userId: string, regimenId: string): Promise<v
     source_id: regimenId,
   });
 
-  // Queue Gina disclosure + public post punishment
-  await enqueuePunishment(userId, 'gina_disclosure_bump', {});
+  // Queue public post punishment (Gina-disclosure bump removed 2026-07-01)
   await enqueuePunishment(userId, 'public_slip_post', {});
 }

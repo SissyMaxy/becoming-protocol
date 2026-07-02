@@ -33,7 +33,8 @@ interface GeneratorSpec {
 
 const GENERATORS: GeneratorSpec[] = [
   { name: 'state_paired_delivery', function_name: 'state_paired_delivery_eval', expected_cadence_minutes: 15, conditional: true },
-  // wardrobe / gina_disclosure / gina_seed are conditional generators: their
+  // wardrobe is a conditional generator (gina_disclosure / gina_seed removed
+  // 2026-07-01 — policy: no disclosure to Gina; evals dropped in mig 624): its
   // _eval CONTINUEs to zero rows by design on most daily runs (pending-cooldown
   // 18h–14d, gap_min_days, readiness/arc gates, off-cooldown seed availability).
   // A 1440-min cadence → 48h freshness window they're quiet in by design, so a
@@ -43,18 +44,50 @@ const GENERATORS: GeneratorSpec[] = [
   // re-stagger wishes for. Marking them conditional drops these to info/quiet.
   { name: 'wardrobe_prescription', function_name: 'wardrobe_prescription_eval', expected_cadence_minutes: 1440, output_table: 'wardrobe_prescriptions', conditional: true },
   { name: 'cruising_lead_feminization', function_name: 'cruising_lead_feminization_eval', expected_cadence_minutes: 1440 },
-  { name: 'gina_disclosure', function_name: 'gina_disclosure_eval', expected_cadence_minutes: 1440, output_table: 'gina_disclosure_events', conditional: true },
-  { name: 'gina_seed', function_name: 'gina_seed_eval', expected_cadence_minutes: 1440, output_table: 'gina_seed_plantings', conditional: true },
   { name: 'cock_conditioning', function_name: 'cock_conditioning_eval', expected_cadence_minutes: 720, output_table: 'cock_conditioning_events', conditional: true },
   { name: 'pavlovian', function_name: 'pavlovian_eval', expected_cadence_minutes: 15, output_table: 'pavlovian_events', conditional: true },
   { name: 'warmup_tier', function_name: 'warmup_tier_eval', expected_cadence_minutes: 60, conditional: true },
   { name: 'focus_picker', function_name: 'focus_picker_eval', expected_cadence_minutes: 1440 },
-  // Evening confession → next-day prescriptions. Dead 2026-06-21 (only caller,
-  // EveningConfessionGate, was deleted); revived by the nightly
-  // evening-prescribe-dispatch edge fn + pg_cron (mig 616, 21:30 daily) which
-  // feeds today's confession transcript to evening-confession-prescribe.
-  // Conditional: only produces rows on days the user actually confessed.
-  { name: 'evening_confession_prescribe', function_name: 'evening-confession-prescribe', expected_cadence_minutes: 1440, output_table: 'feminization_prescriptions', edge_function: true, conditional: true },
+  // Machine safety envelope (mig 625). machine-overseer only produces rows
+  // when the user actually runs the rig → conditional. The dead-man sweep is
+  // a SQL fn on pg_cron (every minute); the function-exists probe is the
+  // check that matters — zero aborted sessions is the healthy case.
+  { name: 'machine_overseer', function_name: 'machine-overseer', expected_cadence_minutes: 1440, output_table: 'machine_sessions', edge_function: true, conditional: true },
+  { name: 'machine_deadman_sweep', function_name: 'machine_deadman_sweep', expected_cadence_minutes: 1, conditional: true },
+  // Meet safety v2 (mig 626). SAFETY-CRITICAL — the watcher runs on pg_cron
+  // every minute and must be whitelisted in any cron prune. meet_safety_watch
+  // is a SQL fn (probed via check_function_exists); conditional because it is
+  // correctly quiet when no plan is armed/live. The dispatcher is an edge fn
+  // whose output table only has rows during escalations/false alarms.
+  { name: 'meet_safety_watch', function_name: 'meet_safety_watch', expected_cadence_minutes: 1, conditional: true },
+  { name: 'meet_safety_dispatch', function_name: 'meet-safety-dispatch', expected_cadence_minutes: 5, output_table: 'meet_escalation_dispatch', edge_function: true, conditional: true },
+  // Enforcement Spine v2 (migs 627-630). The miss-processor and the hard-mode
+  // recompute are SQL fns on pg_cron; both are conditional (zero rows is the
+  // healthy case when nothing was missed). The outward dispatcher is an edge
+  // fn; its queue is empty in the healthy case.
+  { name: 'obligation_miss_processor', function_name: 'obligation_miss_processor', expected_cadence_minutes: 10, output_table: 'enforcement_escalation_events', conditional: true },
+  { name: 'hard_mode_recompute', function_name: 'hard_mode_recompute_all', expected_cadence_minutes: 30, conditional: true },
+  { name: 'obligation_pause_shift_accruer', function_name: 'obligation_pause_shift_accrue', expected_cadence_minutes: 5, conditional: true },
+  { name: 'outward_consequence_dispatcher', function_name: 'outward-consequence-dispatcher', expected_cadence_minutes: 15, output_table: 'outward_dispatch_queue', edge_function: true, conditional: true },
+  // ── Feminization loop (FEM design §7, migs 634-638) ──
+  // (supersedes the old evening_confession_prescribe conditional entry: the
+  // bank-engine fallback now guarantees daily rows, so silence = dead loop.)
+  // fem_prescription_loop is NOT conditional: between the confession path
+  // and the bank-engine fallback, SOME rows must land daily — silence here
+  // means the whole loop died (the 2026-06-21 dead-pipeline class).
+  { name: 'fem_prescription_loop', function_name: 'evening-prescribe-dispatch', expected_cadence_minutes: 1440, output_table: 'feminization_prescriptions', edge_function: true },
+  { name: 'voice_progress', function_name: 'voice-pitch-watcher', expected_cadence_minutes: 10080, output_table: 'voice_progress_samples', edge_function: true, conditional: true },
+  { name: 'transition_tracking', function_name: 'transition-tracking-prompter', expected_cadence_minutes: 10080, output_table: 'transition_tracking_log', edge_function: true, conditional: true },
+  { name: 'mantra_drills', function_name: 'mommy-mantra-drill-submit', expected_cadence_minutes: 10080, output_table: 'mantra_drill_sessions', edge_function: true, conditional: true },
+  { name: 'body_metrics_spine', function_name: 'body_metrics', expected_cadence_minutes: 43200, output_table: 'body_metrics', edge_function: true, conditional: true },
+  // ── Revenue ladder v2 + conditioning gate (migs 631-633) ──
+  // Daily generator; conditional because the rung gate correctly issues
+  // nothing when the deepest unmet rung's acquisition decree is still open.
+  // conditioning_gate is a SQL fn probed for existence — if it goes missing,
+  // every gated generator fails CLOSED (silent full stop), so this probe is
+  // the alarm that distinguishes "paused by design" from "gate deleted".
+  { name: 'revenue_task_generator', function_name: 'revenue-task-generator', expected_cadence_minutes: 1440, output_table: 'handler_decrees', edge_function: true, conditional: true },
+  { name: 'conditioning_gate', function_name: 'conditioning_gate', expected_cadence_minutes: 1440, conditional: true },
 ];
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
@@ -73,10 +106,9 @@ async function checkGenerator(g: GeneratorSpec): Promise<CheckResult[]> {
   if (g.output_table) {
     const windowHours = Math.ceil(g.expected_cadence_minutes / 60) * 2;
     const since = new Date(Date.now() - windowHours * 3600 * 1000).toISOString();
-    const dateCol = g.output_table === 'gina_seed_plantings' ? 'scheduled_at'
-                  : g.output_table === 'cock_conditioning_events' ? 'assigned_at'
-                  : g.output_table === 'gina_disclosure_events' ? 'assigned_at'
+    const dateCol = g.output_table === 'cock_conditioning_events' ? 'assigned_at'
                   : g.output_table === 'wardrobe_prescriptions' ? 'assigned_at'
+                  : g.output_table === 'body_metrics' ? 'measured_at'
                   : 'created_at';
     const { count, error: qErr } = await supabase.from(g.output_table).select('id', { count: 'exact', head: true }).gte(dateCol, since);
     if (qErr) results.push({ component: g.name, severity: 'warning', event_kind: 'query_error', message: `Output query failed: ${qErr.message}`, context_data: { table: g.output_table } });
@@ -107,7 +139,7 @@ async function checkDeliveryBridge(): Promise<CheckResult[]> {
 
 async function checkFulfillmentChain(): Promise<CheckResult[]> {
   const since = new Date(Date.now() - 7 * 86400 * 1000).toISOString();
-  const { data: rows } = await supabase.from('handler_decrees').select('trigger_source, status').gte('created_at', since).in('trigger_source', ['cock_conditioning','gina_disclosure_pressure','cruising_lead_feminization','gina_seed_planting','wardrobe_acquisition','wardrobe_rotation','pavlovian_pairing','pavlovian_trigger']);
+  const { data: rows } = await supabase.from('handler_decrees').select('trigger_source, status').gte('created_at', since).in('trigger_source', ['cock_conditioning','cruising_lead_feminization','wardrobe_acquisition','wardrobe_rotation','pavlovian_pairing','pavlovian_trigger']);
   const bySource: Record<string, { fulfilled: number; total: number }> = {};
   for (const r of (rows ?? []) as { trigger_source: string; status: string }[]) {
     if (!bySource[r.trigger_source]) bySource[r.trigger_source] = { fulfilled: 0, total: 0 };
@@ -135,6 +167,100 @@ async function checkChainAssertion(): Promise<CheckResult[]> {
   }
 }
 
+// Ledger-liveness assertions (design §6): the obligation ledger is the
+// enforcement spine — if it silently stops, everything downstream reports
+// healthy while penalizing nobody or (worse) without evidence.
+async function checkLedgerLiveness(): Promise<CheckResult[]> {
+  const results: CheckResult[] = [];
+
+  // 1. filed → surfaced median < 6h over the last 7d.
+  const since7d = new Date(Date.now() - 7 * 86400 * 1000).toISOString();
+  const { data: surfaced, error: sErr } = await supabase
+    .from('obligations')
+    .select('created_at, surfaced_at')
+    .not('surfaced_at', 'is', null)
+    .gte('created_at', since7d)
+    .limit(500);
+  if (sErr) {
+    results.push({ component: 'obligation_ledger', severity: 'warning', event_kind: 'query_error', message: `surfacing-latency query failed: ${sErr.message}`, context_data: {} });
+  } else if ((surfaced ?? []).length > 0) {
+    const latencies = (surfaced as { created_at: string; surfaced_at: string }[])
+      .map(o => new Date(o.surfaced_at).getTime() - new Date(o.created_at).getTime())
+      .sort((a, b) => a - b);
+    const medianMs = latencies[Math.floor(latencies.length / 2)];
+    const medianH = medianMs / 3600_000;
+    results.push({
+      component: 'obligation_ledger',
+      severity: medianH < 6 ? 'info' : 'warning',
+      event_kind: medianH < 6 ? 'healthy' : 'surfacing_latency_high',
+      message: `filed→surfaced median ${medianH.toFixed(1)}h over ${latencies.length} obligations (7d).`,
+      context_data: { median_hours: medianH, sample: latencies.length },
+    });
+  }
+
+  // 2. ZERO missed obligations with NULL evidence.
+  const { count: noEvidence, error: eErr } = await supabase
+    .from('obligations')
+    .select('id', { count: 'exact', head: true })
+    .in('status', ['missed', 'consequence_previewed', 'consequence_fired'])
+    .is('evidence_row_id', null);
+  if (eErr) {
+    results.push({ component: 'obligation_ledger', severity: 'warning', event_kind: 'query_error', message: `evidence query failed: ${eErr.message}`, context_data: {} });
+  } else {
+    results.push({
+      component: 'obligation_ledger',
+      severity: (noEvidence ?? 0) === 0 ? 'info' : 'error',
+      event_kind: (noEvidence ?? 0) === 0 ? 'healthy' : 'missed_without_evidence',
+      message: `${noEvidence ?? 0} missed obligations with NULL evidence (must be 0).`,
+      context_data: { count: noEvidence ?? 0 },
+    });
+  }
+
+  // 3. ZERO consequence_fired without an enforcement_audit row.
+  const { data: fired, error: fErr } = await supabase
+    .from('obligations')
+    .select('id')
+    .eq('status', 'consequence_fired')
+    .limit(500);
+  if (fErr) {
+    results.push({ component: 'obligation_ledger', severity: 'warning', event_kind: 'query_error', message: `fired query failed: ${fErr.message}`, context_data: {} });
+  } else if ((fired ?? []).length > 0) {
+    const ids = (fired as { id: string }[]).map(o => o.id);
+    const { data: audits } = await supabase
+      .from('enforcement_audit')
+      .select('obligation_id')
+      .in('obligation_id', ids);
+    const audited = new Set(((audits ?? []) as { obligation_id: string }[]).map(a => a.obligation_id));
+    const missing = ids.filter(id => !audited.has(id));
+    results.push({
+      component: 'obligation_ledger',
+      severity: missing.length === 0 ? 'info' : 'error',
+      event_kind: missing.length === 0 ? 'healthy' : 'fired_without_audit',
+      message: `${missing.length} consequence_fired obligations without an audit row (must be 0).`,
+      context_data: { missing: missing.slice(0, 10) },
+    });
+  }
+
+  // 4. Open-latch age (surface it — a week-old open latch is a stuck state
+  // someone should see on the pulse panel, not an error).
+  const { data: latches } = await supabase
+    .from('safeword_latches')
+    .select('user_id, latched_at')
+    .is('resumed_at', null);
+  for (const l of (latches ?? []) as { user_id: string; latched_at: string }[]) {
+    const ageH = (Date.now() - new Date(l.latched_at).getTime()) / 3600_000;
+    results.push({
+      component: 'safeword_latch',
+      severity: 'info',
+      event_kind: 'open_latch',
+      message: `Open safeword latch, age ${ageH.toFixed(1)}h. Resume is her explicit action — this is state, not a fault.`,
+      context_data: { user_id: l.user_id, age_hours: ageH },
+    });
+  }
+
+  return results;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== 'POST' && req.method !== 'GET') return new Response('method not allowed', { status: 405 });
   const allResults: CheckResult[] = [];
@@ -145,6 +271,7 @@ Deno.serve(async (req: Request) => {
   try { allResults.push(...await checkDeliveryBridge()); } catch (e) { allResults.push({ component: 'delivery_bridge', severity: 'error', event_kind: 'check_exception', message: (e as Error).message, context_data: {} }); }
   try { allResults.push(...await checkFulfillmentChain()); } catch (e) { allResults.push({ component: 'fulfillment', severity: 'error', event_kind: 'check_exception', message: (e as Error).message, context_data: {} }); }
   try { allResults.push(...await checkChainAssertion()); } catch (e) { allResults.push({ component: 'chain_assertion', severity: 'error', event_kind: 'check_exception', message: (e as Error).message, context_data: {} }); }
+  try { allResults.push(...await checkLedgerLiveness()); } catch (e) { allResults.push({ component: 'obligation_ledger', severity: 'error', event_kind: 'check_exception', message: (e as Error).message, context_data: {} }); }
   const toInsert = allResults.map(r => ({ component: r.component, severity: r.severity, event_kind: r.event_kind, message: r.message, context_data: r.context_data }));
   try { await supabase.from('mommy_supervisor_log').insert(toInsert); }
   catch (e) { return new Response(JSON.stringify({ insert_error: (e as Error).message, results: allResults }), { headers: { 'content-type': 'application/json' }, status: 500 }); }

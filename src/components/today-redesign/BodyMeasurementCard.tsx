@@ -35,13 +35,21 @@ export function BodyMeasurementCard() {
   });
   const [submitting, setSubmitting] = useState(false);
 
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     if (!user?.id) return;
-    const { data } = await supabase.from('body_measurements')
+    // Canonical spine (mig 634). body_measurements still works as a view,
+    // but this card is a first-party capture surface — read the table.
+    const { data, error } = await supabase.from('body_metrics')
       .select('id, measured_at, weight_kg, waist_cm, hips_cm, chest_cm, thigh_cm, neck_cm')
       .eq('user_id', user.id)
       .order('measured_at', { ascending: false })
       .limit(8);
+    if (error) {
+      console.error('[BodyMeasurementCard] load failed:', error.message);
+      return;
+    }
     setHistory((data || []) as Measurement[]);
   }, [user?.id]);
 
@@ -50,6 +58,7 @@ export function BodyMeasurementCard() {
   const submit = async () => {
     if (!user?.id) return;
     setSubmitting(true);
+    setSaveError(null);
     const parse = (v: string) => v.trim() === '' ? null : parseFloat(v);
     const payload = {
       user_id: user.id,
@@ -60,20 +69,32 @@ export function BodyMeasurementCard() {
       thigh_cm: parse(form.thigh_cm),
       neck_cm: parse(form.neck_cm),
       notes: form.notes.trim() || null,
+      source: 'card',
     };
     // Require at least one measurement
     const anyPresent = [payload.weight_kg, payload.waist_cm, payload.hips_cm, payload.chest_cm, payload.thigh_cm, payload.neck_cm].some(v => v != null);
     if (!anyPresent) { setSubmitting(false); return; }
 
-    await supabase.from('body_measurements').insert(payload);
+    const { error: insErr } = await supabase.from('body_metrics').insert(payload);
+    if (insErr) {
+      // The old card wrote to body_measurements with metric columns the
+      // imperial table didn't have — every insert failed silently and the
+      // commitment got fulfilled anyway. Never again: error surfaces,
+      // fulfillment happens ONLY on success.
+      console.error('[BodyMeasurementCard] insert failed:', insErr.message);
+      setSaveError(insErr.message);
+      setSubmitting(false);
+      return;
+    }
 
-    // Fulfill any pending weekly measurement commitment
-    await supabase.from('handler_commitments')
+    // Fulfill any pending weekly measurement commitment — ONLY on success.
+    const { error: commitErr } = await supabase.from('handler_commitments')
       .update({ status: 'fulfilled', fulfilled_at: new Date().toISOString(), fulfillment_note: 'Measurements logged via BodyMeasurementCard' })
       .eq('user_id', user.id)
       .eq('category', 'body_proof')
       .eq('status', 'pending')
       .ilike('what', '%measurement%');
+    if (commitErr) console.error('[BodyMeasurementCard] commitment fulfill failed:', commitErr.message);
 
     setForm({ weight_kg: '', waist_cm: '', hips_cm: '', chest_cm: '', thigh_cm: '', neck_cm: '', notes: '' });
     setShowForm(false);
@@ -175,6 +196,11 @@ export function BodyMeasurementCard() {
               style={{ width: '100%', background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 5, padding: '6px 9px', fontSize: 11, color: '#e8e6e3', fontFamily: 'inherit', marginTop: 2 }}
             />
           </div>
+          {saveError && (
+            <div style={{ gridColumn: '1 / -1', fontSize: 11, color: '#f47272', marginTop: 4 }}>
+              Save failed: {saveError}
+            </div>
+          )}
           <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 6, marginTop: 6 }}>
             <button onClick={submit} disabled={submitting} style={{
               flex: 1, padding: '7px 12px', borderRadius: 6, border: 'none',

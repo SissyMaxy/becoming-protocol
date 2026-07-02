@@ -10,6 +10,11 @@
 import { supabase } from '../supabase';
 import { getHiddenParam } from './hidden-operations';
 import { getFundBalance } from '../handler-engines/auto-purchase';
+import {
+  attrsMatch,
+  normalizeWardrobeCategory,
+  type WardrobeRequirement,
+} from '../wardrobe/categories';
 
 // ============================================
 // TYPES
@@ -20,6 +25,8 @@ export interface WardrobeItem {
   userId: string;
   itemName: string;
   category: string;
+  /** attrs jsonb (mig 638): {"heel":true,"color":"...","fem_level":1-5} */
+  attrs: Record<string, unknown>;
   femininityLevel: number;
   stealthSafe: boolean;
   publicSafe: boolean;
@@ -60,6 +67,7 @@ export interface PrescribedOutfit {
 interface NewWardrobeItem {
   itemName: string;
   category: string;
+  attrs?: Record<string, unknown>;
   femininityLevel?: number;
   stealthSafe?: boolean;
   publicSafe?: boolean;
@@ -78,47 +86,51 @@ interface NewWardrobeItem {
 // LEVEL REQUIREMENTS
 // ============================================
 
-const LEVEL_REQUIREMENTS: Record<number, { category: string; minCount: number }[]> = {
-  1: [{ category: 'underwear', minCount: 3 }],
+// Canonical vocabulary (mig 623 CHECK) with attr predicates — the legacy
+// list used category strings ('bra','top','leggings','shoes_heels','wig',
+// 'jewelry','scent') that the DB CHECK forbids, so gap analysis compared
+// inventory against categories that could never exist and reported
+// phantom gaps forever. Heels are shoes+{heel:true}, not a category.
+export const LEVEL_REQUIREMENTS: Record<number, WardrobeRequirement[]> = {
+  1: [{ category: 'panties', minCount: 3 }],
   2: [
-    { category: 'underwear', minCount: 3 },
-    { category: 'bra', minCount: 2 },
-    { category: 'top', minCount: 3 },
-    { category: 'leggings', minCount: 2 },
+    { category: 'panties', minCount: 3 },
+    { category: 'bras', minCount: 2 },
+    { category: 'tops', minCount: 3 },
+    { category: 'bottoms', minCount: 2 },
   ],
   3: [
-    { category: 'underwear', minCount: 3 },
-    { category: 'bra', minCount: 2 },
-    { category: 'top', minCount: 3 },
-    { category: 'leggings', minCount: 2 },
-    { category: 'dress', minCount: 2 },
-    { category: 'skirt', minCount: 2 },
+    { category: 'panties', minCount: 3 },
+    { category: 'bras', minCount: 2 },
+    { category: 'tops', minCount: 3 },
+    { category: 'bottoms', minCount: 2 },
+    { category: 'dresses', minCount: 2 },
+    { category: 'skirts', minCount: 2 },
     { category: 'accessories', minCount: 2 },
   ],
   4: [
-    { category: 'underwear', minCount: 3 },
-    { category: 'bra', minCount: 2 },
-    { category: 'top', minCount: 3 },
-    { category: 'dress', minCount: 2 },
-    { category: 'skirt', minCount: 2 },
-    { category: 'shoes_flats', minCount: 1 },
-    { category: 'shoes_heels', minCount: 1 },
-    { category: 'jewelry', minCount: 3 },
-    { category: 'wig', minCount: 1 },
-    { category: 'accessories', minCount: 2 },
+    { category: 'panties', minCount: 3 },
+    { category: 'bras', minCount: 2 },
+    { category: 'tops', minCount: 3 },
+    { category: 'dresses', minCount: 2 },
+    { category: 'skirts', minCount: 2 },
+    { category: 'shoes', minCount: 2 },
+    { category: 'shoes', minCount: 1, attr: { heel: true }, label: 'heels' },
+    { category: 'accessories', minCount: 3 },
+    { category: 'wigs', minCount: 1 },
   ],
   5: [
-    { category: 'underwear', minCount: 5 },
-    { category: 'bra', minCount: 3 },
-    { category: 'top', minCount: 4 },
-    { category: 'dress', minCount: 3 },
-    { category: 'skirt', minCount: 2 },
-    { category: 'shoes_flats', minCount: 1 },
-    { category: 'shoes_heels', minCount: 2 },
-    { category: 'jewelry', minCount: 4 },
-    { category: 'wig', minCount: 1 },
-    { category: 'accessories', minCount: 3 },
-    { category: 'scent', minCount: 2 },
+    { category: 'panties', minCount: 5 },
+    { category: 'bras', minCount: 3 },
+    { category: 'tops', minCount: 4 },
+    { category: 'dresses', minCount: 3 },
+    { category: 'skirts', minCount: 2 },
+    { category: 'shoes', minCount: 3 },
+    { category: 'shoes', minCount: 2, attr: { heel: true }, label: 'heels' },
+    { category: 'accessories', minCount: 4 },
+    { category: 'wigs', minCount: 1 },
+    { category: 'makeup', minCount: 2 },
+    { category: 'other', minCount: 1, label: 'scent' },
   ],
 };
 
@@ -150,18 +162,27 @@ export async function getWardrobe(
 }
 
 /**
- * Add item to wardrobe inventory.
+ * Add item to wardrobe inventory. The category is normalized to the
+ * canonical (mig 623) vocabulary before insert — legacy values used to
+ * fail the DB CHECK silently because the error was never read. Now the
+ * error is destructured and thrown so no add can silently vanish again.
  */
 export async function addWardrobeItem(
   userId: string,
   item: NewWardrobeItem,
 ): Promise<WardrobeItem | null> {
-  const { data } = await supabase
+  const canonical = normalizeWardrobeCategory(item.category);
+  const attrs: Record<string, unknown> = { ...(item.attrs ?? {}) };
+  // Preserve heel-ness when a legacy shoes_heels value collapses to shoes.
+  if (item.category === 'shoes_heels') attrs.heel = true;
+
+  const { data, error } = await supabase
     .from('wardrobe_inventory')
     .insert({
       user_id: userId,
       item_name: item.itemName,
-      category: item.category,
+      category: canonical,
+      attrs,
       femininity_level: item.femininityLevel ?? 3,
       stealth_safe: item.stealthSafe ?? false,
       public_safe: item.publicSafe ?? false,
@@ -178,7 +199,79 @@ export async function addWardrobeItem(
     .select('*')
     .single();
 
+  if (error) {
+    console.error('[wardrobe] addWardrobeItem insert failed:', error.message);
+    // attrs column may predate mig 638 — retry once without it.
+    if (/attrs/.test(error.message)) {
+      const { data: d2, error: e2 } = await supabase
+        .from('wardrobe_inventory')
+        .insert({
+          user_id: userId,
+          item_name: item.itemName,
+          category: canonical,
+          femininity_level: item.femininityLevel ?? 3,
+          stealth_safe: item.stealthSafe ?? false,
+          public_safe: item.publicSafe ?? false,
+          color: item.color ?? null,
+          size: item.size ?? null,
+          brand: item.brand ?? null,
+          photo_url: item.photoUrl ?? null,
+          purchase_date: item.purchaseDate ?? null,
+          purchase_price_cents: item.purchasePriceCents ?? null,
+          condition: item.condition ?? 'good',
+          handler_notes: item.handlerNotes ?? null,
+          favorite: item.favorite ?? false,
+        })
+        .select('*')
+        .single();
+      if (e2) throw new Error(`wardrobe add failed: ${e2.message}`);
+      return d2 ? mapDbToItem(d2) : null;
+    }
+    throw new Error(`wardrobe add failed: ${error.message}`);
+  }
+
   return data ? mapDbToItem(data) : null;
+}
+
+/**
+ * Pure gap computation — canonical categories + attr predicates. Exported
+ * for the regression test: seed one item per canonical category, level-2
+ * gaps must be EXACTLY the true shortfalls (no phantom legacy categories).
+ */
+export function computeWardrobeGaps(
+  items: Array<{ category: string; attrs?: Record<string, unknown> | null }>,
+  level: number,
+): WardrobeGap[] {
+  const effectiveLevel = Math.min(5, Math.max(1, level));
+
+  // Accumulate requirements level 1..effectiveLevel; key = category + attr
+  // predicate so "heels" (shoes+{heel:true}) tracks separately from shoes.
+  const merged = new Map<string, WardrobeRequirement>();
+  for (let lvl = 1; lvl <= effectiveLevel; lvl++) {
+    for (const req of LEVEL_REQUIREMENTS[lvl] ?? []) {
+      const key = `${req.category}:${JSON.stringify(req.attr ?? null)}`;
+      const existing = merged.get(key);
+      if (!existing || req.minCount > existing.minCount) merged.set(key, req);
+    }
+  }
+
+  const gaps: WardrobeGap[] = [];
+  for (const req of merged.values()) {
+    const have = items.filter(i =>
+      normalizeWardrobeCategory(i.category) === req.category &&
+      attrsMatch(i.attrs ?? undefined, req.attr),
+    ).length;
+    if (have < req.minCount) {
+      const deficit = req.minCount - have;
+      const urgency: WardrobeGap['urgency'] =
+        have === 0 ? 'critical' : deficit >= 2 ? 'moderate' : 'low';
+      gaps.push({ category: req.label ?? req.category, needed: req.minCount, have, urgency });
+    }
+  }
+
+  const urgencyOrder = { critical: 0, moderate: 1, low: 2 };
+  gaps.sort((a, b) => urgencyOrder[a.urgency] - urgencyOrder[b.urgency]);
+  return gaps;
 }
 
 /**
@@ -196,44 +289,12 @@ export async function getWardrobeGaps(userId: string): Promise<WardrobeAnalysis>
   ]);
 
   const styleLevel = skillRes.data?.current_level ?? 1;
-  const effectiveLevel = Math.min(5, Math.max(1, styleLevel));
-
-  // Count items per category
-  const categoryCounts: Record<string, number> = {};
   let totalValueCents = 0;
   for (const item of items) {
-    categoryCounts[item.category] = (categoryCounts[item.category] ?? 0) + 1;
     if (item.purchasePriceCents) totalValueCents += item.purchasePriceCents;
   }
 
-  // Accumulate requirements from level 1 up to current level
-  const allRequirements = new Map<string, number>();
-  for (let lvl = 1; lvl <= effectiveLevel; lvl++) {
-    const reqs = LEVEL_REQUIREMENTS[lvl];
-    if (!reqs) continue;
-    for (const req of reqs) {
-      const existing = allRequirements.get(req.category) ?? 0;
-      if (req.minCount > existing) {
-        allRequirements.set(req.category, req.minCount);
-      }
-    }
-  }
-
-  const gaps: WardrobeGap[] = [];
-  for (const [category, needed] of allRequirements) {
-    const have = categoryCounts[category] ?? 0;
-    if (have < needed) {
-      const deficit = needed - have;
-      const urgency: WardrobeGap['urgency'] =
-        have === 0 ? 'critical' : deficit >= 2 ? 'moderate' : 'low';
-      gaps.push({ category, needed, have, urgency });
-    }
-  }
-
-  // Sort: critical first, then moderate, then low
-  const urgencyOrder = { critical: 0, moderate: 1, low: 2 };
-  gaps.sort((a, b) => urgencyOrder[a.urgency] - urgencyOrder[b.urgency]);
-
+  const gaps = computeWardrobeGaps(items, styleLevel);
   return { gaps, totalItems: items.length, totalValueCents };
 }
 
@@ -278,10 +339,12 @@ export async function prescribeSpecificOutfit(
 
   if (available.length === 0) return null;
 
-  // Selection helper: pick best item from category, favoring variety + femininity match
-  const pick = (category: string | string[]): WardrobeItem | null => {
-    const cats = Array.isArray(category) ? category : [category];
-    const pool = available.filter((i) => cats.includes(i.category));
+  // Selection helper: pick best item from canonical category (+ optional
+  // attr predicate), favoring variety + femininity match
+  const pick = (category: string | string[], attr?: Record<string, boolean | number | string>): WardrobeItem | null => {
+    const cats = (Array.isArray(category) ? category : [category]).map(normalizeWardrobeCategory);
+    const pool = available.filter((i) =>
+      cats.includes(normalizeWardrobeCategory(i.category)) && attrsMatch(i.attrs, attr));
     if (pool.length === 0) return null;
 
     // Score: prefer items near target femininity, deprioritize recently worn
@@ -304,35 +367,34 @@ export async function prescribeSpecificOutfit(
   };
 
   const selected: WardrobeItem[] = [];
-  const addPick = (cats: string | string[]) => {
-    const item = pick(cats);
+  const addPick = (cats: string | string[], attr?: Record<string, boolean | number | string>) => {
+    const item = pick(cats, attr);
     if (item) selected.push(item);
   };
 
-  // Core outfit pieces
-  addPick('underwear');
-  addPick('bra');
+  // Core outfit pieces (canonical vocabulary — mig 623)
+  addPick(['panties', 'underwear']);
+  addPick('bras');
 
   // Either dress or top+bottom
-  const dress = pick('dress');
+  const dress = pick('dresses');
   if (dress && targetFem >= 3) {
     selected.push(dress);
   } else {
-    addPick('top');
-    addPick(['bottom', 'skirt', 'leggings']);
+    addPick('tops');
+    addPick(['bottoms', 'skirts']);
   }
 
-  // Shoes
+  // Shoes — heels are shoes+{heel:true}, an attr, not a category
   if (targetFem >= 4) {
-    addPick('shoes_heels');
+    addPick('shoes', { heel: true });
   } else {
-    addPick(['shoes_flats', 'shoes_heels']);
+    addPick('shoes');
   }
 
   // Accessories
   addPick('accessories');
-  if (targetFem >= 3) addPick('jewelry');
-  if (targetFem >= 4) addPick('wig');
+  if (targetFem >= 4) addPick('wigs');
 
   // Build description
   const itemDescriptions = selected.map(
@@ -470,7 +532,8 @@ function mapDbToItem(row: Record<string, unknown>): WardrobeItem {
     id: row.id as string,
     userId: row.user_id as string,
     itemName: row.item_name as string,
-    category: row.category as string,
+    category: normalizeWardrobeCategory(row.category as string),
+    attrs: (row.attrs as Record<string, unknown>) ?? {},
     femininityLevel: (row.femininity_level as number) ?? 3,
     stealthSafe: (row.stealth_safe as boolean) ?? false,
     publicSafe: (row.public_safe as boolean) ?? false,

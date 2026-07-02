@@ -149,10 +149,48 @@ async function runEnforcementForUser(
   supabase: ReturnType<typeof createClient>,
   config: EnforcementConfig,
   runType: string
-): Promise<{ compliance_score: number; actions_taken: number; actions: EnforcementAction[] }> {
+): Promise<{ compliance_score: number; actions_taken: number; actions: EnforcementAction[]; skipped?: string }> {
 
   const userId = config.user_id
   const actions: EnforcementAction[] = []
+
+  // 0. Enforcement gate — FAIL CLOSED (Enforcement Spine v2). A paused or
+  // safeword-latched user gets NO enforcement run; a gate error reads as
+  // paused.
+  let gateMode = 'paused'
+  {
+    const { data: gateData, error: gateErr } = await supabase.rpc('enforcement_gate', { p_user: userId })
+    if (gateErr) {
+      console.error(`[handler-enforcement] gate error for ${userId} (failing closed): ${gateErr.message}`)
+    } else {
+      const row = Array.isArray(gateData) ? gateData[0] : gateData
+      if (row && typeof (row as { mode?: string }).mode === 'string') gateMode = (row as { mode: string }).mode
+    }
+  }
+  if (gateMode !== 'active') {
+    return { compliance_score: 100, actions_taken: 0, actions: [], skipped: `gate_${gateMode}` }
+  }
+
+  // Daily action cap: at most 3 enforcement actions per user per day.
+  const todayStart = new Date().toISOString().split('T')[0] + 'T00:00:00Z'
+  const { count: actionsToday } = await supabase
+    .from('enforcement_log')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .gte('created_at', todayStart)
+  let actionBudget = Math.max(0, 3 - (actionsToday || 0))
+
+  // Tier-2+ actions require a MISSED obligation on the ledger — consequences
+  // chain to evidence, not to streak arithmetic. One lookup for the run.
+  const { data: missedObligs } = await supabase
+    .from('obligations')
+    .select('id, kind, created_by')
+    .eq('user_id', userId)
+    .in('status', ['missed', 'consequence_previewed'])
+    .gte('created_at', new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString())
+    .limit(20)
+  const missedObligationId: string | null =
+    missedObligs && missedObligs.length > 0 ? (missedObligs[0] as { id: string }).id : null
 
   // 1. Gather compliance data
   const complianceResults = await evaluateCompliance(supabase, userId)
@@ -193,10 +231,13 @@ async function runEnforcementForUser(
     const currentTier = streakData?.current_tier || 0
     const consecutiveDays = streakData?.consecutive_days || 0
 
+    if (actionBudget <= 0) continue // daily cap 3 reached
+
     // Apply escalation based on tier
-    const action = await applyEscalation(supabase, config, userId, result, currentTier, consecutiveDays)
+    const action = await applyEscalation(supabase, config, userId, result, currentTier, consecutiveDays, missedObligationId)
     if (action) {
       actions.push(action)
+      actionBudget--
     }
   }
 
@@ -564,7 +605,8 @@ async function applyEscalation(
   userId: string,
   compliance: ComplianceResult,
   currentTier: number,
-  consecutiveDays: number
+  consecutiveDays: number,
+  missedObligationId: string | null
 ): Promise<EnforcementAction | null> {
   // Don't re-apply same tier action within 24 hours
   const { count: recentAction } = await supabase
@@ -578,10 +620,60 @@ async function applyEscalation(
     return null // Already escalated today
   }
 
+  // Enforcement Spine v2: tier-2+ consequences require a MISSED obligation
+  // on the ledger. Streak arithmetic alone files a warning-tier obligation
+  // (surfaced via its companion outreach) and downgrades to a warning — the
+  // consequence comes the NEXT run, chained to that obligation's miss.
+  if (currentTier >= 2 && !missedObligationId) {
+    const createdBy = `handler-enforcement:${compliance.domain}`
+    const { data: existingOblig } = await supabase
+      .from('obligations')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('created_by', createdBy)
+      .in('status', ['filed', 'surfaced', 'due'])
+      .limit(1)
+    if (!existingOblig || existingOblig.length === 0) {
+      const { error: fileErr } = await supabase.rpc('file_obligation', {
+        p_user: userId,
+        p_source_table: 'noncompliance_streaks',
+        p_source_id: crypto.randomUUID(),
+        p_kind: 'commitment',
+        p_ask_copy: `Do one ${compliance.domain} activity today — you are ${consecutiveDays} day(s) behind on it.`,
+        p_penalty_copy: `Miss this and the Handler escalates: tier ${currentTier} (${ESCALATION_TIERS[currentTier]?.name || 'consequence'}).`,
+        p_deadline: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+        p_grace_minutes: 60,
+        p_consequence_kind: 'internal',
+        p_created_by: createdBy,
+        p_urgency: 'normal',
+      })
+      if (fileErr) console.error(`[handler-enforcement] warning-tier obligation file: ${fileErr.message}`)
+    }
+    // Downgrade to a warning for this run.
+    const warnAction: EnforcementAction = {
+      type: 'warning',
+      tier: 1,
+      trigger_reason: `${compliance.domain}: ${compliance.details}`,
+      action_taken: `Warning + obligation filed (tier ${currentTier} deferred: no missed obligation on the ledger yet)`,
+      details: { domain: compliance.domain, consecutive_days: consecutiveDays, deferred_tier: currentTier },
+    }
+    const { error: warnLogErr } = await supabase.from('enforcement_log').insert({
+      user_id: userId,
+      enforcement_type: warnAction.type,
+      tier: warnAction.tier,
+      trigger_reason: warnAction.trigger_reason,
+      action_taken: warnAction.action_taken,
+      details: warnAction.details,
+    })
+    if (warnLogErr) console.error(`[handler-enforcement] warn log: ${warnLogErr.message}`)
+    return warnAction
+  }
+
   let actionTaken = ''
   const details: Record<string, unknown> = {
     domain: compliance.domain,
     consecutive_days: consecutiveDays,
+    missed_obligation_id: missedObligationId,
   }
 
   switch (currentTier) {
@@ -632,22 +724,23 @@ async function applyEscalation(
       break
     }
 
-    case 4: { // Denial extension
+    case 4: { // Denial extension — through push_unlock_date ONLY (validated,
+      // once per obligation, chain-capped +7d/14d). Derived counters are
+      // never additive: we push the unlock TARGET, not a day counter.
       const extensionDays = Math.min(consecutiveDays - config.denial_extension_threshold + 1, 5)
-      // Extend denial minimum
-      const { data: denialState } = await supabase
-        .from('denial_state')
-        .select('minimum_denial_days')
-        .eq('user_id', userId)
-        .single()
-
-      if (denialState) {
-        await supabase
-          .from('denial_state')
-          .update({
-            minimum_denial_days: (denialState.minimum_denial_days || 0) + extensionDays,
-          })
-          .eq('user_id', userId)
+      const { data: pushedDays, error: pushErr } = await supabase.rpc('push_unlock_date', {
+        p_user: userId,
+        p_obligation: missedObligationId,
+        p_days: extensionDays,
+      })
+      if (pushErr) {
+        console.error(`[handler-enforcement] push_unlock_date: ${pushErr.message}`)
+        return null
+      }
+      const applied = (pushedDays as number | null) ?? 0
+      if (applied <= 0) {
+        // Chain cap reached / obligation not eligible — no consequence fires.
+        return null
       }
       // Fire device to reinforce the denial extension
       if (config.lovense_proactive_enabled) {
@@ -657,12 +750,12 @@ async function applyEscalation(
           target: 'lovense',
           value: { intensity: 5, duration: 30 },
           priority: 'normal',
-          reasoning: `Denial extended ${extensionDays} days — sustained low vibration as reminder`,
+          reasoning: `Denial extended ${applied} days — sustained low vibration as reminder`,
         })
       }
 
-      actionTaken = `Denial extended by ${extensionDays} days for ${compliance.domain} avoidance + device reminder`
-      details.extension_days = extensionDays
+      actionTaken = `Unlock date pushed ${applied} day(s) for ${compliance.domain} avoidance + device reminder`
+      details.extension_days = applied
       break
     }
 
@@ -775,14 +868,33 @@ async function applyEscalation(
         severity = action.tier >= 3 ? 'failure' : 'warning'
     }
 
-    await supabase.from('accountability_blog').insert({
+    // Enforcement Spine v2: nothing goes public from here. The entry lands
+    // internal; PUBLIC visibility is an outward consequence and flows
+    // through the one dispatcher (preview → 24h avertable window → fire),
+    // and only when a missed obligation backs it.
+    const { error: blogErr } = await supabase.from('accountability_blog').insert({
       user_id: userId,
       entry_type: 'compliance_failure',
       entry_text: entryText,
       severity,
       day_number: daysSinceStart,
-      public_visible: true,
-    }).then(() => {}, () => {})
+      public_visible: false,
+    })
+    if (blogErr) console.error(`[handler-enforcement] blog insert: ${blogErr.message}`)
+
+    if (action.tier >= 3 && missedObligationId) {
+      const { error: dispatchErr } = await supabase.from('outward_dispatch_queue').insert({
+        user_id: userId,
+        obligation_id: missedObligationId,
+        channel: 'public_post',
+        artifact_text: entryText,
+      })
+      // Unique partial index enforces ONE outward in flight per user — a
+      // conflict here is expected backpressure, not a fault.
+      if (dispatchErr && !/duplicate key/i.test(dispatchErr.message)) {
+        console.error(`[handler-enforcement] outward dispatch queue: ${dispatchErr.message}`)
+      }
+    }
   }
 
   return action

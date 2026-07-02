@@ -42,7 +42,6 @@ import { TodayView as TodayRedesignView } from './components/today-redesign';
 // Blocking daily-gate overlays (CompulsoryConfessionGate, HrtDailyGate,
 // MorningMantraGate, EveningConfessionGate) removed from the render tree
 // 2026-06-21 — demands now surface as the single FocusMode task, not overlays.
-import { DisclosureRehearsalView } from './components/disclosure/DisclosureRehearsalView';
 import { WhisperToMama } from './components/confession/WhisperToMama';
 import { LivePhotoPingResponder } from './components/live-photo/LivePhotoPingResponder';
 import { MamaPhoneOverlay } from './components/push/MamaPhoneOverlay';
@@ -322,7 +321,7 @@ function AuthenticatedAppInner() {
       const h = window.location.hash.replace('#', '').replace(/\/$/, '');
       // Empty hash returns home to the Focus surface; an explicit non-today
       // hash (settings/recap/etc.) leaves it, letting the deep-linked view show.
-      const otherDeepLink = ['/disclosure', '/whisper', '/welcome'].includes(h);
+      const otherDeepLink = ['/whisper', '/welcome'].includes(h);
       setShowTodayRedesign((h === '' || h === '/today') && !otherDeepLink);
     };
     window.addEventListener('hashchange', onHash);
@@ -371,21 +370,16 @@ function AuthenticatedAppInner() {
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
-  // Hash-routable disclosure rehearsal surface. Open with `/#/disclosure`
-  // (e.g. from a settings link or a Today card). Closes by clearing the
-  // hash, mirroring the recap-detail pattern above.
-  const [showDisclosureRehearsal, setShowDisclosureRehearsal] = useState<boolean>(() =>
-    typeof window !== 'undefined' && window.location.hash.replace('#', '').replace(/\/$/, '') === '/disclosure'
-  );
+  // (Disclosure rehearsal surface removed 2026-07-01 — policy: no disclosure
+  // to Gina; nothing is rehearsed toward disclosing, migration 624.)
   // Hash-routable WhisperToMama — audio-only intimate confession ("Whisper
-  // Your Secrets to Mama"). Same hash pattern as disclosure rehearsal.
+  // Your Secrets to Mama").
   const [showWhisper, setShowWhisper] = useState<boolean>(() =>
     typeof window !== 'undefined' && window.location.hash.replace('#', '').replace(/\/$/, '') === '/whisper'
   );
   useEffect(() => {
     const onHash = () => {
       const h = window.location.hash.replace('#', '').replace(/\/$/, '');
-      setShowDisclosureRehearsal(h === '/disclosure');
       setShowWhisper(h === '/whisper');
     };
     window.addEventListener('hashchange', onHash);
@@ -1230,12 +1224,6 @@ function AuthenticatedAppInner() {
             2026-06-21 — their demands surface as the single FocusMode task, not
             as overlays the user has to dodge. GinaSessionRecorder removed
             2026-06-28 — Gina dropped. */}
-        {showDisclosureRehearsal && (
-          <DisclosureRehearsalView onClose={() => {
-            window.location.hash = '';
-            setShowDisclosureRehearsal(false);
-          }} />
-        )}
         {showWhisper && (
           <WhisperToMama onClose={() => {
             window.location.hash = '';
@@ -1296,15 +1284,6 @@ function AuthenticatedAppInner() {
           They were the "dodge these overlays too" friction on top of the
           gate chain. Each demand is preserved as a FocusMode task + push,
           per feedback_mommy_presses_not_blocks / feedback_one_task_focus. */}
-
-      {/* Disclosure rehearsal compulsion — hash-routable via /#/disclosure.
-          Forces ≥3 audio rehearsals per target before approving real-world disclosure. */}
-      {showDisclosureRehearsal && (
-        <DisclosureRehearsalView onClose={() => {
-          window.location.hash = '';
-          setShowDisclosureRehearsal(false);
-        }} />
-      )}
 
       {/* Whisper-to-Mama — hash-routable via /#/whisper. Audio-only intimate
           confession surface. Mama processes async via confession-watcher-cron. */}

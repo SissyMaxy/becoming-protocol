@@ -2,7 +2,11 @@
  * useForceLayerState
  *
  * Consolidated state for the force-feminization layer: Hard Mode, slip points,
- * punishment queue, chastity lock, regimen adherence, disclosure ladder.
+ * punishment queue, chastity lock, regimen adherence.
+ *
+ * 2026-07-01: the Gina disclosure ladder was removed entirely (policy: no
+ * disclosure to Gina — migration 624). This hook no longer seeds or reads
+ * gina_disclosure_schedule.
  */
 
 import { useEffect, useState, useCallback } from 'react';
@@ -30,21 +34,6 @@ export interface ForceLayerState {
     dodgeCount: number;
     overdue: boolean;
   }>;
-
-  overdueDisclosure: {
-    rung: number;
-    title: string;
-    deadline: string;
-  } | null;
-
-  nextDisclosure: {
-    id: string;
-    rung: number;
-    title: string;
-    domain: string;
-    deadline: string;
-    daysUntil: number;
-  } | null;
 
   activeRegimen: Array<{
     name: string;
@@ -77,8 +66,6 @@ const empty: ForceLayerState = {
   chastityScheduledUnlock: null,
   chastityBreakGlassCount: 0,
   queuedPunishments: [],
-  overdueDisclosure: null,
-  nextDisclosure: null,
   activeRegimen: [],
   nextImmersion: null,
   narrativeOverwriteActive: false,
@@ -93,27 +80,9 @@ export function useForceLayerState(userId: string | undefined): { state: ForceLa
       return;
     }
 
-    // First-run: seed the Gina disclosure ladder if this user has nothing yet.
-    // Fire-and-forget — if it fails, the dashboard still renders.
-    void (async () => {
-      const { count } = await supabase
-        .from('gina_disclosure_schedule')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', userId);
-      if ((count || 0) === 0) {
-        try {
-          const { seedLadder } = await import('../lib/force/gina-disclosure');
-          await seedLadder(userId, 7);
-        } catch (err) {
-          console.error('[Force] ladder seed failed:', err);
-        }
-      }
-    })();
-
     const [
       userStateResult,
       punishmentsResult,
-      disclosureResult,
       regimenResult,
       immersionResult,
     ] = await Promise.allSettled([
@@ -129,14 +98,6 @@ export function useForceLayerState(userId: string | undefined): { state: ForceLa
         .in('status', ['queued', 'active', 'escalated'])
         .order('severity', { ascending: false })
         .limit(10),
-      supabase
-        .from('gina_disclosure_schedule')
-        .select('id, rung, title, disclosure_domain, hard_deadline')
-        .eq('user_id', userId)
-        .eq('status', 'scheduled')
-        .order('rung', { ascending: true })
-        .limit(1)
-        .maybeSingle(),
       supabase
         .from('medication_regimen')
         .select('medication_name, medication_category, ratchet_stage, started_at')
@@ -154,7 +115,6 @@ export function useForceLayerState(userId: string | undefined): { state: ForceLa
 
     const us = userStateResult.status === 'fulfilled' ? userStateResult.value.data : null;
     const punishments = (punishmentsResult.status === 'fulfilled' ? punishmentsResult.value.data : []) ?? [];
-    const disclosure = disclosureResult.status === 'fulfilled' ? disclosureResult.value.data : null;
     const regimens = (regimenResult.status === 'fulfilled' ? regimenResult.value.data : []) ?? [];
     const immersion = immersionResult.status === 'fulfilled' ? immersionResult.value.data : null;
 
@@ -180,26 +140,6 @@ export function useForceLayerState(userId: string | undefined): { state: ForceLa
         dodgeCount: (p.dodge_count as number) || 0,
         overdue: p.due_by ? new Date(p.due_by as string).getTime() < now : false,
       })),
-      overdueDisclosure:
-        disclosure && new Date(disclosure.hard_deadline as string).getTime() < now
-          ? {
-              rung: disclosure.rung as number,
-              title: disclosure.title as string,
-              deadline: disclosure.hard_deadline as string,
-            }
-          : null,
-      nextDisclosure: disclosure
-        ? {
-            id: disclosure.id as string,
-            rung: disclosure.rung as number,
-            title: disclosure.title as string,
-            domain: disclosure.disclosure_domain as string,
-            deadline: disclosure.hard_deadline as string,
-            daysUntil: Math.ceil(
-              (new Date(disclosure.hard_deadline as string).getTime() - now) / 86400000,
-            ),
-          }
-        : null,
       activeRegimen: (regimens as Array<Record<string, unknown>>).map(r => ({
         name: r.medication_name as string,
         category: r.medication_category as string,

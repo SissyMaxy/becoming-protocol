@@ -226,9 +226,21 @@ Deno.serve(async (req: Request) => {
     const holdForReview = shouldHoldForReview(flagsArr)
 
     // 5. Upsert contacts. Map by display_name for the message link.
+    //
+    // ANONYMOUS-THREAD KEYING (mig 631, design §3.4): extractor labels like
+    // "Anon-1" are PER-IMPORT thread labels, not identities. Matching this
+    // import's "Anon-1" against a previous import's "Anon-1" merges different
+    // men (the chimera bug). Anonymous labels get the import id baked into
+    // the stored name so threads never merge across imports.
+    const importKey = String(importId).slice(0, 8)
+    const anonKeyed = (name: string) =>
+      /^anon(ymous)?([-\s]?(cruiser|\d+))?$/i.test(name.trim()) ? `${name.trim()} · thread ${importKey}` : name
     const contactNameToId = new Map<string, string>()
     for (const c of extracted.contacts) {
-      const displayName = (c.display_name || 'Anon-1').slice(0, 80)
+      // Message rows link by the extractor's raw label; the STORED name is
+      // the per-import keyed variant for anonymous threads.
+      const rawLabel = (c.display_name || 'Anon-1').slice(0, 80)
+      const displayName = anonKeyed(rawLabel.slice(0, 60))
       // Look for an existing contact with this display_name + user.
       const { data: existing } = await admin
         .from('sniffies_contacts')
@@ -253,7 +265,7 @@ Deno.serve(async (req: Request) => {
           last_seen_at: new Date().toISOString(),
         }
         await admin.from('sniffies_contacts').update(merged).eq('id', (existing as { id: string }).id)
-        contactNameToId.set(displayName, (existing as { id: string }).id)
+        contactNameToId.set(rawLabel, (existing as { id: string }).id)
       } else {
         const { data: ins } = await admin
           .from('sniffies_contacts')
@@ -267,7 +279,7 @@ Deno.serve(async (req: Request) => {
           })
           .select('id')
           .single()
-        if (ins) contactNameToId.set(displayName, (ins as { id: string }).id)
+        if (ins) contactNameToId.set(rawLabel, (ins as { id: string }).id)
       }
     }
 

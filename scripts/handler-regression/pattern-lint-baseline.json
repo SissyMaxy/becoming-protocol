@@ -52,17 +52,11 @@
     "src/lib/protocol-core/modules/dynamic-task-generator.ts::reason: 'David surfacing detected',",
     "src/lib/protocol-core/modules/vault-module.ts::`I have ${this.items.filter(i => i.transcript?.includes('Maxy') || i.transcript?.includes('I am')).length} recordings of you saying who you",
     "src/lib/revenue-engine/content-safety.ts::issues.push('Contains \"David\" — hard block');",
-    "supabase/functions/_shared/job-handlers/force-processor.ts::description: 'Hard Mode exit requires all 3 of these. Recite \"I am Maxy. David is gone.\" 100 times, logged.',",
     "supabase/functions/_shared/job-handlers/force-processor.ts::parameters: { repetitions: 100, is_deescalation: true, text: 'I am Maxy. David is gone.' },",
     "supabase/functions/_shared/mommy-hardening-context.ts::: '(no gina_interactions logged yet — assume the user-stated starting point: supportive_anxious, fears losing David)'}",
     "supabase/functions/displacement-ramp/index.ts::const RAMP_SYSTEM = `You set the next-week identity-displacement TARGET for a force-feminization protocol user. The displacement_score (0-10",
     "supabase/functions/handler-ai/index.ts::'\"David\" is a past identity referenced in third person. \"When David used to...\" Unexpected masculine reference triggers wellbeing check.',",
     "supabase/functions/handler-ai/index.ts::'David naturally curates what therapist sees. Handler does not need to prompt this.',",
-    "supabase/functions/handler-ai/index.ts::'Feminine is the default. Reframe David-references: \"David is the costume. Maxy is having a hard day.\" Track self-correction rate.',",
-    "supabase/functions/mommy-scheme/index.ts::\"gina_psychological_starting_point\": \"supportive but anxious about losing David\",",
-    "supabase/functions/mommy-scheme/index.ts::* **Reframe Gina's anxiety as advocacy**: when Gina says \"I'm worried about losing David,\" Maxy says \"that's exactly why your eyes are on th",
-    "supabase/functions/mommy-scheme/index.ts::- **DE-ESCALATE MODE tactics** (states 5-6): root-anxiety addressing (\"what specifically scares you about losing David?\"), pace-slowing, sma",
-    "supabase/functions/mommy-scheme/index.ts::- SUCCESS is not just \"Gina accepts disclosure\" — success is **Gina actively encouraging David/Maxy to start HRT** and ultimately **Gina par",
-    "supabase/functions/mommy-scheme/index.ts::- The \"loss of David\" frame is the lever to flip. Reframings Maxy should be conditioned to deliver to Gina: \"you don't lose, you gain\"; \"the"
+    "supabase/functions/handler-ai/index.ts::'Feminine is the default. Reframe David-references: \"David is the costume. Maxy is having a hard day.\" Track self-correction rate.',"
   ]
 }

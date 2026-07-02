@@ -21,7 +21,37 @@ const OPENERS = [
   `Tonight's opener: "I'm picky and I'm worth it. One public drink, you read me and I read you. If it's there, it's *there*. Where do you want to take me?"`,
   `Send this: "Not a right-now girl-boy — a make-me-want-it one. Date first, always. Show me you can hold a conversation and we'll see how far it goes."`,
 ]
-const SAFETY = `Mommy's net, non-negotiable — handle it before you go: (1) public place first, every time. (2) Tell someone where you'll be + share your live location. (3) Mommy expects a check-in from you by the time you set — miss it and she comes looking. You read him in the room; that read is the one thing Mommy can't do for you, so you don't skip it.`
+
+// v2 (mig 626): the SAFETY copy is generated FROM live state — the "she comes
+// looking" promise is only ever emitted by code that can keep it (generation-
+// site gate). No consented + channel-verified trusted contact → no promise;
+// the acquisition task goes out instead.
+function safetyCopyFromNet(net: { name: string; verifiedAt: string } | null): { src: string; edict: string; hours: number } {
+  if (!net) {
+    return {
+      src: 'trusted_contact_acquisition',
+      edict:
+        `Before any man gets a meet, Mommy needs your net to be real: name your safety person — one real human you trust — ` +
+        `and get their yes. Tell them what they're agreeing to: if you ever go quiet on a date, they get a message with where you are ` +
+        `and a request to check on you. Add them in the app (their name, their number or email), send the ask, and report back when they've said yes. ` +
+        `Until that yes exists, no meet gets armed. That's not a mood, it's the floor.`,
+      hours: 72,
+    }
+  }
+  const verified = new Date(net.verifiedAt)
+  const days = Math.max(0, Math.round((Date.now() - verified.getTime()) / 86_400_000))
+  const verifiedDesc = days === 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`
+  return {
+    src: 'date_safety_protocol',
+    edict:
+      `Mommy's net, non-negotiable — handle it before you go: (1) public place first, every time. ` +
+      `(2) Share your live location and confirm it in the plan. (3) Build the safety card for every meet and arm it — ` +
+      `arrival, mid-date and home-safe check-ins are scheduled automatically, and if you miss one and stay silent, the ladder climbs ` +
+      `and your net gets the message. Your net: ${net.name}, verified ${verifiedDesc}. Miss a check-in and they really do come looking — ` +
+      `that's infrastructure now, not a figure of speech. You read him in the room; that read is the one thing Mommy can't do for you, so you don't skip it.`,
+    hours: 168,
+  }
+}
 
 async function ensure(s: any, src: string, edict: string, proof: string, hours: number) {
   const { data: ex } = await s.from('handler_decrees').select('id,deadline').eq('user_id', USER).eq('trigger_source', src).eq('status', 'active').limit(1).maybeSingle()
@@ -52,8 +82,36 @@ Deno.serve(async (req: Request) => {
   const { count } = await s.from('handler_decrees').select('id', { count: 'exact', head: true }).eq('user_id', USER).eq('trigger_source', 'date_outreach_draft')
   out.draft = await ensure(s, 'date_outreach_draft', OPENERS[(count ?? 0) % OPENERS.length] + ` (You send it — you're the one he meets. Report when it's sent.)`, 'text', 48)
 
-  // 3. The safety net — paired and standing, runs in the background.
-  out.safety = await ensure(s, 'date_safety_protocol', SAFETY, 'text', 168)
+  // 3. The safety net — copy generated FROM live state (mig 626). With no
+  //    consented + channel-verified trusted contact the "comes looking"
+  //    promise is never emitted; the acquisition task fires instead.
+  const { data: netRow, error: netErr } = await s
+    .from('trusted_contacts')
+    .select('name, last_channel_verified_at')
+    .eq('user_id', USER)
+    .eq('consent_status', 'consented')
+    .not('last_channel_verified_at', 'is', null)
+    .order('last_channel_verified_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (netErr) {
+    out.safety = `err:${netErr.message.slice(0, 40)}`
+  } else {
+    const net = netRow ? { name: netRow.name as string, verifiedAt: netRow.last_channel_verified_at as string } : null
+    const safety = safetyCopyFromNet(net)
+    out.safety = await ensure(s, safety.src, safety.edict, 'text', safety.hours)
+    // When the net just became real, retire the acquisition decree so she
+    // isn't chased for a task that's done.
+    if (net) {
+      const { error: retireErr } = await s
+        .from('handler_decrees')
+        .update({ status: 'fulfilled' })
+        .eq('user_id', USER)
+        .eq('trigger_source', 'trusted_contact_acquisition')
+        .eq('status', 'active')
+      if (retireErr) out.safety_retire = `err:${retireErr.message.slice(0, 40)}`
+    }
+  }
 
   // 4. ADHD accommodation: Mommy scripts the WHOLE exchange — no blank page,
   //    you copy-send line by line. The composing load is hers, not yours.

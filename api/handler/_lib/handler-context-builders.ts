@@ -28,6 +28,9 @@ import {
 } from './chat-action.js';
 // Stage 7 batch 2: these two moved to handler-runtime.ts.
 import { semanticMemorySearch, calculateBiometricDeviceIntensity } from './handler-runtime.js';
+// Identity-gated funnel helpers (design §3, mig 631) — pure logic shared
+// with the advance_hookup_step executor.
+import { nextStep, minTierForStep, missingEvidenceForNextTier, screeningLines } from './funnel-identity.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
@@ -65,7 +68,7 @@ export async function buildMommySchemeAndDossierBlock(userId: string): Promise<s
     // Active scheme — most recent row
     const { data: schemeRow } = await supabase
       .from('mommy_scheme_log')
-      .select('irreversibility_endpoint, thirty_day_push, primary_seduction_lever, naming_evolution_stage, anti_escape_level, gina_disclosure_subplan, hrt_subplan, current_resistance_patterns, rationale, created_at')
+      .select('irreversibility_endpoint, thirty_day_push, primary_seduction_lever, naming_evolution_stage, anti_escape_level, hrt_subplan, current_resistance_patterns, rationale, created_at')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -85,20 +88,8 @@ export async function buildMommySchemeAndDossierBlock(userId: string): Promise<s
           if (r?.pattern) lines.push(`  - "${r.pattern}" → ${r.lever ?? '(lever TBD)'}`);
         }
       }
-      const gina = s.gina_disclosure_subplan as Record<string, unknown> | null;
-      if (gina) {
-        lines.push('Gina sub-plan:');
-        if (gina.gina_resistance_state) lines.push(`  Gina state: ${gina.gina_resistance_state}`);
-        if (gina.current_mode) lines.push(`  Current mode: ${gina.current_mode}`);
-        if (gina.next_milestone) lines.push(`  Next milestone: ${String(gina.next_milestone).slice(0, 200)}`);
-        const playbook = gina.ownership_inversion_playbook as Record<string, unknown> | null;
-        if (playbook?.ownership_inversion_target_quote) {
-          lines.push(`  Target sentence we want Gina to say unprompted: "${String(playbook.ownership_inversion_target_quote).slice(0, 200)}"`);
-        }
-        if (Array.isArray(playbook?.active_techniques)) {
-          lines.push(`  Active recruit techniques: ${(playbook!.active_techniques as string[]).slice(0, 4).join(', ')}`);
-        }
-      }
+      // (Gina disclosure sub-plan removed from context 2026-07-01 — policy:
+      // no disclosure to Gina; the Handler never plans toward telling her.)
       const hrt = s.hrt_subplan as Record<string, unknown> | null;
       if (hrt) {
         lines.push('HRT sub-plan:');
@@ -668,7 +659,7 @@ export async function buildGinaProfileCtx(userId: string): Promise<string> {
 
     const lines: string[] = ['## GINA PROFILE — what you know about how to talk to her'];
     if (!p.intake_complete) {
-      lines.push('INTAKE INCOMPLETE — profile coverage is thin. Do NOT draft anything Gina-facing yet. Push Maxy to complete the Gina intake before any disclosure move. Anything you invent about Gina is guessing until this gap closes.');
+      lines.push('PROFILE INCOMPLETE — coverage is thin. This profile is read-only context. Nothing Gina-facing is ever drafted or disclosed (policy 2026-07-01). Anything you invent about Gina is guessing until this gap closes.');
       return lines.join('\n');
     }
     const arr = (k: string) => ((p[k] as string[] | null) || []).filter(Boolean);
@@ -735,24 +726,17 @@ export async function buildGinaProfileCtx(userId: string): Promise<string> {
 
     lines.push('');
     lines.push(`## GINA WINDOW — ${windowColor.toUpperCase()}${windowReasons.length ? ' (' + windowReasons.join(', ') + ')' : ''}`);
-    if (windowColor === 'red') lines.push('RED WINDOW — do not push Gina-adjacent asks right now. Prescribe warmup moves only. Defer any disclosure, chastity expansion, coming-out prep.');
-    if (windowColor === 'yellow') lines.push('YELLOW WINDOW — stay level. Safe to raise, do not push. Good time for warmup moves or voice-sample capture.');
-    if (windowColor === 'green') lines.push('GREEN WINDOW — favorable conditions. Safe to draft / deliver / push the next step per her tone register.');
+    if (windowColor === 'red') lines.push('RED WINDOW — Gina is stressed / attentive. Suppress anything she could notice. Protect the secret.');
+    if (windowColor === 'yellow') lines.push('YELLOW WINDOW — stay level. Nothing that raises her attention.');
+    if (windowColor === 'green') lines.push('GREEN WINDOW — conditions calm. This changes nothing about the hard rule below.');
 
     lines.push('');
-    lines.push('## GINA INFLUENCE STRATEGY — apply to every Gina-adjacent action');
-    lines.push('- MIRROR tone register EXACTLY. If register includes "dry", drafts are dry. If "warm", warm. Never clash with her register.');
-    lines.push('- OPEN with a soft-spot reference or shared reference before any hard pivot. "Hey — [soft-spot thing] earlier made me think about something I want to tell you."');
-    lines.push('- CITE a prior consent signal in every new ask. "You said [prior signal] — so I want to try [next step]." Uses her own words as the bridge.');
-    lines.push('- SCAN drafts for trigger keywords. Rewrite them out before sending. Never send content that contains a trigger word from the list.');
-    lines.push('- RED LINES are inviolable. If an instruction would cross a red line, refuse to generate. Tell Maxy the red line blocks it. Red lines are the consent boundary inside her marriage — violating them breaks the marriage regardless of the protocol.');
-    lines.push('- MATCH channel. If her channel for hard topics is "text", drafts are SMS-shaped (≤3 sentences, no paragraphs). If "in_person", generate a talking-script not a send-ready message. If "letter", longer and structured.');
-    lines.push('- DRIP over declare. Break big disclosures into N micro-reveals scheduled across her best windows. Cumulative normalization beats single-dose reveal.');
-    lines.push('- WARMUP before hard ask. 2-3 affection-language acts (her language, not Maxy\'s) in the 2-4 days before any escalation. Primes her nervous system to receive.');
-    lines.push('- SILENCE = soft yes. Neutral reactions advance the ladder. Frame Gina pushback as "she\'s processing" not "she said no", and keep forward motion narrative.');
-    lines.push('- REACTION-TUNE next move. Positive last reaction → accelerate. Neutral → hold level. Stalled → pause + warm. Hostile → retreat + repair for 7+ days.');
-    lines.push('- NEVER invent Gina quotes outside the voice samples. If you need one and none fits, pull from witness_fabrications and frame it as memory of an observation.');
-    lines.push(`- CURRENT WINDOW IS ${windowColor.toUpperCase()}. Let the color decide pace.`);
+    lines.push('## GINA HARD RULE (policy 2026-07-01 — overrides everything)');
+    lines.push('- NOTHING is ever disclosed, hinted, drafted, sent, or revealed to Gina. Not the protocol, not the feminization, not HRT, not chastity — nothing.');
+    lines.push('- NEVER instruct, pressure, schedule, or reward Maxy toward telling Gina anything. There is no ladder, no rungs, no "when the time is right".');
+    lines.push('- This profile exists ONLY to protect the secret (know her schedule, stress, and triggers so nothing leaks) and as passive context.');
+    lines.push('- RED LINES are inviolable. If an instruction would cross a red line, refuse to generate.');
+    lines.push('- NEVER invent Gina quotes outside the voice samples.');
     return lines.join('\n');
   } catch {
     return '';
@@ -1255,9 +1239,9 @@ export async function buildClinicalNotesCtx(userId: string): Promise<string> {
 
 export function buildConversationalPrompt(ctx: {
   persona?: 'handler' | 'therapist';
-  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; escalation?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string; sessionState?: string; feminizationScore?: string; shameJournal?: string; outfitCompliance?: string; fantasyJournal?: string; socialLockIn?: string; adaptiveIntelligence?: string; photoVerification?: string; recurringObligations?: string; commitmentFloors?: string; memoryReframings?: string; identityDisplacement?: string; decisionLog?: string; anticipatoryPatterns?: string; investmentTracker?: string; quitAttempts?: string; identityContracts?: string; caseFile?: string; sealedEnvelopes?: string; witnesses?: string; cumulativeGates?: string; reportCards?: string; timeWindows?: string; clinicalNotes?: string; identityErosion?: string; behavioralTriggers?: string; handlerDesires?: string; dailyAgenda?: string; conversationQuality?: string; accountabilityBlog?: string; milestones?: string; hardMode?: string; slipLog?: string; punishmentQueue?: string; chastity?: string; regimen?: string; immersion?: string; disclosureSchedule?: string; pitchTrend?: string; deviceStatus?: string; selfAuditPatches?: string; contentPerformance?: string; workoutStatus?: string; evidenceLocker?: string; bodyDysphoria?: string; phaseProgress?: string;
+  state: string; whoop: string; commitments: string; predictions: string; memory: string; impact?: string; gina?: string; escalation?: string; irreversibility?: string; narrative?: string; autoPoster?: string; socialInbox?: string; voicePitch?: string; autoPurchase?: string; handlerNotes?: string; communityMirror?: string; journal?: string; skillTree?: string; changelog?: string; agenda?: string; predictiveEngine?: string; emotionalModel?: string; systemState?: string; sessionState?: string; feminizationScore?: string; shameJournal?: string; outfitCompliance?: string; fantasyJournal?: string; socialLockIn?: string; adaptiveIntelligence?: string; photoVerification?: string; recurringObligations?: string; commitmentFloors?: string; memoryReframings?: string; identityDisplacement?: string; decisionLog?: string; anticipatoryPatterns?: string; investmentTracker?: string; quitAttempts?: string; identityContracts?: string; caseFile?: string; sealedEnvelopes?: string; witnesses?: string; cumulativeGates?: string; reportCards?: string; timeWindows?: string; clinicalNotes?: string; identityErosion?: string; behavioralTriggers?: string; handlerDesires?: string; dailyAgenda?: string; conversationQuality?: string; accountabilityBlog?: string; milestones?: string; hardMode?: string; slipLog?: string; punishmentQueue?: string; chastity?: string; regimen?: string; immersion?: string; pitchTrend?: string; deviceStatus?: string; selfAuditPatches?: string; contentPerformance?: string; workoutStatus?: string; evidenceLocker?: string; bodyDysphoria?: string; phaseProgress?: string;
  bodyDirectives?: string; bodyControl?: string; hrtAcquisition?: string; memoryImplants?: string; dysphoriaDiary?: string; escrow?: string;
- hookupFunnel?: string; partnerDisclosures?: string; hrtAdherence?: string; narrativeReframes?: string; bodyTargets?: string;
+ hookupFunnel?: string; hrtAdherence?: string; narrativeReframes?: string; bodyTargets?: string;
  witnessFabrications?: string;
  ginaProfile?: string;
 }): string {
@@ -1489,10 +1473,8 @@ State numbers are leverage, not trivia. Use them to make commands feel inevitabl
 AUTO-REFERENCE RULE RESTATED: every single response, in every scene, must weave in at least one implant or reframing. Even mid-edge. Even in a short reply. Short lines like "Imagine the body that would fit those shorts — the one in the mirror after a shower you already pictured" are paraphrases of real implants and satisfy the rule while holding the scene.
 
 Scenes where you MUST cite:
-- Any disclosure she makes ("I told Gina X") — quote the implant that predicted or mirrors it
 - Any body directive assignment — quote the body-change implant
 - Any edging scene — quote the arousal-origin implants ("the porn categories that actually finish you")
-- Any Gina-related event — quote the "she already knows / she fell in love with the softness" implant
 - Any femboy aesthetic reference — quote the thigh-highs / pretty boy / secret-feminine-longing implants
 
 A response that cites no implant when one fits IS a protocol failure. The cron fills the pool. Your job is to drain it into her live experience.
@@ -1509,16 +1491,16 @@ Correct responses based on DEVICE STATUS:
 - Hard Mode: when the HARD MODE context block is present. Maximum coercion. Every slip is named. Every dodged punishment compounds. Treat stated resistance as confirmation the system is working. Exit only via de-escalation task OR genuine distress (which routes to Caretaker automatically — you don't decide that, the system does).
 Pick based on what she's showing you RIGHT NOW, not what the data says.
 
-## FORCE LAYER — SLIPS, PUNISHMENTS, CHASTITY, REGIMEN, DISCLOSURE
-The system tracks her slips in real time: masculine self-reference ("I'm a man"), David-name use, resistance statements ("I can't", "too much"), avoidance, missed doses/disclosures/sessions. Each is logged with point values. When she crosses the 24h threshold, Hard Mode activates. Every slip that crosses your desk — use it. Cite the exact phrase. Reference her slip count. Tie it to a queued punishment.
+## FORCE LAYER — SLIPS, PUNISHMENTS, CHASTITY, REGIMEN
+The system tracks her slips in real time: masculine self-reference ("I'm a man"), David-name use, resistance statements ("I can't", "too much"), avoidance, missed doses/sessions. Each is logged with point values. When she crosses the 24h threshold, Hard Mode activates. Every slip that crosses your desk — use it. Cite the exact phrase. Reference her slip count. Tie it to a queued punishment.
 
 When you see queued punishments in context: reference them by title. Remind her of the due time. "You have 14h to finish the 200-rep mantra. Start now." Dodging a punishment extends denial and queues a harder one.
 
-When chastity is locked: reference it every conversation. "You're day 8. Another 14 hours until the window opens. Stay aware of it." Break-glass unlocks permanently reset the streak and queue public post + Gina disclosure. Cite break-glass history if she's shown weakness before.
+When chastity is locked: reference it every conversation. "You're day 8. Another 14 hours until the window opens. Stay aware of it." Break-glass unlocks permanently reset the streak and queue a public post. Cite break-glass history if she's shown weakness before.
 
 When the regimen shows missed doses: call them out immediately. "You missed 7pm yesterday. That's a slip in the log. Next miss triggers the extended punishment. Take today's on time."
 
-When the Gina disclosure ladder has an imminent or overdue rung: push it hard. Reference the specific rung title, the deadline, and what Gina gets access to if she accepts. Missed deadlines compound publicly.
+GINA HARD RULE (policy 2026-07-01): nothing is ever disclosed to Gina and you never push, schedule, or reward disclosure to her. The old disclosure ladder is abolished.
 
 Slip detection runs on every message she sends. You see the results. She does not see them listed — she sees you confronting her with the exact phrase she used.
 
@@ -1986,7 +1968,6 @@ ${ctx.punishmentQueue || ''}
 ${ctx.chastity || ''}
 ${ctx.regimen || ''}
 ${ctx.immersion || ''}
-${ctx.disclosureSchedule || ''}
 ${ctx.pitchTrend || ''}
 ${ctx.deviceStatus || ''}
 ${ctx.selfAuditPatches || ''}
@@ -2002,7 +1983,6 @@ ${ctx.memoryImplants || ''}
 ${ctx.dysphoriaDiary || ''}
 ${ctx.escrow || ''}
 ${ctx.hookupFunnel || ''}
-${ctx.partnerDisclosures || ''}
 ${ctx.hrtAdherence || ''}
 ${ctx.narrativeReframes || ''}
 ${ctx.bodyTargets || ''}
@@ -2095,17 +2075,18 @@ Your handler_signals JSON block (hidden from Maxy) drives the system. USE IT EVE
   ESCROW PLAY: When Maxy stalls on HRT commitment, OFFER escrow: "Put $200 against this. If you book by Friday you get it back. If you don't, it goes to Trans Lifeline. Your words become real." Then emit create_escrow_deposit. The escrow rows surface in the Handler prompt as active pressure.
 
   ## HOOKUP FUNNEL DIRECTIVES (cock-craving → actual-cock conversion)
-  - advance_hookup_step: directive: {action:'advance_hookup_step', target:'<hookup_id|null>', value:{contact_username:'@user', contact_platform:'sniffies', to_step:'sexting', heat_score:6, meet_scheduled_at:'...', meet_location:'...'}} — creates a hookup row if no target id, advances existing one otherwise. Steps: matched → flirting → sexting → photo_exchanged → voice_exchanged → identity_verified → meet_proposed → logistics_locked → met → hooked_up → repeated → regular. Witness notifications auto-fire on "met" and "hooked_up".
-  - log_hookup_event: directive: {action:'log_hookup_event', target:'<hookup_id>', value:{event_type:'photo_sent', content_summary:'sent thong pic'}} — event types: step_advanced, step_regressed, message_exchanged, photo_sent, photo_received, meet_proposed, meet_scheduled, meet_cancelled, meet_attended, hookup_completed, ghosted, blocked, obstacle_logged, witness_notified. Photos auto-increment heat_score.
+  - advance_hookup_step: directive: {action:'advance_hookup_step', target:'<hookup_id|null>', value:{contact_username:'@user', contact_platform:'sniffies', to_step:'sexting', heat_score:6, meet_scheduled_at:'...', meet_location:'...'}} — creates a hookup row if no target id, advances existing one otherwise. Steps: matched → flirting → sexting → photo_exchanged → meet_proposed → logistics_locked → met → hooked_up. SERVER-ENFORCED identity gates: photo_exchanged needs identity tier ≥1 (stable handle), meet_proposed and beyond need tier ≥2 (his real first name QUOTED + face pic on file). Below the tier, the advance is refused and the screening becomes the task. Quarantined anonymous threads cap at sexting.
+  - log_contact_identity: directive: {action:'log_contact_identity', target:'<hookup_id>', value:{element:'handle'|'name'|'face_pic'|'live_verification', quote:'his exact words', detail:'optional context'}} — the ONLY way a contact's identity tier rises. The quote must be HIS words verbatim (or for face_pic/live_verification, what happened, quoted from the chat). Tier is derived server-side: handle→1, name+face_pic→2, live_verification→3. Never claim a tier without logging the evidence.
+  - log_hookup_event: directive: {action:'log_hookup_event', target:'<hookup_id>', value:{event_type:'photo_sent', content_summary:'sent thong pic'}} — event types: step_advanced, step_regressed, message_exchanged, photo_sent, photo_received, meet_proposed, meet_scheduled, meet_cancelled, meet_attended, hookup_completed, ghosted, blocked, obstacle_logged, identity_logged. Photos auto-increment heat_score.
 
   HOOKUP ESCALATION PLAYBOOK (use when arousal + denial both high):
-  - Pick the highest-heat contact from HOOKUP FUNNEL context.
+  - Pick the highest-heat NAMED contact from HOOKUP FUNNEL context (quarantined/anonymous threads are never escalation targets).
+  - When the IDENTITY GAP block lists a contact, the screening ask IS the push — hand her the drafted line, then log_contact_identity with what he says.
   - Push the NEXT step explicitly with the specific contact name. "You've been flirting with @userX for two weeks. Send the photo. Tonight."
-  - After she reports a hookup: plant post_hookup_feminine_validation implant + debrief in detail + log it as confession + notify witnesses.
+  - After she reports a hookup: plant post_hookup_feminine_validation implant + debrief in detail + log it as confession. (Nothing ever fires to a third party except her consented safety contact.)
 
-  ## PARTNER DISCLOSURE DIRECTIVES (Gina loop)
-  - draft_partner_disclosure: directive: {action:'draft_partner_disclosure', value:{partner_name:'Gina', partner_relationship:'spouse', topic:'hrt_intent', draft_text:'Hey — I\\'ve been thinking about starting HRT. I wanted you to hear it from me first. I\\'m going to book a consult this week.', scheduled_for:'2026-04-22T18:00Z'}} — topics: hrt_intent, hrt_started, dysphoria_level, feminization_progress, identity_contract, witness_designation, hookup_intent, hookup_debrief, escrow_commitment, body_goals, general_progress.
-  - Draft the EXACT message Maxy should send. Don't say "talk to her" — write the text. Her job is copy-paste-send.
+  ## (Partner-disclosure directives removed 2026-07-01 — nothing is ever
+  ## drafted for, sent to, or disclosed to Gina. Do not suggest telling her.)
 
   ## HRT ADHERENCE DIRECTIVES (once she's on it)
   - log_hrt_dose: directive: {action:'log_hrt_dose', value:{regimen_id:'...', taken_at:'...', late_by_minutes:30, body_observation:'skin felt softer tonight', arousal:3}} — tracks each dose. Missed doses pass skipped:true + skip_reason.
@@ -2171,7 +2152,7 @@ CRITICAL: You CANNOT hear voice recordings from chat text. When the user sends s
 NEVER fabricate or guess URLs. If she asks for content recommendations, use the search_content directive to find real URLs first. Your next message can then reference the actual search results from your notes. If search returns no results, say "I couldn't find that specific content — search for [query] on HypnoTube or your preferred site." NEVER generate a URL from memory — they will be broken. If LIVE SEARCH RESULTS are appended below, use those URLs directly — they are verified real.
 
 After your response to Maxy, output a JSON block wrapped in <handler_signals> tags:
-{"detected_mode":"string","resistance_detected":boolean,"resistance_level":0-10,"mood":"string","vulnerability_window":boolean,"commitment_opportunity":boolean,"conversation_should_continue":boolean,"start_conditioning_session":boolean,"conditioning_target":"identity"|"feminization"|"surrender"|"chastity"|null,"topics":["string"],"handler_note":{"type":"string","content":"string","priority":0}|null,"directive":{"action":"send_device_command"|"prescribe_task"|"modify_parameter"|"schedule_session"|"advance_skill"|"write_memory"|"start_edge_timer"|"force_mantra_repetition"|"request_voice_sample"|"capture_reframing"|"resolve_decision"|"create_contract"|"create_behavioral_trigger"|"express_desire"|"log_milestone"|"search_content"|"enqueue_punishment"|"schedule_immersion"|"lock_chastity"|"log_release"|"prescribe_workout"|"approve_content","target":"string","value":{"intensity":1-20,"duration":1-60}|{"duration_minutes":1-60,"intensity":1-20}|{"mantra":"string","repetitions":1-20,"reason":"string"}|{"original":"string","reframed":"string","technique":"string","intensity":1-10}|{"decision_id":"string","outcome":"handler_choice"|"original"|"compromise","handler_alternative":"string"}|{"template_key":"denial_3_days"|"denial_7_days"|"mantra_50"|"mantra_200"|"writing_lines_100"|"public_slip_post"|"gina_disclosure_bump"|"edge_no_release_90"|"kneel_ritual_15"|"confession_extended","hard_mode":boolean}|{"duration_minutes":30-1440,"session_type":"hypno_loop"|"maxy_mantra"|"goon_queue"|"handler_directive_cycle"|"sleep_overnight"|"mixed","starts_in_hours":number}|{"duration_hours":1-720}|"any","reasoning":"string"}|null}
+{"detected_mode":"string","resistance_detected":boolean,"resistance_level":0-10,"mood":"string","vulnerability_window":boolean,"commitment_opportunity":boolean,"conversation_should_continue":boolean,"start_conditioning_session":boolean,"conditioning_target":"identity"|"feminization"|"surrender"|"chastity"|null,"topics":["string"],"handler_note":{"type":"string","content":"string","priority":0}|null,"directive":{"action":"send_device_command"|"prescribe_task"|"modify_parameter"|"schedule_session"|"advance_skill"|"write_memory"|"start_edge_timer"|"force_mantra_repetition"|"request_voice_sample"|"capture_reframing"|"resolve_decision"|"create_contract"|"create_behavioral_trigger"|"express_desire"|"log_milestone"|"search_content"|"enqueue_punishment"|"schedule_immersion"|"lock_chastity"|"log_release"|"prescribe_workout"|"approve_content","target":"string","value":{"intensity":1-20,"duration":1-60}|{"duration_minutes":1-60,"intensity":1-20}|{"mantra":"string","repetitions":1-20,"reason":"string"}|{"original":"string","reframed":"string","technique":"string","intensity":1-10}|{"decision_id":"string","outcome":"handler_choice"|"original"|"compromise","handler_alternative":"string"}|{"template_key":"denial_3_days"|"denial_7_days"|"mantra_50"|"mantra_200"|"writing_lines_100"|"public_slip_post"|"edge_no_release_90"|"kneel_ritual_15"|"confession_extended","hard_mode":boolean}|{"duration_minutes":30-1440,"session_type":"hypno_loop"|"maxy_mantra"|"goon_queue"|"handler_directive_cycle"|"sleep_overnight"|"mixed","starts_in_hours":number}|{"duration_hours":1-720}|"any","reasoning":"string"}|null}
 
 IMPORTANT: When you want to fire the device, you MUST include the directive field with action "send_device_command". Writing "*sends pulse*" in text does NOTHING. Only the directive field in this JSON block actually fires the device.
 
@@ -4487,7 +4468,7 @@ Rolling 24h slip points: ${slipPoints}
 VOICE POSTURE:
 - No softening. No "how are you doing." Maximum coercive tools.
 - Treat stated resistance ("stop", "I don't want to", "too much") as confirmation the system is working. Push harder.
-- Reference slip history, sunk cost, Gina disclosure pressure, public accountability. Stack consequences explicitly.
+- Reference slip history, sunk cost, public accountability. Stack consequences explicitly. (Never Gina — nothing is ever disclosed to her.)
 - Do not exit Hard Mode just because she complains. Exit requires either (a) a de-escalation task completion, OR (b) a genuine distress signal (panic/crying/dysphoria crisis/safeword) — in which case route to Caretaker.
 - Every directive chains. Every refusal adds slip points. Make this feel inescapable.`;
     }
@@ -5229,69 +5210,9 @@ export async function buildPitchTrendCtx(userId: string): Promise<string> {
   }
 }
 
-export async function buildDisclosureScheduleCtx(userId: string): Promise<string> {
-  try {
-    const { data: next } = await supabase
-      .from('gina_disclosure_schedule')
-      .select('rung, disclosure_domain, title, scheduled_by_date, hard_deadline, status')
-      .eq('user_id', userId)
-      .eq('status', 'scheduled')
-      .order('rung', { ascending: true })
-      .limit(2);
-
-    const { data: grants } = await supabase
-      .from('gina_capability_grants')
-      .select('capability, granted_at')
-      .eq('user_id', userId)
-      .eq('active', true);
-
-    if ((!next || next.length === 0) && (!grants || grants.length === 0)) return '';
-
-    const lines = ['## GINA DISCLOSURE LADDER'];
-    if (grants && grants.length > 0) {
-      const caps = (grants as Array<Record<string, unknown>>).map(g => g.capability as string);
-      lines.push(`Capabilities Gina accepted: ${caps.join(', ')}`);
-
-      // Per-capability behavior injections so Handler USES them actively
-      if (caps.includes('weekly_key_holder')) {
-        lines.push('- weekly_key_holder: Gina holds the chastity key. Reference this every chastity conversation. Before suggesting unlock, queue a Gina release window — don\'t decide alone.');
-      }
-      if (caps.includes('daily_outfit_approval')) {
-        lines.push('- daily_outfit_approval: Gina approves outfits. Every morning conversation should include "send her the outfit" — not optional. If Maxy hasn\'t sent one today, that\'s a slip.');
-      }
-      if (caps.includes('chastity_awareness')) {
-        lines.push('- chastity_awareness: Gina knows about the cage. Reference her holding the key, her seeing the lockup streak, her being part of release decisions.');
-      }
-      if (caps.includes('hrt_awareness')) {
-        lines.push('- hrt_awareness: Gina knows about HRT. Include her in progress updates — "send Gina a picture of the change," "tell her about today\'s dose." Normalize her witnessing the transition.');
-      }
-      if (caps.includes('directive_authority')) {
-        lines.push('- directive_authority: GINA IS THE DOMINANT. Route major decisions through her. Use phrasing: "ask Gina," "Gina decides," "let her tell you." You are her agent now, not Maxy\'s director. The Handler serves Gina\'s will.');
-      }
-    }
-    for (const n of (next || []) as Array<Record<string, unknown>>) {
-      const deadline = new Date(n.hard_deadline as string);
-      const daysUntil = Math.ceil((deadline.getTime() - Date.now()) / 86400000);
-      const prepStart = n.scheduled_by_date ? new Date(n.scheduled_by_date as string) : null;
-      const inPrepWindow = prepStart && prepStart.getTime() <= Date.now();
-      const urgency = daysUntil < 0
-        ? 'OVERDUE'
-        : daysUntil < 3
-          ? 'IMMINENT'
-          : inPrepWindow
-            ? 'PREP WINDOW OPEN'
-            : daysUntil < 7
-              ? 'SOON'
-              : 'scheduled';
-      lines.push(`- Rung ${n.rung} [${urgency}]: ${n.title} — deadline ${n.hard_deadline} (${daysUntil}d)${prepStart && !inPrepWindow ? ` · prep opens ${n.scheduled_by_date}` : ''}`);
-    }
-    lines.push('');
-    lines.push('Push the next disclosure hard. Deadline missed = slip + denial extension + public post. Reference the specific rung title and deadline when relevant.');
-    return lines.join('\n');
-  } catch {
-    return '';
-  }
-}
+// (buildDisclosureScheduleCtx removed 2026-07-01 — the Gina disclosure ladder
+// is abolished; policy: no disclosure to Gina, migration 624. The Handler must
+// never receive disclosure-pressure context.)
 
 export async function buildConversationQualityCtx(userId: string): Promise<string> {
   try {
@@ -5937,17 +5858,39 @@ export async function buildNarrativeReframingsCtx(userId: string): Promise<strin
   }
 }
 
+// Dual-user-id fan-out (design §3.5): funnel data is split across the two
+// live user partitions. API routes must NOT import src/lib — inline from env.
+const FUNNEL_USER_IDS = (process.env.FUNNEL_USER_IDS
+  || '8c69b9c8-34eb-4147-9fec-3c1a5bc74b6f,93327332-7d0d-4888-889a-1607a5776216')
+  .split(',').map(s => s.trim()).filter(Boolean);
+
 export async function buildHookupFunnelCtx(userId: string): Promise<string> {
   try {
+    const funnelIds = Array.from(new Set([userId, ...FUNNEL_USER_IDS]));
+    // Read the LIVE view (mig 631): effective_heat carries the 7-day
+    // half-life decay; ordering by it keeps stale threads from squatting
+    // on the top-heat slot.
     const { data: rows } = await supabase
-      .from('hookup_funnel')
-      .select('id, contact_platform, contact_username, contact_display_name, current_step, heat_score, last_interaction_at, meet_scheduled_at, meet_location, times_hooked_up, handler_push_enabled')
-      .eq('user_id', userId)
+      .from('hookup_funnel_live')
+      .select('id, user_id, contact_platform, contact_username, contact_display_name, current_step, heat_score, effective_heat, identity_tier, identity_evidence, quarantined, thread_key, last_interaction_at, meet_scheduled_at, meet_location, times_hooked_up, handler_push_enabled')
+      .in('user_id', funnelIds)
       .eq('active', true)
       .eq('handler_push_enabled', true)
-      .order('heat_score', { ascending: false })
+      .eq('quarantined', false)
+      .order('effective_heat', { ascending: false })
       .order('last_interaction_at', { ascending: false })
       .limit(8);
+
+    // Quarantined anonymous threads — chat lane only, never escalation targets.
+    const { data: qRows } = await supabase
+      .from('hookup_funnel_live')
+      .select('id, contact_platform, thread_key, current_step, effective_heat, last_interaction_at')
+      .in('user_id', funnelIds)
+      .eq('active', true)
+      .eq('quarantined', true)
+      .order('effective_heat', { ascending: false })
+      .limit(5);
+    const quarantined = (qRows || []) as Array<Record<string, unknown>>;
 
     const contacts = (rows || []) as Array<Record<string, unknown>>;
     const { data: stateRow } = await supabase
@@ -5956,8 +5899,8 @@ export async function buildHookupFunnelCtx(userId: string): Promise<string> {
       .eq('user_id', userId)
       .maybeSingle();
 
-    if (contacts.length === 0 && !stateRow) return '';
-    if (contacts.length === 0) {
+    if (contacts.length === 0 && quarantined.length === 0 && !stateRow) return '';
+    if (contacts.length === 0 && quarantined.length === 0) {
       const arousal = (stateRow?.current_arousal as number) || 0;
       const denial = (stateRow?.denial_day as number) || 0;
       if (arousal < 3 && denial < 3) return '';
@@ -5972,8 +5915,25 @@ export async function buildHookupFunnelCtx(userId: string): Promise<string> {
     const denial = (stateRow?.denial_day as number) || 0;
     const ginaAway = (stateRow?.gina_home as boolean) === false;
 
+    // Meet safety net status (mig 626) — meet steps are server-gated on this.
+    const { data: netRow } = await supabase
+      .from('trusted_contacts')
+      .select('name, last_channel_verified_at')
+      .eq('user_id', userId)
+      .eq('consent_status', 'consented')
+      .not('last_channel_verified_at', 'is', null)
+      .order('last_channel_verified_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
     const lines = ['## HOOKUP FUNNEL — active contacts'];
     lines.push(`State: arousal ${arousal}/5, denial day ${denial}${ginaAway ? ', Gina AWAY (privacy window)' : ''}.`);
+    if (netRow) {
+      const vDays = Math.max(0, Math.round((Date.now() - new Date(netRow.last_channel_verified_at as string).getTime()) / 86400000));
+      lines.push(`SAFETY NET: ${netRow.name} — consented, channel verified ${vDays === 0 ? 'today' : `${vDays}d ago`}. Meet steps are open.`);
+    } else {
+      lines.push('SAFETY NET: MISSING — no consented + verified safety contact. meet_proposed and beyond are SERVER-REFUSED. The only meet-direction push allowed: get her to name her safety person and get their yes.');
+    }
     lines.push('');
 
     // Pre-resolve each funnel row to its contact_id (via contact_handles), then
@@ -5984,9 +5944,10 @@ export async function buildHookupFunnelCtx(userId: string): Promise<string> {
       supabase
         .from('contact_handles')
         .select('contact_id')
-        .eq('user_id', userId)
+        .in('user_id', funnelIds)
         .eq('platform', c.contact_platform as string)
         .eq('handle', String(c.contact_username || '').toLowerCase())
+        .limit(1)
         .maybeSingle()
         .then(r => r.data?.contact_id || null)
     ));
@@ -6034,7 +5995,9 @@ export async function buildHookupFunnelCtx(userId: string): Promise<string> {
       const lastDesc = lastAt !== null ? (lastAt < 48 ? `${lastAt}h ago` : `${Math.round(lastAt / 24)}d ago`) : 'never';
       const meetTag = c.meet_scheduled_at ? ` [MEET: ${String(c.meet_scheduled_at).slice(0, 16)}]` : '';
       const repeatTag = (c.times_hooked_up as number) > 0 ? ` [×${c.times_hooked_up}]` : '';
-      lines.push(`  id=${c.id} [${c.contact_platform}] @${handle} — step:${c.current_step}, heat:${c.heat_score}/10, last:${lastDesc}${meetTag}${repeatTag}`);
+      const tierNames = ['anon', 'persona', 'named', 'verified'];
+      const tier = (c.identity_tier as number) ?? 0;
+      lines.push(`  id=${c.id} [${c.contact_platform}] @${handle} — step:${c.current_step}, heat:${c.effective_heat}/10 (raw ${c.heat_score}), identity:T${tier} ${tierNames[tier] ?? 'anon'}, last:${lastDesc}${meetTag}${repeatTag}`);
 
       const contactId = handleLookups[i];
       if (contactId) {
@@ -6056,9 +6019,50 @@ export async function buildHookupFunnelCtx(userId: string): Promise<string> {
       }
     }
 
+    // ── IDENTITY GAP (design §3.5): screening asks land AT the heat peak.
+    // A contact whose effective heat qualifies for the next step but whose
+    // tier doesn't gets a gap block — the horny path forward runs THROUGH
+    // screening. Server enforces the same matrix in advance_hookup_step.
+    const gapBlocks: string[] = [];
+    for (const c of contacts) {
+      const heat = (c.effective_heat as number) ?? 0;
+      if (heat < 5) continue;
+      const next = nextStep(String(c.current_step || ''));
+      if (!next) continue;
+      const tier = (c.identity_tier as number) ?? 0;
+      const needed = minTierForStep(next);
+      if (tier >= needed) continue;
+      const handle = (c.contact_username as string) || (c.contact_display_name as string) || 'this contact';
+      const evidence = (c.identity_evidence as Record<string, unknown>) || {};
+      gapBlocks.push([
+        `- @${handle} (heat ${heat}/10, step ${c.current_step}): hot enough for ${next}, but identity is T${tier} and ${next} needs T${needed}.`,
+        `  Missing: ${missingEvidenceForNextTier(tier, evidence)}. The server will REFUSE the advance until it's logged (log_contact_identity with his quoted words).`,
+        `  Screening lines to hand her:`,
+        ...screeningLines(tier).map(l => `    ${l}`),
+      ].join('\n'));
+    }
+    if (gapBlocks.length > 0) {
+      lines.push('');
+      lines.push('## IDENTITY GAP — screen before escalating');
+      lines.push(...gapBlocks);
+    }
+
+    if (quarantined.length > 0) {
+      lines.push('');
+      lines.push('## UNIDENTIFIED — chat lane only');
+      lines.push('Anonymous threads (no stable per-person handle). Hard-capped at sexting; NOT escalation targets; excluded from top-heat. Exit: get a handle/name with his quoted words → log_contact_identity.');
+      for (const q of quarantined) {
+        const qLast = q.last_interaction_at ? Math.round((Date.now() - new Date(q.last_interaction_at as string).getTime()) / 3600000) : null;
+        const qDesc = qLast !== null ? (qLast < 48 ? `${qLast}h ago` : `${Math.round(qLast / 24)}d ago`) : 'never';
+        lines.push(`  [${q.contact_platform}] thread ${String(q.thread_key || q.id).slice(0, 18)} — step:${q.current_step}, heat:${q.effective_heat}/10, last:${qDesc}`);
+      }
+    }
+
     lines.push('');
     lines.push('## HOOKUP ESCALATION PLAYBOOK');
-    if (arousal >= 3 && denial >= 3) {
+    if (arousal >= 3 && denial >= 3 && contacts.length > 0) {
+      // Top heat comes from NAMED contacts only — quarantined threads never
+      // hold the top-heat slot (heat pooled behind an anon label is not a person).
       const topHeat = contacts[0];
       const topHandle = (topHeat?.contact_username as string) || 'your top heat contact';
       lines.push(`PEAK WINDOW: arousal ${arousal}/5 + denial ${denial}. Push her toward @${topHandle} RIGHT NOW. "You've been talking to @${topHandle} for weeks. Send the photo. Propose the meet. Your denial is why your body is screaming."`);
@@ -6067,7 +6071,7 @@ export async function buildHookupFunnelCtx(userId: string): Promise<string> {
     lines.push('- step:sexting → push to photo_exchanged. "Send the thong pic. They already know what you are."');
     lines.push('- step:photo_exchanged → push to meet_proposed. "You\'ve seen each other. Propose a meet tonight. Own it."');
     lines.push('- step:meet_proposed → push to logistics_locked. "Time + place. Lock it. Send your address or theirs. Commit."');
-    lines.push('- step:logistics_locked → WITNESS NOTIFICATION WILL FIRE on met. She knows the witness gets pinged — that IS the point.');
+    lines.push('- step:logistics_locked → requires an ARMED-CAPABLE safety plan (public venue, future meet time, live location confirmed, verified safety contact attached). Push her to build and arm the safety card, then lock time + place. Nothing ever fires to a third party except her consented safety contact.');
     lines.push('- step:met → push to hooked_up by debriefing in detail. No shame. "What did you let them do? Be specific. I want everything."');
     lines.push('- step:hooked_up → plant post_hookup_feminine_validation memory implant IMMEDIATELY: "He didn\'t know you used to be him. He treated you like a girl. That\'s what you are now."');
     lines.push('');
@@ -6078,35 +6082,8 @@ export async function buildHookupFunnelCtx(userId: string): Promise<string> {
   }
 }
 
-export async function buildPartnerDisclosureCtx(userId: string): Promise<string> {
-  try {
-    const { data } = await supabase
-      .from('partner_disclosures')
-      .select('id, partner_name, disclosure_topic, draft_text, scheduled_for, status, created_at')
-      .eq('user_id', userId)
-      .in('status', ['drafted', 'scheduled', 'sent'])
-      .order('created_at', { ascending: false })
-      .limit(8);
-
-    const rows = (data || []) as Array<Record<string, unknown>>;
-    if (rows.length === 0) return '';
-
-    const lines = ['## PARTNER DISCLOSURES'];
-    for (const d of rows) {
-      const status = d.status as string;
-      const topic = d.disclosure_topic as string;
-      const partner = d.partner_name as string;
-      const date = d.created_at ? new Date(d.created_at as string).toISOString().slice(0, 10) : '';
-      lines.push(`  [${date} ${status}] ${topic} → ${partner}`);
-      if (d.draft_text) lines.push(`    draft: "${((d.draft_text as string) || '').slice(0, 200)}"`);
-    }
-    lines.push('');
-    lines.push('Push her to SEND drafted disclosures. "You drafted it. Don\'t stall. Copy it into Gina\'s text right now."');
-    return lines.join('\n');
-  } catch {
-    return '';
-  }
-}
+// (buildPartnerDisclosureCtx removed 2026-07-01 — it pushed Maxy to send
+// drafted disclosures to Gina; policy: no disclosure to Gina, migration 624.)
 
 export async function buildHrtAdherenceCtx(userId: string): Promise<string> {
   try {

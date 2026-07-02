@@ -185,7 +185,7 @@ export function RegimenOnboard({ userId, onDone }: Props) {
       </div>
 
       <div className="p-2 rounded bg-red-950/30 border border-red-500/30 text-xs text-red-300">
-        Missed doses log a slip, queue a mantra punishment, and compound if dodged. Cease request requires 7-day cooldown + Gina disclosure.
+        Missed doses log a slip, queue a mantra punishment, and compound if dodged. Cease request requires a 7-day cooldown.
       </div>
 
       <button

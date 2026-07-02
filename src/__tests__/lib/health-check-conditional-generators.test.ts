@@ -1,7 +1,8 @@
 // Regression guard: gated generators in protocol-health-check must be marked
 // `conditional: true`.
 //
-// Bug (2026-06-24): wardrobe_prescription, gina_disclosure, and gina_seed each
+// Bug (2026-06-24): wardrobe_prescription (and formerly gina_disclosure /
+// gina_seed, both removed 2026-07-01 by the no-disclosure-to-Gina policy) each
 // CONTINUE to zero rows on most daily _eval runs by design — they're gated by
 // pending-cooldowns (18h–14d), gap_min_days, readiness/arc-stage, and
 // off-cooldown seed availability. With a 1440-min cadence the freshness window
@@ -27,7 +28,7 @@ const ROOT = join(__dirname, '..', '..', '..');
 const HEALTH_CHECK = join(ROOT, 'supabase', 'functions', 'protocol-health-check', 'index.ts');
 
 // Generators whose _eval legitimately produces zero rows on most runs.
-const MUST_BE_CONDITIONAL = ['wardrobe_prescription', 'gina_disclosure', 'gina_seed', 'cock_conditioning'];
+const MUST_BE_CONDITIONAL = ['wardrobe_prescription', 'cock_conditioning'];
 
 describe('protocol-health-check conditional generators', () => {
   const src = readFileSync(HEALTH_CHECK, 'utf8');

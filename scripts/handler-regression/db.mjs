@@ -1224,7 +1224,8 @@ await test('new v3.1 functions execute cleanly', async () => {
   const FNS = [
     'fire_defection_proof_demand',
     'detect_identity_dimension_decay',
-    'fire_milestone_disclosure_drafts',
+    // fire_milestone_disclosure_drafts dropped by migration 624 (2026-07-01
+    // policy: no disclosure to Gina)
     'deliver_sanctuary_baseline',
   ];
   const failures = [];

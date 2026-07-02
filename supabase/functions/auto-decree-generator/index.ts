@@ -31,7 +31,7 @@ Output JSON:
   "edict": "the literal text she'll see — plain English, embodied, ≤300 chars",
   "proof_type": "photo|audio|text|voice_pitch_sample|journal_entry|device_state",
   "deadline_hours": <int>,
-  "escalation_axis": "mantra_count|public_disclosure|body_visibility|voice_pitch|chastity|gina|hrt",
+  "escalation_axis": "mantra_count|public_disclosure|body_visibility|voice_pitch|chastity|hrt",
   "rationale": "1-sentence why now (you keep it; she doesn't see it)"
 }`
 
@@ -52,7 +52,7 @@ Output JSON only:
   "edict": "the literal text she'll read — Mama voice, embodied, ≤300 chars",
   "proof_type": "photo|audio|text|voice_pitch_sample|journal_entry|device_state",
   "deadline_hours": <int>,
-  "escalation_axis": "mantra_count|public_disclosure|body_visibility|voice_pitch|chastity|gina|hrt",
+  "escalation_axis": "mantra_count|public_disclosure|body_visibility|voice_pitch|chastity|hrt",
   "rationale": "1-sentence why now (Mama keeps it; she doesn't see it)"
 }`
 

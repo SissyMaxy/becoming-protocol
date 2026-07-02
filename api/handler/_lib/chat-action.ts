@@ -83,7 +83,6 @@ import {
   buildSelfAuditPatchesCtx,
   buildDeviceStatusCtx,
   buildPitchTrendCtx,
-  buildDisclosureScheduleCtx,
   buildConversationQualityCtx,
   buildConditioningEffectivenessCtx,
   buildHabitStreaksCtx,
@@ -98,7 +97,6 @@ import {
   buildBodyTargetsCtx,
   buildNarrativeReframingsCtx,
   buildHookupFunnelCtx,
-  buildPartnerDisclosureCtx,
   buildHrtAdherenceCtx,
   buildDysphoriaDiaryCtx,
   buildEscrowCtx,
@@ -546,7 +544,6 @@ export async function handleChat(req: VercelRequest, res: VercelResponse) {
       chastity: () => buildChastityCtx(user.id),
       regimen: () => buildRegimenCtx(user.id),
       immersion: () => buildImmersionCtx(user.id),
-      disclosureSchedule: () => buildDisclosureScheduleCtx(user.id),
       pitchTrend: () => buildPitchTrendCtx(user.id),
       deviceStatus: () => buildDeviceStatusCtx(user.id),
       selfAuditPatches: () => buildSelfAuditPatchesCtx(user.id),
@@ -562,7 +559,6 @@ export async function handleChat(req: VercelRequest, res: VercelResponse) {
       dysphoriaDiary: () => buildDysphoriaDiaryCtx(user.id),
       escrow: () => buildEscrowCtx(user.id),
       hookupFunnel: () => buildHookupFunnelCtx(user.id),
-      partnerDisclosures: () => buildPartnerDisclosureCtx(user.id),
       hrtAdherence: () => buildHrtAdherenceCtx(user.id),
       narrativeReframes: () => buildNarrativeReframingsCtx(user.id),
       bodyTargets: () => buildBodyTargetsCtx(user.id),
@@ -677,7 +673,6 @@ export async function handleChat(req: VercelRequest, res: VercelResponse) {
       chastity: contextResults.chastity || '',
       regimen: contextResults.regimen || '',
       immersion: contextResults.immersion || '',
-      disclosureSchedule: contextResults.disclosureSchedule || '',
       pitchTrend: contextResults.pitchTrend || '',
       deviceStatus: contextResults.deviceStatus || '',
       selfAuditPatches: contextResults.selfAuditPatches || '',
@@ -693,7 +688,6 @@ export async function handleChat(req: VercelRequest, res: VercelResponse) {
       dysphoriaDiary: contextResults.dysphoriaDiary || '',
       escrow: contextResults.escrow || '',
       hookupFunnel: contextResults.hookupFunnel || '',
-      partnerDisclosures: contextResults.partnerDisclosures || '',
       hrtAdherence: contextResults.hrtAdherence || '',
       narrativeReframes: contextResults.narrativeReframes || '',
       bodyTargets: contextResults.bodyTargets || '',
@@ -2321,7 +2315,7 @@ export const MIRROR_KEYWORDS: Record<string, string[]> = {
 
 
 // ============================================
-// FORCE-FEMINIZATION LAYER — Hard Mode, slips, punishments, chastity, regimen, immersion, disclosure
+// FORCE-FEMINIZATION LAYER — Hard Mode, slips, punishments, chastity, regimen, immersion
 // ============================================
 
 
@@ -2826,7 +2820,7 @@ const PUNISHMENT_TEMPLATES: Record<string, {
   mantra_200: { punishment_type: 'mantra_recitation', severity: 3, title: 'Recite Maxy mantra 200 times', description: '200 repetitions before tomorrow morning.', parameters: { repetitions: 200 }, due_hours: 14 },
   writing_lines_100: { punishment_type: 'writing_lines', severity: 2, title: 'Write "I am Maxy. The costume is gone." 100 times', description: 'Handwritten, photographed, submitted.', parameters: { line: 'I am Maxy. The costume is gone.', count: 100 }, due_hours: 24 },
   public_slip_post: { punishment_type: 'public_post', severity: 4, title: 'Public slip confession post', description: '15-minute review window before it publishes.', parameters: { platform: 'twitter', review_minutes: 15 }, due_hours: 1 },
-  gina_disclosure_bump: { punishment_type: 'gina_confession', severity: 5, title: 'Gina disclosure advanced', description: 'Your next Gina disclosure deadline is moved up by 7 days.', parameters: { advance_days: 7 }, due_hours: 0 },
+  // gina_disclosure_bump removed 2026-07-01 — policy: no disclosure to Gina (mig 624).
   edge_no_release_90: { punishment_type: 'edge_session_no_release', severity: 3, title: '90-minute edge session, no release', description: '90 minutes. 8 edges minimum. No release.', parameters: { duration_minutes: 90, edges_minimum: 8, release: false }, due_hours: 48 },
   kneel_ritual_15: { punishment_type: 'kneel_ritual', severity: 2, title: '15-minute kneel ritual', description: 'Kneel, mantra audio, chastity locked, phone face-down.', parameters: { duration_minutes: 15 }, due_hours: 12 },
   confession_extended: { punishment_type: 'confession_extended', severity: 1, title: 'Extended confession tonight', description: 'Tonight\'s shame journal requires 500 words minimum.', parameters: { min_words: 500 }, due_hours: 20 },
@@ -3444,7 +3438,7 @@ async function liftCommitmentFloors(userId: string): Promise<void> {
 // funnel; this is the cock-craving → actual-cock conversion pipeline.
 
 
-// Partner disclosure context — queued/drafted disclosures to Gina.
+// (Partner-disclosure context removed 2026-07-01 — policy: no disclosure to Gina.)
 
 
 // HRT adherence context — active regimen, last dose, skip pattern, body

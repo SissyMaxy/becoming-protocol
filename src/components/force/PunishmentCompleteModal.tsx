@@ -276,32 +276,8 @@ export function PunishmentCompleteModal({ punishmentId, onClose }: Props) {
           </>
         );
       }
-      case 'gina_confession': {
-        // Already advanced the ladder deadline at enqueue time — this is a
-        // reminder/acknowledgment entry. Mark complete when user confirms they
-        // executed the next disclosure.
-        return (
-          <>
-            <div className="p-4 bg-pink-900/20 border border-pink-500/30 rounded-lg space-y-2">
-              <div className="text-sm text-pink-200">This punishment advances your next Gina disclosure deadline. Open the disclosure ladder, execute the next rung, and confirm below.</div>
-            </div>
-            <textarea
-              value={text}
-              onChange={e => setText(e.target.value)}
-              placeholder="Note: which rung, what was said, her response"
-              rows={4}
-              className="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-white text-sm"
-            />
-            <button
-              disabled={text.trim().length < 20 || submitting}
-              onClick={() => complete({ notes: text })}
-              className="w-full py-3 rounded-xl bg-pink-600 text-white font-semibold disabled:bg-gray-700"
-            >
-              I executed the disclosure
-            </button>
-          </>
-        );
-      }
+      // ('gina_confession' case removed 2026-07-01 — the Gina disclosure
+      // ladder is abolished; migration 624 cancelled all such punishments.)
       case 'public_shame_log': {
         return (
           <>

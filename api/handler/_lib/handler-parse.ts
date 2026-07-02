@@ -596,10 +596,10 @@ type ContextBlockName =
   | 'milestones' | 'dailyAgenda' | 'conversationQuality'
   | 'accountabilityBlog'
   | 'hardMode' | 'slipLog' | 'punishmentQueue' | 'chastity' | 'regimen'
-  | 'immersion' | 'disclosureSchedule' | 'pitchTrend' | 'deviceStatus'
+  | 'immersion' | 'pitchTrend' | 'deviceStatus'
   | 'selfAuditPatches' | 'contentPerformance' | 'workoutStatus'
   | 'evidenceLocker' | 'bodyDysphoria' | 'phaseProgress' | 'bodyDirectives' | 'bodyControl' | 'hrtAcquisition' | 'memoryImplants' | 'dysphoriaDiary' | 'escrow'
-  | 'hookupFunnel' | 'partnerDisclosures' | 'hrtAdherence' | 'narrativeReframes' | 'bodyTargets';
+  | 'hookupFunnel' | 'hrtAdherence' | 'narrativeReframes' | 'bodyTargets';
 
 const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean }> = {
   state: { priority: 100, alwaysInclude: true },
@@ -668,7 +668,6 @@ const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean 
   chastity: { priority: 87, alwaysInclude: true },
   regimen: { priority: 86, alwaysInclude: true },
   immersion: { priority: 70, alwaysInclude: false },
-  disclosureSchedule: { priority: 78, alwaysInclude: true },
   pitchTrend: { priority: 60, alwaysInclude: false },
   deviceStatus: { priority: 98, alwaysInclude: true },
   selfAuditPatches: { priority: 97, alwaysInclude: true },
@@ -685,7 +684,6 @@ const CONTEXT_BLOCKS: Record<string, { priority: number; alwaysInclude: boolean 
   dysphoriaDiary: { priority: 92, alwaysInclude: true },
   escrow: { priority: 98, alwaysInclude: true },
   hookupFunnel: { priority: 95, alwaysInclude: true },
-  partnerDisclosures: { priority: 89, alwaysInclude: true },
   hrtAdherence: { priority: 96, alwaysInclude: true },
   narrativeReframes: { priority: 93, alwaysInclude: true },
   bodyTargets: { priority: 94, alwaysInclude: true },

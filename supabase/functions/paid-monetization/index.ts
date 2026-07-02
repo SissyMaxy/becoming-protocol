@@ -6,6 +6,7 @@
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requireGate } from '../_shared/conditioning-gate.ts'
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' }
 const USER = '8c69b9c8-34eb-4147-9fec-3c1a5bc74b6f'
@@ -40,6 +41,11 @@ const ILLEGAL = /sex for (money|pay|cash)|paid (sex|hookup|fuck)|escort.*(sex|fu
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   const s = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '')
+  // Conditioning gate FIRST (mig 633) — safeword latch/pause/elective/live-meet, fail closed.
+  const gate = await requireGate(s, 'paid_monetization')
+  if (!gate.allowed) {
+    return new Response(JSON.stringify({ ok: true, suppressed: gate.reason }), { headers: { ...cors, 'Content-Type': 'application/json' } })
+  }
   const out: Record<string, string> = {}
   for (const lane of LANES) {
     if (ILLEGAL.test(lane.edict)) { out[lane.src] = 'BLOCKED_illegal'; continue }

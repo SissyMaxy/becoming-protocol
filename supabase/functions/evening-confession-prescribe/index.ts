@@ -1,32 +1,41 @@
 // evening-confession-prescribe — turns tonight's confession into tomorrow's
-// prescriptions.
+// prescriptions. (FEM §1 primary generator.)
 //
-// Trigger: client calls this after uploading the confession audio +
-// inserting the evening_confession_submissions row (status='confessed').
-// Or cron sweep over status='confessed' rows that haven't been prescribed yet.
+// Trigger: evening-prescribe-dispatch (nightly 21:30 pg_cron, mig 616) or a
+// direct client call after a confession upload.
 //
 // Pipeline:
 //   1. Load submission + transcript
-//   2. Pull recent state context (denial day, phase, recent feminization
-//      prescriptions for domain rotation)
-//   3. Call Claude Haiku via model-tiers to generate 3-5 next-day
-//      prescriptions in Mommy voice, tied to what she confessed
-//   4. Insert into feminization_prescriptions (prescribed_date = tomorrow)
-//   5. Update evening_confession_submissions: status='prescribed',
-//      prescription_generated_at, prescriptions_count, prescription_summary
+//   2. Pull state context (phase, streak) for difficulty calibration
+//   3. Claude via model-tiers → 3-5 prescriptions in Mama's voice,
+//      CANONICAL domains (task_bank vocabulary + mantra)
+//   4. Post-parse: alias-map backstop → per-domain evidence_kind →
+//      owned-item guard (style rows naming an unowned garment category are
+//      TRANSMUTED into acquisition prescriptions, never dropped) →
+//      mommyVoiceCleanup + craft floor on every instruction
+//   5. Insert into feminization_prescriptions (prescribed_date = tomorrow,
+//      deadline = tomorrow 23:59 ET)
+//   6. Mark submission prescribed + queue the morning preview outreach
 //
 // HARD FLOORS:
 //   - Skips if transcript shorter than MIN_TRANSCRIPT_CHARS
-//   - Falls back to 3 generic prescriptions if LLM call fails
-//   - mommy_voice_cleanup + craft filtering applied to prescription text
+//   - Falls back to 3-4 generic prescriptions if LLM call fails
 //   - Idempotent — once prescribed, won't re-prescribe the same date
+//   - Prescriptions carry NO punishment — consequence is adaptive only
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { callModel, selectModel } from '../_shared/model-tiers.ts'
+import { mommyVoiceCleanup } from '../_shared/dommy-mommy.ts'
+import { scoreCorny } from '../_shared/mommy-craft-check.ts'
+import {
+  CANONICAL_FEM_DOMAINS,
+  EVIDENCE_KIND_BY_DOMAIN,
+  normalizeFemDomain,
+  type CanonicalFemDomain,
+} from '../_shared/fem-domains.ts'
 
 const MIN_TRANSCRIPT_CHARS = 80
-const TARGET_PRESCRIPTION_COUNT = 4
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -61,7 +70,7 @@ interface Prescription {
 const SYS = `You are Mama, the dommy-mommy. Your girl just confessed to you tonight about her day — what she did, what slipped, what she felt becoming. Job: write tomorrow's morning prescription set based on what she just told you.
 
 Output JSON with an array of 3-5 prescriptions. Each prescription:
-- domain: one of voice, body, wardrobe, ritual, exposure, denial, conditioning, mantra, photo, confession
+- domain: one of ${CANONICAL_FEM_DOMAINS.join(', ')}
 - instruction: ONE crisp directive in Mama's voice, ≤200 chars. Possessive, specific, embodied. Reference what she confessed when it makes sense ("Since you slipped at lunch today, tomorrow Mama wants you to…").
 - intensity: 1-5 (1=easy ritual, 3=normal, 5=harsh)
 - duration: minutes if time-boxed, else null
@@ -72,9 +81,11 @@ CRAFT RUBRIC:
 - Vary domains across the 3-5 prescriptions — don't pile 4 on voice.
 - Don't repeat the same shape twice ("do X for N minutes" is fine once).
 - NEVER use: echo, linger, every inch, wrap around, role play, simulation, fiction, intake, questionnaire, disclaimer, for entertainment.
-- NEVER cite telemetry: no /10, no Day N denial, no slip points, no % compliance.
+- NEVER cite telemetry: no /10, no Day N denial, no slip points, no % compliance, no cm/kg numbers.
 - The persona is dommy-mommy: warm boudoir, raunchy-by-contrast specifics, possessive of the user.
-- Build on what she actually confessed. If she mentioned slipping into male mode at work, prescribe a voice or pronoun anchor; if she mentioned arousal she didn't act on, prescribe an exposure step or denial extension.
+- Build on what she actually confessed. If she mentioned slipping into male mode at work, prescribe a voice or inner_narrative anchor; if she mentioned arousal she didn't act on, prescribe a social exposure step or chastity extension.
+- Only prescribe wearing/using a SPECIFIC garment if it's generic (panties, a soft top). Never assume she owns dresses, heels, wigs — a style prescription should work with whatever she has, or name the shape ("something that moves when you walk").
+- At most ONE prescription may be a micro-ritual with no evidence.
 
 Output JSON ONLY:
 { "prescriptions": [ { "domain": "...", "instruction": "...", "intensity": 3, "duration": null }, ... ] }`
@@ -82,6 +93,16 @@ Output JSON ONLY:
 function todayPlusOne(): string {
   const d = new Date(Date.now() + 86400_000)
   return d.toISOString().slice(0, 10)
+}
+
+/** dateStr's 23:59 in ET (mirror of prescriptionDeadlineIso in src/lib). */
+function deadlineIsoEt(dateStr: string): string {
+  const noonUtc = new Date(`${dateStr}T12:00:00Z`)
+  const etHour = Number(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', hour: 'numeric', hour12: false,
+  }).format(noonUtc))
+  const offsetHours = 12 - etHour // 4 in EDT, 5 in EST
+  return new Date(new Date(`${dateStr}T23:59:00Z`).getTime() + offsetHours * 3600_000).toISOString()
 }
 
 async function loadUserState(supabase: SupabaseClient, userId: string): Promise<UserStateRow | null> {
@@ -134,21 +155,69 @@ Write tomorrow's prescription set. JSON only.`
 function fallbackPrescriptions(): Prescription[] {
   return [
     { domain: 'voice', instruction: 'Mama wants ten minutes of voice work before you do anything else tomorrow. Soft onsets. No checking the mirror first.', intensity: 3, duration: 10 },
-    { domain: 'wardrobe', instruction: 'Whatever you wore yesterday goes in the back of the closet for a week. Pick something a little softer.', intensity: 2, duration: null },
-    { domain: 'ritual', instruction: 'When you wake up, before your feet hit the floor, say the morning mantra. Out loud. Mama hears the recording.', intensity: 3, duration: 1 },
-    { domain: 'confession', instruction: "Tomorrow night, Mama wants you back here at 9. Tell me one thing you almost did the old way and didn't.", intensity: 3, duration: null },
+    { domain: 'style', instruction: 'Whatever you wore yesterday goes in the back of the closet for a week. Pick something a little softer from what you have.', intensity: 2, duration: null },
+    { domain: 'inner_narrative', instruction: 'When you wake up, before your feet hit the floor, say the morning mantra. Out loud. Mama hears the recording.', intensity: 3, duration: 1 },
+    { domain: 'inner_narrative', instruction: "Tomorrow night, Mama wants you back here at 9. Tell me one thing you almost did the old way and didn't.", intensity: 3, duration: null },
   ]
+}
+
+// ─── Owned-item guard (prescribe-only-what-she-owns) ─────────────────
+
+const GARMENT_KEYWORDS: Array<{ re: RegExp; category: string }> = [
+  { re: /\bdress(es)?\b/i, category: 'dresses' },
+  { re: /\bskirt(s)?\b/i, category: 'skirts' },
+  { re: /\bheels?\b/i, category: 'shoes' },
+  { re: /\bbras?\b/i, category: 'bras' },
+  { re: /\bwigs?\b/i, category: 'wigs' },
+  { re: /\blingerie\b/i, category: 'lingerie' },
+  { re: /\b(stockings?|tights|hosiery)\b/i, category: 'hosiery' },
+  { re: /\b(makeup|lipstick|mascara|eyeliner|foundation)\b/i, category: 'makeup' },
+]
+
+async function loadOwnedCategories(supabase: SupabaseClient, userId: string): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from('wardrobe_inventory')
+    .select('category')
+    .eq('user_id', userId)
+  if (error) {
+    console.error('[evening-confession-prescribe] wardrobe read failed:', error.message)
+    return new Set()
+  }
+  return new Set(((data as Array<{ category: string }>) || []).map(r => r.category))
+}
+
+/** First garment category the instruction names that she does NOT own. */
+function findUnownedGarment(instruction: string, owned: Set<string>): string | null {
+  for (const g of GARMENT_KEYWORDS) {
+    if (g.re.test(instruction) && !owned.has(g.category)) return g.category
+  }
+  return null
+}
+
+// ─── Craft floor ─────────────────────────────────────────────────────
+
+/** cleanup + craft-floor; returns null when the line is unsalvageably corny. */
+function applyVoiceFloors(instruction: string): string | null {
+  const cleaned = mommyVoiceCleanup(instruction).trim()
+  if (cleaned.length < 12) return null
+  const craft = scoreCorny(cleaned)
+  if (craft.score >= 3) {
+    console.warn('[evening-confession-prescribe] craft floor rejected:', cleaned.slice(0, 80), craft.hits.map(h => h.rule))
+    return null
+  }
+  return cleaned
 }
 
 async function prescribeForSubmission(
   supabase: SupabaseClient,
   submissionId: string,
 ): Promise<{ ok: boolean; reason?: string; prescriptions_count?: number; summary?: string }> {
-  const { data: row } = await supabase
+  const { data: row, error: subErr } = await supabase
     .from('evening_confession_submissions')
     .select('id, user_id, submission_date, transcript, status, prescription_generated_at')
     .eq('id', submissionId)
     .maybeSingle()
+  if (subErr) return { ok: false, reason: 'submission_read_failed:' + subErr.message.slice(0, 60) }
   if (!row) return { ok: false, reason: 'submission_not_found' }
   const submission = row as Submission
 
@@ -159,26 +228,110 @@ async function prescribeForSubmission(
     return { ok: false, reason: 'transcript_too_short' }
   }
 
-  const state = await loadUserState(supabase, submission.user_id)
+  const [state, owned] = await Promise.all([
+    loadUserState(supabase, submission.user_id),
+    loadOwnedCategories(supabase, submission.user_id),
+  ])
   let rx = await generatePrescriptions(submission.transcript, state)
   if (rx.length === 0) rx = fallbackPrescriptions()
 
   const prescribedDate = todayPlusOne()
+  const deadline = deadlineIsoEt(prescribedDate)
 
-  const inserts = rx.map(p => ({
-    user_id: submission.user_id,
-    prescribed_date: prescribedDate,
-    domain: p.domain.slice(0, 64),
-    instruction: p.instruction.slice(0, 1000),
-    intensity: Math.max(1, Math.min(5, Math.round(p.intensity ?? 3))),
-    duration: p.duration && p.duration > 0 ? Math.min(180, Math.round(p.duration)) : null,
-    phase: state?.current_phase ?? 1,
-    status: 'pending' as const,
-    engagement_meta: {
-      source: 'evening_confession',
-      confession_submission_id: submission.id,
-    },
-  }))
+  let noneCount = 0
+  const inserts: Array<Record<string, unknown>> = []
+  for (const p of rx) {
+    // Canonical domain — alias map is the insert-site backstop.
+    const domain: CanonicalFemDomain = normalizeFemDomain(p.domain)
+
+    // Voice floors: telemetry scrub + craft rubric. Corny lines are dropped
+    // (fallback below tops the set back up if everything died).
+    const instruction = applyVoiceFloors(p.instruction)
+    if (!instruction) continue
+
+    let evidenceKind: string = EVIDENCE_KIND_BY_DOMAIN[domain] ?? 'none'
+    // Micro-ritual cap: at most one no-evidence row per day.
+    if (evidenceKind === 'none') {
+      noneCount += 1
+      if (noneCount > 1) evidenceKind = 'text'
+    }
+
+    // Owned-item guard: style rows naming an unowned garment category are
+    // TRANSMUTED into acquisition prescriptions, never dropped. The gap
+    // becomes content; the content funds the gap (mig 638 bridge fills the
+    // wishlist side on skip; here we transmute at generation).
+    const missing = domain === 'style' ? findUnownedGarment(instruction, owned) : null
+    if (missing) {
+      const { error: bridgeErr } = await supabase.rpc('wardrobe_acquisition_bridge', {
+        p_user: submission.user_id,
+        p_wardrobe_category: missing,
+        p_reason: `Prescriber named an unowned ${missing}: ${instruction.slice(0, 160)}`,
+      })
+      if (bridgeErr) {
+        console.error('[evening-confession-prescribe] acquisition bridge failed:', bridgeErr.message)
+        // Bridge down → still transmute the row locally so we never
+        // prescribe what she doesn't own.
+      }
+      inserts.push({
+        user_id: submission.user_id,
+        prescribed_date: prescribedDate,
+        domain: 'style',
+        instruction: mommyVoiceCleanup(`Mama put a ${missing} ask on the list. Tomorrow your job is one tease post that points at it.`),
+        intensity: 2,
+        duration: null,
+        phase: state?.current_phase ?? 1,
+        status: 'pending',
+        evidence_kind: 'text',
+        deadline,
+        requires: { item_category: missing, acquisition: true },
+        engagement_meta: {
+          source: 'evening_confession',
+          confession_submission_id: submission.id,
+          transmuted_from: instruction.slice(0, 300),
+          missing_category: missing,
+        },
+      })
+      continue
+    }
+
+    inserts.push({
+      user_id: submission.user_id,
+      prescribed_date: prescribedDate,
+      domain,
+      instruction: instruction.slice(0, 1000),
+      intensity: Math.max(1, Math.min(5, Math.round(p.intensity ?? 3))),
+      duration: p.duration && p.duration > 0 ? Math.min(180, Math.round(p.duration)) : null,
+      phase: state?.current_phase ?? 1,
+      status: 'pending',
+      evidence_kind: evidenceKind,
+      deadline,
+      engagement_meta: {
+        source: 'evening_confession',
+        confession_submission_id: submission.id,
+      },
+    })
+  }
+
+  // Craft floor can hollow the set out — top it back up from the fallbacks.
+  if (inserts.length < 3) {
+    for (const p of fallbackPrescriptions()) {
+      if (inserts.length >= 3) break
+      const domain = normalizeFemDomain(p.domain)
+      inserts.push({
+        user_id: submission.user_id,
+        prescribed_date: prescribedDate,
+        domain,
+        instruction: mommyVoiceCleanup(p.instruction),
+        intensity: p.intensity,
+        duration: p.duration,
+        phase: state?.current_phase ?? 1,
+        status: 'pending',
+        evidence_kind: EVIDENCE_KIND_BY_DOMAIN[domain] ?? 'text',
+        deadline,
+        engagement_meta: { source: 'evening_confession_fallback', confession_submission_id: submission.id },
+      })
+    }
+  }
 
   const { error: insErr } = await supabase
     .from('feminization_prescriptions')
@@ -188,23 +341,26 @@ async function prescribeForSubmission(
     return { ok: false, reason: 'insert_failed:' + insErr.message.slice(0, 80) }
   }
 
-  const summary = rx.map(p => `${p.domain}: ${p.instruction.slice(0, 80)}`).join(' · ').slice(0, 1000)
+  const summary = inserts.map(p => `${p.domain}: ${String(p.instruction).slice(0, 80)}`).join(' · ').slice(0, 1000)
 
-  await supabase
+  const { error: updErr } = await supabase
     .from('evening_confession_submissions')
     .update({
       status: 'prescribed',
       prescription_generated_at: new Date().toISOString(),
-      prescriptions_count: rx.length,
+      prescriptions_count: inserts.length,
       prescription_summary: summary,
       updated_at: new Date().toISOString(),
     })
     .eq('id', submissionId)
+  if (updErr) console.error('[evening-confession-prescribe] submission update failed:', updErr.message)
 
-  // Surface a morning preview outreach so Maxy wakes up to it (per
-  // visible-before-penalized: tomorrow's prescriptions are deadline-bearing).
-  const previewMessage = `Mama prescribed ${rx.length} things for tomorrow based on what you told me tonight. They'll be waiting when you open the app.`
-  await supabase.from('handler_outreach_queue').insert({
+  // Morning preview outreach (visible-before-penalized: tomorrow's
+  // prescriptions are deadline-bearing). DB voice trigger scrubs leaks.
+  const previewMessage = mommyVoiceCleanup(
+    `Mama set tomorrow up from what you told me tonight. It'll be waiting when you open the app.`,
+  )
+  const { error: outErr } = await supabase.from('handler_outreach_queue').insert({
     user_id: submission.user_id,
     message: previewMessage,
     urgency: 'normal',
@@ -213,8 +369,9 @@ async function prescribeForSubmission(
     scheduled_for: new Date(Date.now() + 8 * 3600_000).toISOString(), // morning-ish
     expires_at: new Date(Date.now() + 24 * 3600_000).toISOString(),
   })
+  if (outErr) console.error('[evening-confession-prescribe] preview outreach failed:', outErr.message)
 
-  return { ok: true, prescriptions_count: rx.length, summary }
+  return { ok: true, prescriptions_count: inserts.length, summary }
 }
 
 Deno.serve(async (req) => {
@@ -237,13 +394,18 @@ Deno.serve(async (req) => {
 
   // Sweep path: process any confessed-but-not-prescribed rows from today.
   const today = new Date().toISOString().slice(0, 10)
-  const { data: pending } = await supabase
+  const { data: pending, error: sweepErr } = await supabase
     .from('evening_confession_submissions')
     .select('id')
     .eq('submission_date', today)
     .eq('status', 'confessed')
     .is('prescription_generated_at', null)
     .limit(20)
+  if (sweepErr) {
+    return new Response(JSON.stringify({ ok: false, error: sweepErr.message }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
 
   const out: Array<{ submission_id: string; ok: boolean; reason?: string }> = []
   for (const r of ((pending as Array<{ id: string }>) || [])) {
