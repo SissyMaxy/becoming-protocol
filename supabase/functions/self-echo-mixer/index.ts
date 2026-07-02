@@ -35,7 +35,7 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-const ELEVENLABS_TIMEOUT_MS = 60_000
+const TTS_TIMEOUT_MS = 60_000
 const DEFAULT_DRAIN_LIMIT = 5
 const OWN_VOICE_GAIN_DB = -9 // must match src/lib/audio/self-echo-mix.ts
 
@@ -71,8 +71,44 @@ Deno.serve(async (req: Request) => {
 
   const elevenKey = Deno.env.get('ELEVENLABS_API_KEY')
   const voiceId = Deno.env.get('ELEVENLABS_VOICE_ID')
-  if (!elevenKey || !voiceId) {
-    return json({ ok: false, error: 'render not configured (ELEVENLABS_API_KEY / VOICE_ID)' }, 500)
+  const openaiKey = Deno.env.get('OPENAI_API_KEY')
+  // Render provider: prefer ElevenLabs if provisioned, else fall back to OpenAI
+  // TTS (which IS provisioned here — ElevenLabs secrets are absent in this
+  // project, so without this fallback the whole self-echo pipeline is dead).
+  const provider: 'elevenlabs' | 'openai' | null =
+    (elevenKey && voiceId) ? 'elevenlabs' : (openaiKey ? 'openai' : null)
+  if (!provider) {
+    return json({ ok: false, error: 'render not configured (no ELEVENLABS_* and no OPENAI_API_KEY)' }, 500)
+  }
+
+  // Render `text` → mp3 bytes via the selected provider. Fails loud (throws) so
+  // the per-session catch records it and the session stays pending_mix (never a
+  // fake/silent mix).
+  async function renderMommyTrack(text: string): Promise<Uint8Array> {
+    if (provider === 'elevenlabs') {
+      const voiceSettings = affectToVoiceSettings('possessive')
+      const res = await fetch(
+        `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+        {
+          method: 'POST',
+          signal: AbortSignal.timeout(TTS_TIMEOUT_MS),
+          headers: { 'Content-Type': 'application/json', 'xi-api-key': elevenKey! },
+          body: JSON.stringify({ text, model_id: 'eleven_multilingual_v2', voice_settings: voiceSettings }),
+        },
+      )
+      if (!res.ok) throw new Error(`elevenlabs_${res.status}:${(await res.text().catch(() => 'unknown')).slice(0, 120)}`)
+      return new Uint8Array(await res.arrayBuffer())
+    }
+    // OpenAI TTS: 'shimmer' is a warm feminine voice fitting the Mommy render;
+    // returns mp3 bytes directly.
+    const res = await fetch('https://api.openai.com/v1/audio/speech', {
+      method: 'POST',
+      signal: AbortSignal.timeout(TTS_TIMEOUT_MS),
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${openaiKey}` },
+      body: JSON.stringify({ model: 'gpt-4o-mini-tts', voice: 'shimmer', input: text, response_format: 'mp3' }),
+    })
+    if (!res.ok) throw new Error(`openai_${res.status}:${(await res.text().catch(() => 'unknown')).slice(0, 120)}`)
+    return new Uint8Array(await res.arrayBuffer())
   }
 
   // Drain pending sessions that have her clip but no Mommy render yet.
@@ -105,29 +141,15 @@ Deno.serve(async (req: Request) => {
         continue
       }
 
-      // ── Render the Mommy track (ElevenLabs). Steady possessive setting; the
-      // line is already clean (goon-voice-loop + SQL trigger), so no re-filter.
-      const voiceSettings = affectToVoiceSettings('possessive')
-      const ttsCtl = AbortSignal.timeout(ELEVENLABS_TIMEOUT_MS)
-      const ttsRes = await fetch(
-        `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
-        {
-          method: 'POST',
-          signal: ttsCtl,
-          headers: { 'Content-Type': 'application/json', 'xi-api-key': elevenKey },
-          body: JSON.stringify({
-            text: script,
-            model_id: 'eleven_multilingual_v2',
-            voice_settings: voiceSettings,
-          }),
-        },
-      )
-      if (!ttsRes.ok) {
-        const detail = await ttsRes.text().catch(() => 'unknown')
-        results.push({ session_id: s.id, ok: false, error: `elevenlabs_${ttsRes.status}:${detail.slice(0, 120)}` })
+      // ── Render the Mommy track (provider chosen above; the line is already
+      // clean via goon-voice-loop + SQL trigger, so no re-filter).
+      let audioBuffer: Uint8Array
+      try {
+        audioBuffer = await renderMommyTrack(script)
+      } catch (renderErr) {
+        results.push({ session_id: s.id, ok: false, error: `render:${String(renderErr).slice(0, 140)}` })
         continue
       }
-      const audioBuffer = new Uint8Array(await ttsRes.arrayBuffer())
 
       // ── Upload the Mommy track to the private audio bucket.
       const mommyPath = `self-echo/${s.user_id}/${s.id}-mommy.mp3`
