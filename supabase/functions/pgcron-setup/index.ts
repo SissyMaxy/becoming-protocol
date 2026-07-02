@@ -75,6 +75,14 @@ const JOBS: CronJob[] = [
     fn: 'guilt-report',
     body: `jsonb_build_object('trigger','pg_cron')`,
   },
+  {
+    // Self-voice goon loop (mig 642): daily self-echo offer built from her own
+    // voice_progress_samples. Gated fail-closed on conditioning_gate('goon').
+    name: 'goon-voice-loop-daily',
+    schedule: '15 3 * * *',
+    fn: 'goon-voice-loop',
+    body: `jsonb_build_object('trigger','daily')`,
+  },
 ]
 
 function jobSql(j: CronJob, key: string): string {

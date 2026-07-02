@@ -95,6 +95,10 @@ const GENERATORS: GeneratorSpec[] = [
   // the alarm that distinguishes "paused by design" from "gate deleted".
   { name: 'revenue_task_generator', function_name: 'revenue-task-generator', expected_cadence_minutes: 1440, output_table: 'handler_decrees', edge_function: true, conditional: true },
   { name: 'conditioning_gate', function_name: 'conditioning_gate', expected_cadence_minutes: 1440, conditional: true },
+  // Self-voice goon loop (mig 642): daily/peak/retirement self-echo offers.
+  // Conditional — fires only for users with a usable own-voice clip AND the
+  // goon gate open, so zero rows is expected quiet, not a fault.
+  { name: 'goon_voice_loop', function_name: 'goon-voice-loop', expected_cadence_minutes: 1440, output_table: 'self_echo_sessions', edge_function: true, conditional: true },
 ];
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
