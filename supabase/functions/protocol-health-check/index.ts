@@ -60,6 +60,13 @@ const GENERATORS: GeneratorSpec[] = [
   // check that matters — zero aborted sessions is the healthy case.
   { name: 'machine_overseer', function_name: 'machine-overseer', expected_cadence_minutes: 1440, output_table: 'machine_sessions', edge_function: true, conditional: true },
   { name: 'machine_deadman_sweep', function_name: 'machine_deadman_sweep', expected_cadence_minutes: 1, conditional: true },
+  // Meet safety v2 (mig 626). SAFETY-CRITICAL — the watcher runs on pg_cron
+  // every minute and must be whitelisted in any cron prune. meet_safety_watch
+  // is a SQL fn (probed via check_function_exists); conditional because it is
+  // correctly quiet when no plan is armed/live. The dispatcher is an edge fn
+  // whose output table only has rows during escalations/false alarms.
+  { name: 'meet_safety_watch', function_name: 'meet_safety_watch', expected_cadence_minutes: 1, conditional: true },
+  { name: 'meet_safety_dispatch', function_name: 'meet-safety-dispatch', expected_cadence_minutes: 5, output_table: 'meet_escalation_dispatch', edge_function: true, conditional: true },
 ];
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);

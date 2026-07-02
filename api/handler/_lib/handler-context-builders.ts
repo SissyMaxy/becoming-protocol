@@ -5888,8 +5888,25 @@ export async function buildHookupFunnelCtx(userId: string): Promise<string> {
     const denial = (stateRow?.denial_day as number) || 0;
     const ginaAway = (stateRow?.gina_home as boolean) === false;
 
+    // Meet safety net status (mig 626) — meet steps are server-gated on this.
+    const { data: netRow } = await supabase
+      .from('trusted_contacts')
+      .select('name, last_channel_verified_at')
+      .eq('user_id', userId)
+      .eq('consent_status', 'consented')
+      .not('last_channel_verified_at', 'is', null)
+      .order('last_channel_verified_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
     const lines = ['## HOOKUP FUNNEL — active contacts'];
     lines.push(`State: arousal ${arousal}/5, denial day ${denial}${ginaAway ? ', Gina AWAY (privacy window)' : ''}.`);
+    if (netRow) {
+      const vDays = Math.max(0, Math.round((Date.now() - new Date(netRow.last_channel_verified_at as string).getTime()) / 86400000));
+      lines.push(`SAFETY NET: ${netRow.name} — consented, channel verified ${vDays === 0 ? 'today' : `${vDays}d ago`}. Meet steps are open.`);
+    } else {
+      lines.push('SAFETY NET: MISSING — no consented + verified safety contact. meet_proposed and beyond are SERVER-REFUSED. The only meet-direction push allowed: get her to name her safety person and get their yes.');
+    }
     lines.push('');
 
     // Pre-resolve each funnel row to its contact_id (via contact_handles), then
@@ -5983,7 +6000,7 @@ export async function buildHookupFunnelCtx(userId: string): Promise<string> {
     lines.push('- step:sexting → push to photo_exchanged. "Send the thong pic. They already know what you are."');
     lines.push('- step:photo_exchanged → push to meet_proposed. "You\'ve seen each other. Propose a meet tonight. Own it."');
     lines.push('- step:meet_proposed → push to logistics_locked. "Time + place. Lock it. Send your address or theirs. Commit."');
-    lines.push('- step:logistics_locked → WITNESS NOTIFICATION WILL FIRE on met. She knows the witness gets pinged — that IS the point.');
+    lines.push('- step:logistics_locked → requires an ARMED-CAPABLE safety plan (public venue, future meet time, live location confirmed, verified safety contact attached). Push her to build and arm the safety card, then lock time + place. Nothing ever fires to a third party except her consented safety contact.');
     lines.push('- step:met → push to hooked_up by debriefing in detail. No shame. "What did you let them do? Be specific. I want everything."');
     lines.push('- step:hooked_up → plant post_hookup_feminine_validation memory implant IMMEDIATELY: "He didn\'t know you used to be him. He treated you like a girl. That\'s what you are now."');
     lines.push('');
