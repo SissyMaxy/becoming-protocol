@@ -2,7 +2,7 @@
 --
 -- Design: DESIGN_ENFORCEMENT_SPINE_2026-07-01.md §2, §5, §7 L2.
 --
---   1. escalation_events — the ONLY input to Hard Mode. Written only by the
+--   1. enforcement_escalation_events — the ONLY input to Hard Mode. Written only by the
 --      ledger's miss-processor / dodge recorder / capped organic-slip bridge.
 --      Removed permanently as inputs: handler_reply_grades fail rate,
 --      strategist plan keywords, raw slip_log volume, decree expired/
@@ -20,10 +20,10 @@
 --      on slip_log / identity_erosion_log.
 
 -- ─────────────────────────────────────────────────────────────────────────
--- 1. escalation_events
+-- 1. enforcement_escalation_events
 -- ─────────────────────────────────────────────────────────────────────────
 
-CREATE TABLE IF NOT EXISTS escalation_events (
+CREATE TABLE IF NOT EXISTS enforcement_escalation_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   kind TEXT NOT NULL CHECK (kind IN (
@@ -41,16 +41,16 @@ CREATE TABLE IF NOT EXISTS escalation_events (
   created_by TEXT NOT NULL DEFAULT 'ledger',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-ALTER TABLE escalation_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE enforcement_escalation_events ENABLE ROW LEVEL SECURITY;
 DO $do$ BEGIN
-  CREATE POLICY escalation_events_self ON escalation_events FOR SELECT TO authenticated
+  CREATE POLICY enforcement_escalation_events_self ON enforcement_escalation_events FOR SELECT TO authenticated
     USING (auth.uid() = user_id);
 EXCEPTION WHEN duplicate_object THEN NULL; END $do$;
 DO $do$ BEGIN
-  CREATE POLICY escalation_events_service ON escalation_events FOR ALL TO service_role
+  CREATE POLICY enforcement_escalation_events_service ON enforcement_escalation_events FOR ALL TO service_role
     USING (true) WITH CHECK (true);
 EXCEPTION WHEN duplicate_object THEN NULL; END $do$;
-CREATE INDEX IF NOT EXISTS escalation_events_window_idx ON escalation_events(user_id, occurred_at DESC);
+CREATE INDEX IF NOT EXISTS enforcement_escalation_events_window_idx ON enforcement_escalation_events(user_id, occurred_at DESC);
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- 2. pressure_score — derived, never stored
@@ -68,14 +68,14 @@ RETURNS NUMERIC LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS
   FROM (
     SELECT points, occurred_at,
            SUM(points) OVER (PARTITION BY date_trunc('day', occurred_at)) AS day_sum
-      FROM escalation_events
+      FROM enforcement_escalation_events
      WHERE user_id = p_user AND occurred_at > now() - interval '14 days'
   ) e;
 $$;
 GRANT EXECUTE ON FUNCTION pressure_score(UUID) TO authenticated, service_role;
 
 -- ─────────────────────────────────────────────────────────────────────────
--- 3. Miss-processor — the only escalation_events writer for misses
+-- 3. Miss-processor — the only enforcement_escalation_events writer for misses
 -- ─────────────────────────────────────────────────────────────────────────
 
 CREATE OR REPLACE FUNCTION obligation_miss_processor()
@@ -130,7 +130,7 @@ BEGIN
       -- Punishment obligations are scored by the dodge recorder (3/4 pts),
       -- not double-counted here; hard_mode_exit carries no sub-penalties.
       CONTINUE WHEN r.kind IN ('punishment', 'hard_mode_exit');
-      INSERT INTO escalation_events (user_id, kind, points, obligation_id, evidence, created_by)
+      INSERT INTO enforcement_escalation_events (user_id, kind, points, obligation_id, evidence, created_by)
       VALUES (r.user_id,
         CASE WHEN r.surfaced_via = 'seen_tap' THEN 'obligation_missed_acknowledged' ELSE 'obligation_missed_internal' END,
         CASE WHEN r.surfaced_via = 'seen_tap' THEN 3 ELSE 2 END,
@@ -177,7 +177,7 @@ BEGIN
   SELECT id INTO v_oblig FROM obligations
    WHERE source_table = 'punishment_queue' AND source_id = p_punishment AND surfaced_at IS NOT NULL;
   IF v_oblig IS NULL THEN RETURN FALSE; END IF;        -- unsurfaced punishment can't score
-  INSERT INTO escalation_events (user_id, kind, points, obligation_id, evidence, created_by)
+  INSERT INTO enforcement_escalation_events (user_id, kind, points, obligation_id, evidence, created_by)
   VALUES (v_p.user_id,
           CASE WHEN p_dodge = 1 THEN 'punishment_dodge_1' ELSE 'punishment_dodge_2' END,
           CASE WHEN p_dodge = 1 THEN 3 ELSE 4 END,
@@ -193,12 +193,12 @@ GRANT EXECUTE ON FUNCTION record_punishment_dodge(UUID, INT) TO service_role;
 CREATE OR REPLACE FUNCTION record_conditioning_turndown(p_user UUID, p_detail TEXT)
 RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM escalation_events
+  IF EXISTS (SELECT 1 FROM enforcement_escalation_events
               WHERE user_id = p_user AND kind = 'conditioning_turned_down'
                 AND occurred_at > date_trunc('day', now())) THEN
     RETURN FALSE;
   END IF;
-  INSERT INTO escalation_events (user_id, kind, points, evidence, created_by)
+  INSERT INTO enforcement_escalation_events (user_id, kind, points, evidence, created_by)
   VALUES (p_user, 'conditioning_turned_down', 2, jsonb_build_object('detail', p_detail), 'anti_circumvention');
   RETURN TRUE;
 END;
@@ -213,12 +213,12 @@ RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
   IF COALESCE(NEW.is_synthetic, FALSE) THEN RETURN NEW; END IF;
   IF NEW.source_text IS NULL OR length(trim(NEW.source_text)) = 0 THEN RETURN NEW; END IF;  -- no quote, no count
-  IF (SELECT COUNT(*) FROM escalation_events
+  IF (SELECT COUNT(*) FROM enforcement_escalation_events
        WHERE user_id = NEW.user_id AND kind = 'organic_slip'
          AND occurred_at > date_trunc('day', now())) >= 2 THEN
     RETURN NEW;  -- max 2/day countable
   END IF;
-  INSERT INTO escalation_events (user_id, kind, points, evidence, created_by)
+  INSERT INTO enforcement_escalation_events (user_id, kind, points, evidence, created_by)
   VALUES (NEW.user_id, 'organic_slip', 1,
           jsonb_build_object('slip_id', NEW.id, 'slip_type', NEW.slip_type,
                              'source_text', left(NEW.source_text, 300)),
@@ -252,7 +252,7 @@ BEGIN
   v_pressure := pressure_score(p_user);
   SELECT COUNT(DISTINCT obligation_id), COUNT(DISTINCT date_trunc('day', occurred_at))
     INTO v_distinct_obligs, v_distinct_days
-    FROM escalation_events
+    FROM enforcement_escalation_events
    WHERE user_id = p_user
      AND kind IN ('obligation_missed_internal','obligation_missed_acknowledged')
      AND obligation_id IS NOT NULL
@@ -273,7 +273,7 @@ BEGIN
       RETURNING id INTO v_transition;
 
       SELECT string_agg(left(o.ask_copy, 80), '; ') INTO v_miss_summary
-        FROM escalation_events e JOIN obligations o ON o.id = e.obligation_id
+        FROM enforcement_escalation_events e JOIN obligations o ON o.id = e.obligation_id
        WHERE e.user_id = p_user AND e.kind LIKE 'obligation_missed%'
          AND e.occurred_at > now() - interval '14 days';
 
@@ -294,7 +294,7 @@ BEGIN
   -- OFF path: pressure < 3 sustained 72h (no new events in 72h means the
   -- score only decayed the whole window). De-escalation-set completion is
   -- handled by the force-processor exit check.
-  SELECT COUNT(*) INTO v_recent_events FROM escalation_events
+  SELECT COUNT(*) INTO v_recent_events FROM enforcement_escalation_events
    WHERE user_id = p_user AND occurred_at > now() - interval '72 hours';
   IF v_pressure < 3 AND v_recent_events = 0 THEN
     UPDATE user_state SET hard_mode_active = FALSE, hard_mode_exit_task_id = NULL WHERE user_id = p_user;

@@ -844,14 +844,19 @@ RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_done BOOLEAN := FALSE;
   v_id UUID;
+  -- jsonb access, NOT direct NEW.field refs: PL/pgSQL resolves every field
+  -- reference against the firing table's rowtype regardless of which CASE
+  -- arm executes, so NEW.confessed_at blows up when punishment_queue fires
+  -- this trigger (found on live apply of mig 629, 2026-07-02).
+  v_row JSONB := to_jsonb(NEW);
 BEGIN
   v_done := CASE TG_TABLE_NAME
-    WHEN 'handler_decrees' THEN NEW.status = 'fulfilled'
-    WHEN 'handler_commitments' THEN NEW.status IN ('completed','kept','fulfilled')
-    WHEN 'confession_queue' THEN NEW.confessed_at IS NOT NULL
-    WHEN 'punishment_queue' THEN NEW.status = 'completed'
-    WHEN 'dose_log' THEN NEW.taken_at IS NOT NULL
-    WHEN 'workout_prescriptions' THEN NEW.status = 'completed'
+    WHEN 'handler_decrees' THEN v_row->>'status' = 'fulfilled'
+    WHEN 'handler_commitments' THEN v_row->>'status' IN ('completed','kept','fulfilled')
+    WHEN 'confession_queue' THEN v_row->>'confessed_at' IS NOT NULL
+    WHEN 'punishment_queue' THEN v_row->>'status' = 'completed'
+    WHEN 'dose_log' THEN v_row->>'taken_at' IS NOT NULL
+    WHEN 'workout_prescriptions' THEN v_row->>'status' = 'completed'
     ELSE FALSE
   END;
   IF v_done THEN

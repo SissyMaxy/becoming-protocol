@@ -65,7 +65,7 @@ const GENERATORS: GeneratorSpec[] = [
   // recompute are SQL fns on pg_cron; both are conditional (zero rows is the
   // healthy case when nothing was missed). The outward dispatcher is an edge
   // fn; its queue is empty in the healthy case.
-  { name: 'obligation_miss_processor', function_name: 'obligation_miss_processor', expected_cadence_minutes: 10, output_table: 'escalation_events', conditional: true },
+  { name: 'obligation_miss_processor', function_name: 'obligation_miss_processor', expected_cadence_minutes: 10, output_table: 'enforcement_escalation_events', conditional: true },
   { name: 'hard_mode_recompute', function_name: 'hard_mode_recompute_all', expected_cadence_minutes: 30, conditional: true },
   { name: 'obligation_pause_shift_accruer', function_name: 'obligation_pause_shift_accrue', expected_cadence_minutes: 5, conditional: true },
   { name: 'outward_consequence_dispatcher', function_name: 'outward-consequence-dispatcher', expected_cadence_minutes: 15, output_table: 'outward_dispatch_queue', edge_function: true, conditional: true },

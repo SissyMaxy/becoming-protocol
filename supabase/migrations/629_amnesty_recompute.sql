@@ -11,7 +11,7 @@
 --      (status CHECK extended) with one net unlock-push retained via the
 --      unlock-date recompute.
 --   4. Unlock dates recomputed to the +7d chain cap.
---   5. Hard Mode recomputed from surviving signals (escalation_events starts
+--   5. Hard Mode recomputed from surviving signals (enforcement_escalation_events starts
 --      empty ⇒ pressure 0 ⇒ exits), reason 'amnesty_recompute_v2'.
 --   6. handler_decrees.cancel_reason backfill — unknowns resolve in her
 --      favor as 'system_prune' (never counted as ducking).
@@ -154,7 +154,7 @@ DECLARE r RECORD;
 BEGIN
   FOR r IN SELECT user_id FROM user_state WHERE hard_mode_active = TRUE
   LOOP
-    -- escalation_events (mig 628) starts empty: pressure 0 < 3 and no events
+    -- enforcement_escalation_events (mig 628) starts empty: pressure 0 < 3 and no events
     -- in 72h ⇒ the calculus exits Hard Mode. Nothing that flipped it under
     -- the old inputs (reply grades, plan keywords, raw slip volume) survives.
     UPDATE user_state SET hard_mode_active = FALSE, hard_mode_exit_task_id = NULL

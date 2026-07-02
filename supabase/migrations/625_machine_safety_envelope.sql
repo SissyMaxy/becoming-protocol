@@ -112,6 +112,21 @@ ALTER TABLE machine_sessions DROP CONSTRAINT IF EXISTS machine_sessions_status_c
 ALTER TABLE machine_sessions ADD CONSTRAINT machine_sessions_status_check
   CHECK (status IN ('created', 'active', 'paused', 'completed', 'aborted'));
 
+-- Zombie cleanup BEFORE the uniqueness guarantee: the pre-envelope overseer
+-- never closed sessions (no FSM terminal states), so the live DB holds
+-- multiple 'active' rows per user. Keep only the most recent; abort the rest.
+-- (Found on first live apply 2026-07-02: duplicate key on 8c69... .)
+UPDATE machine_sessions ms
+SET status = 'aborted',
+    abort_reason = 'migration_dedup_stale_active',
+    ended_at = COALESCE(ms.ended_at, now())
+WHERE ms.status = 'active'
+  AND ms.id NOT IN (
+    SELECT DISTINCT ON (user_id) id FROM machine_sessions
+    WHERE status = 'active'
+    ORDER BY user_id, started_at DESC NULLS LAST, id DESC
+  );
+
 -- One active session per user (physical safety: two sessions can't fight
 -- over one device), and the sweep's scan index.
 CREATE UNIQUE INDEX IF NOT EXISTS machine_sessions_one_active_per_user

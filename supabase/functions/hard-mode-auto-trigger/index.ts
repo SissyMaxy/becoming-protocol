@@ -7,7 +7,7 @@
 //
 // Hard Mode now responds to HER dodging surfaced obligations, nothing else.
 // The whole calculus lives in SQL (mig 628): pressure_score() over
-// escalation_events + hard_mode_recompute(). This function is a thin caller
+// enforcement_escalation_events + hard_mode_recompute(). This function is a thin caller
 // kept for the existing cron/critical-loop wiring; the 30-min pg_cron
 // recompute (mig 628) is the primary driver.
 

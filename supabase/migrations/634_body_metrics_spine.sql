@@ -201,6 +201,33 @@ CREATE TRIGGER body_measurements_view_insert
 -- accepted on INSERT (folded into notes — body_metrics doesn't carry it)
 -- and exposed as NULL on read.
 
+-- Live-DB reconcile (found on first apply 2026-07-02): body_measurement_log
+-- EXISTS as a real table in production — created out-of-band via the
+-- Management API (the repo never had its DDL; only mig 335's RLS policy).
+-- Absorb it: backfill its rows into the spine, rename it out of the way, and
+-- only then install the view under the same name.
+DO $do$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables
+             WHERE table_schema = 'public' AND table_name = 'body_measurement_log'
+               AND table_type = 'BASE TABLE') THEN
+    INSERT INTO body_metrics (user_id, measured_at, weight_kg, waist_cm, hips_cm, chest_cm, thigh_cm, source, notes)
+    SELECT bml.user_id, COALESCE(bml.measured_at, now()),
+           bml.weight_kg, bml.waist_cm, bml.hips_cm, bml.chest_cm, bml.thigh_cm,
+           'backfill',
+           trim(both ' | ' FROM COALESCE(bml.notes, '')
+             || CASE WHEN bml.body_fat_pct IS NOT NULL THEN ' | body_fat_pct=' || bml.body_fat_pct ELSE '' END)
+      FROM body_measurement_log bml
+     WHERE NOT EXISTS (
+       SELECT 1 FROM body_metrics bm
+       WHERE bm.user_id = bml.user_id AND bm.measured_at = bml.measured_at
+     );
+    ALTER TABLE body_measurement_log RENAME TO zz_legacy_body_measurement_log;
+    COMMENT ON TABLE zz_legacy_body_measurement_log IS
+      'Superseded 2026-07-02 by the body_metrics spine (mig 634). Rows backfilled; kept read-only for audit.';
+  END IF;
+END $do$;
+
 CREATE OR REPLACE VIEW body_measurement_log AS
 SELECT
   id, user_id, measured_at,
@@ -270,6 +297,29 @@ ALTER VIEW body_metrics_trend SET (security_invoker = true);
 GRANT SELECT ON body_metrics_trend TO authenticated, service_role;
 
 -- ─── 7. transition_tracking_log: provenance + collapsed type ────────
+
+-- Live-DB reconcile (2026-07-02): mig 290 declares this table but was never
+-- applied to production — create it here so the ALTERs below always land.
+-- Shape mirrors 290 minus the CHECK (replaced below with the collapsed set).
+CREATE TABLE IF NOT EXISTS transition_tracking_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  tracking_type TEXT NOT NULL,
+  recorded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE transition_tracking_log ENABLE ROW LEVEL SECURITY;
+DO $do$ BEGIN
+  CREATE POLICY transition_tracking_log_own ON transition_tracking_log
+    FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $do$;
+DO $do$ BEGIN
+  CREATE POLICY transition_tracking_log_service ON transition_tracking_log
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $do$;
 
 ALTER TABLE transition_tracking_log ADD COLUMN IF NOT EXISTS evidence_path TEXT;
 ALTER TABLE transition_tracking_log ADD COLUMN IF NOT EXISTS decree_id UUID;
