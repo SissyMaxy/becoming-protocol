@@ -27,7 +27,7 @@
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { affectToVoiceSettings } from '../_shared/mommy-voice-settings.ts'
+import { synthesizeMommySpeech, ttsConfigured, ttsConfigError } from '../_shared/tts.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -69,46 +69,21 @@ Deno.serve(async (req: Request) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
   )
 
-  const elevenKey = Deno.env.get('ELEVENLABS_API_KEY')
-  const voiceId = Deno.env.get('ELEVENLABS_VOICE_ID')
-  const openaiKey = Deno.env.get('OPENAI_API_KEY')
-  // Render provider: prefer ElevenLabs if provisioned, else fall back to OpenAI
-  // TTS (which IS provisioned here — ElevenLabs secrets are absent in this
-  // project, so without this fallback the whole self-echo pipeline is dead).
-  const provider: 'elevenlabs' | 'openai' | null =
-    (elevenKey && voiceId) ? 'elevenlabs' : (openaiKey ? 'openai' : null)
-  if (!provider) {
-    return json({ ok: false, error: 'render not configured (no ELEVENLABS_* and no OPENAI_API_KEY)' }, 500)
+  // TTS provider resolved in _shared/tts.ts: ElevenLabs if provisioned, else
+  // OpenAI (this project has no ElevenLabs secrets, so the OpenAI fallback is
+  // what renders here — without it the whole self-echo pipeline is dead).
+  if (!ttsConfigured()) {
+    return json({ ok: false, error: ttsConfigError() }, 500)
   }
 
-  // Render `text` → mp3 bytes via the selected provider. Fails loud (throws) so
-  // the per-session catch records it and the session stays pending_mix (never a
-  // fake/silent mix).
+  // Render `text` → mp3 bytes. Fails loud (throws) so the per-session catch
+  // records it and the session stays pending_mix (never a fake/silent mix).
   async function renderMommyTrack(text: string): Promise<Uint8Array> {
-    if (provider === 'elevenlabs') {
-      const voiceSettings = affectToVoiceSettings('possessive')
-      const res = await fetch(
-        `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
-        {
-          method: 'POST',
-          signal: AbortSignal.timeout(TTS_TIMEOUT_MS),
-          headers: { 'Content-Type': 'application/json', 'xi-api-key': elevenKey! },
-          body: JSON.stringify({ text, model_id: 'eleven_multilingual_v2', voice_settings: voiceSettings }),
-        },
-      )
-      if (!res.ok) throw new Error(`elevenlabs_${res.status}:${(await res.text().catch(() => 'unknown')).slice(0, 120)}`)
-      return new Uint8Array(await res.arrayBuffer())
-    }
-    // OpenAI TTS: 'shimmer' is a warm feminine voice fitting the Mommy render;
-    // returns mp3 bytes directly.
-    const res = await fetch('https://api.openai.com/v1/audio/speech', {
-      method: 'POST',
-      signal: AbortSignal.timeout(TTS_TIMEOUT_MS),
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${openaiKey}` },
-      body: JSON.stringify({ model: 'gpt-4o-mini-tts', voice: 'shimmer', input: text, response_format: 'mp3' }),
+    const { bytes } = await synthesizeMommySpeech(text, {
+      affect: 'possessive',
+      timeoutMs: TTS_TIMEOUT_MS,
     })
-    if (!res.ok) throw new Error(`openai_${res.status}:${(await res.text().catch(() => 'unknown')).slice(0, 120)}`)
-    return new Uint8Array(await res.arrayBuffer())
+    return bytes
   }
 
   // Drain pending sessions that have her clip but no Mommy render yet.

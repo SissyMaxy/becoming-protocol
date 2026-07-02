@@ -12,7 +12,8 @@
 //      mantra_delivery_log most recent
 //   4. Substitute placeholders, generate script via Anthropic (30s budget)
 //   5. Run script through mommyVoiceCleanup (telemetry/probe filter)
-//   6. POST to ElevenLabs with affect-modulated voice settings (60s budget)
+//   6. Synthesize via _shared/tts.ts (ElevenLabs if provisioned, else OpenAI),
+//      affect-modulated voice settings (60s budget)
 //   7. Upload MP3 to private `audio` bucket at sessions/<user>/<render_id>.mp3
 //   8. Persist row with status='ready', return.
 //
@@ -23,7 +24,7 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.24.3'
 import { mommyVoiceCleanup } from '../_shared/dommy-mommy.ts'
-import { affectToVoiceSettings } from '../_shared/mommy-voice-settings.ts'
+import { synthesizeMommySpeech, ttsConfigured, ttsConfigError } from '../_shared/tts.ts'
 import {
   type AudioSessionIntensity,
   type AudioSessionKind,
@@ -41,7 +42,7 @@ const corsHeaders = {
 }
 
 const ANTHROPIC_TIMEOUT_MS = 30_000
-const ELEVENLABS_TIMEOUT_MS = 60_000
+const TTS_TIMEOUT_MS = 60_000
 const RECENT_TEMPLATE_LOOKBACK = 5
 
 const VALID_KINDS = new Set<AudioSessionKind>([
@@ -89,11 +90,15 @@ Deno.serve(async (req: Request) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
   )
 
-  const elevenKey = Deno.env.get('ELEVENLABS_API_KEY')
-  const voiceId = Deno.env.get('ELEVENLABS_VOICE_ID')
   const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')
-  if (!elevenKey || !voiceId || !anthropicKey) {
-    return jsonResponse({ ok: false, error: 'render not configured' }, 500)
+  // TTS provider is resolved inside _shared/tts.ts (ElevenLabs if provisioned,
+  // else OpenAI). This project has no ElevenLabs secrets, so the OpenAI fallback
+  // is what actually renders here.
+  if (!anthropicKey) {
+    return jsonResponse({ ok: false, error: 'render not configured (no ANTHROPIC_API_KEY)' }, 500)
+  }
+  if (!ttsConfigured()) {
+    return jsonResponse({ ok: false, error: ttsConfigError() }, 500)
   }
 
   // ── 1. Load context: user_state.current_phase, today's affect, recent renders
@@ -248,35 +253,16 @@ Deno.serve(async (req: Request) => {
 
     if (script.length < 100) throw new Error('script_too_short_after_cleanup')
 
-    // ── 8. Voice settings: per-kind affect, modulated to today's mood if it
-    // matches the kind's bias list.
+    // ── 8. Voice: per-kind affect, modulated to today's mood if it matches the
+    // kind's bias list. The shared helper picks ElevenLabs or OpenAI by env.
     const affectForVoice = resolveAffectForKind(kind, todayAffect)
-    const voiceSettings = affectToVoiceSettings(affectForVoice)
 
-    // ── 9. ElevenLabs (60s timeout)
-    const ttsCtl = AbortSignal.timeout(ELEVENLABS_TIMEOUT_MS)
-    const ttsRes = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
-      {
-        method: 'POST',
-        signal: ttsCtl,
-        headers: {
-          'Content-Type': 'application/json',
-          'xi-api-key': elevenKey,
-        },
-        body: JSON.stringify({
-          text: script,
-          model_id: 'eleven_multilingual_v2',
-          voice_settings: voiceSettings,
-        }),
-      },
-    )
-
-    if (!ttsRes.ok) {
-      const detail = await ttsRes.text().catch(() => 'unknown')
-      throw new Error(`elevenlabs_${ttsRes.status}:${detail.slice(0, 200)}`)
-    }
-    const audioBuffer = new Uint8Array(await ttsRes.arrayBuffer())
+    // ── 9. Synthesize (60s timeout, provider-agnostic)
+    const tts = await synthesizeMommySpeech(script, {
+      affect: affectForVoice,
+      timeoutMs: TTS_TIMEOUT_MS,
+    })
+    const audioBuffer = tts.bytes
 
     // ── 10. Upload to private audio bucket
     const path = `sessions/${userId}/${renderId}.mp3`
@@ -295,7 +281,7 @@ Deno.serve(async (req: Request) => {
       audio_url: path,
       script_text: script,
       duration_seconds: durationSeconds,
-      voice_settings_used: { affect: affectForVoice, voice_id: voiceId, ...voiceSettings },
+      voice_settings_used: { affect: affectForVoice, provider: tts.provider, voice_id: tts.voiceId ?? null, ...tts.voiceSettings },
       status: 'ready',
       error_text: null,
     }).eq('id', renderId)
@@ -307,7 +293,7 @@ Deno.serve(async (req: Request) => {
       script_text: script,
       duration_seconds: durationSeconds,
       expires_at: expiresAt,
-      voice_settings_used: { affect: affectForVoice, voice_id: voiceId, ...voiceSettings },
+      voice_settings_used: { affect: affectForVoice, provider: tts.provider, voice_id: tts.voiceId ?? null, ...tts.voiceSettings },
       template_name: template.name,
       tier,
     })

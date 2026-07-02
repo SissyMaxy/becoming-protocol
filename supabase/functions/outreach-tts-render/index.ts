@@ -1,4 +1,5 @@
-// outreach-tts-render — render Mommy's outreach text to ElevenLabs audio.
+// outreach-tts-render — render Mommy's outreach text to audio via _shared/tts.ts
+// (ElevenLabs if provisioned, else OpenAI).
 //
 // Invoked fire-and-forget by the AFTER INSERT trigger on
 // handler_outreach_queue (migration 259) and by the backfill script.
@@ -14,7 +15,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { mommyVoiceCleanup } from '../_shared/dommy-mommy.ts'
-import { affectToVoiceSettings } from '../_shared/mommy-voice-settings.ts'
+import { synthesizeMommySpeech, ttsConfigured, ttsConfigError } from '../_shared/tts.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -80,10 +81,9 @@ Deno.serve(async (req: Request) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
   )
 
-  const elevenKey = Deno.env.get('ELEVENLABS_API_KEY')
-  const voiceId = Deno.env.get('ELEVENLABS_VOICE_ID')
-  if (!elevenKey || !voiceId) {
-    return new Response(JSON.stringify({ ok: false, error: 'ElevenLabs not configured' }), {
+  // TTS provider resolved in _shared/tts.ts: ElevenLabs if provisioned, else OpenAI.
+  if (!ttsConfigured()) {
+    return new Response(JSON.stringify({ ok: false, error: ttsConfigError() }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
@@ -118,7 +118,6 @@ Deno.serve(async (req: Request) => {
       .eq('mood_date', today)
       .maybeSingle()
     const affect = (moodData as MoodRow | null)?.affect ?? null
-    const voiceSettings = affectToVoiceSettings(affect)
 
     const cleaned = cleanForTts(row.message)
     if (cleaned.length < 10) {
@@ -132,34 +131,21 @@ Deno.serve(async (req: Request) => {
     }
     const text = truncateAtWordBoundary(cleaned, MAX_TTS_CHARS)
 
-    const ttsRes = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'xi-api-key': elevenKey,
-        },
-        body: JSON.stringify({
-          text,
-          model_id: 'eleven_multilingual_v2',
-          voice_settings: voiceSettings,
-        }),
-      },
-    )
-
-    if (!ttsRes.ok) {
-      const detail = await ttsRes.text().catch(() => 'unknown')
+    let tts
+    try {
+      tts = await synthesizeMommySpeech(text, { affect })
+    } catch (ttsErr) {
+      const detail = ttsErr instanceof Error ? ttsErr.message : String(ttsErr)
       await supabase.from('handler_outreach_queue').update({
         tts_status: 'failed',
-        tts_error: `elevenlabs_${ttsRes.status}:${detail.slice(0, 200)}`,
+        tts_error: `tts_${detail.slice(0, 200)}`,
       }).eq('id', row.id)
-      return new Response(JSON.stringify({ ok: false, error: `ElevenLabs ${ttsRes.status}` }), {
+      return new Response(JSON.stringify({ ok: false, error: `tts: ${detail}` }), {
         status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
-
-    const audioBuffer = new Uint8Array(await ttsRes.arrayBuffer())
+    const audioBuffer = tts.bytes
+    const voiceSettings = tts.voiceSettings
     const fileName = `mommy-outreach/${row.user_id}/${row.id}.mp3`
 
     const { error: uploadErr } = await supabase.storage
@@ -180,7 +166,7 @@ Deno.serve(async (req: Request) => {
     // (audio bucket is private post-migration 301). useOutreachAudio handles signing.
     await supabase.from('handler_outreach_queue').update({
       audio_url: fileName,
-      voice_settings_used: { affect, voice_id: voiceId, ...voiceSettings },
+      voice_settings_used: { affect, provider: tts.provider, voice_id: tts.voiceId ?? null, ...voiceSettings },
       tts_status: 'ready',
       tts_error: null,
     }).eq('id', row.id)
