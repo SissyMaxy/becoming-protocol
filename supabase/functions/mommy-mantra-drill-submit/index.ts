@@ -178,15 +178,23 @@ async function fireMilestoneActions(
       })
       if (wishErr) console.error('[mantra-drill-submit] 10k wishlist reward failed:', wishErr.message)
     } else if (threshold === 100_000) {
-      // Retirement rite: trance track built from her best drill recording.
-      // The mixing pipeline doesn't exist — file the build wish.
-      const { error: cwErr } = await supabase.from('mommy_code_wishes').insert({
-        wish_title: 'Mantra retirement rite: trance-track mixing pipeline',
-        wish_body: 'Layer the user\'s best mantra drill recording (mantra_drill_sessions.audio_storage_paths, highest weighted_rep_count) under a Mommy-voiced ElevenLabs rendition into a single custom trance track, saved to storage and offered via audio_session_offers. Trigger context: 100k lifetime weighted reps crossed.',
-        protocol_goal: 'voice/identity — the mantra stops being something she says and becomes something she hears',
-        source: 'event_trigger',
-      })
-      if (cwErr) console.error('[mantra-drill-submit] 100k code wish failed:', cwErr.message)
+      // Retirement rite: her own voice looped under a Mommy rendition. The
+      // goon-voice-loop generator owns the pairing + offer + mixing-pipeline
+      // wish (mig 642) — call it with trigger='retirement_rite' so this and the
+      // daily goon loop share one code path (and one canonical mixing wish).
+      try {
+        const res = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/goon-voice-loop`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''}`,
+          },
+          body: JSON.stringify({ user_id: userId, trigger: 'retirement_rite' }),
+        })
+        if (!res.ok) console.error('[mantra-drill-submit] goon-voice-loop call failed:', res.status)
+      } catch (e) {
+        console.error('[mantra-drill-submit] goon-voice-loop call exception:', e)
+      }
     }
   } catch (e) {
     console.error('[mantra-drill-submit] milestone action exception:', e)
