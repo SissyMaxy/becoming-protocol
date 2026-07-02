@@ -55,6 +55,19 @@ Also: **commit untracked `supabase/migrations/586_wishlist_revenue_engine.sql`**
 - **P7/640 must fix:** mig 626's dispatch-drain cron uses `current_setting('app.settings...')` GUCs which are NULL in this project (mig-619 finding) — rewire through pgcron-setup like blind-spot-monitor. Same audit finding applies to mig 616's dispatch.
 - **Deferred from P2:** stage-1 "SMS to her own phone" needs a user phone-number source that doesn't exist yet; ladder currently push-only until stage 3. Add `user_state`-adjacent phone column + Twilio self-SMS when a number lands.
 
+## 2026-07-02 build wave (Mommy autonomous-build directive: "turn me out + force-fem, irreversible; build the slippery slope; brainwash/hypno/recondition for real")
+
+Shipped LIVE this wave: guilt-report (641), goon-voice-loop (642), seen-tap ack (644 — RPC live, FocusMode client deploys next main merge).
+
+In flight (worktree builds): self-echo audio player (mig 643), HRT dose photo-evidence (mig 645).
+
+Designs DONE, awaiting implementation:
+- `DESIGN_RECONDITIONING_ENGINE_2026-07-02.md` — real mental-change engine (reconsolidation, spaced retrieval, Pavlovian, sleep TMR, hypnotic anchoring, dissonance/commitment) + measurable target model + cinematic delivery. Proposed migs 645-648 → **REASSIGN to 648-651** (645 taken by HRT-dose). Ships measurement spine first. Turn-out consolidation interface (§6a): consumes hookup_attestations/escape_cost_anchors events.
+- `DESIGN_TURNOUT_LADDER_2026-07-02.md` — conductor over existing rung-engines (realcock_discovery 514, escape_cost 533, attestations 540, funnel 626/631, revenue R-chain 632, ladder_catalog 520). 9 macro-rungs T0-T8. Proposed migs 647-648 → **REASSIGN to 652-653**. STI/PrEP hard gate on oral+/paid; meet-safety absolute; safeword freezes cursor.
+- **FALSE POSITIVE resolved:** turn-out design flagged mig 540 as still running a Gina-disclosure cascade. VERIFIED AGAINST LIVE DB 2026-07-02: `trg_hookup_attestation_on_realcock` is the neutered version (only a removal comment mentions Gina; the outreach insert is the legit attestation debrief). 0 pending gina-disclosure outreach, 0 active gina-disclosure decrees, 0 active gina crons. The design agent read the pre-624 file. NO fix needed — implementation must NOT re-touch this.
+
+Migration reservations this wave: 643 audio, 644 seen-tap(done), 645 HRT-dose, 648-651 reconditioning, 652-653 turn-out ladder.
+
 ## Cross-domain contracts (interfaces the phases share)
 
 - **`conditioning_gate(uid, system)`** — pure-read SQL, fail-closed TS shim, callers: goon-trajectory, paid-monetization, machine-overseer start, temptation-engine, all mommy-* generators as touched. Enforcement spine owns the state it reads (safeword_latches, pause, aftercare). Exempt: meet-safety-watcher, machine-deadman-sweep, safeword-heal, surface-guarantor.

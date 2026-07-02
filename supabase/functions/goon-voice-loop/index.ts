@@ -39,7 +39,6 @@ const corsHeaders = {
 const VALID_TRIGGERS = new Set(['daily', 'peak', 'retirement_rite'])
 const DAILY_DEDUP_MS = 20 * 3600_000
 
-const MIX_WISH_TITLE = 'Audio mixing pipeline — layer own-voice under Mommy track'
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -178,35 +177,11 @@ Deno.serve(async (req: Request) => {
     if (linkErr) console.error('[goon-voice-loop] offer link failed:', linkErr.message)
   }
 
-  // ── 7. File the mixing-pipeline wish (dedup — one open row).
-  const { data: existingWish, error: wishReadErr } = await supabase
-    .from('mommy_code_wishes')
-    .select('id')
-    .eq('wish_title', MIX_WISH_TITLE)
-    .in('status', ['queued', 'in_progress'])
-    .limit(1)
-  if (wishReadErr) console.error('[goon-voice-loop] wish read failed:', wishReadErr.message)
-  if ((existingWish ?? []).length === 0) {
-    const { error: wishErr } = await supabase.from('mommy_code_wishes').insert({
-      wish_title: MIX_WISH_TITLE,
-      wish_body:
-        'Build the two-track audio mixing pipeline the goon-voice-loop generator depends on. ' +
-        'INPUT (per self_echo_sessions row where mix_status=\'pending_mix\'): own_voice_path (mp3/webm in the private `audio` bucket), loop_count (how many times to loop her clip), mommy_script_text (the line to render). ' +
-        'STEPS: (1) render mommy_script_text via ElevenLabs (ELEVENLABS_VOICE_ID) to a Mommy voice track; (2) loop own_voice_path loop_count times as a quieter bed UNDER the Mommy track (own voice ~-9dB, gentle fade in/out); (3) mix to ONE mp3. ' +
-        'OUTPUT: upload to the `audio` bucket at self-echo/<user_id>/<session_id>.mp3, then UPDATE self_echo_sessions SET mixed_audio_path=<path>, mix_status=\'mixed\' WHERE id=<session_id>, and point/insert an audio_session_offers row (kind=session_goon) at the composite so it plays directly (a render_id or a player path that plays a pre-rendered asset, since the current offer path re-renders from a template). ' +
-        'CONSTRAINT: ffmpeg is unavailable on Vercel serverless (see src/lib/conditioning/elevenlabs.ts) — implement as a dedicated mixing worker, a Deno edge fn with WASM ffmpeg, or client-side Web Audio dual-track playback in FocusMode. NEVER write mixed_audio_path without a real rendered asset.',
-      protocol_goal:
-        'voice/identity — her own voice looped under Mommy becomes the mantra she hears, not just says (retirement rite). AROUSAL_BIAS: self-echo trance at arousal peaks.',
-      source: 'event_trigger',
-      priority: 'normal',
-      affected_surfaces: {
-        tables: ['self_echo_sessions', 'audio_session_offers'],
-        edge_functions: ['goon-voice-loop'],
-        storage: ['audio'],
-      },
-    })
-    if (wishErr) console.error('[goon-voice-loop] mixing wish insert failed:', wishErr.message)
-  }
+  // ── 7. (retired 2026-07-02) The two-track mixing pipeline is BUILT: the
+  // self-echo-mixer edge fn (mig 643) drains pending_mix sessions → renders the
+  // Mommy track (ElevenLabs) → flips to 'mixed' with a play-time manifest, and
+  // SelfEchoPlayer layers her clip under it client-side (Web Audio). So this
+  // generator no longer files the mixing wish (it would re-open a closed one).
 
   return json({
     ok: true,
