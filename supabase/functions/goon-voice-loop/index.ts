@@ -15,9 +15,8 @@
 //   5. Record the pairing in self_echo_sessions (mix_status='pending_mix').
 //   6. Surface an audio_session_offers row (session_goon) so she can play a
 //      real Mommy goon session NOW.
-//   7. File the two-track MIXING pipeline as a mommy_code_wishes row (dedup) —
-//      it does not exist yet; the composite (her clip looped under the Mommy
-//      rendition) is built when that wish ships. NOTHING here fakes a mix.
+//   7. (retired) The MIXING pipeline is BUILT (mig 643 self-echo-mixer +
+//      SelfEchoPlayer client Web Audio). This generator no longer files a wish.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
