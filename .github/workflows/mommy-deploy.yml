@@ -78,17 +78,35 @@ jobs:
           # Supabase Management API — the project's actual mechanism
           # (scripts/apply-migration.mjs). `supabase db push` only understands
           # <timestamp>_name.sql, so it SKIPS every numbered file and then
-          # errors on the timestamp-based remote history. Apply migrations
-          # numbered >= 591 (everything not already on prod) via the API, in
-          # order. Each is idempotent (IF NOT EXISTS / OR REPLACE / ON CONFLICT),
-          # so re-applying on later deploys is safe.
+          # errors on the timestamp-based remote history.
+          #
+          # Apply only migrations NOT already recorded in schema_migrations, and
+          # record each one after it applies. Migrations are idempotent for a
+          # single fresh apply, but NOT for bulk re-apply against an evolved
+          # schema — e.g. 601 ALTERs `penalty_previews` which a later migration
+          # turns into a view, and its CREATE OR REPLACE FUNCTIONs would revert
+          # newer versions. So we must apply-once-and-skip, never re-apply.
+          # The applied set is normalized by number (leading zeros stripped) so
+          # bare ('601') and padded ('00000000000601') versions both match.
           set -euo pipefail
           ENDPOINT="https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query"
-          applied=0
+
+          # Snapshot already-applied migration numbers.
+          curl -sS -X POST "$ENDPOINT" \
+            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data '{"query":"select regexp_replace(version, '\''^0+'\'', '\'''\'') as n from supabase_migrations.schema_migrations"}' \
+            | jq -r '.[].n' | sort -u > /tmp/applied_nums.txt || {
+              echo "::error::could not read schema_migrations"; exit 1; }
+
+          applied=0; skipped=0
           for f in $(ls supabase/migrations/*.sql | sort -V); do
             base=$(basename "$f")
             num=$(echo "$base" | grep -oE '^[0-9]+' || echo 0)
             if [ "${num:-0}" -lt 591 ]; then continue; fi
+            if grep -qxF "$num" /tmp/applied_nums.txt; then
+              skipped=$((skipped+1)); continue
+            fi
             echo "→ applying $base"
             jq -Rs '{query: .}' "$f" > /tmp/payload.json
             code=$(curl -sS -o /tmp/resp.json -w '%{http_code}' -X POST "$ENDPOINT" \
@@ -99,10 +117,20 @@ jobs:
               echo "::error::migration $base failed (HTTP $code): $(head -c 1000 /tmp/resp.json)"
               exit 1
             fi
+            # Record it so future deploys skip it.
+            version=$(printf '%014d' "$num")
+            cleanname=$(echo "$base" | sed -E 's/\.sql$//; s/^[0-9]+_//' | sed "s/'/''/g")
+            rec="INSERT INTO supabase_migrations.schema_migrations (version, name) VALUES ('${version}', '${cleanname}') ON CONFLICT (version) DO NOTHING;"
+            jq -n --arg q "$rec" '{query: $q}' > /tmp/rec.json
+            curl -sS -o /dev/null -X POST "$ENDPOINT" \
+              -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+              -H "Content-Type: application/json" \
+              --data-binary @/tmp/rec.json || true
+            echo "$num" >> /tmp/applied_nums.txt
             applied=$((applied+1))
-            echo "  ok"
+            echo "  ok (recorded)"
           done
-          echo "Applied $applied migration(s) >= 591."
+          echo "Applied $applied new migration(s); skipped $skipped already-applied."
 
       - name: Set up Deno (edge runtime)
         if: steps.secrets.outputs.ready == 'true'

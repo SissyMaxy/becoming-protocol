@@ -62,11 +62,27 @@ async function runQuery(sql) {
   return text
 }
 
+const FORCE = args.includes('--force')
+
 async function main() {
   const full = join(ROOT, 'supabase', 'migrations', NAME)
   const sql = await readFile(full, 'utf8')
   console.log(`Applying ${NAME} (${sql.length} chars) to project ${PROJECT_REF}`)
   console.log(`Dry-run: ${DRY}`)
+
+  // Skip if already recorded — migrations are safe for a single fresh apply but
+  // NOT for re-apply against an evolved schema (a later migration may supersede
+  // this one's objects; re-running would revert them). --force to override.
+  const num = (NAME.match(/^(\d+)/) || [])[1]
+  if (num && !FORCE) {
+    const check = await runQuery(
+      `select 1 from supabase_migrations.schema_migrations ` +
+      `where regexp_replace(version, '^0+', '') = '${String(Number(num))}' limit 1;`)
+    if (Array.isArray(JSON.parse(check)) && JSON.parse(check).length > 0) {
+      console.log(`  SKIP — migration ${num} already recorded (use --force to re-apply)`)
+      return
+    }
+  }
 
   if (DRY) {
     console.log('[dry-run] would POST entire file as one query')
