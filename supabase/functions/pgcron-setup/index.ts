@@ -66,6 +66,15 @@ const JOBS: CronJob[] = [
     fn: 'outward-consequence-dispatcher',
     body: `jsonb_build_object('trigger','pg_cron')`,
   },
+  {
+    // Auto-Generated Guilt Reports (mig 641): weekly evidence-quoted readback
+    // of surfaced-then-missed obligations. Sunday 22:00 UTC (~Sun 17:00–18:00
+    // ET). The fn de-dupes to one report per user per 6 days.
+    name: 'guilt-report-weekly',
+    schedule: '0 22 * * 0',
+    fn: 'guilt-report',
+    body: `jsonb_build_object('trigger','pg_cron')`,
+  },
 ]
 
 function jobSql(j: CronJob, key: string): string {
