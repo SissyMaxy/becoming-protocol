@@ -24,7 +24,7 @@ interface Props {
   /** Mommy persona or handler — wording on the button */
   mommy?: boolean;
   /** Called when transcription completes (or 202 with transcribing flag) */
-  onTranscribed?: (result: { transcript: string; audioPath: string; transcribing: boolean }) => void;
+  onTranscribed?: (result: { transcript: string; audioPath: string; transcribing: boolean; durationSec?: number }) => void;
   /** Called the moment the upload finishes, before transcription returns */
   onUploaded?: () => void;
   /** Minimum capture seconds before the upload is allowed (anti-misclick) */
@@ -193,7 +193,7 @@ export function ConfessionAudioCapture({
       const transcript = json.transcript || '';
       const transcribing = json.transcribing === true || (!transcript && json.transcription_status !== 'done');
       setPhase(transcribing ? 'transcribing' : 'done');
-      onTranscribed?.({ transcript, audioPath: json.audio_path || '', transcribing });
+      onTranscribed?.({ transcript, audioPath: json.audio_path || '', transcribing, durationSec });
 
       // If still transcribing, poll for up to 60s.
       if (transcribing && confessionId) {
@@ -208,7 +208,7 @@ export function ConfessionAudioCapture({
             .maybeSingle();
           const r = row as { transcribed_text?: string; transcription_status?: string } | null;
           if (r?.transcription_status === 'done' && r.transcribed_text) {
-            onTranscribed?.({ transcript: r.transcribed_text, audioPath: json.audio_path || '', transcribing: false });
+            onTranscribed?.({ transcript: r.transcribed_text, audioPath: json.audio_path || '', transcribing: false, durationSec });
             setPhase('done');
             return;
           }

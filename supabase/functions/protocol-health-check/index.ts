@@ -60,6 +60,15 @@ const GENERATORS: GeneratorSpec[] = [
   // check that matters — zero aborted sessions is the healthy case.
   { name: 'machine_overseer', function_name: 'machine-overseer', expected_cadence_minutes: 1440, output_table: 'machine_sessions', edge_function: true, conditional: true },
   { name: 'machine_deadman_sweep', function_name: 'machine_deadman_sweep', expected_cadence_minutes: 1, conditional: true },
+  // ── Feminization loop (FEM design §7, migs 634-638) ──
+  // fem_prescription_loop is NOT conditional: between the confession path
+  // and the bank-engine fallback, SOME rows must land daily — silence here
+  // means the whole loop died (the 2026-06-21 dead-pipeline class).
+  { name: 'fem_prescription_loop', function_name: 'evening-prescribe-dispatch', expected_cadence_minutes: 1440, output_table: 'feminization_prescriptions', edge_function: true },
+  { name: 'voice_progress', function_name: 'voice-pitch-watcher', expected_cadence_minutes: 10080, output_table: 'voice_progress_samples', edge_function: true, conditional: true },
+  { name: 'transition_tracking', function_name: 'transition-tracking-prompter', expected_cadence_minutes: 10080, output_table: 'transition_tracking_log', edge_function: true, conditional: true },
+  { name: 'mantra_drills', function_name: 'mommy-mantra-drill-submit', expected_cadence_minutes: 10080, output_table: 'mantra_drill_sessions', edge_function: true, conditional: true },
+  { name: 'body_metrics_spine', function_name: 'body_metrics', expected_cadence_minutes: 43200, output_table: 'body_metrics', edge_function: true, conditional: true },
 ];
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
@@ -80,6 +89,7 @@ async function checkGenerator(g: GeneratorSpec): Promise<CheckResult[]> {
     const since = new Date(Date.now() - windowHours * 3600 * 1000).toISOString();
     const dateCol = g.output_table === 'cock_conditioning_events' ? 'assigned_at'
                   : g.output_table === 'wardrobe_prescriptions' ? 'assigned_at'
+                  : g.output_table === 'body_metrics' ? 'measured_at'
                   : 'created_at';
     const { count, error: qErr } = await supabase.from(g.output_table).select('id', { count: 'exact', head: true }).gte(dateCol, since);
     if (qErr) results.push({ component: g.name, severity: 'warning', event_kind: 'query_error', message: `Output query failed: ${qErr.message}`, context_data: { table: g.output_table } });

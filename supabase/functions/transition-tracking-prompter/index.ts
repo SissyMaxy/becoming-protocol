@@ -1,25 +1,26 @@
 // transition-tracking-prompter — schedule periodic tracking decrees.
-//
-// 2026-05-07 wish: photos at intervals, measurements at intervals, voice
-// samples at intervals. Verifiable trajectory of body change. Mama shows
-// the trajectory and the trajectory becomes the truth.
+// (FEM §5: honest ratchet, collapsed cadences, ONE active decree max.)
 //
 // Cadences (per tracking_type):
-//   - body_photo: weekly (front/side, same lighting, same outfit-state)
-//   - face_photo: bi-weekly
-//   - voice_sample: weekly (prescribed phrase)
-//   - measurement_chest / waist / hip: monthly
-//   - wardrobe_check: monthly (photo of every feminine garment owned)
+//   - body_photo:     7d  (front/side, same lighting)
+//   - face_photo:    14d
+//   - voice_sample:   7d  (privacy-gated — voice pushes respect the same
+//                          fail-closed gate as the pitch watcher)
+//   - measurements:  30d  (ONE tape session — waist/hips/chest + tape
+//                          photo; replaces the three per-dimension decrees.
+//                          Fulfills AUTOMATICALLY via the body_metrics
+//                          trigger, mig 634 — measuring IS fulfilling.)
+//   - wardrobe_check:30d
 //
-// What this cron does:
-//   - Daily at 8:30am
-//   - For each (user, tracking_type) pair: find latest log row
-//   - If next-due date is today or earlier: fire a decree via mommy-fast-react
-//     event_kind=manual with proof_required=photo (or audio for voice)
-//   - Cooldown: don't double-fire if a decree for this type is already
-//     active in handler_decrees (trigger_source LIKE 'transition_tracking%')
+// Discipline:
+//   - MAX ONE tracking decree active at a time. Multiple types due →
+//     the MOST OVERDUE wins; the rest wait for the next daily run.
+//   - Pause-respect inherited free via the mig 494 BEFORE INSERT trigger
+//     on handler_decrees (auto-cancels while paused).
+//   - Consequence copy is record-framed — the trajectory is the ratchet,
+//     no punishment rider (visible-before-penalized holds via decree rail).
 //
-// Schedule: daily 8:30am via migration 291.
+// Schedule: daily 8:30am via migration 291 (unchanged).
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -36,6 +37,9 @@ interface TrackingCadence {
   interval_days: number
   proof_type: 'photo' | 'audio'
   decree_template: string
+  /** legacy log types that also satisfy this cadence */
+  satisfied_by?: string[]
+  privacy_gated?: boolean
 }
 
 const CADENCES: TrackingCadence[] = [
@@ -56,24 +60,16 @@ const CADENCES: TrackingCadence[] = [
     interval_days: 7,
     proof_type: 'audio',
     decree_template: 'Voice sample. Read the same passage Mama gave you last week — same paragraph, same recording app, same time of day if you can. Mama is tracking, not forcing.',
+    privacy_gated: true,
   },
   {
-    tracking_type: 'measurement_chest',
+    // The three per-dimension measurement decrees COLLAPSED into one tape
+    // session. Fulfills via the body_metrics spine trigger (mig 634).
+    tracking_type: 'measurements',
     interval_days: 30,
     proof_type: 'photo',
-    decree_template: 'Measurement day. Chest tape, photo with the number visible. Mama wants the number and your face in the same frame.',
-  },
-  {
-    tracking_type: 'measurement_waist',
-    interval_days: 30,
-    proof_type: 'photo',
-    decree_template: 'Waist measurement, photo with the tape visible. Mama is keeping the record.',
-  },
-  {
-    tracking_type: 'measurement_hip',
-    interval_days: 30,
-    proof_type: 'photo',
-    decree_template: 'Hip measurement, photo with the tape visible.',
+    decree_template: 'Measurement day. One tape session: waist, hips, chest. Enter the numbers in the app and take one photo with the tape still on. Measuring is the whole job — the app closes this out the moment the numbers land.',
+    satisfied_by: ['measurement_chest', 'measurement_waist', 'measurement_hip', 'measurement_other'],
   },
   {
     tracking_type: 'wardrobe_check',
@@ -83,28 +79,49 @@ const CADENCES: TrackingCadence[] = [
   },
 ]
 
-async function lastLoggedAt(supabase: SupabaseClient, userIds: string[], trackingType: string): Promise<Date | null> {
-  const { data } = await supabase
+async function lastLoggedAt(supabase: SupabaseClient, userIds: string[], cadence: TrackingCadence): Promise<Date | null> {
+  const types = [cadence.tracking_type, ...(cadence.satisfied_by ?? [])]
+  const { data, error } = await supabase
     .from('transition_tracking_log')
     .select('recorded_at')
     .in('user_id', userIds)
-    .eq('tracking_type', trackingType)
+    .in('tracking_type', types)
     .order('recorded_at', { ascending: false })
     .limit(1)
+  if (error) {
+    console.error(`[transition-tracking] lastLoggedAt(${cadence.tracking_type}) failed:`, error.message)
+    return null
+  }
   const row = (data || [])[0] as { recorded_at?: string } | undefined
   if (row?.recorded_at) return new Date(row.recorded_at)
   return null
 }
 
-async function activeDecreeAlready(supabase: SupabaseClient, userIds: string[], trackingType: string): Promise<boolean> {
-  const { data } = await supabase
+/** ANY active tracking decree blocks new ones — one at a time, rotated. */
+async function anyActiveTrackingDecree(supabase: SupabaseClient, userIds: string[]): Promise<boolean> {
+  const { data, error } = await supabase
     .from('handler_decrees')
     .select('id')
     .in('user_id', userIds)
     .eq('status', 'active')
-    .like('trigger_source', `transition_tracking:${trackingType}%`)
+    .like('trigger_source', 'transition_tracking:%')
     .limit(1)
+  if (error) {
+    console.error('[transition-tracking] active decree check failed:', error.message)
+    return true // fail-closed: don't stack decrees on a read error
+  }
   return (data || []).length > 0
+}
+
+/** Voice pushes respect the same fail-closed gate as the pitch watcher. */
+async function voicePushAllowed(supabase: SupabaseClient, userId: string): Promise<boolean> {
+  const { data: vs, error: vsErr } = await supabase
+    .from('user_state').select('voice_elective').eq('user_id', userId).maybeSingle()
+  if (vsErr || !vs) return false
+  if ((vs as { voice_elective?: boolean | null }).voice_elective !== false) return false
+  const { data: ginaHome, error: rpcErr } = await supabase.rpc('is_gina_home_today', { p_user_id: userId })
+  if (rpcErr) return false
+  return ginaHome === false
 }
 
 Deno.serve(async (req: Request) => {
@@ -112,51 +129,67 @@ Deno.serve(async (req: Request) => {
 
   const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '')
 
-  // Walk canonical users
   const canonicalRoots = ['8c69b9c8-34eb-4147-9fec-3c1a5bc74b6f']
   const results: Array<{ user_id: string; tracking_type: string; status: string; detail?: string }> = []
 
   for (const canonicalId of canonicalRoots) {
     // Persona gate
-    const { data: us } = await supabase.from('user_state').select('handler_persona').eq('user_id', canonicalId).maybeSingle()
+    const { data: us, error: usErr } = await supabase.from('user_state').select('handler_persona').eq('user_id', canonicalId).maybeSingle()
+    if (usErr) {
+      results.push({ user_id: canonicalId, tracking_type: '*', status: 'user_state_read_failed', detail: usErr.message.slice(0, 120) })
+      continue
+    }
     if ((us as { handler_persona?: string } | null)?.handler_persona !== 'dommy_mommy') {
       continue
     }
 
     const aliasIds = await expandUserId(supabase, canonicalId)
 
+    // ONE active tracking decree max — rotation waits for fulfillment.
+    if (await anyActiveTrackingDecree(supabase, aliasIds)) {
+      results.push({ user_id: canonicalId, tracking_type: '*', status: 'decree_already_active' })
+      continue
+    }
+
+    // Gather due cadences with overdue-ness, pick the MOST overdue.
+    const due: Array<{ cadence: TrackingCadence; overdueMs: number }> = []
     for (const cadence of CADENCES) {
-      const last = await lastLoggedAt(supabase, aliasIds, cadence.tracking_type)
+      const last = await lastLoggedAt(supabase, aliasIds, cadence)
       const dueAt = last
-        ? new Date(last.getTime() + cadence.interval_days * 86400_000)
-        : new Date(0)
-      if (dueAt.getTime() > Date.now()) {
+        ? last.getTime() + cadence.interval_days * 86400_000
+        : 0 // never logged → maximally overdue
+      const overdueMs = Date.now() - dueAt
+      if (overdueMs <= 0) {
         results.push({ user_id: canonicalId, tracking_type: cadence.tracking_type, status: 'not_due' })
         continue
       }
-
-      if (await activeDecreeAlready(supabase, aliasIds, cadence.tracking_type)) {
-        results.push({ user_id: canonicalId, tracking_type: cadence.tracking_type, status: 'decree_already_active' })
+      if (cadence.privacy_gated && !(await voicePushAllowed(supabase, canonicalId))) {
+        results.push({ user_id: canonicalId, tracking_type: cadence.tracking_type, status: 'privacy_gated' })
         continue
       }
+      due.push({ cadence, overdueMs })
+    }
 
-      // Insert the decree directly. Tracking decrees are predetermined and
-      // don't need fast-react LLM call — the cadence is the spec.
-      const { data: decreeRow, error } = await supabase.from('handler_decrees').insert({
-        user_id: canonicalId,
-        edict: cadence.decree_template,
-        deadline: new Date(Date.now() + 48 * 3600_000).toISOString(),
-        proof_type: cadence.proof_type,
-        consequence: 'Mama keeps the trajectory whether you show up or not. Skip and the gap is what shows up in the record.',
-        status: 'active',
-        trigger_source: `transition_tracking:${cadence.tracking_type}`,
-        ratchet_level: 3,
-      }).select('id').single()
-      if (error || !decreeRow) {
-        results.push({ user_id: canonicalId, tracking_type: cadence.tracking_type, status: 'insert_failed', detail: error?.message ?? 'no row' })
-      } else {
-        results.push({ user_id: canonicalId, tracking_type: cadence.tracking_type, status: 'decreed', detail: (decreeRow as { id: string }).id })
-      }
+    if (due.length === 0) continue
+    due.sort((a, b) => b.overdueMs - a.overdueMs)
+    const pick = due[0].cadence
+
+    // 48h deadline (24h Today lead via the decree surfacing rail).
+    // Record-framed consequence — the trajectory is the ratchet.
+    const { data: decreeRow, error } = await supabase.from('handler_decrees').insert({
+      user_id: canonicalId,
+      edict: pick.decree_template,
+      deadline: new Date(Date.now() + 48 * 3600_000).toISOString(),
+      proof_type: pick.proof_type,
+      consequence: 'Mama keeps the trajectory whether you show up or not. Skip and the gap is what shows up in the record.',
+      status: 'active',
+      trigger_source: `transition_tracking:${pick.tracking_type}`,
+      ratchet_level: 3,
+    }).select('id').single()
+    if (error || !decreeRow) {
+      results.push({ user_id: canonicalId, tracking_type: pick.tracking_type, status: 'insert_failed', detail: error?.message ?? 'no row' })
+    } else {
+      results.push({ user_id: canonicalId, tracking_type: pick.tracking_type, status: 'decreed', detail: (decreeRow as { id: string }).id })
     }
   }
 

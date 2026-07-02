@@ -29,6 +29,11 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { checkSafewordGate } from '../_shared/safeword-gate.ts'
+import { mommyVoiceCleanup } from '../_shared/dommy-mommy.ts'
+import {
+  EVIDENCE_KIND_BY_DOMAIN,
+  normalizeFemDomain,
+} from '../_shared/fem-domains.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -153,6 +158,124 @@ async function ensureSubmission(
   return { submissionId: (ins as { id: string }).id, reason: 'synthesized' }
 }
 
+// ─── Bank-engine fallback (FEM §1: two generators, one contract) ─────
+// Runs ONLY when no confession landed today. A trimmed edge port of
+// src/lib/conditioning/feminization-prescriptions.ts: phase-gated task_bank
+// pool, skip-rate cooldown, owned-item filter, 3 rows for tomorrow with
+// evidence_kind + deadline. Idempotent — skips if tomorrow already has rows.
+
+const PHASE_DOMAINS: Record<number, string[]> = {
+  0: ['skincare', 'nutrition', 'exercise'],
+  1: ['skincare', 'nutrition', 'exercise', 'voice', 'scent', 'style'],
+  2: ['skincare', 'nutrition', 'exercise', 'voice', 'scent', 'style', 'movement', 'body_language', 'makeup'],
+  3: ['skincare', 'nutrition', 'exercise', 'voice', 'scent', 'style', 'movement', 'body_language', 'makeup', 'social', 'inner_narrative', 'wigs'],
+  4: ['skincare', 'nutrition', 'exercise', 'voice', 'scent', 'style', 'movement', 'body_language', 'makeup', 'social', 'inner_narrative', 'wigs', 'arousal', 'chastity', 'conditioning', 'identity'],
+}
+
+function fallbackDeadlineIsoEt(dateStr: string): string {
+  const noonUtc = new Date(`${dateStr}T12:00:00Z`)
+  const etHour = Number(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', hour: 'numeric', hour12: false,
+  }).format(noonUtc))
+  return new Date(new Date(`${dateStr}T23:59:00Z`).getTime() + (12 - etHour) * 3600_000).toISOString()
+}
+
+async function bankEngineFallback(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<{ ok: boolean; reason: string; count?: number }> {
+  const tomorrow = new Date(Date.now() + 86400_000).toISOString().slice(0, 10)
+
+  // Idempotency: tomorrow already provisioned (by a prior run or the
+  // confession path) → no-op. NEVER deletes — completed/skipped are history.
+  const { count: existing, error: exErr } = await supabase
+    .from('feminization_prescriptions')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('prescribed_date', tomorrow)
+  if (exErr) return { ok: false, reason: 'existing_check_failed:' + exErr.message.slice(0, 60) }
+  if ((existing ?? 0) > 0) return { ok: false, reason: 'tomorrow_already_prescribed' }
+
+  const [stateRes, skipRes, wardrobeRes] = await Promise.all([
+    supabase.from('user_state').select('current_phase').eq('user_id', userId).maybeSingle(),
+    supabase.from('feminization_prescriptions')
+      .select('domain, status, expired_silently')
+      .eq('user_id', userId)
+      .gte('prescribed_date', new Date(Date.now() - 7 * 86400_000).toISOString().slice(0, 10)),
+    supabase.from('wardrobe_inventory').select('category').eq('user_id', userId),
+  ])
+
+  const phase = Math.min(4, Math.max(0, (stateRes.data as { current_phase?: number } | null)?.current_phase ?? 0))
+  const owned = new Set(((wardrobeRes.data as Array<{ category: string }>) || []).map(r => r.category))
+
+  // Skip-rate cooldown: ≥85% weighted skip in 7d → domain sits out.
+  const perDomain: Record<string, { total: number; weighted: number }> = {}
+  for (const r of ((skipRes.data as Array<{ domain: string; status: string; expired_silently?: boolean }>) || [])) {
+    if (r.status === 'expired' && r.expired_silently) continue // never-surfaced counts for nothing
+    const d = perDomain[r.domain] ?? (perDomain[r.domain] = { total: 0, weighted: 0 })
+    d.total += 1
+    if (r.status === 'skipped') d.weighted += 1
+    else if (r.status === 'expired') d.weighted += 0.5
+  }
+  const cooled = new Set(Object.entries(perDomain)
+    .filter(([, v]) => v.total >= 3 && v.weighted / v.total >= 0.85)
+    .map(([k]) => k))
+
+  const domains = (PHASE_DOMAINS[phase] ?? PHASE_DOMAINS[0]).filter(d => !cooled.has(d))
+  const pool = domains.length > 0 ? domains : PHASE_DOMAINS[0]
+
+  const { data: tasks, error: taskErr } = await supabase
+    .from('task_bank')
+    .select('id, domain, instruction, intensity, duration_minutes, requires')
+    .eq('active', true)
+    .in('domain', pool)
+    .lte('intensity', 5)
+    .limit(150)
+  if (taskErr) return { ok: false, reason: 'task_bank_read_failed:' + taskErr.message.slice(0, 60) }
+
+  type BankTask = { id: string; domain: string; instruction: string; intensity: number; duration_minutes: number | null; requires?: { item_category?: string } | null }
+  const candidates = ((tasks as BankTask[]) || []).filter(t => {
+    const cat = t.requires?.item_category
+    return !cat || owned.has(cat) // prescribe only what she owns
+  })
+  if (candidates.length === 0) return { ok: false, reason: 'no_candidates' }
+
+  // Shuffle-lite + domain diversity (max 1 per domain, 3 rows).
+  const shuffled = [...candidates].sort(() => Math.random() - 0.5)
+  const picked: BankTask[] = []
+  const usedDomains = new Set<string>()
+  for (const t of shuffled) {
+    if (picked.length >= 3) break
+    if (usedDomains.has(t.domain)) continue
+    usedDomains.add(t.domain)
+    picked.push(t)
+  }
+
+  const deadline = fallbackDeadlineIsoEt(tomorrow)
+  const rows = picked.map(t => {
+    const domain = normalizeFemDomain(t.domain)
+    return {
+      user_id: userId,
+      prescribed_date: tomorrow,
+      task_id: t.id,
+      domain,
+      instruction: mommyVoiceCleanup(t.instruction).slice(0, 1000),
+      intensity: Math.max(1, Math.min(5, Math.round(t.intensity))),
+      duration: t.duration_minutes,
+      phase,
+      status: 'pending',
+      evidence_kind: EVIDENCE_KIND_BY_DOMAIN[domain] ?? 'text',
+      deadline,
+      requires: t.requires ?? null,
+      engagement_meta: { source: 'bank_engine_fallback', cooled_domains: Array.from(cooled) },
+    }
+  })
+
+  const { error: insErr } = await supabase.from('feminization_prescriptions').insert(rows)
+  if (insErr) return { ok: false, reason: 'insert_failed:' + insErr.message.slice(0, 60) }
+  return { ok: true, reason: 'bank_engine_fallback', count: rows.length }
+}
+
 async function callPrescribe(submissionId: string): Promise<{ ok: boolean; status: number; body: string }> {
   const url = Deno.env.get('SUPABASE_URL')! + '/functions/v1/evening-confession-prescribe'
   const res = await fetch(url, {
@@ -193,7 +316,15 @@ Deno.serve(async (req) => {
       }
       const { submissionId, reason } = await ensureSubmission(supabase, userId)
       if (!submissionId) {
-        results.push({ user_id: userId, ok: false, reason })
+        // No confession landed today → bank engine provisions tomorrow
+        // (FEM §1: two generators, one contract; engine ONLY when the
+        // confession path produced nothing).
+        if (reason === 'no_material') {
+          const fb = await bankEngineFallback(supabase, userId)
+          results.push({ user_id: userId, ok: fb.ok, reason: `${reason}→${fb.reason}` })
+        } else {
+          results.push({ user_id: userId, ok: false, reason })
+        }
         continue
       }
       const r = await callPrescribe(submissionId)
