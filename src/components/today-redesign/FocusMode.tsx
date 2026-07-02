@@ -40,6 +40,8 @@ import type {
   AudioSessionKind,
 } from '../../lib/audio-sessions/template-selector';
 import type { ReleaseType, ReleaseContext } from '../../types/arousal';
+import { parseSelfEchoManifest } from '../../lib/audio/self-echo-mix';
+import { SelfEchoPlayer } from './SelfEchoPlayer';
 import { ConfessionAudioCapture } from './ConfessionAudioCapture';
 import { savePhysicalStateLog, type PhysicalState } from '../../lib/compulsory-elements';
 import { HRT_STEPS, HRT_STEP_LABELS, HRT_STEP_NEXT_ACTION } from '../../lib/handler-context/hrt-steps';
@@ -155,9 +157,19 @@ interface FocusTask {
   tone: 'critical' | 'high' | 'medium' | 'calm';
 }
 
+interface SelfEchoMeta {
+  ownVoicePath: string;
+  mommyRenderPath: string;
+  loopCount: number;
+  ownDurationS: number | null;
+}
+
 interface AudioSessionMeta {
   kind: AudioSessionKind;
   intensity: AudioSessionIntensity;
+  /** When present, the offer plays her own voice looped under a Mommy render
+   *  (dual-track, client-side Web Audio) instead of re-rendering a template. */
+  selfEcho?: SelfEchoMeta | null;
 }
 
 const TONE_STYLES_HANDLER: Record<FocusTask['tone'], { bg: string; border: string; accent: string; label: string }> = {
@@ -272,7 +284,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
     const [overdueConfs, overduePuns, overdueDecrees, todayConfs, todayDecrees,
            pendingCommits, regs, doseLog, outfit, workout, mommyTouch, audioOffer,
            focusDecree, hrtFunnel, hrtState, hrtPastObs, lastReleaseRow, physStateToday,
-           pendingPost, femRx, mantraHarvest] = await Promise.all([
+           pendingPost, femRx, mantraHarvest, selfEchoMixed] = await Promise.all([
       // Include missed-but-unconfessed rows. The compliance check marks
       // overdue rows missed=true (slip already fired); we still want the
       // user able to answer them late from FocusMode. Locking her out
@@ -376,6 +388,14 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
         .gt('expires_at', nowIso)
         .order('created_at', { ascending: false })
         .limit(1),
+      // Self-echo composites ready to play (mig 643). Her own voice looped under
+      // a Mommy render — matched to the audio offer by offer_id so the goon
+      // offer plays the dual-track composite (SelfEchoPlayer) instead of
+      // re-rendering a single Mommy template.
+      supabase.from('self_echo_sessions')
+        .select('id, offer_id, own_voice_path, mommy_render_path, mixed_audio_path, loop_count, own_voice_duration_s')
+        .eq('user_id', user.id).eq('mix_status', 'mixed').not('offer_id', 'is', null)
+        .order('created_at', { ascending: false }).limit(5),
     ]);
 
     // Compute most-overdue and most-due-today doses
@@ -575,12 +595,31 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
       };
       const minsLeft = Math.max(1, Math.round((new Date(o.expires_at).getTime() - now) / 60_000));
       const kindLabel = o.kind.replace(/^session_/, '').replace(/^primer_/, 'primer · ').replace(/_/g, ' ');
+      // If this offer is a self-echo composite (goon-voice-loop + mig 643), play
+      // her own voice looped under the Mommy render (dual-track, client-side)
+      // instead of re-rendering a single Mommy template.
+      const echoRow = ((selfEchoMixed.data ?? []) as Array<{
+        id: string; offer_id: string | null; own_voice_path: string | null;
+        mommy_render_path: string | null; mixed_audio_path: string | null;
+        loop_count: number; own_voice_duration_s: number | null;
+      }>).find(r => r.offer_id === o.id);
+      const echoManifest = echoRow ? parseSelfEchoManifest(echoRow.mixed_audio_path) : null;
+      const selfEcho = echoManifest && echoRow?.own_voice_path && echoRow?.mommy_render_path
+        ? {
+            ownVoicePath: echoManifest.own_voice_path,
+            mommyRenderPath: echoManifest.mommy_render_path,
+            loopCount: echoManifest.loop_count,
+            ownDurationS: echoManifest.own_voice_duration_s,
+          }
+        : null;
       chosen = {
         kind: 'audio_session', rowId: o.id,
         title: o.teaser,
-        detail: `Mama queued an audio session · ${kindLabel} · ${minsLeft}m`,
+        detail: selfEcho
+          ? `Mama looped your own voice under hers · ${minsLeft}m`
+          : `Mama queued an audio session · ${kindLabel} · ${minsLeft}m`,
         surface: 'audio_session', tone: 'high',
-        meta: { kind: o.kind, intensity: o.intensity_tier } satisfies AudioSessionMeta,
+        meta: { kind: o.kind, intensity: o.intensity_tier, selfEcho } satisfies AudioSessionMeta,
       };
     } else if (todayConfs.data?.[0]) {
       const c = todayConfs.data[0] as { id: string; prompt: string; deadline: string };
@@ -970,6 +1009,15 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
       markOfferCompleted(task.rowId),
       markRenderPlayed(audioState.renderId),
     ]);
+    window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'audio_session', id: task.rowId } }));
+    await advance();
+  };
+
+  // Self-echo composite finished (or user marked complete) — no render row to
+  // stamp, just close out the offer and advance.
+  const handleSelfEchoComplete = async () => {
+    if (!task?.rowId) return;
+    await markOfferCompleted(task.rowId);
     window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'audio_session', id: task.rowId } }));
     await advance();
   };
@@ -1531,6 +1579,8 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
   // ─── Render ──────────────────────────────────────────────────────────────
 
   const tone = task ? TONE_STYLES[task.tone] : TONE_STYLES.medium;
+  const audioMeta = task?.meta as AudioSessionMeta | undefined;
+  const selfEcho = audioMeta?.selfEcho ?? null;
   const minChars = useMemo(() => task?.kind === 'due_today_commitment' ? 30 : 80, [task?.kind]);
   const charsRemaining = Math.max(0, minChars - confessText.trim().length);
 
@@ -2390,7 +2440,19 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
             </button>
           )}
 
-          {task.surface === 'audio_session' && (
+          {task.surface === 'audio_session' && selfEcho && (
+            <SelfEchoPlayer
+              ownVoicePath={selfEcho.ownVoicePath}
+              mommyRenderPath={selfEcho.mommyRenderPath}
+              loopCount={selfEcho.loopCount}
+              ownDurationS={selfEcho.ownDurationS}
+              accent={tone.accent}
+              border={tone.border}
+              onComplete={() => { void handleSelfEchoComplete(); }}
+            />
+          )}
+
+          {task.surface === 'audio_session' && !selfEcho && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {audioState.phase === 'idle' && (
                 <>
