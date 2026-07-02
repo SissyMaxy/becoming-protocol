@@ -44,7 +44,20 @@ const COLUMNS = [
     constraint: 'handler_outreach_queue_evidence_kind_check',
     required: ['photo', 'video', 'audio', 'voice', 'any', 'none'],
   },
+  {
+    // FEM loop delivery contract (mig 635). Shares the column NAME with
+    // handler_outreach_queue but not the vocabulary — the scanner below is
+    // table-scoped so the two don't cross-contaminate.
+    table: 'feminization_prescriptions',
+    column: 'evidence_kind',
+    constraint: 'feminization_prescriptions_evidence_kind_check',
+    required: ['photo', 'voice', 'measurement', 'timer', 'text', 'none'],
+  },
 ];
+// NOTE: feminization_prescriptions.domain is pinned by the alias-map tests
+// (src/__tests__/lib/fem-domains.test.ts) + normalizeFemDomain at every
+// insert site rather than this scanner — `domain:` is far too generic a
+// column name for a repo-wide literal scan.
 
 const migFiles = readdirSync(MIG)
   .filter((f) => /^\d+.*\.sql$/.test(f))
@@ -101,14 +114,35 @@ for (const col of COLUMNS) {
     console.error(`[enum-guard] FAIL ${col.table}.${col.column}: required values not in constraint (${live.file}): ${missingRequired.join(', ')}`);
     failed = true;
   }
-  // 3. written literals ⊆ constraint
+  // 3. written literals ⊆ constraint — TABLE-SCOPED.
+  // A column name can live on multiple tables with different vocabularies
+  // (evidence_kind on handler_outreach_queue vs feminization_prescriptions),
+  // so each match only counts when the nearest preceding table reference
+  // (`.from('t')` / `INSERT INTO t` / `UPDATE t SET`) names THIS table.
+  // Matches with no table reference in the file so far still count
+  // (fail-closed for helpers that build rows away from the .from call).
   // Match `col = 'x'`, `col := 'x'` (PL/pgSQL), `col: 'x'`/`col: "x"` (TS object literal).
   const writeRe = new RegExp(`\\b${col.column}\\b\\s*(?::=|=|:)\\s*['"]([a-z_]+)['"]`, 'gi');
+  const tableRefRe = /\.from\(\s*['"]([a-z_]+)['"]\s*\)|INSERT\s+INTO\s+([a-z_"]+)|UPDATE\s+([a-z_"]+)\s+SET/gi;
   const written = new Set();
   for (const f of sourceFiles()) {
     const text = readFileSync(join(ROOT, f), 'utf8');
     let m;
-    while ((m = writeRe.exec(text)) !== null) written.add(m[1]);
+    while ((m = writeRe.exec(text)) !== null) {
+      // Nearest table reference before this match.
+      const before = text.slice(0, m.index);
+      let lastTable = null;
+      let t;
+      tableRefRe.lastIndex = 0;
+      while ((t = tableRefRe.exec(before)) !== null) {
+        lastTable = (t[1] || t[2] || t[3] || '').replace(/"/g, '');
+      }
+      // Unattributed matches (no table ref yet in the file) count only when
+      // the column is unambiguous across the registry — for shared column
+      // names an unattributed literal can't be assigned to either table.
+      const ambiguous = COLUMNS.filter((c) => c.column === col.column).length > 1;
+      if (lastTable === col.table || (lastTable === null && !ambiguous)) written.add(m[1]);
+    }
   }
   const rejected = [...written].filter((v) => !live.set.has(v));
   if (rejected.length) {

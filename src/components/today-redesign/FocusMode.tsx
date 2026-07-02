@@ -41,38 +41,9 @@ import type {
 import type { ReleaseType, ReleaseContext } from '../../types/arousal';
 import { ConfessionAudioCapture } from './ConfessionAudioCapture';
 import { savePhysicalStateLog, type PhysicalState } from '../../lib/compulsory-elements';
+import { HRT_STEPS, HRT_STEP_LABELS, HRT_STEP_NEXT_ACTION } from '../../lib/handler-context/hrt-steps';
 
-// ─── HRT funnel (ported from HrtDailyGate) ──────────────────────────────────
-const HRT_STEPS = [
-  'uncommitted', 'committed', 'researching', 'provider_chosen',
-  'appointment_booked', 'intake_submitted', 'appointment_attended',
-  'prescription_obtained', 'pharmacy_filled', 'first_dose_taken',
-  'week_one_complete', 'month_one_complete', 'adherent',
-];
-const HRT_STEP_LABELS: Record<string, string> = {
-  uncommitted: 'Uncommitted', committed: 'Committed',
-  researching: 'Researching providers', provider_chosen: 'Provider chosen',
-  appointment_booked: 'Appointment booked', intake_submitted: "Paperwork's in, waiting on the visit",
-  appointment_attended: 'Appointment attended', prescription_obtained: 'Prescription obtained',
-  pharmacy_filled: 'Pharmacy filled', first_dose_taken: 'First dose taken',
-  week_one_complete: 'Week 1 complete', month_one_complete: 'Month 1 complete',
-  adherent: 'Adherent',
-};
-const HRT_STEP_NEXT_ACTION: Record<string, string> = {
-  uncommitted:           'You have not committed to starting HRT.',
-  committed:             'You said yes to HRT but have not researched providers.',
-  researching:           'You are researching providers but have not picked one.',
-  provider_chosen:       'You picked a provider but have not booked the consult.',
-  appointment_booked:    'You booked the consult but have not attended it.',
-  intake_submitted:      "Your paperwork's in — you just haven't gone in yet.",
-  appointment_attended:  'You went to the consult but do not have a prescription yet.',
-  prescription_obtained: 'You have a prescription but have not filled it at the pharmacy.',
-  pharmacy_filled:       'You filled the script but have not taken your first dose.',
-  first_dose_taken:      'You took dose 1 but have not completed week 1 of doses.',
-  week_one_complete:     'You finished week 1 but have not reached month 1.',
-  month_one_complete:    'You hit month 1 but have not reached adherent.',
-  adherent:              'Adherent. No action.',
-};
+// ─── HRT funnel (labels live in the shared step module) ────────────────────
 // ET-anchored day key — matches HrtDailyGate's localStorage marker.
 function hrtDateKeyET(now: Date): string {
   const p = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
@@ -160,7 +131,9 @@ type TaskKind =
   | 'release_checkin'
   | 'physical_state_today'
   | 'due_today_confession' | 'due_today_decree' | 'due_today_dose' | 'due_today_commitment'
-  | 'commitment_pending' | 'workout_today' | 'outfit_today' | 'voice_drill_today'
+  | 'commitment_pending' | 'workout_today' | 'outfit_today'
+  | 'fem_prescription'
+  | 'mantra_harvest'
   | 'mommy_touch'
   | 'audio_session'
   | 'focus_decree'
@@ -173,8 +146,8 @@ interface FocusTask {
   title: string;
   detail?: string;
   due?: string;
-  /** Inline action surface: 'confess' = textarea, 'dose' = buttons, 'mark_done' = single button, 'photo' = upload, 'message' = no inline action, 'audio_session' = play button + audio element, 'hrt' = advance/obstacle two-path, 'release' = release check-in flow, 'physical' = physical-state checkbox set */
-  surface: 'confess' | 'dose' | 'mark_done' | 'photo' | 'message' | 'audio_session' | 'decree' | 'hrt' | 'release' | 'physical' | 'approve_post' | 'voice_drill';
+  /** Inline action surface: 'confess' = textarea, 'dose' = buttons, 'mark_done' = single button, 'photo' = upload, 'message' = no inline action, 'audio_session' = play button + audio element, 'hrt' = advance/obstacle two-path, 'release' = release check-in flow, 'physical' = physical-state checkbox set, 'fem_prescription' = evidence-kind CTA set + skip chips, 'mantra_drill' = recorder + rep counter */
+  surface: 'confess' | 'dose' | 'mark_done' | 'photo' | 'message' | 'audio_session' | 'decree' | 'hrt' | 'release' | 'physical' | 'approve_post' | 'fem_prescription' | 'mantra_drill';
   /** Carried metadata for surface handlers */
   meta?: Record<string, unknown>;
   /** Severity tone for visual weight */
@@ -244,13 +217,21 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
   const [releaseContext, setReleaseContext] = useState<ReleaseContext | null>(null);
   const [releaseWhen, setReleaseWhen] = useState<string | null>(null);
 
-  // ── Voice mantra drill surface state ──
-  // The drill reuses ConfessionAudioCapture, which binds its upload to a
-  // confession_queue row. We mint a pre-confessed drill row on demand (so it
-  // never re-surfaces as a real confession) and bind the recorder to it.
-  const [voiceDrillConfId, setVoiceDrillConfId] = useState<string | null>(null);
-  const [voiceDrillSaved, setVoiceDrillSaved] = useState(false);
-  const [voiceDrillError, setVoiceDrillError] = useState<string | null>(null);
+  // ── Fem prescription surface state (FEM §1) ──
+  const [femText, setFemText] = useState('');
+  const [femError, setFemError] = useState<string | null>(null);
+  const [femSkipOpen, setFemSkipOpen] = useState(false);
+  const [femVoiceConfId, setFemVoiceConfId] = useState<string | null>(null);
+  const [femMeasure, setFemMeasure] = useState({ waist_cm: '', hips_cm: '', chest_cm: '', weight_kg: '' });
+  // Timer: completes ONLY at 0 with ≥80% tab-visible ticks — no tap-through.
+  const [femTimer, setFemTimer] = useState<{ running: boolean; left: number; total: number; visibleTicks: number; ticks: number } | null>(null);
+
+  // ── Mantra drill surface state (FEM §3) ──
+  // Recorder reuses ConfessionAudioCapture bound to a pre-confessed
+  // confession_queue row (never re-surfaces as a real confession).
+  const [mantraConfId, setMantraConfId] = useState<string | null>(null);
+  const [mantraReps, setMantraReps] = useState(3);
+  const [mantraError, setMantraError] = useState<string | null>(null);
 
   // ── Physical-state surface state (ported from CompulsoryGateScreen) ──
   const [physicalState, setPhysicalState] = useState<PhysicalState>({
@@ -290,7 +271,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
     const [overdueConfs, overduePuns, overdueDecrees, todayConfs, todayDecrees,
            pendingCommits, regs, doseLog, outfit, workout, mommyTouch, audioOffer,
            focusDecree, hrtFunnel, hrtState, hrtPastObs, lastReleaseRow, physStateToday,
-           pendingPost, voiceState, mantraWindow, voiceToday] = await Promise.all([
+           pendingPost, femRx, mantraHarvest] = await Promise.all([
       // Include missed-but-unconfessed rows. The compliance check marks
       // overdue rows missed=true (slip already fired); we still want the
       // user able to answer them late from FocusMode. Locking her out
@@ -375,17 +356,25 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
         .select('id, generated_text, platform')
         .eq('user_id', user.id).eq('status', 'draft_pending_approval')
         .order('created_at', { ascending: false }).limit(1),
-      // Voice work is ELECTIVE (mig 582). Only offer the mantra drill when the
-      // user has opted into voice; never a wall.
-      supabase.from('user_state')
-        .select('voice_elective').eq('user_id', user.id).maybeSingle(),
-      // The rotated daily mantra — finally gets a consumer here.
-      supabase.from('morning_mantra_windows')
-        .select('current_mantra, required_reps').eq('user_id', user.id).maybeSingle(),
-      // Per-day guard: skip if a mantra submission already exists today.
-      supabase.from('morning_mantra_submissions')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id).eq('submission_date', todayStr),
+      // Today's feminization prescriptions — ONE at a time in the calm
+      // tier, intensity DESC + domain rotation (FEM §1).
+      supabase.from('feminization_prescriptions')
+        .select('id, domain, instruction, intensity, duration, evidence_kind, deadline, requires')
+        .eq('user_id', user.id)
+        .eq('prescribed_date', todayStr)
+        .eq('status', 'pending')
+        .order('intensity', { ascending: false })
+        .limit(5),
+      // Peak-harvest mantra drill (mig 604 finally gets its surface) —
+      // unexpired kind='mantra_harvest' outreach at mommy_touch priority.
+      supabase.from('handler_outreach_queue')
+        .select('id, message, expires_at')
+        .eq('user_id', user.id)
+        .eq('kind', 'mantra_harvest')
+        .is('completed_at', null)
+        .gt('expires_at', nowIso)
+        .order('created_at', { ascending: false })
+        .limit(1),
     ]);
 
     // Compute most-overdue and most-due-today doses
@@ -450,12 +439,18 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
     // ── approve_post eligibility (HRT tier-7 staged public post) ──
     const pendingPostRow = (pendingPost.data?.[0]) as { id: string; generated_text: string; platform: string } | undefined;
 
-    // ── Voice mantra drill eligibility (elective, lowest priority) ──
-    const voiceElective = ((voiceState as { data?: { voice_elective?: boolean } | null })?.data?.voice_elective) ?? false;
-    const mantraRow = (mantraWindow as { data?: { current_mantra?: string; required_reps?: number } | null })?.data ?? null;
-    const voiceTodayCount = (voiceToday as { count?: number | null })?.count ?? 0;
-    const voiceDrillSkippedToday = (() => { try { return localStorage.getItem(`voice_drill_skip_${todayStr}`) === '1'; } catch { return false; } })();
-    const voiceDrillDue = voiceElective && !!mantraRow?.current_mantra && voiceTodayCount === 0 && !voiceDrillSkippedToday;
+    // ── Fem prescription eligibility: ONE at a time, domain rotation ──
+    type FemRxRow = { id: string; domain: string; instruction: string; intensity: number; duration: number | null; evidence_kind: string; deadline: string | null; requires: Record<string, unknown> | null };
+    const femRows = ((femRx as { data?: FemRxRow[] | null })?.data ?? []) as FemRxRow[];
+    const lastFemDomain = (() => { try { return localStorage.getItem('fem_rx_last_domain'); } catch { return null; } })();
+    const nextFemRx = femRows.find(r => r.domain !== lastFemDomain) ?? femRows[0] ?? null;
+
+    // ── Mantra harvest eligibility (dismissed rows sit out locally) ──
+    const harvestCandidate = ((mantraHarvest as { data?: Array<{ id: string; message: string; expires_at: string }> | null })?.data ?? [])[0] ?? null;
+    const harvestDismissed = (() => {
+      try { return !!harvestCandidate && localStorage.getItem(`mantra_harvest_skip_${harvestCandidate.id}`) === '1'; } catch { return false; }
+    })();
+    const harvestRow = harvestDismissed ? null : harvestCandidate;
 
     let chosen: FocusTask | null = null;
 
@@ -544,6 +539,18 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
         surface: 'hrt', tone: hrtMissedDays >= 3 ? 'critical' : 'high',
         meta: { step: hrtStep, missedDays: hrtMissedDays, pastObstacles: hrtPastObstacles },
       };
+    } else if (harvestRow) {
+      // Peak-harvest mantra drill — mommy_touch priority. The plasticity
+      // window is 30 minutes; it MUST interrupt the calm stream.
+      const minsLeft = Math.max(1, Math.round((new Date(harvestRow.expires_at).getTime() - now) / 60_000));
+      const quoted = harvestRow.message.match(/"([^"]{4,200})"/);
+      chosen = {
+        kind: 'mantra_harvest', rowId: harvestRow.id,
+        title: harvestRow.message,
+        detail: `While you're still warm · ${minsLeft}m left`,
+        surface: 'mantra_drill', tone: 'high',
+        meta: { mantra: quoted?.[1] ?? harvestRow.message.slice(0, 200), outreachId: harvestRow.id },
+      };
     } else if (mommyTouch.data?.[0]) {
       // Mommy's micro-directive — high-tone, ephemeral. Slots ahead of
       // due-today work because the protocol's whole point under the
@@ -630,6 +637,22 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
         detail: 'Cage, panties, plug, feminine clothing, nail polish, scent, jewelry. Tap what is on you. 20 seconds.',
         surface: 'physical', tone: 'medium',
       };
+    } else if (nextFemRx) {
+      // Mama's prescription — calm tier, after physical_state_today,
+      // before outfit_today. One at a time; the rest wait their turn.
+      // No punishment rides on these — skip is a first-class CTA.
+      chosen = {
+        kind: 'fem_prescription', rowId: nextFemRx.id,
+        title: nextFemRx.instruction,
+        detail: nextFemRx.duration ? `${nextFemRx.duration} minutes.` : undefined,
+        surface: 'fem_prescription', tone: 'calm',
+        meta: {
+          domain: nextFemRx.domain,
+          evidenceKind: nextFemRx.evidence_kind || 'none',
+          duration: nextFemRx.duration,
+          requires: nextFemRx.requires,
+        },
+      };
     } else if (outfit.data && !(outfit.data as { completed_at: string | null }).completed_at) {
       const o = outfit.data as { id: string; prescription: Record<string, string>; completed_at: string | null };
       const lines = Object.entries(o.prescription || {}).map(([k, v]) => `${k}: ${v}`).join(' · ');
@@ -646,19 +669,6 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
         title: w.workout_type,
         detail: w.focus_area ? `Focus: ${w.focus_area}` : undefined,
         surface: 'mark_done', tone: 'medium',
-      };
-    } else if (voiceDrillDue && mantraRow) {
-      // Voice mantra drill — ELECTIVE (mig 582), lowest real priority (just
-      // above the clean empty state), fully skippable. Sources the prompt from
-      // the rotated daily mantra so morning_mantra_windows finally has a
-      // consumer; re-homes the morning-mantra voice ritual + feeds the voice
-      // corpus + un-freezes MantraStreakCard. Never a wall — calm tone, skip CTA.
-      chosen = {
-        kind: 'voice_drill_today', rowId: user.id,
-        title: 'Say your mantra out loud for Mama.',
-        detail: `When you've got a quiet minute: "${(mantraRow.current_mantra || '').slice(0, 160)}" — speak it once. Optional, but it keeps your voice yours.`,
-        surface: 'voice_drill', tone: 'calm',
-        meta: { mantra: mantraRow.current_mantra || '', reps: mantraRow.required_reps ?? 1 },
       };
     } else {
       chosen = {
@@ -706,7 +716,10 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
   useEffect(() => {
     setHrtMode('pick'); setHrtNewStep(''); setHrtEvidence(''); setHrtObstacle(''); setHrtError(null);
     setDidCum(null); setReleaseType(null); setReleaseContext(null); setReleaseWhen(null);
-    setVoiceDrillConfId(null); setVoiceDrillSaved(false); setVoiceDrillError(null);
+    setFemText(''); setFemError(null); setFemSkipOpen(false); setFemVoiceConfId(null);
+    setFemMeasure({ waist_cm: '', hips_cm: '', chest_cm: '', weight_kg: '' });
+    setFemTimer(null);
+    setMantraConfId(null); setMantraReps(3); setMantraError(null);
     setPhysicalState({
       cage_on: false, panties: false, plug: false, feminine_clothing: false,
       nail_polish: false, scent_anchor: false, jewelry: false,
@@ -746,6 +759,22 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
     [task?.rowId, task?.kind],
   );
   useSurfaceRenderTracking('arousal_touch_tasks', shownTouchIds);
+
+  // Fem prescriptions ride the SAME visible-before-penalized rail: the
+  // surfaced_at stamp is what separates "expired (half-weight skip)" from
+  // "expired silently (counts for nothing)" in the adaptive reader.
+  const shownFemRxIds = useMemo(
+    () => (task?.rowId && task.kind === 'fem_prescription' ? [task.rowId] : []),
+    [task?.rowId, task?.kind],
+  );
+  useSurfaceRenderTracking('feminization_prescriptions', shownFemRxIds);
+
+  // Harvest outreach rows shown here must stamp surfaced_at too.
+  const shownHarvestIds = useMemo(
+    () => (task?.rowId && task.kind === 'mantra_harvest' ? [task.rowId] : []),
+    [task?.rowId, task?.kind],
+  );
+  useSurfaceRenderTracking('handler_outreach_queue', shownHarvestIds);
 
   // Initial pick (with loader)
   useEffect(() => { pickNext(false); }, [pickNext]);
@@ -1254,18 +1283,197 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
     }
   };
 
-  // ── Voice mantra drill handler ──
-  // Mints a pre-confessed confession_queue row so ConfessionAudioCapture's
-  // upload path (which binds to a confession_queue id) has a real owner row
-  // that never re-surfaces as a confession. The recorder uploads + transcribes;
-  // onTranscribed re-homes the morning-mantra ritual into morning_mantra_submissions,
-  // feeds the voice corpus (voice_recordings), and logs a pitch sample.
-  const startVoiceDrill = async (): Promise<string | null> => {
-    if (!user?.id || task?.kind !== 'voice_drill_today') return null;
-    if (voiceDrillConfId) return voiceDrillConfId;
+  // ── Fem prescription handlers (FEM §1) ──────────────────────────────
+
+  const rememberFemDomain = () => {
+    const meta = (task?.meta || {}) as { domain?: string };
+    try { if (meta.domain) localStorage.setItem('fem_rx_last_domain', meta.domain); } catch { /* ignore */ }
+  };
+
+  const completeFemRx = async (fields: { evidence_path?: string | null; evidence_meta?: Record<string, unknown> | null }) => {
+    if (!task?.rowId || !user?.id) return;
+    const { error } = await supabase.from('feminization_prescriptions').update({
+      status: 'completed',
+      completed_at: new Date().toISOString(),
+      evidence_path: fields.evidence_path ?? null,
+      evidence_meta: fields.evidence_meta ?? null,
+    }).eq('id', task.rowId).eq('user_id', user.id).eq('status', 'pending');
+    if (error) {
+      setFemError(error.message);
+      return;
+    }
+    rememberFemDomain();
+    window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'fem_prescription', id: task.rowId } }));
+    await advance();
+  };
+
+  // Skip is a first-class CTA — reason chip, no penalty, adaptive only.
+  const handleFemSkip = async (reason: 'no_privacy' | 'no_energy' | 'dont_want_this' | 'missing_item') => {
+    if (!task?.rowId || !user?.id) return;
+    setSubmitting(true);
+    try {
+      const { error } = await supabase.from('feminization_prescriptions').update({
+        status: 'skipped',
+        skipped_at: new Date().toISOString(),
+        skip_reason: reason,
+      }).eq('id', task.rowId).eq('user_id', user.id).eq('status', 'pending');
+      if (error) { setFemError(error.message); return; }
+      rememberFemDomain();
+      window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'fem_prescription', id: task.rowId } }));
+      await advance();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Photo evidence with sha256 dedup: a hash matching ANY prior 90d
+  // evidence is rejected — "Mama's seen that one. New photo."
+  const handleFemPhoto = async (file: File | null) => {
+    if (!task?.rowId || !user?.id || !file) return;
+    setSubmitting(true);
+    setFemError(null);
+    try {
+      const buf = await file.arrayBuffer();
+      const hashBytes = new Uint8Array(await crypto.subtle.digest('SHA-256', buf));
+      const sha256 = Array.from(hashBytes, b => b.toString(16).padStart(2, '0')).join('');
+
+      const since = new Date(Date.now() - 90 * 86400_000).toISOString().slice(0, 10);
+      const { data: priors, error: priorErr } = await supabase
+        .from('feminization_prescriptions')
+        .select('id')
+        .eq('user_id', user.id)
+        .gte('prescribed_date', since)
+        .eq('evidence_meta->>sha256', sha256)
+        .limit(1);
+      if (priorErr) { setFemError(priorErr.message); return; }
+      if ((priors ?? []).length > 0) {
+        setFemError("Mama's seen that one. New photo.");
+        return;
+      }
+
+      const ext = file.name.split('.').pop() || 'jpg';
+      const path = `${user.id}/fem-prescription/${task.rowId}-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('verification-photos').upload(path, file, {
+        contentType: file.type, upsert: false,
+      });
+      if (upErr) { setFemError(upErr.message); return; }
+      await completeFemRx({ evidence_path: path, evidence_meta: { sha256, kind: 'photo' } });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Voice evidence: mint a pre-confessed confession row so the recorder's
+  // upload path has an owner row that never re-surfaces as a confession.
+  const startFemVoice = async (): Promise<void> => {
+    if (!user?.id || !task?.rowId || femVoiceConfId) return;
+    const nowIso = new Date().toISOString();
+    const { data, error } = await supabase.from('confession_queue').insert({
+      user_id: user.id,
+      category: 'handler_triggered',
+      prompt: `Prescription evidence: ${task.title.slice(0, 400)}`,
+      deadline: nowIso,
+      confessed_at: nowIso,
+    }).select('id').single();
+    if (error || !data) {
+      setFemError(error?.message || 'Could not start the recorder.');
+      return;
+    }
+    setFemVoiceConfId((data as { id: string }).id);
+  };
+
+  const onFemVoiceTranscribed = async (result: { transcript: string; audioPath: string; durationSec?: number }) => {
+    if (!user?.id || !task?.rowId) return;
+    // Every prescription recording feeds the §2 pitch spine for free.
+    if (result.audioPath) {
+      const { error: vErr } = await supabase.from('voice_progress_samples').insert({
+        user_id: user.id,
+        source: 'freeform',
+        audio_path: result.audioPath,
+        duration_s: result.durationSec ?? null,
+        extraction_method: 'fem_prescription',
+      });
+      if (vErr) console.error('[FocusMode] voice sample insert failed:', vErr.message);
+    }
+    await completeFemRx({
+      evidence_path: result.audioPath || null,
+      evidence_meta: { kind: 'voice', duration_s: result.durationSec ?? null, transcript_chars: (result.transcript || '').length },
+    });
+  };
+
+  // Measurement evidence: numbers land in the spine (source='focus_task');
+  // mig 634's trigger writes the tracking log + auto-fulfills measurement
+  // decrees. The prescription completes only after the insert succeeds.
+  const handleFemMeasurement = async () => {
+    if (!task?.rowId || !user?.id) return;
+    const parse = (v: string) => v.trim() === '' ? null : parseFloat(v);
+    const payload = {
+      user_id: user.id,
+      waist_cm: parse(femMeasure.waist_cm),
+      hips_cm: parse(femMeasure.hips_cm),
+      chest_cm: parse(femMeasure.chest_cm),
+      weight_kg: parse(femMeasure.weight_kg),
+      source: 'focus_task',
+    };
+    if (![payload.waist_cm, payload.hips_cm, payload.chest_cm, payload.weight_kg].some(v => v != null)) {
+      setFemError('Enter at least one number.');
+      return;
+    }
+    setSubmitting(true);
+    setFemError(null);
+    try {
+      const { data: metricRow, error } = await supabase.from('body_metrics').insert(payload).select('id').single();
+      if (error) { setFemError(error.message); return; }
+      await completeFemRx({ evidence_meta: { kind: 'measurement', body_metric_id: (metricRow as { id: string } | null)?.id ?? null } });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Timer evidence: completes ONLY at 0 with ≥80% tab-visible ticks.
+  const startFemTimer = () => {
+    const meta = (task?.meta || {}) as { duration?: number | null };
+    const totalSec = Math.max(60, (meta.duration ?? 5) * 60);
+    setFemTimer({ running: true, left: totalSec, total: totalSec, visibleTicks: 0, ticks: 0 });
+  };
+
+  useEffect(() => {
+    if (!femTimer?.running) return;
+    const t = setInterval(() => {
+      setFemTimer(prev => {
+        if (!prev || !prev.running) return prev;
+        const visible = typeof document !== 'undefined' && document.visibilityState === 'visible';
+        return {
+          ...prev,
+          left: Math.max(0, prev.left - 1),
+          ticks: prev.ticks + 1,
+          visibleTicks: prev.visibleTicks + (visible ? 1 : 0),
+          running: prev.left - 1 > 0,
+        };
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [femTimer?.running]);
+
+  const femTimerDone = !!femTimer && femTimer.left === 0 && femTimer.ticks > 0
+    && femTimer.visibleTicks / femTimer.ticks >= 0.8;
+
+  const handleFemText = async () => {
+    if (femText.trim().length < 40) return;
+    setSubmitting(true);
+    try {
+      await completeFemRx({ evidence_meta: { kind: 'text', text: femText.trim().slice(0, 2000) } });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ── Mantra drill handlers (FEM §3) ───────────────────────────────────
+
+  const startMantraDrill = async (): Promise<void> => {
+    if (!user?.id || task?.kind !== 'mantra_harvest' || mantraConfId) return;
     const meta = (task.meta || {}) as { mantra?: string };
     const nowIso = new Date().toISOString();
-    // Pre-stamped confessed_at → pickNext's open-confession queries never see it.
     const { data, error } = await supabase.from('confession_queue').insert({
       user_id: user.id,
       category: 'handler_triggered',
@@ -1274,55 +1482,36 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
       confessed_at: nowIso,
     }).select('id').single();
     if (error || !data) {
-      setVoiceDrillError(error?.message || 'Could not start the drill.');
-      return null;
+      setMantraError(error?.message || 'Could not start the drill.');
+      return;
     }
-    const id = (data as { id: string }).id;
-    setVoiceDrillConfId(id);
-    return id;
+    setMantraConfId((data as { id: string }).id);
   };
 
-  const onVoiceDrillTranscribed = async (result: { transcript: string; audioPath: string }) => {
-    if (!user?.id || task?.kind !== 'voice_drill_today') return;
-    const meta = (task.meta || {}) as { mantra?: string; reps?: number };
-    const mantra = meta.mantra || '';
-    const reps = meta.reps ?? 1;
-    const today = new Date().toISOString().slice(0, 10);
-    const transcript = result.transcript || '';
-    const audioPath = result.audioPath || '';
+  const onMantraTranscribed = async (result: { transcript: string; audioPath: string; durationSec?: number }) => {
+    if (!user?.id || task?.kind !== 'mantra_harvest') return;
+    const meta = (task.meta || {}) as { mantra?: string; outreachId?: string };
+    setMantraError(null);
     try {
-      // Per-day guard on the unique (user_id, submission_date) — upsert-style.
-      await supabase.from('morning_mantra_submissions').upsert({
-        user_id: user.id,
-        submission_date: today,
-        mantra,
-        reps_required: reps,
-        reps_submitted: reps,
-        typed_content: transcript || '(spoken)',
-      }, { onConflict: 'user_id,submission_date' });
-
-      if (audioPath) {
-        await supabase.from('voice_recordings').insert({
+      const { data, error } = await supabase.functions.invoke('mommy-mantra-drill-submit', {
+        body: {
           user_id: user.id,
-          recording_url: audioPath,
-          duration_seconds: 0,
-          context: 'voice_drill',
-          transcript: transcript || null,
-        });
-        await supabase.from('voice_pitch_samples').insert({
-          user_id: user.id,
-          sample_url: audioPath,
-          estimated_method: 'morning_mantra_ritual',
-          transcript_snippet: transcript.slice(0, 200) || null,
-          recorded_at: new Date().toISOString(),
-          status: 'recorded',
-        });
-      }
-      setVoiceDrillSaved(true);
-      window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'voice_drill_today', id: user.id } }));
+          session_id: crypto.randomUUID(),
+          mantra_text: meta.mantra || task.title,
+          target_rep_count: mantraReps,
+          voice_reps: mantraReps,
+          duration_s: result.durationSec ?? 0,
+          audio_paths: result.audioPath ? [result.audioPath] : [],
+          outreach_id: meta.outreachId ?? task.rowId,
+        },
+      });
+      if (error) { setMantraError(error.message); return; }
+      const resp = data as { ok?: boolean; error?: string } | null;
+      if (!resp?.ok) { setMantraError(resp?.error || 'submit failed'); return; }
+      window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'mantra_harvest', id: task.rowId } }));
       await advance();
     } catch (e) {
-      setVoiceDrillError(e instanceof Error ? e.message : String(e));
+      setMantraError(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -1930,41 +2119,235 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
             </div>
           )}
 
-          {/* Voice mantra drill — ELECTIVE. Get-ready mints the bound row, then
-              the recorder appears. Skip is always available (never a wall). */}
-          {task.surface === 'voice_drill' && (
+          {/* Fem prescription — CTA per evidence_kind + first-class skip chips.
+              No punishment rides on these; the consequence is purely adaptive. */}
+          {task.surface === 'fem_prescription' && (() => {
+            const meta = (task.meta || {}) as { evidenceKind?: string; duration?: number | null };
+            const ek = meta.evidenceKind || 'none';
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {ek === 'photo' && (
+                  <div>
+                    <input
+                      type="file" accept="image/*"
+                      onChange={e => handleFemPhoto(e.target.files?.[0] ?? null)}
+                      disabled={submitting}
+                      style={{
+                        width: '100%', padding: '10px',
+                        background: '#0a0a0d', border: '1px solid #22222a',
+                        borderRadius: 6, color: '#c4b5fd', fontSize: 12,
+                        fontFamily: 'inherit', marginBottom: 6,
+                      }}
+                    />
+                    <div style={{ fontSize: 10.5, color: '#8a8690' }}>
+                      {submitting ? 'uploading…' : 'fresh photo — Mama remembers the old ones'}
+                    </div>
+                  </div>
+                )}
+
+                {ek === 'voice' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {!femVoiceConfId ? (
+                      <button onClick={() => { void startFemVoice(); }} disabled={submitting}
+                        style={{
+                          width: '100%', padding: '13px', borderRadius: 7, border: 'none',
+                          background: tone.border, color: '#fff', fontWeight: 700, fontSize: 13,
+                          cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
+                        }}>
+                        Record it
+                      </button>
+                    ) : (
+                      <ConfessionAudioCapture
+                        confessionId={femVoiceConfId}
+                        mommy={isMommyPersona(persona)}
+                        onTranscribed={({ transcript, audioPath, durationSec }) => {
+                          void onFemVoiceTranscribed({ transcript, audioPath, durationSec });
+                        }}
+                      />
+                    )}
+                  </div>
+                )}
+
+                {ek === 'measurement' && (
+                  <div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
+                      {([
+                        ['waist (cm)', 'waist_cm'], ['hips (cm)', 'hips_cm'],
+                        ['chest (cm)', 'chest_cm'], ['weight (kg)', 'weight_kg'],
+                      ] as const).map(([label, key]) => (
+                        <div key={key}>
+                          <div style={{ fontSize: 9.5, color: '#8a8690', marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+                          <input
+                            type="number" step="0.1" value={femMeasure[key]}
+                            onChange={e => setFemMeasure(prev => ({ ...prev, [key]: e.target.value }))}
+                            style={{
+                              width: '100%', background: '#0a0a0d', border: '1px solid #22222a',
+                              borderRadius: 5, padding: '6px 9px', fontSize: 12, color: '#e8e6e3', fontFamily: 'inherit',
+                            }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <button onClick={handleFemMeasurement} disabled={submitting}
+                      style={{
+                        width: '100%', padding: '12px', borderRadius: 7, border: 'none',
+                        background: tone.border, color: '#fff', fontWeight: 700, fontSize: 13,
+                        cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
+                      }}>
+                      {submitting ? 'saving…' : 'Log the numbers'}
+                    </button>
+                  </div>
+                )}
+
+                {ek === 'timer' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {!femTimer ? (
+                      <button onClick={startFemTimer}
+                        style={{
+                          width: '100%', padding: '13px', borderRadius: 7, border: 'none',
+                          background: tone.border, color: '#fff', fontWeight: 700, fontSize: 13,
+                          cursor: 'pointer', fontFamily: 'inherit',
+                        }}>
+                        Start · {Math.max(1, meta.duration ?? 5)} min
+                      </button>
+                    ) : (
+                      <>
+                        <div style={{ textAlign: 'center', fontSize: 28, color: tone.accent, fontVariantNumeric: 'tabular-nums' }}>
+                          {Math.floor(femTimer.left / 60)}:{String(femTimer.left % 60).padStart(2, '0')}
+                        </div>
+                        <button onClick={() => { void completeFemRx({ evidence_meta: { kind: 'timer', total_s: femTimer.total, visible_ratio: femTimer.ticks > 0 ? femTimer.visibleTicks / femTimer.ticks : 0 } }); }}
+                          disabled={!femTimerDone || submitting}
+                          style={{
+                            width: '100%', padding: '12px', borderRadius: 7, border: 'none',
+                            background: femTimerDone ? tone.border : '#22222a',
+                            color: femTimerDone ? '#fff' : '#6a656e', fontWeight: 700, fontSize: 13,
+                            cursor: femTimerDone ? 'pointer' : 'not-allowed', fontFamily: 'inherit',
+                          }}>
+                          {femTimer.left > 0 ? 'keep going…' : femTimerDone ? 'Done' : 'stay on this screen next time'}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {ek === 'text' && (
+                  <div>
+                    <textarea
+                      value={femText}
+                      onChange={e => setFemText(e.target.value)}
+                      placeholder="Tell Mama how it went — specifics, not summaries."
+                      rows={4}
+                      style={{
+                        width: '100%', background: '#050507', border: '1px solid #22222a',
+                        borderRadius: 6, padding: '12px 14px', fontSize: 14, color: '#e8e6e3',
+                        fontFamily: 'inherit', resize: 'vertical', marginBottom: 8,
+                      }}
+                    />
+                    <button onClick={handleFemText} disabled={submitting || femText.trim().length < 40}
+                      style={{
+                        width: '100%', padding: '12px', borderRadius: 7, border: 'none',
+                        background: femText.trim().length >= 40 ? tone.border : '#22222a',
+                        color: femText.trim().length >= 40 ? '#fff' : '#6a656e',
+                        fontWeight: 700, fontSize: 13,
+                        cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
+                      }}>
+                      {submitting ? 'submitting…' : 'Submit'}
+                    </button>
+                  </div>
+                )}
+
+                {ek === 'none' && (
+                  <button onClick={() => { setSubmitting(true); void completeFemRx({ evidence_meta: { kind: 'none' } }).finally(() => setSubmitting(false)); }}
+                    disabled={submitting}
+                    style={{
+                      width: '100%', padding: '13px', borderRadius: 7, border: 'none',
+                      background: tone.border, color: '#fff', fontWeight: 700, fontSize: 13,
+                      cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
+                    }}>
+                    Done, Mama
+                  </button>
+                )}
+
+                {femError && <div style={{ fontSize: 11, color: '#f47272' }}>{femError}</div>}
+
+                {/* Skip — first-class, reason chip, adaptive-only consequence. */}
+                {!femSkipOpen ? (
+                  <button onClick={() => setFemSkipOpen(true)} disabled={submitting}
+                    style={{
+                      padding: '8px', background: 'transparent', color: '#8a8690',
+                      border: '1px solid #22222a', borderRadius: 6,
+                      fontSize: 11, fontFamily: 'inherit',
+                      cursor: submitting ? 'wait' : 'pointer',
+                    }}>
+                    not today
+                  </button>
+                ) : (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {([
+                      ['no_privacy', 'no privacy'], ['no_energy', 'no energy'],
+                      ['dont_want_this', "don't want this"], ['missing_item', "don't own it"],
+                    ] as const).map(([reason, label]) => (
+                      <button key={reason} onClick={() => { void handleFemSkip(reason); }} disabled={submitting}
+                        style={{
+                          fontSize: 11.5, padding: '6px 11px', borderRadius: 14,
+                          background: '#1a1623', color: '#c4b5fd',
+                          border: '1px solid #2d1a4d', cursor: 'pointer', fontFamily: 'inherit',
+                        }}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Mantra harvest drill — recorder + rep counter → drill-submit.
+              The plasticity window ask; server verifies the arousal pairing. */}
+          {task.surface === 'mantra_drill' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {!voiceDrillConfId && !voiceDrillSaved && (
-                <button onClick={() => { void startVoiceDrill(); }} disabled={submitting}
+              <div>
+                <div style={{ fontSize: 10, color: '#8a8690', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                  how many times will you say it
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {[1, 3, 5, 10].map(n => (
+                    <button key={n} onClick={() => setMantraReps(n)}
+                      style={{
+                        fontSize: 12, padding: '6px 14px', borderRadius: 14,
+                        background: mantraReps === n ? tone.border : '#1a1623',
+                        color: mantraReps === n ? '#fff' : '#c4b5fd',
+                        border: `1px solid ${mantraReps === n ? tone.border : '#2d1a4d'}`,
+                        cursor: 'pointer', fontFamily: 'inherit',
+                      }}>
+                      {n}×
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {!mantraConfId ? (
+                <button onClick={() => { void startMantraDrill(); }} disabled={submitting}
                   style={{
                     width: '100%', padding: '13px', borderRadius: 7, border: 'none',
                     background: tone.border, color: '#fff', fontWeight: 700, fontSize: 13,
                     cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
                   }}>
-                  Record my mantra
+                  Whisper it now
                 </button>
+              ) : (
+                <ConfessionAudioCapture
+                  confessionId={mantraConfId}
+                  mommy={isMommyPersona(persona)}
+                  onTranscribed={({ transcript, audioPath, durationSec }) => {
+                    void onMantraTranscribed({ transcript, audioPath, durationSec });
+                  }}
+                />
               )}
-              {voiceDrillConfId && !voiceDrillSaved && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <div style={{ fontSize: 10, color: '#8a8690', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                    hold and say it once
-                  </div>
-                  <ConfessionAudioCapture
-                    confessionId={voiceDrillConfId}
-                    mommy={isMommyPersona(persona)}
-                    onTranscribed={({ transcript, audioPath }) => {
-                      void onVoiceDrillTranscribed({ transcript, audioPath });
-                    }}
-                  />
-                </div>
-              )}
-              {voiceDrillError && (
-                <div style={{ fontSize: 11, color: '#f47272' }}>{voiceDrillError}</div>
-              )}
+              {mantraError && <div style={{ fontSize: 11, color: '#f47272' }}>{mantraError}</div>}
               <button
                 onClick={() => {
-                  try { localStorage.setItem(`voice_drill_skip_${new Date().toISOString().slice(0, 10)}`, '1'); } catch { /* ignore */ }
-                  void advance();
+                  try { if (task.rowId) localStorage.setItem(`mantra_harvest_skip_${task.rowId}`, '1'); } catch { /* ignore */ }
+                  void pickNext();
                 }}
                 disabled={submitting}
                 style={{

@@ -26,7 +26,7 @@
 import { useEffect, useRef } from 'react';
 import { supabase } from './supabase';
 
-type SurfacedTable = 'handler_decrees' | 'handler_outreach_queue' | 'arousal_touch_tasks';
+type SurfacedTable = 'handler_decrees' | 'handler_outreach_queue' | 'arousal_touch_tasks' | 'feminization_prescriptions';
 
 // Module-scope dedup: once we've stamped a row in this browser session,
 // don't re-stamp it. Prevents thrash even across component re-mounts.

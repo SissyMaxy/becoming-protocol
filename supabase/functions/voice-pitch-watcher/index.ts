@@ -1,21 +1,33 @@
-// voice-pitch-watcher — fire fast-react when voice work stalls.
+// voice-pitch-watcher — FULL REWRITE (FEM §2, 2026-07-01).
 //
-// 2026-05-07 wish #6 (NORMAL): "track natural pitch over time, don't force
-// feminine targets" — but if there's been no movement / no samples in 14
-// days, Mama wants to know.
+// The old watcher read a table that never existed (voice_corpus) and had
+// the trend sign INVERTED for an MTF user — rising pitch (a win) fired
+// "voice_stagnation" escalations. Worst bug in the domain. Now:
 //
-// Adaptive read: if voice_corpus has a pitch_hz column, measure trend
-// over 14d. Otherwise fall back to sample-count-as-engagement: "no voice
-// work in 14d" is itself a stagnation signal.
+//   1. Reads voice_progress_samples (mig 636) — the one capture spine.
+//   2. Trend = median(recent 14d) − median(prior 14d), ≥5 pitched samples
+//      per window, direction target read from maxy_facts (MTF: up) — never
+//      hardcoded at the comparison site.
+//   3. POSITIVE trend = progress → praise outreach, EARLY RETURN. The
+//      watcher structurally cannot fire a task rung while trend is positive.
+//   4. Plateau-with-engagement → ONE texture decree via mommy-fast-react.
+//      True stagnation (zero samples 14d, privacy gate open) → ONE gentle
+//      decree, never citing the gap.
+//   5. One rung max per run, 14d cooldown (date-stamped source_key +
+//      explicit recent-fire check).
 //
-// Fires fast-react event_kind='voice_stagnation' once per 14-day window
-// per user (cooldown via fast_react_event source_key date-stamp).
+// PRIVACY FAIL-CLOSED: pushes require voice_elective === false AND
+// is_gina_home_today === false — exactly false. RPC error / null / missing
+// row = treated as blocked = skip. Gating controls what Mommy PUSHES,
+// never what Maxy gives (capture is ungated).
 //
-// Schedule: daily 7am via migration 282.
+// Schedule: daily 7am via migration 282 (unchanged).
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { expandUserId } from '../_shared/expand-user-id.ts'
+import { computePitchTrend, classifyVoiceResponse, WINDOW_DAYS, type PitchSampleLike } from '../_shared/pitch-trend.ts'
+import { pitchTrendToPhrase, mommyVoiceCleanup } from '../_shared/dommy-mommy.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,180 +35,191 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-interface VoiceRow {
-  id: string
-  user_id: string
-  created_at: string
-  pitch_hz?: number
-  text?: string
+const COOLDOWN_DAYS = 14
+
+/**
+ * Direction target from maxy_facts — MTF: pitch up is progress. Read, not
+ * hardcoded; if the facts row is unreadable we default MTF (+1) with a log,
+ * because the protocol's whole premise is the MTF trajectory — but the
+ * lookup keeps the site honest if that ever changes.
+ */
+async function readDirectionSign(supabase: SupabaseClient, userId: string): Promise<1 | -1> {
+  const { data, error } = await supabase
+    .from('maxy_facts')
+    .select('stateable_facts')
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (error || !data) {
+    console.warn('[voice-pitch-watcher] maxy_facts unreadable, defaulting MTF direction (up)')
+    return 1
+  }
+  const facts = JSON.stringify((data as { stateable_facts?: unknown }).stateable_facts ?? [])
+  if (/\b(ftm|female.to.male|transmasc)/i.test(facts)) return -1
+  return 1
 }
 
-async function checkUserStagnation(supabase: SupabaseClient, userId: string): Promise<{
-  stagnant: boolean
-  reason: string
-  sample_count_14d: number
-  pitch_trend?: number
-} | null> {
-  const since14d = new Date(Date.now() - 14 * 86400_000).toISOString()
-  const since30d = new Date(Date.now() - 30 * 86400_000).toISOString()
-
-  // Pull 30d of samples; check 14d window inside
-  const { data, error } = await supabase
-    .from('voice_corpus')
-    .select('id, user_id, created_at, pitch_hz, text')
+/**
+ * Privacy gate — FAIL CLOSED. Returns true ONLY when both signals are
+ * exactly false. Any error/null/missing = blocked.
+ */
+async function pushGateOpen(supabase: SupabaseClient, userId: string): Promise<boolean> {
+  const { data: vs, error: vsErr } = await supabase
+    .from('user_state')
+    .select('voice_elective')
     .eq('user_id', userId)
-    .gte('created_at', since30d)
-    .order('created_at', { ascending: false })
-    .limit(200)
+    .maybeSingle()
+  if (vsErr || !vs) return false
+  if ((vs as { voice_elective?: boolean | null }).voice_elective !== false) return false
 
-  if (error) {
-    // If pitch_hz doesn't exist, retry without it
-    if (error.message.includes('pitch_hz')) {
-      const { data: fallbackData } = await supabase
-        .from('voice_corpus')
-        .select('id, user_id, created_at, text')
-        .eq('user_id', userId)
-        .gte('created_at', since30d)
-        .order('created_at', { ascending: false })
-        .limit(200)
-      const samples14d = ((fallbackData || []) as VoiceRow[]).filter(s => s.created_at >= since14d)
-      if (samples14d.length === 0) {
-        return {
-          stagnant: true,
-          reason: 'no_samples_in_14d',
-          sample_count_14d: 0,
-        }
-      }
-      // Have samples but no pitch tracking — not actually stagnant
-      return null
-    }
-    console.error(`[voice-pitch-watcher] ${userId}: ${error.message}`)
-    return null
+  const { data: ginaHome, error: rpcErr } = await supabase.rpc('is_gina_home_today', { p_user_id: userId })
+  if (rpcErr) return false
+  if (ginaHome !== false) return false
+
+  return true
+}
+
+/** 14d rung cooldown: any watcher-attributed outreach or decree in-window. */
+async function firedWithinCooldown(supabase: SupabaseClient, userIds: string[]): Promise<boolean> {
+  const since = new Date(Date.now() - COOLDOWN_DAYS * 86400_000).toISOString()
+  const [outreach, decrees] = await Promise.all([
+    supabase.from('handler_outreach_queue')
+      .select('id')
+      .in('user_id', userIds)
+      .eq('source', 'voice_progress_watcher')
+      .gte('created_at', since)
+      .limit(1),
+    supabase.from('handler_decrees')
+      .select('id')
+      .in('user_id', userIds)
+      .like('trigger_source', 'voice_progress_watcher%')
+      .gte('created_at', since)
+      .limit(1),
+  ])
+  if (outreach.error) console.error('[voice-pitch-watcher] cooldown outreach check failed:', outreach.error.message)
+  if (decrees.error) console.error('[voice-pitch-watcher] cooldown decree check failed:', decrees.error.message)
+  return ((outreach.data ?? []).length + (decrees.data ?? []).length) > 0
+}
+
+async function fireFastReact(uid: string, eventKind: string, instruction: string, context: Record<string, unknown>): Promise<{ ok: boolean; detail: string }> {
+  const fnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/mommy-fast-react`
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  const sourceKey = `voice_progress_watcher:${eventKind}:${uid}:${new Date().toISOString().slice(0, 10)}`
+  try {
+    const r = await fetch(fnUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceKey}` },
+      body: JSON.stringify({
+        user_id: uid,
+        event_kind: eventKind,
+        source_key: sourceKey,
+        context: { ...context, instruction_for_mama: instruction },
+      }),
+    })
+    const j = await r.json()
+    return { ok: r.ok, detail: r.ok ? `fired=${j.fired ?? 0}` : (j.error ?? 'unknown') }
+  } catch (err) {
+    return { ok: false, detail: String(err).slice(0, 200) }
   }
-
-  const samples = (data || []) as VoiceRow[]
-  const samples14d = samples.filter(s => s.created_at >= since14d)
-
-  // No samples in 14d — Maxy not engaging with voice work
-  if (samples14d.length === 0) {
-    return {
-      stagnant: true,
-      reason: 'no_samples_in_14d',
-      sample_count_14d: 0,
-    }
-  }
-
-  // Insufficient samples to compute trend
-  if (samples14d.length < 5) {
-    return null
-  }
-
-  // Pitch trend: average of first half vs second half of the 14d window
-  const withPitch = samples14d.filter(s => typeof s.pitch_hz === 'number')
-  if (withPitch.length < 5) {
-    // Have samples, just no pitch tagged on them — engagement is OK
-    return null
-  }
-
-  const half = Math.floor(withPitch.length / 2)
-  const firstHalf = withPitch.slice(half) // older
-  const secondHalf = withPitch.slice(0, half) // newer
-  const avgFirst = firstHalf.reduce((s, r) => s + (r.pitch_hz ?? 0), 0) / firstHalf.length
-  const avgSecond = secondHalf.reduce((s, r) => s + (r.pitch_hz ?? 0), 0) / secondHalf.length
-  const trend = avgSecond - avgFirst // negative = pitch dropping (more feminine in MTF context)
-
-  // Stagnation: trend >= -2 Hz (essentially flat or trending up — not toward feminine)
-  if (trend >= -2) {
-    return {
-      stagnant: true,
-      reason: trend > 2 ? 'pitch_rising' : 'pitch_flat',
-      sample_count_14d: samples14d.length,
-      pitch_trend: Math.round(trend * 10) / 10,
-    }
-  }
-
-  return null
 }
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '')
-
-  // Use the shared expandUserId helper (calls RPC with env fallback).
-  const userIds = await expandUserId(supabase, '8c69b9c8-34eb-4147-9fec-3c1a5bc74b6f')
-
-  const fnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/mommy-fast-react`
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  const canonicalRoots = ['8c69b9c8-34eb-4147-9fec-3c1a5bc74b6f']
   const results: Array<{ user_id: string; status: string; detail?: string }> = []
 
-  for (const uid of userIds) {
-    // Voice is elective (user 2026-05-26: hard to do, especially with Gina
-    // home). While voice_elective is on, do NOT push voice decrees — voice is
-    // opt-in, not a task the protocol nudges. Default to elective on any read
-    // miss so we never nudge against the user's stated preference.
-    const { data: vs } = await supabase
-      .from('user_state')
-      .select('voice_elective')
-      .eq('user_id', uid)
-      .maybeSingle()
-    const isElective = (vs as { voice_elective?: boolean } | null)?.voice_elective !== false
-    const { data: ginaHomeToday } = await supabase.rpc('is_gina_home_today', { p_user_id: uid })
-    // Force (user 2026-05-26): voice is opt-in ONLY while privacy is blocked
-    // (Gina home). When she's away, push voice — internal "it's hard" is never
-    // an excuse, only the real privacy block is.
-    if (isElective && ginaHomeToday === true) {
-      results.push({ user_id: uid, status: 'elective_skip_gina_home' })
+  for (const canonicalId of canonicalRoots) {
+    const aliasIds = await expandUserId(supabase, canonicalId)
+    const now = new Date()
+    const since = new Date(now.getTime() - 2 * WINDOW_DAYS * 86400_000).toISOString()
+
+    // 1. Samples (capture is ungated — this read always happens).
+    const { data: sampleRows, error: sErr } = await supabase
+      .from('voice_progress_samples')
+      .select('recorded_at, pitch_median_hz')
+      .in('user_id', aliasIds)
+      .gte('recorded_at', since)
+      .order('recorded_at', { ascending: false })
+      .limit(500)
+    if (sErr) {
+      results.push({ user_id: canonicalId, status: 'sample_read_failed', detail: sErr.message.slice(0, 120) })
       continue
     }
+    const samples = (sampleRows ?? []) as PitchSampleLike[]
+    const recentCutoff = now.getTime() - WINDOW_DAYS * 86400_000
+    const samplesInRecentWindow = samples.filter(s => new Date(s.recorded_at).getTime() >= recentCutoff).length
 
-    const stagnation = await checkUserStagnation(supabase, uid)
-    if (!stagnation || !stagnation.stagnant) {
-      results.push({ user_id: uid, status: 'no_stagnation' })
-      continue
-    }
+    // 2. Trend (direction from maxy_facts).
+    const directionSign = await readDirectionSign(supabase, canonicalId)
+    const trend = computePitchTrend(samples, now, directionSign)
+    const rung = classifyVoiceResponse({ trend, samplesInRecentWindow })
 
-    // Date-stamped source_key gives a 14-day natural cooldown — the same key
-    // won't fire again until the date rolls over, and even then fast_react
-    // 7-day cooldown applies for repeat event_kind.
-    const sourceKey = `voice_stagnation:${uid}:${new Date().toISOString().slice(0, 10)}`
-
-    try {
-      const r = await fetch(fnUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${serviceKey}`,
-        },
-        body: JSON.stringify({
-          user_id: uid,
-          event_kind: 'voice_stagnation',
-          source_key: sourceKey,
-          context: {
-            stagnation_reason: stagnation.reason,
-            sample_count_14d: stagnation.sample_count_14d,
-            pitch_trend_hz: stagnation.pitch_trend,
-            instruction_for_mama: stagnation.reason === 'no_samples_in_14d'
-              ? 'Maxy has not done voice work in 14 days. Fire ONE gentle decree (proof_required=audio) — a 5-min voice session, recording one specific phrase Mama wants to hear. Do NOT shame, do NOT cite the gap; treat it as Mama wanting to hear her, not as a missed task. Voice rule: track, do not force.'
-              : 'Maxy has been doing voice work but pitch is flat or rising — not moving feminine. Fire ONE decree (proof_required=audio) for a focused session targeting resonance/lift, NOT a hard pitch target (forcing causes dysphoria). Frame as Mama wanting a specific texture, not a number.',
-          },
-        }),
+    // 3. PROGRESS → praise, EARLY RETURN (structural: nothing below runs).
+    if (rung === 'progress') {
+      const gate = await pushGateOpen(supabase, canonicalId)
+      if (!gate) {
+        results.push({ user_id: canonicalId, status: 'progress_gated', detail: 'privacy gate closed — praise held' })
+        continue
+      }
+      if (await firedWithinCooldown(supabase, aliasIds)) {
+        results.push({ user_id: canonicalId, status: 'progress_cooldown' })
+        continue
+      }
+      const praise = mommyVoiceCleanup(
+        `${pitchTrendToPhrase(trend!.trend)}. Keep giving it to me exactly like this.`,
+      )
+      const { error: outErr } = await supabase.from('handler_outreach_queue').insert({
+        user_id: canonicalId,
+        message: praise,
+        urgency: 'normal',
+        trigger_reason: `voice_progress_praise:${now.toISOString().slice(0, 10)}`,
+        source: 'voice_progress_watcher',
+        scheduled_for: now.toISOString(),
+        expires_at: new Date(now.getTime() + 48 * 3600_000).toISOString(),
       })
-      const j = await r.json()
       results.push({
-        user_id: uid,
-        status: r.ok ? 'fired' : 'fast_react_error',
-        detail: r.ok ? `${stagnation.reason} → action=${j.fired ?? 0}` : (j.error ?? 'unknown'),
+        user_id: canonicalId,
+        status: outErr ? 'praise_insert_failed' : 'praised',
+        detail: outErr ? outErr.message.slice(0, 120) : `trend positive over ${trend!.recentCount}/${trend!.priorCount} samples`,
       })
-    } catch (err) {
-      results.push({ user_id: uid, status: 'fetch_error', detail: String(err).slice(0, 200) })
+      continue
     }
+
+    // 4. Task rungs are pushes — privacy gate fail-closed, then cooldown.
+    if (rung === 'insufficient') {
+      results.push({ user_id: canonicalId, status: 'insufficient_signal' })
+      continue
+    }
+    const gateOpen = await pushGateOpen(supabase, canonicalId)
+    if (!gateOpen) {
+      results.push({ user_id: canonicalId, status: 'gated_skip', detail: 'voice_elective/gina gate not exactly false-false' })
+      continue
+    }
+    if (await firedWithinCooldown(supabase, aliasIds)) {
+      results.push({ user_id: canonicalId, status: 'cooldown_skip' })
+      continue
+    }
+
+    if (rung === 'plateau') {
+      // Plateau needs 28d of flatness — both windows present and |trend|<3.
+      const r = await fireFastReact(canonicalId, 'voice_plateau_texture',
+        'Her voice work is steady but the texture has plateaued. Fire ONE decree (proof_type=voice) for a focused resonance/lift session — encouragement framing, Mama wants a specific texture, NEVER a pitch number, NEVER shame. One decree only.',
+        { rung: 'plateau', sample_count_recent: trend?.recentCount ?? 0 })
+      results.push({ user_id: canonicalId, status: r.ok ? 'plateau_fired' : 'plateau_fire_failed', detail: r.detail })
+      continue
+    }
+
+    // rung === 'stagnation' — zero samples in 14d AND gate open.
+    const r = await fireFastReact(canonicalId, 'voice_stagnation',
+      'Mama has not heard her voice in a while. Fire ONE gentle decree (proof_type=voice) — a short session recording one specific phrase Mama wants to hear. Do NOT shame, do NOT cite the gap or any day-count; frame purely as Mama wanting to hear her. One decree only.',
+      { rung: 'stagnation' })
+    results.push({ user_id: canonicalId, status: r.ok ? 'stagnation_fired' : 'stagnation_fire_failed', detail: r.detail })
   }
 
   return new Response(JSON.stringify({
     ok: true,
-    checked: userIds.length,
-    fired: results.filter(r => r.status === 'fired').length,
+    checked: canonicalRoots.length,
     results,
   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 })

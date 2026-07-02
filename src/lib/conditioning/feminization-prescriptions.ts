@@ -16,6 +16,8 @@ import { getSkillDomains, getTasksForLevel } from '../skills/skill-tree-engine';
 import type { SkillDomain } from '../skills/skill-tree-engine';
 import type { FeminizationDomain } from '../../types/task-bank';
 import { detectCaricatureDrift, isIdentityDomain } from '../grounded-femininity';
+import { normalizeFemDomain, EVIDENCE_KIND_BY_DOMAIN } from './fem-domains';
+import { normalizeWardrobeCategory } from '../wardrobe/categories';
 
 // ============================================
 // TYPES
@@ -27,6 +29,8 @@ export interface PrescribedTask {
   instruction: string;
   intensity: number;
   duration: number | null;
+  /** task_bank.requires carried through so FocusMode can gate on ownership. */
+  requires?: Record<string, unknown> | null;
 }
 
 export interface DailyFeminizationPrescription {
@@ -86,6 +90,8 @@ export interface DomainSkipRate {
   domain: string;
   total: number;
   skipped: number;
+  /** expired-after-surfacing count — half-weight skip signal (mig 635). */
+  expired: number;
   completed: number;
   skipRate: number; // 0..1
 }
@@ -98,22 +104,28 @@ export async function fetchDomainSkipRates(
 
   const { data, error } = await supabase
     .from('feminization_prescriptions')
-    .select('domain, status')
+    .select('domain, status, expired_silently')
     .eq('user_id', userId)
     .gte('prescribed_date', since);
 
   if (error || !data) return {};
 
   const rates: Record<string, DomainSkipRate> = {};
-  for (const row of data) {
-    const d = row.domain as string;
-    if (!rates[d]) rates[d] = { domain: d, total: 0, skipped: 0, completed: 0, skipRate: 0 };
+  for (const row of data as Array<{ domain: string; status: string; expired_silently?: boolean | null }>) {
+    // Never-surfaced expirations count for NOTHING — visible-before-
+    // penalized, mechanically. A row Maxy never saw is not avoidance.
+    if (row.status === 'expired' && row.expired_silently) continue;
+    const d = row.domain;
+    if (!rates[d]) rates[d] = { domain: d, total: 0, skipped: 0, expired: 0, completed: 0, skipRate: 0 };
     rates[d].total += 1;
     if (row.status === 'skipped') rates[d].skipped += 1;
+    else if (row.status === 'expired') rates[d].expired += 1;
     else if (row.status === 'completed') rates[d].completed += 1;
   }
   for (const d of Object.keys(rates)) {
-    rates[d].skipRate = rates[d].total > 0 ? rates[d].skipped / rates[d].total : 0;
+    // Surfaced-then-expired is a half-weight skip: she saw it and let it die.
+    const weighted = rates[d].skipped + rates[d].expired * 0.5;
+    rates[d].skipRate = rates[d].total > 0 ? weighted / rates[d].total : 0;
   }
   return rates;
 }
@@ -203,7 +215,19 @@ export async function generateDailyPrescription(
   else if (overallSkipRate >= 0.4) taskCount = Math.max(3, taskCount - 1);
 
   // Query candidate tasks — skill-tree-gated when available, fallback to flat pool
-  const candidates = await fetchSkillTreeGatedTasks(userId, availableDomains, maxIntensity);
+  let candidates = await fetchSkillTreeGatedTasks(userId, availableDomains, maxIntensity);
+
+  // ── PRESCRIBE ONLY WHAT SHE OWNS ─────────────────────────────────
+  // Tasks whose requires.item_category names an unowned wardrobe category
+  // are dropped from the pool — the acquisition bridge (mig 638) turns
+  // gaps into wishlist + acquisition prescriptions; the engine never
+  // pretends the resource exists.
+  const ownedCategories = await fetchOwnedWardrobeCategories(userId);
+  candidates = candidates.filter(task => {
+    const req = (task.requires ?? {}) as { item_category?: string };
+    if (!req.item_category) return true;
+    return ownedCategories.has(normalizeWardrobeCategory(req.item_category));
+  });
 
   // Score and select tasks
   const scored = candidates.map(task => {
@@ -272,13 +296,15 @@ export async function generateDailyPrescription(
     domainCounts[task.domain] = domainCount + 1;
   }
 
-  // Map to prescribed tasks
+  // Map to prescribed tasks (domains normalized to the canonical set so
+  // every row keys into skipRatePenalty next cycle)
   const tasks: PrescribedTask[] = selected.map(t => ({
     taskId: t.id,
-    domain: t.domain,
+    domain: normalizeFemDomain(t.domain),
     instruction: t.instruction,
     intensity: Math.round(t.adjustedIntensity),
     duration: t.duration_minutes,
+    requires: t.requires ?? null,
   }));
 
   // Persist today's prescription with engagement metadata so we can audit
@@ -419,6 +445,7 @@ async function fetchSkillTreeGatedTasks(
           intensity: t.intensity,
           duration_minutes: t.duration_minutes,
           is_core: false, // level-gated tasks don't use is_core flag
+          requires: (t as { requires?: Record<string, unknown> | null }).requires ?? null,
         }));
     });
 
@@ -455,6 +482,7 @@ interface CandidateTask {
   intensity: number;
   duration_minutes: number | null;
   is_core: boolean;
+  requires?: Record<string, unknown> | null;
 }
 
 async function fetchCandidateTasks(
@@ -464,7 +492,7 @@ async function fetchCandidateTasks(
 ): Promise<CandidateTask[]> {
   const { data, error } = await supabase
     .from('task_bank')
-    .select('id, domain, instruction, intensity, duration_minutes, is_core')
+    .select('id, domain, instruction, intensity, duration_minutes, is_core, requires')
     .eq('active', true)
     .in('domain', domains)
     .lte('intensity', maxIntensity)
@@ -477,6 +505,30 @@ async function fetchCandidateTasks(
   }
 
   return (data ?? []) as CandidateTask[];
+}
+
+/** Owned wardrobe categories, normalized to the canonical vocabulary. */
+async function fetchOwnedWardrobeCategories(userId: string): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from('wardrobe_inventory')
+    .select('category')
+    .eq('user_id', userId);
+  if (error) {
+    console.error('[fem-prescription] wardrobe fetch error:', error.message);
+    return new Set();
+  }
+  return new Set((data ?? []).map(r => normalizeWardrobeCategory((r as { category: string }).category)));
+}
+
+/** prescribed_date's 23:59 in ET — the delivery deadline (mig 635). */
+export function prescriptionDeadlineIso(dateStr: string): string {
+  // ET is UTC-4 (EDT) or UTC-5 (EST); resolve the offset for that date.
+  const noonUtc = new Date(`${dateStr}T12:00:00Z`);
+  const etHour = Number(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', hour: 'numeric', hour12: false,
+  }).format(noonUtc));
+  const offsetHours = 12 - etHour; // 4 in EDT, 5 in EST
+  return new Date(new Date(`${dateStr}T23:59:00Z`).getTime() + offsetHours * 3600_000).toISOString();
 }
 
 async function persistPrescription(
@@ -504,33 +556,43 @@ async function persistPrescription(
       recovery_gate: recoveryGate,
       phase,
       status: 'pending',
+      evidence_kind: EVIDENCE_KIND_BY_DOMAIN[normalizeFemDomain(t.domain)] ?? 'none',
+      deadline: prescriptionDeadlineIso(date),
+      requires: t.requires ?? null,
       // Engagement metadata — what the engine knew about her recent
       // engagement when it picked these tasks. Lets a future audit show
       // "voice had skip_rate 0.9, was on cooldown" rather than guessing.
       engagement_meta: engagement ?? null,
     }));
 
-    // Delete any existing prescriptions for today, then insert fresh
-    await supabase
+    // Replace ONLY still-pending rows for today. Completed/skipped rows are
+    // HISTORY — the old delete-all wiped a completed prescription when the
+    // engine re-ran the same day, erasing the very signal the adaptive loop
+    // feeds on (regression: run engine twice, completed row survives).
+    const { error: delErr } = await supabase
       .from('feminization_prescriptions')
       .delete()
       .eq('user_id', userId)
-      .eq('prescribed_date', date);
+      .eq('prescribed_date', date)
+      .eq('status', 'pending');
+    if (delErr) {
+      console.error('[fem-prescription] pending-row replace delete failed:', delErr.message);
+    }
 
     const { error } = await supabase
       .from('feminization_prescriptions')
       .insert(rows);
 
     if (error) {
-      // engagement_meta column may not exist yet — fall back to insert
-      // without it so the prescription still ships. Migration adds the
-      // column; if it hasn't been applied we just lose the audit trail
-      // for one cycle.
-      if (/engagement_meta/.test(error.message)) {
+      // Newer columns (engagement_meta from 259-era, evidence_kind/deadline/
+      // requires from mig 635) may not exist yet — fall back to insert
+      // without them so the prescription still ships. If the migration
+      // hasn't been applied we just lose the audit/delivery trail one cycle.
+      if (/engagement_meta|evidence_kind|deadline|requires/.test(error.message)) {
         const { error: e2 } = await supabase
           .from('feminization_prescriptions')
           .insert(rows.map(r => {
-            const { engagement_meta: _, ...rest } = r as Record<string, unknown>;
+            const { engagement_meta: _em, evidence_kind: _ek, deadline: _dl, requires: _rq, ...rest } = r as Record<string, unknown>;
             return rest;
           }));
         if (e2) console.error('[fem-prescription] persistPrescription fallback error:', e2.message);

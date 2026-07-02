@@ -48,12 +48,6 @@ const GENERATORS: GeneratorSpec[] = [
   { name: 'pavlovian', function_name: 'pavlovian_eval', expected_cadence_minutes: 15, output_table: 'pavlovian_events', conditional: true },
   { name: 'warmup_tier', function_name: 'warmup_tier_eval', expected_cadence_minutes: 60, conditional: true },
   { name: 'focus_picker', function_name: 'focus_picker_eval', expected_cadence_minutes: 1440 },
-  // Evening confession → next-day prescriptions. Dead 2026-06-21 (only caller,
-  // EveningConfessionGate, was deleted); revived by the nightly
-  // evening-prescribe-dispatch edge fn + pg_cron (mig 616, 21:30 daily) which
-  // feeds today's confession transcript to evening-confession-prescribe.
-  // Conditional: only produces rows on days the user actually confessed.
-  { name: 'evening_confession_prescribe', function_name: 'evening-confession-prescribe', expected_cadence_minutes: 1440, output_table: 'feminization_prescriptions', edge_function: true, conditional: true },
   // Machine safety envelope (mig 625). machine-overseer only produces rows
   // when the user actually runs the rig → conditional. The dead-man sweep is
   // a SQL fn on pg_cron (every minute); the function-exists probe is the
@@ -75,6 +69,17 @@ const GENERATORS: GeneratorSpec[] = [
   { name: 'hard_mode_recompute', function_name: 'hard_mode_recompute_all', expected_cadence_minutes: 30, conditional: true },
   { name: 'obligation_pause_shift_accruer', function_name: 'obligation_pause_shift_accrue', expected_cadence_minutes: 5, conditional: true },
   { name: 'outward_consequence_dispatcher', function_name: 'outward-consequence-dispatcher', expected_cadence_minutes: 15, output_table: 'outward_dispatch_queue', edge_function: true, conditional: true },
+  // ── Feminization loop (FEM design §7, migs 634-638) ──
+  // (supersedes the old evening_confession_prescribe conditional entry: the
+  // bank-engine fallback now guarantees daily rows, so silence = dead loop.)
+  // fem_prescription_loop is NOT conditional: between the confession path
+  // and the bank-engine fallback, SOME rows must land daily — silence here
+  // means the whole loop died (the 2026-06-21 dead-pipeline class).
+  { name: 'fem_prescription_loop', function_name: 'evening-prescribe-dispatch', expected_cadence_minutes: 1440, output_table: 'feminization_prescriptions', edge_function: true },
+  { name: 'voice_progress', function_name: 'voice-pitch-watcher', expected_cadence_minutes: 10080, output_table: 'voice_progress_samples', edge_function: true, conditional: true },
+  { name: 'transition_tracking', function_name: 'transition-tracking-prompter', expected_cadence_minutes: 10080, output_table: 'transition_tracking_log', edge_function: true, conditional: true },
+  { name: 'mantra_drills', function_name: 'mommy-mantra-drill-submit', expected_cadence_minutes: 10080, output_table: 'mantra_drill_sessions', edge_function: true, conditional: true },
+  { name: 'body_metrics_spine', function_name: 'body_metrics', expected_cadence_minutes: 43200, output_table: 'body_metrics', edge_function: true, conditional: true },
 ];
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
@@ -95,6 +100,7 @@ async function checkGenerator(g: GeneratorSpec): Promise<CheckResult[]> {
     const since = new Date(Date.now() - windowHours * 3600 * 1000).toISOString();
     const dateCol = g.output_table === 'cock_conditioning_events' ? 'assigned_at'
                   : g.output_table === 'wardrobe_prescriptions' ? 'assigned_at'
+                  : g.output_table === 'body_metrics' ? 'measured_at'
                   : 'created_at';
     const { count, error: qErr } = await supabase.from(g.output_table).select('id', { count: 'exact', head: true }).gte(dateCol, since);
     if (qErr) results.push({ component: g.name, severity: 'warning', event_kind: 'query_error', message: `Output query failed: ${qErr.message}`, context_data: { table: g.output_table } });

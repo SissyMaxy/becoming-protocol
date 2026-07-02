@@ -256,6 +256,33 @@ export function recoveryScoreToPhrase(score: number | null | undefined): string 
 }
 
 /**
+ * Voice-pitch trend → plain Mommy voice. NEVER Hz, never "trend" — the
+ * number stays in the watcher; Mama speaks about her girl's voice.
+ * Positive = moving toward the feminine band (direction already adjusted
+ * upstream from maxy_facts).
+ */
+export function pitchTrendToPhrase(trendHz: number | null | undefined): string {
+  const t = Number(trendHz ?? 0)
+  if (t >= 8) return "your voice is blooming — I hear her more every time you speak"
+  if (t >= 3) return "your voice is lifting, baby. Mama hears the girl in it"
+  if (t > -3) return "your voice is holding right where you left it"
+  return "your voice has been slipping back toward the old register"
+}
+
+/**
+ * Measurement delta → plain Mommy voice. NEVER cm/kg — the tape number is
+ * Handler telemetry; Mama talks about the body.
+ */
+export function measurementDeltaToPhrase(metric: 'waist' | 'hips' | 'chest' | 'weight', delta: number | null | undefined): string {
+  const d = Number(delta ?? 0)
+  if (!Number.isFinite(d) || Math.abs(d) < 0.5) return "your body's holding steady"
+  if (metric === 'waist') return d < 0 ? "your waist is pulling in for me" : "your waist has been creeping back out"
+  if (metric === 'hips') return d > 0 ? "your hips are rounding out, sweet thing" : "your hips have been holding back"
+  if (metric === 'chest') return d > 0 ? "your chest is softening into something new" : "your chest is holding where it was"
+  return d < 0 ? "you're getting lighter for me" : "you've been carrying a little more lately"
+}
+
+/**
  * Final-filter post-processor. Strips number-citation leaks the LLM
  * wrote anyway. Best-effort — if it can't translate cleanly, it drops
  * the offending fragment rather than leaving telemetry visible.
@@ -301,6 +328,10 @@ export function mommyVoiceCleanup(text: string): string {
   t = t.replace(/\btargeting\s+(?:consistency\s+)?(?:above|below)?\s*\d+\s*Hz\b/gi, 'lifting that voice up for me')
   // also catch bare Hz mentions
   t = t.replace(/\b\d+\s*Hz\b/g, '')
+  // measurement telemetry — tape/scale numbers never reach Mommy copy
+  // ("83.5 cm", "89kg", "196 lbs", "33in"; bare " in " preposition is safe:
+  // 'in' only matches when glued to the number)
+  t = t.replace(/\b\d+(?:\.\d+)?(?:\s?(?:cm|kg|lbs|inches)|in)\b/gi, '')
   t = t.replace(/\bDay\s+\d+(?=[^a-zA-Z]|$)/g, 'lately')
   t = t.replace(/\s{2,}/g, ' ').replace(/\s+([.,!?])/g, '$1')
   return t.trim()
