@@ -29,6 +29,7 @@ import { useAuth } from '../../context/AuthContext';
 import { isMommyPersona } from '../../lib/persona/dommy-mommy';
 import { useSurfaceRenderTracking, useAcknowledgeObligation } from '../../lib/surface-render-hooks';
 import { ackSourceForTask } from '../../../supabase/functions/_shared/enforcement-core';
+import { gradeDoseEvidence } from '../../lib/hrt/dose-evidence';
 import {
   markOfferAccepted,
   markOfferCompleted,
@@ -198,6 +199,15 @@ function fmtCountdown(ms: number): string {
 
 interface FocusModeProps {
   onSwitchToCalendar: () => void;
+}
+
+/** sha256 hex of a file's bytes, for dose-photo dedup. Browser WebCrypto. */
+async function sha256HexOfFile(file: File): Promise<string> {
+  const buf = await file.arrayBuffer();
+  const digest = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(digest))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
@@ -900,7 +910,10 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
     }
   };
 
-  const handleDoseLog = async (action: 'taken_today' | 'taken_earlier' | 'skipped') => {
+  const handleDoseLog = async (
+    action: 'taken_today' | 'taken_earlier' | 'skipped',
+    file?: File | null,
+  ) => {
     if (!task?.rowId || !user?.id) return;
     setSubmitting(true);
     try {
@@ -916,19 +929,72 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
         takenAt = null;
       }
       const meta = (task.meta || {}) as { name?: string; isWeekly?: boolean };
-      await supabase.from('hrt_dose_log').insert({
+
+      // Photo evidence path. A dose without a photo is still logged (self-
+      // report) — we never force-block a genuine dose — it just isn't
+      // verified. The photo is captured to the private evidence bucket, then
+      // graded (present + non-duplicate) so it counts as full adherence.
+      // The DB trigger (mig 645) re-enforces this server-side.
+      let photoPath: string | null = null;
+      let sha256: string | null = null;
+      let evidenceVerified = false;
+      let evidenceGrade: 'verified' | 'unverified' | 'duplicate' = 'unverified';
+      if (file && action !== 'skipped') {
+        try {
+          sha256 = await sha256HexOfFile(file);
+          const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5) || 'jpg';
+          const path = `${user.id}/hrt-dose/${task.rowId}-${Date.now()}.${ext}`;
+          const { error: upErr } = await supabase.storage
+            .from('verification-photos')
+            .upload(path, file, { contentType: file.type, upsert: false });
+          if (upErr) throw upErr;
+          photoPath = path;
+
+          // Pull recent dose hashes to reject a reused picture (last 30d).
+          const { data: recent, error: recentErr } = await supabase
+            .from('hrt_dose_log')
+            .select('evidence_sha256')
+            .eq('user_id', user.id)
+            .not('evidence_sha256', 'is', null)
+            .gte('created_at', new Date(Date.now() - 30 * 86400_000).toISOString());
+          if (recentErr) throw recentErr;
+          const recentHashes = (recent ?? [])
+            .map(r => (r as { evidence_sha256: string | null }).evidence_sha256)
+            .filter((h): h is string => !!h);
+
+          const grade = gradeDoseEvidence({ photoPath, sha256, recentHashes });
+          evidenceVerified = grade.verified;
+          evidenceGrade = grade.grade;
+        } catch (photoErr) {
+          // Photo capture failed — fall back to an unverified self-report
+          // rather than losing the dose entirely.
+          console.warn('[dose] evidence capture failed:', (photoErr as Error).message);
+          photoPath = null;
+          sha256 = null;
+          evidenceVerified = false;
+          evidenceGrade = 'unverified';
+        }
+      }
+
+      const { error: doseErr } = await supabase.from('hrt_dose_log').insert({
         user_id: user.id,
         regimen_id: task.rowId,
         dose_taken_at: takenAt,
         skipped: action === 'skipped',
+        photo_url: photoPath,
+        evidence_sha256: sha256,
+        evidence_verified: evidenceVerified,
+        evidence_grade: action === 'skipped' ? null : evidenceGrade,
         notes: `Logged via Focus. ${meta.name || 'dose'}${action === 'taken_earlier' ? ' (backdated)' : ''}`,
       });
+      if (doseErr) throw doseErr;
       // Mirror to dose_log (some readers use it)
-      await supabase.from('dose_log').insert({
+      const { error: mirrorErr } = await supabase.from('dose_log').insert({
         user_id: user.id,
         regimen_id: task.rowId,
         taken_at: takenAt,
       });
+      if (mirrorErr) console.warn('[dose] dose_log mirror failed:', mirrorErr.message);
       window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'dose', id: task.rowId } }));
       await advance();
     } finally {
@@ -1762,18 +1828,38 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
 
           {task.surface === 'dose' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <button
-                onClick={() => handleDoseLog('taken_today')}
-                disabled={submitting}
+              <label
                 style={{
                   padding: '12px', background: '#7c3aed', color: '#fff',
                   border: 'none', borderRadius: 7,
                   fontSize: 13, fontWeight: 700, fontFamily: 'inherit',
-                  cursor: submitting ? 'wait' : 'pointer',
+                  cursor: submitting ? 'wait' : 'pointer', textAlign: 'center',
                   textTransform: 'uppercase', letterSpacing: '0.03em',
+                  opacity: submitting ? 0.6 : 1,
                 }}
               >
-                Mark taken (today)
+                Snap it for Mommy — taken
+                <input
+                  type="file" accept="image/*" capture="environment"
+                  disabled={submitting}
+                  onChange={e => { const f = e.target.files?.[0] ?? null; if (f) handleDoseLog('taken_today', f); }}
+                  style={{ display: 'none' }}
+                />
+              </label>
+              <div style={{ fontSize: 10.5, color: '#8a8690', marginTop: -2, marginBottom: 2 }}>
+                a quick shot of the pill · patch · vial — that's all Mommy needs
+              </div>
+              <button
+                onClick={() => handleDoseLog('taken_today')}
+                disabled={submitting}
+                style={{
+                  padding: '10px', background: 'transparent', color: '#c4b5fd',
+                  border: '1px solid #2d1a4d', borderRadius: 6,
+                  fontSize: 12, fontFamily: 'inherit',
+                  cursor: submitting ? 'wait' : 'pointer',
+                }}
+              >
+                Took it — no photo right now
               </button>
               <button
                 onClick={() => handleDoseLog('taken_earlier')}

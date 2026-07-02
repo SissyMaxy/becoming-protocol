@@ -18,6 +18,7 @@
 
 import { supabase } from '../supabase';
 import { hrtStepLabel, nextHrtStep, HRT_STEP_NEXT_ACTION } from './hrt-steps';
+import { computeAdherence, describeAdherence, type DoseRow } from '../hrt/dose-evidence';
 
 export async function getHRTContext(userId: string): Promise<string> {
   try {
@@ -29,7 +30,7 @@ export async function getHRTContext(userId: string): Promise<string> {
         .select('hrt_step_missed_days')
         .eq('user_id', userId).maybeSingle(),
       supabase.from('hrt_dose_log')
-        .select('dose_taken_at, skipped')
+        .select('dose_taken_at, skipped, evidence_verified')
         .eq('user_id', userId)
         .gte('created_at', new Date(Date.now() - 7 * 86400_000).toISOString()),
       supabase.from('body_metrics_trend')
@@ -68,12 +69,11 @@ export async function getHRTContext(userId: string): Promise<string> {
     if (missed > 0) lines.push(`Daily-gate miss streak: ${missed}`);
 
     // 7d dose adherence — ONLY when doses exist. No dose rows → no claim.
-    const doses = (doseRes.data ?? []) as Array<{ dose_taken_at: string | null; skipped: boolean | null }>;
-    if (doses.length > 0) {
-      const taken = doses.filter(d => d.dose_taken_at != null && !d.skipped).length;
-      const skipped = doses.filter(d => d.skipped).length;
-      lines.push(`Doses last 7d: ${taken} taken, ${skipped} skipped`);
-    }
+    // Verified (real photo evidence) is counted separately from self-report;
+    // the Handler may only call adherence "strong" from verified doses.
+    const doses = (doseRes.data ?? []) as DoseRow[];
+    const adherenceLine = describeAdherence(computeAdherence(doses));
+    if (adherenceLine) lines.push(adherenceLine);
 
     // Body evidence — real spine numbers (Handler may cite telemetry;
     // Mommy-facing copy translates via measurementDeltaToPhrase upstream).
