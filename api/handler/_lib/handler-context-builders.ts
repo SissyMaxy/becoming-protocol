@@ -656,7 +656,7 @@ export async function buildGinaProfileCtx(userId: string): Promise<string> {
 
     const lines: string[] = ['## GINA PROFILE — what you know about how to talk to her'];
     if (!p.intake_complete) {
-      lines.push('INTAKE INCOMPLETE — profile coverage is thin. This profile is read-only context. Nothing Gina-facing is ever drafted or disclosed (policy 2026-07-01). Anything you invent about Gina is guessing until this gap closes.');
+      lines.push('PROFILE INCOMPLETE — coverage is thin. This profile is read-only context. Nothing Gina-facing is ever drafted or disclosed (policy 2026-07-01). Anything you invent about Gina is guessing until this gap closes.');
       return lines.join('\n');
     }
     const arr = (k: string) => ((p[k] as string[] | null) || []).filter(Boolean);

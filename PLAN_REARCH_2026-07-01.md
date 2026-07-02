@@ -45,6 +45,12 @@ Also: **commit untracked `supabase/migrations/586_wishlist_revenue_engine.sql`**
 7. **P6 Identity funnel + revenue** (migs 631–633 + ctx builder dual-id + revenue generator v2 + conditioning gate adoption).
 8. **P7 Arousal scale + cutover** (migs 639–640) — atomic with reader updates; ENFORCE flip after clean shadow week; health-check + blind-spot registrations verified.
 
+## Progress log
+
+- 2026-07-01: P0 merged (d141c11, mig 624), P1 merged (mig 625), P2 merged (efa7a89, mig 626). P4/P5 in flight.
+- **P7/640 must fix:** mig 626's dispatch-drain cron uses `current_setting('app.settings...')` GUCs which are NULL in this project (mig-619 finding) — rewire through pgcron-setup like blind-spot-monitor. Same audit finding applies to mig 616's dispatch.
+- **Deferred from P2:** stage-1 "SMS to her own phone" needs a user phone-number source that doesn't exist yet; ladder currently push-only until stage 3. Add `user_state`-adjacent phone column + Twilio self-SMS when a number lands.
+
 ## Cross-domain contracts (interfaces the phases share)
 
 - **`conditioning_gate(uid, system)`** — pure-read SQL, fail-closed TS shim, callers: goon-trajectory, paid-monetization, machine-overseer start, temptation-engine, all mommy-* generators as touched. Enforcement spine owns the state it reads (safeword_latches, pause, aftercare). Exempt: meet-safety-watcher, machine-deadman-sweep, safeword-heal, surface-guarantor.
