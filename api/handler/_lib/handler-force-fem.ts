@@ -15,7 +15,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import {
-  minTierForStep, quarantineAllowsStep, stepIndex,
+  minTierForStep, quarantineAllowsStep,
   tierFromEvidence, missingEvidenceForNextTier,
   type IdentityElement, IDENTITY_ELEMENTS,
 } from './funnel-identity.js';
