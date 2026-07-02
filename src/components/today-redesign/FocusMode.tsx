@@ -27,7 +27,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { isMommyPersona } from '../../lib/persona/dommy-mommy';
-import { useSurfaceRenderTracking } from '../../lib/surface-render-hooks';
+import { useSurfaceRenderTracking, useAcknowledgeObligation } from '../../lib/surface-render-hooks';
+import { ackSourceForTask } from '../../../supabase/functions/_shared/enforcement-core';
 import {
   markOfferAccepted,
   markOfferCompleted,
@@ -775,6 +776,18 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
     [task?.rowId, task?.kind],
   );
   useSurfaceRenderTracking('handler_outreach_queue', shownHarvestIds);
+
+  // Seen-tap acknowledgment: FocusMode is the SINGLE-task surface, so a
+  // consequence-bearing task on screen here is genuinely, deliberately seen —
+  // not merely fetched into a list. Stamp surfaced_via='seen_tap' on its
+  // obligation so that if she now lets it lapse, the miss scores as deliberate
+  // (3 pts, mig 628) instead of a plain internal miss (2). ackSourceForTask
+  // returns null for every non-obligation task kind, so nothing else is stamped.
+  const ackSource = useMemo(
+    () => ackSourceForTask(task?.kind ?? '', task?.rowId ?? null),
+    [task?.kind, task?.rowId],
+  );
+  useAcknowledgeObligation(ackSource);
 
   // Initial pick (with loader)
   useEffect(() => { pickNext(false); }, [pickNext]);

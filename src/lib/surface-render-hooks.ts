@@ -91,3 +91,56 @@ export function useSurfaceRenderTracking(table: SurfacedTable, ids: string[]): v
 export function markSurfaced(table: SurfacedTable, ids: string[]): Promise<void> {
   return stampSurfaced(table, ids);
 }
+
+// ─── Seen-tap acknowledgment ──────────────────────────────────────────────
+// A step BEYOND surfaced_at: when a single-task surface (FocusMode) genuinely
+// displays an obligation-backed task, it stamps surfaced_via='seen_tap' on the
+// obligation, so a subsequent miss scores as DELIBERATE (3 pts) instead of a
+// plain internal miss (2 pts) — mig 628 / mig 644. surfaced_at means "seen";
+// seen_tap means "seen AND on the single focus surface she can't miss".
+//
+// RLS on obligations is SELECT-only for authenticated (mig 627), so the stamp
+// goes through the SECURITY DEFINER acknowledge_obligation() RPC, scoped to the
+// caller's own rows. Idempotent + session-deduped like the surfaced_at rail.
+
+const ackedThisSession = new Set<string>();
+
+async function ackObligation(sourceTable: string, sourceId: string): Promise<void> {
+  const key = `${sourceTable}:${sourceId}`;
+  if (ackedThisSession.has(key)) return;
+  ackedThisSession.add(key);
+
+  const { error } = await supabase.rpc('acknowledge_obligation', {
+    p_source_table: sourceTable,
+    p_source_id: sourceId,
+  });
+
+  if (error) {
+    // Soft-fail: a missed ack just means the obligation scores the normal 2-pt
+    // miss instead of 3 — never a crash. Roll back the session guard so a later
+    // render can retry, and log for diagnosis.
+    ackedThisSession.delete(key);
+    console.warn(`[surface-render-hooks] acknowledge_obligation failed for ${key}:`, error.message);
+  }
+}
+
+/**
+ * Call from a SINGLE-task surface (FocusMode) with the obligation source of the
+ * row genuinely on screen — NOT from list/card-stack surfaces, where a row's
+ * presence isn't a deliberate look. Pass null when the current task is not an
+ * acknowledgeable obligation (see ackSourceForTask). Fires once per obligation
+ * per browser session; the RPC is itself idempotent + fair (acking an
+ * already-overdue row voids rather than penalizes — mig 644).
+ */
+export function useAcknowledgeObligation(source: { sourceTable: string; sourceId: string } | null): void {
+  const key = source ? `${source.sourceTable}:${source.sourceId}` : '';
+  const ranForKeyRef = useRef<string>('');
+
+  useEffect(() => {
+    if (!key || ranForKeyRef.current === key || !source) return;
+    ranForKeyRef.current = key;
+    void ackObligation(source.sourceTable, source.sourceId);
+    // Depend on the derived key string, not the source object reference.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+}

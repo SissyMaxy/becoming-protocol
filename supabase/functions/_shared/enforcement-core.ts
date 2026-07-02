@@ -105,6 +105,87 @@ export function isMandatedText(text: string, mandatedNormalized: string[]): bool
   return false
 }
 
+// ─── Seen-tap acknowledgment (design §2 — the +3 acknowledged-miss path) ──
+// A genuinely-displayed obligation is stamped surfaced_via='seen_tap'. The
+// miss-processor (mig 628) then scores its miss at 3 points ('acknowledged' =
+// she saw it and let it lapse = deliberate) instead of 2 ('internal').
+// SQL mirror: acknowledge_obligation() (mig 644). Kept here so the browser
+// surface (surface-render-hooks) and vitest share one source of truth.
+
+export const SEEN_TAP_VIA = 'seen_tap' as const;
+
+// The obligation statuses in which a seen-tap ack is allowed to stamp: live and
+// strictly pre-consequence. missed / consequence_* / terminal are never upgraded.
+export const ACK_STAMPABLE_STATUSES = ['filed', 'surfaced', 'due'] as const;
+
+export interface ObligationAckState {
+  status: string;
+  surfaced_via: string | null;
+  surfaced_at: string | null;
+}
+
+export interface AckStampDecision {
+  shouldUpdate: boolean;
+  nextStatus: string;
+  nextSurfacedVia: string | null;
+  nextSurfacedAt: string | null;
+}
+
+// Pure mirror of acknowledge_obligation(): given the obligation's current state
+// and the ack time, resolve what the stamp becomes. Idempotent — a row already
+// seen-tap-surfaced returns shouldUpdate=false.
+export function computeAckStamp(o: ObligationAckState, nowIso: string): AckStampDecision {
+  const noop: AckStampDecision = {
+    shouldUpdate: false,
+    nextStatus: o.status,
+    nextSurfacedVia: o.surfaced_via,
+    nextSurfacedAt: o.surfaced_at,
+  };
+  // Only live, pre-consequence obligations can be acknowledged.
+  if (!(ACK_STAMPABLE_STATUSES as readonly string[]).includes(o.status)) return noop;
+  // Already acknowledged (and past filed) → idempotent no-op.
+  if (o.surfaced_via === SEEN_TAP_VIA && o.status !== 'filed') return noop;
+  return {
+    shouldUpdate: true,
+    // A 'filed' row is surfaced BY the ack; anything else keeps its status.
+    nextStatus: o.status === 'filed' ? 'surfaced' : o.status,
+    nextSurfacedVia: SEEN_TAP_VIA,
+    // COALESCE(surfaced_at, now()) — never overwrite an earlier honest surface.
+    nextSurfacedAt: o.surfaced_at ?? nowIso,
+  };
+}
+
+// FocusMode task kinds whose single on-screen row IS a ledger obligation source.
+// ONLY these single-task displays are genuine enough to acknowledge — the mere
+// existence of a fetched row is not a "seen tap". Every other kind maps to null
+// and is never stamped. (dose is intentionally excluded: FocusMode's dose task
+// carries the regimen_id, not the dose_log row id the obligation is keyed on.)
+const ACK_SOURCE_BY_KIND: Record<string, string> = {
+  focus_decree: 'handler_decrees',
+  overdue_decree: 'handler_decrees',
+  due_today_decree: 'handler_decrees',
+  due_today_commitment: 'handler_commitments',
+  overdue_punishment: 'punishment_queue',
+  overdue_confession: 'confession_queue',
+  due_today_confession: 'confession_queue',
+  workout_today: 'workout_prescriptions',
+};
+
+export interface AckSource {
+  sourceTable: string;
+  sourceId: string;
+}
+
+// Resolve the obligation source (table + id) to acknowledge for a given
+// on-screen FocusMode task, or null when the task is not an acknowledgeable
+// obligation display.
+export function ackSourceForTask(kind: string, rowId: string | null): AckSource | null {
+  if (!rowId) return null;
+  const sourceTable = ACK_SOURCE_BY_KIND[kind];
+  if (!sourceTable) return null;
+  return { sourceTable, sourceId: rowId };
+}
+
 // ─── Gate (design §3) — thin RPC caller, fail-CLOSED ─────────────────────
 
 export type GateMode = 'active' | 'paused' | 'safeword_latched'
