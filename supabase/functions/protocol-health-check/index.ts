@@ -67,6 +67,14 @@ const GENERATORS: GeneratorSpec[] = [
   // whose output table only has rows during escalations/false alarms.
   { name: 'meet_safety_watch', function_name: 'meet_safety_watch', expected_cadence_minutes: 1, conditional: true },
   { name: 'meet_safety_dispatch', function_name: 'meet-safety-dispatch', expected_cadence_minutes: 5, output_table: 'meet_escalation_dispatch', edge_function: true, conditional: true },
+  // Enforcement Spine v2 (migs 627-630). The miss-processor and the hard-mode
+  // recompute are SQL fns on pg_cron; both are conditional (zero rows is the
+  // healthy case when nothing was missed). The outward dispatcher is an edge
+  // fn; its queue is empty in the healthy case.
+  { name: 'obligation_miss_processor', function_name: 'obligation_miss_processor', expected_cadence_minutes: 10, output_table: 'escalation_events', conditional: true },
+  { name: 'hard_mode_recompute', function_name: 'hard_mode_recompute_all', expected_cadence_minutes: 30, conditional: true },
+  { name: 'obligation_pause_shift_accruer', function_name: 'obligation_pause_shift_accrue', expected_cadence_minutes: 5, conditional: true },
+  { name: 'outward_consequence_dispatcher', function_name: 'outward-consequence-dispatcher', expected_cadence_minutes: 15, output_table: 'outward_dispatch_queue', edge_function: true, conditional: true },
 ];
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
@@ -145,6 +153,100 @@ async function checkChainAssertion(): Promise<CheckResult[]> {
   }
 }
 
+// Ledger-liveness assertions (design §6): the obligation ledger is the
+// enforcement spine — if it silently stops, everything downstream reports
+// healthy while penalizing nobody or (worse) without evidence.
+async function checkLedgerLiveness(): Promise<CheckResult[]> {
+  const results: CheckResult[] = [];
+
+  // 1. filed → surfaced median < 6h over the last 7d.
+  const since7d = new Date(Date.now() - 7 * 86400 * 1000).toISOString();
+  const { data: surfaced, error: sErr } = await supabase
+    .from('obligations')
+    .select('created_at, surfaced_at')
+    .not('surfaced_at', 'is', null)
+    .gte('created_at', since7d)
+    .limit(500);
+  if (sErr) {
+    results.push({ component: 'obligation_ledger', severity: 'warning', event_kind: 'query_error', message: `surfacing-latency query failed: ${sErr.message}`, context_data: {} });
+  } else if ((surfaced ?? []).length > 0) {
+    const latencies = (surfaced as { created_at: string; surfaced_at: string }[])
+      .map(o => new Date(o.surfaced_at).getTime() - new Date(o.created_at).getTime())
+      .sort((a, b) => a - b);
+    const medianMs = latencies[Math.floor(latencies.length / 2)];
+    const medianH = medianMs / 3600_000;
+    results.push({
+      component: 'obligation_ledger',
+      severity: medianH < 6 ? 'info' : 'warning',
+      event_kind: medianH < 6 ? 'healthy' : 'surfacing_latency_high',
+      message: `filed→surfaced median ${medianH.toFixed(1)}h over ${latencies.length} obligations (7d).`,
+      context_data: { median_hours: medianH, sample: latencies.length },
+    });
+  }
+
+  // 2. ZERO missed obligations with NULL evidence.
+  const { count: noEvidence, error: eErr } = await supabase
+    .from('obligations')
+    .select('id', { count: 'exact', head: true })
+    .in('status', ['missed', 'consequence_previewed', 'consequence_fired'])
+    .is('evidence_row_id', null);
+  if (eErr) {
+    results.push({ component: 'obligation_ledger', severity: 'warning', event_kind: 'query_error', message: `evidence query failed: ${eErr.message}`, context_data: {} });
+  } else {
+    results.push({
+      component: 'obligation_ledger',
+      severity: (noEvidence ?? 0) === 0 ? 'info' : 'error',
+      event_kind: (noEvidence ?? 0) === 0 ? 'healthy' : 'missed_without_evidence',
+      message: `${noEvidence ?? 0} missed obligations with NULL evidence (must be 0).`,
+      context_data: { count: noEvidence ?? 0 },
+    });
+  }
+
+  // 3. ZERO consequence_fired without an enforcement_audit row.
+  const { data: fired, error: fErr } = await supabase
+    .from('obligations')
+    .select('id')
+    .eq('status', 'consequence_fired')
+    .limit(500);
+  if (fErr) {
+    results.push({ component: 'obligation_ledger', severity: 'warning', event_kind: 'query_error', message: `fired query failed: ${fErr.message}`, context_data: {} });
+  } else if ((fired ?? []).length > 0) {
+    const ids = (fired as { id: string }[]).map(o => o.id);
+    const { data: audits } = await supabase
+      .from('enforcement_audit')
+      .select('obligation_id')
+      .in('obligation_id', ids);
+    const audited = new Set(((audits ?? []) as { obligation_id: string }[]).map(a => a.obligation_id));
+    const missing = ids.filter(id => !audited.has(id));
+    results.push({
+      component: 'obligation_ledger',
+      severity: missing.length === 0 ? 'info' : 'error',
+      event_kind: missing.length === 0 ? 'healthy' : 'fired_without_audit',
+      message: `${missing.length} consequence_fired obligations without an audit row (must be 0).`,
+      context_data: { missing: missing.slice(0, 10) },
+    });
+  }
+
+  // 4. Open-latch age (surface it — a week-old open latch is a stuck state
+  // someone should see on the pulse panel, not an error).
+  const { data: latches } = await supabase
+    .from('safeword_latches')
+    .select('user_id, latched_at')
+    .is('resumed_at', null);
+  for (const l of (latches ?? []) as { user_id: string; latched_at: string }[]) {
+    const ageH = (Date.now() - new Date(l.latched_at).getTime()) / 3600_000;
+    results.push({
+      component: 'safeword_latch',
+      severity: 'info',
+      event_kind: 'open_latch',
+      message: `Open safeword latch, age ${ageH.toFixed(1)}h. Resume is her explicit action — this is state, not a fault.`,
+      context_data: { user_id: l.user_id, age_hours: ageH },
+    });
+  }
+
+  return results;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== 'POST' && req.method !== 'GET') return new Response('method not allowed', { status: 405 });
   const allResults: CheckResult[] = [];
@@ -155,6 +257,7 @@ Deno.serve(async (req: Request) => {
   try { allResults.push(...await checkDeliveryBridge()); } catch (e) { allResults.push({ component: 'delivery_bridge', severity: 'error', event_kind: 'check_exception', message: (e as Error).message, context_data: {} }); }
   try { allResults.push(...await checkFulfillmentChain()); } catch (e) { allResults.push({ component: 'fulfillment', severity: 'error', event_kind: 'check_exception', message: (e as Error).message, context_data: {} }); }
   try { allResults.push(...await checkChainAssertion()); } catch (e) { allResults.push({ component: 'chain_assertion', severity: 'error', event_kind: 'check_exception', message: (e as Error).message, context_data: {} }); }
+  try { allResults.push(...await checkLedgerLiveness()); } catch (e) { allResults.push({ component: 'obligation_ledger', severity: 'error', event_kind: 'check_exception', message: (e as Error).message, context_data: {} }); }
   const toInsert = allResults.map(r => ({ component: r.component, severity: r.severity, event_kind: r.event_kind, message: r.message, context_data: r.context_data }));
   try { await supabase.from('mommy_supervisor_log').insert(toInsert); }
   catch (e) { return new Response(JSON.stringify({ insert_error: (e as Error).message, results: allResults }), { headers: { 'content-type': 'application/json' }, status: 500 }); }
