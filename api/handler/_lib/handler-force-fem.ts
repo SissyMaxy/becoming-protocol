@@ -251,6 +251,89 @@ export async function handleForceFeminizationDirective(
         const toStep = val.to_step as string | undefined;
         if (!toStep) return;
 
+        // ── Meet safety gate (mig 626): no net, no meet. ──────────────────
+        // Server-refuse advancing to meet_proposed or beyond without a
+        // consented + channel-verified trusted contact; refuse
+        // logistics_locked (and beyond) without an armed-capable safety plan.
+        // The refusal surfaces as the acquisition task — the path forward
+        // runs THROUGH the net, never around it. Query errors fail CLOSED.
+        const meetGatedSteps = new Set(['meet_proposed', 'logistics_locked', 'met', 'hooked_up']);
+        if (meetGatedSteps.has(toStep)) {
+          const refuse = async (reasonKey: string, message: string) => {
+            const { error: refuseErr } = await supabase.from('handler_outreach_queue').insert({
+              user_id: userId,
+              message,
+              urgency: 'high',
+              trigger_reason: `meet_gate:${reasonKey}`,
+              source: 'meet_safety',
+              kind: 'meet_gate_refusal',
+              scheduled_for: new Date().toISOString(),
+              expires_at: new Date(Date.now() + 24 * 3600_000).toISOString(),
+            });
+            if (refuseErr) console.error('[Hookup] meet-gate refusal outreach insert failed:', refuseErr.message);
+            console.log('[Hookup] Advance REFUSED (meet safety gate):', toStep, reasonKey);
+          };
+
+          const { data: netContact, error: netErr } = await supabase
+            .from('trusted_contacts')
+            .select('id, name')
+            .eq('user_id', userId)
+            .eq('consent_status', 'consented')
+            .not('last_channel_verified_at', 'is', null)
+            .limit(1)
+            .maybeSingle();
+          if (netErr) {
+            console.error('[Hookup] meet-gate trusted_contacts query failed (failing closed):', netErr.message);
+            return;
+          }
+          if (!netContact) {
+            await refuse(
+              'no_consented_contact',
+              'Meet steps are locked until your safety net is real. Name your safety person — one human you trust — get their yes and a verified way to reach them in the app. When that yes exists, the gate opens. Until then, this stays at flirting.',
+            );
+            return;
+          }
+
+          if (toStep !== 'meet_proposed') {
+            // logistics_locked and beyond: an armed-capable plan must exist —
+            // a draft (or armed/live) plan that would pass arming validation.
+            const { data: plans, error: planErr } = await supabase
+              .from('meet_safety_plans')
+              .select('id, status, venue_is_public, meet_at, location_share_confirmed_at, trusted_contact_id')
+              .eq('user_id', userId)
+              .in('status', ['draft', 'armed', 'live']);
+            if (planErr) {
+              console.error('[Hookup] meet-gate meet_safety_plans query failed (failing closed):', planErr.message);
+              return;
+            }
+            const { data: okContacts, error: okErr } = await supabase
+              .from('trusted_contacts')
+              .select('id')
+              .eq('user_id', userId)
+              .eq('consent_status', 'consented')
+              .not('last_channel_verified_at', 'is', null);
+            if (okErr) {
+              console.error('[Hookup] meet-gate contacts query failed (failing closed):', okErr.message);
+              return;
+            }
+            const okContactIds = new Set((okContacts || []).map((c) => (c as { id: string }).id));
+            const armCapable = (plans || []).some((p) => {
+              const plan = p as Record<string, unknown>;
+              return plan.venue_is_public === true
+                && !!plan.meet_at && new Date(plan.meet_at as string) > new Date()
+                && !!plan.location_share_confirmed_at
+                && okContactIds.has(plan.trusted_contact_id as string);
+            });
+            if (!armCapable) {
+              await refuse(
+                'no_arm_capable_plan',
+                'Locking time and place needs a safety card that can actually arm: a public venue, a future meet time, live location sharing confirmed, and your verified safety person attached. Build the card first, then lock the logistics.',
+              );
+              return;
+            }
+          }
+        }
+
         // If no hookup_id, create a new hookup row for a named contact
         let id = hookupId;
         if (!id) {
@@ -300,25 +383,9 @@ export async function handleForceFeminizationDirective(
             to_step: toStep,
           });
 
-          // Milestone witness notifications at first meet + first hookup
-          const witnessTrigger = new Set(['met', 'hooked_up']);
-          if (witnessTrigger.has(toStep)) {
-            const { data: witnesses } = await supabase
-              .from('designated_witnesses')
-              .select('id, witness_name')
-              .eq('user_id', userId)
-              .eq('status', 'active');
-            for (const w of (witnesses || [])) {
-              await supabase.from('witness_notifications').insert({
-                user_id: userId,
-                witness_id: (w as Record<string, unknown>).id as string,
-                notification_type: 'hookup_milestone',
-                subject: `Milestone: ${toStep.replace(/_/g, ' ')}`,
-                body: `This is an automated witness update.\n\nA protocol milestone was reached: ${toStep.replace(/_/g, ' ')}.\n\nYou were designated as a witness to this transformation. The milestone is visible so it's not private — that's the point of witness designation.`,
-                delivery_status: 'pending',
-              });
-            }
-          }
+          // Witness milestone notifications REMOVED (2026-07-01 policy):
+          // nothing ever fires to a third party except the consented
+          // trusted-contact safety channel (meet_escalation_dispatch, mig 626).
         }
         console.log('[Hookup] Step advanced:', toStep);
         return;
