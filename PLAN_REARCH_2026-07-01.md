@@ -66,7 +66,11 @@ Designs DONE, awaiting implementation:
 - `DESIGN_TURNOUT_LADDER_2026-07-02.md` — conductor over existing rung-engines (realcock_discovery 514, escape_cost 533, attestations 540, funnel 626/631, revenue R-chain 632, ladder_catalog 520). 9 macro-rungs T0-T8. Proposed migs 647-648 → **REASSIGN to 652-653**. STI/PrEP hard gate on oral+/paid; meet-safety absolute; safeword freezes cursor.
 - **FALSE POSITIVE resolved:** turn-out design flagged mig 540 as still running a Gina-disclosure cascade. VERIFIED AGAINST LIVE DB 2026-07-02: `trg_hookup_attestation_on_realcock` is the neutered version (only a removal comment mentions Gina; the outreach insert is the legit attestation debrief). 0 pending gina-disclosure outreach, 0 active gina-disclosure decrees, 0 active gina crons. The design agent read the pre-624 file. NO fix needed — implementation must NOT re-touch this.
 
-Migration reservations this wave: 643 audio, 644 seen-tap(done), 645 HRT-dose, 648-651 reconditioning, 652-653 turn-out ladder.
+Migration reservations this wave: 643 audio, 644 seen-tap, 645 HRT-dose, 648-651 reconditioning, 652-653 turn-out ladder.
+
+**ALL FIVE discrete features LIVE (applied + deployed) 2026-07-02:** guilt-report(641), goon-voice-loop(642), self-echo audio+mixer(643, verified rendered+mixed a real session), seen-tap(644 RPC live), HRT-dose evidence(645 applied). Frontend bits (FocusMode seen-tap/dose/SelfEchoPlayer) deploy via Vercel on next main merge. 2058 tests pass.
+
+**INFRA FINDING (important):** ELEVENLABS_API_KEY / ELEVENLABS_VOICE_ID are NOT provisioned in the Supabase project (verified via secrets list) — so `audio-session-render` (trance/hypno delivery) and every ElevenLabs TTS path has NEVER rendered in prod. OPENAI_API_KEY + ANTHROPIC_API_KEY ARE provisioned. Fixed self-echo-mixer with an OpenAI TTS fallback (`gpt-4o-mini-tts`, voice 'shimmer', /v1/audio/speech → mp3). **TODO: generalize into `_shared/tts.ts` (ElevenLabs-if-configured-else-OpenAI) and adopt in audio-session-render — the reconditioning engine's cinematic/trance delivery depends on working TTS.** Reconditioning implementation must build/adopt this shared helper.
 
 ## Cross-domain contracts (interfaces the phases share)
 
