@@ -83,6 +83,17 @@ const JOBS: CronJob[] = [
     fn: 'goon-voice-loop',
     body: `jsonb_build_object('trigger','daily')`,
   },
+  {
+    // Self-echo mixer (mig 643): drains pending_mix self_echo_sessions →
+    // renders the Mommy track (ElevenLabs) → flips to 'mixed' with a play-time
+    // manifest. Guarded so idle minutes cost nothing. The composite itself is
+    // layered client-side (Web Audio, SelfEchoPlayer) — no ffmpeg mixdown.
+    name: 'self-echo-mixer-drain',
+    schedule: '*/5 * * * *',
+    fn: 'self-echo-mixer',
+    body: `jsonb_build_object('trigger','pg_cron')`,
+    guard: `WHERE EXISTS (SELECT 1 FROM self_echo_sessions WHERE mix_status = 'pending_mix' AND own_voice_path IS NOT NULL)`,
+  },
 ]
 
 function jobSql(j: CronJob, key: string): string {

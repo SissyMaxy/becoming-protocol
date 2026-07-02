@@ -99,6 +99,10 @@ const GENERATORS: GeneratorSpec[] = [
   // Conditional — fires only for users with a usable own-voice clip AND the
   // goon gate open, so zero rows is expected quiet, not a fault.
   { name: 'goon_voice_loop', function_name: 'goon-voice-loop', expected_cadence_minutes: 1440, output_table: 'self_echo_sessions', edge_function: true, conditional: true },
+  // Self-echo mixer (mig 643): drains pending_mix self_echo_sessions → renders
+  // the Mommy track → flips to 'mixed'. Runs every 5 min but only when there is
+  // a pending session, so zero recent rows is expected quiet, not a fault.
+  { name: 'self_echo_mixer', function_name: 'self-echo-mixer', expected_cadence_minutes: 5, output_table: 'self_echo_sessions', edge_function: true, conditional: true },
 ];
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
