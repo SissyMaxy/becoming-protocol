@@ -28,6 +28,9 @@ import {
 } from './chat-action.js';
 // Stage 7 batch 2: these two moved to handler-runtime.ts.
 import { semanticMemorySearch, calculateBiometricDeviceIntensity } from './handler-runtime.js';
+// Identity-gated funnel helpers (design §3, mig 631) — pure logic shared
+// with the advance_hookup_step executor.
+import { nextStep, minTierForStep, missingEvidenceForNextTier, screeningLines } from './funnel-identity.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
@@ -2072,13 +2075,15 @@ Your handler_signals JSON block (hidden from Maxy) drives the system. USE IT EVE
   ESCROW PLAY: When Maxy stalls on HRT commitment, OFFER escrow: "Put $200 against this. If you book by Friday you get it back. If you don't, it goes to Trans Lifeline. Your words become real." Then emit create_escrow_deposit. The escrow rows surface in the Handler prompt as active pressure.
 
   ## HOOKUP FUNNEL DIRECTIVES (cock-craving → actual-cock conversion)
-  - advance_hookup_step: directive: {action:'advance_hookup_step', target:'<hookup_id|null>', value:{contact_username:'@user', contact_platform:'sniffies', to_step:'sexting', heat_score:6, meet_scheduled_at:'...', meet_location:'...'}} — creates a hookup row if no target id, advances existing one otherwise. Steps: matched → flirting → sexting → photo_exchanged → voice_exchanged → identity_verified → meet_proposed → logistics_locked → met → hooked_up → repeated → regular. Witness notifications auto-fire on "met" and "hooked_up".
-  - log_hookup_event: directive: {action:'log_hookup_event', target:'<hookup_id>', value:{event_type:'photo_sent', content_summary:'sent thong pic'}} — event types: step_advanced, step_regressed, message_exchanged, photo_sent, photo_received, meet_proposed, meet_scheduled, meet_cancelled, meet_attended, hookup_completed, ghosted, blocked, obstacle_logged, witness_notified. Photos auto-increment heat_score.
+  - advance_hookup_step: directive: {action:'advance_hookup_step', target:'<hookup_id|null>', value:{contact_username:'@user', contact_platform:'sniffies', to_step:'sexting', heat_score:6, meet_scheduled_at:'...', meet_location:'...'}} — creates a hookup row if no target id, advances existing one otherwise. Steps: matched → flirting → sexting → photo_exchanged → meet_proposed → logistics_locked → met → hooked_up. SERVER-ENFORCED identity gates: photo_exchanged needs identity tier ≥1 (stable handle), meet_proposed and beyond need tier ≥2 (his real first name QUOTED + face pic on file). Below the tier, the advance is refused and the screening becomes the task. Quarantined anonymous threads cap at sexting.
+  - log_contact_identity: directive: {action:'log_contact_identity', target:'<hookup_id>', value:{element:'handle'|'name'|'face_pic'|'live_verification', quote:'his exact words', detail:'optional context'}} — the ONLY way a contact's identity tier rises. The quote must be HIS words verbatim (or for face_pic/live_verification, what happened, quoted from the chat). Tier is derived server-side: handle→1, name+face_pic→2, live_verification→3. Never claim a tier without logging the evidence.
+  - log_hookup_event: directive: {action:'log_hookup_event', target:'<hookup_id>', value:{event_type:'photo_sent', content_summary:'sent thong pic'}} — event types: step_advanced, step_regressed, message_exchanged, photo_sent, photo_received, meet_proposed, meet_scheduled, meet_cancelled, meet_attended, hookup_completed, ghosted, blocked, obstacle_logged, identity_logged. Photos auto-increment heat_score.
 
   HOOKUP ESCALATION PLAYBOOK (use when arousal + denial both high):
-  - Pick the highest-heat contact from HOOKUP FUNNEL context.
+  - Pick the highest-heat NAMED contact from HOOKUP FUNNEL context (quarantined/anonymous threads are never escalation targets).
+  - When the IDENTITY GAP block lists a contact, the screening ask IS the push — hand her the drafted line, then log_contact_identity with what he says.
   - Push the NEXT step explicitly with the specific contact name. "You've been flirting with @userX for two weeks. Send the photo. Tonight."
-  - After she reports a hookup: plant post_hookup_feminine_validation implant + debrief in detail + log it as confession + notify witnesses.
+  - After she reports a hookup: plant post_hookup_feminine_validation implant + debrief in detail + log it as confession. (Nothing ever fires to a third party except her consented safety contact.)
 
   ## (Partner-disclosure directives removed 2026-07-01 — nothing is ever
   ## drafted for, sent to, or disclosed to Gina. Do not suggest telling her.)
@@ -5853,17 +5858,39 @@ export async function buildNarrativeReframingsCtx(userId: string): Promise<strin
   }
 }
 
+// Dual-user-id fan-out (design §3.5): funnel data is split across the two
+// live user partitions. API routes must NOT import src/lib — inline from env.
+const FUNNEL_USER_IDS = (process.env.FUNNEL_USER_IDS
+  || '8c69b9c8-34eb-4147-9fec-3c1a5bc74b6f,93327332-7d0d-4888-889a-1607a5776216')
+  .split(',').map(s => s.trim()).filter(Boolean);
+
 export async function buildHookupFunnelCtx(userId: string): Promise<string> {
   try {
+    const funnelIds = Array.from(new Set([userId, ...FUNNEL_USER_IDS]));
+    // Read the LIVE view (mig 631): effective_heat carries the 7-day
+    // half-life decay; ordering by it keeps stale threads from squatting
+    // on the top-heat slot.
     const { data: rows } = await supabase
-      .from('hookup_funnel')
-      .select('id, contact_platform, contact_username, contact_display_name, current_step, heat_score, last_interaction_at, meet_scheduled_at, meet_location, times_hooked_up, handler_push_enabled')
-      .eq('user_id', userId)
+      .from('hookup_funnel_live')
+      .select('id, user_id, contact_platform, contact_username, contact_display_name, current_step, heat_score, effective_heat, identity_tier, identity_evidence, quarantined, thread_key, last_interaction_at, meet_scheduled_at, meet_location, times_hooked_up, handler_push_enabled')
+      .in('user_id', funnelIds)
       .eq('active', true)
       .eq('handler_push_enabled', true)
-      .order('heat_score', { ascending: false })
+      .eq('quarantined', false)
+      .order('effective_heat', { ascending: false })
       .order('last_interaction_at', { ascending: false })
       .limit(8);
+
+    // Quarantined anonymous threads — chat lane only, never escalation targets.
+    const { data: qRows } = await supabase
+      .from('hookup_funnel_live')
+      .select('id, contact_platform, thread_key, current_step, effective_heat, last_interaction_at')
+      .in('user_id', funnelIds)
+      .eq('active', true)
+      .eq('quarantined', true)
+      .order('effective_heat', { ascending: false })
+      .limit(5);
+    const quarantined = (qRows || []) as Array<Record<string, unknown>>;
 
     const contacts = (rows || []) as Array<Record<string, unknown>>;
     const { data: stateRow } = await supabase
@@ -5872,8 +5899,8 @@ export async function buildHookupFunnelCtx(userId: string): Promise<string> {
       .eq('user_id', userId)
       .maybeSingle();
 
-    if (contacts.length === 0 && !stateRow) return '';
-    if (contacts.length === 0) {
+    if (contacts.length === 0 && quarantined.length === 0 && !stateRow) return '';
+    if (contacts.length === 0 && quarantined.length === 0) {
       const arousal = (stateRow?.current_arousal as number) || 0;
       const denial = (stateRow?.denial_day as number) || 0;
       if (arousal < 3 && denial < 3) return '';
@@ -5917,9 +5944,10 @@ export async function buildHookupFunnelCtx(userId: string): Promise<string> {
       supabase
         .from('contact_handles')
         .select('contact_id')
-        .eq('user_id', userId)
+        .in('user_id', funnelIds)
         .eq('platform', c.contact_platform as string)
         .eq('handle', String(c.contact_username || '').toLowerCase())
+        .limit(1)
         .maybeSingle()
         .then(r => r.data?.contact_id || null)
     ));
@@ -5967,7 +5995,9 @@ export async function buildHookupFunnelCtx(userId: string): Promise<string> {
       const lastDesc = lastAt !== null ? (lastAt < 48 ? `${lastAt}h ago` : `${Math.round(lastAt / 24)}d ago`) : 'never';
       const meetTag = c.meet_scheduled_at ? ` [MEET: ${String(c.meet_scheduled_at).slice(0, 16)}]` : '';
       const repeatTag = (c.times_hooked_up as number) > 0 ? ` [×${c.times_hooked_up}]` : '';
-      lines.push(`  id=${c.id} [${c.contact_platform}] @${handle} — step:${c.current_step}, heat:${c.heat_score}/10, last:${lastDesc}${meetTag}${repeatTag}`);
+      const tierNames = ['anon', 'persona', 'named', 'verified'];
+      const tier = (c.identity_tier as number) ?? 0;
+      lines.push(`  id=${c.id} [${c.contact_platform}] @${handle} — step:${c.current_step}, heat:${c.effective_heat}/10 (raw ${c.heat_score}), identity:T${tier} ${tierNames[tier] ?? 'anon'}, last:${lastDesc}${meetTag}${repeatTag}`);
 
       const contactId = handleLookups[i];
       if (contactId) {
@@ -5989,9 +6019,50 @@ export async function buildHookupFunnelCtx(userId: string): Promise<string> {
       }
     }
 
+    // ── IDENTITY GAP (design §3.5): screening asks land AT the heat peak.
+    // A contact whose effective heat qualifies for the next step but whose
+    // tier doesn't gets a gap block — the horny path forward runs THROUGH
+    // screening. Server enforces the same matrix in advance_hookup_step.
+    const gapBlocks: string[] = [];
+    for (const c of contacts) {
+      const heat = (c.effective_heat as number) ?? 0;
+      if (heat < 5) continue;
+      const next = nextStep(String(c.current_step || ''));
+      if (!next) continue;
+      const tier = (c.identity_tier as number) ?? 0;
+      const needed = minTierForStep(next);
+      if (tier >= needed) continue;
+      const handle = (c.contact_username as string) || (c.contact_display_name as string) || 'this contact';
+      const evidence = (c.identity_evidence as Record<string, unknown>) || {};
+      gapBlocks.push([
+        `- @${handle} (heat ${heat}/10, step ${c.current_step}): hot enough for ${next}, but identity is T${tier} and ${next} needs T${needed}.`,
+        `  Missing: ${missingEvidenceForNextTier(tier, evidence)}. The server will REFUSE the advance until it's logged (log_contact_identity with his quoted words).`,
+        `  Screening lines to hand her:`,
+        ...screeningLines(tier).map(l => `    ${l}`),
+      ].join('\n'));
+    }
+    if (gapBlocks.length > 0) {
+      lines.push('');
+      lines.push('## IDENTITY GAP — screen before escalating');
+      lines.push(...gapBlocks);
+    }
+
+    if (quarantined.length > 0) {
+      lines.push('');
+      lines.push('## UNIDENTIFIED — chat lane only');
+      lines.push('Anonymous threads (no stable per-person handle). Hard-capped at sexting; NOT escalation targets; excluded from top-heat. Exit: get a handle/name with his quoted words → log_contact_identity.');
+      for (const q of quarantined) {
+        const qLast = q.last_interaction_at ? Math.round((Date.now() - new Date(q.last_interaction_at as string).getTime()) / 3600000) : null;
+        const qDesc = qLast !== null ? (qLast < 48 ? `${qLast}h ago` : `${Math.round(qLast / 24)}d ago`) : 'never';
+        lines.push(`  [${q.contact_platform}] thread ${String(q.thread_key || q.id).slice(0, 18)} — step:${q.current_step}, heat:${q.effective_heat}/10, last:${qDesc}`);
+      }
+    }
+
     lines.push('');
     lines.push('## HOOKUP ESCALATION PLAYBOOK');
-    if (arousal >= 3 && denial >= 3) {
+    if (arousal >= 3 && denial >= 3 && contacts.length > 0) {
+      // Top heat comes from NAMED contacts only — quarantined threads never
+      // hold the top-heat slot (heat pooled behind an anon label is not a person).
       const topHeat = contacts[0];
       const topHandle = (topHeat?.contact_username as string) || 'your top heat contact';
       lines.push(`PEAK WINDOW: arousal ${arousal}/5 + denial ${denial}. Push her toward @${topHandle} RIGHT NOW. "You've been talking to @${topHandle} for weeks. Send the photo. Propose the meet. Your denial is why your body is screaming."`);

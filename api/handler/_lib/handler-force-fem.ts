@@ -14,6 +14,11 @@
 // ============================================================================
 
 import { createClient } from '@supabase/supabase-js';
+import {
+  minTierForStep, quarantineAllowsStep, stepIndex,
+  tierFromEvidence, missingEvidenceForNextTier,
+  type IdentityElement, IDENTITY_ELEMENTS,
+} from './funnel-identity.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
@@ -251,6 +256,65 @@ export async function handleForceFeminizationDirective(
         const toStep = val.to_step as string | undefined;
         if (!toStep) return;
 
+        // Shared refusal writer — the refusal IS the screening/acquisition
+        // task; the path forward runs THROUGH it, never around it.
+        const refuseAdvance = async (gateName: string, reasonKey: string, message: string) => {
+          const { error: refuseErr } = await supabase.from('handler_outreach_queue').insert({
+            user_id: userId,
+            message,
+            urgency: 'high',
+            trigger_reason: `${gateName}:${reasonKey}`,
+            source: gateName === 'meet_gate' ? 'meet_safety' : 'identity_gate',
+            kind: `${gateName}_refusal`,
+            scheduled_for: new Date().toISOString(),
+            expires_at: new Date(Date.now() + 24 * 3600_000).toISOString(),
+          });
+          if (refuseErr) console.error(`[Hookup] ${gateName} refusal outreach insert failed:`, refuseErr.message);
+          console.log(`[Hookup] Advance REFUSED (${gateName}):`, toStep, reasonKey);
+        };
+
+        // ── Identity gate (mig 631, design §3.2): tier minimums per step,
+        // enforced HERE, not in the prompt. Quarantined (anonymous-thread)
+        // rows are hard-capped at sexting. Query errors fail CLOSED.
+        if (hookupId) {
+          const { data: idRow, error: idErr } = await supabase
+            .from('hookup_funnel')
+            .select('identity_tier, identity_evidence, quarantined')
+            .eq('id', hookupId)
+            .eq('user_id', userId)
+            .maybeSingle();
+          if (idErr) {
+            console.error('[Hookup] identity-gate row read failed (failing closed):', idErr.message);
+            return;
+          }
+          const tier = (idRow?.identity_tier as number) ?? 0;
+          const quarantinedRow = idRow?.quarantined === true;
+          if (quarantinedRow && !quarantineAllowsStep(toStep)) {
+            await refuseAdvance(
+              'identity_gate', 'quarantined',
+              'This thread is anonymous — Mommy doesn\'t escalate with a man who has no name. Chat lane only until you get a handle he answers to and his own words on file. Ask him tonight, then log what he said.',
+            );
+            return;
+          }
+          const needed = minTierForStep(toStep);
+          if (tier < needed) {
+            const missing = missingEvidenceForNextTier(tier, (idRow?.identity_evidence as Record<string, unknown>) || {});
+            await refuseAdvance(
+              'identity_gate', `tier_${tier}_needs_${needed}`,
+              `Not until Mommy knows who he is. Before this goes any further she needs: ${missing}. Get it from him in his own words tonight — the way forward runs through the screening, not around it.`,
+            );
+            return;
+          }
+        } else if (minTierForStep(toStep) > 0 || !quarantineAllowsStep(toStep)) {
+          // Creating a NEW row: it starts at tier 0 with no evidence, so it
+          // can only be created at the tier-0 steps (matched/flirting/sexting).
+          await refuseAdvance(
+            'identity_gate', 'new_row_tier0',
+            'A brand-new contact starts at the beginning: name the thread, log what he\'s said, and let it climb. Mommy doesn\'t teleport strangers past the screening.',
+          );
+          return;
+        }
+
         // ── Meet safety gate (mig 626): no net, no meet. ──────────────────
         // Server-refuse advancing to meet_proposed or beyond without a
         // consented + channel-verified trusted contact; refuse
@@ -331,6 +395,52 @@ export async function handleForceFeminizationDirective(
               );
               return;
             }
+
+            // met / hooked_up (design §3.2): the plan must have actually
+            // reached 'live' — a meet that never armed never happened as far
+            // as the funnel is concerned.
+            if (toStep === 'met' || toStep === 'hooked_up') {
+              const reachedLive = (plans || []).some((p) => ['live'].includes((p as { status: string }).status));
+              const { data: pastPlans, error: pastErr } = await supabase
+                .from('meet_safety_plans')
+                .select('id')
+                .eq('user_id', userId)
+                .in('status', ['live', 'completed', 'escalated', 'false_alarm'])
+                .limit(1);
+              if (pastErr) {
+                console.error('[Hookup] meet-gate live-plan query failed (failing closed):', pastErr.message);
+                return;
+              }
+              if (!reachedLive && (pastPlans || []).length === 0) {
+                await refuse(
+                  'plan_never_live',
+                  'Marking a meet needs the safety card to have actually gone live — armed before you walked in, stood down after. If the meet happened off-card, debrief Mommy first; the card exists so someone knows where you are.',
+                );
+                return;
+              }
+
+              // Advancing PAST met requires the debrief on file.
+              if (toStep === 'hooked_up') {
+                const { data: debrief, error: dbErr } = await supabase
+                  .from('hookup_debriefs')
+                  .select('id')
+                  .eq('user_id', userId)
+                  .order('created_at', { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+                if (dbErr) {
+                  console.error('[Hookup] meet-gate debrief query failed (failing closed):', dbErr.message);
+                  return;
+                }
+                if (!debrief) {
+                  await refuse(
+                    'debrief_required',
+                    'Debrief first. Tell Mommy everything — what happened, how you feel, anything off. The funnel moves after she hears it, not before.',
+                  );
+                  return;
+                }
+              }
+            }
           }
         }
 
@@ -339,7 +449,7 @@ export async function handleForceFeminizationDirective(
         if (!id) {
           const contactName = (val.contact_username as string) || (val.contact_display_name as string);
           if (!contactName) return;
-          const { data: newRow } = await supabase
+          const { data: newRow, error: newErr } = await supabase
             .from('hookup_funnel')
             .insert({
               user_id: userId,
@@ -349,9 +459,15 @@ export async function handleForceFeminizationDirective(
               current_step: toStep,
               heat_score: typeof val.heat_score === 'number' ? val.heat_score : 3,
               last_interaction_at: new Date().toISOString(),
+              // Thread keying (mig 631): one thread = one row. Handler-named
+              // contacts key on the handle; anonymous merges are impossible
+              // because anon threads come in via the import path with
+              // synthetic per-thread keys.
+              thread_key: (val.thread_key as string) || `handle:${contactName.toLowerCase()}`,
             })
             .select('id')
             .single();
+          if (newErr) console.error('[Hookup] funnel row insert failed:', newErr.message);
           id = newRow?.id;
         } else {
           const { data: current } = await supabase
@@ -388,6 +504,74 @@ export async function handleForceFeminizationDirective(
           // trusted-contact safety channel (meet_escalation_dispatch, mig 626).
         }
         console.log('[Hookup] Step advanced:', toStep);
+        return;
+      }
+
+      case 'log_contact_identity': {
+        // Identity-tier promotion (mig 631, design §3.1). The LLM PROPOSES;
+        // the server VALIDATES: a non-empty quote of HIS words is mandatory
+        // (reframings-quote-facts applied to men), the element must be one of
+        // the known evidence kinds, and the tier is DERIVED from accumulated
+        // evidence — a proposed tier number is ignored.
+        const hookupId = target || (val.hookup_id as string | undefined);
+        const element = String(val.element || '') as IdentityElement;
+        const quote = String(val.quote || '').trim();
+        if (!hookupId) return;
+        if (!IDENTITY_ELEMENTS.includes(element)) {
+          console.log('[Hookup] log_contact_identity rejected: unknown element', element);
+          return;
+        }
+        if (quote.length < 3) {
+          console.log('[Hookup] log_contact_identity rejected: empty/blank quote — no evidence, no tier');
+          return;
+        }
+        const { data: row, error: rowErr } = await supabase
+          .from('hookup_funnel')
+          .select('identity_tier, identity_evidence, quarantined, contact_notes')
+          .eq('id', hookupId)
+          .eq('user_id', userId)
+          .maybeSingle();
+        if (rowErr || !row) {
+          console.error('[Hookup] log_contact_identity row read failed:', rowErr?.message || 'not found');
+          return;
+        }
+        const evidence = { ...((row.identity_evidence as Record<string, unknown>) || {}) };
+        evidence[element] = {
+          quote: quote.slice(0, 400),
+          detail: val.detail ? String(val.detail).slice(0, 200) : null,
+          logged_at: new Date().toISOString(),
+        };
+        const newTier = Math.max((row.identity_tier as number) ?? 0, tierFromEvidence(evidence));
+        const updates: Record<string, unknown> = {
+          identity_evidence: evidence,
+          identity_tier: newTier,
+          updated_at: new Date().toISOString(),
+        };
+        // Quarantine exit (design §3.4): tier ≥1 with evidence — the row is
+        // already per-thread, so its heat is this thread's alone; it simply
+        // stops being anonymous.
+        if (row.quarantined === true && newTier >= 1) {
+          updates.quarantined = false;
+          updates.contact_notes = ((row.contact_notes as string) || '') +
+            `\n[identity ${new Date().toISOString().slice(0, 10)}] Exited quarantine at tier ${newTier} — evidence: ${element}.`;
+        }
+        const { error: updErr } = await supabase
+          .from('hookup_funnel')
+          .update(updates)
+          .eq('id', hookupId)
+          .eq('user_id', userId);
+        if (updErr) {
+          console.error('[Hookup] log_contact_identity update failed:', updErr.message);
+          return;
+        }
+        const { error: evErr } = await supabase.from('hookup_funnel_events').insert({
+          user_id: userId,
+          hookup_id: hookupId,
+          event_type: 'identity_logged',
+          content_summary: `${element} → tier ${newTier}: "${quote.slice(0, 140)}"`,
+        });
+        if (evErr) console.error('[Hookup] identity event insert failed:', evErr.message);
+        console.log('[Hookup] Identity logged:', element, '→ tier', newTier);
         return;
       }
 
