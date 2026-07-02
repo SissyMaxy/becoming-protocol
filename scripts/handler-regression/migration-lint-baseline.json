@@ -408,6 +408,8 @@
   "supabase/migrations/649_reconditioning_programs.sql::insert-without-on-conflict::INSERT INTO recon_program_transition_log ... ; (no ON CONFLICT)",
   "supabase/migrations/649_reconditioning_programs.sql::insert-without-on-conflict::INSERT INTO reconditioning_programs ... ; (no ON CONFLICT)",
   "supabase/migrations/651_reconditioning_safety_and_turnout.sql::insert-without-on-conflict::INSERT INTO recon_reconsolidation_sessions ... ; (no ON CONFLICT)",
+  "supabase/migrations/652_turnout_ladder_core.sql::insert-without-on-conflict::INSERT INTO escape_cost_anchors ... ; (no ON CONFLICT)",
+  "supabase/migrations/652_turnout_ladder_core.sql::insert-without-on-conflict::INSERT INTO turnout_events ... ; (no ON CONFLICT)",
   "supabase/migrations/apply_1_tables.sql::insert-without-on-conflict::INSERT INTO supabase_migrations ... ; (no ON CONFLICT)",
   "supabase/migrations/catchup_031_037.sql::alter-table-add-column-needs-if-not-exists::ALTER TABLE mood_checkins ADD COLUMN triggered_by TEXT;",
   "supabase/migrations/catchup_031_037.sql::alter-table-add-column-needs-if-not-exists::ALTER TABLE user_state ADD COLUMN consecutive_survival_days INTEGER DEFAULT 0;",
