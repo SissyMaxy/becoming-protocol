@@ -55,15 +55,28 @@ const DEADLINE_COL: Record<Surface, string> = {
   arousal_touch_tasks: 'expires_at',
 }
 
+// Status filters (Enforcement Spine v2, design §6): only rows that are still
+// LIVE need surfacing. Fulfilled/cancelled decrees, delivered/expired
+// outreach, and completed touch tasks were flooding the urgent-push half
+// with rows nobody could act on.
+// deno-lint-ignore no-explicit-any
+function applyLiveFilter(q: any, surface: Surface): any {
+  if (surface === 'handler_decrees') return q.eq('status', 'active')
+  if (surface === 'handler_outreach_queue') return q.in('status', ['pending', 'queued'])
+  return q.is('completed_at', null) // arousal_touch_tasks
+}
+
 async function pullPending(supabase: SupabaseClient, surface: Surface, beforeIso: string, afterIso: string): Promise<SurfaceRow[]> {
   const col = DEADLINE_COL[surface]
-  const baseQuery = supabase
-    .from(surface)
-    .select(`id, user_id, ${col}, surfaced_at, expired_unsurfaced`)
-    .gte(col, afterIso)
-    .lte(col, beforeIso)
-    .eq('expired_unsurfaced', false)
-    .limit(200)
+  const baseQuery = applyLiveFilter(
+    supabase
+      .from(surface)
+      .select(`id, user_id, ${col}, surfaced_at, expired_unsurfaced`)
+      .gte(col, afterIso)
+      .lte(col, beforeIso)
+      .eq('expired_unsurfaced', false),
+    surface,
+  ).limit(200)
   const { data, error } = await baseQuery
   if (error) {
     console.error(`[surface-guarantor] ${surface}: ${error.message}`)
@@ -80,13 +93,15 @@ async function pullPending(supabase: SupabaseClient, surface: Surface, beforeIso
 
 async function pullExpiredUnsurfaced(supabase: SupabaseClient, surface: Surface, nowIso: string): Promise<SurfaceRow[]> {
   const col = DEADLINE_COL[surface]
-  const { data, error } = await supabase
-    .from(surface)
-    .select(`id, user_id, ${col}, surfaced_at, expired_unsurfaced`)
-    .lt(col, nowIso)
-    .is('surfaced_at', null)
-    .eq('expired_unsurfaced', false)
-    .limit(200)
+  const { data, error } = await applyLiveFilter(
+    supabase
+      .from(surface)
+      .select(`id, user_id, ${col}, surfaced_at, expired_unsurfaced`)
+      .lt(col, nowIso)
+      .is('surfaced_at', null)
+      .eq('expired_unsurfaced', false),
+    surface,
+  ).limit(200)
   if (error) {
     console.error(`[surface-guarantor] expired ${surface}: ${error.message}`)
     return []
@@ -160,6 +175,17 @@ Deno.serve(async (req: Request) => {
         .in('id', ids)
       if (blockErr) {
         console.error(`[surface-guarantor] block ${surface}: ${blockErr.message}`)
+      }
+
+      // Enforcement Spine v2: an expired-unsurfaced row also permanently
+      // voids its ledger obligation (visible-before-penalized as a state-
+      // machine invariant — obligation_transition logs + alarms).
+      for (const r of expired) {
+        const { error: voidErr } = await supabase.rpc('void_obligation_for_source', {
+          p_source_table: surface,
+          p_source_id: r.id,
+        })
+        if (voidErr) console.error(`[surface-guarantor] void ${surface}/${r.id}: ${voidErr.message}`)
       }
 
       // Audit trail in mommy_voice_leaks (existing table per active_features
