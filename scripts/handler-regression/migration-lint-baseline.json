@@ -405,6 +405,8 @@
   "supabase/migrations/640_chain_test_drop_gina_steps.sql::insert-without-on-conflict::INSERT INTO mommy_supervisor_log ... ; (no ON CONFLICT)",
   "supabase/migrations/648_reconditioning_target_spine.sql::insert-without-on-conflict::INSERT INTO mommy_supervisor_log ... ; (no ON CONFLICT)",
   "supabase/migrations/648_reconditioning_target_spine.sql::insert-without-on-conflict::INSERT INTO recon_measurements ... ; (no ON CONFLICT)",
+  "supabase/migrations/649_reconditioning_programs.sql::insert-without-on-conflict::INSERT INTO recon_program_transition_log ... ; (no ON CONFLICT)",
+  "supabase/migrations/649_reconditioning_programs.sql::insert-without-on-conflict::INSERT INTO reconditioning_programs ... ; (no ON CONFLICT)",
   "supabase/migrations/apply_1_tables.sql::insert-without-on-conflict::INSERT INTO supabase_migrations ... ; (no ON CONFLICT)",
   "supabase/migrations/catchup_031_037.sql::alter-table-add-column-needs-if-not-exists::ALTER TABLE mood_checkins ADD COLUMN triggered_by TEXT;",
   "supabase/migrations/catchup_031_037.sql::alter-table-add-column-needs-if-not-exists::ALTER TABLE user_state ADD COLUMN consecutive_survival_days INTEGER DEFAULT 0;",
