@@ -65,7 +65,6 @@
   ],
   "intake": [
     "api/handler/_lib/handler-context-builders.ts::const turn = p.intake_turnaround_days ? `${p.intake_turnaround_days}d intake` : '';",
-    "api/handler/_lib/handler-context-builders.ts::lines.push('INTAKE INCOMPLETE — profile coverage is thin. Do NOT draft anything Gina-facing yet. Push Maxy to complete the Gina intake befor",
     "api/handler/_lib/handler-context-builders.ts::lines.push('Intake submitted — next is attending the appointment. Confirm attendance. If she no-shows, that\\'s a major regression — log it.'",
     "api/handler/_lib/handler-context-builders.ts::lines.push('She\\'s looking but hasn\\'t committed to one. Emit advance_hrt_step to \"provider_chosen\" the moment she names one. Offer to draft",
     "api/handler/_lib/handler-context-builders.ts::lines.push(`Appointment scheduled for ${apptAt ? apptAt.toISOString().slice(0, 16) : 'unknown'}. Start drafting intake answers now. Prepare",
