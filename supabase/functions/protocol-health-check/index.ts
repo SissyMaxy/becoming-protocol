@@ -80,6 +80,14 @@ const GENERATORS: GeneratorSpec[] = [
   { name: 'transition_tracking', function_name: 'transition-tracking-prompter', expected_cadence_minutes: 10080, output_table: 'transition_tracking_log', edge_function: true, conditional: true },
   { name: 'mantra_drills', function_name: 'mommy-mantra-drill-submit', expected_cadence_minutes: 10080, output_table: 'mantra_drill_sessions', edge_function: true, conditional: true },
   { name: 'body_metrics_spine', function_name: 'body_metrics', expected_cadence_minutes: 43200, output_table: 'body_metrics', edge_function: true, conditional: true },
+  // ── Revenue ladder v2 + conditioning gate (migs 631-633) ──
+  // Daily generator; conditional because the rung gate correctly issues
+  // nothing when the deepest unmet rung's acquisition decree is still open.
+  // conditioning_gate is a SQL fn probed for existence — if it goes missing,
+  // every gated generator fails CLOSED (silent full stop), so this probe is
+  // the alarm that distinguishes "paused by design" from "gate deleted".
+  { name: 'revenue_task_generator', function_name: 'revenue-task-generator', expected_cadence_minutes: 1440, output_table: 'handler_decrees', edge_function: true, conditional: true },
+  { name: 'conditioning_gate', function_name: 'conditioning_gate', expected_cadence_minutes: 1440, conditional: true },
 ];
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);

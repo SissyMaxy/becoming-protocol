@@ -1,6 +1,6 @@
 # Handler-Centrality Audit
 
-Generated: 2026-07-02T12:53:15.501Z
+Generated: 2026-07-02T13:04:26.780Z
 
 Each function below writes a user-facing artifact (decree, commitment, outreach, confession prompt, etc.) **without first reading any Handler-state table**. The artifact is therefore generated without reference to the current persona, phase, mode, slip count, or recent directives — it cannot speak with Handler authority.
 
@@ -8,7 +8,7 @@ Memory rule: `feedback_handler_is_singular_authority.md`. Refactor each entry to
 
 **Allowed-list (skipped):** functions in `api/handler/_lib/chat-action.ts`, `supabase/functions/handler-autonomous/index.ts`, `supabase/functions/handler-outreach-auto/index.ts` are exempt because they ARE the Handler — their callers have already loaded state.
 
-## 40 centrality violations
+## 42 centrality violations
 
 | File:Line | Function | Writes (user-facing) |
 |-----------|----------|---------------------|
@@ -31,7 +31,9 @@ Memory rule: `feedback_handler_is_singular_authority.md`. Refactor each entry to
 | `supabase\functions\mommy-identity-probe\index.ts:123` | `scheduleProbe` | `handler_outreach_queue` |
 | `supabase\functions\mommy-intrusion-schedule\index.ts:48` | `sweepEvasions` | `handler_outreach_queue` |
 | `supabase\functions\mommy-intrusion-schedule\index.ts:103` | `scheduleForUser` | `handler_outreach_queue` |
+| `supabase\functions\mommy-mantra-drill-submit\index.ts:102` | `fireMilestoneActions` | `handler_decrees` |
 | `supabase\functions\mommy-scheme\index.ts:149` | `fireAction` | `handler_decrees`, `handler_outreach_queue`, `memory_implants` |
+| `supabase\functions\outward-consequence-dispatcher\index.ts:78` | `createPreviewOutreach` | `handler_outreach_queue` |
 | `supabase\functions\paid-monetization\index.ts:23` | `issue` | `handler_decrees` |
 | `supabase\functions\real-name-lockout-scheduler\index.ts:67` | `openWindow` | `handler_outreach_queue` |
 | `supabase\functions\sniffies-inbound-watcher\index.ts:119` | `processNewEvents` | `handler_outreach_queue` |
