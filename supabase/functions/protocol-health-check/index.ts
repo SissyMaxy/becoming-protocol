@@ -69,6 +69,13 @@ const GENERATORS: GeneratorSpec[] = [
   { name: 'hard_mode_recompute', function_name: 'hard_mode_recompute_all', expected_cadence_minutes: 30, conditional: true },
   { name: 'obligation_pause_shift_accruer', function_name: 'obligation_pause_shift_accrue', expected_cadence_minutes: 5, conditional: true },
   { name: 'outward_consequence_dispatcher', function_name: 'outward-consequence-dispatcher', expected_cadence_minutes: 15, output_table: 'outward_dispatch_queue', edge_function: true, conditional: true },
+  // Auto-Generated Guilt Reports (mig 641). Weekly edge fn that writes ONE
+  // handler_outreach_queue row per user. No dedicated output_table: many
+  // generators write handler_outreach_queue, so row-freshness there is not a
+  // signal that THIS fn ran (it would always read "healthy"). Registered
+  // presence-only (edge_function, conditional, no output_table) — its real
+  // liveness is asserted by checkLedgerLiveness + the fn's own idempotency.
+  { name: 'guilt_report', function_name: 'guilt-report', expected_cadence_minutes: 10080, edge_function: true, conditional: true },
   // ── Feminization loop (FEM design §7, migs 634-638) ──
   // (supersedes the old evening_confession_prescribe conditional entry: the
   // bank-engine fallback now guarantees daily rows, so silence = dead loop.)
@@ -88,6 +95,10 @@ const GENERATORS: GeneratorSpec[] = [
   // the alarm that distinguishes "paused by design" from "gate deleted".
   { name: 'revenue_task_generator', function_name: 'revenue-task-generator', expected_cadence_minutes: 1440, output_table: 'handler_decrees', edge_function: true, conditional: true },
   { name: 'conditioning_gate', function_name: 'conditioning_gate', expected_cadence_minutes: 1440, conditional: true },
+  // Self-voice goon loop (mig 642): daily/peak/retirement self-echo offers.
+  // Conditional — fires only for users with a usable own-voice clip AND the
+  // goon gate open, so zero rows is expected quiet, not a fault.
+  { name: 'goon_voice_loop', function_name: 'goon-voice-loop', expected_cadence_minutes: 1440, output_table: 'self_echo_sessions', edge_function: true, conditional: true },
 ];
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
