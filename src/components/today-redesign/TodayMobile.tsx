@@ -75,6 +75,7 @@ import { PunishmentQueueCard } from './PunishmentQueueCard';
 import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
 import { DossierDripCard } from './DossierDripCard';
+import { BecomingHero } from './BecomingHero';
 import { VoiceLessonCard } from '../voice/VoiceLessonCard';
 import { SlipLogCard } from './SlipLogCard';
 import { RationalizationPatternCard } from './RationalizationPatternCard';
@@ -181,8 +182,6 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
     }
   };
 
-  const today = new Date();
-  const weekday = today.toLocaleDateString(undefined, { weekday: 'long' });
   const openDirectives = data.directives.filter(d => !d.done).length;
   const proteinPct = Math.min(100, Math.round((data.proteinToday / data.proteinTarget) * 100));
   const weightDelta = data.weightKg && data.weightStart ? Math.round((data.weightStart - data.weightKg) * 10) / 10 : null;
@@ -279,12 +278,12 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
         </button>
       </div>
 
-      <div className="tdm-hero">
-        <h1 className="tdm-h1">{weekday}</h1>
-        <div className="tdm-sub">{morphPronouns(`Phase ${data.currentPhase} · ${data.chastityLocked ? `Chastity day ${data.chastityStreakDays}` : `Denial day ${data.denialDay}`} · ${openDirectives} directives open`, data.conditioning.displacementScore)}</div>
-      </div>
+      {/* The home is the becoming, not a dashboard. The clinical hero (weekday +
+          "Phase N · directives open") and the Compliance%/Orgasm-debt stat grid
+          are OFF the Today home now — the body metrics live under the Body tab. */}
+      {tab === 'today' && <BecomingHero />}
 
-      {(tab === 'today' || tab === 'body') && (
+      {(tab === 'body') && (
         <div className="tdm-stats">
           <div className="tdm-stat">
             <div className="lbl">Compliance 7d</div>

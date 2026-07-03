@@ -76,6 +76,7 @@ import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
 import { VoiceLessonCard } from '../voice/VoiceLessonCard';
 import { DossierDripCard } from './DossierDripCard';
+import { BecomingHero } from './BecomingHero';
 import { SlipLogCard } from './SlipLogCard';
 import { RationalizationPatternCard } from './RationalizationPatternCard';
 import { DeviceScheduleCard } from './DeviceScheduleCard';
@@ -232,8 +233,6 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
     }
   };
 
-  const today = new Date();
-  const dateStr = today.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
   const openDirectives = data.directives.filter(d => !d.done).length;
 
   const proteinPct = Math.min(100, Math.round((data.proteinToday / data.proteinTarget) * 100));
@@ -468,9 +467,9 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         )}
 
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, marginBottom: 20 }}>
-          <div style={{ flex: 1 }}>
-            <h1 className="td-h1">{dateStr}</h1>
-            <div className="td-sub" style={{ marginBottom: 0 }}>{morphPronouns(`Phase ${data.currentPhase} · ${data.chastityLocked ? `Chastity Day ${data.chastityStreakDays}` : `Denial Day ${data.denialDay}`} · ${openDirectives} directives open`, data.conditioning.displacementScore)}</div>
+          {/* The becoming, not a date + compliance readout. */}
+          <div style={{ flex: 1, marginLeft: -16 }}>
+            <BecomingHero />
           </div>
           <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
             <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', padding: '4px 9px', borderRadius: 10, fontWeight: 600, background: '#291823', color: '#edaec5', border: '1px solid #4a2438', display: 'flex', alignItems: 'center', gap: 5 }}>
