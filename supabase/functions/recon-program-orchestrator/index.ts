@@ -85,7 +85,27 @@ Deno.serve(async (req: Request) => {
         .select('id, phase, status').eq('target_id', t.id).maybeSingle()
       if (prog && prog.status === 'running') { picked = t; phase = prog.phase; break }
     }
-    if (!picked) { results.push({ user, note: 'no_active_running_target' }); continue }
+
+    // Close the proposed→active loop: if nothing is running and we're under the
+    // ≤3-active cap, start the top-priority proposed target that already has a
+    // baseline (recon-measure captures those weekly; no baseline → skip, honesty
+    // spine). Reconditioning is invitational, so auto-start under the opted-in
+    // gate is within Mommy's autonomy — no penalty rides on it.
+    if (!picked) {
+      const { count: activeCount } = await s.from('reconditioning_targets')
+        .select('id', { count: 'exact', head: true }).eq('user_id', user).eq('status', 'active')
+      if ((activeCount ?? 0) < 3) {
+        const { data: proposed } = await s.from('reconditioning_targets')
+          .select('id, slug, claim_text')
+          .eq('user_id', user).eq('status', 'proposed').not('baseline_captured_at', 'is', null)
+          .order('priority', { ascending: true }).limit(1).maybeSingle()
+        if (proposed) {
+          const { data: progId } = await s.rpc('recon_start_program', { p_target: proposed.id })
+          if (progId) { picked = proposed; phase = 'induction' }
+        }
+      }
+    }
+    if (!picked) { results.push({ user, note: 'no_startable_target' }); continue }
 
     // A due retrieval rep, if the reinforce phase has one.
     let repPrompt: string | null = null
