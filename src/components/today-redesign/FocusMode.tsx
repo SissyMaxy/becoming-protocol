@@ -1011,6 +1011,21 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
         await supabase.from('punishment_queue').update({ status: 'completed', completed_at: nowIso }).eq('id', task.rowId);
       } else if (task.kind === 'overdue_decree' || task.kind === 'due_today_decree' || task.kind === 'focus_decree') {
         await supabase.from('handler_decrees').update({ status: 'fulfilled', fulfilled_at: nowIso }).eq('id', task.rowId);
+        // Capture her report (if she wrote one) as a genuine first-person admission
+        // — this is the material the conditioning corpus wants. Fire-and-forget; a
+        // failed capture must never block the fulfillment.
+        const report = confessText.trim();
+        if (report.length > 0) {
+          try {
+            await supabase.from('key_admissions').insert({
+              user_id: user.id,
+              admission_text: report.slice(0, 2000),
+              admission_type: 'decree_reflection',
+            });
+          } catch (e) { console.error('[FocusMode] decree report capture failed:', e); }
+          localStorage.removeItem(`focus_draft:${task.rowId}`);
+          setConfessText('');
+        }
       } else if (task.kind === 'workout_today') {
         await supabase.from('workout_prescriptions').update({ status: 'completed', completed_at: nowIso }).eq('id', task.rowId);
       } else if (task.kind === 'mommy_touch') {
@@ -1906,7 +1921,25 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
           )}
 
           {task.surface === 'decree' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {/* The task tells her to REPORT back — so give her somewhere to do it.
+                  Her words land in her own-words corpus (key_admissions), which is
+                  exactly what the reconditioning/target-author engines feed on: the
+                  reflection is the point, not a checkbox. Optional but present. */}
+              <textarea
+                value={confessText}
+                onChange={(e) => setConfessText(e.target.value)}
+                placeholder="Tell Mama how it felt…"
+                rows={3}
+                disabled={submitting}
+                style={{
+                  width: '100%', padding: '10px 12px', resize: 'vertical',
+                  background: '#160c13', color: '#f2e9e6',
+                  border: `1px solid ${confessText.trim() ? tone.border : '#2a2a32'}`,
+                  borderRadius: 8, fontSize: 13, lineHeight: 1.5,
+                  fontFamily: 'inherit', outline: 'none',
+                }}
+              />
               <button
                 onClick={handleMarkDone}
                 disabled={submitting}
@@ -1919,7 +1952,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
                   cursor: submitting ? 'wait' : 'pointer',
                 }}
               >
-                {submitting ? 'submitting…' : 'Mark fulfilled'}
+                {submitting ? 'submitting…' : (confessText.trim() ? 'Give it to Mama' : 'Mark fulfilled')}
               </button>
               <button
                 onClick={async () => {
