@@ -120,6 +120,38 @@ const JOBS: CronJob[] = [
     fn: 'turnout-orchestrator',
     body: `jsonb_build_object('trigger','pg_cron')`,
   },
+  {
+    // Reconsolidation: authors 'opened' sessions + fires the micro-rep INSIDE the
+    // ~2h labile window — so it MUST run at least hourly (window/2). Gated.
+    name: 'recon-reconsolidation-hourly',
+    schedule: '0 * * * *',
+    fn: 'recon-reconsolidation',
+    body: `jsonb_build_object('trigger','pg_cron')`,
+  },
+  {
+    // Mommy proposes <=1 new reconditioning target/week from the corpus. Gated +
+    // recon_target_guard. Tue 09:00 UTC.
+    name: 'recon-target-author-weekly',
+    schedule: '0 9 * * 2',
+    fn: 'recon-target-author',
+    body: `jsonb_build_object('trigger','pg_cron')`,
+  },
+  {
+    // TMR sleep-cue builder: pre-renders already-installed cues for deep-sleep
+    // replay. Double-gated (recondition + recon_sleep_enabled). Pre-sleep 03:00 UTC.
+    name: 'recon-sleep-cue-nightly',
+    schedule: '0 3 * * *',
+    fn: 'recon-sleep-cue-builder',
+    body: `jsonb_build_object('trigger','pg_cron')`,
+  },
+  {
+    // Commitment ladder: <=1 penalty-bearing commitment rung/run via the
+    // obligation ledger. Gated. 05:00 UTC.
+    name: 'recon-commitment-ladder-daily',
+    schedule: '0 5 * * *',
+    fn: 'recon-commitment-ladder',
+    body: `jsonb_build_object('trigger','pg_cron')`,
+  },
 ]
 
 function jobSql(j: CronJob, key: string): string {

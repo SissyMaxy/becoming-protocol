@@ -63,6 +63,8 @@ import { LettersSettings } from './LettersSettings';
 import { MommyPersonaSettings } from './MommyPersonaSettings';
 import { MicroTaskSettings } from '../micro-tasks';
 import { CorruptionDashboard } from '../admin/CorruptionDashboard';
+import { ReconditioningPanel } from '../admin/ReconditioningPanel';
+import { TurnoutPanel } from '../admin/TurnoutPanel';
 import { SleepContentSettings } from '../sleep-content/SleepContentSettings';
 import { SocialMediaDashboard } from '../social/SocialMediaDashboard';
 import { PersonaSettings } from './PersonaSettings';
@@ -323,7 +325,7 @@ interface SettingsViewProps {
   onOpenDossierStatus?: () => void;
 }
 
-type SettingsSection = 'main' | 'profile' | 'lovense' | 'whoop' | 'calendar' | 'equipment' | 'timeratchets' | 'reminders' | 'privacy' | 'stealth' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content' | 'opacity' | 'social-dashboard' | 'persona' | 'sniffies' | 'letters' | 'identity' | 'weekly-recap' | 'ego-deconstruction';
+type SettingsSection = 'main' | 'profile' | 'lovense' | 'whoop' | 'calendar' | 'equipment' | 'timeratchets' | 'reminders' | 'privacy' | 'stealth' | 'appearance' | 'data' | 'handler' | 'taskupload' | 'microtasks' | 'corruption' | 'sleep-content' | 'opacity' | 'social-dashboard' | 'persona' | 'sniffies' | 'letters' | 'identity' | 'weekly-recap' | 'ego-deconstruction' | 'reconditioning' | 'turnout';
 
 export function SettingsView({ onBack, onEditIntake, onOpenDossierQuiz, onOpenDossierStatus }: SettingsViewProps) {
   const { isBambiMode } = useBambiMode();
@@ -418,7 +420,7 @@ export function SettingsView({ onBack, onEditIntake, onOpenDossierQuiz, onOpenDo
       icon: Zap,
       label: 'Micro-Tasks',
       description: 'Identity reinforcement during work',
-      color: '#a855f7',
+      color: '#c9557f',
     },
     {
       id: 'identity' as const,
@@ -467,14 +469,14 @@ export function SettingsView({ onBack, onEditIntake, onOpenDossierQuiz, onOpenDo
       icon: Shield,
       label: 'Stealth',
       description: 'Disguise icon, hide previews, PIN',
-      color: '#8b5cf6',
+      color: '#cf6088',
     },
     {
       id: 'appearance' as const,
       icon: Palette,
       label: 'Appearance',
       description: 'Theme and display',
-      color: '#a855f7',
+      color: '#c9557f',
     },
     {
       id: 'data' as const,
@@ -534,6 +536,8 @@ export function SettingsView({ onBack, onEditIntake, onOpenDossierQuiz, onOpenDo
     if (activeSection === 'identity') return 'Identity';
     if (activeSection === 'weekly-recap') return 'Weekly Recap';
     if (activeSection === 'ego-deconstruction') return 'Ego deconstruction';
+    if (activeSection === 'reconditioning') return 'Reconditioning Panel';
+    if (activeSection === 'turnout') return 'Turn-Out Panel';
     const section = sections.find(s => s.id === activeSection);
     return section?.label || 'Settings';
   };
@@ -636,11 +640,11 @@ export function SettingsView({ onBack, onEditIntake, onOpenDossierQuiz, onOpenDo
                 >
                   <div
                     className="p-3 rounded-xl"
-                    style={{ backgroundColor: '#c4b5fd20' }}
+                    style={{ backgroundColor: '#edaec520' }}
                   >
                     <User
                       className="w-5 h-5"
-                      style={{ color: '#c4b5fd' }}
+                      style={{ color: '#edaec5' }}
                     />
                   </div>
                   <div className="flex-1">
@@ -770,11 +774,11 @@ export function SettingsView({ onBack, onEditIntake, onOpenDossierQuiz, onOpenDo
                 >
                   <div
                     className="p-3 rounded-xl"
-                    style={{ backgroundColor: '#8b5cf620' }}
+                    style={{ backgroundColor: '#cf608820' }}
                   >
                     <ClipboardEdit
                       className="w-5 h-5"
-                      style={{ color: '#8b5cf6' }}
+                      style={{ color: '#cf6088' }}
                     />
                   </div>
                   <div className="flex-1">
@@ -1233,6 +1237,66 @@ export function SettingsView({ onBack, onEditIntake, onOpenDossierQuiz, onOpenDo
                   </button>
                 )}
 
+                {/* Reconditioning Panel - Debug Mode Only */}
+                {isDebugMode && (
+                  <button
+                    onClick={() => setActiveSection('reconditioning')}
+                    className={`w-full p-4 rounded-xl border flex items-center gap-4 text-left transition-all ${
+                      isBambiMode
+                        ? 'bg-pink-50 border-pink-200 hover:border-pink-300'
+                        : 'bg-protocol-surface border-protocol-border hover:border-protocol-accent/30'
+                    }`}
+                  >
+                    <div className="p-3 rounded-xl" style={{ backgroundColor: '#c9557f20' }}>
+                      <Brain className="w-5 h-5" style={{ color: '#c9557f' }} />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className={`font-medium ${isBambiMode ? 'text-pink-700' : 'text-protocol-text'}`}>
+                          Reconditioning Panel
+                        </p>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-400">
+                          DEBUG
+                        </span>
+                      </div>
+                      <p className={`text-sm ${isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'}`}>
+                        Target baselines, phases, probes
+                      </p>
+                    </div>
+                    <ChevronRight className={`w-5 h-5 ${isBambiMode ? 'text-pink-300' : 'text-protocol-text-muted'}`} />
+                  </button>
+                )}
+
+                {/* Turn-Out Panel - Debug Mode Only */}
+                {isDebugMode && (
+                  <button
+                    onClick={() => setActiveSection('turnout')}
+                    className={`w-full p-4 rounded-xl border flex items-center gap-4 text-left transition-all ${
+                      isBambiMode
+                        ? 'bg-pink-50 border-pink-200 hover:border-pink-300'
+                        : 'bg-protocol-surface border-protocol-border hover:border-protocol-accent/30'
+                    }`}
+                  >
+                    <div className="p-3 rounded-xl" style={{ backgroundColor: '#3b82f620' }}>
+                      <Activity className="w-5 h-5" style={{ color: '#3b82f6' }} />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className={`font-medium ${isBambiMode ? 'text-pink-700' : 'text-protocol-text'}`}>
+                          Turn-Out Panel
+                        </p>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-400">
+                          DEBUG
+                        </span>
+                      </div>
+                      <p className={`text-sm ${isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'}`}>
+                        Ladder position, escape cost, controls
+                      </p>
+                    </div>
+                    <ChevronRight className={`w-5 h-5 ${isBambiMode ? 'text-pink-300' : 'text-protocol-text-muted'}`} />
+                  </button>
+                )}
+
                 {/* Debug Mode Toggle */}
                 {isDebugMode && (
                   <button
@@ -1330,6 +1394,16 @@ export function SettingsView({ onBack, onEditIntake, onOpenDossierQuiz, onOpenDo
         {/* Corruption Dashboard - Debug Mode Only */}
         {activeSection === 'corruption' && isDebugMode && (
           <CorruptionDashboard onBack={() => setActiveSection('main')} />
+        )}
+
+        {/* Reconditioning Panel - Debug Mode Only */}
+        {activeSection === 'reconditioning' && isDebugMode && (
+          <ReconditioningPanel onBack={() => setActiveSection('main')} />
+        )}
+
+        {/* Turn-Out Panel - Debug Mode Only */}
+        {activeSection === 'turnout' && isDebugMode && (
+          <TurnoutPanel onBack={() => setActiveSection('main')} />
         )}
 
         {/* Task Upload - Always available for flooding the protocol */}

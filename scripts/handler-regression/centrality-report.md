@@ -1,6 +1,6 @@
 # Handler-Centrality Audit
 
-Generated: 2026-07-03T14:03:38.549Z
+Generated: 2026-07-03T17:34:57.180Z
 
 Each function below writes a user-facing artifact (decree, commitment, outreach, confession prompt, etc.) **without first reading any Handler-state table**. The artifact is therefore generated without reference to the current persona, phase, mode, slip count, or recent directives — it cannot speak with Handler authority.
 
@@ -8,7 +8,7 @@ Memory rule: `feedback_handler_is_singular_authority.md`. Refactor each entry to
 
 **Allowed-list (skipped):** functions in `api/handler/_lib/chat-action.ts`, `supabase/functions/handler-autonomous/index.ts`, `supabase/functions/handler-outreach-auto/index.ts` are exempt because they ARE the Handler — their callers have already loaded state.
 
-## 44 centrality violations
+## 45 centrality violations
 
 | File:Line | Function | Writes (user-facing) |
 |-----------|----------|---------------------|
@@ -37,6 +37,7 @@ Memory rule: `feedback_handler_is_singular_authority.md`. Refactor each entry to
 | `supabase\functions\paid-monetization\index.ts:23` | `issue` | `handler_decrees` |
 | `supabase\functions\real-name-lockout-scheduler\index.ts:67` | `openWindow` | `handler_outreach_queue` |
 | `supabase\functions\recon-program-orchestrator\index.ts:27` | `issueFocus` | `handler_decrees` |
+| `supabase\functions\recon-reconsolidation\index.ts:133` | `issueDecree` | `handler_decrees` |
 | `supabase\functions\sniffies-inbound-watcher\index.ts:119` | `processNewEvents` | `handler_outreach_queue` |
 | `supabase\functions\sniffies-restart-coach\index.ts:223` | `processUser` | `handler_outreach_queue` |
 | `supabase\functions\turnout-orchestrator\index.ts:40` | `issueTurnout` | `handler_decrees` |

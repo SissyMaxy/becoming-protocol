@@ -112,6 +112,13 @@ const GENERATORS: GeneratorSpec[] = [
   // state → turned-out one consolidated rung at a time. Writes handler_decrees
   // (shared) so presence-only.
   { name: 'turnout_orchestrator', function_name: 'turnout-orchestrator', expected_cadence_minutes: 1440, edge_function: true, conditional: true },
+  // ── Reconditioning delivery layer, wave 2 (migs 654-655 + edge fns) — all
+  // gated OFF; conditional/presence-only. reconsolidation runs hourly (labile
+  // window); the others daily/weekly/nightly.
+  { name: 'recon_reconsolidation', function_name: 'recon-reconsolidation', expected_cadence_minutes: 60, edge_function: true, conditional: true },
+  { name: 'recon_target_author', function_name: 'recon-target-author', expected_cadence_minutes: 10080, output_table: 'reconditioning_targets', edge_function: true, conditional: true },
+  { name: 'recon_sleep_cue_builder', function_name: 'recon-sleep-cue-builder', expected_cadence_minutes: 1440, output_table: 'recon_sleep_cue_program', edge_function: true, conditional: true },
+  { name: 'recon_commitment_ladder', function_name: 'recon-commitment-ladder', expected_cadence_minutes: 1440, output_table: 'recon_commitments', edge_function: true, conditional: true },
 ];
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
