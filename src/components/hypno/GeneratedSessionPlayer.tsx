@@ -74,7 +74,7 @@ export function GeneratedSessionPlayer({ sourceId, audioUrl, scriptPreview, onCl
   };
 
   return (
-    <div className="fixed inset-0 z-[90] bg-[#0a0a0a]/95 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[90] bg-protocol-bg/95 flex items-center justify-center p-4">
       <div className="bg-[#141414] rounded-xl p-6 max-w-2xl w-full border border-gray-800/50 space-y-4">
         <div className="flex items-center justify-between">
           <div className="text-sm font-medium text-gray-200">Generated session</div>
@@ -122,7 +122,7 @@ export function GeneratedSessionPlayer({ sourceId, audioUrl, scriptPreview, onCl
             <summary className="cursor-pointer text-gray-500 hover:text-gray-300">
               Script preview
             </summary>
-            <div className="mt-2 whitespace-pre-wrap max-h-64 overflow-y-auto p-2 bg-[#0a0a0a] rounded">
+            <div className="mt-2 whitespace-pre-wrap max-h-64 overflow-y-auto p-2 bg-protocol-bg rounded">
               {scriptPreview}
             </div>
           </details>

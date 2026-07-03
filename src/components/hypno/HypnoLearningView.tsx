@@ -226,20 +226,20 @@ export function HypnoLearningView() {
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://.../audio.mp3"
-          className="w-full bg-[#0a0a0a] border border-gray-800 rounded px-3 py-2 text-sm"
+          className="w-full bg-protocol-bg border border-gray-800 rounded px-3 py-2 text-sm"
         />
         <div className="flex gap-2">
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Title (optional)"
-            className="flex-1 bg-[#0a0a0a] border border-gray-800 rounded px-3 py-2 text-sm"
+            className="flex-1 bg-protocol-bg border border-gray-800 rounded px-3 py-2 text-sm"
           />
           <input
             value={creator}
             onChange={(e) => setCreator(e.target.value)}
             placeholder="Creator (optional)"
-            className="flex-1 bg-[#0a0a0a] border border-gray-800 rounded px-3 py-2 text-sm"
+            className="flex-1 bg-protocol-bg border border-gray-800 rounded px-3 py-2 text-sm"
           />
         </div>
         <button
@@ -309,7 +309,7 @@ export function HypnoLearningView() {
             <select
               value={durationMin}
               onChange={(e) => setDurationMin(parseInt(e.target.value, 10))}
-              className="ml-2 bg-[#0a0a0a] border border-gray-800 rounded px-2 py-1 text-sm"
+              className="ml-2 bg-protocol-bg border border-gray-800 rounded px-2 py-1 text-sm"
             >
               <option value={3}>3 min</option>
               <option value={5}>5 min</option>

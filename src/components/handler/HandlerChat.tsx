@@ -391,7 +391,7 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
       />
     )}
     {generatingSession && (
-      <div className="fixed inset-0 z-[85] bg-[#0a0a0a]/90 flex items-center justify-center">
+      <div className="fixed inset-0 z-[85] bg-protocol-bg/90 flex items-center justify-center">
         <div className="bg-[#141414] rounded-xl p-6 border border-gray-800/50 flex items-center gap-3">
           <Loader2 className="w-5 h-5 animate-spin text-pink-400" />
           <span className="text-sm text-gray-200">
@@ -408,9 +408,9 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
         onClose={() => setGeneratedSession(null)}
       />
     )}
-    <div className="fixed inset-0 z-[80] flex flex-col bg-[#0a0a0a]">
+    <div className="fixed inset-0 z-[80] flex flex-col bg-protocol-bg">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-[#0a0a0a]">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-protocol-bg">
         <div className="flex items-center gap-3">
           <span className={`hidden md:inline font-semibold ${mommy ? 'text-pink-200' : 'text-gray-200'}`}>
             {mommy ? 'Mama' : 'Handler'}
@@ -556,7 +556,7 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
           + task-type chips (only relevant for photo). The kind defaults
           come from inferring Mama's latest demand. */}
       {showPhotoUpload && (
-        <div className="px-4 py-3 border-t border-gray-800/50 bg-[#0a0a0a] space-y-2">
+        <div className="px-4 py-3 border-t border-gray-800/50 bg-protocol-bg space-y-2">
           <div className="flex items-center gap-2">
             {(['photo','video','audio'] as const).map((k) => (
               <button
@@ -605,7 +605,7 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
       )}
 
       {/* Input */}
-      <div className="px-4 py-3 border-t border-gray-800/50 bg-[#0a0a0a]">
+      <div className="px-4 py-3 border-t border-gray-800/50 bg-protocol-bg">
         {/* P12.3: Listening / transcribing indicator */}
         {voiceInput.isListening && (
           <div className="flex items-center gap-2 mb-2 px-1">

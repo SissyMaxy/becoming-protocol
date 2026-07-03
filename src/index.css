@@ -15,13 +15,26 @@ html {
    Bambi mode re-lights its own tree via .bambi-mode; nothing else may. */
 body {
   margin: 0;
-  background-color: #120b10;
   color: #f2e9e6;
   min-height: 100dvh;
+  /* Velvet boudoir — not flat near-black. A warm plum floor with a low rose
+     glow bleeding up from the bottom, like candlelight. This is the signature. */
+  background-color: #120b10;
+  background-image:
+    radial-gradient(120% 80% at 50% 108%, rgba(201, 85, 127, 0.16) 0%, rgba(201, 85, 127, 0) 55%),
+    radial-gradient(90% 60% at 15% -10%, rgba(120, 58, 87, 0.18) 0%, rgba(120, 58, 87, 0) 50%),
+    linear-gradient(180deg, #160c13 0%, #120b10 45%, #0f0a0e 100%);
+  background-attachment: fixed;
 }
 
 #root {
   min-height: 100dvh;
+}
+
+/* The app frame reads bg-protocol-bg as a solid token; make those frame layers
+   transparent so the body's candlelit gradient shows through the whole app. */
+.min-h-screen.bg-protocol-bg {
+  background-color: transparent !important;
 }
 
 /* Custom scrollbar */

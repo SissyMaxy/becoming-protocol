@@ -172,7 +172,7 @@ type Tab = 'protocol' | 'progress' | 'sealed' | 'menu';
 
 function LoadingScreen() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center" style={{ backgroundColor: '#FAF7F5' }}>
+    <div className="min-h-screen flex flex-col items-center justify-center" style={{ backgroundColor: '#120b10' }}>
       <Loader2 className="w-10 h-10 text-pink-400 animate-spin mb-4" />
       <p className="text-pink-600 text-sm">Loading...</p>
     </div>
@@ -995,8 +995,8 @@ function AuthenticatedAppInner() {
         return <HypnoDashboard onBack={handleBackFromSubView} />;
       case 'hypno-learning':
         return (
-          <div className="min-h-screen bg-[#0a0a0a]">
-            <div className="px-4 py-3 flex items-center gap-2 border-b border-gray-800/50">
+          <div className="min-h-screen bg-protocol-bg">
+            <div className="px-4 py-3 flex items-center gap-2 border-b border-protocol-border/50">
               <button
                 onClick={handleBackFromSubView}
                 className="text-gray-400 hover:text-gray-200 text-sm"
@@ -1237,7 +1237,7 @@ function AuthenticatedAppInner() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a]">
+    <div className="min-h-screen bg-protocol-bg">
       {/* PRIMARY: The Conversation — always visible unless settings open */}
       {!showSettings && (
         <>
@@ -1264,7 +1264,7 @@ function AuthenticatedAppInner() {
 
       {/* SETTINGS: Accessed via gear icon in chat header */}
       {showSettings && (
-        <div className="min-h-screen bg-[#0a0a0a]">
+        <div className="min-h-screen bg-protocol-bg">
           <div className="max-w-lg mx-auto px-4 py-4">
             <button
               onClick={() => setShowSettings(false)}
