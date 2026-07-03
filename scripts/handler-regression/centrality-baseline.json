@@ -37,8 +37,10 @@
   "supabase/functions/outward-consequence-dispatcher/index.ts:createPreviewOutreach",
   "supabase/functions/paid-monetization/index.ts:issue",
   "supabase/functions/real-name-lockout-scheduler/index.ts:openWindow",
+  "supabase/functions/recon-program-orchestrator/index.ts:issueFocus",
   "supabase/functions/sniffies-inbound-watcher/index.ts:processNewEvents",
   "supabase/functions/sniffies-restart-coach/index.ts:processUser",
+  "supabase/functions/turnout-orchestrator/index.ts:issueTurnout",
   "supabase/functions/verification-evidence-grader/index.ts:queueFeedbackOutreach",
   "supabase/functions/wish-human-handoff/index.ts:handoffForUser"
 ]

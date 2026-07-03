@@ -11,7 +11,7 @@
 // prove the gate is open does not condition.
 //
 // Known systems (unknown = deny at the SQL layer):
-//   'goon' | 'machine' | 'paid_monetization' | 'temptation'
+//   'goon' | 'machine' | 'paid_monetization' | 'temptation' | 'recondition' | 'turnout'
 
 // deno-lint-ignore no-explicit-any
 type Sb = any

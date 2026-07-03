@@ -94,6 +94,32 @@ const JOBS: CronJob[] = [
     body: `jsonb_build_object('trigger','pg_cron')`,
     guard: `WHERE EXISTS (SELECT 1 FROM self_echo_sessions WHERE mix_status = 'pending_mix' AND own_voice_path IS NOT NULL)`,
   },
+  {
+    // Reconditioning measurement pass (migs 648-651): weekly re-measure of each
+    // target's behavioral indicator + baseline capture. Read-mostly; self-gates
+    // program advancement. Quiet until recondition_enabled. Mon 08:00 UTC.
+    name: 'recon-measure-weekly',
+    schedule: '0 8 * * 1',
+    fn: 'recon-measure',
+    body: `jsonb_build_object('trigger','pg_cron')`,
+  },
+  {
+    // Reconditioning conductor: emits ONE phase-appropriate Focus task/day for the
+    // top active target. Gated fail-closed on conditioning_gate('recondition'). 02:00 UTC.
+    name: 'recon-program-orchestrator-daily',
+    schedule: '0 2 * * *',
+    fn: 'recon-program-orchestrator',
+    body: `jsonb_build_object('trigger','pg_cron')`,
+  },
+  {
+    // Turn-out conductor: consolidation check + advance + surface ONE next step.
+    // Gated fail-closed on conditioning_gate('turnout'). Delegates to the live
+    // engines; never a raw physical decree. 04:00 UTC.
+    name: 'turnout-orchestrator-daily',
+    schedule: '0 4 * * *',
+    fn: 'turnout-orchestrator',
+    body: `jsonb_build_object('trigger','pg_cron')`,
+  },
 ]
 
 function jobSql(j: CronJob, key: string): string {

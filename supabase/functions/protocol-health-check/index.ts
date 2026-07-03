@@ -103,6 +103,15 @@ const GENERATORS: GeneratorSpec[] = [
   // the Mommy track → flips to 'mixed'. Runs every 5 min but only when there is
   // a pending session, so zero recent rows is expected quiet, not a fault.
   { name: 'self_echo_mixer', function_name: 'self-echo-mixer', expected_cadence_minutes: 5, output_table: 'self_echo_sessions', edge_function: true, conditional: true },
+  // ── Reconditioning engine (migs 648-651) — all gated OFF by default, so quiet
+  // is the expected state until recondition_enabled is set. Presence-only /
+  // output-table where a dedicated one exists.
+  { name: 'recon_measure', function_name: 'recon-measure', expected_cadence_minutes: 10080, output_table: 'recon_measurements', edge_function: true, conditional: true },
+  { name: 'recon_program_orchestrator', function_name: 'recon-program-orchestrator', expected_cadence_minutes: 1440, edge_function: true, conditional: true },
+  // ── Turn-Out ladder (migs 652-653) — gated OFF by default; conducts current-
+  // state → turned-out one consolidated rung at a time. Writes handler_decrees
+  // (shared) so presence-only.
+  { name: 'turnout_orchestrator', function_name: 'turnout-orchestrator', expected_cadence_minutes: 1440, edge_function: true, conditional: true },
 ];
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);

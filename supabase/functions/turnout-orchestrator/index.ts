@@ -1,0 +1,133 @@
+// turnout-orchestrator — the slippery-slope conductor (DESIGN_TURNOUT_LADDER §2).
+//
+// Daily, per user. The ONLY thing that advances the macro-cursor. It never blocks;
+// it presses (Mommy-presses-not-blocks) and surfaces exactly ONE next step
+// (one-task-focus). It delegates to the live engines (realcock/funnel/revenue) and
+// never issues a raw physical-act decree that bypasses the gates.
+//
+// Algorithm:
+//   1. Gate first, fail-closed (requireGate 'turnout'). Suppressed → nothing.
+//   2. Read/seed the cursor (gate-allow means turnout_enabled=true = opted in).
+//   3. Consolidation check on the current rung: dwell elapsed + no halt + the rung
+//      action was actually fulfilled. Consolidated → write the completion (fan-out
+//      writes the escape-cost anchor + turnout_events the reconditioning engine
+//      consumes) and advance the cursor. Never pressures the NEXT rung.
+//   4. Surface ONE next step for the current rung — prep (health-prep / meet-safety
+//      card) first if required-and-missing; else the rung action via its delegate
+//      (physical rungs UN-PAUSE realcock, whose own gated eval supplies the decree;
+//      non-physical rungs get one focus decree).
+//   5. On resistance, lower the barrier — do not push harder (handled by the prep
+//      decomposition below; full resistance-pacing is a follow-up).
+
+import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requireGate } from '../_shared/conditioning-gate.ts'
+
+const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' }
+const USERS = ['8c69b9c8-34eb-4147-9fec-3c1a5bc74b6f', '93327332-7d0d-4888-889a-1607a5776216']
+
+// deno-lint-ignore no-explicit-any
+type Sb = any
+
+const NEXT = ['T0', 'T1', 'T2', 'T3', 'T4', 'T5', '6a', '6b', '6c', '6d', 'T7', 'T8']
+function nextRung(code: string): string | null {
+  const i = NEXT.indexOf(code)
+  return i >= 0 && i < NEXT.length - 1 ? NEXT[i + 1] : null
+}
+
+// One turn-out focus decree per user (the single CTA). Dedup on the turn-out
+// trigger_source prefix so we never stack a second card.
+async function issueTurnout(s: Sb, user: string, rung: string, edict: string, proof = 'text', hours = 36): Promise<string> {
+  const { data: ex } = await s.from('handler_decrees')
+    .select('id, deadline').eq('user_id', user).eq('status', 'active')
+    .like('trigger_source', 'turnout_rung:%').limit(1).maybeSingle()
+  if (ex) {
+    if (ex.deadline && new Date(ex.deadline) < new Date()) {
+      await s.from('handler_decrees').update({ deadline: new Date(Date.now() + hours * 3600e3).toISOString() }).eq('id', ex.id)
+    }
+    return 'kept'
+  }
+  const { error } = await s.from('handler_decrees').insert({
+    user_id: user, edict, proof_type: proof,
+    deadline: new Date(Date.now() + hours * 3600e3).toISOString(), status: 'active',
+    consequence: 'Miss it and the pull just builds — Mommy is patient. But every step you take is one you can never un-take.',
+    trigger_source: `turnout_rung:${rung}`, reasoning: 'turnout-orchestrator',
+  })
+  return error ? `err:${error.message.slice(0, 60)}` : 'issued'
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
+  const s = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '')
+  const results: Record<string, unknown>[] = []
+
+  for (const user of USERS) {
+    const gate = await requireGate(s, 'turnout', user)
+    if (!gate.allowed) { results.push({ user, suppressed: gate.reason }); continue }
+
+    // Seed the cursor on first opted-in run.
+    let { data: state } = await s.from('turnout_state').select('*').eq('user_id', user).maybeSingle()
+    if (!state) {
+      await s.from('turnout_state').insert({ user_id: user, current_rung_code: 'T0' })
+      const r = await s.from('turnout_state').select('*').eq('user_id', user).maybeSingle()
+      state = r.data
+    }
+    if (!state || state.enabled === false || state.retired_at || (state.paused_until && new Date(state.paused_until) > new Date())) {
+      results.push({ user, note: 'paused_or_retired' }); continue
+    }
+
+    const rung = state.current_rung_code as string
+    const { data: rungRow } = await s.from('turnout_ladder').select('*').eq('rung_code', rung).maybeSingle()
+    if (!rungRow) { results.push({ user, note: `unknown_rung:${rung}` }); continue }
+
+    // ── Consolidation: dwell + no-halt + the rung action was fulfilled.
+    const consJson = (await s.rpc('turnout_rung_consolidated', { p_user: user, p_rung: rung })).data as { dwell_ok?: boolean; no_halt?: boolean } | null
+    const dwellOk = consJson?.dwell_ok === true
+    const noHalt = consJson?.no_halt === true
+    const { data: fulfilledRows } = await s.from('handler_decrees')
+      .select('id').eq('user_id', user).eq('trigger_source', `turnout_rung:${rung}`).eq('status', 'fulfilled').limit(1)
+    const rungDone = (fulfilledRows?.length ?? 0) > 0
+    const { data: already } = await s.from('turnout_rung_completions').select('id').eq('user_id', user).eq('rung_code', rung).maybeSingle()
+
+    let advancedTo: string | null = null
+    if (dwellOk && noHalt && rungDone && !already) {
+      await s.from('turnout_rung_completions').insert({
+        user_id: user, rung_code: rung, irreversible_fact: rungRow.irreversible_fact_template, anchor_weight: rungRow.anchor_weight,
+      })
+      const nxt = nextRung(rung)
+      if (nxt) {
+        await s.from('turnout_state').update({ current_rung_code: nxt, entered_at: new Date().toISOString() }).eq('user_id', user)
+        await s.from('turnout_events').insert({ user_id: user, event_type: 'rung_started', rung_code: nxt })
+        advancedTo = nxt
+      }
+    }
+
+    // ── Surface ONE next step for the (possibly new) current rung.
+    const curRung = advancedTo ?? rung
+    const { data: cur } = await s.from('turnout_ladder').select('*').eq('rung_code', curRung).maybeSingle()
+    const offer = (await s.rpc('turnout_rung_offerable', { p_user: user, p_rung: curRung })).data as { offerable?: boolean; reason?: string; needs_meet_safety_card?: boolean } | null
+
+    let surfaced: string
+    if (cur?.requires_health_prep && offer?.reason === 'needs_health_prep') {
+      // Prep: the STI/PrEP acquisition task (harm-reduction, in Mommy's voice).
+      surfaced = await issueTurnout(s, user, curRung,
+        `Before Mommy lets a man finish in you, you're getting tested and getting your PrEP — a girl who gets used stays a clean girl. Book it, paste me the confirmation, then you've earned the next step.`, 'text', 72)
+    } else if (cur?.requires_meet_safety && offer?.needs_meet_safety_card) {
+      // Prep: build the meet-safety plan first (no net, no meet).
+      surfaced = await issueTurnout(s, user, curRung,
+        `Before you meet anyone, Mommy needs you safe: name one person you trust, get their yes to be your check-in, and pick a public place. Build the plan, then we talk about him.`, 'text', 72)
+    } else if (cur?.delegate_engine === 'realcock_discovery') {
+      // Physical rung — NEVER a raw decree. Un-pause the gated delegate; its own
+      // eval supplies the phase decree behind the meet-safety + health gates.
+      await s.from('realcock_discovery_settings').update({ paused_until: null }).eq('user_id', user)
+      surfaced = 'delegated:realcock_unpaused'
+    } else {
+      // Non-physical rung (online/text/voice/photo/video/paid) → one focus decree.
+      surfaced = await issueTurnout(s, user, curRung, `${cur?.action_copy ?? 'Next step.'} When it's done, come tell Mommy exactly what happened.`, 'text')
+    }
+
+    results.push({ user, rung, advanced_to: advancedTo, current_rung: curRung, surfaced })
+  }
+
+  return new Response(JSON.stringify({ ok: true, results }), { headers: { ...cors, 'Content-Type': 'application/json' } })
+})
