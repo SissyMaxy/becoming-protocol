@@ -247,7 +247,7 @@ export function EgoDeconstructionSettings() {
     <div className="space-y-4">
       <div className="rounded-xl border border-protocol-border bg-protocol-surface p-4">
         <div className="flex items-start gap-3">
-          <Brain className="w-5 h-5 text-purple-400 shrink-0 mt-0.5" />
+          <Brain className="w-5 h-5 text-protocol-accent shrink-0 mt-0.5" />
           <div className="flex-1">
             <h3 className="text-sm font-semibold text-protocol-text">Ego deconstruction layer</h3>
             <p className="text-xs text-protocol-text-muted mt-1">
@@ -279,7 +279,7 @@ export function EgoDeconstructionSettings() {
                 type="button"
                 onClick={acknowledge}
                 disabled={saving === 'ego_layer_ack_at'}
-                className="px-3 py-1.5 text-xs rounded-lg bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-50"
+                className="px-3 py-1.5 text-xs rounded-lg bg-protocol-accent text-white hover:bg-protocol-accent/80 disabled:opacity-50"
               >
                 Acknowledge
               </button>
@@ -334,7 +334,7 @@ function ToggleRow({ label, description, checked, disabled, onChange }: {
         disabled={disabled}
         aria-pressed={checked}
         className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
-          checked ? 'bg-purple-500' : 'bg-protocol-surface-light border border-protocol-border'
+          checked ? 'bg-protocol-accent' : 'bg-protocol-surface-light border border-protocol-border'
         }`}
       >
         <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />

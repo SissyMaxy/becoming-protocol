@@ -34,15 +34,17 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
       <div
         style={{
           minHeight: '100dvh',
-          background: '#fafafa',
+          background: '#120b10',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: '#888',
-          fontSize: 14,
+          color: '#a8929c',
+          fontSize: 15,
+          fontFamily: "'Playfair Display', Georgia, serif",
+          fontStyle: 'italic',
         }}
       >
-        Loading…
+        Mama's getting you ready…
       </div>
     );
   }

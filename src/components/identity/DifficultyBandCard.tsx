@@ -50,12 +50,12 @@ const BAND_DESC: Record<DifficultyBand, { label: string; copy: string }> = {
 };
 
 const PALETTE = {
-  bg: 'linear-gradient(140deg, #1a0f2e 0%, #0f0820 100%)',
-  border: '#2d1a4d',
+  bg: 'linear-gradient(140deg, #1a1118 0%, #120b10 100%)',
+  border: '#3b2635',
   accent: '#edaec5',
-  accentBright: '#e9d5ff',
-  textBody: '#c8c4cc',
-  textMuted: '#8a8690',
+  accentBright: '#f2e9e6',
+  textBody: '#e0d2d8',
+  textMuted: '#a8929c',
 };
 
 export function DifficultyBandCard() {

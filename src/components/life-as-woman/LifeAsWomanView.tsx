@@ -92,18 +92,24 @@ export function LifeAsWomanView({ onBack }: Props) {
 
   return (
     <div style={{
-      maxWidth: 760, margin: '0 auto', padding: '16px 16px 80px',
-      color: '#e0e0e0', minHeight: '100dvh',
+      maxWidth: 760, margin: '0 auto',
+      padding: '16px 16px max(env(safe-area-inset-bottom), 80px)',
+      color: '#f2e9e6', minHeight: '100dvh', background: '#120b10',
     }}>
       <button onClick={onBack} style={{
-        background: 'transparent', border: 'none', color: '#a0a0a0',
+        background: 'transparent', border: 'none', color: '#a8929c',
         display: 'inline-flex', alignItems: 'center', gap: 4,
         cursor: 'pointer', marginBottom: 12, fontSize: 14,
       }}>
         <ChevronLeft size={16} /> Menu
       </button>
 
-      <h2 style={{ marginTop: 0, color: '#f0d0e8' }}>Life as a woman</h2>
+      <h2 className="mommy-voice" style={{ marginTop: 0, marginBottom: 2, color: '#edaec5', fontSize: 24 }}>
+        Life as a woman
+      </h2>
+      <p style={{ marginTop: 0, marginBottom: 18, color: '#a8929c', fontSize: 12.5 }}>
+        Everything you're becoming, gathered where Mommy can reach it.
+      </p>
 
       <LifeAsWomanSettings userId={userId} onSettingsChanged={s => setSettings(s)} />
 
@@ -161,7 +167,7 @@ export function LifeAsWomanView({ onBack }: Props) {
       )}
 
       {!masterOn && (
-        <div style={{ color: '#888', padding: 16, fontSize: 13 }}>
+        <div style={{ color: '#a8929c', padding: 16, fontSize: 13 }}>
           Master switch is off. Flip the toggle above to enable the four systems.
         </div>
       )}
@@ -172,12 +178,12 @@ export function LifeAsWomanView({ onBack }: Props) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 24 }}>
-      <h3 style={{ color: '#d0a0c0', fontSize: 16, marginBottom: 8 }}>{title}</h3>
+      <h3 style={{ color: '#edaec5', fontSize: 16, marginBottom: 8 }}>{title}</h3>
       {children}
     </div>
   )
 }
 
 function Empty({ msg }: { msg: string }) {
-  return <div style={{ color: '#666', fontSize: 13, padding: '8px 12px' }}>{msg}</div>
+  return <div style={{ color: '#a8929c', fontSize: 13, padding: '8px 12px' }}>{msg}</div>
 }

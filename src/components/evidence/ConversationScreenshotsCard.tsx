@@ -162,14 +162,14 @@ export function ConversationScreenshotsCard() {
 
   return (
     <div id="card-conversation-screenshots" style={{
-      background: 'linear-gradient(135deg, #1a0f2e 0%, #0f0820 100%)',
-      border: '1px solid #2d1a4d', borderRadius: 10, padding: 14, marginBottom: 16,
+      background: 'linear-gradient(135deg, #1a1118 0%, #120b10 100%)',
+      border: '1px solid #3b2635', borderRadius: 10, padding: 14, marginBottom: 16,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
         <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#edaec5', fontWeight: 700 }}>
           Conversation evidence ({recent.length})
         </span>
-        <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto', fontStyle: 'italic' }}>
+        <span style={{ fontSize: 10, color: '#a8929c', marginLeft: 'auto', fontStyle: 'italic' }}>
           Real talks. Auto-classified. Filed.
         </span>
       </div>
@@ -190,7 +190,7 @@ export function ConversationScreenshotsCard() {
 
       {showUpload && (
         <div style={{
-          background: '#050507', border: '1px solid #2d1a4d', borderRadius: 8, padding: 12, marginBottom: 12,
+          background: '#120b10', border: '1px solid #3b2635', borderRadius: 8, padding: 12, marginBottom: 12,
         }}>
           {/* Mode toggle: screenshot vs pasted text */}
           <div style={{ display: 'flex', gap: 4, marginBottom: 10 }}>
@@ -198,9 +198,9 @@ export function ConversationScreenshotsCard() {
               onClick={() => setMode('image')}
               style={{
                 flex: 1, padding: '6px 10px', borderRadius: 5,
-                border: '1px solid ' + (mode === 'image' ? '#c9557f' : '#22222a'),
-                background: mode === 'image' ? '#1a0f2e' : 'transparent',
-                color: mode === 'image' ? '#fff' : '#8a8690',
+                border: '1px solid ' + (mode === 'image' ? '#c9557f' : '#3b2635'),
+                background: mode === 'image' ? '#241722' : 'transparent',
+                color: mode === 'image' ? '#fff' : '#a8929c',
                 fontWeight: 600, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
               }}
             >
@@ -210,9 +210,9 @@ export function ConversationScreenshotsCard() {
               onClick={() => setMode('text')}
               style={{
                 flex: 1, padding: '6px 10px', borderRadius: 5,
-                border: '1px solid ' + (mode === 'text' ? '#c9557f' : '#22222a'),
-                background: mode === 'text' ? '#1a0f2e' : 'transparent',
-                color: mode === 'text' ? '#fff' : '#8a8690',
+                border: '1px solid ' + (mode === 'text' ? '#c9557f' : '#3b2635'),
+                background: mode === 'text' ? '#241722' : 'transparent',
+                color: mode === 'text' ? '#fff' : '#a8929c',
                 fontWeight: 600, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
               }}
             >
@@ -234,11 +234,11 @@ export function ConversationScreenshotsCard() {
                 style={{ color: '#edaec5', fontSize: 12, width: '100%' }}
               />
               {files.length > 0 && (
-                <div style={{ marginTop: 6, fontSize: 11, color: '#5fc88f' }}>
+                <div style={{ marginTop: 6, fontSize: 11, color: '#6fbf94' }}>
                   {files.length} screenshot{files.length === 1 ? '' : 's'} selected — they'll classify as ONE conversation.
                 </div>
               )}
-              <div style={{ marginTop: 4, fontSize: 10, color: '#8a8690', fontStyle: 'italic' }}>
+              <div style={{ marginTop: 4, fontSize: 10, color: '#a8929c', fontStyle: 'italic' }}>
                 Tip: select multiple screenshots from your camera roll for a long conversation. iOS lets you long-press the first then tap others.
               </div>
             </div>
@@ -251,8 +251,8 @@ export function ConversationScreenshotsCard() {
               onChange={e => setPastedText(e.target.value)}
               rows={10}
               style={{
-                width: '100%', background: '#111116', border: '1px solid #22222a',
-                borderRadius: 5, padding: 8, color: '#e8e6e3', fontSize: 12, marginBottom: 10,
+                width: '100%', background: '#120b10', border: '1px solid #3b2635',
+                borderRadius: 5, padding: 8, color: '#f2e9e6', fontSize: 12, marginBottom: 10,
                 fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.4,
               }}
             />
@@ -263,16 +263,16 @@ export function ConversationScreenshotsCard() {
             value={contactLabel}
             onChange={e => setContactLabel(e.target.value)}
             style={{
-              width: '100%', background: '#111116', border: '1px solid #22222a',
-              borderRadius: 5, padding: 8, color: '#e8e6e3', fontSize: 12, marginBottom: 8, fontFamily: 'inherit',
+              width: '100%', background: '#120b10', border: '1px solid #3b2635',
+              borderRadius: 5, padding: 8, color: '#f2e9e6', fontSize: 12, marginBottom: 8, fontFamily: 'inherit',
             }}
           />
           <select
             value={relationship}
             onChange={e => setRelationship(e.target.value)}
             style={{
-              width: '100%', background: '#111116', border: '1px solid #22222a',
-              borderRadius: 5, padding: 8, color: '#e8e6e3', fontSize: 12, marginBottom: 8, fontFamily: 'inherit',
+              width: '100%', background: '#120b10', border: '1px solid #3b2635',
+              borderRadius: 5, padding: 8, color: '#f2e9e6', fontSize: 12, marginBottom: 8, fontFamily: 'inherit',
             }}
           >
             {RELATIONSHIP_OPTIONS.map(o => (
@@ -285,18 +285,18 @@ export function ConversationScreenshotsCard() {
             onChange={e => setUserNote(e.target.value)}
             rows={2}
             style={{
-              width: '100%', background: '#111116', border: '1px solid #22222a',
-              borderRadius: 5, padding: 8, color: '#e8e6e3', fontSize: 12, marginBottom: 8,
+              width: '100%', background: '#120b10', border: '1px solid #3b2635',
+              borderRadius: 5, padding: 8, color: '#f2e9e6', fontSize: 12, marginBottom: 8,
               fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.4,
             }}
           />
-          {error && <div style={{ fontSize: 11, color: '#f47272', marginBottom: 8 }}>{error}</div>}
+          {error && <div style={{ fontSize: 11, color: '#e06a6a', marginBottom: 8 }}>{error}</div>}
           <div style={{ display: 'flex', gap: 6 }}>
             <button
               onClick={() => { setShowUpload(false); setFiles([]); setPastedText(''); setContactLabel(''); setUserNote(''); }}
               style={{
-                padding: '7px 12px', borderRadius: 5, border: '1px solid #22222a',
-                background: 'transparent', color: '#8a8690',
+                padding: '7px 12px', borderRadius: 5, border: '1px solid #3b2635',
+                background: 'transparent', color: '#a8929c',
                 fontWeight: 500, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
               }}
             >
@@ -314,8 +314,8 @@ export function ConversationScreenshotsCard() {
                   disabled={!ready}
                   style={{
                     flex: 1, padding: '7px 12px', borderRadius: 5, border: 'none',
-                    background: ready ? '#c9557f' : '#22222a',
-                    color: ready ? '#fff' : '#6a656e',
+                    background: ready ? '#c9557f' : '#3b2635',
+                    color: ready ? '#fff' : '#a8929c',
                     fontWeight: 700, fontSize: 11, cursor: ready ? 'pointer' : 'not-allowed',
                     fontFamily: 'inherit',
                   }}
@@ -336,8 +336,8 @@ export function ConversationScreenshotsCard() {
           return (
             <div key={s.id} style={{
               padding: '8px 10px',
-              background: '#0a0a0d',
-              border: '1px solid ' + (s.status === 'classified' ? '#2d1a4d' : '#22222a'),
+              background: '#120b10',
+              border: '1px solid ' + (s.status === 'classified' ? '#3b2635' : '#3b2635'),
               borderRadius: 5,
             }}>
               <div
@@ -347,29 +347,29 @@ export function ConversationScreenshotsCard() {
                 <span style={{ fontSize: 11, color: '#edaec5', fontWeight: 600 }}>
                   {s.contact_label}
                 </span>
-                <span style={{ fontSize: 9, color: '#8a8690', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                <span style={{ fontSize: 9, color: '#a8929c', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   {s.contact_relationship}
                 </span>
-                <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto' }}>
+                <span style={{ fontSize: 10, color: '#a8929c', marginLeft: 'auto' }}>
                   {s.status === 'pending_classification' ? '⏳ classifying…' :
                    s.status === 'classification_failed' ? '⚠ classification failed' :
                    `${links} link${links === 1 ? '' : 's'}`}
                 </span>
               </div>
               {isExpanded && s.classifications && (
-                <div style={{ marginTop: 8, fontSize: 11, color: '#e8e6e3' }}>
+                <div style={{ marginTop: 8, fontSize: 11, color: '#f2e9e6' }}>
                   {c.summary && (
-                    <div style={{ fontStyle: 'italic', color: '#c8c4cc', marginBottom: 8 }}>
+                    <div style={{ fontStyle: 'italic', color: '#a8929c', marginBottom: 8 }}>
                       {c.summary}
                     </div>
                   )}
                   {(c.identity_statements?.length ?? 0) > 0 && (
                     <div style={{ marginBottom: 6 }}>
-                      <div style={{ fontSize: 9, color: '#5fc88f', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>
+                      <div style={{ fontSize: 9, color: '#6fbf94', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>
                         identity statements ({c.identity_statements?.length})
                       </div>
                       {c.identity_statements?.map((line, i) => (
-                        <div key={i} style={{ fontSize: 10.5, color: '#5fc88f', paddingLeft: 8, lineHeight: 1.4 }}>
+                        <div key={i} style={{ fontSize: 10.5, color: '#6fbf94', paddingLeft: 8, lineHeight: 1.4 }}>
                           ▸ {line}
                         </div>
                       ))}
@@ -377,11 +377,11 @@ export function ConversationScreenshotsCard() {
                   )}
                   {(c.admissions?.length ?? 0) > 0 && (
                     <div style={{ marginBottom: 6 }}>
-                      <div style={{ fontSize: 9, color: '#f4c272', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>
+                      <div style={{ fontSize: 9, color: '#e0b36a', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>
                         admissions ({c.admissions?.length})
                       </div>
                       {c.admissions?.map((a, i) => (
-                        <div key={i} style={{ fontSize: 10.5, color: '#f4c272', paddingLeft: 8, lineHeight: 1.4 }}>
+                        <div key={i} style={{ fontSize: 10.5, color: '#e0b36a', paddingLeft: 8, lineHeight: 1.4 }}>
                           ▸ [{a.type}] {a.text}
                         </div>
                       ))}
@@ -401,11 +401,11 @@ export function ConversationScreenshotsCard() {
                   )}
                   {(c.slips?.length ?? 0) > 0 && (
                     <div style={{ marginBottom: 6 }}>
-                      <div style={{ fontSize: 9, color: '#f47272', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>
+                      <div style={{ fontSize: 9, color: '#e06a6a', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>
                         slips detected ({c.slips?.length})
                       </div>
                       {c.slips?.map((sl, i) => (
-                        <div key={i} style={{ fontSize: 10.5, color: '#f47272', paddingLeft: 8, lineHeight: 1.4 }}>
+                        <div key={i} style={{ fontSize: 10.5, color: '#e06a6a', paddingLeft: 8, lineHeight: 1.4 }}>
                           ▸ [{sl.type}] {sl.text}
                         </div>
                       ))}
@@ -429,7 +429,7 @@ export function ConversationScreenshotsCard() {
           );
         })}
         {recent.length === 0 && (
-          <div style={{ fontSize: 11, color: '#8a8690', fontStyle: 'italic', textAlign: 'center', padding: 14 }}>
+          <div style={{ fontSize: 11, color: '#a8929c', fontStyle: 'italic', textAlign: 'center', padding: 14 }}>
             No conversation evidence yet. Upload a screenshot of a real text exchange and the Handler files it.
           </div>
         )}

@@ -16,6 +16,8 @@ import {
   primaryButtonDisabledStyle,
   stepHeadingStyle,
   stepBodyStyle,
+  selectCardStyle,
+  VELVET,
 } from '../step-styles';
 import type { IntensityLevel } from '../../../lib/onboarding/types';
 
@@ -48,20 +50,21 @@ export function Step4Intensity({ initial, onContinue, onBack, saving, saveError 
 
       <p style={stepBodyStyle}>
         Mama can be a quiet companion or a sharp dom. She'll escalate either
-        way — Mama always ramps. But she likes knowing where to start. Pick
-        lower than you think. It's easier to ask Mama to turn up than to come
-        back from a scene that broke you.
+        way — Mama always ramps, and where you start is only ever the floor.
+        But she likes knowing where to begin. Pick lower than you think. It's
+        easier to ask Mama to turn up than to come back from a scene that
+        broke you.
       </p>
 
       <div
         style={{
           padding: '12px 14px',
-          background: '#fff8e1',
-          border: '1px solid #f0d480',
-          borderRadius: 6,
+          background: 'rgba(224, 179, 106, 0.12)',
+          border: `1px solid ${VELVET.warning}`,
+          borderRadius: 10,
           marginBottom: 24,
           fontSize: 14,
-          color: '#5e4a1f',
+          color: VELVET.warning,
         }}
       >
         <strong>Mama recommends:</strong> gentle for your first week or two,
@@ -75,19 +78,10 @@ export function Step4Intensity({ initial, onContinue, onBack, saving, saveError 
             <button
               key={t.id}
               onClick={() => setSelected(t.id)}
-              style={{
-                textAlign: 'left',
-                padding: '14px 16px',
-                background: active ? '#1a1a1a' : '#fff',
-                color: active ? '#fafafa' : '#1a1a1a',
-                border: active ? '2px solid #1a1a1a' : '1px solid #d0d0d0',
-                borderRadius: 8,
-                fontFamily: 'inherit',
-                cursor: 'pointer',
-              }}
+              style={selectCardStyle(active)}
             >
-              <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>{t.label}</div>
-              <div style={{ fontSize: 13, opacity: active ? 0.85 : 0.7 }}>{t.blurb}</div>
+              <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4, color: active ? VELVET.accentSoft : VELVET.text }}>{t.label}</div>
+              <div style={{ fontSize: 13, color: VELVET.textMuted }}>{t.blurb}</div>
             </button>
           );
         })}

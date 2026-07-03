@@ -164,7 +164,7 @@ export function StealthSettings() {
       {/* Intro */}
       <div className={`rounded-lg p-4 border ${surfaceClass}`}>
         <div className="flex items-start gap-3">
-          <ShieldOff className={`w-5 h-5 mt-0.5 ${isBambiMode ? 'text-pink-500' : 'text-purple-400'}`} />
+          <ShieldOff className={`w-5 h-5 mt-0.5 ${isBambiMode ? 'text-pink-500' : 'text-protocol-accent'}`} />
           <div className="text-xs leading-relaxed">
             <div className={`text-sm font-medium mb-1 ${valueClass}`}>Stealth & discretion</div>
             <div className={mutedClass}>
@@ -195,7 +195,7 @@ export function StealthSettings() {
                   active
                     ? isBambiMode
                       ? 'border-pink-400 bg-pink-50 ring-2 ring-pink-300'
-                      : 'border-purple-400 bg-purple-500/10 ring-2 ring-purple-500/30'
+                      : 'border-protocol-accent bg-protocol-accent/10 ring-2 ring-protocol-accent/30'
                     : surfaceClass
                 }`}
               >
@@ -209,7 +209,7 @@ export function StealthSettings() {
                 <div className={`text-xs font-medium ${valueClass}`}>{ICON_VARIANT_LABELS[v].name}</div>
                 <div className={`text-[10px] mt-0.5 ${mutedClass}`}>{ICON_VARIANT_LABELS[v].description}</div>
                 {active && (
-                  <div className="text-[10px] mt-1.5 text-purple-400 font-medium">Active</div>
+                  <div className="text-[10px] mt-1.5 text-protocol-accent font-medium">Active</div>
                 )}
               </button>
             );
@@ -304,7 +304,7 @@ export function StealthSettings() {
                   type="button"
                   onClick={handlePinSubmit}
                   disabled={saving !== 'idle'}
-                  className="flex-1 py-2 rounded-md bg-purple-500 text-white text-sm font-medium disabled:opacity-50"
+                  className="flex-1 py-2 rounded-md bg-protocol-accent text-white text-sm font-medium disabled:opacity-50"
                 >
                   {saving === 'pin' ? 'Saving...' : 'Update PIN'}
                 </button>
@@ -340,7 +340,7 @@ export function StealthSettings() {
                 type="button"
                 onClick={handlePinSubmit}
                 disabled={saving !== 'idle'}
-                className="w-full py-2 rounded-md bg-purple-500 text-white text-sm font-medium disabled:opacity-50"
+                className="w-full py-2 rounded-md bg-protocol-accent text-white text-sm font-medium disabled:opacity-50"
               >
                 {saving === 'pin' ? 'Saving...' : 'Set PIN & enable lock'}
               </button>
@@ -379,7 +379,7 @@ function ToggleRow({
       onClick={onToggle}
       disabled={disabled}
       className={`w-full p-4 rounded-lg border flex items-start gap-3 text-left transition-all ${
-        isBambiMode ? 'bg-white border-pink-200 hover:border-pink-300' : 'bg-protocol-surface border-protocol-border hover:border-purple-500/30'
+        isBambiMode ? 'bg-white border-pink-200 hover:border-pink-300' : 'bg-protocol-surface border-protocol-border hover:border-protocol-accent/30'
       } disabled:opacity-60`}
     >
       <div className="flex-1">
@@ -388,7 +388,7 @@ function ToggleRow({
       </div>
       <div
         className={`mt-1 w-10 h-6 rounded-full relative transition-colors flex-shrink-0 ${
-          checked ? (isBambiMode ? 'bg-pink-500' : 'bg-purple-500') : (isBambiMode ? 'bg-pink-200' : 'bg-gray-700')
+          checked ? (isBambiMode ? 'bg-pink-500' : 'bg-protocol-accent') : (isBambiMode ? 'bg-pink-200' : 'bg-protocol-surface-light')
         }`}
       >
         <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${checked ? 'translate-x-5' : 'translate-x-1'}`} />

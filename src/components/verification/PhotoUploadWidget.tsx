@@ -195,8 +195,8 @@ export function PhotoUploadWidget({
   }, [user?.id, file, verificationType, directiveId, directiveKind, directiveSnippet, caption, onComplete]);
 
   const palette = mommy
-    ? { accent: '#f4a7c4', bg: 'linear-gradient(135deg, #1a0f2e 0%, #1a0820 100%)', border: '#5d2d4a' }
-    : { accent: '#edaec5', bg: 'linear-gradient(135deg, #14101e 0%, #0f0820 100%)', border: '#2d1a4d' };
+    ? { accent: '#f4a7c4', bg: 'linear-gradient(135deg, #241722 0%, #120b10 100%)', border: '#5d2d4a' }
+    : { accent: '#edaec5', bg: 'linear-gradient(135deg, #1a1118 0%, #120b10 100%)', border: '#3b2635' };
 
   const speakerLabel = mommy ? 'Mama' : 'the Handler';
   const noticeText = mommy
@@ -240,7 +240,7 @@ export function PhotoUploadWidget({
           <span
             style={{
               fontSize: 10,
-              color: '#8a8690',
+              color: '#a8929c',
               fontStyle: 'italic',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -258,8 +258,8 @@ export function PhotoUploadWidget({
       {stage === 'idle' && !previewUrl && (
         <div
           style={{
-            background: '#0a0a0d',
-            border: '1px solid #2d1a4d',
+            background: '#120b10',
+            border: '1px solid #3b2635',
             borderRadius: 7,
             padding: 10,
             marginBottom: 10,
@@ -328,11 +328,11 @@ export function PhotoUploadWidget({
             disabled={stage !== 'idle'}
             style={{
               width: '100%',
-              background: '#111116',
-              border: '1px solid #22222a',
+              background: '#120b10',
+              border: '1px solid #3b2635',
               borderRadius: 5,
               padding: 8,
-              color: '#e8e6e3',
+              color: '#f2e9e6',
               fontSize: 12,
               marginTop: 8,
               fontFamily: 'inherit',
@@ -353,7 +353,7 @@ export function PhotoUploadWidget({
               borderRadius: 7,
               border: 'none',
               background: palette.accent,
-              color: '#0a0a0d',
+              color: '#120b10',
               fontWeight: 700,
               fontSize: 12,
               cursor: 'pointer',
@@ -369,9 +369,9 @@ export function PhotoUploadWidget({
               style={{
                 padding: '10px 12px',
                 borderRadius: 7,
-                border: '1px solid #22222a',
+                border: '1px solid #3b2635',
                 background: 'transparent',
-                color: '#8a8690',
+                color: '#a8929c',
                 fontSize: 11,
                 cursor: 'pointer',
                 fontFamily: 'inherit',
@@ -391,9 +391,9 @@ export function PhotoUploadWidget({
             style={{
               padding: '8px 12px',
               borderRadius: 5,
-              border: '1px solid #22222a',
+              border: '1px solid #3b2635',
               background: 'transparent',
-              color: '#8a8690',
+              color: '#a8929c',
               fontSize: 11,
               cursor: 'pointer',
               fontFamily: 'inherit',
@@ -410,7 +410,7 @@ export function PhotoUploadWidget({
               borderRadius: 5,
               border: 'none',
               background: palette.accent,
-              color: '#0a0a0d',
+              color: '#120b10',
               fontWeight: 700,
               fontSize: 12,
               cursor: 'pointer',
@@ -430,7 +430,7 @@ export function PhotoUploadWidget({
             alignItems: 'center',
             gap: 10,
             padding: '10px 12px',
-            background: '#0a0a0d',
+            background: '#120b10',
             borderRadius: 7,
             color: palette.accent,
             fontSize: 12,
@@ -455,7 +455,7 @@ export function PhotoUploadWidget({
       {stage === 'error' && (
         <div
           style={{
-            color: '#f47272',
+            color: '#e06a6a',
             fontSize: 12,
             background: '#1f0a0a',
             border: '1px solid #5d2020',
@@ -503,12 +503,12 @@ export function PhotoUploadWidget({
           )}
           <div
             style={{
-              background: '#0a0a0d',
+              background: '#120b10',
               border: `1px solid ${palette.border}`,
               borderRadius: 7,
               padding: 12,
               fontSize: 13,
-              color: '#e8e6e3',
+              color: '#f2e9e6',
               lineHeight: 1.5,
               whiteSpace: 'pre-wrap',
             }}
@@ -536,12 +536,12 @@ export function PhotoUploadWidget({
                   reviewState === 'approved' ? '#1a3d2a'
                   : reviewState === 'denied' ? '#3d1a1a'
                   : reviewState === 'redo_requested' ? '#3d2d1a'
-                  : '#22222a',
+                  : '#3b2635',
                 color:
-                  reviewState === 'approved' ? '#5fc88f'
-                  : reviewState === 'denied' ? '#f47272'
-                  : reviewState === 'redo_requested' ? '#f4c272'
-                  : '#8a8690',
+                  reviewState === 'approved' ? '#6fbf94'
+                  : reviewState === 'denied' ? '#e06a6a'
+                  : reviewState === 'redo_requested' ? '#e0b36a'
+                  : '#a8929c',
               }}
             >
               {reviewState ?? 'pending'}
@@ -576,7 +576,7 @@ export function PhotoUploadWidget({
                   borderRadius: 5,
                   border: 'none',
                   background: palette.accent,
-                  color: '#0a0a0d',
+                  color: '#120b10',
                   fontSize: 11,
                   fontWeight: 700,
                   cursor: 'pointer',
@@ -592,9 +592,9 @@ export function PhotoUploadWidget({
                 style={{
                   padding: '4px 10px',
                   borderRadius: 5,
-                  border: '1px solid #22222a',
+                  border: '1px solid #3b2635',
                   background: 'transparent',
-                  color: '#8a8690',
+                  color: '#a8929c',
                   fontSize: 11,
                   cursor: 'pointer',
                   fontFamily: 'inherit',

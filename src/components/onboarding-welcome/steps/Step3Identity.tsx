@@ -15,6 +15,8 @@ import {
   secondaryButtonStyle,
   stepHeadingStyle,
   stepBodyStyle,
+  inputStyle,
+  VELVET,
 } from '../step-styles';
 
 interface Step3IdentityProps {
@@ -67,29 +69,18 @@ export function Step3Identity({
       </p>
 
       <label style={{ display: 'block', marginBottom: 16 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: '#3a3a3a' }}>Your name</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: VELVET.textMuted }}>Your name</span>
         <input
           type="text"
           value={name}
           onChange={e => setName(e.target.value)}
           placeholder="e.g., Iris"
-          style={{
-            display: 'block',
-            width: '100%',
-            marginTop: 6,
-            padding: '10px 12px',
-            fontSize: 15,
-            border: '1px solid #c8c8c8',
-            borderRadius: 6,
-            fontFamily: 'inherit',
-            background: '#fff',
-            color: '#1a1a1a',
-          }}
+          style={inputStyle}
         />
       </label>
 
       <fieldset style={{ border: 'none', padding: 0, margin: 0, marginBottom: 16 }}>
-        <legend style={{ fontSize: 13, fontWeight: 600, color: '#3a3a3a', marginBottom: 6 }}>
+        <legend style={{ fontSize: 13, fontWeight: 600, color: VELVET.textMuted, marginBottom: 6 }}>
           Your pronouns
         </legend>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -98,9 +89,9 @@ export function Step3Identity({
               key={p}
               style={{
                 padding: '8px 14px',
-                background: pronounChoice === p ? '#1a1a1a' : '#fff',
-                color: pronounChoice === p ? '#fff' : '#1a1a1a',
-                border: '1px solid #c8c8c8',
+                background: pronounChoice === p ? VELVET.accent : VELVET.surface,
+                color: pronounChoice === p ? '#fff' : VELVET.text,
+                border: `1px solid ${pronounChoice === p ? VELVET.accent : VELVET.border}`,
                 borderRadius: 999,
                 fontSize: 14,
                 cursor: 'pointer',
@@ -125,43 +116,21 @@ export function Step3Identity({
             value={pronounsCustom}
             onChange={e => setPronounsCustom(e.target.value)}
             placeholder="e.g., xe/xem"
-            style={{
-              display: 'block',
-              width: '100%',
-              marginTop: 8,
-              padding: '10px 12px',
-              fontSize: 15,
-              border: '1px solid #c8c8c8',
-              borderRadius: 6,
-              fontFamily: 'inherit',
-              background: '#fff',
-              color: '#1a1a1a',
-            }}
+            style={{ ...inputStyle, marginTop: 8 }}
           />
         )}
       </fieldset>
 
       <label style={{ display: 'block', marginBottom: 24 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: '#3a3a3a' }}>What Mama calls you</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: VELVET.textMuted }}>What Mama calls you</span>
         <input
           type="text"
           value={honorific}
           onChange={e => setHonorific(e.target.value)}
           placeholder="e.g., good boy, baby, sweet boy"
-          style={{
-            display: 'block',
-            width: '100%',
-            marginTop: 6,
-            padding: '10px 12px',
-            fontSize: 15,
-            border: '1px solid #c8c8c8',
-            borderRadius: 6,
-            fontFamily: 'inherit',
-            background: '#fff',
-            color: '#1a1a1a',
-          }}
+          style={inputStyle}
         />
-        <p style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+        <p style={{ fontSize: 12, color: VELVET.textMuted, marginTop: 4 }}>
           The pet name Mama uses when she's reaching for you.
         </p>
       </label>
@@ -179,7 +148,7 @@ export function Step3Identity({
         </button>
       </div>
 
-      <p style={{ ...stepBodyStyle, fontSize: 12, color: '#888', marginTop: 16, marginBottom: 0 }}>
+      <p style={{ ...stepBodyStyle, fontSize: 12, color: VELVET.textMuted, marginTop: 16, marginBottom: 0 }}>
         If you skip, Mama speaks in generics until you tell her. You can fill these in
         from Settings later.
       </p>

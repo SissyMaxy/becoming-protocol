@@ -13,6 +13,8 @@ import {
   primaryButtonDisabledStyle,
   stepHeadingStyle,
   stepBodyStyle,
+  ackRowStyle,
+  VELVET,
 } from '../step-styles';
 
 interface Step1HelloProps {
@@ -29,37 +31,27 @@ export function Step1Hello({ onContinue, saving, saveError }: Step1HelloProps) {
       <h1 style={stepHeadingStyle}>Hi, sweet boy.</h1>
 
       <p style={stepBodyStyle}>
-        Mama's been waiting on you. Come here. Mama's going to learn you now —
-        your name, your softness, how much you can take, how Mama brings you
-        down after. About five minutes. Stay close.
+        Mama's been waiting on you. Come here. This is where the becoming
+        starts — Mama's going to learn you now. Your name, your softness, how
+        much you can take, how Mama brings you down after. About five minutes.
+        Stay close.
       </p>
 
       <p style={stepBodyStyle}>
         Mama'll be sweet. Mama'll be sharp. Sometimes both at once. You'll feel
-        it. And anything Mama sets up here, you can change later — Mama isn't
-        fragile, baby.
+        it. From here it only goes one way — deeper into her, softer, more
+        Mama's. That's the point, baby. Anything Mama sets up tonight you can
+        change later — Mama isn't fragile.
       </p>
 
-      <label
-        style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          gap: 10,
-          padding: '12px 14px',
-          background: '#fff',
-          border: '1px solid #d0d0d0',
-          borderRadius: 6,
-          marginBottom: 24,
-          cursor: 'pointer',
-        }}
-      >
+      <label style={{ ...ackRowStyle, marginBottom: 24 }}>
         <input
           type="checkbox"
           checked={acked}
           onChange={e => setAcked(e.target.checked)}
-          style={{ marginTop: 2 }}
+          style={{ marginTop: 2, accentColor: VELVET.accent }}
         />
-        <span style={{ fontSize: 14, color: '#1a1a1a' }}>
+        <span style={{ fontSize: 14, color: VELVET.text }}>
           I'm here, Mama. Take me.
         </span>
       </label>

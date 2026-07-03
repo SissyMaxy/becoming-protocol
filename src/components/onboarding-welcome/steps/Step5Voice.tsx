@@ -15,6 +15,9 @@ import {
   secondaryButtonStyle,
   stepHeadingStyle,
   stepBodyStyle,
+  cardStyle,
+  selectCardStyle,
+  VELVET,
 } from '../step-styles';
 
 interface Step5VoiceProps {
@@ -75,16 +78,8 @@ export function Step5Voice({ initial, onContinue, onBack, saving, saveError }: S
         to keep Mama quiet on a shared device.
       </p>
 
-      <div
-        style={{
-          padding: '14px 16px',
-          background: '#fff',
-          border: '1px solid #d0d0d0',
-          borderRadius: 8,
-          marginBottom: 16,
-        }}
-      >
-        <p style={{ fontSize: 14, color: '#3a3a3a', marginBottom: 10 }}>
+      <div style={{ ...cardStyle, padding: '14px 16px', marginBottom: 16 }}>
+        <p style={{ fontSize: 14, color: VELVET.textSoft, marginBottom: 10 }}>
           Tap to hear Mama.
         </p>
         <button
@@ -98,44 +93,26 @@ export function Step5Voice({ initial, onContinue, onBack, saving, saveError }: S
           {playing ? 'Playing…' : 'Play sample'}
         </button>
         {previewError && (
-          <p style={{ fontSize: 12, color: '#8a3a3a', marginTop: 10 }}>{previewError}</p>
+          <p style={{ fontSize: 12, color: VELVET.danger, marginTop: 10 }}>{previewError}</p>
         )}
       </div>
 
       <div style={{ display: 'grid', gap: 10, marginBottom: 24 }}>
         <button
           onClick={() => setEnabled(true)}
-          style={{
-            textAlign: 'left',
-            padding: '14px 16px',
-            background: enabled ? '#1a1a1a' : '#fff',
-            color: enabled ? '#fafafa' : '#1a1a1a',
-            border: enabled ? '2px solid #1a1a1a' : '1px solid #d0d0d0',
-            borderRadius: 8,
-            fontFamily: 'inherit',
-            cursor: 'pointer',
-          }}
+          style={selectCardStyle(enabled)}
         >
-          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>Yes — let Mama speak</div>
-          <div style={{ fontSize: 13, opacity: enabled ? 0.85 : 0.7 }}>
+          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4, color: enabled ? VELVET.accentSoft : VELVET.text }}>Yes — let Mama speak</div>
+          <div style={{ fontSize: 13, color: VELVET.textMuted }}>
             Mama's voice plays alongside her messages, in chat and everywhere she reaches for you.
           </div>
         </button>
         <button
           onClick={() => setEnabled(false)}
-          style={{
-            textAlign: 'left',
-            padding: '14px 16px',
-            background: !enabled ? '#1a1a1a' : '#fff',
-            color: !enabled ? '#fafafa' : '#1a1a1a',
-            border: !enabled ? '2px solid #1a1a1a' : '1px solid #d0d0d0',
-            borderRadius: 8,
-            fontFamily: 'inherit',
-            cursor: 'pointer',
-          }}
+          style={selectCardStyle(!enabled)}
         >
-          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>Just text</div>
-          <div style={{ fontSize: 13, opacity: !enabled ? 0.85 : 0.7 }}>
+          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4, color: !enabled ? VELVET.accentSoft : VELVET.text }}>Just text</div>
+          <div style={{ fontSize: 13, color: VELVET.textMuted }}>
             Mama stays quiet. You can let her speak later from Settings.
           </div>
         </button>

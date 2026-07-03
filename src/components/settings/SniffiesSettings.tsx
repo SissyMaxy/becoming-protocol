@@ -166,7 +166,7 @@ export function SniffiesSettings() {
       {/* Privacy intro */}
       <div className={`rounded-lg p-4 border ${surfaceClass}`}>
         <div className="flex items-start gap-3">
-          <Lock className={`w-5 h-5 mt-0.5 ${isBambiMode ? 'text-pink-500' : 'text-purple-400'}`} />
+          <Lock className={`w-5 h-5 mt-0.5 ${isBambiMode ? 'text-pink-500' : 'text-protocol-accent'}`} />
           <div className="text-xs leading-relaxed">
             <div className={`text-sm font-medium mb-1 ${valueClass}`}>Sniffies imports</div>
             <div className={mutedClass}>
@@ -234,7 +234,7 @@ export function SniffiesSettings() {
             type="button"
             onClick={() => setShowUpload((v) => !v)}
             disabled={!integrationOn || saving !== 'idle'}
-            className="px-3 py-1.5 rounded-md text-xs bg-purple-500 text-white font-medium disabled:opacity-50"
+            className="px-3 py-1.5 rounded-md text-xs bg-protocol-accent text-white font-medium disabled:opacity-50"
           >
             <Upload className="w-3.5 h-3.5 inline mr-1" />
             Add chat
@@ -251,7 +251,7 @@ export function SniffiesSettings() {
                   onClick={() => setSourceKind(k)}
                   className={`px-2 py-1 rounded text-xs border ${
                     sourceKind === k
-                      ? 'bg-purple-500 text-white border-purple-500'
+                      ? 'bg-protocol-accent text-white border-protocol-accent'
                       : `${surfaceClass} ${valueClass}`
                   }`}
                 >
@@ -286,7 +286,7 @@ export function SniffiesSettings() {
                 type="button"
                 onClick={handleUpload}
                 disabled={saving !== 'idle'}
-                className="flex-1 py-2 rounded-md bg-purple-500 text-white text-sm font-medium disabled:opacity-50"
+                className="flex-1 py-2 rounded-md bg-protocol-accent text-white text-sm font-medium disabled:opacity-50"
               >
                 {saving === 'upload' ? 'Uploading...' : 'Upload & extract'}
               </button>
@@ -359,7 +359,7 @@ export function SniffiesSettings() {
                         <button
                           type="button"
                           onClick={() => handleRename(c.id)}
-                          className="px-2 py-1 rounded text-xs bg-purple-500 text-white"
+                          className="px-2 py-1 rounded text-xs bg-protocol-accent text-white"
                         >
                           Save
                         </button>
@@ -482,7 +482,7 @@ function ToggleRow({
       className={`w-full p-4 rounded-lg border flex items-start gap-3 text-left transition-all ${
         isBambiMode
           ? 'bg-white border-pink-200 hover:border-pink-300'
-          : 'bg-protocol-surface border-protocol-border hover:border-purple-500/30'
+          : 'bg-protocol-surface border-protocol-border hover:border-protocol-accent/30'
       } disabled:opacity-50`}
     >
       <div className="flex-1">
@@ -506,7 +506,7 @@ function ToggleRow({
           checked
             ? isBambiMode
               ? 'bg-pink-500'
-              : 'bg-purple-500'
+              : 'bg-protocol-accent'
             : isBambiMode
               ? 'bg-pink-200'
               : 'bg-gray-700'

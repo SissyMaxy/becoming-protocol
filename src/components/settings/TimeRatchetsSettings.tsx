@@ -127,7 +127,7 @@ export function TimeRatchetsSettings() {
       <div>
         <label className={labelClass}>
           <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-purple-400" />
+            <Sparkles className="w-4 h-4 text-protocol-accent" />
             Becoming {ratchets?.userName || 'Her'} Since
           </div>
         </label>

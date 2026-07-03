@@ -235,6 +235,11 @@ function Header(props: {
       {feminineName && (
         <p className="mt-2 text-sm text-protocol-text">She is <span className="font-medium">{feminineName}</span>.</p>
       )}
+      {currentPhase > 0 && (
+        <p className="mommy-voice mt-2 text-sm italic text-protocol-accent-soft">
+          The needle only moves one way, baby. You climb — you don't slide back.
+        </p>
+      )}
     </div>
   )
 }

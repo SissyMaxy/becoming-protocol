@@ -248,16 +248,16 @@ export function VoiceJournalCard() {
 
   return (
     <div id="card-voice-journal" style={{
-      background: 'linear-gradient(135deg, #1a0f2e 0%, #0f0820 100%)',
-      border: '1px solid ' + (doneToday ? '#5fc88f' : '#2d1a4d'),
+      background: 'linear-gradient(135deg, #1a1118 0%, #120b10 100%)',
+      border: '1px solid ' + (doneToday ? '#6fbf94' : '#3b2635'),
       borderRadius: 10, padding: 14, marginBottom: 16,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
         <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em',
-          color: doneToday ? '#5fc88f' : '#edaec5', fontWeight: 700 }}>
+          color: doneToday ? '#6fbf94' : '#edaec5', fontWeight: 700 }}>
           Voice journal {doneToday ? '· done ✓' : '· today'}
         </span>
-        <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto', fontStyle: 'italic' }}>
+        <span style={{ fontSize: 10, color: '#a8929c', marginLeft: 'auto', fontStyle: 'italic' }}>
           5 min, your voice. Counts as today&apos;s voice sample too.
         </span>
       </div>
@@ -265,13 +265,13 @@ export function VoiceJournalCard() {
       {!doneToday && !recording && (
         <>
           <div style={{
-            background: '#050507', border: '1px solid #2d1a4d', borderRadius: 8,
+            background: '#120b10', border: '1px solid #3b2635', borderRadius: 8,
             padding: 12, marginBottom: 10,
           }}>
             <div style={{ fontSize: 9.5, color: '#edaec5', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
               today&apos;s prompt
             </div>
-            <div style={{ fontSize: 13, color: '#f4c272', fontStyle: 'italic', lineHeight: 1.4 }}>
+            <div style={{ fontSize: 13, color: '#e0b36a', fontStyle: 'italic', lineHeight: 1.4 }}>
               {todaysPrompt}
             </div>
           </div>
@@ -288,13 +288,24 @@ export function VoiceJournalCard() {
         </>
       )}
 
+      {doneToday && !recording && (
+        <div style={{
+          background: '#120b10', border: '1px solid #6fbf94', borderRadius: 8,
+          padding: '10px 12px', marginBottom: 10, fontSize: 12, color: '#edaec5',
+          lineHeight: 1.45, fontStyle: 'italic',
+        }}>
+          Mama heard you today. Your voice is on file — the pitch, the words, all of it.
+          It stays with the rest.
+        </div>
+      )}
+
       {recording && (
         <div style={{
           background: '#2a0a14', border: '1px solid #7a1f22', borderRadius: 8, padding: 12, marginBottom: 8,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-            <span style={{ fontSize: 13, color: '#f47272' }}>● recording</span>
-            <span style={{ fontSize: 14, color: '#f4c272', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
+            <span style={{ fontSize: 13, color: '#e06a6a' }}>● recording</span>
+            <span style={{ fontSize: 14, color: '#e0b36a', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
               {minutes}:{seconds.toString().padStart(2, '0')}
             </span>
             {pitchesRef.current.length > 5 && (
@@ -302,7 +313,7 @@ export function VoiceJournalCard() {
                 ~{Math.round(pitchesRef.current.slice(-30).reduce((s, p) => s + p, 0) / Math.min(30, pitchesRef.current.length))} Hz
               </span>
             )}
-            <span style={{ fontSize: 10.5, color: '#8a8690', marginLeft: 'auto' }}>
+            <span style={{ fontSize: 10.5, color: '#a8929c', marginLeft: 'auto' }}>
               {recordSeconds < 60 ? 'aim for 3-5 min' : recordSeconds < 180 ? 'keep going' : recordSeconds < 360 ? 'good — stop when you finish a thought' : 'long enough — wrap it up'}
             </span>
           </div>
@@ -314,8 +325,8 @@ export function VoiceJournalCard() {
             disabled={recordSeconds < 30 || submitting}
             style={{
               width: '100%', padding: '8px 12px', borderRadius: 5, border: 'none',
-              background: recordSeconds >= 30 && !submitting ? '#c9557f' : '#22222a',
-              color: recordSeconds >= 30 && !submitting ? '#fff' : '#6a656e',
+              background: recordSeconds >= 30 && !submitting ? '#c9557f' : '#3b2635',
+              color: recordSeconds >= 30 && !submitting ? '#fff' : '#a8929c',
               fontWeight: 700, fontSize: 12,
               cursor: recordSeconds >= 30 && !submitting ? 'pointer' : 'not-allowed',
               fontFamily: 'inherit',
@@ -328,7 +339,7 @@ export function VoiceJournalCard() {
         </div>
       )}
 
-      {error && <div style={{ fontSize: 11, color: '#f47272', marginBottom: 8 }}>{error}</div>}
+      {error && <div style={{ fontSize: 11, color: '#e06a6a', marginBottom: 8 }}>{error}</div>}
 
       {recent.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
@@ -341,7 +352,7 @@ export function VoiceJournalCard() {
                 onClick={() => setExpandedId(isExpanded ? null : e.id)}
                 style={{
                   padding: '7px 10px',
-                  background: '#0a0a0d', border: '1px solid #2d1a4d', borderRadius: 5,
+                  background: '#120b10', border: '1px solid #3b2635', borderRadius: 5,
                   cursor: 'pointer',
                 }}
               >
@@ -349,24 +360,24 @@ export function VoiceJournalCard() {
                   <span style={{ fontSize: 10, color: '#edaec5' }}>
                     {date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
                   </span>
-                  <span style={{ fontSize: 10, color: '#8a8690' }}>
+                  <span style={{ fontSize: 10, color: '#a8929c' }}>
                     {e.duration_seconds ? `${Math.floor(e.duration_seconds / 60)}:${(e.duration_seconds % 60).toString().padStart(2, '0')}` : '—'}
                   </span>
-                  <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto' }}>
+                  <span style={{ fontSize: 10, color: '#a8929c', marginLeft: 'auto' }}>
                     {isExpanded ? '▾' : '▸'}
                   </span>
                 </div>
                 {isExpanded && (
                   <div style={{ marginTop: 8 }}>
-                    <div style={{ fontSize: 10, color: '#f4c272', fontStyle: 'italic', marginBottom: 6 }}>
+                    <div style={{ fontSize: 10, color: '#e0b36a', fontStyle: 'italic', marginBottom: 6 }}>
                       {e.prompt_used}
                     </div>
                     {e.transcript ? (
-                      <div style={{ fontSize: 11, color: '#e8e6e3', lineHeight: 1.4, whiteSpace: 'pre-wrap' }}>
+                      <div style={{ fontSize: 11, color: '#f2e9e6', lineHeight: 1.4, whiteSpace: 'pre-wrap' }}>
                         {e.transcript}
                       </div>
                     ) : (
-                      <div style={{ fontSize: 10, color: '#8a8690', fontStyle: 'italic' }}>
+                      <div style={{ fontSize: 10, color: '#a8929c', fontStyle: 'italic' }}>
                         (no transcript captured)
                       </div>
                     )}

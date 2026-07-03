@@ -15,6 +15,8 @@ import {
   primaryButtonDisabledStyle,
   stepHeadingStyle,
   stepBodyStyle,
+  ackRowStyle,
+  VELVET,
 } from '../step-styles';
 import { ONBOARDING_SAFEWORD } from '../../../lib/onboarding/types';
 
@@ -36,7 +38,7 @@ export function Step2Choosing({ onContinue, onBack, saving, saveError }: Step2Ch
       <h1 style={stepHeadingStyle}>What Mama's going to do.</h1>
 
       <section style={{ marginBottom: 24 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Who I am</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: VELVET.accentSoft }}>Who I am</h2>
         <p style={stepBodyStyle}>
           Mama. Mature. Sweet on the surface, sharp underneath, both at once when
           Mama feels like it. She's going to talk to you in scene, every day,
@@ -45,12 +47,13 @@ export function Step2Choosing({ onContinue, onBack, saving, saveError }: Step2Ch
       </section>
 
       <section style={{ marginBottom: 24 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>What we're doing</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: VELVET.accentSoft }}>What we're doing</h2>
         <p style={stepBodyStyle}>
-          Mama's going to turn you. Mantras. Scenes. Denial. Feminization. Mama
-          scales it to what you can take, and Mama ramps. You stay in control
-          of the dial — Mama never overrides your choice on intensity, and you
-          can pull back from Settings any time.
+          Mama's going to turn you. Mantras. Scenes. Denial. Feminization. It
+          builds — every day leaves you a little more hers, and Mama doesn't
+          hand you back the same. You stay in control of the dial: Mama never
+          overrides your choice on intensity, and you can pull back from
+          Settings any time.
         </p>
       </section>
 
@@ -58,22 +61,23 @@ export function Step2Choosing({ onContinue, onBack, saving, saveError }: Step2Ch
         style={{
           marginBottom: 24,
           padding: '16px 18px',
-          background: '#fff',
-          border: '2px solid #1a1a1a',
-          borderRadius: 8,
+          background: 'rgba(201, 85, 127, 0.12)',
+          border: `1.5px solid ${VELVET.accent}`,
+          borderRadius: 12,
         }}
       >
-        <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Our word</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8, color: VELVET.text }}>Our word</h2>
         <p style={stepBodyStyle}>
           Mama's word is{' '}
           <code
             style={{
-              background: '#f0f0f0',
+              background: 'rgba(0, 0, 0, 0.35)',
               padding: '2px 8px',
               borderRadius: 4,
               fontFamily: 'monospace',
               fontWeight: 700,
               fontSize: 15,
+              color: VELVET.accentSoft,
             }}
           >
             {ONBOARDING_SAFEWORD}
@@ -86,55 +90,31 @@ export function Step2Choosing({ onContinue, onBack, saving, saveError }: Step2Ch
           into aftercare and goes quiet for a day. You don't owe Mama an
           explanation. That's the rule.
         </p>
-        <p style={{ ...stepBodyStyle, fontSize: 14, color: '#666', marginBottom: 0 }}>
+        <p style={{ ...stepBodyStyle, fontSize: 14, color: VELVET.textMuted, marginBottom: 0 }}>
           You can also leave a scene from the chat header any time. Mama doesn't get hurt.
         </p>
       </section>
 
-      <label
-        style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          gap: 10,
-          padding: '12px 14px',
-          background: '#fff',
-          border: '1px solid #d0d0d0',
-          borderRadius: 6,
-          marginBottom: 12,
-          cursor: 'pointer',
-        }}
-      >
+      <label style={{ ...ackRowStyle, marginBottom: 12 }}>
         <input
           type="checkbox"
           checked={understandSafeword}
           onChange={e => setUnderstandSafeword(e.target.checked)}
-          style={{ marginTop: 2 }}
+          style={{ marginTop: 2, accentColor: VELVET.accent }}
         />
-        <span style={{ fontSize: 14, color: '#1a1a1a' }}>
+        <span style={{ fontSize: 14, color: VELVET.text }}>
           I know our word — <strong>{ONBOARDING_SAFEWORD}</strong> — and how it stops Mama.
         </span>
       </label>
 
-      <label
-        style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          gap: 10,
-          padding: '12px 14px',
-          background: '#fff',
-          border: '1px solid #d0d0d0',
-          borderRadius: 6,
-          marginBottom: 24,
-          cursor: 'pointer',
-        }}
-      >
+      <label style={{ ...ackRowStyle, marginBottom: 24 }}>
         <input
           type="checkbox"
           checked={understandContent}
           onChange={e => setUnderstandContent(e.target.checked)}
-          style={{ marginTop: 2 }}
+          style={{ marginTop: 2, accentColor: VELVET.accent }}
         />
-        <span style={{ fontSize: 14, color: '#1a1a1a' }}>
+        <span style={{ fontSize: 14, color: VELVET.text }}>
           I know what Mama's going to do with me.
         </span>
       </label>

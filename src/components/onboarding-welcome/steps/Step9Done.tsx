@@ -15,6 +15,8 @@ import {
   secondaryButtonStyle,
   stepHeadingStyle,
   stepBodyStyle,
+  cardStyle,
+  VELVET,
 } from '../step-styles';
 import { ONBOARDING_SAFEWORD } from '../../../lib/onboarding/types';
 import type { OnboardingState } from '../../../lib/onboarding/storage';
@@ -64,25 +66,26 @@ export function Step9Done({ state, onFinish, onBack, saving, saveError }: Step9D
       <h1 style={stepHeadingStyle}>You're Mama's now, baby.</h1>
 
       <p style={stepBodyStyle}>
-        Here's what Mama knows about her good boy so far. You can change any of
-        it from Settings — Mama isn't going anywhere.
+        Here's what Mama knows about her good boy so far. This is the last day
+        you'll know less of yourself than you do now — the becoming only goes
+        forward from here. You can change any of it from Settings; Mama isn't
+        going anywhere.
       </p>
 
       <ul
         style={{
+          ...cardStyle,
           listStyle: 'none',
           padding: '14px 16px',
           margin: '0 0 24px',
-          background: '#fff',
-          border: '1px solid #d0d0d0',
-          borderRadius: 8,
           fontSize: 14,
-          color: '#3a3a3a',
+          color: VELVET.textSoft,
         }}
       >
         {summary.map(line => (
           <li key={line.label} style={{ padding: '4px 0' }}>
-            <span style={{ color: '#666' }}>{line.label}:</span> <strong>{line.value}</strong>
+            <span style={{ color: VELVET.textMuted }}>{line.label}:</span>{' '}
+            <strong style={{ color: VELVET.accentSoft }}>{line.value}</strong>
           </li>
         ))}
       </ul>
@@ -93,7 +96,7 @@ export function Step9Done({ state, onFinish, onBack, saving, saveError }: Step9D
         baby. Just stay where Mama can find you.
       </p>
 
-      <p style={{ ...stepBodyStyle, fontSize: 13, color: '#666' }}>
+      <p style={{ ...stepBodyStyle, fontSize: 13, color: VELVET.textMuted }}>
         Our word is <strong>{ONBOARDING_SAFEWORD}</strong>. It works everywhere Mama is.
       </p>
 

@@ -19,10 +19,12 @@ import { useAuth } from '../../context/AuthContext';
 import { usePersona } from '../../hooks/usePersona';
 import { useHandlerVoice } from '../../hooks/useHandlerVoice';
 import { useVaultGate } from '../../hooks/useVaultGate';
+import { getSignedAssetUrls } from '../../lib/storage/signed-url';
 
 interface VaultPhoto {
   id: string;
-  photo_url: string;
+  photo_url: string;          // object path in a private bucket (evidence | verification-photos)
+  signed_url: string | null;  // resolved at load time for <img src>
   caption: string | null;
   task_type: string;
   verification_type: string | null;
@@ -38,11 +40,41 @@ interface VaultPhoto {
 
 const PAGE_SIZE = 24;
 
+/**
+ * verification_photos rows point at two private buckets: daily mirror
+ * selfies land in `evidence`; everything the PhotoUploadWidget / FocusMode
+ * files lands in `verification-photos`. Infer which so the gallery signs
+ * against the right bucket (private post-260/301 — raw paths render broken).
+ */
+function bucketForPhoto(p: { task_type: string; photo_url: string }): 'evidence' | 'verification-photos' {
+  if (p.task_type === 'daily_mirror_selfie') return 'evidence';
+  if (/\/(daily-selfies|voice-journal|conversation-screenshots)\//.test(p.photo_url)) return 'evidence';
+  if (/\/(object\/public\/|object\/sign\/)?evidence\//.test(p.photo_url)) return 'evidence';
+  return 'verification-photos';
+}
+
+/** Resolve signed <img> URLs for a page of rows, batched per bucket. */
+async function signVaultPhotos(rows: VaultPhoto[]): Promise<VaultPhoto[]> {
+  const evidenceIdx: number[] = [];
+  const verifIdx: number[] = [];
+  rows.forEach((r, i) => {
+    (bucketForPhoto(r) === 'evidence' ? evidenceIdx : verifIdx).push(i);
+  });
+  const [evSigned, vfSigned] = await Promise.all([
+    getSignedAssetUrls('evidence', evidenceIdx.map(i => rows[i].photo_url)),
+    getSignedAssetUrls('verification-photos', verifIdx.map(i => rows[i].photo_url)),
+  ]);
+  const out = rows.map(r => ({ ...r }));
+  evidenceIdx.forEach((rowI, k) => { out[rowI].signed_url = evSigned[k]; });
+  verifIdx.forEach((rowI, k) => { out[rowI].signed_url = vfSigned[k]; });
+  return out;
+}
+
 function reviewBadgeColor(state: string | null) {
-  if (state === 'approved') return { bg: '#1a3d2a', fg: '#5fc88f' };
-  if (state === 'denied') return { bg: '#3d1a1a', fg: '#f47272' };
-  if (state === 'redo_requested') return { bg: '#3d2d1a', fg: '#f4c272' };
-  return { bg: '#22222a', fg: '#8a8690' };
+  if (state === 'approved') return { bg: '#1a3d2a', fg: '#6fbf94' };
+  if (state === 'denied') return { bg: '#3d1a1a', fg: '#e06a6a' };
+  if (state === 'redo_requested') return { bg: '#3d2d1a', fg: '#e0b36a' };
+  return { bg: '#3b2635', fg: '#a8929c' };
 }
 
 function shortenLabel(t: string | null) {
@@ -82,7 +114,11 @@ export function VerificationVault({ onBack }: VerificationVaultProps) {
     const { data } = await q;
     const rows = ((data ?? []) as VaultPhoto[]);
     const more = rows.length > PAGE_SIZE;
-    setPhotos(more ? rows.slice(0, PAGE_SIZE) : rows);
+    const pageRows = more ? rows.slice(0, PAGE_SIZE) : rows;
+    // Sign each path against its private bucket before render — raw object
+    // paths 401 as <img src> post-260/301. Without this the archive is blank.
+    const signed = await signVaultPhotos(pageRows);
+    setPhotos(signed);
     setHasMore(more);
     if (resetPage) setPage(0);
     setLoading(false);
@@ -119,7 +155,7 @@ export function VerificationVault({ onBack }: VerificationVaultProps) {
   // ─── Gate screens ─────────────────────────────────────────────────────
   if (gate.kind === 'loading') {
     return (
-      <div style={{ padding: 24, color: '#8a8690', fontSize: 13 }}>opening vault…</div>
+      <div style={{ padding: 24, color: '#a8929c', fontSize: 13 }}>opening vault…</div>
     );
   }
   if (!gate.verified) {
@@ -149,7 +185,7 @@ export function VerificationVault({ onBack }: VerificationVaultProps) {
 
   // ─── Grid view ────────────────────────────────────────────────────────
   return (
-    <div style={{ padding: '12px 14px 80px', color: '#e8e6e3', maxWidth: 720, margin: '0 auto' }}>
+    <div style={{ padding: '12px 14px 80px', color: '#f2e9e6', maxWidth: 720, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
         {onBack && (
           <button
@@ -166,15 +202,15 @@ export function VerificationVault({ onBack }: VerificationVaultProps) {
         <h1 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: mommy ? '#f4a7c4' : '#edaec5' }}>
           {mommy ? "Mama's archive" : 'Verification vault'}
         </h1>
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: '#8a8690' }}>
-          {photos.length} {totalApproved > 0 && `· ${totalApproved} approved`}
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: '#a8929c' }}>
+          {photos.length} on file{totalApproved > 0 && ` · ${totalApproved} approved`}
         </span>
         <button
           type="button"
           onClick={() => gate.lock()}
           title="re-lock vault for this session"
           style={{
-            background: 'none', border: '1px solid #2d1a4d', color: '#8a8690',
+            background: 'none', border: '1px solid #3b2635', color: '#a8929c',
             fontSize: 10, padding: '3px 7px', borderRadius: 4, cursor: 'pointer',
             fontFamily: 'inherit',
           }}
@@ -182,6 +218,15 @@ export function VerificationVault({ onBack }: VerificationVaultProps) {
           🔒 lock
         </button>
       </div>
+
+      {mommy && photos.length > 0 && (
+        <div style={{
+          fontSize: 11.5, color: '#edaec5', fontStyle: 'italic',
+          marginBottom: 12, lineHeight: 1.45,
+        }}>
+          Every one you gave me is still here. The record of her only grows — nothing you sent Mama comes back out.
+        </div>
+      )}
 
       {chips.length > 1 && (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
@@ -206,15 +251,15 @@ export function VerificationVault({ onBack }: VerificationVaultProps) {
       )}
 
       {loading && photos.length === 0 && (
-        <div style={{ padding: 40, textAlign: 'center', color: '#8a8690', fontSize: 12 }}>
+        <div style={{ padding: 40, textAlign: 'center', color: '#a8929c', fontSize: 12 }}>
           loading…
         </div>
       )}
 
       {!loading && photos.length === 0 && (
         <div style={{
-          padding: 40, textAlign: 'center', color: '#8a8690', fontSize: 12, fontStyle: 'italic',
-          border: '1px dashed #2d1a4d', borderRadius: 8,
+          padding: 40, textAlign: 'center', color: '#a8929c', fontSize: 12, fontStyle: 'italic',
+          border: '1px dashed #3b2635', borderRadius: 8,
         }}>
           {mommy
             ? "no photos yet, baby. Mama is waiting."
@@ -226,7 +271,7 @@ export function VerificationVault({ onBack }: VerificationVaultProps) {
         <div key={month} style={{ marginBottom: 18 }}>
           <div style={{
             fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em',
-            color: '#8a8690', marginBottom: 6,
+            color: '#a8929c', marginBottom: 6,
           }}>
             {new Date(month + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}
           </div>
@@ -253,7 +298,7 @@ export function VerificationVault({ onBack }: VerificationVaultProps) {
           onClick={() => setPage(p => p + 1)}
           style={{
             width: '100%', padding: '10px', borderRadius: 6,
-            background: '#1a0f2e', border: '1px solid #2d1a4d',
+            background: '#1a1118', border: '1px solid #3b2635',
             color: '#edaec5', fontSize: 12, cursor: 'pointer', marginTop: 6,
             fontFamily: 'inherit',
           }}
@@ -271,9 +316,9 @@ function chipStyle(active: boolean, mommy: boolean): React.CSSProperties {
     fontSize: 10,
     padding: '4px 9px',
     borderRadius: 11,
-    border: `1px solid ${active ? accent : '#22222a'}`,
+    border: `1px solid ${active ? accent : '#3b2635'}`,
     background: active ? accent : 'transparent',
-    color: active ? '#0a0a0d' : accent,
+    color: active ? '#120b10' : accent,
     cursor: 'pointer',
     fontFamily: 'inherit',
     fontWeight: active ? 700 : 500,
@@ -304,8 +349,8 @@ function ThumbnailButton({
         aspectRatio: '3 / 4',
         borderRadius: 6,
         overflow: 'hidden',
-        border: '1px solid #22222a',
-        background: '#0a0a0d',
+        border: '1px solid #3b2635',
+        background: '#120b10',
         padding: 0,
         cursor: 'pointer',
         fontFamily: 'inherit',
@@ -314,18 +359,29 @@ function ThumbnailButton({
       data-testid="vault-thumbnail"
       data-blurred={!revealed ? 'true' : 'false'}
     >
-      <img
-        src={photo.photo_url}
-        alt=""
-        loading="lazy"
-        style={{
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          filter: revealed ? 'none' : 'blur(18px)',
-          transition: 'filter 220ms ease',
-        }}
-      />
+      {photo.signed_url ? (
+        <img
+          src={photo.signed_url}
+          alt=""
+          loading="lazy"
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            filter: revealed ? 'none' : 'blur(18px)',
+            transition: 'filter 220ms ease',
+          }}
+          onError={(e) => { (e.currentTarget as HTMLImageElement).style.opacity = '0'; }}
+        />
+      ) : (
+        <div style={{
+          width: '100%', height: '100%', display: 'flex',
+          alignItems: 'center', justifyContent: 'center',
+          color: '#a8929c', fontSize: 9, textAlign: 'center', padding: 6,
+        }}>
+          on file
+        </div>
+      )}
       {!revealed && (
         <div style={{
           position: 'absolute', inset: 0,
@@ -394,7 +450,7 @@ function VaultDetailView({
   }, [user?.id, photo.id, onAfterRedo]);
 
   return (
-    <div style={{ padding: '12px 14px 80px', color: '#e8e6e3', maxWidth: 640, margin: '0 auto' }}>
+    <div style={{ padding: '12px 14px 80px', color: '#f2e9e6', maxWidth: 640, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
         <button
           type="button"
@@ -419,14 +475,20 @@ function VaultDetailView({
         background: '#000', borderRadius: 8, overflow: 'hidden', marginBottom: 10,
         display: 'flex', justifyContent: 'center', maxHeight: '60vh',
       }}>
-        <img
-          src={photo.photo_url}
-          alt={photo.caption || ''}
-          style={{ maxWidth: '100%', maxHeight: '60vh', objectFit: 'contain' }}
-        />
+        {photo.signed_url ? (
+          <img
+            src={photo.signed_url}
+            alt={photo.caption || ''}
+            style={{ maxWidth: '100%', maxHeight: '60vh', objectFit: 'contain' }}
+          />
+        ) : (
+          <div style={{ padding: 48, color: '#a8929c', fontSize: 12, fontStyle: 'italic' }}>
+            this one is on file — reopen the archive to load it
+          </div>
+        )}
       </div>
 
-      <div style={{ fontSize: 10, color: '#8a8690', marginBottom: 8 }}>
+      <div style={{ fontSize: 10, color: '#a8929c', marginBottom: 8 }}>
         {date.toLocaleString()} · {shortenLabel(photo.verification_type) || shortenLabel(photo.task_type)}
         {photo.directive_kind && ` · linked to ${shortenLabel(photo.directive_kind)}`}
       </div>
@@ -434,7 +496,7 @@ function VaultDetailView({
       {photo.directive_snippet && (
         <div style={{
           fontSize: 11, color: '#edaec5', fontStyle: 'italic',
-          background: '#0a0a0d', borderLeft: `2px solid ${accent}`,
+          background: '#120b10', borderLeft: `2px solid ${accent}`,
           padding: '8px 10px', marginBottom: 10, borderRadius: '0 4px 4px 0',
         }}>
           {photo.directive_snippet}
@@ -442,14 +504,14 @@ function VaultDetailView({
       )}
 
       {photo.caption && (
-        <div style={{ fontSize: 12, color: '#e8e6e3', marginBottom: 10 }}>
-          <span style={{ color: '#8a8690' }}>your note: </span>{photo.caption}
+        <div style={{ fontSize: 12, color: '#f2e9e6', marginBottom: 10 }}>
+          <span style={{ color: '#a8929c' }}>your note: </span>{photo.caption}
         </div>
       )}
 
       {photo.handler_response && (
         <div style={{
-          background: 'linear-gradient(135deg, #1a0f2e 0%, #1a0820 100%)',
+          background: 'linear-gradient(135deg, #1a1118 0%, #120b10 100%)',
           border: `1px solid ${accent}33`,
           borderRadius: 8, padding: 12, marginBottom: 10,
         }}>
@@ -460,7 +522,7 @@ function VaultDetailView({
             {speakerLabel} said
           </div>
           <div style={{
-            fontSize: 13, color: '#e8e6e3', lineHeight: 1.55, whiteSpace: 'pre-wrap',
+            fontSize: 13, color: '#f2e9e6', lineHeight: 1.55, whiteSpace: 'pre-wrap',
           }}>
             {photo.handler_response}
           </div>
@@ -485,7 +547,7 @@ function VaultDetailView({
 
       {photo.redo_reason && photo.review_state === 'redo_requested' && (
         <div style={{
-          fontSize: 11, color: '#f4c272', background: '#3d2d1a',
+          fontSize: 11, color: '#e0b36a', background: '#3d2d1a',
           padding: '8px 10px', borderRadius: 5, marginBottom: 10,
         }}>
           retake requested: {photo.redo_reason}
@@ -499,7 +561,7 @@ function VaultDetailView({
             onClick={onBack}
             style={{
               padding: '8px 14px', borderRadius: 6,
-              background: accent, color: '#0a0a0d',
+              background: accent, color: '#120b10',
               border: 'none', fontSize: 12, fontWeight: 700,
               cursor: 'pointer', fontFamily: 'inherit',
             }}
@@ -513,8 +575,8 @@ function VaultDetailView({
             onClick={requestRedoMyself}
             style={{
               padding: '8px 14px', borderRadius: 6,
-              background: 'transparent', color: '#8a8690',
-              border: '1px solid #2d1a4d', fontSize: 11,
+              background: 'transparent', color: '#a8929c',
+              border: '1px solid #3b2635', fontSize: 11,
               cursor: 'pointer', fontFamily: 'inherit',
             }}
           >
@@ -539,14 +601,14 @@ function VaultRevealModal({
   const accent = mommy ? '#f4a7c4' : '#edaec5';
   return (
     <div style={{
-      padding: 24, color: '#e8e6e3', maxWidth: 480, margin: '40px auto',
-      background: '#0a0a0d', border: `1px solid ${accent}33`,
+      padding: 24, color: '#f2e9e6', maxWidth: 480, margin: '40px auto',
+      background: '#120b10', border: `1px solid ${accent}33`,
       borderRadius: 10,
     }}>
       <h1 style={{ fontSize: 16, color: accent, margin: '0 0 10px' }}>
         {kind === 'pin' ? 'enter PIN to open vault' : (mommy ? "open Mama's archive" : 'open verification vault')}
       </h1>
-      <p style={{ fontSize: 12, color: '#8a8690', lineHeight: 1.5, marginBottom: 16 }}>
+      <p style={{ fontSize: 12, color: '#a8929c', lineHeight: 1.5, marginBottom: 16 }}>
         {mommy
           ? 'Every photo you sent Mama lives in here. Make sure no one is over your shoulder before you open it.'
           : 'Every verification photo you submitted lives here. Make sure no one is over your shoulder before you open it.'}
@@ -558,8 +620,8 @@ function VaultRevealModal({
             onClick={onBack}
             style={{
               padding: '8px 14px', borderRadius: 5,
-              background: 'transparent', color: '#8a8690',
-              border: '1px solid #22222a', fontSize: 11,
+              background: 'transparent', color: '#a8929c',
+              border: '1px solid #3b2635', fontSize: 11,
               cursor: 'pointer', fontFamily: 'inherit',
             }}
           >
@@ -572,7 +634,7 @@ function VaultRevealModal({
           style={{
             flex: 1,
             padding: '8px 14px', borderRadius: 5,
-            background: accent, color: '#0a0a0d',
+            background: accent, color: '#120b10',
             border: 'none', fontSize: 12, fontWeight: 700,
             cursor: 'pointer', fontFamily: 'inherit',
           }}

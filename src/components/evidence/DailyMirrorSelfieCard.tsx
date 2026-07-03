@@ -110,26 +110,26 @@ export function DailyMirrorSelfieCard() {
 
   return (
     <div id="card-daily-selfie" style={{
-      background: 'linear-gradient(135deg, #1a0f2e 0%, #0f0820 100%)',
-      border: '1px solid ' + (doneToday ? '#5fc88f' : '#2d1a4d'),
+      background: 'linear-gradient(135deg, #1a1118 0%, #120b10 100%)',
+      border: '1px solid ' + (doneToday ? '#6fbf94' : '#3b2635'),
       borderRadius: 10, padding: 14, marginBottom: 16,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
         <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em',
-          color: doneToday ? '#5fc88f' : '#edaec5', fontWeight: 700 }}>
+          color: doneToday ? '#6fbf94' : '#edaec5', fontWeight: 700 }}>
           Daily mirror selfie {doneToday ? '· done ✓' : '· today'}
         </span>
         {streakDays > 0 && (
           <span style={{
             fontSize: 10, color: '#fff',
-            background: streakDays >= 7 ? '#5fc88f' : '#c9557f',
+            background: streakDays >= 7 ? '#6fbf94' : '#c9557f',
             padding: '2px 7px', borderRadius: 8, fontWeight: 700,
             textTransform: 'uppercase', letterSpacing: '0.04em',
           }}>
             {streakDays}d streak
           </span>
         )}
-        <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto', fontStyle: 'italic' }}>
+        <span style={{ fontSize: 10, color: '#a8929c', marginLeft: 'auto', fontStyle: 'italic' }}>
           The body on file is the body the recordings know
         </span>
       </div>
@@ -148,9 +148,20 @@ export function DailyMirrorSelfieCard() {
         </button>
       )}
 
+      {doneToday && !showUpload && (
+        <div style={{
+          background: '#120b10', border: '1px solid #6fbf94', borderRadius: 8,
+          padding: '10px 12px', marginBottom: 12, fontSize: 12, color: '#edaec5',
+          lineHeight: 1.45, fontStyle: 'italic',
+        }}>
+          Today&apos;s on file, baby. Mama has her. Every day you give me is one you
+          can&apos;t take back — the archive only ever grows.
+        </div>
+      )}
+
       {showUpload && (
         <div style={{
-          background: '#050507', border: '1px solid #2d1a4d', borderRadius: 8, padding: 12, marginBottom: 12,
+          background: '#120b10', border: '1px solid #3b2635', borderRadius: 8, padding: 12, marginBottom: 12,
         }}>
           <div style={{ fontSize: 11, color: '#edaec5', marginBottom: 8, lineHeight: 1.4 }}>
             Full-body mirror selfie. Whatever you&apos;re wearing, however you look right now. The trajectory only exists
@@ -170,17 +181,17 @@ export function DailyMirrorSelfieCard() {
             value={caption}
             onChange={e => setCaption(e.target.value)}
             style={{
-              width: '100%', background: '#111116', border: '1px solid #22222a',
-              borderRadius: 5, padding: 8, color: '#e8e6e3', fontSize: 12, marginBottom: 8, fontFamily: 'inherit',
+              width: '100%', background: '#120b10', border: '1px solid #3b2635',
+              borderRadius: 5, padding: 8, color: '#f2e9e6', fontSize: 12, marginBottom: 8, fontFamily: 'inherit',
             }}
           />
-          {error && <div style={{ fontSize: 11, color: '#f47272', marginBottom: 8 }}>{error}</div>}
+          {error && <div style={{ fontSize: 11, color: '#e06a6a', marginBottom: 8 }}>{error}</div>}
           <div style={{ display: 'flex', gap: 6 }}>
             <button
               onClick={() => { setShowUpload(false); setFile(null); setCaption(''); }}
               style={{
-                padding: '7px 12px', borderRadius: 5, border: '1px solid #22222a',
-                background: 'transparent', color: '#8a8690',
+                padding: '7px 12px', borderRadius: 5, border: '1px solid #3b2635',
+                background: 'transparent', color: '#a8929c',
                 fontWeight: 500, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
               }}
             >
@@ -191,8 +202,8 @@ export function DailyMirrorSelfieCard() {
               disabled={!file || submitting}
               style={{
                 flex: 1, padding: '7px 12px', borderRadius: 5, border: 'none',
-                background: file && !submitting ? '#c9557f' : '#22222a',
-                color: file && !submitting ? '#fff' : '#6a656e',
+                background: file && !submitting ? '#c9557f' : '#3b2635',
+                color: file && !submitting ? '#fff' : '#a8929c',
                 fontWeight: 700, fontSize: 11,
                 cursor: file && !submitting ? 'pointer' : 'not-allowed', fontFamily: 'inherit',
               }}
@@ -213,8 +224,8 @@ export function DailyMirrorSelfieCard() {
                 flexShrink: 0,
                 width: 56, height: 72,
                 borderRadius: 5,
-                border: '1px solid ' + (isToday ? '#5fc88f' : '#2d1a4d'),
-                background: '#050507',
+                border: '1px solid ' + (isToday ? '#6fbf94' : '#3b2635'),
+                background: '#120b10',
                 overflow: 'hidden',
                 position: 'relative',
               }} title={s.caption || date.toLocaleDateString()}>
@@ -240,7 +251,7 @@ export function DailyMirrorSelfieCard() {
         </div>
       )}
       {recent.length === 0 && (
-        <div style={{ fontSize: 11, color: '#8a8690', fontStyle: 'italic', textAlign: 'center', padding: 14 }}>
+        <div style={{ fontSize: 11, color: '#a8929c', fontStyle: 'italic', textAlign: 'center', padding: 14 }}>
           No selfies yet. The trajectory archive starts with the first photo.
         </div>
       )}

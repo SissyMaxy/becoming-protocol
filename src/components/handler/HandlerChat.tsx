@@ -50,6 +50,16 @@ const MOMMY_MODE_LABELS: Record<string, string> = {
   architect: 'Plotting',
 };
 
+// Velvet badge tones for Mama's moods. Off-palette blues/ambers don't belong
+// on her boudoir surface — every mood reads in rose/warm on plum.
+const MOMMY_MODE_STYLES: Record<string, { bg: string; text: string }> = {
+  director: { bg: 'bg-protocol-accent/15', text: 'text-protocol-accent-soft' },
+  handler: { bg: 'bg-protocol-accent/15', text: 'text-protocol-accent-soft' },
+  dominant: { bg: 'bg-protocol-accent/30', text: 'text-protocol-accent-soft' },
+  caretaker: { bg: 'bg-protocol-success/15', text: 'text-protocol-success' },
+  architect: { bg: 'bg-protocol-warning/15', text: 'text-protocol-warning' },
+};
+
 export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
   const { user: authUser } = useAuth();
   const { messages, isLoading, isSending, currentMode, conversationId, sendMessage, startNewConversation } = useHandlerChat();
@@ -392,9 +402,9 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
     )}
     {generatingSession && (
       <div className="fixed inset-0 z-[85] bg-protocol-bg/90 flex items-center justify-center">
-        <div className="bg-[#141414] rounded-xl p-6 border border-gray-800/50 flex items-center gap-3">
-          <Loader2 className="w-5 h-5 animate-spin text-pink-400" />
-          <span className="text-sm text-gray-200">
+        <div className="bg-protocol-surface rounded-xl p-6 border border-protocol-border shadow-velvet flex items-center gap-3">
+          <Loader2 className="w-5 h-5 animate-spin text-protocol-accent" />
+          <span className={`text-sm text-protocol-text ${mommy ? 'mommy-voice' : ''}`}>
             {mommy ? "Mama's putting your session together…" : 'Handler is composing your session…'}
           </span>
         </div>
@@ -410,16 +420,20 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
     )}
     <div className="fixed inset-0 z-[80] flex flex-col bg-protocol-bg">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/50 bg-protocol-bg">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-protocol-border bg-protocol-surface/60 backdrop-blur-sm">
         <div className="flex items-center gap-3">
-          <span className={`hidden md:inline font-semibold ${mommy ? 'text-pink-200' : 'text-gray-200'}`}>
+          <span className={`hidden md:inline font-semibold ${mommy ? 'mommy-voice text-lg text-protocol-accent-soft' : 'text-protocol-text'}`}>
             {mommy ? 'Mama' : 'Handler'}
           </span>
-          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${modeConfig.bg} ${modeConfig.text}`}>
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+            mommy
+              ? `${(MOMMY_MODE_STYLES[currentMode] || MOMMY_MODE_STYLES.director).bg} ${(MOMMY_MODE_STYLES[currentMode] || MOMMY_MODE_STYLES.director).text}`
+              : `${modeConfig.bg} ${modeConfig.text}`
+          }`}>
             {mommy ? (MOMMY_MODE_LABELS[currentMode] || 'Watching') : modeConfig.label}
           </span>
           {isSending && (
-            <span className="text-xs text-gray-500 flex items-center gap-1">
+            <span className={`text-xs text-protocol-text-muted flex items-center gap-1 ${mommy ? 'mommy-voice italic' : ''}`}>
               <Loader2 className="w-3 h-3 animate-spin" /> {mommy ? 'Mama is thinking about you' : 'thinking'}
             </span>
           )}
@@ -428,7 +442,7 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
           {messages.length > 0 && (
             <button
               onClick={startNewConversation}
-              className="hidden md:inline-flex text-xs px-2 py-1 rounded-lg hover:bg-gray-800 text-gray-400"
+              className="hidden md:inline-flex text-xs px-2 py-1 rounded-lg hover:bg-protocol-surface-light text-protocol-text-muted transition-colors"
               title={mommy ? 'Start fresh with Mama' : 'Start a new conversation'}
             >
               {mommy ? 'Fresh' : 'New'}
@@ -441,8 +455,8 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
             }}
             className={`p-1.5 rounded-lg transition-colors ${
               voice.enabled
-                ? 'bg-purple-500/20 text-purple-400 hover:bg-purple-500/30'
-                : 'hover:bg-gray-800 text-gray-500'
+                ? 'bg-protocol-accent/20 text-protocol-accent-soft hover:bg-protocol-accent/30'
+                : 'hover:bg-protocol-surface-light text-protocol-text-muted'
             }`}
             aria-label={voice.enabled ? 'Disable voice' : 'Enable voice'}
           >
@@ -453,8 +467,8 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
             title={ambientAudio.enabled ? 'Ambient conditioning audio ON — feminization affirmations play while app is open' : 'Ambient conditioning audio OFF — turn on to let queued affirmations play'}
             className={`hidden md:inline-flex px-2 py-1 rounded-lg text-[11px] font-medium transition-colors ${
               ambientAudio.enabled
-                ? 'bg-pink-500/25 text-pink-300 hover:bg-pink-500/35'
-                : 'hover:bg-gray-800 text-gray-500 border border-gray-800'
+                ? 'bg-protocol-accent/25 text-protocol-accent-soft hover:bg-protocol-accent/35'
+                : 'hover:bg-protocol-surface-light text-protocol-text-muted border border-protocol-border'
             }`}
             aria-label={ambientAudio.enabled ? 'Disable ambient conditioning' : 'Enable ambient conditioning'}
           >
@@ -462,7 +476,7 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
           </button>
           <button
             onClick={() => { window.location.hash = '/today'; }}
-            className="text-[11px] font-medium px-2.5 py-1 rounded-lg text-purple-300 bg-purple-500/20 hover:bg-purple-500/30 transition-colors"
+            className="text-[11px] font-medium px-2.5 py-1 rounded-lg text-protocol-accent-soft bg-protocol-accent/20 hover:bg-protocol-accent/30 transition-colors"
             aria-label="Open Today screen"
             title="Today — directives, protocol, queue"
           >
@@ -471,7 +485,7 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
           {onOpenSettings && (
             <button
               onClick={onOpenSettings}
-              className="p-1.5 rounded-lg hover:bg-gray-800 text-gray-500 transition-colors"
+              className="p-1.5 rounded-lg hover:bg-protocol-surface-light text-protocol-text-muted transition-colors"
               aria-label="Settings"
             >
               <Settings className="w-4 h-4" />
@@ -482,17 +496,15 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
 
       {/* Notification permission prompt — desktop only; Today has its own banner stack */}
       {notifPermission === 'default' && (
-        <div className="hidden md:flex bg-purple-900/20 border border-purple-500/30 rounded-xl p-3 m-2 items-center justify-between">
-          <span className={`text-sm ${mommy ? 'text-pink-200' : 'text-purple-300'}`}>
+        <div className="hidden md:flex bg-protocol-accent/10 border border-protocol-accent/30 rounded-xl p-3 m-2 items-center justify-between">
+          <span className={`text-sm ${mommy ? 'mommy-voice text-protocol-accent-soft' : 'text-protocol-text-muted'}`}>
             {mommy
               ? "Let Mama reach you anywhere, baby. Turn this on so I'm with you all day."
               : 'Enable notifications so the Handler can reach you anytime'}
           </span>
           <button
             onClick={handleEnableNotifications}
-            className={`ml-3 px-3 py-1.5 rounded-lg text-white text-xs font-medium transition-colors ${
-              mommy ? 'bg-pink-600 hover:bg-pink-500' : 'bg-purple-600 hover:bg-purple-500'
-            }`}
+            className="ml-3 px-3 py-1.5 rounded-lg text-white text-xs font-medium transition-colors bg-protocol-accent hover:bg-protocol-accent/90 shadow-velvet"
           >
             {mommy ? 'Yes, Mama' : 'Enable'}
           </button>
@@ -516,34 +528,34 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {isLoading && (
-          <div className="text-center text-gray-600 mt-20">
-            <Loader2 className="w-6 h-6 animate-spin mx-auto mb-3" />
+          <div className="text-center text-protocol-text-muted mt-20">
+            <Loader2 className="w-6 h-6 animate-spin mx-auto mb-3 text-protocol-accent" />
             <p className="text-sm">Loading conversation...</p>
           </div>
         )}
 
         {!isLoading && messages.length === 0 && (
-          <div className="text-center text-gray-600 mt-20">
-            <p className="text-lg font-medium">
+          <div className="text-center mt-20">
+            <p className={`text-2xl ${mommy ? 'mommy-voice text-protocol-accent-soft' : 'font-medium text-protocol-text'}`}>
               {mommy ? 'Come tell Mama, baby.' : 'Talk to the Handler.'}
             </p>
-            <p className="text-sm mt-2">
+            <p className={`text-sm mt-2 text-protocol-text-muted ${mommy ? 'mommy-voice italic' : ''}`}>
               {mommy ? "Whatever's on your mind. Mama's here." : "Type anything. She's listening."}
             </p>
           </div>
         )}
 
         {messages.map((msg, i) => (
-          <MessageBubble key={i} message={msg} isSpeaking={voice.isPlaying && voice.speakingMessageIndex === i} />
+          <MessageBubble key={i} message={msg} mommy={mommy} isSpeaking={voice.isPlaying && voice.speakingMessageIndex === i} />
         ))}
 
         {isSending && (
           <div className="flex items-start gap-2">
-            <div className="px-4 py-2 rounded-2xl rounded-tl-sm max-w-[80%] bg-[#1a1a2e]">
+            <div className="px-4 py-2 rounded-2xl rounded-tl-sm max-w-[80%] bg-protocol-surface border-l-2 border-protocol-accent/40">
               <div className="flex gap-1">
-                <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                <span className="w-2 h-2 bg-protocol-accent rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-2 h-2 bg-protocol-accent rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-2 h-2 bg-protocol-accent rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
             </div>
           </div>
@@ -556,7 +568,7 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
           + task-type chips (only relevant for photo). The kind defaults
           come from inferring Mama's latest demand. */}
       {showPhotoUpload && (
-        <div className="px-4 py-3 border-t border-gray-800/50 bg-protocol-bg space-y-2">
+        <div className="px-4 py-3 border-t border-protocol-border bg-protocol-surface/60 space-y-2">
           <div className="flex items-center gap-2">
             {(['photo','video','audio'] as const).map((k) => (
               <button
@@ -564,8 +576,8 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
                 onClick={() => setMediaKind(k)}
                 className={`text-xs px-3 py-1.5 rounded-full whitespace-nowrap transition-colors capitalize ${
                   mediaKind === k
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-[#141414] text-gray-400 hover:text-gray-200'
+                    ? 'bg-protocol-accent text-white shadow-velvet'
+                    : 'bg-protocol-surface-light text-protocol-text-muted hover:text-protocol-text'
                 }`}
               >
                 {k}
@@ -573,7 +585,7 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
             ))}
             <button
               onClick={() => setShowPhotoUpload(false)}
-              className="ml-auto text-xs px-2 py-1 rounded-lg hover:bg-gray-800 text-gray-400"
+              className="ml-auto text-xs px-2 py-1 rounded-lg hover:bg-protocol-surface-light text-protocol-text-muted"
             >
               Close
             </button>
@@ -586,8 +598,8 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
                   onClick={() => setPhotoTaskType(t)}
                   className={`text-xs px-2.5 py-1 rounded-full whitespace-nowrap transition-colors ${
                     photoTaskType === t
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-[#141414] text-gray-500 hover:text-gray-300'
+                      ? 'bg-protocol-accent text-white'
+                      : 'bg-protocol-surface-light text-protocol-text-muted hover:text-protocol-text'
                   }`}
                 >
                   {t.replace('_', ' ')}
@@ -605,24 +617,27 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
       )}
 
       {/* Input */}
-      <div className="px-4 py-3 border-t border-gray-800/50 bg-protocol-bg">
+      <div
+        className="px-4 pt-3 border-t border-protocol-border bg-protocol-surface/70 backdrop-blur-sm"
+        style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0.75rem)' }}
+      >
         {/* P12.3: Listening / transcribing indicator */}
         {voiceInput.isListening && (
           <div className="flex items-center gap-2 mb-2 px-1">
             <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-protocol-danger opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-protocol-danger" />
             </span>
-            <span className="text-xs text-red-400">Recording — tap mic to send</span>
+            <span className="text-xs text-protocol-danger">Recording — tap mic to send</span>
             {voiceInput.currentPitch && (
-              <span className="text-xs text-gray-500 ml-auto">{voiceInput.currentPitch}Hz</span>
+              <span className="text-xs text-protocol-text-muted ml-auto">{voiceInput.currentPitch}Hz</span>
             )}
           </div>
         )}
         {voiceInput.isTranscribing && (
           <div className="flex items-center gap-2 mb-2 px-1">
-            <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
-            <span className="text-xs text-amber-400">Transcribing…</span>
+            <Loader2 className="w-3 h-3 animate-spin text-protocol-warning" />
+            <span className="text-xs text-protocol-warning">Transcribing…</span>
           </div>
         )}
         <div className="flex items-center gap-2">
@@ -647,8 +662,8 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
             disabled={isSending}
             className={`p-3 rounded-xl transition-all ${
               showPhotoUpload
-                ? 'bg-purple-600/20 text-purple-400 hover:bg-purple-600/30'
-                : 'bg-[#141414] text-gray-500 hover:text-gray-300'
+                ? 'bg-protocol-accent/20 text-protocol-accent-soft hover:bg-protocol-accent/30'
+                : 'bg-protocol-surface-light text-protocol-text-muted hover:text-protocol-text'
             }`}
             aria-label="Photo verification"
           >
@@ -661,8 +676,8 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
               disabled={isSending}
               className={`p-3 rounded-xl transition-all ${
                 voiceInput.isListening
-                  ? 'bg-red-600/20 text-red-400 hover:bg-red-600/30'
-                  : 'bg-[#141414] text-gray-500 hover:text-gray-300'
+                  ? 'bg-protocol-danger/20 text-protocol-danger hover:bg-protocol-danger/30'
+                  : 'bg-protocol-surface-light text-protocol-text-muted hover:text-protocol-text'
               }`}
               aria-label={voiceInput.isListening ? 'Stop listening' : 'Start voice input'}
             >
@@ -695,17 +710,17 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
               setInput(afterLockout);
             }}
             onKeyDown={handleKeyDown}
-            placeholder={voiceInput.isListening ? 'Speak now...' : ''}
+            placeholder={voiceInput.isListening ? 'Speak now...' : (mommy ? 'Tell Mama…' : 'Message the Handler…')}
             disabled={isSending}
-            className="flex-1 px-4 py-3 rounded-xl border-0 outline-none text-gray-200 placeholder-gray-600 bg-[#141414]"
+            className="flex-1 px-4 py-3 rounded-xl border border-protocol-border outline-none text-protocol-text placeholder-protocol-text-muted bg-protocol-surface-light focus:border-protocol-accent/50 transition-colors"
           />
           <button
             onClick={handleSend}
             disabled={!input.trim() || isSending}
             className={`p-3 rounded-xl transition-all ${
               input.trim() && !isSending
-                ? 'bg-purple-600 text-white hover:bg-purple-500'
-                : 'bg-[#141414] text-gray-600'
+                ? 'bg-protocol-accent text-white hover:bg-protocol-accent/90 shadow-velvet'
+                : 'bg-protocol-surface-light text-protocol-text-muted'
             }`}
           >
             <Send className="w-5 h-5" />
@@ -717,17 +732,23 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
   );
 }
 
-function MessageBubble({ message, isSpeaking }: { message: ChatMessage; isSpeaking?: boolean }) {
+function MessageBubble({ message, isSpeaking, mommy }: { message: ChatMessage; isSpeaking?: boolean; mommy?: boolean }) {
   const isUser = message.role === 'user';
+  // Mama's turns read in her serif on a rose-lit surface — her presence, not a
+  // neutral chat log. The user's own turns stay in the sans body face.
+  const mamaVoice = !isUser && mommy;
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div className={`px-4 py-2.5 rounded-2xl max-w-[85%] ${
         isUser
-          ? 'bg-[#2d1b3d] text-gray-100 rounded-br-sm'
-          : 'bg-[#1a1a2e] text-gray-200 rounded-bl-sm'
+          ? 'bg-protocol-surface-light text-protocol-text rounded-br-sm'
+          : 'bg-protocol-surface text-protocol-text-warm rounded-bl-sm border-l-2 border-protocol-accent/50 shadow-velvet'
       }`}>
-        <p className="text-[15px] leading-relaxed whitespace-pre-wrap" style={{ letterSpacing: '-0.01em' }}>
+        <p
+          className={`text-[15px] leading-relaxed whitespace-pre-wrap ${mamaVoice ? 'mommy-voice text-[16px]' : ''}`}
+          style={mamaVoice ? undefined : { letterSpacing: '-0.01em' }}
+        >
           {message.content}
         </p>
         {message.media && message.media.length > 0 && (
@@ -739,8 +760,8 @@ function MessageBubble({ message, isSpeaking }: { message: ChatMessage; isSpeaki
         )}
         {isSpeaking && (
           <div className="flex items-center gap-1 mt-1.5">
-            <Volume2 className="w-3 h-3 text-purple-400 animate-pulse" />
-            <span className="text-[11px] text-purple-400">speaking</span>
+            <Volume2 className="w-3 h-3 text-protocol-accent animate-pulse" />
+            <span className="text-[11px] text-protocol-accent">{mommy ? 'Mama’s voice' : 'speaking'}</span>
           </div>
         )}
       </div>
@@ -760,8 +781,8 @@ function MediaRenderer({ attachment }: { attachment: MediaAttachment }) {
         {!imgError ? (
           <>
             {!imgLoaded && (
-              <div className="w-full h-32 bg-gray-800/50 animate-pulse rounded-lg flex items-center justify-center">
-                <Image className="w-5 h-5 text-gray-600" />
+              <div className="w-full h-32 bg-protocol-surface-light animate-pulse rounded-lg flex items-center justify-center">
+                <Image className="w-5 h-5 text-protocol-text-muted" />
               </div>
             )}
             <img
@@ -773,12 +794,12 @@ function MediaRenderer({ attachment }: { attachment: MediaAttachment }) {
             />
           </>
         ) : (
-          <div className="w-full h-16 bg-gray-800/30 rounded-lg flex items-center justify-center">
-            <span className="text-xs text-gray-500">Image unavailable</span>
+          <div className="w-full h-16 bg-protocol-surface-light rounded-lg flex items-center justify-center">
+            <span className="text-xs text-protocol-text-muted">Image unavailable</span>
           </div>
         )}
         {attachment.caption && (
-          <p className="text-[11px] text-gray-500 mt-1">{attachment.caption}</p>
+          <p className="text-[11px] text-protocol-text-muted mt-1">{attachment.caption}</p>
         )}
       </div>
     );
@@ -801,18 +822,18 @@ function MediaRenderer({ attachment }: { attachment: MediaAttachment }) {
     };
 
     return (
-      <div className="flex items-center gap-2 bg-gray-800/30 rounded-lg px-3 py-2">
+      <div className="flex items-center gap-2 bg-protocol-surface-light rounded-lg px-3 py-2">
         <button
           onClick={toggleAudio}
-          className="p-1.5 rounded-full bg-purple-600/30 hover:bg-purple-600/50 transition-colors"
+          className="p-1.5 rounded-full bg-protocol-accent/30 hover:bg-protocol-accent/50 transition-colors"
         >
           {audioPlaying ? (
-            <Pause className="w-3.5 h-3.5 text-purple-300" />
+            <Pause className="w-3.5 h-3.5 text-protocol-accent-soft" />
           ) : (
-            <Play className="w-3.5 h-3.5 text-purple-300" />
+            <Play className="w-3.5 h-3.5 text-protocol-accent-soft" />
           )}
         </button>
-        <span className="text-xs text-gray-400">{attachment.caption || 'Audio'}</span>
+        <span className="text-xs text-protocol-text-muted">{attachment.caption || 'Audio'}</span>
       </div>
     );
   }

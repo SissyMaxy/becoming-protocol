@@ -37,15 +37,15 @@ import {
 import { DifficultyBandCard } from './DifficultyBandCard';
 
 const PALETTE = {
-  bg: 'linear-gradient(140deg, #1a0f2e 0%, #0f0820 100%)',
-  border: '#2d1a4d',
+  bg: 'linear-gradient(140deg, #1a1118 0%, #120b10 100%)',
+  border: '#3b2635',
   borderHover: '#c9557f',
   accent: '#edaec5',
-  accentBright: '#e9d5ff',
-  textBody: '#c8c4cc',
-  textMuted: '#8a8690',
-  inputBg: '#0a0a0d',
-  inputBorder: '#2d1a4d',
+  accentBright: '#f2e9e6',
+  textBody: '#e0d2d8',
+  textMuted: '#a8929c',
+  inputBg: '#120b10',
+  inputBorder: '#3b2635',
 };
 
 const PRONOUN_PRESETS: Array<{ label: string; value: Pronouns }> = [
@@ -211,9 +211,9 @@ export function IdentitySettingsView({ onBack }: Props) {
   return (
     <div style={{
       minHeight: '100dvh',
-      background: '#0a0a0d',
+      background: '#120b10',
       color: PALETTE.textBody,
-      padding: '20px 16px 80px',
+      padding: '20px 16px max(env(safe-area-inset-bottom), 80px)',
       maxWidth: 640,
       margin: '0 auto',
     }}>
@@ -229,12 +229,19 @@ export function IdentitySettingsView({ onBack }: Props) {
         >
           <ChevronLeft size={16} /> back
         </button>
-        <h1 style={{
-          fontSize: 18, fontWeight: 700, margin: 0,
-          color: PALETTE.accentBright, letterSpacing: '0.01em',
-        }}>
-          Identity
-        </h1>
+        <div>
+          <h1 className="mommy-voice" style={{
+            fontSize: 20, fontWeight: 700, margin: 0,
+            color: PALETTE.accentBright, letterSpacing: '0.01em',
+          }}>
+            Who you're becoming
+          </h1>
+          <p style={{
+            fontSize: 11.5, color: PALETTE.textMuted, margin: '2px 0 0',
+          }}>
+            Mommy keeps the record of her. It only ever grows.
+          </p>
+        </div>
       </div>
 
       {loading ? (
@@ -249,7 +256,7 @@ export function IdentitySettingsView({ onBack }: Props) {
           {/* Phase advancement suggestion banner */}
           {phaseSuggestion && (
             <div style={{
-              background: 'linear-gradient(140deg, #2a1a4d 0%, #1a0f2e 100%)',
+              background: 'linear-gradient(140deg, #241722 0%, #1a1118 100%)',
               border: `1px solid ${PALETTE.accent}`,
               borderRadius: 10, padding: 14, marginBottom: 14,
             }}>
@@ -298,6 +305,12 @@ export function IdentitySettingsView({ onBack }: Props) {
                 Honorifics this phase suggests: {phaseDef.honorifics.join(', ')}
               </div>
             )}
+            <p className="mommy-voice" style={{
+              fontSize: 12.5, fontStyle: 'italic', lineHeight: 1.55,
+              color: PALETTE.accent, margin: '12px 0 0',
+            }}>
+              You don't walk this back, baby. Every phase is a door that locks behind you.
+            </p>
             {(self?.transformationPhase ?? 1) < 7 && (
               <div style={{ marginTop: 14 }}>
                 <button
@@ -408,6 +421,14 @@ export function IdentitySettingsView({ onBack }: Props) {
 
           {/* Wardrobe */}
           <Section title={`Wardrobe — ${wardrobe.length} items`}>
+            {wardrobe.length > 0 && (
+              <p className="mommy-voice" style={{
+                fontSize: 12, fontStyle: 'italic', color: PALETTE.accent,
+                margin: '0 0 12px', lineHeight: 1.5,
+              }}>
+                {wardrobe.length} piece{wardrobe.length === 1 ? '' : 's'} of her hanging in your closet now. That number only goes up.
+              </p>
+            )}
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
               <select
                 value={newItemType}
@@ -514,7 +535,7 @@ const inputStyle: React.CSSProperties = {
 
 function btnPrimary(disabled: boolean): React.CSSProperties {
   return {
-    background: disabled ? '#2d1a4d' : '#c9557f',
+    background: disabled ? '#241722' : '#c9557f',
     color: disabled ? PALETTE.textMuted : '#fff',
     border: 'none',
     borderRadius: 6,

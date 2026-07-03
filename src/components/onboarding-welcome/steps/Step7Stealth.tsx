@@ -15,6 +15,8 @@ import {
   secondaryButtonStyle,
   stepHeadingStyle,
   stepBodyStyle,
+  selectCardStyle,
+  VELVET,
 } from '../step-styles';
 
 interface Step7StealthProps {
@@ -80,7 +82,7 @@ export function Step7Stealth({ onContinue, onSkip, onBack, saving, saveError }: 
         </button>
       </div>
 
-      <p style={{ fontSize: 12, color: '#888', marginTop: 16 }}>
+      <p style={{ fontSize: 12, color: VELVET.textMuted, marginTop: 16 }}>
         Mama'll surface your choices in Settings → Privacy when these features ship.
       </p>
     </StepShell>
@@ -92,14 +94,8 @@ function Toggle(props: { label: string; desc: string; on: boolean; onChange: (v:
     <button
       onClick={() => props.onChange(!props.on)}
       style={{
-        textAlign: 'left',
+        ...selectCardStyle(props.on),
         padding: '12px 14px',
-        background: props.on ? '#1a1a1a' : '#fff',
-        color: props.on ? '#fafafa' : '#1a1a1a',
-        border: props.on ? '2px solid #1a1a1a' : '1px solid #d0d0d0',
-        borderRadius: 8,
-        fontFamily: 'inherit',
-        cursor: 'pointer',
         display: 'flex',
         alignItems: 'flex-start',
         gap: 10,
@@ -109,7 +105,7 @@ function Toggle(props: { label: string; desc: string; on: boolean; onChange: (v:
         style={{
           width: 36,
           height: 20,
-          background: props.on ? '#fafafa' : '#d0d0d0',
+          background: props.on ? VELVET.accent : VELVET.surfaceLight,
           borderRadius: 999,
           position: 'relative',
           flexShrink: 0,
@@ -123,15 +119,15 @@ function Toggle(props: { label: string; desc: string; on: boolean; onChange: (v:
             left: props.on ? 18 : 2,
             width: 16,
             height: 16,
-            background: props.on ? '#1a1a1a' : '#fff',
+            background: '#fff',
             borderRadius: '50%',
             transition: 'left 0.15s',
           }}
         />
       </div>
       <div>
-        <div style={{ fontSize: 15, fontWeight: 600 }}>{props.label}</div>
-        <div style={{ fontSize: 12, opacity: 0.75, marginTop: 2 }}>{props.desc}</div>
+        <div style={{ fontSize: 15, fontWeight: 600, color: props.on ? VELVET.accentSoft : VELVET.text }}>{props.label}</div>
+        <div style={{ fontSize: 12, color: VELVET.textMuted, marginTop: 2 }}>{props.desc}</div>
       </div>
     </button>
   );

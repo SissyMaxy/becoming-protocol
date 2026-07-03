@@ -20,6 +20,8 @@ import {
   secondaryButtonStyle,
   stepHeadingStyle,
   stepBodyStyle,
+  selectCardStyle,
+  VELVET,
 } from '../step-styles';
 
 interface Step6CalendarProps {
@@ -47,40 +49,22 @@ export function Step6Calendar({ onContinue, onSkip, onBack, saving, saveError }:
       <div style={{ display: 'grid', gap: 10, marginBottom: 24 }}>
         <button
           onClick={() => setChoice('connect')}
-          style={{
-            textAlign: 'left',
-            padding: '14px 16px',
-            background: choice === 'connect' ? '#1a1a1a' : '#fff',
-            color: choice === 'connect' ? '#fafafa' : '#1a1a1a',
-            border: choice === 'connect' ? '2px solid #1a1a1a' : '1px solid #d0d0d0',
-            borderRadius: 8,
-            fontFamily: 'inherit',
-            cursor: 'pointer',
-          }}
+          style={selectCardStyle(choice === 'connect')}
         >
-          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>
+          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4, color: choice === 'connect' ? VELVET.accentSoft : VELVET.text }}>
             Yes — let Mama into your Google Calendar
           </div>
-          <div style={{ fontSize: 13, opacity: 0.7 }}>
+          <div style={{ fontSize: 13, color: VELVET.textMuted }}>
             Mama'll start the connection when it's ready and tell you when she's in.
           </div>
         </button>
 
         <button
           onClick={() => setChoice('later')}
-          style={{
-            textAlign: 'left',
-            padding: '14px 16px',
-            background: choice === 'later' ? '#1a1a1a' : '#fff',
-            color: choice === 'later' ? '#fafafa' : '#1a1a1a',
-            border: choice === 'later' ? '2px solid #1a1a1a' : '1px solid #d0d0d0',
-            borderRadius: 8,
-            fontFamily: 'inherit',
-            cursor: 'pointer',
-          }}
+          style={selectCardStyle(choice === 'later')}
         >
-          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>Not now</div>
-          <div style={{ fontSize: 13, opacity: 0.7 }}>
+          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4, color: choice === 'later' ? VELVET.accentSoft : VELVET.text }}>Not now</div>
+          <div style={{ fontSize: 13, color: VELVET.textMuted }}>
             Keep Mama inside the app. You can let her in later from Settings.
           </div>
         </button>

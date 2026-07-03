@@ -167,7 +167,7 @@ export function DataExportView() {
       {/* Select all toggle */}
       <button
         onClick={toggleAll}
-        className={`text-xs font-medium ${isBambiMode ? 'text-pink-600' : 'text-purple-400'}`}
+        className={`text-xs font-medium ${isBambiMode ? 'text-pink-600' : 'text-protocol-accent'}`}
       >
         {selected.size === SECTIONS.length ? 'Deselect All' : 'Select All'}
       </button>
@@ -186,7 +186,7 @@ export function DataExportView() {
                 isSelected
                   ? isBambiMode
                     ? 'bg-pink-50 border-pink-300'
-                    : 'bg-purple-500/10 border-purple-500/30'
+                    : 'bg-protocol-accent/10 border-protocol-accent/30'
                   : isBambiMode
                     ? 'bg-white border-pink-200'
                     : 'bg-protocol-surface border-protocol-border'
@@ -194,7 +194,7 @@ export function DataExportView() {
             >
               <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
                 isSelected
-                  ? isBambiMode ? 'bg-pink-500 border-pink-500' : 'bg-purple-500 border-purple-500'
+                  ? isBambiMode ? 'bg-pink-500 border-pink-500' : 'bg-protocol-accent border-protocol-accent'
                   : isBambiMode ? 'border-pink-300' : 'border-gray-600'
               }`}>
                 {isSelected && <Check className="w-3 h-3 text-white" />}
@@ -232,7 +232,7 @@ export function DataExportView() {
               ? 'opacity-50 cursor-not-allowed bg-gray-500/20 text-gray-400'
               : isBambiMode
                 ? 'bg-pink-500 hover:bg-pink-600 text-white'
-                : 'bg-purple-600 hover:bg-purple-700 text-white'
+                : 'bg-protocol-accent hover:bg-protocol-accent/80 text-white'
         }`}
       >
         {exporting ? (

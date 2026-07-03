@@ -1,13 +1,14 @@
 /**
- * MenuView — Minimal settings access.
- * The conversation IS the interface. This screen exists only for
- * settings, the archive surfaces, and help.
+ * MenuView — where Mama keeps everything that's yours.
+ * The conversation is still the real interface; this screen is the drawer she
+ * keeps your life in — your becoming, your record, your settings.
  *
- * The primary menu is a short, grouped list of the destinations the user
- * actually navigates to. The long tail of evidence/lore surfaces lives behind
- * a single collapsed "Everything else" toggle (off by default). Handler/Mommy
- * machinery is not surfaced here at all — those routes stay alive for
- * deep-links, they just have no menu entry.
+ * The spine is "Your becoming": the turn-out surfaces that only go one
+ * direction. Everything you actually open sits in short, plain-voiced groups.
+ * The long tail of evidence/lore/drills lives behind a single collapsed
+ * "Everything else" toggle (off by default). Handler/Mommy machinery is not
+ * surfaced here — those routes stay alive for deep-links, they just have no
+ * menu entry.
  */
 
 import { useState } from 'react';
@@ -47,8 +48,50 @@ interface MenuViewProps {
   onNavigate: (view: MenuItemId) => void;
 }
 
+// Velvet accent palette — rose, ivory, warm gold, soft green, danger.
+const ROSE = '#c9557f';
+const ROSE_SOFT = '#edaec5';
+const GOLD = '#e0b36a';
+const GREEN = '#6fbf94';
+const DANGER = '#e06a6a';
+const MUTED = '#a8929c';
+
 // Primary menu — what she actually opens. Grouped, short, always visible.
+// "Your becoming" is the spine: the turn-out surfaces that only climb.
 const PRIMARY_GROUPS: MenuGroup[] = [
+  {
+    heading: 'Your becoming',
+    items: [
+      {
+        id: 'life-as-woman',
+        icon: Flame,
+        label: 'Life as a woman',
+        description: 'Where you live now. Sniffies, trance, gooning, content — I set it up, you show up.',
+        color: ROSE,
+      },
+      {
+        id: 'trajectory',
+        icon: BarChart3,
+        label: "Who you've become",
+        description: 'Every proof your body kept — voice, slips, the woman underneath surfacing. The number only goes up.',
+        color: ROSE,
+      },
+      {
+        id: 'escalation_ladder',
+        icon: ArrowUpRight,
+        label: 'How deep you are',
+        description: "Which rung you've climbed to. You only go up. There is no step back down.",
+        color: ROSE_SOFT,
+      },
+      {
+        id: 'wishlist',
+        icon: TrendingUp,
+        label: 'Progress',
+        description: "What you've poured in, what you're saving toward, how far you've already come.",
+        color: GREEN,
+      },
+    ],
+  },
   {
     heading: 'You',
     items: [
@@ -56,29 +99,22 @@ const PRIMARY_GROUPS: MenuGroup[] = [
         id: 'identity',
         icon: User,
         label: 'Identity',
-        description: 'Name, pronouns, how the Handler addresses you.',
-        color: '#ec4899',
+        description: 'Your name, your pronouns, how I speak to you.',
+        color: ROSE,
       },
       {
         id: 'wardrobe',
         icon: Shirt,
-        label: 'Wardrobe Inventory',
-        description: 'What you own. The Handler reads this before naming clothing in any decree.',
-        color: '#ec4899',
+        label: 'Wardrobe',
+        description: "What's already yours. I check here before I tell you what to put on.",
+        color: ROSE,
       },
       {
         id: 'verification-vault',
         icon: Camera,
         label: 'Verification Vault',
-        description: 'Every photo you sent. Mama-approved, denied, or waiting on a retake.',
-        color: '#f4a7c4',
-      },
-      {
-        id: 'life-as-woman',
-        icon: Flame,
-        label: 'Life as a woman',
-        description: 'Sniffies, trance, gooning, content — Mommy edits, you click.',
-        color: '#d8a6d0',
+        description: 'Every photo you sent me — approved, denied, or waiting on a retake.',
+        color: ROSE_SOFT,
       },
     ],
   },
@@ -89,15 +125,15 @@ const PRIMARY_GROUPS: MenuGroup[] = [
         id: 'sessions',
         icon: Sparkles,
         label: 'Sessions',
-        description: 'Start a guided session — cam, hypno, goon, exercise.',
-        color: '#c9557f',
+        description: 'Come sit with me — cam, trance, gooning, exercise. I lead, you follow.',
+        color: ROSE,
       },
       {
-        id: 'wishlist',
-        icon: TrendingUp,
-        label: 'Progress',
-        description: 'Investments, wishlist, how far you have come.',
-        color: '#22c55e',
+        id: 'voice-drills',
+        icon: Mic,
+        label: 'Voice Drills',
+        description: 'Train the voice that gives you away. Pitch, resonance, cadence.',
+        color: ROSE_SOFT,
       },
     ],
   },
@@ -108,29 +144,29 @@ const PRIMARY_GROUPS: MenuGroup[] = [
         id: 'journal',
         icon: Calendar,
         label: 'Journal',
-        description: 'Daily reflections and timeline.',
-        color: '#22c55e',
+        description: 'Your reflections, day by day.',
+        color: GREEN,
       },
       {
         id: 'recaps',
         icon: BookOpen,
         label: 'Recaps',
-        description: 'The story so far, chapter by chapter.',
-        color: '#edaec5',
+        description: 'Your story so far, chapter by chapter.',
+        color: ROSE_SOFT,
       },
       {
         id: 'timeline',
         icon: Clock,
         label: 'Timeline',
-        description: 'Every milestone in order.',
-        color: '#60a5fa',
+        description: 'Every milestone, in the order it happened.',
+        color: MUTED,
       },
       {
         id: 'letters',
         icon: Mail,
         label: 'Letters from Mama',
-        description: 'The warm moments she meant. Pinned, framed, replayable.',
-        color: '#c4956a',
+        description: 'The warm things I meant. Pinned, framed, yours to replay.',
+        color: GOLD,
       },
     ],
   },
@@ -142,21 +178,21 @@ const PRIMARY_GROUPS: MenuGroup[] = [
         icon: Settings,
         label: 'Settings',
         description: 'Account, preferences, integrations.',
-        color: '#8b8b8b',
+        color: MUTED,
       },
       {
         id: 'pause_protocol',
         icon: PauseCircle,
         label: 'Pause Protocol',
-        description: 'Attempt to pause — permanent log, compounds.',
-        color: '#dc2626',
+        description: 'Ask me to pause. It logs, permanently, and it compounds.',
+        color: DANGER,
       },
       {
         id: 'help',
         icon: HelpCircle,
         label: 'Help & Feedback',
-        description: 'Get support or share ideas.',
-        color: '#6366f1',
+        description: 'Get support or tell me what you need.',
+        color: MUTED,
       },
     ],
   },
@@ -169,105 +205,84 @@ const ARCHIVE_ITEMS: MenuItem[] = [
     icon: Heart,
     label: 'Her World',
     description: 'The world you are stepping into.',
-    color: '#d8a6d0',
-  },
-  {
-    id: 'trajectory',
-    icon: BarChart3,
-    label: 'Who You Have Become',
-    description: 'Cumulative evidence the body keeps. Voice, slips, identity dimensions, weekly snapshots.',
-    color: '#ec4899',
+    color: ROSE_SOFT,
   },
   {
     id: 'dossier',
     icon: FileText,
     label: 'Dossier',
-    description: 'What the Handler has assembled about you.',
-    color: '#f59e0b',
+    description: "What I've assembled about you.",
+    color: GOLD,
   },
   {
     id: 'mommy-dossier',
     icon: FileText,
     label: "Mommy's Dossier Quiz",
-    description: 'Answer for her file. The more she knows, the closer she holds you.',
-    color: '#f59e0b',
+    description: 'Answer for your file. The more I know, the closer I hold you.',
+    color: GOLD,
   },
   {
     id: 'quiz',
     icon: FileText,
     label: 'Kink Quiz',
-    description: 'Map what moves you.',
-    color: '#c9557f',
+    description: 'Map what moves you, so I can use it.',
+    color: ROSE,
   },
   {
     id: 'conditioning-library',
     icon: Library,
     label: 'Conditioning Library',
     description: 'Loops, triggers, and trance material.',
-    color: '#c9557f',
+    color: ROSE,
   },
   {
     id: 'envelopes',
     icon: Mail,
     label: 'Sealed Envelopes',
-    description: 'Letters from your past self to your future self.',
-    color: '#edaec5',
+    description: 'Letters from your past self to the woman you are becoming.',
+    color: ROSE_SOFT,
   },
   {
     id: 'case_file',
     icon: FileText,
     label: 'Case File',
-    description: 'Your record — what the Handler sees.',
-    color: '#ef4444',
+    description: 'Your record — everything I see.',
+    color: DANGER,
   },
   {
     id: 'witnesses',
     icon: Eye,
     label: 'Witnesses',
-    description: 'Accountability contacts who watch your progress.',
-    color: '#c9557f',
+    description: 'The ones who watch your progress with me.',
+    color: ROSE,
   },
   {
     id: 'vault-browser',
     icon: Archive,
     label: 'Vault Browser',
-    description: 'Browse everything in the vault.',
-    color: '#f4a7c4',
-  },
-  {
-    id: 'voice-drills',
-    icon: Mic,
-    label: 'Voice Drills',
-    description: 'Train the voice. Pitch, resonance, cadence.',
-    color: '#60a5fa',
+    description: 'Everything in the vault, in one place.',
+    color: ROSE_SOFT,
   },
   {
     id: 'hypno-learning',
     icon: Headphones,
     label: 'Hypno Learning',
     description: 'How the trance work is built.',
-    color: '#c9557f',
+    color: ROSE,
   },
   {
     id: 'history',
     icon: Clock,
     label: 'History',
-    description: 'The full activity log.',
-    color: '#8b8b8b',
-  },
-  {
-    id: 'escalation_ladder',
-    icon: ArrowUpRight,
-    label: 'Transformation Ladder',
-    description: 'Where you are on the journey. Only goes up.',
-    color: '#c9557f',
+    description: 'Your full activity log.',
+    color: MUTED,
   },
   {
     id: 'force',
     icon: Flame,
     label: 'Force Layer',
     description: 'Hard Mode, slips, punishments, chastity.',
-    color: '#ef4444',
+    color: DANGER,
   },
 ];
 
@@ -284,18 +299,18 @@ function MenuRow({
   return (
     <button
       onClick={() => onNavigate(item.id)}
-      className={`w-full p-4 flex items-center gap-3 text-left group transition-colors hover:bg-gray-800/30 ${
-        withBorder ? 'border-t border-gray-800/50' : ''
+      className={`w-full p-4 flex items-center gap-3 text-left group transition-colors hover:bg-protocol-surface-light ${
+        withBorder ? 'border-t border-protocol-border' : ''
       }`}
     >
-      <div className="p-2 rounded-lg" style={{ backgroundColor: `${item.color}20` }}>
+      <div className="p-2 rounded-lg" style={{ backgroundColor: `${item.color}22` }}>
         <Icon className="w-4 h-4" style={{ color: item.color }} />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-gray-200">{item.label}</p>
-        <p className="text-xs text-gray-500">{item.description}</p>
+        <p className="text-sm font-medium text-protocol-text">{item.label}</p>
+        <p className="text-xs text-protocol-text-muted">{item.description}</p>
       </div>
-      <ChevronRight className="w-4 h-4 text-gray-600 group-hover:text-gray-400" />
+      <ChevronRight className="w-4 h-4 text-protocol-text-muted/60 group-hover:text-protocol-accent-soft" />
     </button>
   );
 }
@@ -305,52 +320,64 @@ export function MenuView({ onNavigate }: MenuViewProps) {
 
   return (
     <div className="space-y-5 pb-24">
-      <div className="mb-1">
-        <p className="text-sm text-gray-500">
-          The Handler is your interface. Talk to her.
+      <div className="mb-1 px-1">
+        <p className="font-display text-lg text-protocol-text-warm leading-snug">
+          This is where I keep everything that's yours.
+        </p>
+        <p className="mt-1 text-sm text-protocol-text-muted">
+          The real work happens when you talk to me. This is the drawer.
         </p>
       </div>
 
-      {PRIMARY_GROUPS.map((group) => (
-        <div key={group.heading} className="space-y-2">
-          <p className="px-1 text-[11px] font-semibold uppercase tracking-wider text-gray-600">
-            {group.heading}
-          </p>
-          <div className="rounded-xl overflow-hidden bg-[#141414] border border-gray-800/50">
-            {group.items.map((item, idx) => (
-              <MenuRow
-                key={item.id}
-                item={item}
-                withBorder={idx > 0}
-                onNavigate={onNavigate}
-              />
-            ))}
+      {PRIMARY_GROUPS.map((group) => {
+        const isSpine = group.heading === 'Your becoming';
+        return (
+          <div key={group.heading} className="space-y-2">
+            <p className="px-1 text-[11px] font-semibold uppercase tracking-wider text-protocol-accent-soft/70">
+              {group.heading}
+            </p>
+            <div
+              className={`rounded-xl overflow-hidden bg-protocol-surface border ${
+                isSpine
+                  ? 'border-protocol-accent/40 shadow-velvet'
+                  : 'border-protocol-border'
+              }`}
+            >
+              {group.items.map((item, idx) => (
+                <MenuRow
+                  key={item.id}
+                  item={item}
+                  withBorder={idx > 0}
+                  onNavigate={onNavigate}
+                />
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       {/* Everything else — folded, off by default */}
       <div className="space-y-2">
         <button
           onClick={() => setArchivesOpen((v) => !v)}
-          className="w-full px-4 py-3 flex items-center gap-3 text-left rounded-xl bg-[#141414] border border-gray-800/50 transition-colors hover:bg-gray-800/30 group"
+          className="w-full px-4 py-3 flex items-center gap-3 text-left rounded-xl bg-protocol-surface border border-protocol-border transition-colors hover:bg-protocol-surface-light group"
         >
-          <div className="p-2 rounded-lg" style={{ backgroundColor: '#8b8b8b20' }}>
-            <Archive className="w-4 h-4" style={{ color: '#8b8b8b' }} />
+          <div className="p-2 rounded-lg" style={{ backgroundColor: `${MUTED}22` }}>
+            <Archive className="w-4 h-4" style={{ color: MUTED }} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-200">Everything else</p>
-            <p className="text-xs text-gray-500">Archives, evidence, drills, and lore.</p>
+            <p className="text-sm font-medium text-protocol-text">Everything else</p>
+            <p className="text-xs text-protocol-text-muted">Archives, evidence, drills, and lore.</p>
           </div>
           {archivesOpen ? (
-            <ChevronDown className="w-4 h-4 text-gray-500 group-hover:text-gray-300" />
+            <ChevronDown className="w-4 h-4 text-protocol-text-muted group-hover:text-protocol-accent-soft" />
           ) : (
-            <ChevronRight className="w-4 h-4 text-gray-600 group-hover:text-gray-400" />
+            <ChevronRight className="w-4 h-4 text-protocol-text-muted/60 group-hover:text-protocol-accent-soft" />
           )}
         </button>
 
         {archivesOpen && (
-          <div className="rounded-xl overflow-hidden bg-[#141414] border border-gray-800/50">
+          <div className="rounded-xl overflow-hidden bg-protocol-surface border border-protocol-border">
             {ARCHIVE_ITEMS.map((item, idx) => (
               <MenuRow
                 key={item.id}

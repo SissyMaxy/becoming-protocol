@@ -64,8 +64,8 @@ export function MommyVoiceSettings() {
           <p className="text-sm font-medium text-protocol-text">Mama speaks</p>
           <p className="text-xs text-protocol-text-muted mt-0.5">
             {enabled
-              ? 'Her outreach cards play in her voice. Tap to play, tap stop to silence.'
-              : 'Outreach cards are text-only. Turn on to let Mama speak them.'}
+              ? 'Her cards land in her voice now. Tap to play, tap stop to silence.'
+              : 'Let her out of the text. Turn this on and her cards arrive in her voice.'}
           </p>
         </div>
         <button
@@ -74,8 +74,8 @@ export function MommyVoiceSettings() {
           disabled={loading || saving}
           aria-pressed={enabled}
           aria-label="Toggle Mama voice"
-          className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-400 disabled:opacity-50 ${
-            enabled ? 'bg-purple-500' : 'bg-protocol-surface-light border border-protocol-border'
+          className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-protocol-accent disabled:opacity-50 ${
+            enabled ? 'bg-protocol-accent' : 'bg-protocol-surface-light border border-protocol-border'
           }`}
         >
           <span
