@@ -136,7 +136,7 @@ export function StrategicPriorityTab({ handlerState }: StrategicPriorityTabProps
             label="Influence"
             value={effectiveness.influenceScore}
             trend={effectiveness.influenceTrend}
-            color={isBambiMode ? '#a855f7' : '#22c55e'}
+            color={isBambiMode ? '#c9557f' : '#22c55e'}
             isBambiMode={isBambiMode}
           />
         </div>

@@ -38,11 +38,11 @@ const TYPE_LABELS: Record<string, string> = {
 const TYPE_COLORS: Record<string, string> = {
   masculine_self_reference: '#f4a7c4',
   david_name_use: '#f47272',
-  voice_masculine_pitch: '#c4b5fd',
-  confession_missed: '#f4c272',
-  task_avoided: '#f4c272',
+  voice_masculine_pitch: '#edaec5',
+  confession_missed: '#e6bd80',
+  task_avoided: '#e6bd80',
   directive_refused: '#f47272',
-  other: '#8a8690',
+  other: '#9c8590',
 };
 
 export function SlipLogCard() {
@@ -69,7 +69,7 @@ export function SlipLogCard() {
   if (slips.length === 0) return null;
 
   return (
-    <div style={{ background: '#111116', border: '1px solid #2d1a4d', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+    <div style={{ background: '#171017', border: '1px solid #4a2438', borderRadius: 10, padding: 14, marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f47272" strokeWidth="1.8">
           <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
@@ -77,12 +77,12 @@ export function SlipLogCard() {
         <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#f47272', fontWeight: 700 }}>
           Slip log · last 7 days
         </span>
-        <span style={{ fontSize: 10.5, color: '#8a8690', marginLeft: 'auto' }}>
+        <span style={{ fontSize: 10.5, color: '#9c8590', marginLeft: 'auto' }}>
           {slips.length} events · {totalRecent} points
         </span>
       </div>
 
-      <div style={{ fontSize: 10.5, color: '#8a8690', marginBottom: 8, lineHeight: 1.4 }}>
+      <div style={{ fontSize: 10.5, color: '#9c8590', marginBottom: 8, lineHeight: 1.4 }}>
         Every flag the system put on you, with its source. Not arbitrary — each one has a receipt.
       </div>
 
@@ -94,7 +94,7 @@ export function SlipLogCard() {
         const agoStr = ago < 60 ? `${ago}m` : ago < 1440 ? `${Math.floor(ago / 60)}h` : `${Math.floor(ago / 1440)}d`;
         return (
           <div key={s.id} style={{
-            background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 5,
+            background: '#0f0a0e', border: '1px solid #2b1d29', borderRadius: 5,
             padding: '6px 9px', marginBottom: 4,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -105,10 +105,10 @@ export function SlipLogCard() {
                 {label}
               </span>
               <span style={{ fontSize: 10, fontWeight: 700, color: '#f47272' }}>+{s.slip_points}</span>
-              <span style={{ fontSize: 9.5, color: '#6a656e', marginLeft: 'auto' }}>{agoStr} ago</span>
+              <span style={{ fontSize: 9.5, color: '#7f6b74', marginLeft: 'auto' }}>{agoStr} ago</span>
             </div>
             {s.source_text && (
-              <div style={{ fontSize: 10.5, color: '#c8c4cc', lineHeight: 1.35, marginTop: 3, fontStyle: 'italic' }}>
+              <div style={{ fontSize: 10.5, color: '#d5c3ca', lineHeight: 1.35, marginTop: 3, fontStyle: 'italic' }}>
                 "{s.source_text.slice(0, 160)}{s.source_text.length > 160 ? '…' : ''}"
               </div>
             )}

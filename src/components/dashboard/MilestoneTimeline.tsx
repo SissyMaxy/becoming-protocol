@@ -16,7 +16,7 @@ interface MilestoneTimelineProps {
 const TYPE_CONFIG: Record<string, { icon: typeof Trophy; color: string }> = {
   streak: { icon: Star, color: '#f59e0b' },
   level_up: { icon: TrendingUp, color: '#22c55e' },
-  gina_rung_advancement: { icon: TrendingUp, color: '#a855f7' },
+  gina_rung_advancement: { icon: TrendingUp, color: '#c9557f' },
   commitment_honored: { icon: CheckCircle, color: '#3b82f6' },
   default: { icon: Trophy, color: '#B06B61' },
 };

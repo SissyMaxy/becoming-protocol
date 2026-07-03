@@ -68,7 +68,7 @@ const OUTCOME_LABEL: Record<string, string> = {
 };
 
 const OUTCOME_TONE: Record<string, string> = {
-  auto_merged: '#86efac',           // green — actually fixed
+  auto_merged: '#8fd9b0',           // green — actually fixed
   pr_opened: '#fbbf24',              // amber — needs review
   no_match: '#a8a3ad',               // grey — escalated
   forbidden_path: '#a8a3ad',
@@ -144,14 +144,14 @@ export function DeployFixerStatusCard() {
   const tone = snap.rollbackOpen
     ? { bg: 'linear-gradient(135deg, #2a0a0f 0%, #1f0510 100%)', border: '#a8273a', accent: '#fb7185', label: 'ROLLBACK PR OPEN' }
     : totalUrgent === 0
-      ? { bg: 'linear-gradient(135deg, #0a1a14 0%, #051a10 100%)', border: '#3a5a3f', accent: '#86efac', label: 'CLEAN' }
+      ? { bg: 'linear-gradient(135deg, #0a1a14 0%, #051a10 100%)', border: '#3a5a3f', accent: '#8fd9b0', label: 'CLEAN' }
       : totalUrgent < 3
         ? { bg: 'linear-gradient(135deg, #1a1f0a 0%, #15180a 100%)', border: '#7a8a3f', accent: '#a3e635', label: 'WATCH' }
         : { bg: 'linear-gradient(135deg, #2a1f0a 0%, #1f1608 100%)', border: '#a87a1f', accent: '#fbbf24', label: 'ATTEND' };
 
   if (loading && snap.lastAction === null && snap.openFailures.total === 0) {
     return (
-      <div style={{ background: '#111116', border: '1px solid #2d1a4d', borderRadius: 10, padding: 12, marginBottom: 16, color: '#8a8690', fontSize: 11 }}>
+      <div style={{ background: '#171017', border: '1px solid #4a2438', borderRadius: 10, padding: 12, marginBottom: 16, color: '#9c8590', fontSize: 11 }}>
         Reading deploy-fixer status…
       </div>
     );
@@ -169,7 +169,7 @@ export function DeployFixerStatusCard() {
         </span>
         <button
           onClick={() => setExpanded(e => !e)}
-          style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid #2d1a4d', borderRadius: 5, color: '#c4b5fd', fontSize: 10.5, padding: '3px 8px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
+          style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid #4a2438', borderRadius: 5, color: '#edaec5', fontSize: 10.5, padding: '3px 8px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
         >
           {expanded ? '▾ collapse' : '▸ details'}
         </button>
@@ -190,7 +190,7 @@ export function DeployFixerStatusCard() {
                 {snap.attempts24h.auto_merged > 0 && ` · ${snap.attempts24h.auto_merged} auto-merged today`}
               </span>}
           {snap.lastAction && (
-            <span style={{ color: '#6a656e', fontSize: 10 }}>
+            <span style={{ color: '#7f6b74', fontSize: 10 }}>
               last action: <span style={{ color: OUTCOME_TONE[snap.lastAction.outcome] ?? '#a8a3ad' }}>{OUTCOME_LABEL[snap.lastAction.outcome] ?? snap.lastAction.outcome}</span> · {relTime(snap.lastAction.at)}
             </span>
           )}
@@ -204,9 +204,9 @@ export function DeployFixerStatusCard() {
           <Row label="No-match / refused" c={0} h={0} t={snap.attempts24h.no_match + snap.attempts24h.forbidden_path} hint="needs new pattern" />
           <Row label="Failed / loop-guard" c={snap.attempts24h.loop_guard_stopped} h={snap.attempts24h.failed} t={snap.attempts24h.failed + snap.attempts24h.loop_guard_stopped} />
           {snap.lastAction && (
-            <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #15151b', fontSize: 10.5, color: '#8a8690' }}>
-              <strong style={{ color: OUTCOME_TONE[snap.lastAction.outcome] ?? '#c4b5fd' }}>last action: {OUTCOME_LABEL[snap.lastAction.outcome] ?? snap.lastAction.outcome}</strong>
-              <div style={{ color: '#6a656e', fontStyle: 'italic', marginTop: 2 }}>
+            <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #1b121a', fontSize: 10.5, color: '#9c8590' }}>
+              <strong style={{ color: OUTCOME_TONE[snap.lastAction.outcome] ?? '#edaec5' }}>last action: {OUTCOME_LABEL[snap.lastAction.outcome] ?? snap.lastAction.outcome}</strong>
+              <div style={{ color: '#7f6b74', fontStyle: 'italic', marginTop: 2 }}>
                 {snap.lastAction.summary ?? '(no diff summary)'} · {relTime(snap.lastAction.at)}
               </div>
             </div>
@@ -219,13 +219,13 @@ export function DeployFixerStatusCard() {
 
 function Row({ label, c, h, t, hint }: { label: string; c: number; h: number; t: number; hint?: string }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid #15151b' }}>
-      <span style={{ fontSize: 11, color: '#c4b5fd', fontWeight: 600, flex: '0 0 170px' }}>{label}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid #1b121a' }}>
+      <span style={{ fontSize: 11, color: '#edaec5', fontWeight: 600, flex: '0 0 170px' }}>{label}</span>
       {c > 0 && <span style={{ fontSize: 10, color: '#fff', background: '#c4272d', padding: '2px 6px', borderRadius: 4, fontWeight: 700 }}>{c} crit</span>}
       {h > 0 && <span style={{ fontSize: 10, color: '#fff', background: '#a87a1f', padding: '2px 6px', borderRadius: 4, fontWeight: 700 }}>{h}</span>}
-      {t === 0 && <span style={{ fontSize: 10.5, color: '#5a5560', fontStyle: 'italic' }}>none</span>}
-      {t > c + h && <span style={{ fontSize: 10, color: '#8a8690' }}>+{t - c - h} more</span>}
-      {hint && <span style={{ fontSize: 10, color: '#6a656e', marginLeft: 'auto', fontStyle: 'italic' }}>{hint}</span>}
+      {t === 0 && <span style={{ fontSize: 10.5, color: '#6d5a63', fontStyle: 'italic' }}>none</span>}
+      {t > c + h && <span style={{ fontSize: 10, color: '#9c8590' }}>+{t - c - h} more</span>}
+      {hint && <span style={{ fontSize: 10, color: '#7f6b74', marginLeft: 'auto', fontStyle: 'italic' }}>{hint}</span>}
     </div>
   );
 }

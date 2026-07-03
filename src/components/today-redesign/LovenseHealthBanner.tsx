@@ -76,8 +76,8 @@ export function LovenseHealthBanner() {
   const colors = state.health === 'app_offline'
     ? { border: '#7a1f22', bg: 'linear-gradient(92deg, #2a0a0c, #1a0608)', text: '#f47272' }
     : state.health === 'never_paired'
-    ? { border: '#7a5a1f', bg: 'linear-gradient(92deg, #2a1f0a, #1f1608)', text: '#f4c272' }
-    : { border: '#2d1a4d', bg: 'linear-gradient(92deg, #1a0f2e, #150a24)', text: '#c4b5fd' };
+    ? { border: '#7a5a1f', bg: 'linear-gradient(92deg, #2a1f0a, #1f1608)', text: '#e6bd80' }
+    : { border: '#4a2438', bg: 'linear-gradient(92deg, #2c1723, #22111c)', text: '#edaec5' };
 
   let title = '';
   let detail = '';

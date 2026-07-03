@@ -223,7 +223,7 @@ export function LessonPlayer({ lessonId, climaxGated = false, onGraded }: Lesson
 
   return (
     <div style={cardStyle}>
-      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#c4b5fd', fontWeight: 700, marginBottom: 8 }}>
+      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#edaec5', fontWeight: 700, marginBottom: 8 }}>
         {headerLabel}
       </div>
 
@@ -252,7 +252,7 @@ export function LessonPlayer({ lessonId, climaxGated = false, onGraded }: Lesson
       {phase === 'idle' || phase === 'graded' || phase === 'error' ? (
         <button
           onClick={start}
-          style={{ ...btnStyle, background: '#7c3aed', color: '#fff' }}
+          style={{ ...btnStyle, background: '#c9557f', color: '#fff' }}
         >
           {progress?.attempts_count ? 'Record again' : 'Start recording'}
         </button>
@@ -265,7 +265,7 @@ export function LessonPlayer({ lessonId, climaxGated = false, onGraded }: Lesson
       )}
 
       {(phase === 'encoding' || phase === 'uploading') && (
-        <div style={{ color: '#c4b5fd', fontSize: 12, marginTop: 6 }}>
+        <div style={{ color: '#edaec5', fontSize: 12, marginTop: 6 }}>
           {phase === 'encoding' ? 'Preparing audio…' : 'Mama is listening…'}
         </div>
       )}
@@ -278,7 +278,7 @@ export function LessonPlayer({ lessonId, climaxGated = false, onGraded }: Lesson
         <div style={{ marginTop: 14, borderTop: '1px solid #2d1a4d', paddingTop: 12 }}>
           <div style={{
             fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em',
-            color: result.pass_perfect ? '#86efac' : result.pass_overall ? '#c4b5fd' : '#f4c272',
+            color: result.pass_perfect ? '#86efac' : result.pass_overall ? '#edaec5' : '#f4c272',
             fontWeight: 700, marginBottom: 6,
           }}>
             {result.pass_perfect ? "perfect" : result.pass_overall ? "passed" : "not yet"}

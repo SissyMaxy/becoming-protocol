@@ -341,7 +341,7 @@ export function SocialMediaDashboard({ onBack }: Props) {
           label="Followers"
           value={data.followers.current}
           sub={data.followers.change24h !== null ? `${data.followers.change24h >= 0 ? '+' : ''}${data.followers.change24h} today` : undefined}
-          color="#a855f7"
+          color="#c9557f"
         />
         <StatCard label="Posts today" value={todayPosts} color="#22c55e" />
         <StatCard label="Replies" value={todayReplies} color="#3b82f6" />

@@ -251,7 +251,7 @@ export function LivePhotoPingResponder() {
               disabled={uploading}
               style={{
                 width: '100%', padding: '14px 14px', borderRadius: 7, border: 'none',
-                background: '#7c3aed', color: '#fff',
+                background: '#c9557f', color: '#fff',
                 fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
                 marginBottom: 10,
               }}

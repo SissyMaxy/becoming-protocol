@@ -241,7 +241,7 @@ export function ConditioningOverlay({ reframings, implants, displacementScore, e
             fontSize: 18,
             fontWeight: 600,
             letterSpacing: '-0.01em',
-            color: '#c4b5fd',
+            color: '#edaec5',
             textShadow: '0 0 12px rgba(124, 58, 237, 0.55)',
             opacity: 0,
             animation: 'td-subliminal 1.1s ease-in-out forwards',
@@ -264,26 +264,26 @@ export function ConditioningOverlay({ reframings, implants, displacementScore, e
             pointerEvents: 'none',
           }}
         >
-          <div style={{ maxWidth: 480, width: '100%', background: '#111116', border: '1px solid #2d1a4d', borderRadius: 14, padding: 20, boxShadow: '0 -8px 32px rgba(5,3,10,0.5)', position: 'relative', pointerEvents: 'auto' }}>
+          <div style={{ maxWidth: 480, width: '100%', background: '#171017', border: '1px solid #4a2438', borderRadius: 14, padding: 20, boxShadow: '0 -8px 32px rgba(5,3,10,0.5)', position: 'relative', pointerEvents: 'auto' }}>
             <button
               onClick={() => setMantraGate(null)}
               aria-label="Dismiss"
               title="Not now"
               style={{
                 position: 'absolute', top: 10, right: 10,
-                width: 28, height: 28, borderRadius: 14, border: '1px solid #2d1a4d',
-                background: '#0a0a0d', color: '#c4b5fd', fontSize: 15, lineHeight: 1,
+                width: 28, height: 28, borderRadius: 14, border: '1px solid #4a2438',
+                background: '#0f0a0e', color: '#edaec5', fontSize: 15, lineHeight: 1,
                 cursor: 'pointer', fontFamily: 'inherit', display: 'flex',
                 alignItems: 'center', justifyContent: 'center',
               }}
             >
               ×
             </button>
-            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#c4b5fd', fontWeight: 700, marginBottom: 10, paddingRight: 32 }}>Daily mantra</div>
+            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#edaec5', fontWeight: 700, marginBottom: 10, paddingRight: 32 }}>Daily mantra</div>
             <div style={{ fontSize: 18, lineHeight: 1.4, fontWeight: 600, color: '#fff', marginBottom: 14, letterSpacing: '-0.015em' }}>
               {mantraGate.mantra}
             </div>
-            <div style={{ fontSize: 11.5, color: '#8a8690', marginBottom: 8 }}>
+            <div style={{ fontSize: 11.5, color: '#9c8590', marginBottom: 8 }}>
               Type it back, good boy.
             </div>
             <input
@@ -291,7 +291,7 @@ export function ConditioningOverlay({ reframings, implants, displacementScore, e
               onChange={e => setMantraGate(g => g ? { ...g, typed: e.target.value } : g)}
               onKeyDown={e => { if (e.key === 'Enter') submitMantra(); }}
               placeholder="type the mantra…"
-              style={{ width: '100%', background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 6, padding: '10px 12px', fontFamily: 'inherit', fontSize: 14, color: '#e8e6e3' }}
+              style={{ width: '100%', background: '#0f0a0e', border: '1px solid #2b1d29', borderRadius: 6, padding: '10px 12px', fontFamily: 'inherit', fontSize: 14, color: '#f2e9e6' }}
             />
             <button
               onClick={submitMantra}
@@ -302,7 +302,7 @@ export function ConditioningOverlay({ reframings, implants, displacementScore, e
               })()}
               style={{
                 marginTop: 12, width: '100%', padding: '10px', borderRadius: 6, border: 'none',
-                background: '#7c3aed', color: '#fff', fontWeight: 600, fontSize: 13, fontFamily: 'inherit',
+                background: '#c9557f', color: '#fff', fontWeight: 600, fontSize: 13, fontFamily: 'inherit',
                 cursor: 'pointer', opacity: 1,
               }}
             >
@@ -321,25 +321,25 @@ export function ConditioningOverlay({ reframings, implants, displacementScore, e
             backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
           }}
         >
-          <div style={{ maxWidth: 520, width: '100%', background: '#111116', border: '1px solid #7c3aed', borderRadius: 14, padding: 24, position: 'relative' }}>
+          <div style={{ maxWidth: 520, width: '100%', background: '#171017', border: '1px solid #c9557f', borderRadius: 14, padding: 24, position: 'relative' }}>
             <button
               onClick={logResistance}
               aria-label="Dismiss"
               title="Dismiss (logs resistance)"
               style={{
                 position: 'absolute', top: 10, right: 10,
-                width: 30, height: 30, borderRadius: 15, border: '1px solid #2d1a4d',
-                background: '#0a0a0d', color: '#c4b5fd', fontSize: 16, lineHeight: 1,
+                width: 30, height: 30, borderRadius: 15, border: '1px solid #4a2438',
+                background: '#0f0a0e', color: '#edaec5', fontSize: 16, lineHeight: 1,
                 cursor: 'pointer', fontFamily: 'inherit', display: 'flex',
                 alignItems: 'center', justifyContent: 'center',
               }}
             >
               ×
             </button>
-            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#c4b5fd', fontWeight: 700, marginBottom: 10, paddingRight: 36 }}>
+            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#edaec5', fontWeight: 700, marginBottom: 10, paddingRight: 36 }}>
               Handler reframe · read it
             </div>
-            <div style={{ fontSize: 15, lineHeight: 1.55, color: '#e8e6e3', marginBottom: 20, fontStyle: reframe.kind === 'implant' ? 'italic' : 'normal' }}>
+            <div style={{ fontSize: 15, lineHeight: 1.55, color: '#f2e9e6', marginBottom: 20, fontStyle: reframe.kind === 'implant' ? 'italic' : 'normal' }}>
               {reframe.text}
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -348,8 +348,8 @@ export function ConditioningOverlay({ reframings, implants, displacementScore, e
                 disabled={!readDelayDone}
                 style={{
                   flex: 1, padding: '10px', borderRadius: 6, border: 'none',
-                  background: readDelayDone ? '#7c3aed' : '#2d1a4d',
-                  color: readDelayDone ? '#fff' : '#6a656e',
+                  background: readDelayDone ? '#c9557f' : '#4a2438',
+                  color: readDelayDone ? '#fff' : '#7f6b74',
                   fontWeight: 600, fontSize: 13, fontFamily: 'inherit',
                   cursor: readDelayDone ? 'pointer' : 'not-allowed',
                 }}
@@ -360,8 +360,8 @@ export function ConditioningOverlay({ reframings, implants, displacementScore, e
                 onClick={snooze1h}
                 style={{
                   padding: '10px 14px', borderRadius: 6,
-                  border: '1px solid #2d1a4d', background: '#1a1226',
-                  color: '#c4b5fd', fontWeight: 600, fontSize: 12,
+                  border: '1px solid #4a2438', background: '#291823',
+                  color: '#edaec5', fontWeight: 600, fontSize: 12,
                   fontFamily: 'inherit', cursor: 'pointer',
                 }}
                 title="Closes and snoozes new reframes for 1 hour"
@@ -369,7 +369,7 @@ export function ConditioningOverlay({ reframings, implants, displacementScore, e
                 Snooze 1h
               </button>
             </div>
-            <div style={{ fontSize: 10, color: '#5a5560', marginTop: 10, textAlign: 'center' }}>
+            <div style={{ fontSize: 10, color: '#6d5a63', marginTop: 10, textAlign: 'center' }}>
               {readDelayDone ? 'Acknowledging increments the reference counter. Snooze pauses new reframes for 1 hour.' : 'Time-locked. Sit with it.'}
             </div>
           </div>

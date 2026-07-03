@@ -79,28 +79,28 @@ export function DailyBriefingCard() {
 
   return (
     <div style={{
-      background: 'linear-gradient(135deg, #1a0f2e 0%, #0f0820 100%)',
-      border: '1px solid #7c3aed',
+      background: 'linear-gradient(135deg, #2c1723 0%, #0f0820 100%)',
+      border: '1px solid #c9557f',
       borderRadius: 10, padding: 14, marginBottom: 16,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" strokeWidth="1.8">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#edaec5" strokeWidth="1.8">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
           <polyline points="14 2 14 8 20 8"/>
           <path d="M8 13h8M8 17h5"/>
         </svg>
-        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#c4b5fd', fontWeight: 700 }}>
+        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#edaec5', fontWeight: 700 }}>
           Daily briefing
         </span>
       </div>
 
-      <div style={{ fontSize: 10.5, color: '#8a8690', marginBottom: 10 }}>
+      <div style={{ fontSize: 10.5, color: '#9c8590', marginBottom: 10 }}>
         phase {b.phase} · day {b.denialDay} denial · slips 7d: {b.slipPoints}pt ({b.recentSlipCount}×){b.urgencyTotal != null && ` · HRT bleed $${b.urgencyTotal.toFixed(2)}`}
       </div>
 
       {b.topCommitment && (
         <Row label="closest deadline" tone="#f47272">
-          <div style={{ fontSize: 12, color: '#e8e6e3', lineHeight: 1.4 }}>{b.topCommitment.what}</div>
+          <div style={{ fontSize: 12, color: '#f2e9e6', lineHeight: 1.4 }}>{b.topCommitment.what}</div>
           <div style={{ fontSize: 10, color: '#f47272', marginTop: 2 }}>
             by {new Date(b.topCommitment.by_when).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })} · miss → {b.topCommitment.consequence}
           </div>
@@ -109,7 +109,7 @@ export function DailyBriefingCard() {
 
       {b.outfitToday && (
         <Row label="today's outfit" tone="#f4a7c4">
-          <div style={{ fontSize: 11.5, color: '#e8e6e3' }}>
+          <div style={{ fontSize: 11.5, color: '#f2e9e6' }}>
             {b.outfitToday.top ? `${b.outfitToday.top}` : ''}
             {b.outfitToday.bottom ? ` · ${b.outfitToday.bottom}` : ''}
             {b.outfitToday.underwear ? ` · ${b.outfitToday.underwear}` : ''}
@@ -118,11 +118,11 @@ export function DailyBriefingCard() {
       )}
 
       {b.topPlaybookMove && (
-        <Row label="next Gina move" tone="#c4b5fd">
-          <div style={{ fontSize: 11.5, color: '#e8e6e3', fontStyle: 'italic' }}>
+        <Row label="next Gina move" tone="#edaec5">
+          <div style={{ fontSize: 11.5, color: '#f2e9e6', fontStyle: 'italic' }}>
             "{b.topPlaybookMove.exact_line.slice(0, 150)}{b.topPlaybookMove.exact_line.length > 150 ? '…' : ''}"
           </div>
-          <div style={{ fontSize: 9.5, color: '#8a8690', marginTop: 2 }}>
+          <div style={{ fontSize: 9.5, color: '#9c8590', marginTop: 2 }}>
             via {b.topPlaybookMove.channel} · fires {new Date(b.topPlaybookMove.fires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </div>
         </Row>
@@ -136,7 +136,7 @@ function Row({ label, tone, children }: { label: string; tone: string; children:
   return (
     <div style={{
       padding: '8px 10px', marginBottom: 5,
-      background: '#0a0a0d', border: `1px solid ${tone}33`,
+      background: '#0f0a0e', border: `1px solid ${tone}33`,
       borderLeft: `3px solid ${tone}`, borderRadius: 5,
     }}>
       <div style={{ fontSize: 9, color: tone, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>

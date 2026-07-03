@@ -101,8 +101,8 @@ export function MommyDailyPlanCard() {
 
   return (
     <div style={{
-      background: fullyDone ? '#111116' : 'linear-gradient(135deg, #2e0f24 0%, #200818 100%)',
-      border: `1px solid ${fullyDone ? '#22222a' : '#6a2a4a'}`,
+      background: fullyDone ? '#171017' : 'linear-gradient(135deg, #2e0f24 0%, #200818 100%)',
+      border: `1px solid ${fullyDone ? '#2b1d29' : '#6a2a4a'}`,
       borderRadius: 10, padding: 14, marginBottom: 16,
       opacity: fullyDone ? 0.75 : 1,
     }}>
@@ -113,7 +113,7 @@ export function MommyDailyPlanCard() {
         <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#f0a5c8', fontWeight: 700 }}>
           Mama decided today
         </span>
-        <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto' }}>
+        <span style={{ fontSize: 10, color: '#9c8590', marginLeft: 'auto' }}>
           {completedCount}/{items.length}
         </span>
       </div>
@@ -125,8 +125,8 @@ export function MommyDailyPlanCard() {
           return (
             <div key={i} style={{
               padding: 9,
-              background: done ? '#0a0a0d' : refusedAt ? '#2a0810' : '#1a1018',
-              border: `1px solid ${done ? '#22222a' : refusedAt ? '#6a1f3a' : '#3a2030'}`,
+              background: done ? '#0f0a0e' : refusedAt ? '#2a0810' : '#1a1018',
+              border: `1px solid ${done ? '#2b1d29' : refusedAt ? '#6a1f3a' : '#3a2030'}`,
               borderRadius: 6,
               opacity: done || refusedAt ? 0.65 : 1,
             }}>
@@ -136,11 +136,11 @@ export function MommyDailyPlanCard() {
                   color: '#f0a5c8', minWidth: 60,
                 }}>{KIND_LABELS[it.kind] ?? it.kind}</span>
                 <span style={{
-                  fontSize: 9, color: it.intensity === 'cruel' ? '#f47272' : it.intensity === 'firm' ? '#f0a5c8' : '#c4b5fd',
+                  fontSize: 9, color: it.intensity === 'cruel' ? '#f47272' : it.intensity === 'firm' ? '#f0a5c8' : '#edaec5',
                   fontWeight: 600,
                 }}>{it.intensity}</span>
               </div>
-              <div style={{ fontSize: 12, color: '#e8e6e3', marginBottom: 4, lineHeight: 1.4 }}>
+              <div style={{ fontSize: 12, color: '#f2e9e6', marginBottom: 4, lineHeight: 1.4 }}>
                 {it.prescription}
               </div>
               {it.why && (

@@ -53,8 +53,8 @@ const SERVICE_STAGE_DESCRIPTIONS: Record<ServiceStage, string> = {
 
 const SERVICE_STAGE_COLORS: Record<ServiceStage, string> = {
   fantasy: '#6366f1',
-  content_consumption: '#8b5cf6',
-  online_interaction: '#a855f7',
+  content_consumption: '#cf6088',
+  online_interaction: '#c9557f',
   first_encounter: '#d946ef',
   regular_service: '#B06B61',
   organized_availability: '#f43f5e',

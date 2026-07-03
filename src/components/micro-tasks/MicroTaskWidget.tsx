@@ -55,7 +55,7 @@ export function MicroTaskWidget() {
           />
           <defs>
             <linearGradient id="microGrad" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="#a855f7" />
+              <stop offset="0%" stopColor="#c9557f" />
               <stop offset="100%" stopColor="#B06B61" />
             </linearGradient>
           </defs>

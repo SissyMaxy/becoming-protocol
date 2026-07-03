@@ -52,28 +52,28 @@ export function StrategicPlanCard() {
 
   return (
     <div id="card-strategic-plan" style={{
-      background: 'linear-gradient(135deg, #1a0f2e 0%, #0f0820 100%)',
-      border: '1px solid #c4b5fd', borderRadius: 10, padding: 14, marginBottom: 16,
+      background: 'linear-gradient(135deg, #2c1723 0%, #0f0820 100%)',
+      border: '1px solid #edaec5', borderRadius: 10, padding: 14, marginBottom: 16,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em',
-          color: '#c4b5fd', fontWeight: 700 }}>
+          color: '#edaec5', fontWeight: 700 }}>
           Handler strategy · {ageLabel}
         </span>
-        <span style={{ fontSize: 9, color: '#8a8690', marginLeft: 'auto', fontStyle: 'italic' }}>
+        <span style={{ fontSize: 9, color: '#9c8590', marginLeft: 'auto', fontStyle: 'italic' }}>
           {plan.generated_by.split('-')[0]}{plan.critique_by ? ' + ' + plan.critique_by.split('-')[0] : ''}
         </span>
       </div>
 
-      <div style={{ fontSize: 13, color: '#f4c272', lineHeight: 1.5, marginBottom: 8 }}>
+      <div style={{ fontSize: 13, color: '#e6bd80', lineHeight: 1.5, marginBottom: 8 }}>
         {plan.summary}
       </div>
 
       <button
         onClick={() => setExpanded(e => !e)}
         style={{
-          background: 'transparent', border: '1px solid #2d1a4d', borderRadius: 5,
-          color: '#c4b5fd', fontSize: 11, padding: '5px 10px',
+          background: 'transparent', border: '1px solid #4a2438', borderRadius: 5,
+          color: '#edaec5', fontSize: 11, padding: '5px 10px',
           cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600,
         }}
       >
@@ -81,7 +81,7 @@ export function StrategicPlanCard() {
       </button>
 
       {expanded && (
-        <div style={{ marginTop: 10, fontSize: 11, color: '#e8e6e3', lineHeight: 1.5 }}>
+        <div style={{ marginTop: 10, fontSize: 11, color: '#f2e9e6', lineHeight: 1.5 }}>
           {plan.escalation_moves?.length > 0 && (
             <div style={{ marginBottom: 10 }}>
               <div style={{ color: '#5fc88f', fontWeight: 600, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: 10 }}>
@@ -91,7 +91,7 @@ export function StrategicPlanCard() {
                 <div key={i} style={{ marginBottom: 6 }}>
                   <span style={{ color: '#fff' }}>{i + 1}. {m.title}</span>
                   {m.concrete_action && (
-                    <div style={{ color: '#8a8690', fontSize: 10, marginLeft: 14 }}>{m.concrete_action}</div>
+                    <div style={{ color: '#9c8590', fontSize: 10, marginLeft: 14 }}>{m.concrete_action}</div>
                   )}
                 </div>
               ))}

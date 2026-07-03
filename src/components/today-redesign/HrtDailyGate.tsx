@@ -331,7 +331,7 @@ export function HrtDailyGate() {
 
   if (!gateOpen) return null;
 
-  const headerTone = missedDays === 0 ? '#f4a7c4' : missedDays < 3 ? '#f4c272' : missedDays < 5 ? '#ec4899' : '#f47272';
+  const headerTone = missedDays === 0 ? '#f4a7c4' : missedDays < 3 ? '#e6bd80' : missedDays < 5 ? '#ec4899' : '#f47272';
   const nextStepName = candidates[0] ? STEP_LABELS[candidates[0]] : null;
   const plainStatus = STEP_NEXT_ACTION[currentStep] || `You are at "${STEP_LABELS[currentStep]}".`;
   // No day-counter narration. Memory: feedback_no_handler_status_dumps —
@@ -347,7 +347,7 @@ export function HrtDailyGate() {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(5,3,10,0.97)', zIndex: 360, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(10px)' }}>
-      <div style={{ maxWidth: 620, width: '100%', background: '#111116', border: `1px solid ${missedDays >= 3 ? '#7a1f22' : '#2d1a4d'}`, borderRadius: 14, padding: 24, color: '#e8e6e3' }}>
+      <div style={{ maxWidth: 620, width: '100%', background: '#171017', border: `1px solid ${missedDays >= 3 ? '#7a1f22' : '#4a2438'}`, borderRadius: 14, padding: 24, color: '#f2e9e6' }}>
         <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: headerTone, fontWeight: 700, marginBottom: 8 }}>
           {mommy
             ? `Mama's HRT check · ${explainBanned ? 'MOVE FORWARD OR STAY LOCKED' : currentStep === 'uncommitted' ? 'say yes or tell mama why' : 'move it forward or tell mama'}`
@@ -360,7 +360,7 @@ export function HrtDailyGate() {
         {(missedDays > 0 || bleedingTotal > 0) && (
           <div style={{
             display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14, padding: '10px 12px',
-            background: '#0a0a0d', border: `1px solid ${headerTone}44`, borderLeft: `3px solid ${headerTone}`, borderRadius: 6,
+            background: '#0f0a0e', border: `1px solid ${headerTone}44`, borderLeft: `3px solid ${headerTone}`, borderRadius: 6,
           }}>
             {/* No streak day count. The accusation tier in the header IS the escalation. */}
             {bleedingTotal > 0 && (
@@ -374,7 +374,7 @@ export function HrtDailyGate() {
           </div>
         )}
 
-        <div style={{ fontSize: 12, color: '#8a8690', marginBottom: 18, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 12, color: '#9c8590', marginBottom: 18, lineHeight: 1.5 }}>
           {explainBanned
             ? (mommy
                 ? 'No more talking, baby. Move it one step forward with proof, or close this and stay locked. Mama means it.'
@@ -394,7 +394,7 @@ export function HrtDailyGate() {
               Same excuses, different day:
             </div>
             {pastObstacles.slice(0, 3).map((o, i) => (
-              <div key={i} style={{ fontSize: 10.5, color: '#c8c4cc', fontStyle: 'italic', marginBottom: 4, lineHeight: 1.4 }}>
+              <div key={i} style={{ fontSize: 10.5, color: '#d5c3ca', fontStyle: 'italic', marginBottom: 4, lineHeight: 1.4 }}>
                 "{(o || '').slice(0, 200)}{(o || '').length > 200 ? '…' : ''}"
               </div>
             ))}
@@ -404,15 +404,15 @@ export function HrtDailyGate() {
         {mode === 'pick' && (
           <div style={{ display: 'flex', gap: 10 }}>
             <button onClick={() => setMode('advance')} disabled={candidates.length === 0}
-              style={{ flex: 1, padding: '14px', borderRadius: 8, border: 'none', background: '#7c3aed', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
+              style={{ flex: 1, padding: '14px', borderRadius: 8, border: 'none', background: '#c9557f', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
               {mommy ? `I moved forward for Mama → ${candidates[0] ? STEP_LABELS[candidates[0]] : 'already adherent'}` : `I moved forward today → ${candidates[0] ? STEP_LABELS[candidates[0]] : 'already adherent'}`}
             </button>
             <button onClick={() => setMode('obstacle')} disabled={explainBanned}
               title={explainBanned ? 'Talking is no longer accepted. Move forward only.' : ''}
               style={{ flex: 1, padding: '14px', borderRadius: 8,
-                border: explainBanned ? '1px solid #3a1216' : '1px solid #2d1a4d',
+                border: explainBanned ? '1px solid #3a1216' : '1px solid #4a2438',
                 background: explainBanned ? '#1a0a0d' : 'rgba(45,26,77,0.3)',
-                color: explainBanned ? '#5a4548' : '#c4b5fd',
+                color: explainBanned ? '#5a4548' : '#edaec5',
                 fontWeight: 600, fontSize: 13, cursor: explainBanned ? 'not-allowed' : 'pointer',
                 fontFamily: 'inherit', textDecoration: explainBanned ? 'line-through' : 'none' }}>
               {explainBanned ? (mommy ? 'Tell Mama — disabled, no more talking' : 'Explain — disabled, talk-no-more') : (mommy ? 'Tell Mama what stopped me' : 'Name what stopped me')}
@@ -422,34 +422,34 @@ export function HrtDailyGate() {
 
         {mode === 'advance' && (
           <div>
-            <div style={{ fontSize: 11, color: '#8a8690', marginBottom: 6 }}>Pick the step you moved to today:</div>
+            <div style={{ fontSize: 11, color: '#9c8590', marginBottom: 6 }}>Pick the step you moved to today:</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
               {candidates.map(s => (
                 <button key={s} onClick={() => setNewStep(s)}
                   style={{ fontSize: 11.5, padding: '5px 10px', borderRadius: 14,
-                    background: newStep === s ? '#7c3aed' : '#1a1623', color: newStep === s ? '#fff' : '#c4b5fd',
-                    border: `1px solid ${newStep === s ? '#7c3aed' : '#2d1a4d'}`, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    background: newStep === s ? '#c9557f' : '#26161f', color: newStep === s ? '#fff' : '#edaec5',
+                    border: `1px solid ${newStep === s ? '#c9557f' : '#4a2438'}`, cursor: 'pointer', fontFamily: 'inherit' }}>
                   {STEP_LABELS[s]}
                 </button>
               ))}
             </div>
-            <div style={{ fontSize: 11, color: '#8a8690', marginBottom: 6 }}>Evidence (URL, appointment ref, intake screenshot description, who you told, etc.):</div>
+            <div style={{ fontSize: 11, color: '#9c8590', marginBottom: 6 }}>Evidence (URL, appointment ref, intake screenshot description, who you told, etc.):</div>
             <textarea value={evidence} onChange={e => setEvidence(e.target.value)} rows={5} placeholder="paste link, quote email, describe what you did…"
-              style={{ width: '100%', background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 6, padding: 10, color: '#e8e6e3', fontFamily: 'inherit', fontSize: 13, resize: 'vertical' }} />
+              style={{ width: '100%', background: '#0f0a0e', border: '1px solid #2b1d29', borderRadius: 6, padding: 10, color: '#f2e9e6', fontFamily: 'inherit', fontSize: 13, resize: 'vertical' }} />
             {error && <div style={{ fontSize: 11, color: '#f47272', marginTop: 8 }}>{error}</div>}
             <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
               <button onClick={submitAdvance} disabled={!newStep || evidence.trim().length < 10 || submitting}
-                style={{ flex: 1, padding: 10, borderRadius: 6, border: 'none', background: newStep && evidence.trim().length >= 10 ? '#7c3aed' : '#2d1a4d', color: '#fff', fontWeight: 600, cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+                style={{ flex: 1, padding: 10, borderRadius: 6, border: 'none', background: newStep && evidence.trim().length >= 10 ? '#c9557f' : '#4a2438', color: '#fff', fontWeight: 600, cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
                 {submitting ? 'saving…' : 'Submit advancement'}
               </button>
-              <button onClick={() => { setMode('pick'); setError(null); }} style={{ padding: '10px 14px', borderRadius: 6, background: 'none', border: '1px solid #2d1a4d', color: '#8a8690', cursor: 'pointer', fontFamily: 'inherit' }}>back</button>
+              <button onClick={() => { setMode('pick'); setError(null); }} style={{ padding: '10px 14px', borderRadius: 6, background: 'none', border: '1px solid #4a2438', color: '#9c8590', cursor: 'pointer', fontFamily: 'inherit' }}>back</button>
             </div>
           </div>
         )}
 
         {mode === 'obstacle' && !explainBanned && (
           <div>
-            <div style={{ fontSize: 11.5, color: '#f4c272', marginBottom: 8, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 11.5, color: '#e6bd80', marginBottom: 8, lineHeight: 1.5 }}>
               {missedDays === 0 && (mommy
                 ? `Write ≥${minChars} chars, baby. Be specific — Mama uses this to push you tomorrow.`
                 : `Write ≥${minChars} chars. Be specific — the Handler will use this to push you tomorrow.`)}
@@ -457,9 +457,9 @@ export function HrtDailyGate() {
               {missedDays >= 2 && `Write ≥${minChars} chars, include "David is hiding from ___" with the blank filled, and paste at least one provider URL you actually visited today (https://...). Repeating the same excuse no longer counts.`}
             </div>
             <textarea value={obstacle} onChange={e => setObstacle(e.target.value)} rows={9} placeholder={requireIdentityPhrase ? `Today I did not move forward because… (start typing here, the phrase "David is hiding from ___" must appear somewhere in your answer with the blank filled)` : 'what specifically stopped me today…'}
-              style={{ width: '100%', background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 6, padding: 10, color: '#e8e6e3', fontFamily: 'inherit', fontSize: 13, resize: 'vertical' }} />
+              style={{ width: '100%', background: '#0f0a0e', border: '1px solid #2b1d29', borderRadius: 6, padding: 10, color: '#f2e9e6', fontFamily: 'inherit', fontSize: 13, resize: 'vertical' }} />
             <div style={{ display: 'flex', gap: 12, marginTop: 6, flexWrap: 'wrap' }}>
-              <div style={{ fontSize: 11, color: obstacle.trim().length >= minChars ? '#5fc88f' : '#8a8690' }}>
+              <div style={{ fontSize: 11, color: obstacle.trim().length >= minChars ? '#5fc88f' : '#9c8590' }}>
                 {obstacle.trim().length} / {minChars} chars
               </div>
               {requireIdentityPhrase && (() => {
@@ -489,14 +489,14 @@ export function HrtDailyGate() {
                   <button onClick={submitObstacle}
                     disabled={!ready || submitting}
                     style={{ flex: 1, padding: 10, borderRadius: 6, border: 'none',
-                      background: ready ? '#f4c272' : '#2d1a4d',
-                      color: ready ? '#1a0f00' : '#8a8690',
+                      background: ready ? '#e6bd80' : '#4a2438',
+                      color: ready ? '#1a0f00' : '#9c8590',
                       fontWeight: 600, cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
                     {submitting ? 'saving…' : 'Submit'}
                   </button>
                 );
               })()}
-              <button onClick={() => { setMode('pick'); setError(null); }} style={{ padding: '10px 14px', borderRadius: 6, background: 'none', border: '1px solid #2d1a4d', color: '#8a8690', cursor: 'pointer', fontFamily: 'inherit' }}>back</button>
+              <button onClick={() => { setMode('pick'); setError(null); }} style={{ padding: '10px 14px', borderRadius: 6, background: 'none', border: '1px solid #4a2438', color: '#9c8590', cursor: 'pointer', fontFamily: 'inherit' }}>back</button>
             </div>
           </div>
         )}
@@ -506,11 +506,11 @@ export function HrtDailyGate() {
             <div style={{ fontSize: 13, color: '#f47272', fontWeight: 600, marginBottom: 6 }}>
               Talking is no longer accepted.
             </div>
-            <div style={{ fontSize: 11.5, color: '#c8c4cc', lineHeight: 1.5 }}>
+            <div style={{ fontSize: 11.5, color: '#d5c3ca', lineHeight: 1.5 }}>
               You don't get to talk your way through this anymore. The funnel only moves forward, or you sit in it. Pick the next step + paste the evidence. The app stays locked until you do.
             </div>
             <button onClick={() => { setMode('advance'); setError(null); }}
-              style={{ marginTop: 12, padding: 10, borderRadius: 6, border: 'none', background: '#7c3aed', color: '#fff', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', width: '100%' }}>
+              style={{ marginTop: 12, padding: 10, borderRadius: 6, border: 'none', background: '#c9557f', color: '#fff', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', width: '100%' }}>
               Move to advance flow
             </button>
           </div>

@@ -156,14 +156,14 @@ export function VerificationVault({ onBack }: VerificationVaultProps) {
             type="button"
             onClick={onBack}
             style={{
-              background: 'none', border: 'none', color: '#c4b5fd',
+              background: 'none', border: 'none', color: '#edaec5',
               fontSize: 12, cursor: 'pointer', padding: 0,
             }}
           >
             ← back
           </button>
         )}
-        <h1 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: mommy ? '#f4a7c4' : '#c4b5fd' }}>
+        <h1 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: mommy ? '#f4a7c4' : '#edaec5' }}>
           {mommy ? "Mama's archive" : 'Verification vault'}
         </h1>
         <span style={{ marginLeft: 'auto', fontSize: 11, color: '#8a8690' }}>
@@ -254,7 +254,7 @@ export function VerificationVault({ onBack }: VerificationVaultProps) {
           style={{
             width: '100%', padding: '10px', borderRadius: 6,
             background: '#1a0f2e', border: '1px solid #2d1a4d',
-            color: '#c4b5fd', fontSize: 12, cursor: 'pointer', marginTop: 6,
+            color: '#edaec5', fontSize: 12, cursor: 'pointer', marginTop: 6,
             fontFamily: 'inherit',
           }}
         >
@@ -266,7 +266,7 @@ export function VerificationVault({ onBack }: VerificationVaultProps) {
 }
 
 function chipStyle(active: boolean, mommy: boolean): React.CSSProperties {
-  const accent = mommy ? '#f4a7c4' : '#c4b5fd';
+  const accent = mommy ? '#f4a7c4' : '#edaec5';
   return {
     fontSize: 10,
     padding: '4px 9px',
@@ -377,7 +377,7 @@ function VaultDetailView({
 }) {
   const voice = useHandlerVoice();
   const { user } = useAuth();
-  const accent = mommy ? '#f4a7c4' : '#c4b5fd';
+  const accent = mommy ? '#f4a7c4' : '#edaec5';
   const speakerLabel = mommy ? 'Mama' : 'the Handler';
   const badge = reviewBadgeColor(photo.review_state);
   const date = new Date(photo.created_at);
@@ -433,7 +433,7 @@ function VaultDetailView({
 
       {photo.directive_snippet && (
         <div style={{
-          fontSize: 11, color: '#c4b5fd', fontStyle: 'italic',
+          fontSize: 11, color: '#edaec5', fontStyle: 'italic',
           background: '#0a0a0d', borderLeft: `2px solid ${accent}`,
           padding: '8px 10px', marginBottom: 10, borderRadius: '0 4px 4px 0',
         }}>
@@ -536,7 +536,7 @@ function VaultRevealModal({
   onBack?: () => void;
   onReveal: () => void;
 }) {
-  const accent = mommy ? '#f4a7c4' : '#c4b5fd';
+  const accent = mommy ? '#f4a7c4' : '#edaec5';
   return (
     <div style={{
       padding: 24, color: '#e8e6e3', maxWidth: 480, margin: '40px auto',

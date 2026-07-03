@@ -162,7 +162,7 @@ export function SystemGrowthCard() {
 
   if (loading && snap.rateHistory.length === 0) {
     return (
-      <div style={{ background: '#111116', border: '1px solid #2d1a4d', borderRadius: 10, padding: 12, marginBottom: 16, color: '#8a8690', fontSize: 11 }}>
+      <div style={{ background: '#171017', border: '1px solid #4a2438', borderRadius: 10, padding: 12, marginBottom: 16, color: '#9c8590', fontSize: 11 }}>
         Reading growth-loop telemetry…
       </div>
     );
@@ -172,7 +172,7 @@ export function SystemGrowthCard() {
   const tone = snap.investigationAlert
     ? { bg: 'linear-gradient(135deg, #2a1f0a 0%, #1f0a0a 100%)', border: '#a87a1f', accent: '#fbbf24', label: 'INVESTIGATE' }
     : snap.trendDirection === 'up'
-      ? { bg: 'linear-gradient(135deg, #0a1a14 0%, #051a10 100%)', border: '#3a5a3f', accent: '#86efac', label: 'GROWING' }
+      ? { bg: 'linear-gradient(135deg, #0a1a14 0%, #051a10 100%)', border: '#3a5a3f', accent: '#8fd9b0', label: 'GROWING' }
       : snap.trendDirection === 'down'
         ? { bg: 'linear-gradient(135deg, #1f0a14 0%, #1a0a14 100%)', border: '#7a3f5a', accent: '#f87171', label: 'REGRESSING' }
         : { bg: 'linear-gradient(135deg, #0a141a 0%, #0a101a 100%)', border: '#3f5a7a', accent: '#93c5fd', label: 'STEADY' };
@@ -200,7 +200,7 @@ export function SystemGrowthCard() {
         </span>
         <button
           onClick={() => setExpanded((e) => !e)}
-          style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid #2d1a4d', borderRadius: 5, color: '#c4b5fd', fontSize: 10.5, padding: '3px 8px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
+          style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid #4a2438', borderRadius: 5, color: '#edaec5', fontSize: 10.5, padding: '3px 8px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
         >
           {expanded ? '▾ collapse' : '▸ details'}
         </button>
@@ -218,22 +218,22 @@ export function SystemGrowthCard() {
             {snap.todayPct !== null ? `${snap.todayPct.toFixed(0)}%` : '—'}
           </span>
           <span style={{ color: tone.accent }}>{trendArrow} mommy</span>
-          <span style={{ color: '#6a656e' }}>·</span>
+          <span style={{ color: '#7f6b74' }}>·</span>
           <span>{snap.topGaps.length} open gaps</span>
-          <span style={{ color: '#6a656e' }}>·</span>
+          <span style={{ color: '#7f6b74' }}>·</span>
           <span>{snap.proposalsAwaitingReview.length} proposals</span>
         </div>
       ) : (
         <div>
           {/* Rate panel */}
-          <div style={{ padding: '6px 0', borderBottom: '1px solid #15151b' }}>
+          <div style={{ padding: '6px 0', borderBottom: '1px solid #1b121a' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
-              <span style={{ fontSize: 11, color: '#c4b5fd', fontWeight: 600 }}>Mommy intervention rate (30d)</span>
+              <span style={{ fontSize: 11, color: '#edaec5', fontWeight: 600 }}>Mommy intervention rate (30d)</span>
               <span style={{ fontSize: 22, color: '#fff', fontWeight: 700 }}>
                 {snap.todayPct !== null ? `${snap.todayPct.toFixed(0)}%` : '—'}
               </span>
               <span style={{ fontSize: 11, color: tone.accent }}>{trendArrow} {snap.trendDirection}</span>
-              <span style={{ fontSize: 10, color: '#6a656e', marginLeft: 'auto' }}>
+              <span style={{ fontSize: 10, color: '#7f6b74', marginLeft: 'auto' }}>
                 30d mean {snap.thirtyDayMean !== null ? `${snap.thirtyDayMean}%` : '—'}
               </span>
             </div>
@@ -256,12 +256,12 @@ export function SystemGrowthCard() {
           </div>
 
           {/* Top open gaps */}
-          <div style={{ padding: '6px 0', borderBottom: '1px solid #15151b' }}>
-            <div style={{ fontSize: 11, color: '#c4b5fd', fontWeight: 600, marginBottom: 4 }}>
+          <div style={{ padding: '6px 0', borderBottom: '1px solid #1b121a' }}>
+            <div style={{ fontSize: 11, color: '#edaec5', fontWeight: 600, marginBottom: 4 }}>
               Top open capability gaps ({snap.topGaps.length})
             </div>
             {snap.topGaps.length === 0 ? (
-              <div style={{ fontSize: 10.5, color: '#5a5560', fontStyle: 'italic' }}>no open gaps</div>
+              <div style={{ fontSize: 10.5, color: '#6d5a63', fontStyle: 'italic' }}>no open gaps</div>
             ) : (
               snap.topGaps.map((g) => (
                 <div key={g.id} style={{ fontSize: 10.5, color: '#a8a3ad', padding: '2px 0' }}>
@@ -272,16 +272,16 @@ export function SystemGrowthCard() {
           </div>
 
           {/* Pattern proposals */}
-          <div style={{ padding: '6px 0', borderBottom: '1px solid #15151b' }}>
-            <div style={{ fontSize: 11, color: '#c4b5fd', fontWeight: 600, marginBottom: 4 }}>
+          <div style={{ padding: '6px 0', borderBottom: '1px solid #1b121a' }}>
+            <div style={{ fontSize: 11, color: '#edaec5', fontWeight: 600, marginBottom: 4 }}>
               Pattern proposals awaiting review ({snap.proposalsAwaitingReview.length})
             </div>
             {snap.proposalsAwaitingReview.length === 0 ? (
-              <div style={{ fontSize: 10.5, color: '#5a5560', fontStyle: 'italic' }}>no proposals waiting</div>
+              <div style={{ fontSize: 10.5, color: '#6d5a63', fontStyle: 'italic' }}>no proposals waiting</div>
             ) : (
               snap.proposalsAwaitingReview.map((p) => (
                 <div key={p.id} style={{ fontSize: 10.5, color: '#a8a3ad', padding: '2px 0' }}>
-                  [×{p.match_count}] {p.pattern_signature} <span style={{ color: '#5a5560' }}>· {p.outcome}</span>
+                  [×{p.match_count}] {p.pattern_signature} <span style={{ color: '#6d5a63' }}>· {p.outcome}</span>
                   {p.pr_url && (
                     <a href={p.pr_url} target="_blank" rel="noopener noreferrer" style={{ color: tone.accent, marginLeft: 6, fontSize: 10 }}>
                       PR ↗
@@ -294,17 +294,17 @@ export function SystemGrowthCard() {
 
           {/* Last self-review */}
           <div style={{ padding: '6px 0' }}>
-            <div style={{ fontSize: 11, color: '#c4b5fd', fontWeight: 600, marginBottom: 4 }}>
+            <div style={{ fontSize: 11, color: '#edaec5', fontWeight: 600, marginBottom: 4 }}>
               Last self-review
             </div>
             {snap.lastSelfReview ? (
               <div style={{ fontSize: 10.5, color: '#a8a3ad' }}>
                 {new Date(snap.lastSelfReview.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                <span style={{ color: '#5a5560' }}> · </span>
+                <span style={{ color: '#6d5a63' }}> · </span>
                 {(snap.lastSelfReview.judged ?? '').slice(0, 200)}…
               </div>
             ) : (
-              <div style={{ fontSize: 10.5, color: '#5a5560', fontStyle: 'italic' }}>
+              <div style={{ fontSize: 10.5, color: '#6d5a63', fontStyle: 'italic' }}>
                 no self-review run yet (Saturday 04:00 UTC)
               </div>
             )}

@@ -114,11 +114,11 @@ export function SupabaseHealthCard() {
       ? { bg: 'linear-gradient(135deg, #2a1f0a 0%, #1f1608 100%)', border: '#a87a1f', accent: '#fbbf24', label: 'ATTEND' }
       : grandTotal > 0
         ? { bg: 'linear-gradient(135deg, #1a1f0a 0%, #15180a 100%)', border: '#7a8a3f', accent: '#a3e635', label: 'WATCH' }
-        : { bg: 'linear-gradient(135deg, #0a1a14 0%, #051a10 100%)', border: '#3a5a3f', accent: '#86efac', label: 'CLEAN' };
+        : { bg: 'linear-gradient(135deg, #0a1a14 0%, #051a10 100%)', border: '#3a5a3f', accent: '#8fd9b0', label: 'CLEAN' };
 
   if (loading && snap.latestAt === null && grandTotal === 0) {
     return (
-      <div style={{ background: '#111116', border: '1px solid #2d1a4d', borderRadius: 10, padding: 12, marginBottom: 16, color: '#8a8690', fontSize: 11 }}>
+      <div style={{ background: '#171017', border: '1px solid #4a2438', borderRadius: 10, padding: 12, marginBottom: 16, color: '#9c8590', fontSize: 11 }}>
         Reading Supabase health…
       </div>
     );
@@ -127,13 +127,13 @@ export function SupabaseHealthCard() {
   const Row = ({ source }: { source: Source }) => {
     const b = snap[source];
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid #15151b' }}>
-        <span style={{ fontSize: 11, color: '#c4b5fd', fontWeight: 600, flex: '0 0 110px' }}>{SOURCE_LABELS[source]}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid #1b121a' }}>
+        <span style={{ fontSize: 11, color: '#edaec5', fontWeight: 600, flex: '0 0 110px' }}>{SOURCE_LABELS[source]}</span>
         {b.critical > 0 && <span style={{ fontSize: 10, color: '#fff', background: '#c4272d', padding: '2px 6px', borderRadius: 4, fontWeight: 700 }}>{b.critical} crit</span>}
         {b.high > 0 && <span style={{ fontSize: 10, color: '#fff', background: '#a87a1f', padding: '2px 6px', borderRadius: 4, fontWeight: 700 }}>{b.high} high</span>}
-        {b.total === 0 && <span style={{ fontSize: 10.5, color: '#5a5560', fontStyle: 'italic' }}>clean</span>}
-        {b.total > b.critical + b.high && <span style={{ fontSize: 10, color: '#8a8690' }}>+{b.total - b.critical - b.high} more</span>}
-        <span style={{ fontSize: 10, color: '#6a656e', marginLeft: 'auto', fontStyle: 'italic' }}>{SOURCE_HINTS[source]}</span>
+        {b.total === 0 && <span style={{ fontSize: 10.5, color: '#6d5a63', fontStyle: 'italic' }}>clean</span>}
+        {b.total > b.critical + b.high && <span style={{ fontSize: 10, color: '#9c8590' }}>+{b.total - b.critical - b.high} more</span>}
+        <span style={{ fontSize: 10, color: '#7f6b74', marginLeft: 'auto', fontStyle: 'italic' }}>{SOURCE_HINTS[source]}</span>
       </div>
     );
   };
@@ -150,7 +150,7 @@ export function SupabaseHealthCard() {
         </span>
         <button
           onClick={() => setExpanded(e => !e)}
-          style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid #2d1a4d', borderRadius: 5, color: '#c4b5fd', fontSize: 10.5, padding: '3px 8px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
+          style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid #4a2438', borderRadius: 5, color: '#edaec5', fontSize: 10.5, padding: '3px 8px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
         >
           {expanded ? '▾ collapse' : '▸ details'}
         </button>
@@ -165,7 +165,7 @@ export function SupabaseHealthCard() {
         <div>
           {SOURCES.map(s => <Row key={s} source={s} />)}
           {snap.latestAt && (
-            <div style={{ fontSize: 10, color: '#5a5560', marginTop: 8, fontStyle: 'italic' }}>
+            <div style={{ fontSize: 10, color: '#6d5a63', marginTop: 8, fontStyle: 'italic' }}>
               latest: {new Date(snap.latestAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
             </div>
           )}

@@ -52,7 +52,7 @@ const BAND_DESC: Record<DifficultyBand, { label: string; copy: string }> = {
 const PALETTE = {
   bg: 'linear-gradient(140deg, #1a0f2e 0%, #0f0820 100%)',
   border: '#2d1a4d',
-  accent: '#c4b5fd',
+  accent: '#edaec5',
   accentBright: '#e9d5ff',
   textBody: '#c8c4cc',
   textMuted: '#8a8690',
@@ -215,9 +215,9 @@ function Section({ title, children }: { title?: string; children: React.ReactNod
 
 function pillStyle(active: boolean): React.CSSProperties {
   return {
-    background: active ? '#7c3aed' : 'transparent',
+    background: active ? '#c9557f' : 'transparent',
     color: active ? '#fff' : PALETTE.textBody,
-    border: `1px solid ${active ? '#7c3aed' : PALETTE.border}`,
+    border: `1px solid ${active ? '#c9557f' : PALETTE.border}`,
     borderRadius: 999,
     padding: '6px 14px',
     fontSize: 11.5,

@@ -24,7 +24,7 @@ interface Punishment {
 }
 
 const SEVERITY_TONE: Record<number, string> = {
-  1: '#c4b5fd', 2: '#f4c272', 3: '#f4a7c4', 4: '#f47272', 5: '#c4272d',
+  1: '#edaec5', 2: '#e6bd80', 3: '#f4a7c4', 4: '#f47272', 5: '#c4272d',
 };
 
 function fmtDue(due: string | null): { text: string; overdue: boolean } {
@@ -93,7 +93,7 @@ export function PunishmentQueueCard() {
         <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#f47272', fontWeight: 700 }}>
           Punishment queue ({items.length})
         </span>
-        <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto', fontStyle: 'italic' }}>
+        <span style={{ fontSize: 10, color: '#9c8590', marginLeft: 'auto', fontStyle: 'italic' }}>
           Mark complete with proof.
         </span>
       </div>
@@ -105,7 +105,7 @@ export function PunishmentQueueCard() {
         return (
           <div key={item.id} style={{
             padding: '10px 12px', marginBottom: 7,
-            background: '#0a0a0d',
+            background: '#0f0a0e',
             border: `1px solid ${due.overdue ? '#7a1f22' : tone + '44'}`,
             borderLeft: `3px solid ${tone}`, borderRadius: 5,
           }}>
@@ -116,15 +116,15 @@ export function PunishmentQueueCard() {
                   <span style={{ marginLeft: 6, color: '#f47272' }}>dodged {item.dodge_count}×</span>
                 )}
               </span>
-              <span style={{ fontSize: 10, color: due.overdue ? '#f47272' : '#8a8690', marginLeft: 'auto', fontWeight: 600 }}>
+              <span style={{ fontSize: 10, color: due.overdue ? '#f47272' : '#9c8590', marginLeft: 'auto', fontWeight: 600 }}>
                 {due.text}
               </span>
             </div>
-            <div style={{ fontSize: 12, color: '#e8e6e3', fontWeight: 600, lineHeight: 1.4, marginBottom: 4 }}>
+            <div style={{ fontSize: 12, color: '#f2e9e6', fontWeight: 600, lineHeight: 1.4, marginBottom: 4 }}>
               {item.title}
             </div>
             {item.description && (
-              <div style={{ fontSize: 11, color: '#c8c4cc', lineHeight: 1.45, marginBottom: 6 }}>
+              <div style={{ fontSize: 11, color: '#d5c3ca', lineHeight: 1.45, marginBottom: 6 }}>
                 {item.description}
               </div>
             )}
@@ -143,10 +143,10 @@ export function PunishmentQueueCard() {
               </button>
             ) : (
               <div style={{
-                marginTop: 4, padding: 9, background: '#050507',
-                border: '1px solid #2d1a4d', borderRadius: 4,
+                marginTop: 4, padding: 9, background: '#0a0709',
+                border: '1px solid #4a2438', borderRadius: 4,
               }}>
-                <div style={{ fontSize: 10, color: '#c4b5fd', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, marginBottom: 5 }}>
+                <div style={{ fontSize: 10, color: '#edaec5', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, marginBottom: 5 }}>
                   Evidence
                 </div>
                 <input
@@ -154,8 +154,8 @@ export function PunishmentQueueCard() {
                   onChange={e => setEvUrl(s => ({ ...s, [item.id]: e.target.value }))}
                   placeholder="link to post / screenshot URL / Reddit thread"
                   style={{
-                    width: '100%', background: '#0a0a0d', border: '1px solid #22222a',
-                    borderRadius: 4, padding: '6px 9px', fontSize: 11.5, color: '#e8e6e3',
+                    width: '100%', background: '#0f0a0e', border: '1px solid #2b1d29',
+                    borderRadius: 4, padding: '6px 9px', fontSize: 11.5, color: '#f2e9e6',
                     fontFamily: 'inherit', marginBottom: 5,
                   }}
                 />
@@ -165,8 +165,8 @@ export function PunishmentQueueCard() {
                   placeholder="optional notes — when, where, what happened"
                   rows={2}
                   style={{
-                    width: '100%', background: '#0a0a0d', border: '1px solid #22222a',
-                    borderRadius: 4, padding: '6px 9px', fontSize: 11.5, color: '#e8e6e3',
+                    width: '100%', background: '#0f0a0e', border: '1px solid #2b1d29',
+                    borderRadius: 4, padding: '6px 9px', fontSize: 11.5, color: '#f2e9e6',
                     fontFamily: 'inherit', resize: 'vertical', marginBottom: 6,
                   }}
                 />
@@ -176,8 +176,8 @@ export function PunishmentQueueCard() {
                     disabled={submitting === item.id || (!evUrl[item.id]?.trim() && !evNotes[item.id]?.trim())}
                     style={{
                       flex: 1, padding: '6px 12px', borderRadius: 4, border: 'none',
-                      background: (evUrl[item.id]?.trim() || evNotes[item.id]?.trim()) ? '#5fc88f' : '#22222a',
-                      color: (evUrl[item.id]?.trim() || evNotes[item.id]?.trim()) ? '#0a1a14' : '#5a5560',
+                      background: (evUrl[item.id]?.trim() || evNotes[item.id]?.trim()) ? '#5fc88f' : '#2b1d29',
+                      color: (evUrl[item.id]?.trim() || evNotes[item.id]?.trim()) ? '#0a1a14' : '#6d5a63',
                       fontWeight: 700, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
                       textTransform: 'uppercase',
                     }}
@@ -188,7 +188,7 @@ export function PunishmentQueueCard() {
                     onClick={() => setOpenId(null)}
                     style={{
                       padding: '6px 12px', borderRadius: 4, background: 'transparent',
-                      border: '1px solid #2d1a4d', color: '#8a8690', fontSize: 10,
+                      border: '1px solid #4a2438', color: '#9c8590', fontSize: 10,
                       cursor: 'pointer', fontFamily: 'inherit',
                     }}
                   >

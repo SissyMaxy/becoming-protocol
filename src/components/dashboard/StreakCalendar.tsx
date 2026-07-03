@@ -63,8 +63,8 @@ export function StreakCalendar({ data, days = 90, currentStreak, longestStreak }
     if (tasks === 0) return isBambiMode ? '#FAF7F5' : '#1a1a2e';
     if (tasks === 1) return isBambiMode ? '#D4A89C' : '#3b1f5e';
     if (tasks <= 3) return isBambiMode ? '#C4847A' : '#6b21a8';
-    if (tasks <= 5) return isBambiMode ? '#B06B61' : '#9333ea';
-    return isBambiMode ? '#96524A' : '#a855f7';
+    if (tasks <= 5) return isBambiMode ? '#B06B61' : '#b8467a';
+    return isBambiMode ? '#96524A' : '#c9557f';
   };
 
   const maxTasks = Math.max(...data.map(d => d.tasksCompleted), 1);

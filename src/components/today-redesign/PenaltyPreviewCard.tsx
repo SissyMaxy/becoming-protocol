@@ -23,8 +23,8 @@ interface Preview {
 }
 
 const STATE_LABEL: Record<PreviewState, { text: string; color: string }> = {
-  not_shown: { text: 'not shown yet', color: '#8a8690' },
-  in_grace: { text: 'grace — not live yet', color: '#f4c272' },
+  not_shown: { text: 'not shown yet', color: '#9c8590' },
+  in_grace: { text: 'grace — not live yet', color: '#e6bd80' },
   live: { text: 'live cost', color: '#f47272' },
   cancelled: { text: 'cleared', color: '#6ee7b7' },
   applied: { text: 'charged', color: '#f47272' },
@@ -80,7 +80,7 @@ export function PenaltyPreviewCard() {
         <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#f47272', fontWeight: 700 }}>
           What it'll cost
         </span>
-        <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto', fontStyle: 'italic' }}>
+        <span style={{ fontSize: 10, color: '#9c8590', marginLeft: 'auto', fontStyle: 'italic' }}>
           on the table before it's charged
         </span>
       </div>
@@ -103,7 +103,7 @@ export function PenaltyPreviewCard() {
               <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                 <span style={{ fontSize: 10, fontWeight: 700, color: meta.color }}>{meta.text}</span>
                 {p.deadline && (
-                  <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>
+                  <span style={{ fontSize: 10, color: '#9c8590', marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>
                     {deadlineLabel(p.deadline)}
                   </span>
                 )}

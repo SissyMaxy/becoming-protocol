@@ -360,7 +360,7 @@ export function ProgressRing({
   const offset = circumference - (progress / 100) * circumference;
 
   const bgColor = isBambiMode ? '#E8CFC5' : '#2a2a3a';
-  const fillColor = isBambiMode ? '#C4847A' : '#a855f7';
+  const fillColor = isBambiMode ? '#C4847A' : '#c9557f';
 
   return (
     <div className={`relative ${className}`} style={{ width: size, height: size }}>

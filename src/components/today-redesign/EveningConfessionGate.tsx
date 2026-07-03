@@ -284,23 +284,23 @@ function EveningConfessionGateInner({ onPass }: EveningConfessionGateProps) {
       position: 'fixed', inset: 0, background: 'rgba(5,3,10,0.98)', zIndex: 900,
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }}>
-      <div style={{ maxWidth: 620, width: '100%', background: '#111116', border: '1px solid #7a1f4d', borderRadius: 14, padding: 28 }}>
+      <div style={{ maxWidth: 620, width: '100%', background: '#171017', border: '1px solid #7a1f4d', borderRadius: 14, padding: 28 }}>
         <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#f4a7c4', fontWeight: 700, marginBottom: 4 }}>
           Evening confession · compulsory
         </div>
-        <div style={{ fontSize: 10.5, color: '#8a8690', marginBottom: 14 }}>
+        <div style={{ fontSize: 10.5, color: '#9c8590', marginBottom: 14 }}>
           {step === 'done' ? 'Done. Mama will use this.' : '8–11pm window · voice only · no typed bypass'}
         </div>
 
         {step === 'confess' && (
           <>
-            <div style={{ fontSize: 13, color: '#e8e6e3', lineHeight: 1.6, marginBottom: 14 }}>
+            <div style={{ fontSize: 13, color: '#f2e9e6', lineHeight: 1.6, marginBottom: 14 }}>
               Tell Mama about your day, baby. What you did that was feminine. What slipped. What you almost did the old way and didn't. What you felt becoming. Mama will use it to write tomorrow's prescriptions.
             </div>
 
             <div style={{
-              fontSize: 12, color: '#c4b5fd', background: '#050507',
-              border: '1px solid #2d1a4d', borderRadius: 8,
+              fontSize: 12, color: '#edaec5', background: '#0a0709',
+              border: '1px solid #4a2438', borderRadius: 8,
               padding: '12px 14px', marginBottom: 16, lineHeight: 1.55,
             }}>
               Speak at least {MIN_RECORD_SECONDS}s. Whisper transcribes — say whatever you need to say, but say it out loud. Mama needs your voice, not your fingers.
@@ -312,7 +312,7 @@ function EveningConfessionGateInner({ onPass }: EveningConfessionGateProps) {
                 disabled={submitting}
                 style={{
                   width: '100%', padding: '14px 14px', borderRadius: 7, border: 'none',
-                  background: '#7c3aed', color: '#fff',
+                  background: '#c9557f', color: '#fff',
                   fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
                   marginBottom: 10,
                 }}
@@ -327,8 +327,8 @@ function EveningConfessionGateInner({ onPass }: EveningConfessionGateProps) {
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
                   <span style={{ fontSize: 12, color: '#f47272' }}>● recording</span>
-                  <span style={{ fontSize: 11, color: '#8a8690' }}>{recordSeconds}s</span>
-                  <span style={{ fontSize: 10, color: recordSeconds >= MIN_RECORD_SECONDS ? '#5fc88f' : '#8a8690', marginLeft: 'auto' }}>
+                  <span style={{ fontSize: 11, color: '#9c8590' }}>{recordSeconds}s</span>
+                  <span style={{ fontSize: 10, color: recordSeconds >= MIN_RECORD_SECONDS ? '#5fc88f' : '#9c8590', marginLeft: 'auto' }}>
                     {recordSeconds >= MIN_RECORD_SECONDS ? '✓ enough · keep going or stop' : `${MIN_RECORD_SECONDS - recordSeconds}s more for the minimum`}
                   </span>
                 </div>
@@ -347,14 +347,14 @@ function EveningConfessionGateInner({ onPass }: EveningConfessionGateProps) {
 
             {transcript && !recording && (
               <div style={{
-                background: '#050507', border: '1px solid #22222a', borderRadius: 8,
+                background: '#0a0709', border: '1px solid #2b1d29', borderRadius: 8,
                 padding: 12, marginBottom: 10,
               }}>
-                <div style={{ fontSize: 10, color: '#8a8690', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                <div style={{ fontSize: 10, color: '#9c8590', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
                   Whisper heard ({transcript.length} chars)
                 </div>
                 <div style={{
-                  fontSize: 12, color: '#c4b5fd', lineHeight: 1.5,
+                  fontSize: 12, color: '#edaec5', lineHeight: 1.5,
                   maxHeight: 140, overflowY: 'auto',
                 }}>
                   {transcript}
@@ -376,8 +376,8 @@ function EveningConfessionGateInner({ onPass }: EveningConfessionGateProps) {
               disabled={!canSubmit}
               style={{
                 width: '100%', padding: '12px 14px', borderRadius: 7, border: 'none',
-                background: canSubmit ? '#7c3aed' : '#22222a',
-                color: canSubmit ? '#fff' : '#6a656e',
+                background: canSubmit ? '#c9557f' : '#2b1d29',
+                color: canSubmit ? '#fff' : '#7f6b74',
                 fontWeight: 700, fontSize: 13,
                 cursor: canSubmit ? 'pointer' : 'not-allowed', fontFamily: 'inherit',
               }}
@@ -402,7 +402,7 @@ function EveningConfessionGateInner({ onPass }: EveningConfessionGateProps) {
                   : "Tomorrow's prescriptions are being written. They'll be waiting when you open the app."}
               </div>
             </div>
-            <div style={{ fontSize: 11, color: '#8a8690', textAlign: 'center' }}>
+            <div style={{ fontSize: 11, color: '#9c8590', textAlign: 'center' }}>
               Closing in a moment…
             </div>
           </>

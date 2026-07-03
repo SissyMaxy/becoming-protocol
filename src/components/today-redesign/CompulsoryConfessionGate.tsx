@@ -206,16 +206,16 @@ export function CompulsoryConfessionGate() {
     >
       <div style={{
         maxWidth: 560, width: '100%',
-        background: '#111116', border: '1px solid #2d1a4d', borderRadius: 14, padding: 24,
-        color: '#e8e6e3', fontFamily: 'Inter, "SF Pro Text", system-ui, sans-serif',
+        background: '#171017', border: '1px solid #4a2438', borderRadius: 14, padding: 24,
+        color: '#f2e9e6', fontFamily: 'Inter, "SF Pro Text", system-ui, sans-serif',
       }}>
-        <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#c4b5fd', fontWeight: 700, marginBottom: 10 }}>
+        <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#edaec5', fontWeight: 700, marginBottom: 10 }}>
           Daily confession · before you pass
         </div>
         <div style={{ fontSize: 19, lineHeight: 1.4, fontWeight: 600, color: '#fff', marginBottom: 16, letterSpacing: '-0.015em' }}>
           {prompt.prompt_question}
         </div>
-        <div style={{ fontSize: 11.5, color: '#8a8690', marginBottom: 10 }}>
+        <div style={{ fontSize: 11.5, color: '#9c8590', marginBottom: 10 }}>
           Write {effectiveMin}+ characters. Honest. No editing out. This goes into the permanent record and the Handler will quote it back.
         </div>
         <textarea
@@ -225,12 +225,12 @@ export function CompulsoryConfessionGate() {
           placeholder="start typing…"
           rows={10}
           style={{
-            width: '100%', background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 6,
-            padding: '10px 12px', fontFamily: 'inherit', fontSize: 14, color: '#e8e6e3',
+            width: '100%', background: '#0f0a0e', border: '1px solid #2b1d29', borderRadius: 6,
+            padding: '10px 12px', fontFamily: 'inherit', fontSize: 14, color: '#f2e9e6',
             resize: 'vertical', lineHeight: 1.55,
           }}
         />
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, marginBottom: 14, fontSize: 11, color: canSubmit ? '#5fc88f' : '#8a8690' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, marginBottom: 14, fontSize: 11, color: canSubmit ? '#5fc88f' : '#9c8590' }}>
           <span>{trimmedLen} / {effectiveMin} chars</span>
           <span>source: compulsory_gate · source_focus: {prompt.target_focus || 'identity'}</span>
         </div>
@@ -244,15 +244,15 @@ export function CompulsoryConfessionGate() {
           disabled={!canSubmit || submitting}
           style={{
             width: '100%', padding: '10px', borderRadius: 6, border: 'none',
-            background: canSubmit ? '#7c3aed' : '#2d1a4d',
-            color: canSubmit ? '#fff' : '#6a656e',
+            background: canSubmit ? '#c9557f' : '#4a2438',
+            color: canSubmit ? '#fff' : '#7f6b74',
             fontWeight: 600, fontSize: 13, fontFamily: 'inherit',
             cursor: canSubmit && !submitting ? 'pointer' : 'not-allowed',
           }}
         >
           {submitting ? 'submitting…' : canSubmit ? 'Submit confession & unlock' : `${effectiveMin - trimmedLen} more characters`}
         </button>
-        <div style={{ fontSize: 10.5, color: '#5a5560', marginTop: 10, textAlign: 'center' }}>
+        <div style={{ fontSize: 10.5, color: '#6d5a63', marginTop: 10, textAlign: 'center' }}>
           You can't skip this. The app stays locked until you finish. No safeword for this gate — the whole point is to finish.
         </div>
       </div>

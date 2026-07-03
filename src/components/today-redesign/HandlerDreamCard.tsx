@@ -40,25 +40,25 @@ export function HandlerDreamCard() {
 
   return (
     <div style={{
-      background: 'linear-gradient(140deg, #1a0f2e 0%, #150a24 100%)',
-      border: '1px solid #7c3aed',
+      background: 'linear-gradient(140deg, #2c1723 0%, #22111c 100%)',
+      border: '1px solid #c9557f',
       borderRadius: 10, padding: 16, marginBottom: 16,
       position: 'relative',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" strokeWidth="1.8">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#edaec5" strokeWidth="1.8">
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
         </svg>
-        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#c4b5fd', fontWeight: 700 }}>
+        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#edaec5', fontWeight: 700 }}>
           Handler's overnight thought
         </span>
-        <span style={{ fontSize: 10.5, color: '#8a8690', marginLeft: 'auto' }}>
+        <span style={{ fontSize: 10.5, color: '#9c8590', marginLeft: 'auto' }}>
           {ago < 1 ? 'just now' : ago < 24 ? `${ago}h ago` : `${Math.floor(ago / 24)}d ago`}
         </span>
       </div>
 
       <div style={{
-        fontSize: 13, color: '#e8e6e3', lineHeight: 1.65,
+        fontSize: 13, color: '#f2e9e6', lineHeight: 1.65,
         fontFamily: 'Georgia, serif', fontStyle: 'italic',
         whiteSpace: 'pre-wrap',
       }}>
@@ -72,8 +72,8 @@ export function HandlerDreamCard() {
           style={{
             marginTop: 12,
             padding: '6px 12px', borderRadius: 5,
-            background: playingId === dreamId ? '#7c3aed40' : 'transparent',
-            color: '#c4b5fd', border: '1px solid #7c3aed',
+            background: playingId === dreamId ? '#c9557f40' : 'transparent',
+            color: '#edaec5', border: '1px solid #c9557f',
             fontWeight: 700, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
             textTransform: 'uppercase', letterSpacing: '0.05em',
           }}

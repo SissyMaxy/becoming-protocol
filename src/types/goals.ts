@@ -367,7 +367,7 @@ export function getDomainLabel(domain: Domain | null): string {
 }
 
 export function getDomainColor(domain: Domain | null): string {
-  if (!domain) return '#8b5cf6';
+  if (!domain) return '#cf6088';
   const colors: Record<Domain, string> = {
     // Arousal domains - red/hot colors (highest priority)
     arousal: '#ef4444',        // red
@@ -375,13 +375,13 @@ export function getDomainColor(domain: Domain | null): string {
     chastity: '#f59e0b',       // amber
     // Sissification domains - purple
     mindset: '#3b82f6',        // blue
-    identity: '#8b5cf6',       // purple
+    identity: '#cf6088',       // purple
     // Submission domains
     social: '#f59e0b',         // amber
     // Feminization domains - softer colors (lowest priority)
     movement: '#22c55e',       // green
     voice: '#C4847A',          // pink
-    style: '#a855f7',          // purple
+    style: '#c9557f',          // purple
     skincare: '#06b6d4',       // cyan
   };
   return colors[domain];

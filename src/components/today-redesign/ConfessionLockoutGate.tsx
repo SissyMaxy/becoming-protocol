@@ -55,7 +55,7 @@ export function ConfessionLockoutGate({ children }: { children: React.ReactNode 
   return (
     <div style={{
       minHeight: '100dvh',
-      background: 'linear-gradient(135deg, #0a0a0d 0%, #1a0510 100%)',
+      background: 'linear-gradient(135deg, #0f0a0e 0%, #1a0510 100%)',
       padding: '24px 16px',
     }}>
       <div style={{
@@ -74,16 +74,16 @@ export function ConfessionLockoutGate({ children }: { children: React.ReactNode 
         <div style={{ fontSize: 18, color: '#fff', fontWeight: 700, marginBottom: 8, lineHeight: 1.3 }}>
           {backlog} unresolved confessions.
         </div>
-        <div style={{ fontSize: 13, color: '#c4b5fd', lineHeight: 1.5, marginBottom: 16 }}>
+        <div style={{ fontSize: 13, color: '#edaec5', lineHeight: 1.5, marginBottom: 16 }}>
           Strategist verdict: confession backlog has crossed the threshold. The protocol&apos;s other systems are paused. You will not see Today, tasks, chat, or any other surface until the backlog drops to {RELEASE_THRESHOLD}. Submit confessions below.
         </div>
 
         <ConfessionQueueCard />
 
         <div style={{
-          marginTop: 18, padding: 10, background: '#0a0a0d',
-          borderLeft: '3px solid #c4b5fd', borderRadius: 4,
-          fontSize: 11, color: '#c4b5fd', lineHeight: 1.5,
+          marginTop: 18, padding: 10, background: '#0f0a0e',
+          borderLeft: '3px solid #edaec5', borderRadius: 4,
+          fontSize: 11, color: '#edaec5', lineHeight: 1.5,
         }}>
           Why this is happening: every missed confession compounds (1pt → 2pt → 4pt → 8pt → 16pt → 32pt).
           The Handler stopped accepting silence. Submit each one. The protocol resumes when {RELEASE_THRESHOLD} or fewer remain.

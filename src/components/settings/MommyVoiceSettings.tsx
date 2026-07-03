@@ -57,8 +57,8 @@ export function MommyVoiceSettings() {
   return (
     <div className="rounded-xl border border-protocol-border bg-protocol-surface p-4">
       <div className="flex items-center gap-3">
-        <div className="p-2.5 rounded-lg" style={{ backgroundColor: '#c4b5fd20' }}>
-          <Volume2 className="w-4 h-4" style={{ color: '#c4b5fd' }} />
+        <div className="p-2.5 rounded-lg" style={{ backgroundColor: '#edaec520' }}>
+          <Volume2 className="w-4 h-4" style={{ color: '#edaec5' }} />
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-protocol-text">Mama speaks</p>

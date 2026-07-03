@@ -39,9 +39,9 @@ const PLATFORM_TONE: Record<string, string> = {
   fetlife: '#c4272d',
   sniffies: '#f4a7c4',
   fansly: '#5fc88f',
-  onlyfans: '#c4b5fd',
-  irl: '#f4c272',
-  other: '#8a8690',
+  onlyfans: '#edaec5',
+  irl: '#e6bd80',
+  other: '#9c8590',
 };
 
 function extractVars(body: string): string[] {
@@ -143,7 +143,7 @@ export function DmTemplateCard() {
         <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#6ee7b7', fontWeight: 700 }}>
           DM templates · {templates.length}
         </span>
-        <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto', fontStyle: 'italic' }}>
+        <span style={{ fontSize: 10, color: '#9c8590', marginLeft: 'auto', fontStyle: 'italic' }}>
           One tap → clipboard
         </span>
       </div>
@@ -155,7 +155,7 @@ export function DmTemplateCard() {
               padding: '3px 9px', borderRadius: 10, border: '1px solid',
               borderColor: filterPlatform === 'all' ? '#6ee7b7' : '#2d4a5a',
               background: filterPlatform === 'all' ? '#0a1a14' : 'transparent',
-              color: filterPlatform === 'all' ? '#6ee7b7' : '#8a8690',
+              color: filterPlatform === 'all' ? '#6ee7b7' : '#9c8590',
               fontSize: 9.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
               textTransform: 'uppercase', letterSpacing: '0.05em',
             }}>
@@ -163,14 +163,14 @@ export function DmTemplateCard() {
           </button>
           {platformsInUse.map(p => {
             const count = templates.filter(t => t.platform === p).length;
-            const tone = PLATFORM_TONE[p] || '#8a8690';
+            const tone = PLATFORM_TONE[p] || '#9c8590';
             return (
               <button key={p} onClick={() => setFilterPlatform(p)}
                 style={{
                   padding: '3px 9px', borderRadius: 10, border: '1px solid',
                   borderColor: filterPlatform === p ? tone : '#2d4a5a',
-                  background: filterPlatform === p ? '#0a0a0d' : 'transparent',
-                  color: filterPlatform === p ? tone : '#8a8690',
+                  background: filterPlatform === p ? '#0f0a0e' : 'transparent',
+                  color: filterPlatform === p ? tone : '#9c8590',
                   fontSize: 9.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
                   textTransform: 'uppercase', letterSpacing: '0.05em',
                 }}>
@@ -182,24 +182,24 @@ export function DmTemplateCard() {
       )}
 
       {filtered.length === 0 && !adding && (
-        <div style={{ fontSize: 11, color: '#8a8690', fontStyle: 'italic', padding: '8px 0', textAlign: 'center' }}>
+        <div style={{ fontSize: 11, color: '#9c8590', fontStyle: 'italic', padding: '8px 0', textAlign: 'center' }}>
           No templates yet. Save a menu, gig offer, or thanks message — one tap to retrieve later.
         </div>
       )}
 
       {filtered.map(t => {
-        const tone = PLATFORM_TONE[t.platform] || '#8a8690';
+        const tone = PLATFORM_TONE[t.platform] || '#9c8590';
         return (
           <div key={t.id} style={{
             padding: '8px 10px', marginBottom: 6,
-            background: '#0a0a0d', border: `1px solid ${tone}33`,
+            background: '#0f0a0e', border: `1px solid ${tone}33`,
             borderLeft: `3px solid ${tone}`, borderRadius: 5,
           }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 4 }}>
               <span style={{ fontSize: 9, color: tone, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {t.platform} · {SCENARIO_LABEL[t.scenario]}
               </span>
-              <span style={{ fontSize: 11, color: '#e8e6e3', fontWeight: 600 }}>{t.label}</span>
+              <span style={{ fontSize: 11, color: '#f2e9e6', fontWeight: 600 }}>{t.label}</span>
               {t.used_count > 0 && (
                 <span style={{ fontSize: 9.5, color: '#5fc88f', marginLeft: 'auto' }}>
                   used {t.used_count}×
@@ -207,15 +207,15 @@ export function DmTemplateCard() {
               )}
             </div>
             <div style={{
-              fontSize: 11.5, color: '#c8c4cc', lineHeight: 1.4, marginBottom: 6,
-              padding: '6px 8px', background: '#050507', borderRadius: 4, border: '1px solid #1a1a20',
+              fontSize: 11.5, color: '#d5c3ca', lineHeight: 1.4, marginBottom: 6,
+              padding: '6px 8px', background: '#0a0709', borderRadius: 4, border: '1px solid #221722',
               whiteSpace: 'pre-wrap',
             }}>
               {t.body}
             </div>
             {substituting === t.id ? (
               <div style={{ marginBottom: 6 }}>
-                <div style={{ fontSize: 9.5, color: '#c4b5fd', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>
+                <div style={{ fontSize: 9.5, color: '#edaec5', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>
                   Fill variables:
                 </div>
                 {t.variables.map(v => (
@@ -225,8 +225,8 @@ export function DmTemplateCard() {
                     onChange={e => setVarValues(s => ({ ...s, [v]: e.target.value }))}
                     placeholder={`{${v}}`}
                     style={{
-                      width: '100%', background: '#050507', border: '1px solid #2d4a5a',
-                      borderRadius: 4, padding: '4px 7px', fontSize: 11, color: '#e8e6e3',
+                      width: '100%', background: '#0a0709', border: '1px solid #2d4a5a',
+                      borderRadius: 4, padding: '4px 7px', fontSize: 11, color: '#f2e9e6',
                       fontFamily: 'inherit', marginBottom: 4,
                     }}
                   />
@@ -244,7 +244,7 @@ export function DmTemplateCard() {
                   <button onClick={() => setSubstituting(null)}
                     style={{
                       padding: '5px 10px', borderRadius: 4, background: 'transparent',
-                      border: '1px solid #2d4a5a', color: '#8a8690', fontSize: 10,
+                      border: '1px solid #2d4a5a', color: '#9c8590', fontSize: 10,
                       cursor: 'pointer', fontFamily: 'inherit',
                     }}>
                     cancel
@@ -257,7 +257,7 @@ export function DmTemplateCard() {
                   style={{
                     flex: 1, padding: '5px 10px', borderRadius: 4, border: 'none',
                     background: copied === t.id ? '#5fc88f' : tone,
-                    color: copied === t.id ? '#0a1a14' : '#0a0a0d',
+                    color: copied === t.id ? '#0a1a14' : '#0f0a0e',
                     fontSize: 10.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
                     textTransform: 'uppercase',
                   }}>
@@ -266,7 +266,7 @@ export function DmTemplateCard() {
                 <button onClick={() => archive(t.id)}
                   style={{
                     padding: '5px 10px', borderRadius: 4, background: 'transparent',
-                    border: '1px solid #2d4a5a', color: '#8a8690', fontSize: 10,
+                    border: '1px solid #2d4a5a', color: '#9c8590', fontSize: 10,
                     cursor: 'pointer', fontFamily: 'inherit',
                   }}>
                   archive
@@ -289,7 +289,7 @@ export function DmTemplateCard() {
         </button>
       ) : (
         <div style={{
-          marginTop: 8, padding: 10, background: '#0a0a0d',
+          marginTop: 8, padding: 10, background: '#0f0a0e',
           border: '1px solid #2d4a5a', borderRadius: 5,
         }}>
           <input
@@ -297,24 +297,24 @@ export function DmTemplateCard() {
             onChange={e => setDraft(d => ({ ...d, label: e.target.value }))}
             placeholder="label (e.g. Reddit menu reply)"
             style={{
-              width: '100%', background: '#050507', border: '1px solid #22222a',
-              borderRadius: 4, padding: '5px 8px', fontSize: 11, color: '#e8e6e3',
+              width: '100%', background: '#0a0709', border: '1px solid #2b1d29',
+              borderRadius: 4, padding: '5px 8px', fontSize: 11, color: '#f2e9e6',
               fontFamily: 'inherit', marginBottom: 5,
             }}
           />
           <div style={{ display: 'flex', gap: 5, marginBottom: 5 }}>
             <select value={draft.platform} onChange={e => setDraft(d => ({ ...d, platform: e.target.value }))}
               style={{
-                flex: 1, background: '#050507', border: '1px solid #22222a',
-                borderRadius: 4, padding: '5px 8px', fontSize: 11, color: '#e8e6e3',
+                flex: 1, background: '#0a0709', border: '1px solid #2b1d29',
+                borderRadius: 4, padding: '5px 8px', fontSize: 11, color: '#f2e9e6',
                 fontFamily: 'inherit',
               }}>
               {PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
             <select value={draft.scenario} onChange={e => setDraft(d => ({ ...d, scenario: e.target.value }))}
               style={{
-                flex: 1, background: '#050507', border: '1px solid #22222a',
-                borderRadius: 4, padding: '5px 8px', fontSize: 11, color: '#e8e6e3',
+                flex: 1, background: '#0a0709', border: '1px solid #2b1d29',
+                borderRadius: 4, padding: '5px 8px', fontSize: 11, color: '#f2e9e6',
                 fontFamily: 'inherit',
               }}>
               {SCENARIOS.map(s => <option key={s} value={s}>{SCENARIO_LABEL[s]}</option>)}
@@ -326,8 +326,8 @@ export function DmTemplateCard() {
             placeholder="template body. use {variable_name} for slots like {handle} or {price}."
             rows={3}
             style={{
-              width: '100%', background: '#050507', border: '1px solid #22222a',
-              borderRadius: 4, padding: '5px 8px', fontSize: 11, color: '#e8e6e3',
+              width: '100%', background: '#0a0709', border: '1px solid #2b1d29',
+              borderRadius: 4, padding: '5px 8px', fontSize: 11, color: '#f2e9e6',
               fontFamily: 'inherit', resize: 'vertical', marginBottom: 5,
             }}
           />
@@ -335,8 +335,8 @@ export function DmTemplateCard() {
             <button onClick={save} disabled={!draft.label.trim() || !draft.body.trim()}
               style={{
                 flex: 1, padding: 7, borderRadius: 4, border: 'none',
-                background: (draft.label.trim() && draft.body.trim()) ? '#6ee7b7' : '#22222a',
-                color: (draft.label.trim() && draft.body.trim()) ? '#0a1a14' : '#5a5560',
+                background: (draft.label.trim() && draft.body.trim()) ? '#6ee7b7' : '#2b1d29',
+                color: (draft.label.trim() && draft.body.trim()) ? '#0a1a14' : '#6d5a63',
                 fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
                 textTransform: 'uppercase',
               }}>
@@ -345,7 +345,7 @@ export function DmTemplateCard() {
             <button onClick={() => setAdding(false)}
               style={{
                 padding: '7px 12px', borderRadius: 4, background: 'transparent',
-                border: '1px solid #2d4a5a', color: '#8a8690', fontSize: 10,
+                border: '1px solid #2d4a5a', color: '#9c8590', fontSize: 10,
                 cursor: 'pointer', fontFamily: 'inherit',
               }}>
               cancel

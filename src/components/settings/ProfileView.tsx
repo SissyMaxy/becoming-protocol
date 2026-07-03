@@ -167,7 +167,7 @@ export function ProfileView() {
       id: 'euphoria',
       title: 'Euphoria Sources',
       icon: Sparkles,
-      color: '#a855f7',
+      color: '#c9557f',
       content: (
         <div className="space-y-3">
           {profile.euphoriaTriggers && profile.euphoriaTriggers.length > 0 ? (
@@ -177,7 +177,7 @@ export function ProfileView() {
                   <span className={isBambiMode ? 'text-pink-700' : 'text-protocol-text'}>
                     {trigger.activity}
                   </span>
-                  <IntensityDots intensity={trigger.intensity} color="#a855f7" />
+                  <IntensityDots intensity={trigger.intensity} color="#c9557f" />
                 </div>
               ))}
               {profile.euphoriaBestMoments && (
@@ -255,7 +255,7 @@ export function ProfileView() {
       id: 'preferences',
       title: 'Preferences',
       icon: Calendar,
-      color: '#8b5cf6',
+      color: '#cf6088',
       content: (
         <div className="space-y-3">
           <ProfileField label="Intensity" value={formatIntensity(profile.preferredIntensity)} />

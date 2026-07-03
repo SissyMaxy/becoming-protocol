@@ -24,13 +24,13 @@ interface PlanItem {
 }
 
 const KIND_COLORS: Record<ItemKind, { bg: string; fg: string; label: string }> = {
-  decree:     { bg: '#1a0f2e', fg: '#c4b5fd', label: 'decree' },
+  decree:     { bg: '#2c1723', fg: '#edaec5', label: 'decree' },
   commitment: { bg: '#0f1a2e', fg: '#a5d8ff', label: 'commitment' },
   confession: { bg: '#2a0a14', fg: '#f47272', label: 'confession' },
   punishment: { bg: '#2a0510', fg: '#f47272', label: 'punishment' },
   dose:       { bg: '#0f2a14', fg: '#5fc88f', label: 'dose' },
   device:     { bg: '#1a0a2a', fg: '#e879f9', label: 'device' },
-  outreach:   { bg: '#1a1a05', fg: '#f4c272', label: 'outreach' },
+  outreach:   { bg: '#1a1a05', fg: '#e6bd80', label: 'outreach' },
 };
 
 function bucketFor(d: Date): 'today' | 'tomorrow' | 'this_week' | 'later' {
@@ -163,13 +163,13 @@ export function HandlerPlanCalendar() {
   if (loading || items.length === 0) {
     return (
       <div id="card-handler-plan" style={{
-        background: 'linear-gradient(135deg, #1a0f2e 0%, #0f0820 100%)',
-        border: '1px solid #2d1a4d', borderRadius: 10, padding: 14, marginBottom: 16,
+        background: 'linear-gradient(135deg, #2c1723 0%, #0f0820 100%)',
+        border: '1px solid #4a2438', borderRadius: 10, padding: 14, marginBottom: 16,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em',
-            color: '#c4b5fd', fontWeight: 700 }}>Handler's plan</span>
-          <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto', fontStyle: 'italic' }}>
+            color: '#edaec5', fontWeight: 700 }}>Handler's plan</span>
+          <span style={{ fontSize: 10, color: '#9c8590', marginLeft: 'auto', fontStyle: 'italic' }}>
             {loading ? 'loading…' : 'queue is clean. nothing scheduled.'}
           </span>
         </div>
@@ -182,7 +182,7 @@ export function HandlerPlanCalendar() {
     return (
       <div key={`${it.kind}-${it.id}`} style={{
         display: 'flex', alignItems: 'flex-start', gap: 8, padding: '6px 0',
-        borderBottom: '1px solid #15151b',
+        borderBottom: '1px solid #1b121a',
       }}>
         <span style={{
           fontSize: 9, color: c.fg, background: c.bg,
@@ -193,10 +193,10 @@ export function HandlerPlanCalendar() {
           {c.label}
         </span>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12, color: '#e8e6e3', lineHeight: 1.4 }}>
+          <div style={{ fontSize: 12, color: '#f2e9e6', lineHeight: 1.4 }}>
             {it.title}
           </div>
-          <div style={{ fontSize: 10, color: '#8a8690', marginTop: 2 }}>
+          <div style={{ fontSize: 10, color: '#9c8590', marginTop: 2 }}>
             {fmtTime(it.dueAt)}
           </div>
         </div>
@@ -208,23 +208,23 @@ export function HandlerPlanCalendar() {
     today: 'Today', tomorrow: 'Tomorrow', this_week: 'This week', later: 'Later',
   };
   const bucketColor: Record<keyof typeof grouped, string> = {
-    today: '#f47272', tomorrow: '#f4c272', this_week: '#c4b5fd', later: '#8a8690',
+    today: '#f47272', tomorrow: '#e6bd80', this_week: '#edaec5', later: '#9c8590',
   };
 
   const next3 = items.slice(0, 3);
 
   return (
     <div id="card-handler-plan" style={{
-      background: 'linear-gradient(135deg, #1a0f2e 0%, #0f0820 100%)',
-      border: '1px solid #2d1a4d', borderRadius: 10, padding: 14, marginBottom: 16,
+      background: 'linear-gradient(135deg, #2c1723 0%, #0f0820 100%)',
+      border: '1px solid #4a2438', borderRadius: 10, padding: 14, marginBottom: 16,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em',
-          color: '#c4b5fd', fontWeight: 700 }}>
+          color: '#edaec5', fontWeight: 700 }}>
           Handler's plan
         </span>
         <span style={{
-          fontSize: 10, color: '#fff', background: '#7c3aed',
+          fontSize: 10, color: '#fff', background: '#c9557f',
           padding: '2px 7px', borderRadius: 8, fontWeight: 700,
         }}>
           {items.length} queued
@@ -232,8 +232,8 @@ export function HandlerPlanCalendar() {
         <button
           onClick={() => setExpanded(e => !e)}
           style={{
-            marginLeft: 'auto', background: 'transparent', border: '1px solid #2d1a4d',
-            borderRadius: 5, color: '#c4b5fd', fontSize: 11, padding: '4px 9px',
+            marginLeft: 'auto', background: 'transparent', border: '1px solid #4a2438',
+            borderRadius: 5, color: '#edaec5', fontSize: 11, padding: '4px 9px',
             cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600,
           }}
         >
@@ -245,7 +245,7 @@ export function HandlerPlanCalendar() {
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           {next3.map(renderItem)}
           {items.length > 3 && (
-            <div style={{ fontSize: 10, color: '#8a8690', fontStyle: 'italic', marginTop: 6 }}>
+            <div style={{ fontSize: 10, color: '#9c8590', fontStyle: 'italic', marginTop: 6 }}>
               + {items.length - 3} more — tap "full calendar" to see all.
             </div>
           )}

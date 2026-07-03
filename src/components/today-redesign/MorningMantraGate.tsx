@@ -351,24 +351,24 @@ export function MorningMantraGate() {
       position: 'fixed', inset: 0, background: 'rgba(5,3,10,0.98)', zIndex: 900,
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }}>
-      <div style={{ maxWidth: 620, width: '100%', background: '#111116', border: '1px solid #7a1f4d', borderRadius: 14, padding: 28 }}>
+      <div style={{ maxWidth: 620, width: '100%', background: '#171017', border: '1px solid #7a1f4d', borderRadius: 14, padding: 28 }}>
         <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#f4a7c4', fontWeight: 700, marginBottom: 4 }}>
           {electiveVoice && ginaHome ? 'Morning mantra · whenever you can' : 'Morning mantra · compulsory'}
         </div>
-        <div style={{ fontSize: 10.5, color: '#8a8690', marginBottom: 14 }}>
+        <div style={{ fontSize: 10.5, color: '#9c8590', marginBottom: 14 }}>
           Step {step === 'recite' ? 1 : 2} of 2 · voice first
         </div>
 
         {step === 'recite' && (
           <>
-            <div style={{ fontSize: 13, color: '#e8e6e3', lineHeight: 1.5, marginBottom: 14 }}>
+            <div style={{ fontSize: 13, color: '#f2e9e6', lineHeight: 1.5, marginBottom: 14 }}>
               {electiveVoice && ginaHome
                 ? "Say it aloud if you've got a private moment — Gina's home, so only if you want to today."
                 : 'Say it aloud. Whisper compares your voice to the mantra — speak it word-for-word. No typed bypass.'}
             </div>
             <div style={{
-              fontSize: 18, color: '#f4c272', fontStyle: 'italic',
-              background: '#050507', border: '1px solid #2d1a4d', borderRadius: 8,
+              fontSize: 18, color: '#e6bd80', fontStyle: 'italic',
+              background: '#0a0709', border: '1px solid #4a2438', borderRadius: 8,
               padding: '20px 16px', marginBottom: 16, lineHeight: 1.6,
             }}>
               {targetMantra}
@@ -379,7 +379,7 @@ export function MorningMantraGate() {
                 onClick={startRecording}
                 style={{
                   width: '100%', padding: '12px 14px', borderRadius: 7, border: 'none',
-                  background: '#7c3aed', color: '#fff',
+                  background: '#c9557f', color: '#fff',
                   fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
                   marginBottom: 8,
                 }}
@@ -394,16 +394,16 @@ export function MorningMantraGate() {
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
                   <span style={{ fontSize: 12, color: '#f47272' }}>● recording</span>
-                  <span style={{ fontSize: 11, color: '#8a8690' }}>{recordSeconds}s</span>
+                  <span style={{ fontSize: 11, color: '#9c8590' }}>{recordSeconds}s</span>
                   <span style={{
-                    fontSize: 10, color: voiceMatched ? '#5fc88f' : '#8a8690', marginLeft: 'auto',
+                    fontSize: 10, color: voiceMatched ? '#5fc88f' : '#9c8590', marginLeft: 'auto',
                   }}>
                     overlap {Math.round(overlap * 100)}% {voiceMatched ? '· matched ✓' : '· keep going'}
                   </span>
                 </div>
                 {transcript && (
                   <div style={{
-                    fontSize: 11, color: '#c4b5fd', background: '#050507', padding: 8, borderRadius: 4,
+                    fontSize: 11, color: '#edaec5', background: '#0a0709', padding: 8, borderRadius: 4,
                     maxHeight: 80, overflowY: 'auto',
                   }}>
                     {transcript}
@@ -441,8 +441,8 @@ export function MorningMantraGate() {
               disabled={!voiceMatched || recording}
               style={{
                 width: '100%', padding: '10px 14px', borderRadius: 7, border: 'none',
-                background: voiceMatched && !recording ? '#7c3aed' : '#22222a',
-                color: voiceMatched && !recording ? '#fff' : '#6a656e',
+                background: voiceMatched && !recording ? '#c9557f' : '#2b1d29',
+                color: voiceMatched && !recording ? '#fff' : '#7f6b74',
                 fontWeight: 700, fontSize: 13,
                 cursor: voiceMatched && !recording ? 'pointer' : 'not-allowed',
                 fontFamily: 'inherit',
@@ -456,7 +456,7 @@ export function MorningMantraGate() {
                 onClick={dismissElective}
                 style={{
                   width: '100%', padding: '9px', marginTop: 8, borderRadius: 6, border: 'none',
-                  background: 'transparent', color: '#8a8690',
+                  background: 'transparent', color: '#9c8590',
                   fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit',
                 }}
               >
@@ -488,12 +488,12 @@ export function MorningMantraGate() {
 
               return (
                 <>
-                  <div style={{ fontSize: 13, color: '#e8e6e3', lineHeight: 1.5, marginBottom: 10 }}>
+                  <div style={{ fontSize: 13, color: '#f2e9e6', lineHeight: 1.5, marginBottom: 10 }}>
                     {lead}
                   </div>
                   <div style={{
-                    fontSize: 16, color: '#f4c272', fontStyle: 'italic',
-                    background: '#050507', border: '1px solid #2d1a4d', borderRadius: 8,
+                    fontSize: 16, color: '#e6bd80', fontStyle: 'italic',
+                    background: '#0a0709', border: '1px solid #4a2438', borderRadius: 8,
                     padding: '14px 14px', marginBottom: 14, lineHeight: 1.55,
                   }}>
                     &ldquo;{targetMantra}&rdquo;
@@ -501,21 +501,21 @@ export function MorningMantraGate() {
 
                   {suggestedTask && (
                     <div style={{
-                      background: '#0a0a0d', border: '1px solid #2d1a4d', borderRadius: 6,
+                      background: '#0f0a0e', border: '1px solid #4a2438', borderRadius: 6,
                       padding: '8px 10px', marginBottom: 10,
                     }}>
-                      <div style={{ fontSize: 9.5, color: '#c4b5fd', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                      <div style={{ fontSize: 9.5, color: '#edaec5', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
                         {queueLabel}
                       </div>
-                      <div style={{ fontSize: 12, color: '#e8e6e3', lineHeight: 1.45, marginBottom: applyText.length === 0 ? 6 : 0 }}>
+                      <div style={{ fontSize: 12, color: '#f2e9e6', lineHeight: 1.45, marginBottom: applyText.length === 0 ? 6 : 0 }}>
                         {suggestedTask.label}
                       </div>
                       {applyText.length === 0 && (
                         <button
                           onClick={() => setApplyText(`"${targetMantra}" — so today I'll `)}
                           style={{
-                            padding: '5px 10px', borderRadius: 4, border: '1px solid #2d1a4d',
-                            background: 'transparent', color: '#c4b5fd',
+                            padding: '5px 10px', borderRadius: 4, border: '1px solid #4a2438',
+                            background: 'transparent', color: '#edaec5',
                             fontSize: 10.5, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
                           }}
                         >
@@ -525,7 +525,7 @@ export function MorningMantraGate() {
                     </div>
                   )}
 
-                  <div style={{ fontSize: 12.5, color: '#c8c4cc', lineHeight: 1.5, marginBottom: 8 }}>
+                  <div style={{ fontSize: 12.5, color: '#d5c3ca', lineHeight: 1.5, marginBottom: 8 }}>
                     {suggestedTask ? promptWithTask : promptNoTask}
                   </div>
                 </>
@@ -539,13 +539,13 @@ export function MorningMantraGate() {
               autoFocus
               rows={3}
               style={{
-                width: '100%', background: '#050507',
-                border: `1px solid ${applyValid ? '#5fc88f' : '#22222a'}`, borderRadius: 8,
-                padding: 12, fontSize: 13, color: '#e8e6e3', fontFamily: 'inherit',
+                width: '100%', background: '#0a0709',
+                border: `1px solid ${applyValid ? '#5fc88f' : '#2b1d29'}`, borderRadius: 8,
+                padding: 12, fontSize: 13, color: '#f2e9e6', fontFamily: 'inherit',
                 resize: 'vertical', lineHeight: 1.6, marginBottom: 8,
               }}
             />
-            <div style={{ fontSize: 11, color: applyValid ? '#5fc88f' : '#8a8690', marginBottom: 12 }}>
+            <div style={{ fontSize: 11, color: applyValid ? '#5fc88f' : '#9c8590', marginBottom: 12 }}>
               {applyText.length} / 25+ chars
             </div>
             {error && <div style={{ fontSize: 11, color: '#f47272', marginBottom: 8 }}>{error}</div>}
@@ -553,8 +553,8 @@ export function MorningMantraGate() {
               <button
                 onClick={() => setStep('recite')}
                 style={{
-                  flex: 1, padding: '10px 14px', borderRadius: 7, border: '1px solid #2d1a4d',
-                  background: 'transparent', color: '#c4b5fd',
+                  flex: 1, padding: '10px 14px', borderRadius: 7, border: '1px solid #4a2438',
+                  background: 'transparent', color: '#edaec5',
                   fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
                 }}
               >
@@ -565,8 +565,8 @@ export function MorningMantraGate() {
                 disabled={!canSubmit || submitting}
                 style={{
                   flex: 2, padding: '10px 14px', borderRadius: 7, border: 'none',
-                  background: canSubmit ? '#7c3aed' : '#22222a',
-                  color: canSubmit ? '#fff' : '#6a656e',
+                  background: canSubmit ? '#c9557f' : '#2b1d29',
+                  color: canSubmit ? '#fff' : '#7f6b74',
                   fontWeight: 700, fontSize: 13,
                   cursor: canSubmit ? 'pointer' : 'not-allowed', fontFamily: 'inherit',
                 }}

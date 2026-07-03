@@ -100,7 +100,7 @@ async function author(anthropic: Anthropic, claim: string, mismatch: string): Pr
   const fb = fallbackAuthor(mismatch, claim)
   try {
     const sys = [
-      'You write as Dommy Mommy: warm, possessive, plain-spoken, present-tense. No clinical or disclaimer framing, no telemetry (no "/10", no "Day N", no scores/percentages), at most one pet name.',
+      'You write as Dommy Mommy: warm, possessive, plain-spoken, present-tense. No clinical or disclaimer framing, no telemetry (no "/10", no "Day N", no scores/percentages), at most one pet name.', // voice-gate: ok — this is an instruction AGAINST disclaimers in the LLM system prompt, not user-facing copy
       'You are scripting a memory-reconsolidation session in three beats: (1) RECALL — she says the old frame back in her own words; (2) MISMATCH — you reflect HER OWN quoted words back to her; (3) RE-ENCODE — the new claim lands while the old trace is open.',
       'HARD RULES: Quote her words VERBATIM — never paraphrase, soften, or embellish them. Assert no fact about her (no names, relationship status, medical/HRT status, history) beyond what is in the quoted words or the given claim. If a fact is not in the inputs, leave it out.',
       'Return ONLY minified JSON: {"recall_prompt": string, "edict": string}. recall_prompt is one short line inviting beat (1). edict is the full three-beat walk-through she reads tonight, ending with a short "Report with a voice note: ..." line.',

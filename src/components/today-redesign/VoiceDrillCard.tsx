@@ -61,42 +61,42 @@ export function VoiceDrillCard() {
 
   return (
     <div style={{
-      background: urgent ? 'linear-gradient(92deg, #2a1f0a 0%, #1f1608 100%)' : '#111116',
-      border: `1px solid ${urgent ? '#7a5a1f' : '#2d1a4d'}`,
+      background: urgent ? 'linear-gradient(92deg, #2a1f0a 0%, #1f1608 100%)' : '#171017',
+      border: `1px solid ${urgent ? '#7a5a1f' : '#4a2438'}`,
       borderRadius: 10, padding: 14, marginBottom: 16,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={urgent ? '#f4c272' : '#c4b5fd'} strokeWidth="1.8">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={urgent ? '#e6bd80' : '#edaec5'} strokeWidth="1.8">
           <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
           <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
           <line x1="12" y1="19" x2="12" y2="23" />
         </svg>
-        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: urgent ? '#f4c272' : '#c4b5fd', fontWeight: 700 }}>
+        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: urgent ? '#e6bd80' : '#edaec5', fontWeight: 700 }}>
           Voice drill · today
         </span>
-        <span style={{ fontSize: 10.5, color: urgent ? '#f47272' : '#8a8690', marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>
+        <span style={{ fontSize: 10.5, color: urgent ? '#f47272' : '#9c8590', marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>
           {hoursLeft}h {minsLeft}m left
         </span>
       </div>
 
       <div style={{
-        padding: 12, background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 7, marginBottom: 8,
+        padding: 12, background: '#0f0a0e', border: '1px solid #2b1d29', borderRadius: 7, marginBottom: 8,
       }}>
-        <div style={{ fontSize: 9.5, color: '#6a656e', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>say this</div>
-        <div style={{ fontSize: 14, color: '#e8e6e3', fontStyle: 'italic', fontWeight: 500 }}>"{phrase}"</div>
+        <div style={{ fontSize: 9.5, color: '#7f6b74', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>say this</div>
+        <div style={{ fontSize: 14, color: '#f2e9e6', fontStyle: 'italic', fontWeight: 500 }}>"{phrase}"</div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, marginBottom: 8 }}>
-        <Metric label="target" value={`${targetHz}Hz`} color="#c4b5fd" />
-        <Metric label="floor" value={`${floorHz}Hz`} color="#8a8690" />
+        <Metric label="target" value={`${targetHz}Hz`} color="#edaec5" />
+        <Metric label="floor" value={`${floorHz}Hz`} color="#9c8590" />
         <Metric
           label="last sample"
           value={recentPitch ? `${Math.round(recentPitch)}Hz` : '—'}
-          color={recentPitch && recentPitch >= targetHz ? '#6ee7b7' : recentPitch ? '#f47272' : '#8a8690'}
+          color={recentPitch && recentPitch >= targetHz ? '#6ee7b7' : recentPitch ? '#f47272' : '#9c8590'}
         />
       </div>
 
-      <div style={{ fontSize: 10.5, color: '#8a8690' }}>
+      <div style={{ fontSize: 10.5, color: '#9c8590' }}>
         12s sample. Avg pitch, not peak. Miss by midnight → {drill.consequence}.
       </div>
     </div>
@@ -105,8 +105,8 @@ export function VoiceDrillCard() {
 
 function Metric({ label, value, color }: { label: string; value: string; color: string }) {
   return (
-    <div style={{ background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 5, padding: '5px 7px' }}>
-      <div style={{ fontSize: 9, color: '#6a656e', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
+    <div style={{ background: '#0f0a0e', border: '1px solid #2b1d29', borderRadius: 5, padding: '5px 7px' }}>
+      <div style={{ fontSize: 9, color: '#7f6b74', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
       <div style={{ fontSize: 13, color, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
     </div>
   );

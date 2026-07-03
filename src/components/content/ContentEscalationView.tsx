@@ -35,13 +35,13 @@ const THEME_LABELS: Record<string, string> = {
 const THEME_COLORS: Record<string, string> = {
   feminization: '#B06B61',
   sissification: '#C4847A',
-  service: '#8b5cf6',
+  service: '#cf6088',
   humiliation: '#f97316',
   bbc: '#1f2937',
   gangbang: '#dc2626',
   gloryhole: '#6b7280',
   submission: '#3b82f6',
-  hypno: '#a855f7',
+  hypno: '#c9557f',
   chastity: '#f59e0b',
 };
 

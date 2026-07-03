@@ -76,7 +76,7 @@ export function MantraDrillCard() {
     : `${Math.round(lifetime).toLocaleString()} (top tier reached)`;
 
   return (
-    <div style={{ background: '#111116', border: '1px solid #2d1a4d', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+    <div style={{ background: '#171017', border: '1px solid #4a2438', borderRadius: 10, padding: 14, marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ec4899" strokeWidth="1.8">
           <circle cx="12" cy="12" r="3" />
@@ -89,21 +89,21 @@ export function MantraDrillCard() {
 
       {today ? (
         <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 11, color: '#c4b5fd', marginBottom: 4 }}>
+          <div style={{ fontSize: 11, color: '#edaec5', marginBottom: 4 }}>
             today: {today.voiceToday} voice · {today.typedToday} typed · {Math.round(today.weightedToday)} weighted toward target {today.targetToday}
           </div>
-          <div style={{ fontSize: 10.5, color: '#8a8690', fontStyle: 'italic' }}>
+          <div style={{ fontSize: 10.5, color: '#9c8590', fontStyle: 'italic' }}>
             "{today.lastMantra}"
           </div>
         </div>
       ) : (
-        <div style={{ fontSize: 11, color: '#8a8690', marginBottom: 10 }}>
+        <div style={{ fontSize: 11, color: '#9c8590', marginBottom: 10 }}>
           no drill submitted today
         </div>
       )}
 
       <div style={{ marginTop: 6 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#8a8690', marginBottom: 4 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#9c8590', marginBottom: 4 }}>
           <span>lifetime weighted reps</span>
           <span>{milestoneLabel}</span>
         </div>
@@ -111,7 +111,7 @@ export function MantraDrillCard() {
           <div style={{ width: `${pctTowardNext}%`, height: '100%', background: '#ec4899' }} />
         </div>
         {lastFired > 0 && (
-          <div style={{ fontSize: 9.5, color: '#6a656e', marginTop: 5 }}>
+          <div style={{ fontSize: 9.5, color: '#7f6b74', marginTop: 5 }}>
             last milestone fired: {lastFired.toLocaleString()}
           </div>
         )}

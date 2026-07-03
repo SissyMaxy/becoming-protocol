@@ -33,12 +33,12 @@ const CATEGORIES = ['panties', 'thong', 'socks', 'shorts', 'tights', 'leggings',
 
 const STATUS_TONE: Record<string, string> = {
   wearing: '#ec4899',
-  ready_to_list: '#f4c272',
-  listed: '#c4b5fd',
-  sold: '#7c3aed',
+  ready_to_list: '#e6bd80',
+  listed: '#edaec5',
+  sold: '#c9557f',
   shipped: '#6ee7b7',
   paid: '#5fc88f',
-  archived: '#5a5560',
+  archived: '#6d5a63',
 };
 
 function fmtUsd(cents: number | null): string {
@@ -135,20 +135,20 @@ export function WornItemCard() {
         <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#ec4899', fontWeight: 700 }}>
           Worn-item inventory
         </span>
-        <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto', fontStyle: 'italic' }}>
+        <span style={{ fontSize: 10, color: '#9c8590', marginLeft: 'auto', fontStyle: 'italic' }}>
           {active.length} active · {recentPaid.length > 0 ? `${recentPaid.length} paid` : 'no sales yet'}
         </span>
       </div>
 
       {active.map(item => {
-        const tone = STATUS_TONE[item.status] || '#8a8690';
+        const tone = STATUS_TONE[item.status] || '#9c8590';
         const elapsed = elapsedHours(item.started_wear_at);
         const wearComplete = elapsed >= item.wear_target_hours;
 
         return (
           <div key={item.id} style={{
             padding: '9px 11px', marginBottom: 7,
-            background: '#0a0a0d',
+            background: '#0f0a0e',
             border: `1px solid ${tone}33`,
             borderLeft: `3px solid ${tone}`, borderRadius: 5,
           }}>
@@ -156,7 +156,7 @@ export function WornItemCard() {
               <span style={{ fontSize: 9.5, color: tone, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                 {item.status.replace(/_/g, ' ')} · {item.category}
               </span>
-              <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto' }}>
+              <span style={{ fontSize: 10, color: '#9c8590', marginLeft: 'auto' }}>
                 {item.status === 'wearing'
                   ? `${elapsed}h / ${item.wear_target_hours}h`
                   : item.sale_price_cents
@@ -164,7 +164,7 @@ export function WornItemCard() {
                     : ''}
               </span>
             </div>
-            <div style={{ fontSize: 12, color: '#e8e6e3', lineHeight: 1.4, marginBottom: 6 }}>
+            <div style={{ fontSize: 12, color: '#f2e9e6', lineHeight: 1.4, marginBottom: 6 }}>
               {item.label}
             </div>
 
@@ -174,8 +174,8 @@ export function WornItemCard() {
                 <button onClick={() => transition(item, 'ready_to_list')}
                   style={{
                     flex: 1, padding: '5px 10px', borderRadius: 4, border: 'none',
-                    background: wearComplete ? '#f4c272' : '#22222a',
-                    color: wearComplete ? '#1a0f00' : '#5a5560',
+                    background: wearComplete ? '#e6bd80' : '#2b1d29',
+                    color: wearComplete ? '#1a0f00' : '#6d5a63',
                     fontSize: 11, fontWeight: 700, cursor: wearComplete ? 'pointer' : 'not-allowed',
                     fontFamily: 'inherit', textTransform: 'uppercase',
                   }}
@@ -194,8 +194,8 @@ export function WornItemCard() {
                   placeholder="listing copy — paste from shot directives or write fresh"
                   rows={2}
                   style={{
-                    width: '100%', background: '#050507', border: '1px solid #22222a',
-                    borderRadius: 4, padding: '5px 8px', fontSize: 11, color: '#e8e6e3',
+                    width: '100%', background: '#0a0709', border: '1px solid #2b1d29',
+                    borderRadius: 4, padding: '5px 8px', fontSize: 11, color: '#f2e9e6',
                     fontFamily: 'inherit', resize: 'vertical', marginBottom: 5,
                   }}
                 />
@@ -241,8 +241,8 @@ export function WornItemCard() {
                   disabled={!editHandle[item.id]?.trim()}
                   style={{
                     padding: '5px 12px', borderRadius: 4, border: 'none',
-                    background: editHandle[item.id]?.trim() ? '#7c3aed' : '#22222a',
-                    color: editHandle[item.id]?.trim() ? '#fff' : '#5a5560',
+                    background: editHandle[item.id]?.trim() ? '#c9557f' : '#2b1d29',
+                    color: editHandle[item.id]?.trim() ? '#fff' : '#6d5a63',
                     fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
                     textTransform: 'uppercase',
                   }}>
@@ -307,8 +307,8 @@ export function WornItemCard() {
         </button>
       ) : (
         <div style={{
-          marginTop: 8, padding: 10, background: '#0a0a0d',
-          border: '1px solid #2d1a4d', borderRadius: 5,
+          marginTop: 8, padding: 10, background: '#0f0a0e',
+          border: '1px solid #4a2438', borderRadius: 5,
         }}>
           <input
             value={draft.label}
@@ -332,8 +332,8 @@ export function WornItemCard() {
             <button onClick={startCycle} disabled={!draft.label.trim()}
               style={{
                 flex: 1, padding: 7, borderRadius: 4, border: 'none',
-                background: draft.label.trim() ? '#ec4899' : '#22222a',
-                color: draft.label.trim() ? '#fff' : '#5a5560',
+                background: draft.label.trim() ? '#ec4899' : '#2b1d29',
+                color: draft.label.trim() ? '#fff' : '#6d5a63',
                 fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
                 textTransform: 'uppercase',
               }}>
@@ -348,12 +348,12 @@ export function WornItemCard() {
 }
 
 const mintInput: React.CSSProperties = {
-  flex: 1, background: '#050507', border: '1px solid #22222a', borderRadius: 4,
-  padding: '5px 8px', fontSize: 11, color: '#e8e6e3', fontFamily: 'inherit',
+  flex: 1, background: '#0a0709', border: '1px solid #2b1d29', borderRadius: 4,
+  padding: '5px 8px', fontSize: 11, color: '#f2e9e6', fontFamily: 'inherit',
 };
 
 const archiveBtn: React.CSSProperties = {
   padding: '5px 10px', borderRadius: 4, background: 'transparent',
-  border: '1px solid #2d1a4d', color: '#8a8690', fontSize: 10,
+  border: '1px solid #4a2438', color: '#9c8590', fontSize: 10,
   cursor: 'pointer', fontFamily: 'inherit',
 };

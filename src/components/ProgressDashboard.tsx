@@ -50,7 +50,7 @@ interface StatCardProps {
   color?: string;
 }
 
-function StatCard({ icon, label, value, subtext, color = '#a855f7' }: StatCardProps) {
+function StatCard({ icon, label, value, subtext, color = '#c9557f' }: StatCardProps) {
   return (
     <div className="card p-4 space-y-2">
       <div className="flex items-center gap-2 text-protocol-text-muted">
@@ -383,7 +383,7 @@ export function ProgressDashboard() {
                 progress.domainProgress.length
               ).toFixed(1)}
               subtext="across domains"
-              color="#a855f7"
+              color="#c9557f"
             />
           </div>
 

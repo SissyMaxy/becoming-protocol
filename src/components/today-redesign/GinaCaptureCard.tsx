@@ -85,7 +85,7 @@ export function GinaCaptureCard() {
   })();
 
   return (
-    <div style={{ background: '#111116', border: '1px solid #2d1a4d', borderRadius: 10, padding: 16, marginBottom: 16 }}>
+    <div style={{ background: '#171017', border: '1px solid #4a2438', borderRadius: 10, padding: 16, marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f4a7c4" strokeWidth="1.8">
           <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
@@ -94,22 +94,22 @@ export function GinaCaptureCard() {
         <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#f4a7c4', fontWeight: 700 }}>
           Gina capture
         </span>
-        <span style={{ fontSize: 10.5, color: '#8a8690', marginLeft: 'auto' }}>
+        <span style={{ fontSize: 10.5, color: '#9c8590', marginLeft: 'auto' }}>
           profile {coverage.filled}/{coverage.total} · {sampleCount} quote{sampleCount === 1 ? '' : 's'}
         </span>
       </div>
 
       {!profile.intake_complete && (
-        <div style={{ fontSize: 12, color: '#c8c4cc', lineHeight: 1.5, marginBottom: 10 }}>
+        <div style={{ fontSize: 12, color: '#d5c3ca', lineHeight: 1.5, marginBottom: 10 }}>
           The Handler knows almost nothing about Gina specifically — any Gina-facing action is essentially guessing. Complete the one-time intake so the Handler can tune tone, avoid triggers, and draft in her register.
         </div>
       )}
 
       {profile.intake_complete && recentSamples.length > 0 && (
         <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 10, color: '#6a656e', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Recent Gina quotes</div>
+          <div style={{ fontSize: 10, color: '#7f6b74', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Recent Gina quotes</div>
           {recentSamples.map((s, i) => (
-            <div key={i} style={{ fontSize: 11.5, color: '#c8c4cc', fontStyle: 'italic', marginBottom: 4 }}>
+            <div key={i} style={{ fontSize: 11.5, color: '#d5c3ca', fontStyle: 'italic', marginBottom: 4 }}>
               "{s.quote.slice(0, 120)}{s.quote.length > 120 ? '…' : ''}"
             </div>
           ))}
@@ -120,9 +120,9 @@ export function GinaCaptureCard() {
         <button
           onClick={() => setShowIntake(true)}
           style={{ flex: '1 1 auto', padding: '7px 12px', borderRadius: 6, fontSize: 11.5, fontWeight: 600,
-            background: profile.intake_complete ? 'rgba(124,58,237,0.12)' : '#7c3aed',
-            color: profile.intake_complete ? '#c4b5fd' : '#fff',
-            border: profile.intake_complete ? '1px solid #2d1a4d' : 'none',
+            background: profile.intake_complete ? 'rgba(124,58,237,0.12)' : '#c9557f',
+            color: profile.intake_complete ? '#edaec5' : '#fff',
+            border: profile.intake_complete ? '1px solid #4a2438' : 'none',
             cursor: 'pointer', fontFamily: 'inherit' }}
         >
           {profile.intake_complete ? 'Edit profile' : 'Complete Gina intake'}
@@ -162,9 +162,9 @@ function IntakeModal({ profile, onClose }: { profile: Profile; onClose: () => vo
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(5,3,10,0.94)', zIndex: 400, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 20, overflowY: 'auto' }}>
-      <div style={{ maxWidth: 620, width: '100%', background: '#111116', border: '1px solid #2d1a4d', borderRadius: 12, padding: 24, color: '#e8e6e3', margin: '20px 0' }}>
+      <div style={{ maxWidth: 620, width: '100%', background: '#171017', border: '1px solid #4a2438', borderRadius: 12, padding: 24, color: '#f2e9e6', margin: '20px 0' }}>
         <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#f4a7c4', fontWeight: 700, marginBottom: 10 }}>Gina intake · one time</div>
-        <div style={{ fontSize: 13, color: '#8a8690', marginBottom: 16 }}>Answer what you can. You can edit later. The Handler uses this to tune every Gina-facing action.</div>
+        <div style={{ fontSize: 13, color: '#9c8590', marginBottom: 16 }}>Answer what you can. You can edit later. The Handler uses this to tune every Gina-facing action.</div>
 
         <Field label="Tone register (tap all that apply)">
           <Chips options={TONE_OPTIONS} values={p.tone_register} onToggle={v => setP({ ...p, tone_register: toggle(p.tone_register, v) })} />
@@ -235,13 +235,13 @@ function IntakeModal({ profile, onClose }: { profile: Profile; onClose: () => vo
         </Field>
 
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-          <button onClick={() => save(true)} disabled={saving} style={{ flex: 1, padding: 10, borderRadius: 6, border: 'none', background: '#7c3aed', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
+          <button onClick={() => save(true)} disabled={saving} style={{ flex: 1, padding: 10, borderRadius: 6, border: 'none', background: '#c9557f', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
             {saving ? 'saving…' : profile.intake_complete ? 'Update profile' : 'Mark intake complete'}
           </button>
-          <button onClick={() => save(false)} disabled={saving} style={{ padding: '10px 14px', borderRadius: 6, border: '1px solid #2d1a4d', background: 'rgba(45,26,77,0.3)', color: '#c4b5fd', fontWeight: 500, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+          <button onClick={() => save(false)} disabled={saving} style={{ padding: '10px 14px', borderRadius: 6, border: '1px solid #4a2438', background: 'rgba(45,26,77,0.3)', color: '#edaec5', fontWeight: 500, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
             Save draft
           </button>
-          <button onClick={onClose} style={{ padding: '10px 14px', borderRadius: 6, background: 'none', border: '1px solid #1a1a20', color: '#8a8690', cursor: 'pointer', fontFamily: 'inherit' }}>Close</button>
+          <button onClick={onClose} style={{ padding: '10px 14px', borderRadius: 6, background: 'none', border: '1px solid #221722', color: '#9c8590', cursor: 'pointer', fontFamily: 'inherit' }}>Close</button>
         </div>
       </div>
     </div>
@@ -271,7 +271,7 @@ function CaptureModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(5,3,10,0.94)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ maxWidth: 520, width: '100%', background: '#111116', border: '1px solid #7a1f4d', borderRadius: 12, padding: 22, color: '#e8e6e3' }}>
+      <div style={{ maxWidth: 520, width: '100%', background: '#171017', border: '1px solid #7a1f4d', borderRadius: 12, padding: 22, color: '#f2e9e6' }}>
         <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#f4a7c4', fontWeight: 700, marginBottom: 14 }}>Log a Gina quote</div>
 
         <Field label="What she said (exact as possible)">
@@ -291,10 +291,10 @@ function CaptureModal({ onClose }: { onClose: () => void }) {
         </Field>
 
         <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-          <button onClick={save} disabled={saving || quote.trim().length < 3} style={{ flex: 1, padding: 10, borderRadius: 6, border: 'none', background: quote.trim().length >= 3 ? '#f4a7c4' : '#2d1a4d', color: '#1a0a12', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
+          <button onClick={save} disabled={saving || quote.trim().length < 3} style={{ flex: 1, padding: 10, borderRadius: 6, border: 'none', background: quote.trim().length >= 3 ? '#f4a7c4' : '#4a2438', color: '#1a0a12', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
             {saving ? 'saving…' : 'Log quote'}
           </button>
-          <button onClick={onClose} style={{ padding: '10px 14px', borderRadius: 6, background: 'none', border: '1px solid #1a1a20', color: '#8a8690', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+          <button onClick={onClose} style={{ padding: '10px 14px', borderRadius: 6, background: 'none', border: '1px solid #221722', color: '#9c8590', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
         </div>
       </div>
     </div>
@@ -305,13 +305,13 @@ function CaptureModal({ onClose }: { onClose: () => void }) {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 12 }}>
-      <div style={{ fontSize: 10.5, color: '#8a8690', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+      <div style={{ fontSize: 10.5, color: '#9c8590', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
       {children}
     </div>
   );
 }
 function Input({ value, onChange, placeholder, multiline }: { value: string; onChange: (v: string) => void; placeholder?: string; multiline?: boolean }) {
-  const style: React.CSSProperties = { width: '100%', background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 5, padding: '7px 10px', fontFamily: 'inherit', fontSize: 12.5, color: '#e8e6e3', resize: 'vertical' };
+  const style: React.CSSProperties = { width: '100%', background: '#0f0a0e', border: '1px solid #2b1d29', borderRadius: 5, padding: '7px 10px', fontFamily: 'inherit', fontSize: 12.5, color: '#f2e9e6', resize: 'vertical' };
   return multiline
     ? <textarea rows={2} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={style} />
     : <input type="text" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={style} />;
@@ -324,12 +324,12 @@ function Chips({ options, values, onToggle, single }: { options: string[]; value
         return (
           <button key={o} onClick={() => onToggle(o)} style={{
             fontSize: 11, padding: '4px 9px', borderRadius: 12,
-            background: on ? '#7c3aed' : '#0a0a0d', color: on ? '#fff' : '#8a8690',
-            border: `1px solid ${on ? '#7c3aed' : '#22222a'}`, cursor: 'pointer', fontFamily: 'inherit',
+            background: on ? '#c9557f' : '#0f0a0e', color: on ? '#fff' : '#9c8590',
+            border: `1px solid ${on ? '#c9557f' : '#2b1d29'}`, cursor: 'pointer', fontFamily: 'inherit',
           }}>{o.replace(/_/g, ' ')}</button>
         );
       })}
-      {single && values.length > 0 && <span style={{ fontSize: 10, color: '#6a656e', alignSelf: 'center', marginLeft: 4 }}>tap to clear</span>}
+      {single && values.length > 0 && <span style={{ fontSize: 10, color: '#7f6b74', alignSelf: 'center', marginLeft: 4 }}>tap to clear</span>}
     </div>
   );
 }

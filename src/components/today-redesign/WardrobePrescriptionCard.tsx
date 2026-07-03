@@ -69,8 +69,8 @@ export function WardrobePrescriptionCard() {
 
   // Persona-aware copy. mommy = warm boudoir tone; therapist = neutral.
   const headerLabel = mommy ? 'mama wants you in this' : 'wardrobe prescription';
-  const accent = mommy ? '#f4a7c4' : '#c4b5fd';
-  const border = mommy ? '#c46a72' : '#7c3aed';
+  const accent = mommy ? '#f4a7c4' : '#edaec5';
+  const border = mommy ? '#c46a72' : '#c9557f';
   const ctaLabel = mommy ? "i got it, mama →" : 'photograph it →';
 
   return (
@@ -87,13 +87,13 @@ export function WardrobePrescriptionCard() {
         }}>
           {headerLabel}
         </span>
-        <span style={{ fontSize: 10.5, color: '#8a8690', marginLeft: 'auto' }}>
+        <span style={{ fontSize: 10.5, color: '#9c8590', marginLeft: 'auto' }}>
           {presc.item_type.replace(/_/g, ' ')}{dueLabel ? ` · ${dueLabel}` : ''}
         </span>
       </div>
 
       <div style={{
-        fontSize: 14, color: '#e8e6e3', lineHeight: 1.45, marginBottom: 12,
+        fontSize: 14, color: '#f2e9e6', lineHeight: 1.45, marginBottom: 12,
         whiteSpace: 'pre-wrap',
       }}>
         {presc.description}

@@ -166,7 +166,7 @@ export function ConversationScreenshotsCard() {
       border: '1px solid #2d1a4d', borderRadius: 10, padding: 14, marginBottom: 16,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#c4b5fd', fontWeight: 700 }}>
+        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#edaec5', fontWeight: 700 }}>
           Conversation evidence ({recent.length})
         </span>
         <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto', fontStyle: 'italic' }}>
@@ -179,7 +179,7 @@ export function ConversationScreenshotsCard() {
           onClick={() => setShowUpload(true)}
           style={{
             width: '100%', padding: '12px 14px', borderRadius: 7, border: 'none',
-            background: '#7c3aed', color: '#fff',
+            background: '#c9557f', color: '#fff',
             fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
             marginBottom: 10,
           }}
@@ -198,7 +198,7 @@ export function ConversationScreenshotsCard() {
               onClick={() => setMode('image')}
               style={{
                 flex: 1, padding: '6px 10px', borderRadius: 5,
-                border: '1px solid ' + (mode === 'image' ? '#7c3aed' : '#22222a'),
+                border: '1px solid ' + (mode === 'image' ? '#c9557f' : '#22222a'),
                 background: mode === 'image' ? '#1a0f2e' : 'transparent',
                 color: mode === 'image' ? '#fff' : '#8a8690',
                 fontWeight: 600, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
@@ -210,7 +210,7 @@ export function ConversationScreenshotsCard() {
               onClick={() => setMode('text')}
               style={{
                 flex: 1, padding: '6px 10px', borderRadius: 5,
-                border: '1px solid ' + (mode === 'text' ? '#7c3aed' : '#22222a'),
+                border: '1px solid ' + (mode === 'text' ? '#c9557f' : '#22222a'),
                 background: mode === 'text' ? '#1a0f2e' : 'transparent',
                 color: mode === 'text' ? '#fff' : '#8a8690',
                 fontWeight: 600, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
@@ -231,7 +231,7 @@ export function ConversationScreenshotsCard() {
                   const arr = Array.from(e.target.files ?? []);
                   setFiles(arr);
                 }}
-                style={{ color: '#c4b5fd', fontSize: 12, width: '100%' }}
+                style={{ color: '#edaec5', fontSize: 12, width: '100%' }}
               />
               {files.length > 0 && (
                 <div style={{ marginTop: 6, fontSize: 11, color: '#5fc88f' }}>
@@ -314,7 +314,7 @@ export function ConversationScreenshotsCard() {
                   disabled={!ready}
                   style={{
                     flex: 1, padding: '7px 12px', borderRadius: 5, border: 'none',
-                    background: ready ? '#7c3aed' : '#22222a',
+                    background: ready ? '#c9557f' : '#22222a',
                     color: ready ? '#fff' : '#6a656e',
                     fontWeight: 700, fontSize: 11, cursor: ready ? 'pointer' : 'not-allowed',
                     fontFamily: 'inherit',
@@ -344,7 +344,7 @@ export function ConversationScreenshotsCard() {
                 style={{ display: 'flex', gap: 10, alignItems: 'center', cursor: 'pointer' }}
                 onClick={() => setExpandedId(isExpanded ? null : s.id)}
               >
-                <span style={{ fontSize: 11, color: '#c4b5fd', fontWeight: 600 }}>
+                <span style={{ fontSize: 11, color: '#edaec5', fontWeight: 600 }}>
                   {s.contact_label}
                 </span>
                 <span style={{ fontSize: 9, color: '#8a8690', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
@@ -413,11 +413,11 @@ export function ConversationScreenshotsCard() {
                   )}
                   {(c.disclosure_signals?.length ?? 0) > 0 && (
                     <div style={{ marginBottom: 6 }}>
-                      <div style={{ fontSize: 9, color: '#c4b5fd', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>
+                      <div style={{ fontSize: 9, color: '#edaec5', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>
                         disclosure signals ({c.disclosure_signals?.length})
                       </div>
                       {c.disclosure_signals?.map((line, i) => (
-                        <div key={i} style={{ fontSize: 10.5, color: '#c4b5fd', paddingLeft: 8, lineHeight: 1.4 }}>
+                        <div key={i} style={{ fontSize: 10.5, color: '#edaec5', paddingLeft: 8, lineHeight: 1.4 }}>
                           ▸ {line}
                         </div>
                       ))}

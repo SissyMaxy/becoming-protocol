@@ -105,7 +105,7 @@ export function GinaWindowIndicator() {
   const palette = color === 'red'
     ? { border: '#7a1f22', bg: 'linear-gradient(92deg, #2a0a0c 0%, #1a0608 100%)', accent: '#f47272', dot: '#f47272' }
     : color === 'yellow'
-    ? { border: '#7a5a1f', bg: 'linear-gradient(92deg, #2a1f0a 0%, #1f1608 100%)', accent: '#f4c272', dot: '#f4c272' }
+    ? { border: '#7a5a1f', bg: 'linear-gradient(92deg, #2a1f0a 0%, #1f1608 100%)', accent: '#e6bd80', dot: '#e6bd80' }
     : { border: '#1f6a3a', bg: 'linear-gradient(92deg, #0a2a14 0%, #081f10 100%)', accent: '#6ee7b7', dot: '#6ee7b7' };
 
   const recommendation = color === 'red'
@@ -133,26 +133,26 @@ export function GinaWindowIndicator() {
           Gina window · {color}
         </span>
         {reasons.length > 0 && (
-          <span style={{ fontSize: 10.5, color: '#8a8690', marginLeft: 'auto' }}>
+          <span style={{ fontSize: 10.5, color: '#9c8590', marginLeft: 'auto' }}>
             {reasons.join(' · ')}
           </span>
         )}
       </div>
 
-      <div style={{ fontSize: 12, color: '#c8c4cc', lineHeight: 1.45, marginBottom: 10 }}>
+      <div style={{ fontSize: 12, color: '#d5c3ca', lineHeight: 1.45, marginBottom: 10 }}>
         {recommendation}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
         <div>
-          <div style={{ fontSize: 9.5, color: '#6a656e', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Lean into</div>
+          <div style={{ fontSize: 9.5, color: '#7f6b74', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Lean into</div>
           {profile.soft_spots.length === 0 && <div style={{ fontSize: 11, color: '#5a555e', fontStyle: 'italic' }}>no soft spots captured</div>}
           {profile.soft_spots.slice(0, 3).map((s, i) => (
             <div key={i} style={{ fontSize: 11.5, color: '#6ee7b7', marginBottom: 2 }}>+ {s}</div>
           ))}
         </div>
         <div>
-          <div style={{ fontSize: 9.5, color: '#6a656e', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Avoid</div>
+          <div style={{ fontSize: 9.5, color: '#7f6b74', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Avoid</div>
           {profile.triggers.length === 0 && <div style={{ fontSize: 11, color: '#5a555e', fontStyle: 'italic' }}>no triggers captured</div>}
           {profile.triggers.slice(0, 3).map((t, i) => (
             <div key={i} style={{ fontSize: 11.5, color: '#f47272', marginBottom: 2 }}>− {t}</div>
@@ -168,9 +168,9 @@ export function GinaWindowIndicator() {
 
       {reactions.length > 0 && (
         <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 9.5, color: '#6a656e', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Last reactions</div>
+          <div style={{ fontSize: 9.5, color: '#7f6b74', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Last reactions</div>
           {reactions.map((r, i) => (
-            <div key={i} style={{ fontSize: 11, color: '#c8c4cc', marginBottom: 2, fontFamily: 'ui-monospace, monospace' }}>
+            <div key={i} style={{ fontSize: 11, color: '#d5c3ca', marginBottom: 2, fontFamily: 'ui-monospace, monospace' }}>
               {lastReactionSummary(r)}
             </div>
           ))}
@@ -178,10 +178,10 @@ export function GinaWindowIndicator() {
       )}
 
       {nextWarmup && (
-        <div style={{ fontSize: 11, color: '#c4b5fd', padding: '6px 8px', background: 'rgba(124,58,237,0.1)', borderRadius: 5, border: '1px solid rgba(124,58,237,0.25)' }}>
+        <div style={{ fontSize: 11, color: '#edaec5', padding: '6px 8px', background: 'rgba(124,58,237,0.1)', borderRadius: 5, border: '1px solid rgba(124,58,237,0.25)' }}>
           <strong>Next warmup</strong> in {nextWarmupIn}h
           {nextWarmup.affection_language ? ` (${nextWarmup.affection_language})` : ''}: {nextWarmup.warmup_move}
-          <div style={{ fontSize: 9.5, color: '#8a8690', marginTop: 2 }}>→ warming for: {nextWarmup.target_event.replace(/_/g, ' ')}</div>
+          <div style={{ fontSize: 9.5, color: '#9c8590', marginTop: 2 }}>→ warming for: {nextWarmup.target_event.replace(/_/g, ' ')}</div>
         </div>
       )}
     </div>

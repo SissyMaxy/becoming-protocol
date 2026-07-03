@@ -29,14 +29,14 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  time_excuse: '#f4c272',
-  emotional_excuse: '#c4b5fd',
+  time_excuse: '#e6bd80',
+  emotional_excuse: '#edaec5',
   body_excuse: '#f4a7c4',
   external_blame: '#f47272',
   future_defer: '#f47272',
-  false_agency: '#f4c272',
-  minimization: '#8a8690',
-  bargaining: '#c4b5fd',
+  false_agency: '#e6bd80',
+  minimization: '#9c8590',
+  bargaining: '#edaec5',
   intellectualizing: '#6ee7b7',
 };
 
@@ -75,42 +75,42 @@ export function RationalizationPatternCard() {
   const totalHits = events.length;
 
   return (
-    <div style={{ background: '#111116', border: '1px solid #2d1a4d', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+    <div style={{ background: '#171017', border: '1px solid #4a2438', borderRadius: 10, padding: 14, marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f4c272" strokeWidth="1.8">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#e6bd80" strokeWidth="1.8">
           <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
         </svg>
-        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#f4c272', fontWeight: 700 }}>
+        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#e6bd80', fontWeight: 700 }}>
           Your deflection patterns · 14 days
         </span>
-        <span style={{ fontSize: 10.5, color: '#8a8690', marginLeft: 'auto' }}>
+        <span style={{ fontSize: 10.5, color: '#9c8590', marginLeft: 'auto' }}>
           {totalHits} hits
         </span>
       </div>
 
-      <div style={{ fontSize: 10.5, color: '#8a8690', marginBottom: 10, lineHeight: 1.4 }}>
+      <div style={{ fontSize: 10.5, color: '#9c8590', marginBottom: 10, lineHeight: 1.4 }}>
         The Handler sees these. Patterns you repeat stop being invisible. Naming them out loud is the first move that doesn't cost anything.
       </div>
 
       {sorted.map(([cat, data]) => {
         const label = CATEGORY_LABELS[cat] || cat.replace(/_/g, ' ');
-        const color = CATEGORY_COLORS[cat] || '#8a8690';
+        const color = CATEGORY_COLORS[cat] || '#9c8590';
         const ago = Math.floor((Date.now() - new Date(data.lastAt).getTime()) / 3600000);
         const agoStr = ago < 1 ? 'just now' : ago < 24 ? `${ago}h ago` : `${Math.floor(ago / 24)}d ago`;
         const pct = Math.round((data.count / totalHits) * 100);
 
         return (
           <div key={cat} style={{
-            background: '#0a0a0d', border: `1px solid ${color}33`,
+            background: '#0f0a0e', border: `1px solid ${color}33`,
             borderLeft: `3px solid ${color}`, borderRadius: 5,
             padding: '7px 9px', marginBottom: 5,
           }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 3 }}>
               <span style={{ fontSize: 11, fontWeight: 700, color }}>{label}</span>
-              <span style={{ fontSize: 10, color: '#8a8690' }}>×{data.count} · {pct}%</span>
-              <span style={{ fontSize: 9.5, color: '#6a656e', marginLeft: 'auto' }}>last: {agoStr}</span>
+              <span style={{ fontSize: 10, color: '#9c8590' }}>×{data.count} · {pct}%</span>
+              <span style={{ fontSize: 9.5, color: '#7f6b74', marginLeft: 'auto' }}>last: {agoStr}</span>
             </div>
-            <div style={{ fontSize: 10.5, color: '#c8c4cc', fontStyle: 'italic', lineHeight: 1.35 }}>
+            <div style={{ fontSize: 10.5, color: '#d5c3ca', fontStyle: 'italic', lineHeight: 1.35 }}>
               {Array.from(data.phrases).slice(0, 5).map(p => `"${p}"`).join(' · ')}
             </div>
           </div>

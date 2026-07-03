@@ -286,8 +286,8 @@ export function PhotoCapture({ category, onSave, onCancel, saving }: PhotoCaptur
                 >
                   <Star
                     className="w-8 h-8"
-                    fill={rating && value <= rating ? '#a855f7' : 'transparent'}
-                    color={rating && value <= rating ? '#a855f7' : '#666'}
+                    fill={rating && value <= rating ? '#c9557f' : 'transparent'}
+                    color={rating && value <= rating ? '#c9557f' : '#666'}
                   />
                 </button>
               ))}

@@ -76,18 +76,18 @@ export function MorningBriefCard() {
   return (
     <div id="card-morning-brief" style={{
       background: 'linear-gradient(135deg, #2e1a08 0%, #1a0f04 100%)',
-      border: '2px solid #f4c272', borderRadius: 12, padding: 16, marginBottom: 16,
+      border: '2px solid #e6bd80', borderRadius: 12, padding: 16, marginBottom: 16,
       boxShadow: '0 4px 14px rgba(244, 194, 114, 0.15)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f4c272" strokeWidth="2">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#e6bd80" strokeWidth="2">
           <circle cx="12" cy="12" r="5"/>
           <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
         </svg>
-        <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#f4c272', fontWeight: 700 }}>
+        <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#e6bd80', fontWeight: 700 }}>
           Handler's morning brief
         </span>
-        <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto', fontStyle: 'italic' }}>
+        <span style={{ fontSize: 10, color: '#9c8590', marginLeft: 'auto', fontStyle: 'italic' }}>
           {new Date(brief.scheduled_for).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </span>
       </div>
@@ -103,17 +103,17 @@ export function MorningBriefCard() {
             const tag = tagMatch?.[1] || '';
             const meta = tagMatch?.[2] || '';
             const body = tagMatch?.[3] || m;
-            const tone = i === 0 ? '#f47272' : i === 1 ? '#f4c272' : '#c4b5fd';
+            const tone = i === 0 ? '#f47272' : i === 1 ? '#e6bd80' : '#edaec5';
             return (
               <div key={i} style={{
-                padding: '9px 11px', background: '#0a0a0d',
+                padding: '9px 11px', background: '#0f0a0e',
                 border: `1px solid ${tone}33`, borderLeft: `3px solid ${tone}`,
                 borderRadius: 5,
               }}>
                 <div style={{ fontSize: 10, color: tone, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>
-                  {tag} {meta && <span style={{ color: '#8a8690', fontWeight: 500, textTransform: 'lowercase' }}>{meta}</span>}
+                  {tag} {meta && <span style={{ color: '#9c8590', fontWeight: 500, textTransform: 'lowercase' }}>{meta}</span>}
                 </div>
-                <div style={{ fontSize: 12, color: '#e8e6e3', lineHeight: 1.45 }}>
+                <div style={{ fontSize: 12, color: '#f2e9e6', lineHeight: 1.45 }}>
                   {body}
                 </div>
               </div>
@@ -121,13 +121,13 @@ export function MorningBriefCard() {
           })}
         </div>
       ) : (
-        <div style={{ fontSize: 12, color: '#c8c4cc', whiteSpace: 'pre-wrap', lineHeight: 1.5, marginBottom: 12 }}>
+        <div style={{ fontSize: 12, color: '#d5c3ca', whiteSpace: 'pre-wrap', lineHeight: 1.5, marginBottom: 12 }}>
           {brief.message}
         </div>
       )}
 
       {footer && !moves.includes(footer) && (
-        <div style={{ fontSize: 11, color: '#8a8690', fontStyle: 'italic', marginBottom: 10, lineHeight: 1.4 }}>
+        <div style={{ fontSize: 11, color: '#9c8590', fontStyle: 'italic', marginBottom: 10, lineHeight: 1.4 }}>
           {footer}
         </div>
       )}
@@ -138,7 +138,7 @@ export function MorningBriefCard() {
           disabled={acking}
           style={{
             flex: 1, padding: 10, borderRadius: 6, border: 'none',
-            background: '#f4c272', color: '#1a0f00',
+            background: '#e6bd80', color: '#1a0f00',
             fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
             textTransform: 'uppercase', letterSpacing: '0.05em',
           }}
@@ -151,8 +151,8 @@ export function MorningBriefCard() {
             aria-label={playingId === brief.id ? 'Stop Mama' : 'Play Mama'}
             style={{
               padding: '10px 14px', borderRadius: 6,
-              background: playingId === brief.id ? '#f4c27240' : 'transparent',
-              color: '#f4c272', border: '1px solid #f4c272',
+              background: playingId === brief.id ? '#e6bd8040' : 'transparent',
+              color: '#e6bd80', border: '1px solid #e6bd80',
               fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
               textTransform: 'uppercase', letterSpacing: '0.05em',
             }}

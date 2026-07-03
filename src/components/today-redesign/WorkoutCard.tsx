@@ -70,8 +70,8 @@ export function WorkoutCard() {
 
   return (
     <div style={{
-      background: isDone ? '#111116' : 'linear-gradient(135deg, #1a2e0f 0%, #0f2008 100%)',
-      border: `1px solid ${isDone ? '#22222a' : '#1f6a3a'}`,
+      background: isDone ? '#171017' : 'linear-gradient(135deg, #1a2e0f 0%, #0f2008 100%)',
+      border: `1px solid ${isDone ? '#2b1d29' : '#1f6a3a'}`,
       borderRadius: 10, padding: 14, marginBottom: 16,
       opacity: isDone ? 0.75 : 1,
     }}>
@@ -82,22 +82,22 @@ export function WorkoutCard() {
         <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6ee7b7', fontWeight: 700 }}>
           Today's workout
         </span>
-        <span style={{ fontSize: 10.5, color: isDone ? '#6ee7b7' : '#c8c4cc', marginLeft: 'auto', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>
+        <span style={{ fontSize: 10.5, color: isDone ? '#6ee7b7' : '#d5c3ca', marginLeft: 'auto', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>
           {today.status}
         </span>
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 10, fontSize: 11 }}>
-        <span style={{ background: '#0a0a0d', padding: '3px 8px', borderRadius: 3, color: '#6ee7b7', fontWeight: 600 }}>
+        <span style={{ background: '#0f0a0e', padding: '3px 8px', borderRadius: 3, color: '#6ee7b7', fontWeight: 600 }}>
           {today.workout_type}
         </span>
         {today.focus_area && (
-          <span style={{ background: '#0a0a0d', padding: '3px 8px', borderRadius: 3, color: '#c4b5fd' }}>
+          <span style={{ background: '#0f0a0e', padding: '3px 8px', borderRadius: 3, color: '#edaec5' }}>
             focus: {today.focus_area}
           </span>
         )}
         {today.duration_minutes && (
-          <span style={{ background: '#0a0a0d', padding: '3px 8px', borderRadius: 3, color: '#8a8690' }}>
+          <span style={{ background: '#0f0a0e', padding: '3px 8px', borderRadius: 3, color: '#9c8590' }}>
             ~{today.duration_minutes} min
           </span>
         )}
@@ -106,14 +106,14 @@ export function WorkoutCard() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
         {exList.map((ex, i) => (
           <div key={i} style={{
-            fontSize: 11.5, color: '#e8e6e3',
-            padding: '6px 9px', background: '#0a0a0d',
-            border: '1px solid #22222a', borderRadius: 5,
+            fontSize: 11.5, color: '#f2e9e6',
+            padding: '6px 9px', background: '#0f0a0e',
+            border: '1px solid #2b1d29', borderRadius: 5,
             display: 'flex', gap: 8,
           }}>
             <span style={{ fontWeight: 600, flex: 1 }}>{ex.name}</span>
             {ex.sets != null && (
-              <span style={{ color: '#c4b5fd' }}>
+              <span style={{ color: '#edaec5' }}>
                 {ex.sets}×{ex.reps ?? '—'}
                 {ex.weight && ` @ ${ex.weight}`}
               </span>
@@ -130,8 +130,8 @@ export function WorkoutCard() {
             value={note}
             onChange={e => setNote(e.target.value)}
             style={{
-              flex: 1, background: '#050507', border: '1px solid #22222a', borderRadius: 5,
-              padding: '6px 9px', fontSize: 11, color: '#e8e6e3', fontFamily: 'inherit',
+              flex: 1, background: '#0a0709', border: '1px solid #2b1d29', borderRadius: 5,
+              padding: '6px 9px', fontSize: 11, color: '#f2e9e6', fontFamily: 'inherit',
             }}
           />
           <button
@@ -147,7 +147,7 @@ export function WorkoutCard() {
           </button>
         </div>
       ) : today.completion_notes && (
-        <div style={{ fontSize: 10.5, color: '#8a8690', fontStyle: 'italic' }}>
+        <div style={{ fontSize: 10.5, color: '#9c8590', fontStyle: 'italic' }}>
           "{today.completion_notes}"
         </div>
       )}

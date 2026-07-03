@@ -496,7 +496,7 @@ export function MorningBriefing({ onComplete }: MorningBriefingProps) {
               : 'bg-protocol-surface border border-protocol-border/60 text-protocol-text-muted cursor-not-allowed'
           }`}
           style={selectedIntensity && !isBambiMode ? {
-            background: 'linear-gradient(135deg, #c77dff, #a855f7)',
+            background: 'linear-gradient(135deg, #e388a8, #c9557f)',
           } : undefined}
         >
           {isStarting ? (

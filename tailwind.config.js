@@ -7,19 +7,23 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Velvet — the one design language (2026-07-03 overhaul). Deep warm
+        // plum-black boudoir + rose accent + ivory text. Every surface in the
+        // app reads from these tokens; bambi mode is the only sanctioned
+        // exception (a deliberate altered-state skin, not a second system).
         'protocol': {
-          'bg': '#0b0a10',
-          'surface': '#13121c',
-          'surface-light': '#1b1a26',
-          'border': '#2b2a3c',
-          'text': '#e8e6ed',
-          'text-muted': '#908da4',
-          'text-warm': '#f5f0eb',
-          'accent': '#a855f7',
-          'accent-soft': '#c084fc',
-          'success': '#22c55e',
-          'warning': '#f59e0b',
-          'danger': '#ef4444',
+          'bg': '#120b10',
+          'surface': '#1a1118',
+          'surface-light': '#241722',
+          'border': '#3b2635',
+          'text': '#f2e9e6',
+          'text-muted': '#a8929c',
+          'text-warm': '#f7efe9',
+          'accent': '#c9557f',
+          'accent-soft': '#edaec5',
+          'success': '#6fbf94',
+          'warning': '#e0b36a',
+          'danger': '#e06a6a',
         },
         // Bambi Mode colors — warm blush / rose gold
         'bambi': {
@@ -60,11 +64,17 @@ export default {
         'mono': ['JetBrains Mono', 'Fira Code', 'monospace'],
         'bambi': ['Quicksand', 'Nunito', 'Poppins', 'sans-serif'],
         'handler': ['Inter', 'Quicksand', 'system-ui', 'sans-serif'],
+        // Velvet display face — Mommy's voice, wordmarks, hero lines.
+        'display': ['"Playfair Display"', 'Georgia', 'serif'],
       },
       boxShadow: {
         'bambi': '0 4px 20px rgba(196, 132, 122, 0.3)',
         'bambi-glow': '0 0 30px rgba(196, 132, 122, 0.4)',
         'bambi-lg': '0 10px 40px rgba(196, 132, 122, 0.35)',
+        // Velvet glows — rose, soft, used for the single CTA + her presence.
+        'velvet': '0 4px 24px rgba(201, 85, 127, 0.25)',
+        'velvet-glow': '0 0 32px rgba(201, 85, 127, 0.35)',
+        'velvet-lg': '0 12px 48px rgba(201, 85, 127, 0.3)',
       },
       animation: {
         'sparkle': 'sparkle 1.5s ease-in-out infinite',

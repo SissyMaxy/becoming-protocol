@@ -49,7 +49,7 @@ export function ArousalLogCard() {
   const avg24h = recent.length > 0 ? recent.reduce((s, r) => s + r.value, 0) / recent.length : null;
 
   return (
-    <div style={{ background: '#111116', border: '1px solid #2d1a4d', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+    <div style={{ background: '#171017', border: '1px solid #4a2438', borderRadius: 10, padding: 14, marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f4a7c4" strokeWidth="1.8">
           <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
@@ -57,12 +57,12 @@ export function ArousalLogCard() {
         <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#f4a7c4', fontWeight: 700 }}>
           Arousal log
         </span>
-        <span style={{ fontSize: 10.5, color: '#8a8690', marginLeft: 'auto' }}>
+        <span style={{ fontSize: 10.5, color: '#9c8590', marginLeft: 'auto' }}>
           {avg24h != null ? `24h avg ${avg24h.toFixed(1)}` : 'no entries yet'}
         </span>
       </div>
 
-      <div style={{ fontSize: 10.5, color: '#8a8690', marginBottom: 8, lineHeight: 1.4 }}>
+      <div style={{ fontSize: 10.5, color: '#9c8590', marginBottom: 8, lineHeight: 1.4 }}>
         Tap your current level. ≥7 triggers the pairing cron — device + outreach tying the arousal to feminization moves.
       </div>
 
@@ -71,7 +71,7 @@ export function ArousalLogCard() {
           const isCurrent = current === i;
           const intensity = i / 10;
           const bg = i === 0
-            ? '#22222a'
+            ? '#2b1d29'
             : `rgba(244, 167, 196, ${0.15 + intensity * 0.65})`;
           return (
             <button
@@ -81,8 +81,8 @@ export function ArousalLogCard() {
               style={{
                 padding: '6px 0', borderRadius: 4,
                 background: bg,
-                border: `1px solid ${isCurrent ? '#f4a7c4' : '#22222a'}`,
-                color: i >= 6 ? '#1a0a12' : '#e8e6e3',
+                border: `1px solid ${isCurrent ? '#f4a7c4' : '#2b1d29'}`,
+                color: i >= 6 ? '#1a0a12' : '#f2e9e6',
                 fontWeight: isCurrent ? 700 : 500,
                 fontSize: 11, cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
               }}
@@ -94,11 +94,11 @@ export function ArousalLogCard() {
       </div>
 
       {recent.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, fontSize: 9.5, color: '#8a8690' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, fontSize: 9.5, color: '#9c8590' }}>
           {recent.slice(0, 8).map((r, i) => {
             const mins = Math.floor((Date.now() - new Date(r.created_at).getTime()) / 60000);
             return (
-              <span key={i} style={{ padding: '2px 6px', background: '#0a0a0d', borderRadius: 3 }}>
+              <span key={i} style={{ padding: '2px 6px', background: '#0f0a0e', borderRadius: 3 }}>
                 {r.value} · {mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h`} ago
               </span>
             );

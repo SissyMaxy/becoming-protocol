@@ -174,10 +174,10 @@ interface AudioSessionMeta {
 }
 
 const TONE_STYLES_HANDLER: Record<FocusTask['tone'], { bg: string; border: string; accent: string; label: string }> = {
-  critical: { bg: 'linear-gradient(140deg, #2a0508 0%, #1a0508 100%)', border: '#c4272d', accent: '#fca5a5', label: 'CRITICAL' },
+  critical: { bg: 'linear-gradient(140deg, #2a0508 0%, #1a0508 100%)', border: '#c4272d', accent: '#f0a0a0', label: 'CRITICAL' },
   high:     { bg: 'linear-gradient(140deg, #2a1f0a 0%, #1f1608 100%)', border: '#a87a1f', accent: '#fbbf24', label: 'PRIORITY' },
-  medium:   { bg: 'linear-gradient(140deg, #1a0f2e 0%, #0f0820 100%)', border: '#7c3aed', accent: '#c4b5fd', label: 'TODAY' },
-  calm:     { bg: 'linear-gradient(140deg, #0a1a14 0%, #051a10 100%)', border: '#3a5a3f', accent: '#86efac', label: 'CLEAN' },
+  medium:   { bg: 'linear-gradient(140deg, #2c1723 0%, #0f0820 100%)', border: '#c9557f', accent: '#edaec5', label: 'TODAY' },
+  calm:     { bg: 'linear-gradient(140deg, #0a1a14 0%, #051a10 100%)', border: '#3a5a3f', accent: '#8fd9b0', label: 'CLEAN' },
 };
 
 // Dommy Mommy palette: warm boudoir / dusty rose / candle-gold instead
@@ -1653,9 +1653,9 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
   return (
     <div style={{
       minHeight: '100dvh',
-      background: '#050507',
+      background: '#0a0709',
       padding: '24px 18px 80px',
-      color: '#e8e6e3',
+      color: '#f2e9e6',
       display: 'flex',
       flexDirection: 'column',
     }}>
@@ -1665,13 +1665,13 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
         maxWidth: 640, width: '100%', marginLeft: 'auto', marginRight: 'auto',
       }}>
         <div style={{
-          fontSize: 10, color: '#c4b5fd', fontWeight: 700,
+          fontSize: 10, color: '#edaec5', fontWeight: 700,
           textTransform: 'uppercase', letterSpacing: '0.1em',
         }}>
           Focus
         </div>
         <div style={{
-          fontSize: 10, color: '#fff', background: '#7c3aed',
+          fontSize: 10, color: '#fff', background: '#c9557f',
           padding: '2px 8px', borderRadius: 8, fontWeight: 700,
         }}>
           {completedToday} done today
@@ -1680,8 +1680,8 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
           onClick={onSwitchToCalendar}
           style={{
             marginLeft: 'auto',
-            background: 'transparent', border: '1px solid #2d1a4d',
-            color: '#8a8690', fontSize: 11, padding: '4px 10px',
+            background: 'transparent', border: '1px solid #4a2438',
+            color: '#9c8590', fontSize: 11, padding: '4px 10px',
             borderRadius: 5, cursor: 'pointer', fontFamily: 'inherit',
           }}
         >
@@ -1693,7 +1693,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
       {loading ? (
         <div style={{
           maxWidth: 640, width: '100%', marginLeft: 'auto', marginRight: 'auto',
-          padding: 40, textAlign: 'center', color: '#8a8690', fontSize: 12,
+          padding: 40, textAlign: 'center', color: '#9c8590', fontSize: 12,
         }}>
           reading the queue…
         </div>
@@ -1702,8 +1702,8 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
           maxWidth: 640, width: '100%', marginLeft: 'auto', marginRight: 'auto',
           padding: 40, textAlign: 'center',
         }}>
-          <div style={{ fontSize: 32, color: '#86efac', marginBottom: 10 }}>✓</div>
-          <div style={{ fontSize: 14, color: '#e8e6e3', fontWeight: 600 }}>Done. Loading next…</div>
+          <div style={{ fontSize: 32, color: '#8fd9b0', marginBottom: 10 }}>✓</div>
+          <div style={{ fontSize: 14, color: '#f2e9e6', fontWeight: 600 }}>Done. Loading next…</div>
         </div>
       ) : (completedToday >= 5 /* DAILY_CAP */ && task && task.tone !== 'critical') ? (
         // Daily cap — sustainability over the endless treadmill. A solid set is
@@ -1737,7 +1737,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
             </span>
             {task.due && (
               <span style={{
-                fontSize: 10, color: '#8a8690', marginLeft: 'auto',
+                fontSize: 10, color: '#9c8590', marginLeft: 'auto',
               }}>
                 {task.due}
               </span>
@@ -1764,15 +1764,15 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
                 placeholder="Be specific — name a moment, a feeling, a person, a body part, a time of day. Boilerplate gets refused."
                 rows={6}
                 style={{
-                  width: '100%', background: '#050507',
-                  border: '1px solid #22222a', borderRadius: 6,
-                  padding: '12px 14px', fontSize: 14, color: '#e8e6e3',
+                  width: '100%', background: '#0a0709',
+                  border: '1px solid #2b1d29', borderRadius: 6,
+                  padding: '12px 14px', fontSize: 14, color: '#f2e9e6',
                   fontFamily: 'inherit', resize: 'vertical',
                   marginBottom: 8,
                 }}
               />
               <div style={{
-                fontSize: 10.5, color: charsRemaining > 0 ? '#8a8690' : '#86efac',
+                fontSize: 10.5, color: charsRemaining > 0 ? '#9c8590' : '#8fd9b0',
                 marginBottom: 12, textAlign: 'right',
               }}>
                 {charsRemaining > 0 ? `${charsRemaining} more chars` : 'enough — submit when ready'}
@@ -1782,8 +1782,8 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
                 disabled={submitting || charsRemaining > 0}
                 style={{
                   width: '100%', padding: '12px',
-                  background: charsRemaining > 0 ? '#22222a' : tone.border,
-                  color: charsRemaining > 0 ? '#6a656e' : '#fff',
+                  background: charsRemaining > 0 ? '#2b1d29' : tone.border,
+                  color: charsRemaining > 0 ? '#7f6b74' : '#fff',
                   border: 'none', borderRadius: 7,
                   fontSize: 13, fontWeight: 700, letterSpacing: '0.04em',
                   textTransform: 'uppercase', fontFamily: 'inherit',
@@ -1802,10 +1802,10 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
               */}
               {task.kind !== 'due_today_commitment' && task.rowId && (
                 <div style={{
-                  marginTop: 14, paddingTop: 14, borderTop: '1px dashed #22222a',
+                  marginTop: 14, paddingTop: 14, borderTop: '1px dashed #2b1d29',
                   display: 'flex', flexDirection: 'column', gap: 6,
                 }}>
-                  <div style={{ fontSize: 10, color: '#8a8690', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  <div style={{ fontSize: 10, color: '#9c8590', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                     or speak it
                   </div>
                   <ConfessionAudioCapture
@@ -1830,7 +1830,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <label
                 style={{
-                  padding: '12px', background: '#7c3aed', color: '#fff',
+                  padding: '12px', background: '#c9557f', color: '#fff',
                   border: 'none', borderRadius: 7,
                   fontSize: 13, fontWeight: 700, fontFamily: 'inherit',
                   cursor: submitting ? 'wait' : 'pointer', textAlign: 'center',
@@ -1846,15 +1846,15 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
                   style={{ display: 'none' }}
                 />
               </label>
-              <div style={{ fontSize: 10.5, color: '#8a8690', marginTop: -2, marginBottom: 2 }}>
+              <div style={{ fontSize: 10.5, color: '#9c8590', marginTop: -2, marginBottom: 2 }}>
                 a quick shot of the pill · patch · vial — that's all Mommy needs
               </div>
               <button
                 onClick={() => handleDoseLog('taken_today')}
                 disabled={submitting}
                 style={{
-                  padding: '10px', background: 'transparent', color: '#c4b5fd',
-                  border: '1px solid #2d1a4d', borderRadius: 6,
+                  padding: '10px', background: 'transparent', color: '#edaec5',
+                  border: '1px solid #4a2438', borderRadius: 6,
                   fontSize: 12, fontFamily: 'inherit',
                   cursor: submitting ? 'wait' : 'pointer',
                 }}
@@ -1865,8 +1865,8 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
                 onClick={() => handleDoseLog('taken_earlier')}
                 disabled={submitting}
                 style={{
-                  padding: '10px', background: 'transparent', color: '#c4b5fd',
-                  border: '1px solid #2d1a4d', borderRadius: 6,
+                  padding: '10px', background: 'transparent', color: '#edaec5',
+                  border: '1px solid #4a2438', borderRadius: 6,
                   fontSize: 12, fontFamily: 'inherit',
                   cursor: submitting ? 'wait' : 'pointer',
                 }}
@@ -1877,8 +1877,8 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
                 onClick={() => handleDoseLog('skipped')}
                 disabled={submitting}
                 style={{
-                  padding: '10px', background: 'transparent', color: '#8a8690',
-                  border: '1px solid #22222a', borderRadius: 6,
+                  padding: '10px', background: 'transparent', color: '#9c8590',
+                  border: '1px solid #2b1d29', borderRadius: 6,
                   fontSize: 12, fontFamily: 'inherit',
                   cursor: submitting ? 'wait' : 'pointer',
                 }}
@@ -1935,7 +1935,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
                 disabled={submitting}
                 style={{
                   width: '100%', padding: '8px',
-                  background: 'transparent', color: '#8a8690',
+                  background: 'transparent', color: '#9c8590',
                   border: '1px solid #2a2a32', borderRadius: 6,
                   fontSize: 11, fontFamily: 'inherit',
                   cursor: submitting ? 'wait' : 'pointer',
@@ -1954,12 +1954,12 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
                 disabled={submitting}
                 style={{
                   width: '100%', padding: '10px',
-                  background: '#0a0a0d', border: '1px solid #22222a',
-                  borderRadius: 6, color: '#c4b5fd', fontSize: 12,
+                  background: '#0f0a0e', border: '1px solid #2b1d29',
+                  borderRadius: 6, color: '#edaec5', fontSize: 12,
                   fontFamily: 'inherit', marginBottom: 6,
                 }}
               />
-              <div style={{ fontSize: 10.5, color: '#8a8690' }}>
+              <div style={{ fontSize: 10.5, color: '#9c8590' }}>
                 {submitting ? 'uploading…' : 'mirror selfie · phone camera roll · finished outfit'}
               </div>
             </div>
@@ -1988,9 +1988,9 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
                     title={hrtExplainBanned ? 'Talking is no longer accepted. Move forward only.' : ''}
                     style={{
                       width: '100%', padding: '12px', borderRadius: 7,
-                      border: `1px solid ${hrtExplainBanned ? '#3a1216' : '#2d1a4d'}`,
+                      border: `1px solid ${hrtExplainBanned ? '#3a1216' : '#4a2438'}`,
                       background: hrtExplainBanned ? '#1a0a0d' : 'rgba(45,26,77,0.3)',
-                      color: hrtExplainBanned ? '#5a4548' : '#c4b5fd', fontWeight: 600, fontSize: 12,
+                      color: hrtExplainBanned ? '#5a4548' : '#edaec5', fontWeight: 600, fontSize: 12,
                       cursor: hrtExplainBanned ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
                       textDecoration: hrtExplainBanned ? 'line-through' : 'none',
                     }}
@@ -2002,47 +2002,47 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
 
               {hrtMode === 'advance' && (
                 <div>
-                  <div style={{ fontSize: 11, color: '#8a8690', marginBottom: 6 }}>Pick the step you moved to today:</div>
+                  <div style={{ fontSize: 11, color: '#9c8590', marginBottom: 6 }}>Pick the step you moved to today:</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
                     {hrtCandidates.map(s => (
                       <button key={s} onClick={() => setHrtNewStep(s)}
                         style={{
                           fontSize: 11.5, padding: '5px 10px', borderRadius: 14,
-                          background: hrtNewStep === s ? tone.border : '#1a1623',
-                          color: hrtNewStep === s ? '#fff' : '#c4b5fd',
-                          border: `1px solid ${hrtNewStep === s ? tone.border : '#2d1a4d'}`,
+                          background: hrtNewStep === s ? tone.border : '#26161f',
+                          color: hrtNewStep === s ? '#fff' : '#edaec5',
+                          border: `1px solid ${hrtNewStep === s ? tone.border : '#4a2438'}`,
                           cursor: 'pointer', fontFamily: 'inherit',
                         }}>
                         {HRT_STEP_LABELS[s]}
                       </button>
                     ))}
                   </div>
-                  <div style={{ fontSize: 11, color: '#8a8690', marginBottom: 6 }}>Evidence (URL, appointment ref, intake screenshot, who you told):</div>
+                  <div style={{ fontSize: 11, color: '#9c8590', marginBottom: 6 }}>Evidence (URL, appointment ref, intake screenshot, who you told):</div>
                   <textarea value={hrtEvidence} onChange={e => setHrtEvidence(e.target.value)} rows={4}
                     placeholder="paste link, quote email, describe what you did…"
                     style={{
-                      width: '100%', background: '#050507', border: '1px solid #22222a', borderRadius: 6,
-                      padding: 10, color: '#e8e6e3', fontFamily: 'inherit', fontSize: 13, resize: 'vertical',
+                      width: '100%', background: '#0a0709', border: '1px solid #2b1d29', borderRadius: 6,
+                      padding: 10, color: '#f2e9e6', fontFamily: 'inherit', fontSize: 13, resize: 'vertical',
                     }} />
                   {hrtError && <div style={{ fontSize: 11, color: '#f47272', marginTop: 8 }}>{hrtError}</div>}
                   <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                     <button onClick={submitHrtAdvance} disabled={!hrtNewStep || hrtEvidence.trim().length < 10 || submitting}
                       style={{
                         flex: 1, padding: 11, borderRadius: 6, border: 'none',
-                        background: hrtNewStep && hrtEvidence.trim().length >= 10 ? tone.border : '#2d1a4d',
+                        background: hrtNewStep && hrtEvidence.trim().length >= 10 ? tone.border : '#4a2438',
                         color: '#fff', fontWeight: 700, cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
                       }}>
                       {submitting ? 'saving…' : 'Submit advancement'}
                     </button>
                     <button onClick={() => { setHrtMode('pick'); setHrtError(null); }}
-                      style={{ padding: '11px 14px', borderRadius: 6, background: 'none', border: '1px solid #2d1a4d', color: '#8a8690', cursor: 'pointer', fontFamily: 'inherit' }}>back</button>
+                      style={{ padding: '11px 14px', borderRadius: 6, background: 'none', border: '1px solid #4a2438', color: '#9c8590', cursor: 'pointer', fontFamily: 'inherit' }}>back</button>
                   </div>
                 </div>
               )}
 
               {hrtMode === 'obstacle' && (
                 <div>
-                  <div style={{ fontSize: 11.5, color: '#f4c272', marginBottom: 8, lineHeight: 1.5 }}>
+                  <div style={{ fontSize: 11.5, color: '#e6bd80', marginBottom: 8, lineHeight: 1.5 }}>
                     {hrtMissedDays === 0 && `Write ≥${hrtMinChars} chars. Be specific — the Handler uses this to push you tomorrow.`}
                     {hrtMissedDays === 1 && `Write ≥${hrtMinChars} chars and include "David is hiding from ___" with the blank filled.`}
                     {hrtMissedDays >= 2 && `Write ≥${hrtMinChars} chars, include "David is hiding from ___" filled, and paste one provider URL you visited today (https://...).`}
@@ -2050,11 +2050,11 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
                   <textarea value={hrtObstacle} onChange={e => setHrtObstacle(e.target.value)} rows={7}
                     placeholder={hrtRequireIdentityPhrase ? 'Today I did not move forward because… (include "David is hiding from ___" with the blank filled)' : 'what specifically stopped me today…'}
                     style={{
-                      width: '100%', background: '#050507', border: '1px solid #22222a', borderRadius: 6,
-                      padding: 10, color: '#e8e6e3', fontFamily: 'inherit', fontSize: 13, resize: 'vertical',
+                      width: '100%', background: '#0a0709', border: '1px solid #2b1d29', borderRadius: 6,
+                      padding: 10, color: '#f2e9e6', fontFamily: 'inherit', fontSize: 13, resize: 'vertical',
                     }} />
                   <div style={{ display: 'flex', gap: 12, marginTop: 6, flexWrap: 'wrap', fontSize: 11 }}>
-                    <span style={{ color: hrtObstacle.trim().length >= hrtMinChars ? '#5fc88f' : '#8a8690' }}>
+                    <span style={{ color: hrtObstacle.trim().length >= hrtMinChars ? '#5fc88f' : '#9c8590' }}>
                       {hrtObstacle.trim().length} / {hrtMinChars} chars
                     </span>
                     {hrtRequireIdentityPhrase && (() => {
@@ -2080,8 +2080,8 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
                         <button onClick={submitHrtObstacle} disabled={!ready || submitting}
                           style={{
                             flex: 1, padding: 11, borderRadius: 6, border: 'none',
-                            background: ready ? '#f4c272' : '#2d1a4d',
-                            color: ready ? '#1a0f00' : '#8a8690',
+                            background: ready ? '#e6bd80' : '#4a2438',
+                            color: ready ? '#1a0f00' : '#9c8590',
                             fontWeight: 700, cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
                           }}>
                           {submitting ? 'saving…' : 'Submit'}
@@ -2089,7 +2089,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
                       );
                     })()}
                     <button onClick={() => { setHrtMode('pick'); setHrtError(null); }}
-                      style={{ padding: '11px 14px', borderRadius: 6, background: 'none', border: '1px solid #2d1a4d', color: '#8a8690', cursor: 'pointer', fontFamily: 'inherit' }}>back</button>
+                      style={{ padding: '11px 14px', borderRadius: 6, background: 'none', border: '1px solid #4a2438', color: '#9c8590', cursor: 'pointer', fontFamily: 'inherit' }}>back</button>
                   </div>
                 </div>
               )}
@@ -2105,8 +2105,8 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button onClick={() => submitReleaseCheckin(false)} disabled={submitting}
                     style={{
-                      flex: 1, padding: '13px', borderRadius: 7, border: '1px solid #2d1a4d',
-                      background: 'rgba(45,26,77,0.3)', color: '#c4b5fd', fontWeight: 700, fontSize: 13,
+                      flex: 1, padding: '13px', borderRadius: 7, border: '1px solid #4a2438',
+                      background: 'rgba(45,26,77,0.3)', color: '#edaec5', fontWeight: 700, fontSize: 13,
                       cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
                     }}>
                     No — still holding
@@ -2125,15 +2125,15 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
               {didCum === true && (
                 <>
                   <div>
-                    <div style={{ fontSize: 11, color: '#8a8690', marginBottom: 6 }}>When?</div>
+                    <div style={{ fontSize: 11, color: '#9c8590', marginBottom: 6 }}>When?</div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                       {RELEASE_WHEN_OPTIONS.map(opt => (
                         <button key={opt.value} onClick={() => setReleaseWhen(opt.value)}
                           style={{
                             fontSize: 11.5, padding: '5px 10px', borderRadius: 14,
-                            background: releaseWhen === opt.value ? tone.border : '#1a1623',
-                            color: releaseWhen === opt.value ? '#fff' : '#c4b5fd',
-                            border: `1px solid ${releaseWhen === opt.value ? tone.border : '#2d1a4d'}`,
+                            background: releaseWhen === opt.value ? tone.border : '#26161f',
+                            color: releaseWhen === opt.value ? '#fff' : '#edaec5',
+                            border: `1px solid ${releaseWhen === opt.value ? tone.border : '#4a2438'}`,
                             cursor: 'pointer', fontFamily: 'inherit',
                           }}>
                           {opt.label}
@@ -2144,15 +2144,15 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
 
                   {releaseWhen && (
                     <div>
-                      <div style={{ fontSize: 11, color: '#8a8690', marginBottom: 6 }}>How did it happen?</div>
+                      <div style={{ fontSize: 11, color: '#9c8590', marginBottom: 6 }}>How did it happen?</div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                         {RELEASE_CONTEXT_OPTIONS.map(opt => (
                           <button key={opt.context} onClick={() => setReleaseContext(opt.context)}
                             style={{
                               fontSize: 11.5, padding: '5px 10px', borderRadius: 14,
-                              background: releaseContext === opt.context ? tone.border : '#1a1623',
-                              color: releaseContext === opt.context ? '#fff' : '#c4b5fd',
-                              border: `1px solid ${releaseContext === opt.context ? tone.border : '#2d1a4d'}`,
+                              background: releaseContext === opt.context ? tone.border : '#26161f',
+                              color: releaseContext === opt.context ? '#fff' : '#edaec5',
+                              border: `1px solid ${releaseContext === opt.context ? tone.border : '#4a2438'}`,
                               cursor: 'pointer', fontFamily: 'inherit',
                             }}>
                             {opt.label}
@@ -2164,15 +2164,15 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
 
                   {releaseContext && (
                     <div>
-                      <div style={{ fontSize: 11, color: '#8a8690', marginBottom: 6 }}>What kind?</div>
+                      <div style={{ fontSize: 11, color: '#9c8590', marginBottom: 6 }}>What kind?</div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                         {RELEASE_TYPE_OPTIONS.map(opt => (
                           <button key={opt.type} onClick={() => setReleaseType(opt.type)}
                             style={{
                               fontSize: 11.5, padding: '5px 10px', borderRadius: 14,
-                              background: releaseType === opt.type ? tone.border : '#1a1623',
-                              color: releaseType === opt.type ? '#fff' : '#c4b5fd',
-                              border: `1px solid ${releaseType === opt.type ? tone.border : '#2d1a4d'}`,
+                              background: releaseType === opt.type ? tone.border : '#26161f',
+                              color: releaseType === opt.type ? '#fff' : '#edaec5',
+                              border: `1px solid ${releaseType === opt.type ? tone.border : '#4a2438'}`,
                               cursor: 'pointer', fontFamily: 'inherit',
                             }}>
                             {opt.label}
@@ -2212,9 +2212,9 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
                       onClick={() => setPhysicalState(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
                       style={{
                         padding: '11px', borderRadius: 7, textAlign: 'left', fontSize: 13,
-                        background: on ? tone.border : '#1a1623',
-                        color: on ? '#fff' : '#c4b5fd',
-                        border: `1px solid ${on ? tone.border : '#2d1a4d'}`,
+                        background: on ? tone.border : '#26161f',
+                        color: on ? '#fff' : '#edaec5',
+                        border: `1px solid ${on ? tone.border : '#4a2438'}`,
                         cursor: 'pointer', fontFamily: 'inherit',
                       }}>
                       {on ? '✓ ' : ''}{item.label}
@@ -2239,9 +2239,9 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
           {task.surface === 'approve_post' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{
-                padding: '14px 16px', background: '#0a0a0d',
-                border: '1px solid #2d1a4d', borderRadius: 8,
-                fontSize: 14, color: '#e8e6e3', lineHeight: 1.5, whiteSpace: 'pre-wrap',
+                padding: '14px 16px', background: '#0f0a0e',
+                border: '1px solid #4a2438', borderRadius: 8,
+                fontSize: 14, color: '#f2e9e6', lineHeight: 1.5, whiteSpace: 'pre-wrap',
               }}>
                 {(task.meta as { text?: string } | undefined)?.text || ''}
               </div>
@@ -2258,8 +2258,8 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
                 <button onClick={() => submitApprovePost(false)} disabled={submitting}
                   style={{
                     flex: 1, padding: '13px', borderRadius: 7,
-                    background: 'transparent', color: '#8a8690',
-                    border: '1px solid #2d1a4d', fontWeight: 600, fontSize: 13,
+                    background: 'transparent', color: '#9c8590',
+                    border: '1px solid #4a2438', fontWeight: 600, fontSize: 13,
                     cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
                   }}>
                   Not now
@@ -2283,12 +2283,12 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
                       disabled={submitting}
                       style={{
                         width: '100%', padding: '10px',
-                        background: '#0a0a0d', border: '1px solid #22222a',
-                        borderRadius: 6, color: '#c4b5fd', fontSize: 12,
+                        background: '#0f0a0e', border: '1px solid #2b1d29',
+                        borderRadius: 6, color: '#edaec5', fontSize: 12,
                         fontFamily: 'inherit', marginBottom: 6,
                       }}
                     />
-                    <div style={{ fontSize: 10.5, color: '#8a8690' }}>
+                    <div style={{ fontSize: 10.5, color: '#9c8590' }}>
                       {submitting ? 'uploading…' : 'fresh photo — Mama remembers the old ones'}
                     </div>
                   </div>
@@ -2325,13 +2325,13 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
                         ['chest (cm)', 'chest_cm'], ['weight (kg)', 'weight_kg'],
                       ] as const).map(([label, key]) => (
                         <div key={key}>
-                          <div style={{ fontSize: 9.5, color: '#8a8690', marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+                          <div style={{ fontSize: 9.5, color: '#9c8590', marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
                           <input
                             type="number" step="0.1" value={femMeasure[key]}
                             onChange={e => setFemMeasure(prev => ({ ...prev, [key]: e.target.value }))}
                             style={{
-                              width: '100%', background: '#0a0a0d', border: '1px solid #22222a',
-                              borderRadius: 5, padding: '6px 9px', fontSize: 12, color: '#e8e6e3', fontFamily: 'inherit',
+                              width: '100%', background: '#0f0a0e', border: '1px solid #2b1d29',
+                              borderRadius: 5, padding: '6px 9px', fontSize: 12, color: '#f2e9e6', fontFamily: 'inherit',
                             }}
                           />
                         </div>
@@ -2368,8 +2368,8 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
                           disabled={!femTimerDone || submitting}
                           style={{
                             width: '100%', padding: '12px', borderRadius: 7, border: 'none',
-                            background: femTimerDone ? tone.border : '#22222a',
-                            color: femTimerDone ? '#fff' : '#6a656e', fontWeight: 700, fontSize: 13,
+                            background: femTimerDone ? tone.border : '#2b1d29',
+                            color: femTimerDone ? '#fff' : '#7f6b74', fontWeight: 700, fontSize: 13,
                             cursor: femTimerDone ? 'pointer' : 'not-allowed', fontFamily: 'inherit',
                           }}>
                           {femTimer.left > 0 ? 'keep going…' : femTimerDone ? 'Done' : 'stay on this screen next time'}
@@ -2387,16 +2387,16 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
                       placeholder="Tell Mama how it went — specifics, not summaries."
                       rows={4}
                       style={{
-                        width: '100%', background: '#050507', border: '1px solid #22222a',
-                        borderRadius: 6, padding: '12px 14px', fontSize: 14, color: '#e8e6e3',
+                        width: '100%', background: '#0a0709', border: '1px solid #2b1d29',
+                        borderRadius: 6, padding: '12px 14px', fontSize: 14, color: '#f2e9e6',
                         fontFamily: 'inherit', resize: 'vertical', marginBottom: 8,
                       }}
                     />
                     <button onClick={handleFemText} disabled={submitting || femText.trim().length < 40}
                       style={{
                         width: '100%', padding: '12px', borderRadius: 7, border: 'none',
-                        background: femText.trim().length >= 40 ? tone.border : '#22222a',
-                        color: femText.trim().length >= 40 ? '#fff' : '#6a656e',
+                        background: femText.trim().length >= 40 ? tone.border : '#2b1d29',
+                        color: femText.trim().length >= 40 ? '#fff' : '#7f6b74',
                         fontWeight: 700, fontSize: 13,
                         cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
                       }}>
@@ -2423,8 +2423,8 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
                 {!femSkipOpen ? (
                   <button onClick={() => setFemSkipOpen(true)} disabled={submitting}
                     style={{
-                      padding: '8px', background: 'transparent', color: '#8a8690',
-                      border: '1px solid #22222a', borderRadius: 6,
+                      padding: '8px', background: 'transparent', color: '#9c8590',
+                      border: '1px solid #2b1d29', borderRadius: 6,
                       fontSize: 11, fontFamily: 'inherit',
                       cursor: submitting ? 'wait' : 'pointer',
                     }}>
@@ -2439,8 +2439,8 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
                       <button key={reason} onClick={() => { void handleFemSkip(reason); }} disabled={submitting}
                         style={{
                           fontSize: 11.5, padding: '6px 11px', borderRadius: 14,
-                          background: '#1a1623', color: '#c4b5fd',
-                          border: '1px solid #2d1a4d', cursor: 'pointer', fontFamily: 'inherit',
+                          background: '#26161f', color: '#edaec5',
+                          border: '1px solid #4a2438', cursor: 'pointer', fontFamily: 'inherit',
                         }}>
                         {label}
                       </button>
@@ -2456,7 +2456,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
           {task.surface === 'mantra_drill' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div>
-                <div style={{ fontSize: 10, color: '#8a8690', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                <div style={{ fontSize: 10, color: '#9c8590', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
                   how many times will you say it
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
@@ -2464,9 +2464,9 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
                     <button key={n} onClick={() => setMantraReps(n)}
                       style={{
                         fontSize: 12, padding: '6px 14px', borderRadius: 14,
-                        background: mantraReps === n ? tone.border : '#1a1623',
-                        color: mantraReps === n ? '#fff' : '#c4b5fd',
-                        border: `1px solid ${mantraReps === n ? tone.border : '#2d1a4d'}`,
+                        background: mantraReps === n ? tone.border : '#26161f',
+                        color: mantraReps === n ? '#fff' : '#edaec5',
+                        border: `1px solid ${mantraReps === n ? tone.border : '#4a2438'}`,
                         cursor: 'pointer', fontFamily: 'inherit',
                       }}>
                       {n}×
@@ -2500,8 +2500,8 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
                 }}
                 disabled={submitting}
                 style={{
-                  padding: '8px', background: 'transparent', color: '#8a8690',
-                  border: '1px solid #22222a', borderRadius: 6,
+                  padding: '8px', background: 'transparent', color: '#9c8590',
+                  border: '1px solid #2b1d29', borderRadius: 6,
                   fontSize: 11, fontFamily: 'inherit',
                   cursor: submitting ? 'wait' : 'pointer',
                 }}>
@@ -2515,7 +2515,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
               onClick={onSwitchToCalendar}
               style={{
                 width: '100%', padding: '12px',
-                background: 'transparent', color: '#86efac',
+                background: 'transparent', color: '#8fd9b0',
                 border: '1px solid #3a5a3f', borderRadius: 7,
                 fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
                 cursor: 'pointer',
@@ -2559,8 +2559,8 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
                     onClick={handleSkipSession}
                     disabled={submitting}
                     style={{
-                      padding: '8px', background: 'transparent', color: '#8a8690',
-                      border: '1px solid #22222a', borderRadius: 6,
+                      padding: '8px', background: 'transparent', color: '#9c8590',
+                      border: '1px solid #2b1d29', borderRadius: 6,
                       fontSize: 11, fontFamily: 'inherit',
                       cursor: submitting ? 'wait' : 'pointer',
                     }}
@@ -2601,7 +2601,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
               {audioState.phase === 'error' && (
                 <>
                   <div style={{
-                    padding: 12, color: '#fca5a5', fontSize: 11,
+                    padding: 12, color: '#f0a0a0', fontSize: 11,
                     background: '#1a0a0a', borderRadius: 6,
                   }}>
                     Couldn't render: {audioState.message}
@@ -2626,7 +2626,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
       {/* Subtle footer — Handler tracks everything */}
       <div style={{
         maxWidth: 640, width: '100%', marginLeft: 'auto', marginRight: 'auto',
-        marginTop: 24, fontSize: 10.5, color: '#5a5560', textAlign: 'center',
+        marginTop: 24, fontSize: 10.5, color: '#6d5a63', textAlign: 'center',
         fontStyle: 'italic',
       }}>
         the Handler keeps every list. you don't need to.

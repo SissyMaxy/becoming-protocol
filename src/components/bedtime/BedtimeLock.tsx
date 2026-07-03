@@ -56,7 +56,7 @@ const PALETTE = {
   textSecondary: '#a78bfa',
   textMuted: '#8a8690',
   inputBg: 'rgba(10, 10, 13, 0.6)',
-  primaryBg: '#7c3aed',
+  primaryBg: '#c9557f',
   primaryBgHover: '#6d28d9',
 };
 

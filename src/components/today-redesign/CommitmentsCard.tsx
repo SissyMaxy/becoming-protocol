@@ -87,15 +87,15 @@ export function CommitmentsCard() {
   };
 
   return (
-    <div id="card-commitments" style={{ background: '#111116', border: '1px solid #2d1a4d', borderRadius: 10, padding: 16, marginBottom: 16 }}>
+    <div id="card-commitments" style={{ background: '#171017', border: '1px solid #4a2438', borderRadius: 10, padding: 16, marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" strokeWidth="2">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#edaec5" strokeWidth="2">
           <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
         </svg>
-        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#c4b5fd', fontWeight: 700 }}>
+        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#edaec5', fontWeight: 700 }}>
           Handler commitments
         </span>
-        <span style={{ fontSize: 10.5, color: '#8a8690', marginLeft: 'auto' }}>
+        <span style={{ fontSize: 10.5, color: '#9c8590', marginLeft: 'auto' }}>
           {pending.length} pending · {recentMissed.length} recent miss
         </span>
       </div>
@@ -105,8 +105,8 @@ export function CommitmentsCard() {
         const isLocked = c.locked;
         return (
           <div key={c.id} style={{
-            background: isLocked ? 'linear-gradient(92deg, #1a0a12 0%, #130810 100%)' : '#0a0a0d',
-            border: `1px solid ${isLocked ? '#7a1f4d' : countdown.urgent ? '#7a1f22' : '#22222a'}`,
+            background: isLocked ? 'linear-gradient(92deg, #1a0a12 0%, #130810 100%)' : '#0f0a0e',
+            border: `1px solid ${isLocked ? '#7a1f4d' : countdown.urgent ? '#7a1f22' : '#2b1d29'}`,
             borderRadius: 8, padding: 12, marginBottom: 10,
           }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
@@ -119,13 +119,13 @@ export function CommitmentsCard() {
                       textTransform: 'uppercase', letterSpacing: '0.05em',
                     }}>🔒 locked</span>
                   )}
-                  <div style={{ fontSize: 12.5, color: '#e8e6e3', fontWeight: 600 }}>{c.what}</div>
+                  <div style={{ fontSize: 12.5, color: '#f2e9e6', fontWeight: 600 }}>{c.what}</div>
                 </div>
-                <div style={{ fontSize: 10.5, color: '#8a8690' }}>
-                  {c.category && <span style={{ color: '#c4b5fd', marginRight: 8 }}>{c.category}</span>}
+                <div style={{ fontSize: 10.5, color: '#9c8590' }}>
+                  {c.category && <span style={{ color: '#edaec5', marginRight: 8 }}>{c.category}</span>}
                   by {new Date(c.by_when).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                 </div>
-                <div style={{ fontSize: 10, color: '#8a8690', marginTop: 4, fontStyle: 'italic' }}>
+                <div style={{ fontSize: 10, color: '#9c8590', marginTop: 4, fontStyle: 'italic' }}>
                   miss → {c.consequence}
                 </div>
                 {c.evidence_required && (
@@ -141,7 +141,7 @@ export function CommitmentsCard() {
               </div>
               <div style={{
                 fontSize: 11, fontWeight: 700,
-                color: countdown.urgent ? '#f47272' : '#c4b5fd',
+                color: countdown.urgent ? '#f47272' : '#edaec5',
                 fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
               }}>
                 {countdown.label}
@@ -155,9 +155,9 @@ export function CommitmentsCard() {
                 value={fulfillNote[c.id] || ''}
                 onChange={e => setFulfillNote({ ...fulfillNote, [c.id]: e.target.value })}
                 style={{
-                  flex: 1, background: '#050507',
-                  border: `1px solid ${isLocked ? '#7a1f4d' : '#22222a'}`, borderRadius: 5,
-                  padding: '6px 9px', fontSize: 11, color: '#e8e6e3', fontFamily: 'inherit',
+                  flex: 1, background: '#0a0709',
+                  border: `1px solid ${isLocked ? '#7a1f4d' : '#2b1d29'}`, borderRadius: 5,
+                  padding: '6px 9px', fontSize: 11, color: '#f2e9e6', fontFamily: 'inherit',
                 }}
               />
               {(() => {
@@ -170,8 +170,8 @@ export function CommitmentsCard() {
                     title={!canFulfill ? 'Locked commitments require ≥20 chars of evidence' : ''}
                     style={{
                       padding: '6px 12px', borderRadius: 5, border: 'none',
-                      background: !canFulfill ? '#22222a' : '#6ee7b7',
-                      color: !canFulfill ? '#6a656e' : '#081f10',
+                      background: !canFulfill ? '#2b1d29' : '#6ee7b7',
+                      color: !canFulfill ? '#7f6b74' : '#081f10',
                       fontWeight: 600, fontSize: 11,
                       cursor: !canFulfill || submittingId === c.id ? 'not-allowed' : 'pointer',
                       fontFamily: 'inherit',
@@ -187,8 +187,8 @@ export function CommitmentsCard() {
       })}
 
       {recentMissed.length > 0 && (
-        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #22222a' }}>
-          <div style={{ fontSize: 9.5, color: '#6a656e', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #2b1d29' }}>
+          <div style={{ fontSize: 9.5, color: '#7f6b74', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
             Recent misses — consequences applied
           </div>
           {recentMissed.map(c => (
@@ -196,7 +196,7 @@ export function CommitmentsCard() {
               background: 'rgba(122,31,34,0.15)', border: '1px solid #3a1518',
               borderRadius: 6, padding: 8, marginBottom: 6,
             }}>
-              <div style={{ fontSize: 11.5, color: '#e8e6e3', marginBottom: 2 }}>✕ {c.what}</div>
+              <div style={{ fontSize: 11.5, color: '#f2e9e6', marginBottom: 2 }}>✕ {c.what}</div>
               <div style={{ fontSize: 10, color: '#f47272' }}>
                 {c.enforcement_result?.actions?.join(' · ') || c.consequence}
               </div>

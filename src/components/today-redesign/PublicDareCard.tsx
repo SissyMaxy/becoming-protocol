@@ -204,8 +204,8 @@ export function PublicDareCard() {
 
   // Persona-aware copy.
   const headerLabel = mommy ? 'mama wants this from you' : 'public dare';
-  const accent = mommy ? '#f4a7c4' : '#c4b5fd';
-  const border = mommy ? '#c46a72' : '#7c3aed';
+  const accent = mommy ? '#f4a7c4' : '#edaec5';
+  const border = mommy ? '#c46a72' : '#c9557f';
   const inProgCta = mommy ? "i'm doing it, mama →" : 'mark in progress →';
   const ackCta = mommy ? "i'm at the place →" : "i'm there →";
   const doneCta = mommy ? 'done, mama' : 'done';
@@ -227,7 +227,7 @@ export function PublicDareCard() {
         }}>
           {headerLabel}
         </span>
-        <span style={{ fontSize: 10.5, color: '#8a8690', marginLeft: 'auto' }}>
+        <span style={{ fontSize: 10.5, color: '#9c8590', marginLeft: 'auto' }}>
           {KIND_LABELS[dare.template.kind] ?? dare.template.kind}
           {dueLabel ? ` · ${dueLabel}` : ''}
           {inProgress ? ' · in progress' : ''}
@@ -235,7 +235,7 @@ export function PublicDareCard() {
       </div>
 
       <div style={{
-        fontSize: 14, color: '#e8e6e3', lineHeight: 1.5, marginBottom: 12,
+        fontSize: 14, color: '#f2e9e6', lineHeight: 1.5, marginBottom: 12,
         whiteSpace: 'pre-wrap',
       }}>
         {dare.template.description}
@@ -324,8 +324,8 @@ function ctaStyle(border: string, secondary = false): React.CSSProperties {
 
 const skipBtnStyle: React.CSSProperties = {
   background: 'transparent',
-  color: '#8a8690',
-  border: '1px solid #3a3540',
+  color: '#9c8590',
+  border: '1px solid #46333f',
   padding: '8px 14px',
   borderRadius: 6,
   fontSize: 11.5,

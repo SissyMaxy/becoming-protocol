@@ -81,13 +81,13 @@ export function CodeAuditCard() {
 
   return (
     <div id="card-code-audit" style={{
-      background: 'linear-gradient(135deg, #1a0f2e 0%, #0f0820 100%)',
-      border: '1px solid ' + (critCount > 0 ? '#f47272' : '#c4b5fd'),
+      background: 'linear-gradient(135deg, #2c1723 0%, #0f0820 100%)',
+      border: '1px solid ' + (critCount > 0 ? '#f47272' : '#edaec5'),
       borderRadius: 10, padding: 14, marginBottom: 16,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
         <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em',
-          color: critCount > 0 ? '#f47272' : '#c4b5fd', fontWeight: 700 }}>
+          color: critCount > 0 ? '#f47272' : '#edaec5', fontWeight: 700 }}>
           Protocol audit · {findings.length} open
         </span>
         {critCount > 0 && (
@@ -108,7 +108,7 @@ export function CodeAuditCard() {
             {highCount} high
           </span>
         )}
-        <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto', fontStyle: 'italic' }}>
+        <span style={{ fontSize: 10, color: '#9c8590', marginLeft: 'auto', fontStyle: 'italic' }}>
           The Handler is reading its own code
         </span>
       </div>
@@ -122,7 +122,7 @@ export function CodeAuditCard() {
               key={f.id}
               style={{
                 padding: '8px 10px',
-                background: '#0a0a0d',
+                background: '#0f0a0e',
                 border: '1px solid ' + sev.bg,
                 borderRadius: 6,
               }}
@@ -138,45 +138,45 @@ export function CodeAuditCard() {
                 }}>
                   {f.severity}
                 </span>
-                <span style={{ fontSize: 9.5, color: '#8a8690', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <span style={{ fontSize: 9.5, color: '#9c8590', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   {TYPE_LABELS[f.finding_type] || f.finding_type}
                 </span>
-                <span style={{ fontSize: 12, color: '#e8e6e3', fontWeight: 500, flex: 1 }}>
+                <span style={{ fontSize: 12, color: '#f2e9e6', fontWeight: 500, flex: 1 }}>
                   {f.title}
                 </span>
-                <span style={{ fontSize: 10, color: '#8a8690' }}>
+                <span style={{ fontSize: 10, color: '#9c8590' }}>
                   {isExpanded ? '▾' : '▸'}
                 </span>
               </div>
               {isExpanded && (
-                <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed #22222a' }}>
-                  <div style={{ fontSize: 10, color: '#8a8690', marginBottom: 4, fontFamily: 'monospace' }}>
+                <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed #2b1d29' }}>
+                  <div style={{ fontSize: 10, color: '#9c8590', marginBottom: 4, fontFamily: 'monospace' }}>
                     {f.file_path}
                   </div>
-                  <div style={{ fontSize: 11, color: '#c4b5fd', marginBottom: 6, lineHeight: 1.4 }}>
+                  <div style={{ fontSize: 11, color: '#edaec5', marginBottom: 6, lineHeight: 1.4 }}>
                     {f.description}
                   </div>
                   {f.suggested_fix && (
                     <div style={{
                       fontSize: 10.5, color: '#5fc88f',
-                      background: '#050507', padding: 6, borderRadius: 4,
+                      background: '#0a0709', padding: 6, borderRadius: 4,
                       borderLeft: '2px solid #5fc88f', marginBottom: 6,
                       lineHeight: 1.4,
                     }}>
-                      <span style={{ color: '#8a8690', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.05em' }}>fix · </span>
+                      <span style={{ color: '#9c8590', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.05em' }}>fix · </span>
                       {f.suggested_fix}
                     </div>
                   )}
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                    <span style={{ fontSize: 9, color: '#8a8690', fontStyle: 'italic' }}>
+                    <span style={{ fontSize: 9, color: '#9c8590', fontStyle: 'italic' }}>
                       auditor: {f.audited_by.split('-')[0]}{f.auto_actionable ? ' · auto-actionable' : ''}
                     </span>
                     <button
                       onClick={() => acknowledge(f.id)}
                       style={{
                         marginLeft: 'auto',
-                        background: 'transparent', border: '1px solid #2d1a4d', borderRadius: 4,
-                        color: '#c4b5fd', fontSize: 10, padding: '3px 8px',
+                        background: 'transparent', border: '1px solid #4a2438', borderRadius: 4,
+                        color: '#edaec5', fontSize: 10, padding: '3px 8px',
                         cursor: 'pointer', fontFamily: 'inherit',
                       }}
                     >

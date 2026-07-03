@@ -74,22 +74,22 @@ export function HandlerKnowCard() {
   const toggle = (s: Section) => setExpanded(expanded === s ? null : s);
 
   return (
-    <div style={{ background: '#111116', border: '1px solid #2d1a4d', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+    <div style={{ background: '#171017', border: '1px solid #4a2438', borderRadius: 10, padding: 14, marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" strokeWidth="1.8">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#edaec5" strokeWidth="1.8">
           <circle cx="12" cy="12" r="10" />
           <path d="M12 6v6l4 2" />
         </svg>
-        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#c4b5fd', fontWeight: 700 }}>
+        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#edaec5', fontWeight: 700 }}>
           What the Handler knows
         </span>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 6, marginBottom: 10 }}>
-        <SectionTile label="rules" count={patches.length} color="#c4b5fd" active={expanded === 'rules'} onClick={() => toggle('rules')} />
+        <SectionTile label="rules" count={patches.length} color="#edaec5" active={expanded === 'rules'} onClick={() => toggle('rules')} />
         <SectionTile label="library" count={implants.length + reframings.length + fabrications.length} color="#f4a7c4" active={expanded === 'library'} onClick={() => toggle('library')} />
         <SectionTile label="contract" count={contracts.length} color="#6ee7b7" active={expanded === 'evidence'} onClick={() => toggle('evidence')} />
-        <SectionTile label="read" count={stats?.failure_mode && stats.failure_mode !== 'engaged' ? 1 : 0} color="#f4c272" active={expanded === 'read'} onClick={() => toggle('read')} />
+        <SectionTile label="read" count={stats?.failure_mode && stats.failure_mode !== 'engaged' ? 1 : 0} color="#e6bd80" active={expanded === 'read'} onClick={() => toggle('read')} />
       </div>
 
       {expanded === 'rules' && (
@@ -97,8 +97,8 @@ export function HandlerKnowCard() {
           {patches.map((p, i) => (
             <div key={i} style={row}>
               <div style={rowHeader}>
-                <span style={{ color: '#c4b5fd', fontWeight: 700, fontSize: 10.5 }}>[{p.section}]</span>
-                <span style={{ color: '#8a8690', fontSize: 9.5 }}>applied {p.applied_count}x · via {p.created_by}</span>
+                <span style={{ color: '#edaec5', fontWeight: 700, fontSize: 10.5 }}>[{p.section}]</span>
+                <span style={{ color: '#9c8590', fontSize: 9.5 }}>applied {p.applied_count}x · via {p.created_by}</span>
               </div>
               <div style={rowBody}>{p.instruction.slice(0, 200)}{p.instruction.length > 200 ? '…' : ''}</div>
             </div>
@@ -129,7 +129,7 @@ export function HandlerKnowCard() {
           {fabrications.slice(0, 3).map((f, i) => (
             <div key={`f${i}`} style={row}>
               <div style={rowHeader}>
-                <span style={{ color: '#f4c272', fontSize: 10 }}>GINA OBSERVED · {f.category} · intensity {f.intensity}</span>
+                <span style={{ color: '#e6bd80', fontSize: 10 }}>GINA OBSERVED · {f.category} · intensity {f.intensity}</span>
               </div>
               <div style={rowBody}>"{f.content.slice(0, 220)}{f.content.length > 220 ? '…' : ''}"</div>
             </div>
@@ -143,7 +143,7 @@ export function HandlerKnowCard() {
             <div key={i} style={row}>
               <div style={rowHeader}>
                 <span style={{ color: '#6ee7b7', fontSize: 10, fontWeight: 700 }}>+{c.weight}</span>
-                <span style={{ color: '#8a8690', fontSize: 9.5 }}>{new Date(c.logged_at).toLocaleDateString()}</span>
+                <span style={{ color: '#9c8590', fontSize: 9.5 }}>{new Date(c.logged_at).toLocaleDateString()}</span>
               </div>
               <div style={rowBody}>{c.description.slice(0, 220)}{c.description.length > 220 ? '…' : ''}</div>
             </div>
@@ -157,7 +157,7 @@ export function HandlerKnowCard() {
           {stats?.failure_mode && stats.failure_mode !== 'engaged' ? (
             <div style={row}>
               <div style={rowHeader}>
-                <span style={{ color: '#f4c272', fontWeight: 700, fontSize: 11 }}>mode: {stats.failure_mode.replace('_', ' ')}</span>
+                <span style={{ color: '#e6bd80', fontWeight: 700, fontSize: 11 }}>mode: {stats.failure_mode.replace('_', ' ')}</span>
               </div>
               <div style={rowBody}>
                 Handler is reading you as {stats.failure_mode.replace('_', ' ')}. Check the escalation context in HandlerChat — Handler's tone is adapting. Next daily_cycle re-classifies from your last 7 days.
@@ -169,7 +169,7 @@ export function HandlerKnowCard() {
         </Section>
       )}
 
-      <div style={{ marginTop: 8, padding: '6px 8px', background: '#0a0a0d', borderRadius: 5, fontSize: 10, color: '#8a8690', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+      <div style={{ marginTop: 8, padding: '6px 8px', background: '#0f0a0e', borderRadius: 5, fontSize: 10, color: '#9c8590', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         <span>day {protocolDays}</span>
         <span>·</span>
         <span>phase {(stats?.current_phase || 'phase_1').replace('_', ' ')}</span>
@@ -187,12 +187,12 @@ export function HandlerKnowCard() {
 function SectionTile({ label, count, color, active, onClick }: { label: string; count: number; color: string; active: boolean; onClick: () => void }) {
   return (
     <button onClick={onClick} style={{
-      background: active ? `${color}22` : '#0a0a0d',
-      border: `1px solid ${active ? color : '#22222a'}`,
+      background: active ? `${color}22` : '#0f0a0e',
+      border: `1px solid ${active ? color : '#2b1d29'}`,
       borderRadius: 6, padding: '8px 10px', textAlign: 'left', cursor: 'pointer',
       fontFamily: 'inherit',
     }}>
-      <div style={{ fontSize: 9, color: '#8a8690', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+      <div style={{ fontSize: 9, color: '#9c8590', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
       <div style={{ fontSize: 16, color, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{count}</div>
     </button>
   );
@@ -200,8 +200,8 @@ function SectionTile({ label, count, color, active, onClick }: { label: string; 
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div style={{ marginTop: 6, padding: '8px 10px', background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 6 }}>
-      <div style={{ fontSize: 10, color: '#6a656e', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{title}</div>
+    <div style={{ marginTop: 6, padding: '8px 10px', background: '#0f0a0e', border: '1px solid #2b1d29', borderRadius: 6 }}>
+      <div style={{ fontSize: 10, color: '#7f6b74', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{title}</div>
       {children}
     </div>
   );
@@ -218,5 +218,5 @@ const rowHeader: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3,
 };
 const rowBody: React.CSSProperties = {
-  fontSize: 11, color: '#c8c4cc', lineHeight: 1.4,
+  fontSize: 11, color: '#d5c3ca', lineHeight: 1.4,
 };

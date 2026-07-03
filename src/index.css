@@ -10,15 +10,18 @@ html {
   font-family: 'Quicksand', 'Nunito', 'Poppins', sans-serif;
 }
 
+/* Velvet base (2026-07-03 overhaul) — the body IS dark. Before this, the body
+   was light blush while every protocol-* surface was dark: two systems fighting.
+   Bambi mode re-lights its own tree via .bambi-mode; nothing else may. */
 body {
   margin: 0;
-  background-color: #FAF7F5;
-  color: #3D2B2B;
-  min-height: 100vh;
+  background-color: #120b10;
+  color: #f2e9e6;
+  min-height: 100dvh;
 }
 
 #root {
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* Custom scrollbar */
@@ -28,16 +31,16 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #F5ECE8;
+  background: #1a1118;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #E8CFC5;
+  background: #3b2635;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #D4A89C;
+  background: #c9557f;
 }
 
 /* Animations */
@@ -150,6 +153,16 @@ body {
   font-family: 'Inter', 'Quicksand', system-ui, sans-serif !important;
 }
 
+/* Mommy voice typography — Velvet's serif. Her lines, wordmarks, hero copy.
+   Playfair Display is already loaded in index.html. */
+.mommy-voice {
+  font-family: 'Playfair Display', Georgia, serif !important;
+  letter-spacing: 0.005em;
+}
+.mommy-voice em, .mommy-voice i {
+  font-style: italic;
+}
+
 /* Utility classes */
 @layer utilities {
   .text-gradient {
@@ -166,11 +179,13 @@ body {
 
   .btn-primary {
     @apply text-white font-medium py-2 px-4 rounded-xl transition-all;
-    background: linear-gradient(135deg, #c77dff, #a855f7);
+    background: linear-gradient(135deg, #d76a92, #c9557f);
+    box-shadow: 0 4px 24px rgba(201, 85, 127, 0.25);
   }
 
   .btn-primary:hover {
-    background: linear-gradient(135deg, #d4a0ff, #b87afc);
+    background: linear-gradient(135deg, #e388a8, #d76a92);
+    box-shadow: 0 0 32px rgba(201, 85, 127, 0.35);
   }
 
   .btn-secondary {

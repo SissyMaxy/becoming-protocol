@@ -196,7 +196,7 @@ export function PhotoUploadWidget({
 
   const palette = mommy
     ? { accent: '#f4a7c4', bg: 'linear-gradient(135deg, #1a0f2e 0%, #1a0820 100%)', border: '#5d2d4a' }
-    : { accent: '#c4b5fd', bg: 'linear-gradient(135deg, #14101e 0%, #0f0820 100%)', border: '#2d1a4d' };
+    : { accent: '#edaec5', bg: 'linear-gradient(135deg, #14101e 0%, #0f0820 100%)', border: '#2d1a4d' };
 
   const speakerLabel = mommy ? 'Mama' : 'the Handler';
   const noticeText = mommy
@@ -264,7 +264,7 @@ export function PhotoUploadWidget({
             padding: 10,
             marginBottom: 10,
             fontSize: 11,
-            color: '#c4b5fd',
+            color: '#edaec5',
             lineHeight: 1.4,
           }}
         >

@@ -95,7 +95,7 @@ export function RevenueCard() {
   const monthlyGap = Math.max(0, monthlyNeed - (cents30 + davidCents30));
   const isZero = centsAll === 0;
 
-  const tone = isZero ? '#7a1f22' : cents30 >= monthlyNeed ? '#5fc88f' : '#f4c272';
+  const tone = isZero ? '#7a1f22' : cents30 >= monthlyNeed ? '#5fc88f' : '#e6bd80';
 
   return (
     <div id="card-revenue" style={{
@@ -111,7 +111,7 @@ export function RevenueCard() {
         <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: tone, fontWeight: 700 }}>
           Maxy fund
         </span>
-        <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto', fontStyle: 'italic' }}>
+        <span style={{ fontSize: 10, color: '#9c8590', marginLeft: 'auto', fontStyle: 'italic' }}>
           {isZero
             ? davidCentsAll > 0
               ? `Handler $0 · David $${(davidCentsAll / 100).toFixed(2)}`
@@ -128,9 +128,9 @@ export function RevenueCard() {
 
       <div style={{
         padding: '8px 10px', marginBottom: 10,
-        background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 5,
+        background: '#0f0a0e', border: '1px solid #2b1d29', borderRadius: 5,
       }}>
-        <div style={{ fontSize: 10, color: '#c4b5fd', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, marginBottom: 6 }}>
+        <div style={{ fontSize: 10, color: '#edaec5', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, marginBottom: 6 }}>
           What every dollar buys
         </div>
         {targets.map(t => {
@@ -139,7 +139,7 @@ export function RevenueCard() {
           return (
             <div key={t.id} style={{ marginBottom: 6 }}>
               <div style={{
-                display: 'flex', gap: 8, fontSize: 11, color: '#e8e6e3', marginBottom: 2,
+                display: 'flex', gap: 8, fontSize: 11, color: '#f2e9e6', marginBottom: 2,
                 alignItems: 'baseline',
               }}>
                 <span style={{
@@ -149,21 +149,21 @@ export function RevenueCard() {
                   {t.label}
                 </span>
                 <span style={{
-                  flexShrink: 0, color: '#8a8690', fontVariantNumeric: 'tabular-nums',
+                  flexShrink: 0, color: '#9c8590', fontVariantNumeric: 'tabular-nums',
                   fontSize: 10.5,
                 }}>
                   {fmtUsd(t.funded_cents)} / {fmtUsd(need)}
-                  <span style={{ color: '#5a5560', marginLeft: 3 }}>{t.monthly_cents > 0 ? '/mo' : 'one-time'}</span>
+                  <span style={{ color: '#6d5a63', marginLeft: 3 }}>{t.monthly_cents > 0 ? '/mo' : 'one-time'}</span>
                 </span>
               </div>
-              <div style={{ height: 4, background: '#1a1a20', borderRadius: 2, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${pct}%`, background: pct >= 100 ? '#5fc88f' : '#7c3aed', transition: 'width 0.3s' }} />
+              <div style={{ height: 4, background: '#221722', borderRadius: 2, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${pct}%`, background: pct >= 100 ? '#5fc88f' : '#c9557f', transition: 'width 0.3s' }} />
               </div>
             </div>
           );
         })}
         {oneTimeNeed > 0 && (
-          <div style={{ fontSize: 9.5, color: '#8a8690', marginTop: 4, fontStyle: 'italic' }}>
+          <div style={{ fontSize: 9.5, color: '#9c8590', marginTop: 4, fontStyle: 'italic' }}>
             One-time costs total {fmtUsd(oneTimeNeed)}. Monthly costs total {fmtUsd(monthlyNeed)}/mo.
           </div>
         )}
@@ -181,7 +181,7 @@ export function RevenueCard() {
           + Log income
         </button>
       ) : (
-        <div style={{ background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 5, padding: 10 }}>
+        <div style={{ background: '#0f0a0e', border: '1px solid #2b1d29', borderRadius: 5, padding: 10 }}>
           <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
             <input
               value={draft.amount}
@@ -215,8 +215,8 @@ export function RevenueCard() {
               disabled={!parseFloat(draft.amount)}
               style={{
                 flex: 1, padding: 7, borderRadius: 5, border: 'none',
-                background: parseFloat(draft.amount) ? '#5fc88f' : '#22222a',
-                color: parseFloat(draft.amount) ? '#0a1a14' : '#5a5560',
+                background: parseFloat(draft.amount) ? '#5fc88f' : '#2b1d29',
+                color: parseFloat(draft.amount) ? '#0a1a14' : '#6d5a63',
                 fontWeight: 600, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
               }}
             >
@@ -224,7 +224,7 @@ export function RevenueCard() {
             </button>
             <button
               onClick={() => setAdding(false)}
-              style={{ padding: '7px 12px', borderRadius: 5, border: '1px solid #2d1a4d', background: 'none', color: '#8a8690', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}
+              style={{ padding: '7px 12px', borderRadius: 5, border: '1px solid #4a2438', background: 'none', color: '#9c8590', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}
             >
               Cancel
             </button>
@@ -236,20 +236,20 @@ export function RevenueCard() {
 }
 
 const inputStyle: React.CSSProperties = {
-  background: '#050507', border: '1px solid #22222a', borderRadius: 4,
-  padding: '6px 8px', fontSize: 11, color: '#e8e6e3', fontFamily: 'inherit',
+  background: '#0a0709', border: '1px solid #2b1d29', borderRadius: 4,
+  padding: '6px 8px', fontSize: 11, color: '#f2e9e6', fontFamily: 'inherit',
 };
 
 function Stat({ label, value, tone, sub }: { label: string; value: string; tone: string; sub?: string }) {
   return (
-    <div style={{ background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 5, padding: '8px 10px' }}>
-      <div style={{ fontSize: 9, color: '#8a8690', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, marginBottom: 3 }}>
+    <div style={{ background: '#0f0a0e', border: '1px solid #2b1d29', borderRadius: 5, padding: '8px 10px' }}>
+      <div style={{ fontSize: 9, color: '#9c8590', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, marginBottom: 3 }}>
         {label}
       </div>
       <div style={{ fontSize: 16, fontWeight: 650, color: tone, letterSpacing: '-0.01em' }}>
         {value}
       </div>
-      {sub && <div style={{ fontSize: 9.5, color: '#5a5560', marginTop: 2 }}>{sub}</div>}
+      {sub && <div style={{ fontSize: 9.5, color: '#6d5a63', marginTop: 2 }}>{sub}</div>}
     </div>
   );
 }

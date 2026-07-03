@@ -126,27 +126,27 @@ export function BodyMeasurementCard() {
 
   return (
     <div style={{
-      background: isStale ? 'linear-gradient(92deg, #2a1f0a 0%, #1f1608 100%)' : '#111116',
-      border: `1px solid ${isStale ? '#7a5a1f' : '#2d1a4d'}`,
+      background: isStale ? 'linear-gradient(92deg, #2a1f0a 0%, #1f1608 100%)' : '#171017',
+      border: `1px solid ${isStale ? '#7a5a1f' : '#4a2438'}`,
       borderRadius: 10, padding: 16, marginBottom: 16,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={isStale ? '#f4c272' : '#c4b5fd'} strokeWidth="1.8">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={isStale ? '#e6bd80' : '#edaec5'} strokeWidth="1.8">
           <path d="M3 6h18M3 12h18M3 18h18" /><circle cx="7" cy="6" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="17" cy="18" r="1" fill="currentColor"/>
         </svg>
-        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: isStale ? '#f4c272' : '#c4b5fd', fontWeight: 700 }}>
+        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: isStale ? '#e6bd80' : '#edaec5', fontWeight: 700 }}>
           Body measurements
         </span>
-        <span style={{ fontSize: 10.5, color: '#8a8690', marginLeft: 'auto' }}>
+        <span style={{ fontSize: 10.5, color: '#9c8590', marginLeft: 'auto' }}>
           {latest ? `${ageDays}d ago` : 'none logged'}
         </span>
       </div>
 
       {history.length >= 2 && (
         <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 9, color: '#6a656e', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>trend · last {history.length} entries</div>
+          <div style={{ fontSize: 9, color: '#7f6b74', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>trend · last {history.length} entries</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
-            <Sparkline label="weight" values={history.map(h => h.weight_kg).filter((v): v is number => v != null).reverse()} directionColor="#c4b5fd" />
+            <Sparkline label="weight" values={history.map(h => h.weight_kg).filter((v): v is number => v != null).reverse()} directionColor="#edaec5" />
             <Sparkline label="waist" values={history.map(h => h.waist_cm).filter((v): v is number => v != null).reverse()} directionColor="#6ee7b7" invert />
             <Sparkline label="hips" values={history.map(h => h.hips_cm).filter((v): v is number => v != null).reverse()} directionColor="#f4a7c4" />
           </div>
@@ -165,7 +165,7 @@ export function BodyMeasurementCard() {
       )}
 
       {isStale && (
-        <div style={{ fontSize: 11.5, color: '#f4c272', marginBottom: 10, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 11.5, color: '#e6bd80', marginBottom: 10, lineHeight: 1.5 }}>
           Weekly measurement mandate. {latest ? 'Data is over a week old.' : 'Nothing logged yet.'} Miss the 48h deadline and slip +3 + bleed +$15. Log today or explain the refusal.
         </div>
       )}
@@ -173,8 +173,8 @@ export function BodyMeasurementCard() {
       {!showForm ? (
         <button onClick={() => setShowForm(true)} style={{
           width: '100%', padding: '8px 12px', borderRadius: 6, border: 'none',
-          background: isStale ? '#7c3aed' : 'rgba(124,58,237,0.15)',
-          color: isStale ? '#fff' : '#c4b5fd', fontWeight: 600, fontSize: 11.5, cursor: 'pointer',
+          background: isStale ? '#c9557f' : 'rgba(124,58,237,0.15)',
+          color: isStale ? '#fff' : '#edaec5', fontWeight: 600, fontSize: 11.5, cursor: 'pointer',
           fontFamily: 'inherit',
         }}>
           {latest ? 'Log new measurement' : '+ Log first measurement'}
@@ -193,7 +193,7 @@ export function BodyMeasurementCard() {
               placeholder="notes (optional)"
               value={form.notes}
               onChange={e => setForm({ ...form, notes: e.target.value })}
-              style={{ width: '100%', background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 5, padding: '6px 9px', fontSize: 11, color: '#e8e6e3', fontFamily: 'inherit', marginTop: 2 }}
+              style={{ width: '100%', background: '#0f0a0e', border: '1px solid #2b1d29', borderRadius: 5, padding: '6px 9px', fontSize: 11, color: '#f2e9e6', fontFamily: 'inherit', marginTop: 2 }}
             />
           </div>
           {saveError && (
@@ -204,12 +204,12 @@ export function BodyMeasurementCard() {
           <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 6, marginTop: 6 }}>
             <button onClick={submit} disabled={submitting} style={{
               flex: 1, padding: '7px 12px', borderRadius: 6, border: 'none',
-              background: '#7c3aed', color: '#fff', fontWeight: 600, fontSize: 11.5,
+              background: '#c9557f', color: '#fff', fontWeight: 600, fontSize: 11.5,
               cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
             }}>{submitting ? 'saving…' : 'Submit'}</button>
             <button onClick={() => setShowForm(false)} style={{
               padding: '7px 12px', borderRadius: 6,
-              background: 'none', border: '1px solid #22222a', color: '#8a8690',
+              background: 'none', border: '1px solid #2b1d29', color: '#9c8590',
               fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit',
             }}>Cancel</button>
           </div>
@@ -220,15 +220,15 @@ export function BodyMeasurementCard() {
 }
 
 function MetricPill({ label, value, delta, target }: { label: string; value: string; delta: string | null; target?: string | null }) {
-  const deltaColor = !delta || delta === '—' ? '#6a656e'
+  const deltaColor = !delta || delta === '—' ? '#7f6b74'
     : (delta.startsWith('+') && (label === 'hips' || label === 'chest')) || (delta.startsWith('-') && (label === 'waist' || label === 'weight' || label === 'neck' || label === 'thigh'))
     ? '#6ee7b7' : '#f4a7c4';
   return (
-    <div style={{ background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 6, padding: '6px 9px' }}>
-      <div style={{ fontSize: 9, color: '#6a656e', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
-      <div style={{ fontSize: 13.5, color: '#e8e6e3', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+    <div style={{ background: '#0f0a0e', border: '1px solid #2b1d29', borderRadius: 6, padding: '6px 9px' }}>
+      <div style={{ fontSize: 9, color: '#7f6b74', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+      <div style={{ fontSize: 13.5, color: '#f2e9e6', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
       {delta && <div style={{ fontSize: 9.5, color: deltaColor, fontVariantNumeric: 'tabular-nums' }}>{delta}</div>}
-      {target && <div style={{ fontSize: 9, color: '#8a8690', marginTop: 1 }}>{target}</div>}
+      {target && <div style={{ fontSize: 9, color: '#9c8590', marginTop: 1 }}>{target}</div>}
     </div>
   );
 }
@@ -236,8 +236,8 @@ function MetricPill({ label, value, delta, target }: { label: string; value: str
 function Sparkline({ label, values, directionColor, invert }: { label: string; values: number[]; directionColor: string; invert?: boolean }) {
   if (values.length < 2) {
     return (
-      <div style={{ background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 5, padding: '5px 7px' }}>
-        <div style={{ fontSize: 9, color: '#6a656e', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
+      <div style={{ background: '#0f0a0e', border: '1px solid #2b1d29', borderRadius: 5, padding: '5px 7px' }}>
+        <div style={{ fontSize: 9, color: '#7f6b74', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
         <div style={{ fontSize: 10, color: '#5a555e', fontStyle: 'italic' }}>—</div>
       </div>
     );
@@ -258,12 +258,12 @@ function Sparkline({ label, values, directionColor, invert }: { label: string; v
   const delta = last - first;
   // "Good" direction depends on metric: weight/waist shrinking = green, hips growing = green
   const goodDirection = invert ? delta < 0 : delta > 0;
-  const sparkColor = Math.abs(delta) < 0.1 ? '#8a8690' : goodDirection ? directionColor : '#f47272';
+  const sparkColor = Math.abs(delta) < 0.1 ? '#9c8590' : goodDirection ? directionColor : '#f47272';
 
   return (
-    <div style={{ background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 5, padding: '5px 7px' }}>
+    <div style={{ background: '#0f0a0e', border: '1px solid #2b1d29', borderRadius: 5, padding: '5px 7px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 2 }}>
-        <span style={{ fontSize: 9, color: '#6a656e', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</span>
+        <span style={{ fontSize: 9, color: '#7f6b74', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</span>
         <span style={{ fontSize: 9.5, color: sparkColor, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
           {delta > 0 ? '+' : ''}{delta.toFixed(1)}
         </span>
@@ -278,7 +278,7 @@ function Sparkline({ label, values, directionColor, invert }: { label: string; v
 function Field({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
   return (
     <div>
-      <div style={{ fontSize: 9.5, color: '#8a8690', marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+      <div style={{ fontSize: 9.5, color: '#9c8590', marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
       <input
         type="number"
         step="0.1"
@@ -286,8 +286,8 @@ function Field({ label, value, onChange, placeholder }: { label: string; value: 
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
         style={{
-          width: '100%', background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 5,
-          padding: '6px 9px', fontSize: 11.5, color: '#e8e6e3', fontFamily: 'inherit',
+          width: '100%', background: '#0f0a0e', border: '1px solid #2b1d29', borderRadius: 5,
+          padding: '6px 9px', fontSize: 11.5, color: '#f2e9e6', fontFamily: 'inherit',
         }}
       />
     </div>

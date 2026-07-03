@@ -32,12 +32,12 @@ interface Task {
 // 'debt'; everything else is 'momentum'.
 
 const SOURCE_TONE: Record<Source, string> = {
-  commitment: '#7c3aed',
-  decree: '#f4c272',
+  commitment: '#c9557f',
+  decree: '#e6bd80',
   outfit: '#ec4899',
   workout: '#6ee7b7',
   punishment: '#f47272',
-  directive: '#c4b5fd',
+  directive: '#edaec5',
   hrt_gate: '#f4a7c4',
 };
 
@@ -260,8 +260,8 @@ export function UnifiedTaskList() {
           tasks={momentumTasks}
           headerLabel="Assigned"
           headerHint="Forward work. Build with it."
-          accent="#c4b5fd"
-          urgentAccent="#f4c272"
+          accent="#edaec5"
+          urgentAccent="#e6bd80"
           urgentBg="linear-gradient(135deg, #2a1f0a 0%, #1a1305 100%)"
           urgentBorder="#7a4f1f"
         />
@@ -299,8 +299,8 @@ function TaskSection({ tasks, headerLabel, headerHint, accent, urgentAccent, urg
 
   return (
     <div style={{
-      background: 'linear-gradient(135deg, #1a0f2e 0%, #0f0820 100%)',
-      border: `2px solid ${overdueCount > 3 ? urgentBorder : '#2d1a4d'}`,
+      background: 'linear-gradient(135deg, #2c1723 0%, #0f0820 100%)',
+      border: `2px solid ${overdueCount > 3 ? urgentBorder : '#4a2438'}`,
       borderRadius: 10, padding: 14,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
@@ -316,7 +316,7 @@ function TaskSection({ tasks, headerLabel, headerHint, accent, urgentAccent, urg
             {overdueCount} overdue
           </span>
         )}
-        <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto', fontStyle: 'italic' }}>
+        <span style={{ fontSize: 10, color: '#9c8590', marginLeft: 'auto', fontStyle: 'italic' }}>
           {headerHint}
         </span>
       </div>
@@ -336,13 +336,13 @@ function TaskSection({ tasks, headerLabel, headerHint, accent, urgentAccent, urg
           {rightNow.label}
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 10.5, marginBottom: 10 }}>
-          <span style={{ color: formatDue(rightNow.due).overdueHours > 0 ? '#f47272' : '#f4c272', fontWeight: 700 }}>
+          <span style={{ color: formatDue(rightNow.due).overdueHours > 0 ? '#f47272' : '#e6bd80', fontWeight: 700 }}>
             {formatDue(rightNow.due).text}
           </span>
           {rightNow.consequence && (
             <span style={{ color: '#f47272' }}>miss → {rightNow.consequence}</span>
           )}
-          {rightNow.detail && <span style={{ color: '#8a8690' }}>{rightNow.detail}</span>}
+          {rightNow.detail && <span style={{ color: '#9c8590' }}>{rightNow.detail}</span>}
         </div>
         <button
           onClick={async () => {
@@ -351,7 +351,7 @@ function TaskSection({ tasks, headerLabel, headerHint, accent, urgentAccent, urg
               const el = document.getElementById(id);
               if (el) {
                 el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                el.style.outline = '2px solid #f4c272';
+                el.style.outline = '2px solid #e6bd80';
                 el.style.transition = 'outline 0.4s';
                 setTimeout(() => { el.style.outline = ''; }, 1800);
                 return;
@@ -383,20 +383,20 @@ function TaskSection({ tasks, headerLabel, headerHint, accent, urgentAccent, urg
 
       {nextUp && (
         <div style={{
-          background: '#0a0a0d', border: '1px solid #2d1a4d',
+          background: '#0f0a0e', border: '1px solid #4a2438',
           borderLeft: `3px solid ${SOURCE_TONE[nextUp.source]}`,
           borderRadius: 5, padding: '8px 10px', marginBottom: 10,
         }}>
           <div style={{
-            fontSize: 9, color: '#c4b5fd', fontWeight: 700,
+            fontSize: 9, color: '#edaec5', fontWeight: 700,
             textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3,
           }}>
             then next · {SOURCE_LABEL[nextUp.source]}
           </div>
-          <div style={{ fontSize: 12, color: '#e8e6e3', lineHeight: 1.4 }}>
+          <div style={{ fontSize: 12, color: '#f2e9e6', lineHeight: 1.4 }}>
             {nextUp.label}
           </div>
-          <div style={{ fontSize: 10, color: formatDue(nextUp.due).overdueHours > 0 ? '#f47272' : '#8a8690', marginTop: 2 }}>
+          <div style={{ fontSize: 10, color: formatDue(nextUp.due).overdueHours > 0 ? '#f47272' : '#9c8590', marginTop: 2 }}>
             {formatDue(nextUp.due).text}
           </div>
         </div>
@@ -405,12 +405,12 @@ function TaskSection({ tasks, headerLabel, headerHint, accent, urgentAccent, urg
       {after.length > 0 && (
         <details style={{ marginTop: 4 }} className="td-task-queue">
           <summary style={{
-            fontSize: 10.5, color: '#c4b5fd', cursor: 'pointer',
+            fontSize: 10.5, color: '#edaec5', cursor: 'pointer',
             textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6,
             userSelect: 'none',
             padding: '7px 10px',
-            border: '1px solid #2d1a4d', borderRadius: 5,
-            background: '#0a0a0d',
+            border: '1px solid #4a2438', borderRadius: 5,
+            background: '#0f0a0e',
             display: 'flex', alignItems: 'center', gap: 6,
             transition: 'background 0.15s, border-color 0.15s',
           }}>
@@ -425,8 +425,8 @@ function TaskSection({ tasks, headerLabel, headerHint, accent, urgentAccent, urg
               return (
                 <div key={t.id} style={{
                   padding: '7px 10px',
-                  background: '#0a0a0d',
-                  border: `1px solid ${overdue ? '#7a1f22' : '#22222a'}`,
+                  background: '#0f0a0e',
+                  border: `1px solid ${overdue ? '#7a1f22' : '#2b1d29'}`,
                   borderLeft: `3px solid ${tone}`,
                   borderRadius: 5,
                   display: 'flex',
@@ -442,7 +442,7 @@ function TaskSection({ tasks, headerLabel, headerHint, accent, urgentAccent, urg
                     </div>
                     {t.badge && (
                       <div style={{
-                        fontSize: 8, color: '#8a8690', marginTop: 2,
+                        fontSize: 8, color: '#9c8590', marginTop: 2,
                         textTransform: 'uppercase', letterSpacing: '0.04em',
                       }}>
                         {t.badge}
@@ -450,7 +450,7 @@ function TaskSection({ tasks, headerLabel, headerHint, accent, urgentAccent, urg
                     )}
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 11.5, color: '#e8e6e3', lineHeight: 1.4 }}>
+                    <div style={{ fontSize: 11.5, color: '#f2e9e6', lineHeight: 1.4 }}>
                       {t.label}
                     </div>
                     {t.consequence && (
@@ -463,7 +463,7 @@ function TaskSection({ tasks, headerLabel, headerHint, accent, urgentAccent, urg
                     flexShrink: 0,
                     fontSize: 9.5,
                     fontWeight: 700,
-                    color: overdue ? '#f47272' : '#8a8690',
+                    color: overdue ? '#f47272' : '#9c8590',
                     whiteSpace: 'nowrap',
                     fontVariantNumeric: 'tabular-nums',
                   }}>
@@ -476,7 +476,7 @@ function TaskSection({ tasks, headerLabel, headerHint, accent, urgentAccent, urg
         </details>
       )}
 
-      <div style={{ fontSize: 10, color: '#5a5560', marginTop: 10, fontStyle: 'italic', textAlign: 'center' }}>
+      <div style={{ fontSize: 10, color: '#6d5a63', marginTop: 10, fontStyle: 'italic', textAlign: 'center' }}>
         Each item lives on its own card below. This is the index.
       </div>
     </div>

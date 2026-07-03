@@ -39,7 +39,7 @@ export function ConfessionAudioPlayer({ audioPath, label, compact = false, durat
   if (!audioPath) return null;
   if (!signed) {
     return (
-      <div style={{ fontSize: 10, color: '#5a5560', fontStyle: 'italic' }}>
+      <div style={{ fontSize: 10, color: '#6d5a63', fontStyle: 'italic' }}>
         loading audio…
       </div>
     );
@@ -49,12 +49,12 @@ export function ConfessionAudioPlayer({ audioPath, label, compact = false, durat
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       {!compact && label && (
         <div style={{
-          fontSize: 9.5, color: '#c4b5fd', fontWeight: 700,
+          fontSize: 9.5, color: '#edaec5', fontWeight: 700,
           textTransform: 'uppercase', letterSpacing: '0.06em',
         }}>
           {label}
           {typeof durationSec === 'number' && durationSec > 0 && (
-            <span style={{ color: '#8a8690', marginLeft: 6, fontWeight: 400 }}>
+            <span style={{ color: '#9c8590', marginLeft: 6, fontWeight: 400 }}>
               · {durationSec}s
             </span>
           )}

@@ -146,24 +146,24 @@ export function HandlerEvolutionCard() {
 
   const sourceColor = (src: string) =>
     src === 'handler_evolve' ? '#6ee7b7'
-    : src === 'self_audit' ? '#c4b5fd'
+    : src === 'self_audit' ? '#edaec5'
     : src === 'seed_aggression' ? '#f4a7c4'
-    : '#f4c272';
+    : '#e6bd80';
 
   const lastAge = lastEvolve ? Math.floor((Date.now() - new Date(lastEvolve.executed_at).getTime()) / 60000) : null;
   const lastAgeStr = lastAge == null ? 'never' : lastAge < 60 ? `${lastAge}m ago` : lastAge < 1440 ? `${Math.floor(lastAge / 60)}h ago` : `${Math.floor(lastAge / 1440)}d ago`;
 
   return (
-    <div style={{ background: '#111116', border: '1px solid #2d1a4d', borderRadius: 10, padding: 16, marginBottom: 16 }}>
+    <div style={{ background: '#171017', border: '1px solid #4a2438', borderRadius: 10, padding: 16, marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" strokeWidth="1.8">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#edaec5" strokeWidth="1.8">
           <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
           <circle cx="12" cy="12" r="3"/>
         </svg>
-        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#c4b5fd', fontWeight: 700 }}>
+        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#edaec5', fontWeight: 700 }}>
           Handler evolution
         </span>
-        <span style={{ fontSize: 10.5, color: '#8a8690', marginLeft: 'auto' }}>
+        <span style={{ fontSize: 10.5, color: '#9c8590', marginLeft: 'auto' }}>
           last cycle: {lastAgeStr}
         </span>
       </div>
@@ -176,7 +176,7 @@ export function HandlerEvolutionCard() {
       </div>
 
       <div style={{ marginBottom: 10 }}>
-        <div style={{ fontSize: 9.5, color: '#6a656e', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>Patch sources</div>
+        <div style={{ fontSize: 9.5, color: '#7f6b74', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>Patch sources</div>
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
           {Object.entries(metrics.patches_by_source).map(([src, n]) => (
             <span key={src} style={{
@@ -189,16 +189,16 @@ export function HandlerEvolutionCard() {
       </div>
 
       <div style={{ marginBottom: 10 }}>
-        <div style={{ fontSize: 9.5, color: '#6a656e', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>Top 3 active patches</div>
+        <div style={{ fontSize: 9.5, color: '#7f6b74', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>Top 3 active patches</div>
         {patches.slice(0, 3).map(p => {
           const ageDays = Math.floor((Date.now() - new Date(p.created_at).getTime()) / 86400000);
           return (
-            <div key={p.id} style={{ background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 6, padding: 8, marginBottom: 5 }}>
+            <div key={p.id} style={{ background: '#0f0a0e', border: '1px solid #2b1d29', borderRadius: 6, padding: 8, marginBottom: 5 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                 <span style={{ fontSize: 10, fontWeight: 700, color: sourceColor(p.created_by) }}>[{p.section}]</span>
-                <span style={{ fontSize: 9.5, color: '#6a656e' }}>{ageDays}d old · applied {p.applied_count}x</span>
+                <span style={{ fontSize: 9.5, color: '#7f6b74' }}>{ageDays}d old · applied {p.applied_count}x</span>
               </div>
-              <div style={{ fontSize: 10.5, color: '#c8c4cc', lineHeight: 1.4 }}>{p.instruction.slice(0, 160)}{p.instruction.length > 160 ? '…' : ''}</div>
+              <div style={{ fontSize: 10.5, color: '#d5c3ca', lineHeight: 1.4 }}>{p.instruction.slice(0, 160)}{p.instruction.length > 160 ? '…' : ''}</div>
             </div>
           );
         })}
@@ -206,12 +206,12 @@ export function HandlerEvolutionCard() {
       </div>
 
       <div style={{ marginBottom: 10 }}>
-        <div style={{ fontSize: 9.5, color: '#6a656e', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>7-day signal</div>
-        <div style={{ fontSize: 10.5, color: '#c8c4cc', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 4 }}>
+        <div style={{ fontSize: 9.5, color: '#7f6b74', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>7-day signal</div>
+        <div style={{ fontSize: 10.5, color: '#d5c3ca', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 4 }}>
           <div>pronoun slips: <span style={{ color: metrics.pronoun_slips_7d > 0 ? '#f47272' : '#6ee7b7', fontWeight: 600 }}>{metrics.pronoun_slips_7d}</span></div>
           <div>David events: <span style={{ color: metrics.david_events_7d > 0 ? '#f47272' : '#6ee7b7', fontWeight: 600 }}>{metrics.david_events_7d}</span></div>
           <div>commits fulfilled: <span style={{ color: '#6ee7b7', fontWeight: 600 }}>{metrics.commits_fulfilled_7d}</span></div>
-          <div>commits missed: <span style={{ color: metrics.commits_missed_7d > 0 ? '#f47272' : '#6a656e', fontWeight: 600 }}>{metrics.commits_missed_7d}</span></div>
+          <div>commits missed: <span style={{ color: metrics.commits_missed_7d > 0 ? '#f47272' : '#7f6b74', fontWeight: 600 }}>{metrics.commits_missed_7d}</span></div>
         </div>
       </div>
 
@@ -222,8 +222,8 @@ export function HandlerEvolutionCard() {
       )}
 
       {lastEvolve?.decision_data && (
-        <div style={{ fontSize: 10.5, color: '#8a8690', marginBottom: 10, padding: '6px 8px', background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 5 }}>
-          <div style={{ fontSize: 9.5, color: '#6a656e', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Last evolve cycle output</div>
+        <div style={{ fontSize: 10.5, color: '#9c8590', marginBottom: 10, padding: '6px 8px', background: '#0f0a0e', border: '1px solid #2b1d29', borderRadius: 5 }}>
+          <div style={{ fontSize: 9.5, color: '#7f6b74', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Last evolve cycle output</div>
           patches +{lastEvolve.decision_data.patches_generated ?? 0} / −{lastEvolve.decision_data.patches_deactivated ?? 0} ·
           implants +{lastEvolve.decision_data.implants_created ?? 0} ·
           reframes +{lastEvolve.decision_data.reframings_created ?? 0} ·
@@ -236,15 +236,15 @@ export function HandlerEvolutionCard() {
         disabled={running}
         style={{
           width: '100%', padding: '7px 12px', borderRadius: 6, border: 'none',
-          background: running ? '#22222a' : 'rgba(124,58,237,0.15)',
-          color: running ? '#8a8690' : '#c4b5fd',
+          background: running ? '#2b1d29' : 'rgba(124,58,237,0.15)',
+          color: running ? '#9c8590' : '#edaec5',
           fontWeight: 600, fontSize: 11, cursor: running ? 'wait' : 'pointer', fontFamily: 'inherit',
         }}
       >
         {running ? 'running evolve cycle (up to 30s)…' : 'Run evolve cycle now'}
       </button>
       {runResult && (
-        <div style={{ fontSize: 10, color: '#8a8690', marginTop: 6, padding: '4px 6px', background: '#0a0a0d', borderRadius: 4 }}>
+        <div style={{ fontSize: 10, color: '#9c8590', marginTop: 6, padding: '4px 6px', background: '#0f0a0e', borderRadius: 4 }}>
           {runResult}
         </div>
       )}
@@ -254,9 +254,9 @@ export function HandlerEvolutionCard() {
 
 function StatPill({ label, value, delta }: { label: string; value: number; delta?: string | null }) {
   return (
-    <div style={{ background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 6, padding: '6px 8px' }}>
-      <div style={{ fontSize: 9, color: '#6a656e', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
-      <div style={{ fontSize: 15, color: '#e8e6e3', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+    <div style={{ background: '#0f0a0e', border: '1px solid #2b1d29', borderRadius: 6, padding: '6px 8px' }}>
+      <div style={{ fontSize: 9, color: '#7f6b74', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+      <div style={{ fontSize: 15, color: '#f2e9e6', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
       {delta && <div style={{ fontSize: 9, color: '#6ee7b7', fontVariantNumeric: 'tabular-nums' }}>{delta} (7d)</div>}
     </div>
   );

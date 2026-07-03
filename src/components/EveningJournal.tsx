@@ -110,7 +110,7 @@ function JournalTextArea({
   placeholder,
   value,
   onChange,
-  accentColor = '#a855f7'
+  accentColor = '#c9557f'
 }: JournalTextAreaProps) {
   return (
     <div className="space-y-2">
@@ -304,7 +304,7 @@ export function EveningJournal() {
           placeholder="What did you learn about yourself today?"
           value={insights}
           onChange={setInsights}
-          accentColor="#a855f7"
+          accentColor="#c9557f"
         />
       </div>
 

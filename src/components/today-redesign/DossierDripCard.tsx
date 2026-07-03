@@ -195,7 +195,7 @@ export function DossierDripCard() {
               style={{
                 flex: 1,
                 background: draft === v ? accent : 'transparent',
-                color: draft === v ? '#1a0e16' : '#c8c4cc',
+                color: draft === v ? '#1a0e16' : '#d5c3ca',
                 border: `1px solid ${accent}55`,
                 borderRadius: 6,
                 padding: '8px 12px',
@@ -233,7 +233,7 @@ export function DossierDripCard() {
               onClick={() => setChoiceDraft([c.value])}
               style={{
                 background: choiceDraft.includes(c.value) ? `${accent}33` : 'transparent',
-                color: '#c8c4cc',
+                color: '#d5c3ca',
                 border: `1px solid ${accent}55`,
                 borderRadius: 6,
                 padding: '8px 12px',
@@ -260,7 +260,7 @@ export function DossierDripCard() {
               onClick={() => toggle(c.value)}
               style={{
                 background: choiceDraft.includes(c.value) ? `${accent}33` : 'transparent',
-                color: '#c8c4cc',
+                color: '#d5c3ca',
                 border: `1px solid ${accent}55`,
                 borderRadius: 6,
                 padding: '6px 10px',
@@ -316,7 +316,7 @@ export function DossierDripCard() {
         <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: accent, fontWeight: 700 }}>
           Mama wants to know
         </span>
-        <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto' }}>
+        <span style={{ fontSize: 10, color: '#9c8590', marginLeft: 'auto' }}>
           {pending.category.replace(/_/g, ' ')}
         </span>
       </div>
@@ -324,7 +324,7 @@ export function DossierDripCard() {
         {pending.questionText}
       </div>
       {pending.placeholder && (
-        <div style={{ fontSize: 11, color: '#8a8690', fontStyle: 'italic', marginBottom: 10, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 11, color: '#9c8590', fontStyle: 'italic', marginBottom: 10, lineHeight: 1.5 }}>
           {pending.placeholder}
         </div>
       )}
@@ -337,7 +337,7 @@ export function DossierDripCard() {
           disabled={submitting}
           style={{
             background: 'transparent',
-            color: '#8a8690',
+            color: '#9c8590',
             border: '1px solid #2a1f25',
             padding: '6px 12px',
             borderRadius: 5,
@@ -355,7 +355,7 @@ export function DossierDripCard() {
           disabled={!canSubmit}
           style={{
             background: canSubmit ? accent : '#3a3035',
-            color: canSubmit ? '#1a0e16' : '#6a656e',
+            color: canSubmit ? '#1a0e16' : '#7f6b74',
             border: 'none',
             padding: '6px 14px',
             borderRadius: 5,

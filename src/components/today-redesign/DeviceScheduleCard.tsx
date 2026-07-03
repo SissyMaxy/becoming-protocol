@@ -44,7 +44,7 @@ export function DeviceScheduleCard() {
   const fired = today.filter(e => e.status === 'executed' || e.fired_at).length;
 
   return (
-    <div style={{ background: '#111116', border: '1px solid #2d1a4d', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+    <div style={{ background: '#171017', border: '1px solid #4a2438', borderRadius: 10, padding: 14, marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f4a7c4" strokeWidth="1.8">
           <path d="M18 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/>
@@ -53,14 +53,14 @@ export function DeviceScheduleCard() {
         <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#f4a7c4', fontWeight: 700 }}>
           Device schedule · today
         </span>
-        <span style={{ fontSize: 10.5, color: '#8a8690', marginLeft: 'auto' }}>
+        <span style={{ fontSize: 10.5, color: '#9c8590', marginLeft: 'auto' }}>
           {fired}/{today.length} fired
         </span>
       </div>
 
       {nextPending && (
         <div style={{
-          fontSize: 11, color: '#c4b5fd', marginBottom: 8,
+          fontSize: 11, color: '#edaec5', marginBottom: 8,
           padding: '6px 8px', background: 'rgba(124,58,237,0.1)',
           border: '1px solid rgba(124,58,237,0.25)', borderRadius: 5,
         }}>
@@ -78,18 +78,18 @@ export function DeviceScheduleCard() {
             <div key={e.id} style={{
               display: 'flex', alignItems: 'center', gap: 8,
               padding: '4px 8px', borderRadius: 4,
-              background: done ? 'rgba(110,231,183,0.08)' : past ? 'rgba(244,114,114,0.08)' : '#0a0a0d',
-              border: '1px solid #22222a',
+              background: done ? 'rgba(110,231,183,0.08)' : past ? 'rgba(244,114,114,0.08)' : '#0f0a0e',
+              border: '1px solid #2b1d29',
               fontSize: 10.5,
               opacity: done ? 0.7 : 1,
             }}>
-              <span style={{ color: done ? '#6ee7b7' : past ? '#f47272' : '#c4b5fd', fontWeight: 600, fontVariantNumeric: 'tabular-nums', minWidth: 48 }}>
+              <span style={{ color: done ? '#6ee7b7' : past ? '#f47272' : '#edaec5', fontWeight: 600, fontVariantNumeric: 'tabular-nums', minWidth: 48 }}>
                 {timeStr}
               </span>
-              <span style={{ color: '#8a8690' }}>{e.pattern}</span>
+              <span style={{ color: '#9c8590' }}>{e.pattern}</span>
               <span style={{ color: '#f4a7c4' }}>{e.intensity}/20</span>
-              <span style={{ color: '#8a8690' }}>{e.duration_seconds}s</span>
-              <span style={{ marginLeft: 'auto', color: done ? '#6ee7b7' : past ? '#f47272' : '#6a656e', fontSize: 9.5 }}>
+              <span style={{ color: '#9c8590' }}>{e.duration_seconds}s</span>
+              <span style={{ marginLeft: 'auto', color: done ? '#6ee7b7' : past ? '#f47272' : '#7f6b74', fontSize: 9.5 }}>
                 {done ? 'fired' : past ? 'missed' : 'queued'}
               </span>
             </div>

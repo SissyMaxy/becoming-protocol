@@ -41,17 +41,17 @@ const THEME_COLORS: Record<ContentTheme, string> = {
   gooning: '#ef4444',
   edging: '#f87171',
   denial: '#dc2626',
-  hypno: '#a855f7',
+  hypno: '#c9557f',
   // Sissification domain - pink colors
   sissification: '#C4847A',
   sissy_training: '#B06B61',
   turning_out: '#96524A',
   // Submission domain - indigo/purple colors
   service: '#6366f1',
-  submission: '#a855f7',
+  submission: '#c9557f',
   chastity: '#f59e0b',
   humiliation: '#ef4444',
-  bbc: '#8b5cf6',
+  bbc: '#cf6088',
   gangbang: '#d946ef',
   gloryhole: '#f59e0b',
   // Feminization - pink

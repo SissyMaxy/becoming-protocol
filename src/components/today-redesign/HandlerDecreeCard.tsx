@@ -101,7 +101,7 @@ export function HandlerDecreeCard() {
         <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#f47272', fontWeight: 700 }}>
           Handler decree ({items.length})
         </span>
-        <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto', fontStyle: 'italic' }}>
+        <span style={{ fontSize: 10, color: '#9c8590', marginLeft: 'auto', fontStyle: 'italic' }}>
           Not negotiable.
         </span>
       </div>
@@ -118,18 +118,18 @@ export function HandlerDecreeCard() {
         return (
           <div key={d.id} style={{
             padding: '10px 12px', marginBottom: 8,
-            background: '#0a0a0d', border: `1px solid ${overdue ? '#c4272d' : '#7a5a2a'}`,
-            borderLeft: `3px solid ${overdue ? '#f47272' : '#f4c272'}`, borderRadius: 6,
+            background: '#0f0a0e', border: `1px solid ${overdue ? '#c4272d' : '#7a5a2a'}`,
+            borderLeft: `3px solid ${overdue ? '#f47272' : '#e6bd80'}`, borderRadius: 6,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-              <span style={{ fontSize: 9, color: '#f4c272', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              <span style={{ fontSize: 9, color: '#e6bd80', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                 decree · {PROOF_LABEL[d.proof_type] || d.proof_type}
               </span>
-              <span style={{ fontSize: 9.5, color: overdue ? '#f47272' : '#8a8690', marginLeft: 'auto', fontWeight: 600 }}>
+              <span style={{ fontSize: 9.5, color: overdue ? '#f47272' : '#9c8590', marginLeft: 'auto', fontWeight: 600 }}>
                 {due}
               </span>
             </div>
-            <div style={{ fontSize: 12.5, color: '#e8e6e3', lineHeight: 1.45, marginBottom: 6 }}>
+            <div style={{ fontSize: 12.5, color: '#f2e9e6', lineHeight: 1.45, marginBottom: 6 }}>
               {d.edict}
             </div>
             <div style={{ fontSize: 10, color: '#f47272', marginBottom: 8 }}>
@@ -167,8 +167,8 @@ export function HandlerDecreeCard() {
                   }
                   rows={2}
                   style={{
-                    width: '100%', background: '#050507', border: '1px solid #22222a',
-                    borderRadius: 5, padding: '7px 9px', fontSize: 11.5, color: '#e8e6e3',
+                    width: '100%', background: '#0a0709', border: '1px solid #2b1d29',
+                    borderRadius: 5, padding: '7px 9px', fontSize: 11.5, color: '#f2e9e6',
                     fontFamily: 'inherit', resize: 'vertical',
                   }}
                 />
@@ -178,7 +178,7 @@ export function HandlerDecreeCard() {
                     disabled={submittingId === d.id}
                     style={{
                       padding: '6px 14px', borderRadius: 5, border: 'none',
-                      background: '#f4c272', color: '#1f1008', fontWeight: 600,
+                      background: '#e6bd80', color: '#1f1008', fontWeight: 600,
                       fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
                     }}
                   >
@@ -188,8 +188,8 @@ export function HandlerDecreeCard() {
                     <button
                       onClick={() => setPhotoOpenId(d.id)}
                       style={{
-                        padding: '6px 12px', borderRadius: 5, border: '1px solid #f4c272',
-                        background: 'transparent', color: '#f4c272', fontWeight: 700,
+                        padding: '6px 12px', borderRadius: 5, border: '1px solid #e6bd80',
+                        background: 'transparent', color: '#e6bd80', fontWeight: 700,
                         fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
                       }}
                     >

@@ -120,24 +120,24 @@ export function SponsorMilestoneCard() {
 
   return (
     <div id="card-sponsor-milestone" style={{
-      background: 'linear-gradient(135deg, #1a0f2e 0%, #0f0820 100%)',
-      border: '1px solid #5a3a8a', borderRadius: 10, padding: 14, marginBottom: 16,
+      background: 'linear-gradient(135deg, #2c1723 0%, #0f0820 100%)',
+      border: '1px solid #8f4463', borderRadius: 10, padding: 14, marginBottom: 16,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" strokeWidth="1.8">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#edaec5" strokeWidth="1.8">
           <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
           <circle cx="9" cy="7" r="4"/>
           <path d="M22 11h-6M19 8v6"/>
         </svg>
-        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#c4b5fd', fontWeight: 700 }}>
+        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#edaec5', fontWeight: 700 }}>
           Sponsor links · {pending.length} pending · ${(totalPaid / 100).toFixed(2)} paid
         </span>
         <button
           onClick={() => setExpanded(e => !e)}
           style={{
             marginLeft: 'auto', padding: '3px 9px', borderRadius: 4,
-            background: 'transparent', border: '1px solid #2d1a4d',
-            color: '#c4b5fd', fontSize: 9.5, cursor: 'pointer', fontFamily: 'inherit',
+            background: 'transparent', border: '1px solid #4a2438',
+            color: '#edaec5', fontSize: 9.5, cursor: 'pointer', fontFamily: 'inherit',
             textTransform: 'uppercase', letterSpacing: '0.05em',
           }}
         >
@@ -148,30 +148,30 @@ export function SponsorMilestoneCard() {
       {pending.length > 0 && (
         <div style={{
           marginBottom: 10, padding: 10,
-          background: '#0a0a0d', border: '1px solid #5a3a1a', borderLeft: '3px solid #f4c272',
+          background: '#0f0a0e', border: '1px solid #5a3a1a', borderLeft: '3px solid #e6bd80',
           borderRadius: 5,
         }}>
-          <div style={{ fontSize: 10, color: '#f4c272', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+          <div style={{ fontSize: 10, color: '#e6bd80', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
             {pending.length} pending — total ${(totalPending / 100).toFixed(2)} (verify payment, then mark paid)
           </div>
           {pending.map(t => {
             const target = targets.find(tg => tg.id === t.target_id);
             return (
-              <div key={t.id} style={{ marginBottom: 8, padding: '7px 9px', background: '#050507', borderRadius: 4, border: '1px solid #22222a' }}>
+              <div key={t.id} style={{ marginBottom: 8, padding: '7px 9px', background: '#0a0709', borderRadius: 4, border: '1px solid #2b1d29' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                   <span style={{ fontSize: 12, color: '#5fc88f', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
                     {fmtUsd(t.tribute_cents)}
                   </span>
-                  <span style={{ fontSize: 10, color: '#8a8690' }}>
+                  <span style={{ fontSize: 10, color: '#9c8590' }}>
                     → {target?.label.slice(0, 40) || 'unknown'}
                   </span>
-                  <span style={{ fontSize: 10, color: '#c4b5fd', marginLeft: 'auto' }}>
+                  <span style={{ fontSize: 10, color: '#edaec5', marginLeft: 'auto' }}>
                     {t.payment_method}
                   </span>
                 </div>
                 {(t.sub_handle || t.sub_message) && (
-                  <div style={{ fontSize: 10.5, color: '#c8c4cc', marginBottom: 4, lineHeight: 1.4 }}>
-                    {t.sub_handle && <span style={{ color: '#c4b5fd', fontWeight: 600 }}>{t.sub_handle}: </span>}
+                  <div style={{ fontSize: 10.5, color: '#d5c3ca', marginBottom: 4, lineHeight: 1.4 }}>
+                    {t.sub_handle && <span style={{ color: '#edaec5', fontWeight: 600 }}>{t.sub_handle}: </span>}
                     {t.sub_message ? `"${t.sub_message.slice(0, 200)}"` : ''}
                   </div>
                 )}
@@ -209,7 +209,7 @@ export function SponsorMilestoneCard() {
 
       {expanded && (
         <div style={{ marginTop: 4 }}>
-          <div style={{ fontSize: 9.5, color: '#8a8690', marginBottom: 6, fontStyle: 'italic' }}>
+          <div style={{ fontSize: 9.5, color: '#9c8590', marginBottom: 6, fontStyle: 'italic' }}>
             Drop these links anywhere — Reddit/FetLife/Sniffies bio, DMs, status posts. Each goes to a public tribute form for that specific milestone.
           </div>
           {targets.map(t => {
@@ -219,23 +219,23 @@ export function SponsorMilestoneCard() {
             return (
               <div key={t.id} style={{
                 marginBottom: 8, padding: '8px 10px',
-                background: '#0a0a0d', border: '1px solid #22222a',
-                borderLeft: '3px solid #c4b5fd', borderRadius: 5,
+                background: '#0f0a0e', border: '1px solid #2b1d29',
+                borderLeft: '3px solid #edaec5', borderRadius: 5,
               }}>
                 <div style={{ display: 'flex', fontSize: 11, marginBottom: 4 }}>
-                  <span style={{ color: '#e8e6e3', fontWeight: 600 }}>{t.label}</span>
-                  <span style={{ marginLeft: 'auto', color: '#8a8690', fontVariantNumeric: 'tabular-nums' }}>
+                  <span style={{ color: '#f2e9e6', fontWeight: 600 }}>{t.label}</span>
+                  <span style={{ marginLeft: 'auto', color: '#9c8590', fontVariantNumeric: 'tabular-nums' }}>
                     {fmtUsd(t.funded_cents)} / {fmtUsd(need)} ({pct}%)
                   </span>
                 </div>
-                <div style={{ height: 3, background: '#1a1a20', borderRadius: 2, overflow: 'hidden', marginBottom: 6 }}>
-                  <div style={{ height: '100%', width: `${pct}%`, background: pct >= 100 ? '#5fc88f' : '#7c3aed', transition: 'width 0.3s' }} />
+                <div style={{ height: 3, background: '#221722', borderRadius: 2, overflow: 'hidden', marginBottom: 6 }}>
+                  <div style={{ height: '100%', width: `${pct}%`, background: pct >= 100 ? '#5fc88f' : '#c9557f', transition: 'width 0.3s' }} />
                 </div>
                 {url && (
                   <div style={{ display: 'flex', gap: 5 }}>
                     <code style={{
-                      flex: 1, fontSize: 10, color: '#c4b5fd', background: '#050507',
-                      padding: '4px 7px', borderRadius: 3, border: '1px solid #2d1a4d',
+                      flex: 1, fontSize: 10, color: '#edaec5', background: '#0a0709',
+                      padding: '4px 7px', borderRadius: 3, border: '1px solid #4a2438',
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                       fontFamily: 'ui-monospace, monospace',
                     }}>
@@ -245,7 +245,7 @@ export function SponsorMilestoneCard() {
                       onClick={() => copyLink(t.public_share_token!)}
                       style={{
                         padding: '4px 10px', borderRadius: 3, border: 'none',
-                        background: copied === t.public_share_token ? '#5fc88f' : '#7c3aed',
+                        background: copied === t.public_share_token ? '#5fc88f' : '#c9557f',
                         color: copied === t.public_share_token ? '#0a1a14' : '#fff',
                         fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
                       }}

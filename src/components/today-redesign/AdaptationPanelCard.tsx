@@ -73,10 +73,10 @@ export function AdaptationPanelCard() {
   const backlog = summary.unhandled_signals;
   const tone = backlog > 0
     ? { bg: 'linear-gradient(135deg, #1a1a0a 0%, #15150a 100%)', border: '#a8843f', accent: '#fbbf24', label: `${backlog} UNHANDLED` }
-    : { bg: 'linear-gradient(135deg, #14101e 0%, #0e0a18 100%)', border: '#7a3fa8', accent: '#c4b5fd', label: 'PANEL OK' };
+    : { bg: 'linear-gradient(135deg, #14101e 0%, #0e0a18 100%)', border: '#7a3fa8', accent: '#edaec5', label: 'PANEL OK' };
 
   const scopeColor = (s: string | null) =>
-    s === 'cross_cutting' ? '#f87171' : s === 'large' ? '#fbbf24' : '#86efac';
+    s === 'cross_cutting' ? '#f87171' : s === 'large' ? '#fbbf24' : '#8fd9b0';
 
   return (
     <div style={{
@@ -88,7 +88,7 @@ export function AdaptationPanelCard() {
         <span style={{ fontSize: 9.5, color: tone.accent, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           ADAPTIVE PANEL · {tone.label}
         </span>
-        <span style={{ fontSize: 10, color: '#5a5560', marginLeft: 'auto' }}>
+        <span style={{ fontSize: 10, color: '#6d5a63', marginLeft: 'auto' }}>
           last run {timeAgo(summary.last_run_at)} · {summary.runs_7d} runs/7d
         </span>
       </div>
@@ -99,33 +99,33 @@ export function AdaptationPanelCard() {
             Recent proposals
           </div>
           {recent.map((r, i) => (
-            <div key={i} style={{ fontSize: 11, color: '#c4b5fd', padding: '3px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div key={i} style={{ fontSize: 11, color: '#edaec5', padding: '3px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ flex: 1 }}>{r.design}</span>
               {r.scope && (
-                <span style={{ fontSize: 9, color: scopeColor(r.scope), border: '1px solid #2d1a4d', padding: '0 4px', borderRadius: 3 }}>
+                <span style={{ fontSize: 9, color: scopeColor(r.scope), border: '1px solid #4a2438', padding: '0 4px', borderRadius: 3 }}>
                   {r.scope.replace('_', '-')}
                 </span>
               )}
               {r.needs_review && <span title="needs review" style={{ fontSize: 9, color: '#fbbf24' }}>review</span>}
-              {r.wish_filed && <span title="wish filed" style={{ fontSize: 9, color: '#86efac' }}>★</span>}
+              {r.wish_filed && <span title="wish filed" style={{ fontSize: 9, color: '#8fd9b0' }}>★</span>}
             </div>
           ))}
         </div>
       ) : (
-        <div style={{ fontSize: 11, color: '#5a5560', fontStyle: 'italic', marginBottom: 10 }}>
+        <div style={{ fontSize: 11, color: '#6d5a63', fontStyle: 'italic', marginBottom: 10 }}>
           No proposals yet{backlog > 0 ? ` — ${backlog} signal${backlog === 1 ? '' : 's'} waiting` : ''}.
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 10, fontSize: 10.5, color: '#a8a3ad', flexWrap: 'wrap', borderTop: '1px solid #15151b', paddingTop: 8 }}>
+      <div style={{ display: 'flex', gap: 10, fontSize: 10.5, color: '#a8a3ad', flexWrap: 'wrap', borderTop: '1px solid #1b121a', paddingTop: 8 }}>
         <span>30d wishes (panel→builder):</span>
-        {shipped > 0 && <span style={{ color: '#86efac' }}>{shipped} shipped</span>}
+        {shipped > 0 && <span style={{ color: '#8fd9b0' }}>{shipped} shipped</span>}
         {inProgress > 0 && <span style={{ color: '#fbbf24' }}>{inProgress} in progress</span>}
-        {queued > 0 && <span style={{ color: '#c4b5fd' }}>{queued} queued</span>}
+        {queued > 0 && <span style={{ color: '#edaec5' }}>{queued} queued</span>}
         {rejected > 0 && <span style={{ color: '#7a7480' }}>{rejected} rejected</span>}
-        {shipped + inProgress + queued + rejected === 0 && <span style={{ color: '#5a5560', fontStyle: 'italic' }}>none yet</span>}
+        {shipped + inProgress + queued + rejected === 0 && <span style={{ color: '#6d5a63', fontStyle: 'italic' }}>none yet</span>}
         {summary.pending_adaptations > 0 && (
-          <span style={{ marginLeft: 'auto', color: '#8a8690' }}>{summary.pending_adaptations} pending outcome</span>
+          <span style={{ marginLeft: 'auto', color: '#9c8590' }}>{summary.pending_adaptations} pending outcome</span>
         )}
       </div>
     </div>

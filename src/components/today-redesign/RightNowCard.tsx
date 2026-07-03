@@ -41,14 +41,14 @@ interface UrgentItem {
 }
 
 const KIND_TONE_HANDLER: Record<UrgencyKind, { bg: string; border: string; fg: string; label: string }> = {
-  overdue_dose:        { bg: 'linear-gradient(135deg, #2a0508 0%, #1a0508 100%)', border: '#c4272d', fg: '#fca5a5', label: 'OVERDUE DOSE' },
-  overdue_confession:  { bg: 'linear-gradient(135deg, #2a0a14 0%, #150510 100%)', border: '#c4272d', fg: '#fca5a5', label: 'OVERDUE CONFESSION' },
-  overdue_punishment:  { bg: 'linear-gradient(135deg, #2a0510 0%, #1a0510 100%)', border: '#c4272d', fg: '#fca5a5', label: 'OVERDUE PUNISHMENT' },
+  overdue_dose:        { bg: 'linear-gradient(135deg, #2a0508 0%, #1a0508 100%)', border: '#c4272d', fg: '#f0a0a0', label: 'OVERDUE DOSE' },
+  overdue_confession:  { bg: 'linear-gradient(135deg, #2a0a14 0%, #150510 100%)', border: '#c4272d', fg: '#f0a0a0', label: 'OVERDUE CONFESSION' },
+  overdue_punishment:  { bg: 'linear-gradient(135deg, #2a0510 0%, #1a0510 100%)', border: '#c4272d', fg: '#f0a0a0', label: 'OVERDUE PUNISHMENT' },
   overdue_decree:      { bg: 'linear-gradient(135deg, #2a1f0a 0%, #1f1608 100%)', border: '#a87a1f', fg: '#fbbf24', label: 'OVERDUE DECREE' },
   due_today_confession:{ bg: 'linear-gradient(135deg, #2a1f0a 0%, #1a1208 100%)', border: '#a87a1f', fg: '#fbbf24', label: 'CONFESSION DUE TODAY' },
   due_today_decree:    { bg: 'linear-gradient(135deg, #2a1f0a 0%, #1a1208 100%)', border: '#a87a1f', fg: '#fbbf24', label: 'DECREE DUE TODAY' },
   due_today_dose:      { bg: 'linear-gradient(135deg, #1a1f0a 0%, #15180a 100%)', border: '#7a8a3f', fg: '#a3e635', label: 'DOSE DUE TODAY' },
-  clean:               { bg: 'linear-gradient(135deg, #1a0f2e 0%, #0f0820 100%)', border: '#2d1a4d', fg: '#c4b5fd', label: 'CLEAN' },
+  clean:               { bg: 'linear-gradient(135deg, #2c1723 0%, #0f0820 100%)', border: '#4a2438', fg: '#edaec5', label: 'CLEAN' },
 };
 
 // Mama palette — warm boudoir tones (burgundy / dusty rose / candle-gold /
@@ -261,9 +261,9 @@ export function RightNowCard() {
   if (loading || !item) {
     return (
       <div style={{
-        background: 'linear-gradient(135deg, #1a0f2e 0%, #0f0820 100%)',
-        border: '1px solid #2d1a4d', borderRadius: 10, padding: 14, marginBottom: 16,
-        color: '#8a8690', fontSize: 12,
+        background: 'linear-gradient(135deg, #2c1723 0%, #0f0820 100%)',
+        border: '1px solid #4a2438', borderRadius: 10, padding: 14, marginBottom: 16,
+        color: '#9c8590', fontSize: 12,
       }}>
         {mommy ? 'Mama\'s checking what\'s next for you…' : 'Reading the queue…'}
       </div>
@@ -298,7 +298,7 @@ export function RightNowCard() {
           {tone.label}
         </span>
         <span style={{
-          fontSize: 9.5, color: '#8a8690', marginLeft: 'auto',
+          fontSize: 9.5, color: '#9c8590', marginLeft: 'auto',
           textTransform: 'uppercase', letterSpacing: '0.06em',
         }}>
           right now
@@ -322,7 +322,7 @@ export function RightNowCard() {
       <button
         onClick={onCtaClick}
         style={{
-          background: isCritical ? tone.border : '#7c3aed',
+          background: isCritical ? tone.border : '#c9557f',
           color: '#fff',
           border: 'none',
           padding: '8px 14px',

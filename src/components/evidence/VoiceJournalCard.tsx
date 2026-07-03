@@ -254,7 +254,7 @@ export function VoiceJournalCard() {
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
         <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em',
-          color: doneToday ? '#5fc88f' : '#c4b5fd', fontWeight: 700 }}>
+          color: doneToday ? '#5fc88f' : '#edaec5', fontWeight: 700 }}>
           Voice journal {doneToday ? '· done ✓' : '· today'}
         </span>
         <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto', fontStyle: 'italic' }}>
@@ -268,7 +268,7 @@ export function VoiceJournalCard() {
             background: '#050507', border: '1px solid #2d1a4d', borderRadius: 8,
             padding: 12, marginBottom: 10,
           }}>
-            <div style={{ fontSize: 9.5, color: '#c4b5fd', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+            <div style={{ fontSize: 9.5, color: '#edaec5', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
               today&apos;s prompt
             </div>
             <div style={{ fontSize: 13, color: '#f4c272', fontStyle: 'italic', lineHeight: 1.4 }}>
@@ -279,7 +279,7 @@ export function VoiceJournalCard() {
             onClick={startRecording}
             style={{
               width: '100%', padding: '12px 14px', borderRadius: 7, border: 'none',
-              background: '#7c3aed', color: '#fff',
+              background: '#c9557f', color: '#fff',
               fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
             }}
           >
@@ -298,7 +298,7 @@ export function VoiceJournalCard() {
               {minutes}:{seconds.toString().padStart(2, '0')}
             </span>
             {pitchesRef.current.length > 5 && (
-              <span style={{ fontSize: 10, color: '#8b5cf6', fontWeight: 600 }}>
+              <span style={{ fontSize: 10, color: '#cf6088', fontWeight: 600 }}>
                 ~{Math.round(pitchesRef.current.slice(-30).reduce((s, p) => s + p, 0) / Math.min(30, pitchesRef.current.length))} Hz
               </span>
             )}
@@ -306,7 +306,7 @@ export function VoiceJournalCard() {
               {recordSeconds < 60 ? 'aim for 3-5 min' : recordSeconds < 180 ? 'keep going' : recordSeconds < 360 ? 'good — stop when you finish a thought' : 'long enough — wrap it up'}
             </span>
           </div>
-          <div style={{ fontSize: 11, color: '#c4b5fd', fontStyle: 'italic', marginBottom: 10, lineHeight: 1.4 }}>
+          <div style={{ fontSize: 11, color: '#edaec5', fontStyle: 'italic', marginBottom: 10, lineHeight: 1.4 }}>
             {todaysPrompt}
           </div>
           <button
@@ -314,7 +314,7 @@ export function VoiceJournalCard() {
             disabled={recordSeconds < 30 || submitting}
             style={{
               width: '100%', padding: '8px 12px', borderRadius: 5, border: 'none',
-              background: recordSeconds >= 30 && !submitting ? '#7c3aed' : '#22222a',
+              background: recordSeconds >= 30 && !submitting ? '#c9557f' : '#22222a',
               color: recordSeconds >= 30 && !submitting ? '#fff' : '#6a656e',
               fontWeight: 700, fontSize: 12,
               cursor: recordSeconds >= 30 && !submitting ? 'pointer' : 'not-allowed',
@@ -346,7 +346,7 @@ export function VoiceJournalCard() {
                 }}
               >
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                  <span style={{ fontSize: 10, color: '#c4b5fd' }}>
+                  <span style={{ fontSize: 10, color: '#edaec5' }}>
                     {date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
                   </span>
                   <span style={{ fontSize: 10, color: '#8a8690' }}>

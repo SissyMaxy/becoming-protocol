@@ -128,26 +128,26 @@ export function GinaPlaybookCard() {
 
   const kindColor = (kind: string) => {
     if (kind === 'warmup') return '#6ee7b7';
-    if (kind === 'disclosure_opener' || kind === 'probe') return '#f4c272';
+    if (kind === 'disclosure_opener' || kind === 'probe') return '#e6bd80';
     if (kind === 'repair') return '#f4a7c4';
-    return '#c4b5fd';
+    return '#edaec5';
   };
 
   if (moves.length === 0) {
     return (
-      <div style={{ background: '#111116', border: '1px solid #2d1a4d', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+      <div style={{ background: '#171017', border: '1px solid #4a2438', borderRadius: 10, padding: 14, marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#c4b5fd', fontWeight: 700 }}>
+          <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#edaec5', fontWeight: 700 }}>
             Gina Playbook
           </span>
-          <span style={{ fontSize: 10.5, color: '#8a8690', marginLeft: 'auto' }}>no moves queued</span>
+          <span style={{ fontSize: 10.5, color: '#9c8590', marginLeft: 'auto' }}>no moves queued</span>
         </div>
-        <div style={{ fontSize: 11.5, color: '#8a8690', marginTop: 8, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 11.5, color: '#9c8590', marginTop: 8, lineHeight: 1.5 }}>
           Planner runs daily. Tap to plan now from the current signal state (profile · session digests · window color).
         </div>
         <button onClick={planNow} disabled={planning} style={{
           marginTop: 8, padding: '6px 12px', borderRadius: 5, border: 'none',
-          background: '#7c3aed', color: '#fff', fontWeight: 600, fontSize: 11,
+          background: '#c9557f', color: '#fff', fontWeight: 600, fontSize: 11,
           cursor: planning ? 'wait' : 'pointer', fontFamily: 'inherit',
         }}>
           {planning ? 'planning…' : 'Plan moves now'}
@@ -160,12 +160,12 @@ export function GinaPlaybookCard() {
     if (list.length === 0) return null;
     return (
       <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 9.5, color: '#6a656e', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{label}</div>
+        <div style={{ fontSize: 9.5, color: '#7f6b74', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{label}</div>
         {list.map(m => {
           const isOpen = expanded === m.id;
           return (
             <div key={m.id} style={{
-              background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 8,
+              background: '#0f0a0e', border: '1px solid #2b1d29', borderRadius: 8,
               padding: 12, marginBottom: 8,
             }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
@@ -174,8 +174,8 @@ export function GinaPlaybookCard() {
                   background: `${kindColor(m.move_kind)}22`, padding: '2px 6px', borderRadius: 3,
                   textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap',
                 }}>{m.move_kind.replace(/_/g, ' ')}</span>
-                <span style={{ fontSize: 9.5, color: '#8a8690', whiteSpace: 'nowrap' }}>{m.channel}</span>
-                <span style={{ fontSize: 10, color: '#c4b5fd', marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>
+                <span style={{ fontSize: 9.5, color: '#9c8590', whiteSpace: 'nowrap' }}>{m.channel}</span>
+                <span style={{ fontSize: 10, color: '#edaec5', marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>
                   {fmtFires(m.fires_at)}
                 </span>
               </div>
@@ -183,8 +183,8 @@ export function GinaPlaybookCard() {
               <div
                 onClick={() => copy(m)}
                 style={{
-                  fontSize: 12.5, color: '#e8e6e3', lineHeight: 1.5, padding: 10, borderRadius: 6,
-                  background: '#050507', border: '1px solid #22222a', cursor: 'pointer', marginBottom: 8,
+                  fontSize: 12.5, color: '#f2e9e6', lineHeight: 1.5, padding: 10, borderRadius: 6,
+                  background: '#0a0709', border: '1px solid #2b1d29', cursor: 'pointer', marginBottom: 8,
                   position: 'relative',
                 }}
               >
@@ -197,7 +197,7 @@ export function GinaPlaybookCard() {
                 )}
               </div>
 
-              <div style={{ fontSize: 10.5, color: '#8a8690', marginBottom: 8 }}>
+              <div style={{ fontSize: 10.5, color: '#9c8590', marginBottom: 8 }}>
                 {m.rationale}
                 {m.soft_spot_cited && <span style={{ color: '#6ee7b7' }}> · soft-spot: {m.soft_spot_cited}</span>}
                 {(m.trigger_avoided && m.trigger_avoided.length > 0) && <span style={{ color: '#f47272' }}> · dodges: {m.trigger_avoided.join(', ')}</span>}
@@ -207,12 +207,12 @@ export function GinaPlaybookCard() {
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button onClick={() => setExpanded(m.id)} style={{
                     flex: 1, padding: '6px 10px', borderRadius: 5, border: 'none',
-                    background: '#7c3aed', color: '#fff', fontWeight: 600, fontSize: 11,
+                    background: '#c9557f', color: '#fff', fontWeight: 600, fontSize: 11,
                     cursor: 'pointer', fontFamily: 'inherit',
                   }}>I said it → log outcome</button>
                   <button onClick={() => captureOutcome(m, 'skipped')} disabled={submittingId === m.id} style={{
                     padding: '6px 10px', borderRadius: 5,
-                    background: 'none', border: '1px solid #22222a', color: '#8a8690',
+                    background: 'none', border: '1px solid #2b1d29', color: '#9c8590',
                     fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
                   }}>Skip</button>
                 </div>
@@ -224,8 +224,8 @@ export function GinaPlaybookCard() {
                     value={outcomeNote}
                     onChange={e => setOutcomeNote(e.target.value)}
                     style={{
-                      width: '100%', background: '#050507', border: '1px solid #22222a', borderRadius: 5,
-                      padding: '6px 9px', fontSize: 11, color: '#e8e6e3', fontFamily: 'inherit', marginBottom: 6,
+                      width: '100%', background: '#0a0709', border: '1px solid #2b1d29', borderRadius: 5,
+                      padding: '6px 9px', fontSize: 11, color: '#f2e9e6', fontFamily: 'inherit', marginBottom: 6,
                     }}
                   />
                   <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
@@ -236,7 +236,7 @@ export function GinaPlaybookCard() {
                         disabled={submittingId === m.id}
                         style={{
                           flex: '1 1 0', minWidth: 70, padding: '6px 8px', borderRadius: 5, border: 'none',
-                          background: r === 'positive' ? '#6ee7b7' : r === 'hostile' ? '#f47272' : r === 'stalled' ? '#f4c272' : '#c4b5fd',
+                          background: r === 'positive' ? '#6ee7b7' : r === 'hostile' ? '#f47272' : r === 'stalled' ? '#e6bd80' : '#edaec5',
                           color: '#1a0a12', fontWeight: 600, fontSize: 10.5,
                           cursor: submittingId === m.id ? 'wait' : 'pointer', fontFamily: 'inherit',
                           textTransform: 'uppercase', letterSpacing: '0.05em',
@@ -244,8 +244,8 @@ export function GinaPlaybookCard() {
                       >{r}</button>
                     ))}
                     <button onClick={() => { setExpanded(null); setOutcomeNote(''); }} style={{
-                      padding: '6px 10px', borderRadius: 5, background: 'none', border: '1px solid #22222a',
-                      color: '#8a8690', fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit',
+                      padding: '6px 10px', borderRadius: 5, background: 'none', border: '1px solid #2b1d29',
+                      color: '#9c8590', fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit',
                     }}>cancel</button>
                   </div>
                 </div>
@@ -258,16 +258,16 @@ export function GinaPlaybookCard() {
   };
 
   return (
-    <div style={{ background: '#111116', border: '1px solid #2d1a4d', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+    <div style={{ background: '#171017', border: '1px solid #4a2438', borderRadius: 10, padding: 14, marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#c4b5fd', fontWeight: 700 }}>
+        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#edaec5', fontWeight: 700 }}>
           Gina Playbook
         </span>
-        <span style={{ fontSize: 10.5, color: '#8a8690', marginLeft: 'auto' }}>
+        <span style={{ fontSize: 10.5, color: '#9c8590', marginLeft: 'auto' }}>
           {moves.length} move{moves.length === 1 ? '' : 's'} queued
         </span>
         <button onClick={planNow} disabled={planning} style={{
-          background: 'none', border: '1px solid #22222a', color: '#c4b5fd',
+          background: 'none', border: '1px solid #2b1d29', color: '#edaec5',
           padding: '3px 8px', borderRadius: 4, fontSize: 10, cursor: planning ? 'wait' : 'pointer', fontFamily: 'inherit',
         }}>{planning ? '…' : 'refresh'}</button>
       </div>

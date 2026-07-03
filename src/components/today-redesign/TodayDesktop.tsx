@@ -88,7 +88,7 @@ import { DailyBriefingCard } from './DailyBriefingCard';
 
 const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
 
-const HEATMAP_COLORS = ['#1a1a20', '#2d1a4d', '#4d2a75', '#6a2a9a', '#7c3aed'];
+const HEATMAP_COLORS = ['#221722', '#4a2438', '#7e3a57', '#a84468', '#c9557f'];
 
 function Heatmap({ days, cellSize = 12, gap = 3 }: { days: Array<{ date: string; count: number; intensity: number; isToday: boolean }>; cellSize?: number; gap?: number }) {
   return (
@@ -100,7 +100,7 @@ function Heatmap({ days, cellSize = 12, gap = 3 }: { days: Array<{ date: string;
           style={{
             width: cellSize, height: cellSize, borderRadius: 2,
             background: HEATMAP_COLORS[d.intensity],
-            outline: d.isToday ? '1px solid #c4b5fd' : undefined,
+            outline: d.isToday ? '1px solid #edaec5' : undefined,
             outlineOffset: d.isToday ? 1 : undefined,
           }}
         />
@@ -122,7 +122,7 @@ function Sparkline({ values, width = 80, height = 24 }: { values: number[]; widt
   const trendDown = values[values.length - 1] < values[0];
   return (
     <svg width={width} height={height} style={{ display: 'block', marginTop: 4 }}>
-      <polyline points={points} fill="none" stroke={trendDown ? '#5fc88f' : '#f4c272'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <polyline points={points} fill="none" stroke={trendDown ? '#5fc88f' : '#e6bd80'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -329,7 +329,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
           onClick={() => setViewMode('focus')}
           style={{
             marginBottom: 12, padding: '8px 14px',
-            background: '#7c3aed', color: '#fff', border: 'none',
+            background: '#c9557f', color: '#fff', border: 'none',
             borderRadius: 6, fontSize: 11, fontWeight: 700,
             textTransform: 'uppercase', letterSpacing: '0.06em',
             fontFamily: 'inherit', cursor: 'pointer',
@@ -375,7 +375,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         </CollapsibleGroup>
 
         {/* REVENUE — sub-funnel work, default closed. */}
-        <CollapsibleGroup id="revenue_work" label="Revenue & Outreach" tone="#f4c272" hint="revenue · david tax · plan · sponsors · DMs · worn">
+        <CollapsibleGroup id="revenue_work" label="Revenue & Outreach" tone="#e6bd80" hint="revenue · david tax · plan · sponsors · DMs · worn">
           <RevenueCard />
           <DavidTaxCard />
           <RevenuePlanCard />
@@ -415,7 +415,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         </CollapsibleGroup>
 
         {/* HANDLER SYSTEMS — what the Handler is doing in the background. */}
-        <CollapsibleGroup id="handler_systems" label="Handler Systems" tone="#c4b5fd" hint="dreams · outreach · slips · evidence">
+        <CollapsibleGroup id="handler_systems" label="Handler Systems" tone="#edaec5" hint="dreams · outreach · slips · evidence">
           <HandlerDreamCard />
           <HandlerKnowCard />
           <HandlerRunningCard />
@@ -429,7 +429,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         </CollapsibleGroup>
 
         {/* CAPTURE & EVIDENCE — proof + irreversibility ledger. */}
-        <CollapsibleGroup id="capture" label="Capture & Evidence" tone="#f4c272" hint="daily selfie · voice journal · proof uploads · screenshots · witness · irreversibility">
+        <CollapsibleGroup id="capture" label="Capture & Evidence" tone="#e6bd80" hint="daily selfie · voice journal · proof uploads · screenshots · witness · irreversibility">
           <DailyMirrorSelfieCard />
           <VoiceJournalCard />
           <UnifiedCaptureCard />
@@ -441,8 +441,8 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
           const colors = banner.severity === 'critical'
             ? { border: '#7a1f22', bg: 'linear-gradient(92deg, #2a0a0c 0%, #1a0608 100%)', text: '#f47272', iconBg: '#3a0f12' }
             : banner.severity === 'high'
-            ? { border: '#7a5a1f', bg: 'linear-gradient(92deg, #2a1f0a 0%, #1f1608 100%)', text: '#f4c272', iconBg: '#3a2a0f' }
-            : { border: '#2d1a4d', bg: 'linear-gradient(92deg, #1a0f2e 0%, #150a24 100%)', text: '#c4b5fd', iconBg: '#2d1a4d' };
+            ? { border: '#7a5a1f', bg: 'linear-gradient(92deg, #2a1f0a 0%, #1f1608 100%)', text: '#e6bd80', iconBg: '#3a2a0f' }
+            : { border: '#4a2438', bg: 'linear-gradient(92deg, #2c1723 0%, #22111c 100%)', text: '#edaec5', iconBg: '#4a2438' };
           return (
             <div key={i} className="td-banner" style={{ background: colors.bg, borderColor: colors.border }}>
               <div className="td-bannericon" style={{ background: colors.iconBg, color: colors.text }}>
@@ -473,11 +473,11 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
             <div className="td-sub" style={{ marginBottom: 0 }}>{morphPronouns(`Phase ${data.currentPhase} · ${data.chastityLocked ? `Chastity Day ${data.chastityStreakDays}` : `Denial Day ${data.denialDay}`} · ${openDirectives} directives open`, data.conditioning.displacementScore)}</div>
           </div>
           <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
-            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', padding: '4px 9px', borderRadius: 10, fontWeight: 600, background: '#1a1226', color: '#c4b5fd', border: '1px solid #2d1a4d', display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ width: 5, height: 5, borderRadius: 3, background: '#7c3aed', boxShadow: '0 0 6px #7c3aed' }} />
+            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', padding: '4px 9px', borderRadius: 10, fontWeight: 600, background: '#291823', color: '#edaec5', border: '1px solid #4a2438', display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ width: 5, height: 5, borderRadius: 3, background: '#c9557f', boxShadow: '0 0 6px #c9557f' }} />
               Handler {data.activity.lastHandlerTimeDesc}
             </div>
-            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', padding: '4px 9px', borderRadius: 10, fontWeight: 600, background: '#0a0a0d', color: '#8a8690', border: '1px solid #1a1a20', fontVariantNumeric: 'tabular-nums' }}>
+            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', padding: '4px 9px', borderRadius: 10, fontWeight: 600, background: '#0f0a0e', color: '#9c8590', border: '1px solid #221722', fontVariantNumeric: 'tabular-nums' }}>
               {data.activity.handlerMessagesToday} msgs today
             </div>
           </div>
@@ -490,11 +490,11 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
             <div className="td-stat-bar">
               <div className="td-stat-fill" style={{
                 width: `${data.compliancePct}%`,
-                background: data.compliancePct >= 80 ? '#5fc88f' : data.compliancePct >= 50 ? '#f4c272' : '#f47272',
+                background: data.compliancePct >= 80 ? '#5fc88f' : data.compliancePct >= 50 ? '#e6bd80' : '#f47272',
               }} />
             </div>
             {data.complianceSampleSize === 0 && (
-              <div className="td-stat-delta" style={{ color: '#6a656e' }}>no directives resolved 7d</div>
+              <div className="td-stat-delta" style={{ color: '#7f6b74' }}>no directives resolved 7d</div>
             )}
           </div>
           <div className="td-stat">
@@ -502,7 +502,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
             <div className="td-stat-val">{data.orgasmDebt.debtPct}<span className="td-stat-unit">%</span></div>
             <div className="td-stat-bar"><div className="td-stat-fill" style={{ width: `${data.orgasmDebt.debtPct}%`, background: '#c4272d' }} /></div>
             {data.orgasmDebt.daysSinceRelease != null && (
-              <div className="td-stat-delta" style={{ color: '#6a656e' }}>
+              <div className="td-stat-delta" style={{ color: '#7f6b74' }}>
                 {data.orgasmDebt.daysSinceRelease}d since release{data.orgasmDebt.slipPoints24h > 0 ? ` · ${data.orgasmDebt.slipPoints24h} slip pts` : ''}
               </div>
             )}
@@ -533,8 +533,8 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         {/* Session launcher shortcuts — jump into the chat session flow */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 16 }}>
           {[
-            { label: 'Hypno session', sub: 'Deepen conditioning', prompt: "I want to run a hypno session now. Pick the right depth.", color: '#7c3aed' },
-            { label: 'Voice practice', sub: 'Work the pitch', prompt: "Start voice practice. Give me the target pitch and phrase.", color: '#c4b5fd' },
+            { label: 'Hypno session', sub: 'Deepen conditioning', prompt: "I want to run a hypno session now. Pick the right depth.", color: '#c9557f' },
+            { label: 'Voice practice', sub: 'Work the pitch', prompt: "Start voice practice. Give me the target pitch and phrase.", color: '#edaec5' },
             { label: 'Edge session', sub: 'Under Handler control', prompt: "I want to start an edging session. Tell me the rules.", color: '#f47272' },
           ].map(s => (
             <button
@@ -545,13 +545,13 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
                 onExit?.();
               }}
               style={{
-                background: '#101014', border: '1px solid #1a1a20', borderRadius: 10, padding: '12px 14px',
+                background: '#150e13', border: '1px solid #221722', borderRadius: 10, padding: '12px 14px',
                 textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit', color: 'inherit',
               }}
             >
               <div style={{ width: 6, height: 6, borderRadius: 3, background: s.color, marginBottom: 8 }} />
-              <div style={{ fontSize: 12.5, fontWeight: 600, color: '#e8e6e3' }}>{s.label}</div>
-              <div style={{ fontSize: 11, color: '#8a8690', marginTop: 2 }}>{s.sub}</div>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: '#f2e9e6' }}>{s.label}</div>
+              <div style={{ fontSize: 11, color: '#9c8590', marginTop: 2 }}>{s.sub}</div>
             </button>
           ))}
         </div>
@@ -564,22 +564,22 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
                 <div className="td-cardh">
                   <svg className="td-iconsm td-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2v20M2 12h20" /></svg>
                   <div className="td-title">HRT funnel</div>
-                  <div className="td-chip" style={{ color: data.hrt.step === 'adherent' ? '#5fc88f' : data.hrt.step === 'uncommitted' ? '#f47272' : '#c4b5fd' }}>
+                  <div className="td-chip" style={{ color: data.hrt.step === 'adherent' ? '#5fc88f' : data.hrt.step === 'uncommitted' ? '#f47272' : '#edaec5' }}>
                     {data.hrt.stepIndex + 1} / {data.hrt.totalSteps}
                   </div>
-                  {data.hrt.daysStuck >= 7 && <div className="td-meta" style={{ color: '#f4c272' }}>{data.hrt.daysStuck}d stuck</div>}
+                  {data.hrt.daysStuck >= 7 && <div className="td-meta" style={{ color: '#e6bd80' }}>{data.hrt.daysStuck}d stuck</div>}
                 </div>
                 <div style={{ padding: '14px 16px' }}>
                   <div style={{ fontSize: 20, fontWeight: 650, color: '#fff', letterSpacing: '-0.02em', marginBottom: 6 }}>{data.hrt.stepLabel}</div>
                   {data.hrt.provider && (
-                    <div style={{ fontSize: 12, color: '#8a8690' }}>Provider: <span style={{ color: '#c4b5fd' }}>{data.hrt.provider}</span></div>
+                    <div style={{ fontSize: 12, color: '#9c8590' }}>Provider: <span style={{ color: '#edaec5' }}>{data.hrt.provider}</span></div>
                   )}
                   {data.hrt.appointmentAt && (
-                    <div style={{ fontSize: 12, color: '#8a8690', marginTop: 4 }}>Appointment: <span style={{ color: '#c4b5fd' }}>{new Date(data.hrt.appointmentAt).toLocaleDateString()}</span></div>
+                    <div style={{ fontSize: 12, color: '#9c8590', marginTop: 4 }}>Appointment: <span style={{ color: '#edaec5' }}>{new Date(data.hrt.appointmentAt).toLocaleDateString()}</span></div>
                   )}
                   <div style={{ display: 'flex', gap: 3, marginTop: 12 }}>
                     {Array.from({ length: data.hrt.totalSteps }).map((_, i) => (
-                      <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= data.hrt!.stepIndex ? '#7c3aed' : '#1a1a20' }} />
+                      <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= data.hrt!.stepIndex ? '#c9557f' : '#221722' }} />
                     ))}
                   </div>
                 </div>
@@ -596,13 +596,13 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
                     const rounded = Math.abs(Math.round(dose.hoursUntil));
                     const humanTime = rounded >= 48 ? `${Math.round(rounded / 24)}d` : `${rounded}h`;
                     return (
-                      <div key={dose.regimenId} style={{ padding: '8px 0', borderBottom: '1px solid #15151b' }}>
+                      <div key={dose.regimenId} style={{ padding: '8px 0', borderBottom: '1px solid #1b121a' }}>
                         <div style={{ display: 'flex', alignItems: 'center' }}>
                           <div>
-                            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6a656e', fontWeight: 600 }}>{dose.medicationName}</div>
-                            <div style={{ fontSize: 13, color: dose.isOverdue ? '#f47272' : '#e8e6e3', fontWeight: 500 }}>{dose.isOverdue ? `Overdue by ${humanTime}` : `Due in ${humanTime}`}</div>
+                            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#7f6b74', fontWeight: 600 }}>{dose.medicationName}</div>
+                            <div style={{ fontSize: 13, color: dose.isOverdue ? '#f47272' : '#f2e9e6', fontWeight: 500 }}>{dose.isOverdue ? `Overdue by ${humanTime}` : `Due in ${humanTime}`}</div>
                           </div>
-                          <span className="td-chip" style={{ marginLeft: 'auto', color: dose.isOverdue ? '#f47272' : '#c4b5fd', background: dose.isOverdue ? '#2a0f0f' : '#1a1226' }}>
+                          <span className="td-chip" style={{ marginLeft: 'auto', color: dose.isOverdue ? '#f47272' : '#edaec5', background: dose.isOverdue ? '#2a0f0f' : '#291823' }}>
                             {dose.isWeekly ? 'weekly' : 'daily'}
                           </span>
                         </div>
@@ -657,14 +657,14 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
               )}
             </div>
             {directiveKinds.length > 1 && (
-              <div style={{ display: 'flex', gap: 6, padding: '10px 16px 4px', flexWrap: 'wrap', borderBottom: '1px solid #15151b' }}>
+              <div style={{ display: 'flex', gap: 6, padding: '10px 16px 4px', flexWrap: 'wrap', borderBottom: '1px solid #1b121a' }}>
                 <button
                   onClick={() => setDirectiveFilter('all')}
                   style={{
                     fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 10, fontWeight: 600,
-                    background: directiveFilter === 'all' ? '#1a1226' : '#0a0a0d',
-                    color: directiveFilter === 'all' ? '#c4b5fd' : '#6a656e',
-                    border: '1px solid ' + (directiveFilter === 'all' ? '#2d1a4d' : '#1a1a20'),
+                    background: directiveFilter === 'all' ? '#291823' : '#0f0a0e',
+                    color: directiveFilter === 'all' ? '#edaec5' : '#7f6b74',
+                    border: '1px solid ' + (directiveFilter === 'all' ? '#4a2438' : '#221722'),
                     cursor: 'pointer', fontFamily: 'inherit',
                   }}
                 >All</button>
@@ -674,9 +674,9 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
                     onClick={() => setDirectiveFilter(k)}
                     style={{
                       fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 10, fontWeight: 600,
-                      background: directiveFilter === k ? '#1a1226' : '#0a0a0d',
-                      color: directiveFilter === k ? '#c4b5fd' : '#6a656e',
-                      border: '1px solid ' + (directiveFilter === k ? '#2d1a4d' : '#1a1a20'),
+                      background: directiveFilter === k ? '#291823' : '#0f0a0e',
+                      color: directiveFilter === k ? '#edaec5' : '#7f6b74',
+                      border: '1px solid ' + (directiveFilter === k ? '#4a2438' : '#221722'),
                       cursor: 'pointer', fontFamily: 'inherit',
                     }}
                   >{k}</button>
@@ -684,7 +684,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
               </div>
             )}
             {filteredDirectives.length === 0 ? (
-              <div style={{ padding: 16, color: '#6a656e', fontSize: 12.5 }}>{data.directives.length === 0 ? "I haven't assigned anything yet. Sit with that." : `Nothing open under ${directiveFilter}.`}</div>
+              <div style={{ padding: 16, color: '#7f6b74', fontSize: 12.5 }}>{data.directives.length === 0 ? "I haven't assigned anything yet. Sit with that." : `Nothing open under ${directiveFilter}.`}</div>
             ) : filteredDirectives.map(d => (
               <div className="td-dir" key={d.id}>
                 <div className="td-dirhead">
@@ -773,7 +773,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
               </div>
               <div style={{ display: 'flex', gap: 6, marginBottom: 10, marginTop: -8 }}>
                 {PHASE_LABELS.map((label, i) => (
-                  <div key={i} style={{ flex: 1, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.06em', color: i === data.currentPhase ? '#c4b5fd' : i < data.currentPhase ? '#8a8690' : '#3a3540', fontWeight: 600, textAlign: 'center' }}>
+                  <div key={i} style={{ flex: 1, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.06em', color: i === data.currentPhase ? '#edaec5' : i < data.currentPhase ? '#9c8590' : '#46333f', fontWeight: 600, textAlign: 'center' }}>
                     {label}
                   </div>
                 ))}
@@ -794,7 +794,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
               </div>
               {data.heatmap.length > 0 && (
                 <div style={{ marginTop: 14 }}>
-                  <div style={{ fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6a656e', fontWeight: 600, marginBottom: 6 }}>Last 30 days</div>
+                  <div style={{ fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#7f6b74', fontWeight: 600, marginBottom: 6 }}>Last 30 days</div>
                   <Heatmap days={data.heatmap} cellSize={10} gap={2} />
                 </div>
               )}
@@ -811,7 +811,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
             </div>
             <div className="td-queue">
               {data.queue.length === 0 ? (
-                <div style={{ padding: 16, color: '#6a656e', fontSize: 12.5 }}>Silence on purpose. I reach when it moves the protocol.</div>
+                <div style={{ padding: 16, color: '#7f6b74', fontSize: 12.5 }}>Silence on purpose. I reach when it moves the protocol.</div>
               ) : data.queue.map(m => (
                 <button key={m.id} className={`td-msg ${m.priority ? 'priority' : ''}`} onClick={() => setQueueDetail({ id: m.id, kind: m.kind, body: m.body, timeAgo: m.timeAgo })} style={{ textAlign: 'left', background: 'none', border: 'none', width: '100%', cursor: 'pointer', display: 'block' }}>
                   <div className="td-msghead">
@@ -828,7 +828,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
             <div className="td-cardh">
               <svg className="td-iconsm td-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2v20M2 12h20" /></svg>
               <div className="td-title">Arousal level</div>
-              <div className="td-chip" style={{ color: data.arousal === 5 ? '#f47272' : '#c4b5fd', background: data.arousal === 5 ? '#2a0f0f' : '#1a1226' }}>{AROUSAL_LABELS[data.arousal]}</div>
+              <div className="td-chip" style={{ color: data.arousal === 5 ? '#f47272' : '#edaec5', background: data.arousal === 5 ? '#2a0f0f' : '#291823' }}>{AROUSAL_LABELS[data.arousal]}</div>
             </div>
             <div className="td-arousal">
               <div className="td-arh">
@@ -919,7 +919,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
           <div className="td-cardh">
             <svg className="td-iconsm td-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 7L10 17l-5-5" /></svg>
             <div className="td-title">Aesthetic target · {data.aestheticPreset}</div>
-            <div className="td-meta" style={{ color: '#c4b5fd' }}>
+            <div className="td-meta" style={{ color: '#edaec5' }}>
               {data.weightKg ? `${data.weightKg.toFixed(1)}kg` : '—'}
               {weightDelta ? ` · −${weightDelta}kg` : ''}
             </div>
@@ -927,7 +927,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
           <div className="td-target">
             <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
               {data.latestProgressPhotoUrl && (
-                <div style={{ flexShrink: 0, width: 100, height: 130, borderRadius: 6, overflow: 'hidden', border: '1px solid #1a1a20', background: '#0a0a0d' }}>
+                <div style={{ flexShrink: 0, width: 100, height: 130, borderRadius: 6, overflow: 'hidden', border: '1px solid #221722', background: '#0f0a0e' }}>
                   <img src={data.latestProgressPhotoUrl} alt="latest progress" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
               )}
@@ -954,19 +954,19 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         <div
           style={{
             position: 'fixed', top: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 110,
-            background: 'linear-gradient(92deg, #2d1a4d 0%, #1a0f2e 100%)', border: '1px solid #7c3aed',
-            borderRadius: 10, padding: '12px 18px', color: '#e8dcff', fontSize: 13, fontWeight: 500,
+            background: 'linear-gradient(92deg, #4a2438 0%, #2c1723 100%)', border: '1px solid #c9557f',
+            borderRadius: 10, padding: '12px 18px', color: '#f9dfe9', fontSize: 13, fontWeight: 500,
             boxShadow: '0 8px 24px rgba(124, 58, 237, 0.3)', display: 'flex', alignItems: 'center', gap: 12, maxWidth: 480,
           }}
         >
           <span style={{ fontSize: 16 }}>↑</span>
           <div>
-            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#c4b5fd', fontWeight: 700 }}>Phase advanced</div>
+            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#edaec5', fontWeight: 700 }}>Phase advanced</div>
             <div>{PHASE_LABELS[phaseToast.from] || `Phase ${phaseToast.from}`} → <strong>{PHASE_LABELS[phaseToast.to] || `Phase ${phaseToast.to}`}</strong>. The protocol just got harder.</div>
           </div>
           <button
             onClick={() => setPhaseToast(null)}
-            style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#c4b5fd', cursor: 'pointer', fontSize: 16, fontFamily: 'inherit' }}
+            style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#edaec5', cursor: 'pointer', fontSize: 16, fontFamily: 'inherit' }}
           >×</button>
         </div>
       )}
@@ -977,7 +977,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         style={{
           position: 'fixed', right: 28, bottom: 28, height: 44, borderRadius: 22,
           paddingLeft: 14, paddingRight: 18,
-          background: composeOpen ? '#22222a' : '#7c3aed', color: '#fff', border: 'none', cursor: 'pointer',
+          background: composeOpen ? '#2b1d29' : '#c9557f', color: '#fff', border: 'none', cursor: 'pointer',
           boxShadow: '0 4px 16px rgba(124, 58, 237, 0.35)', display: 'flex', alignItems: 'center', gap: 8,
           fontFamily: 'inherit', fontSize: 12.5, fontWeight: 600, zIndex: 90,
         }}
@@ -989,10 +989,10 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
       </button>
       {composeOpen && (
         <div style={{
-          position: 'fixed', right: 28, bottom: 92, width: 340, background: '#111116', border: '1px solid #1a1a20',
+          position: 'fixed', right: 28, bottom: 92, width: 340, background: '#171017', border: '1px solid #221722',
           borderRadius: 12, padding: 14, zIndex: 91, boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
         }}>
-          <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#c4b5fd', fontWeight: 700, marginBottom: 8 }}>
+          <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#edaec5', fontWeight: 700, marginBottom: 8 }}>
             Talk to Handler
           </div>
           <textarea
@@ -1002,7 +1002,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
             placeholder="Say what you need to say."
             rows={4}
             onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) sendCompose(); }}
-            style={{ width: '100%', background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 6, padding: '8px 10px', fontFamily: 'inherit', fontSize: 13, color: '#e8e6e3', resize: 'none' }}
+            style={{ width: '100%', background: '#0f0a0e', border: '1px solid #2b1d29', borderRadius: 6, padding: '8px 10px', fontFamily: 'inherit', fontSize: 13, color: '#f2e9e6', resize: 'none' }}
           />
           <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
             <button className="td-btn primary" onClick={sendCompose} disabled={!composeText.trim()} style={{ flex: 1, justifyContent: 'center', padding: '7px' }}>
@@ -1012,7 +1012,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
               Cancel
             </button>
           </div>
-          <div style={{ fontSize: 10, color: '#6a656e', marginTop: 6 }}>⌘+Enter to send · prefills the Handler input, continues there</div>
+          <div style={{ fontSize: 10, color: '#7f6b74', marginTop: 6 }}>⌘+Enter to send · prefills the Handler input, continues there</div>
         </div>
       )}
 
@@ -1023,13 +1023,13 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         >
           <div
             onClick={e => e.stopPropagation()}
-            style={{ background: '#111116', border: '1px solid #1a1a20', borderRadius: 12, padding: 20, maxWidth: 520, width: '100%', color: '#e8e6e3' }}
+            style={{ background: '#171017', border: '1px solid #221722', borderRadius: 12, padding: 20, maxWidth: 520, width: '100%', color: '#f2e9e6' }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-              <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#c4b5fd', fontWeight: 700 }}>{queueDetail.kind}</span>
-              <span style={{ fontSize: 10.5, color: '#5a5560', marginLeft: 'auto' }}>{queueDetail.timeAgo}</span>
+              <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#edaec5', fontWeight: 700 }}>{queueDetail.kind}</span>
+              <span style={{ fontSize: 10.5, color: '#6d5a63', marginLeft: 'auto' }}>{queueDetail.timeAgo}</span>
             </div>
-            <div style={{ fontSize: 14, lineHeight: 1.55, color: '#e8e6e3', marginBottom: 16 }}>{queueDetail.body}</div>
+            <div style={{ fontSize: 14, lineHeight: 1.55, color: '#f2e9e6', marginBottom: 16 }}>{queueDetail.body}</div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button
                 className="td-btn primary"

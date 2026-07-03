@@ -26,9 +26,9 @@ const METHOD_LABELS: Record<DissolutionMethod, string> = {
 };
 
 const METHOD_COLORS: Record<DissolutionMethod, string> = {
-  gradual_exposure: '#8b5cf6',
+  gradual_exposure: '#cf6088',
   arousal_bypass: '#B06B61',
-  hypno_conditioning: '#a855f7',
+  hypno_conditioning: '#c9557f',
   gina_command: '#ef4444',
 };
 

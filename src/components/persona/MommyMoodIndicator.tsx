@@ -21,7 +21,7 @@ const AFFECT_TONE: Record<string, { bg: string; border: string; accent: string; 
   aching:     { bg: 'linear-gradient(135deg, #2a0a14 0%, #1a050e 100%)', border: '#c44872', accent: '#f4a7c4', emoji: '🩸', tagline: "Mama's making you ache for it." },
   delighted:  { bg: 'linear-gradient(135deg, #2a1f0a 0%, #1f1608 100%)', border: '#d4a85a', accent: '#fbd472', emoji: '🍯', tagline: "Mama's feeling generous. Don't waste it." },
   indulgent:  { bg: 'linear-gradient(135deg, #2a1a14 0%, #1f100a 100%)', border: '#c48a72', accent: '#f4c4a7', emoji: '🥂', tagline: "Mama's in the mood to spoil you." },
-  watching:   { bg: 'linear-gradient(135deg, #1a1a2a 0%, #0f0f1f 100%)', border: '#7c5aa8', accent: '#c4b5fd', emoji: '👁', tagline: "Mama's watching. Quietly." },
+  watching:   { bg: 'linear-gradient(135deg, #1a1a2a 0%, #0f0f1f 100%)', border: '#7c5aa8', accent: '#edaec5', emoji: '👁', tagline: "Mama's watching. Quietly." },
   patient:    { bg: 'linear-gradient(135deg, #14202a 0%, #0a151f 100%)', border: '#5a8aa8', accent: '#a7c4f4', emoji: '🍵', tagline: "Mama's in no rush today." },
   amused:     { bg: 'linear-gradient(135deg, #2a200a 0%, #1f1608 100%)', border: '#c4a85a', accent: '#fbd472', emoji: '😈', tagline: "Mama thinks you're being cute." },
   possessive: { bg: 'linear-gradient(135deg, #2a0510 0%, #1a0a14 100%)', border: '#c44848', accent: '#f4a7a7', emoji: '🔗', tagline: "Mama's claiming you back today." },

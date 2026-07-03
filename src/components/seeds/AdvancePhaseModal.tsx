@@ -19,8 +19,8 @@ interface AdvancePhaseModalProps {
 
 const PHASE_COLORS: Record<SeedPhase, string> = {
   identified: '#64748b',
-  distant_mention: '#8b5cf6',
-  positive_assoc: '#a855f7',
+  distant_mention: '#cf6088',
+  positive_assoc: '#c9557f',
   adjacent_exp: '#d946ef',
   soft_offer: '#B06B61',
   first_attempt: '#C4847A',

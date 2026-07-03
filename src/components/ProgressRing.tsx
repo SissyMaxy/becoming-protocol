@@ -78,7 +78,7 @@ export function ProgressRing({
         <defs>
           <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#B06B61" /> {/* rose-500 */}
-            <stop offset="100%" stopColor="#a855f7" /> {/* purple-500 */}
+            <stop offset="100%" stopColor="#c9557f" /> {/* purple-500 */}
           </linearGradient>
         </defs>
       </svg>

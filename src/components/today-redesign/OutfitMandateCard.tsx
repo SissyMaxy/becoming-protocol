@@ -47,8 +47,8 @@ export function OutfitMandateCard() {
 
   return (
     <div style={{
-      background: submitted ? '#111116' : 'linear-gradient(92deg, #1a0f2e 0%, #150a24 100%)',
-      border: `1px solid ${submitted ? '#2d1a4d' : '#7a1f4d'}`,
+      background: submitted ? '#171017' : 'linear-gradient(92deg, #2c1723 0%, #22111c 100%)',
+      border: `1px solid ${submitted ? '#4a2438' : '#7a1f4d'}`,
       borderRadius: 10, padding: 14, marginBottom: 16,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
@@ -70,13 +70,13 @@ export function OutfitMandateCard() {
       </div>
 
       {p.context && (
-        <div style={{ fontSize: 10.5, color: '#c4b5fd', marginBottom: 6 }}>
-          context: <span style={{ color: '#e8e6e3' }}>{p.context}</span>
+        <div style={{ fontSize: 10.5, color: '#edaec5', marginBottom: 6 }}>
+          context: <span style={{ color: '#f2e9e6' }}>{p.context}</span>
         </div>
       )}
       {p.required_visible && (
         <div style={{ fontSize: 10.5, color: '#f4a7c4', marginBottom: 8 }}>
-          must be visible: <span style={{ color: '#e8e6e3' }}>{p.required_visible}</span>
+          must be visible: <span style={{ color: '#f2e9e6' }}>{p.required_visible}</span>
         </div>
       )}
 
@@ -96,11 +96,11 @@ export function OutfitMandateCard() {
           : `Handler read · score ${mandate.femininity_score ?? '—'}/10`;
         return (
           <div style={{
-            fontSize: 11, color: '#c8c4cc', lineHeight: 1.5, padding: 10,
-            background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 5, marginBottom: 6,
+            fontSize: 11, color: '#d5c3ca', lineHeight: 1.5, padding: 10,
+            background: '#0f0a0e', border: '1px solid #2b1d29', borderRadius: 5, marginBottom: 6,
             whiteSpace: 'pre-wrap',
           }}>
-            <div style={{ fontSize: 9.5, color: mommy ? '#f4a8c4' : '#6a656e', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5, fontWeight: 600 }}>
+            <div style={{ fontSize: 9.5, color: mommy ? '#f4a8c4' : '#7f6b74', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5, fontWeight: 600 }}>
               {scoreLabel}
             </div>
             {fullText.slice(0, limit)}{truncated ? '…' : ''}
@@ -109,7 +109,7 @@ export function OutfitMandateCard() {
                 onClick={() => setExpanded(e => !e)}
                 style={{
                   display: 'block', marginTop: 6, background: 'transparent',
-                  color: '#8a8690', border: 'none', fontSize: 10,
+                  color: '#9c8590', border: 'none', fontSize: 10,
                   cursor: 'pointer', padding: 2, textTransform: 'lowercase',
                   fontFamily: 'inherit', textDecoration: 'underline',
                 }}
@@ -122,7 +122,7 @@ export function OutfitMandateCard() {
       })()}
 
       {!submitted && (
-        <div style={{ fontSize: 10.5, color: '#8a8690' }}>
+        <div style={{ fontSize: 10.5, color: '#9c8590' }}>
           Wear it, photograph it, submit via Capture. Handler scores femininity + feeds context.
         </div>
       )}
@@ -132,9 +132,9 @@ export function OutfitMandateCard() {
 
 function Piece({ label, value }: { label: string; value?: string }) {
   return (
-    <div style={{ background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 5, padding: '5px 7px' }}>
-      <div style={{ fontSize: 9, color: '#6a656e', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 1 }}>{label}</div>
-      <div style={{ fontSize: 11, color: '#e8e6e3', lineHeight: 1.3 }}>{value || '—'}</div>
+    <div style={{ background: '#0f0a0e', border: '1px solid #2b1d29', borderRadius: 5, padding: '5px 7px' }}>
+      <div style={{ fontSize: 9, color: '#7f6b74', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 1 }}>{label}</div>
+      <div style={{ fontSize: 11, color: '#f2e9e6', lineHeight: 1.3 }}>{value || '—'}</div>
     </div>
   );
 }

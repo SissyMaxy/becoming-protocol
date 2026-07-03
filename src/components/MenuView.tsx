@@ -90,7 +90,7 @@ const PRIMARY_GROUPS: MenuGroup[] = [
         icon: Sparkles,
         label: 'Sessions',
         description: 'Start a guided session — cam, hypno, goon, exercise.',
-        color: '#a855f7',
+        color: '#c9557f',
       },
       {
         id: 'wishlist',
@@ -116,7 +116,7 @@ const PRIMARY_GROUPS: MenuGroup[] = [
         icon: BookOpen,
         label: 'Recaps',
         description: 'The story so far, chapter by chapter.',
-        color: '#c084fc',
+        color: '#edaec5',
       },
       {
         id: 'timeline',
@@ -197,21 +197,21 @@ const ARCHIVE_ITEMS: MenuItem[] = [
     icon: FileText,
     label: 'Kink Quiz',
     description: 'Map what moves you.',
-    color: '#a855f7',
+    color: '#c9557f',
   },
   {
     id: 'conditioning-library',
     icon: Library,
     label: 'Conditioning Library',
     description: 'Loops, triggers, and trance material.',
-    color: '#a855f7',
+    color: '#c9557f',
   },
   {
     id: 'envelopes',
     icon: Mail,
     label: 'Sealed Envelopes',
     description: 'Letters from your past self to your future self.',
-    color: '#c084fc',
+    color: '#edaec5',
   },
   {
     id: 'case_file',
@@ -225,7 +225,7 @@ const ARCHIVE_ITEMS: MenuItem[] = [
     icon: Eye,
     label: 'Witnesses',
     description: 'Accountability contacts who watch your progress.',
-    color: '#a855f7',
+    color: '#c9557f',
   },
   {
     id: 'vault-browser',
@@ -246,7 +246,7 @@ const ARCHIVE_ITEMS: MenuItem[] = [
     icon: Headphones,
     label: 'Hypno Learning',
     description: 'How the trance work is built.',
-    color: '#a855f7',
+    color: '#c9557f',
   },
   {
     id: 'history',
@@ -260,7 +260,7 @@ const ARCHIVE_ITEMS: MenuItem[] = [
     icon: ArrowUpRight,
     label: 'Transformation Ladder',
     description: 'Where you are on the journey. Only goes up.',
-    color: '#a855f7',
+    color: '#c9557f',
   },
   {
     id: 'force',

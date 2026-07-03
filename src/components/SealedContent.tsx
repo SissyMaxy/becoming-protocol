@@ -45,7 +45,7 @@ interface SealedCardProps {
 
 function SealedCard({ content, onClick, isBambiMode }: SealedCardProps) {
   const Icon = categoryIcons[content.category] || Mail;
-  const color = categoryColors[content.category] || '#a855f7';
+  const color = categoryColors[content.category] || '#c9557f';
 
   return (
     <button

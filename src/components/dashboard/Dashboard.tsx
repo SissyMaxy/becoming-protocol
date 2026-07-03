@@ -58,7 +58,7 @@ function DomainProgressSection({ domains, isBambiMode }: { domains: DomainLevel[
                 className="h-full rounded-full transition-all duration-500"
                 style={{
                   width: `${pct}%`,
-                  backgroundColor: isBambiMode ? '#B06B61' : '#a855f7',
+                  backgroundColor: isBambiMode ? '#B06B61' : '#c9557f',
                 }}
               />
             </div>
@@ -110,7 +110,7 @@ function PipelineSummarySection({ gina, isBambiMode }: { gina: GinaConversionSta
                   width: `${pct}%`,
                   backgroundColor: locked
                     ? isBambiMode ? '#D4A89C' : '#4a4a6a'
-                    : isBambiMode ? '#B06B61' : '#a855f7',
+                    : isBambiMode ? '#B06B61' : '#c9557f',
                 }}
               />
             </div>

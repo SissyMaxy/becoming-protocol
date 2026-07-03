@@ -144,19 +144,19 @@ export function DavidTaxCard() {
       border: '1px solid #5a3a1a', borderRadius: 10, padding: 14, marginBottom: 16,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f4c272" strokeWidth="1.8">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#e6bd80" strokeWidth="1.8">
           <path d="M3 7h18M3 12h18M3 17h12"/>
         </svg>
-        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#f4c272', fontWeight: 700 }}>
+        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#e6bd80', fontWeight: 700 }}>
           David tax
         </span>
-        <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto', fontStyle: 'italic' }}>
+        <span style={{ fontSize: 10, color: '#9c8590', marginLeft: 'auto', fontStyle: 'italic' }}>
           David earns. The fund takes its cut.
         </span>
       </div>
 
       <div style={{
-        fontSize: 11.5, color: '#c8c4cc', marginBottom: 10, lineHeight: 1.5,
+        fontSize: 11.5, color: '#d5c3ca', marginBottom: 10, lineHeight: 1.5,
       }}>
         Until the Handler runs its own revenue, David funds the transition. Log each paycheck and the tax auto-allocates by budget priority — Plume first, voice coach next, laser, etc.
       </div>
@@ -170,13 +170,13 @@ export function DavidTaxCard() {
           placeholder="net paycheck $"
           inputMode="decimal"
           style={{
-            background: '#050507', border: '1px solid #22222a', borderRadius: 5,
-            padding: '8px 10px', fontSize: 12.5, color: '#e8e6e3', fontFamily: 'inherit',
+            background: '#0a0709', border: '1px solid #2b1d29', borderRadius: 5,
+            padding: '8px 10px', fontSize: 12.5, color: '#f2e9e6', fontFamily: 'inherit',
           }}
         />
         <div style={{
           display: 'flex', alignItems: 'center', gap: 4,
-          background: '#050507', border: '1px solid #22222a', borderRadius: 5,
+          background: '#0a0709', border: '1px solid #2b1d29', borderRadius: 5,
           padding: '0 10px',
         }}>
           <input
@@ -187,17 +187,17 @@ export function DavidTaxCard() {
             onChange={e => setPct(Math.max(0, Math.min(100, parseInt(e.target.value || '0', 10))))}
             style={{
               flex: 1, background: 'transparent', border: 'none', textAlign: 'right',
-              fontSize: 12.5, color: '#f4c272', fontFamily: 'inherit', fontWeight: 700,
+              fontSize: 12.5, color: '#e6bd80', fontFamily: 'inherit', fontWeight: 700,
             }}
           />
-          <span style={{ color: '#8a8690', fontSize: 12 }}>%</span>
+          <span style={{ color: '#9c8590', fontSize: 12 }}>%</span>
         </div>
       </div>
 
       {paycheck && parseFloat(paycheck) > 0 && (
         <div style={{
-          fontSize: 11, color: '#f4c272', marginBottom: 10,
-          padding: '6px 10px', background: '#0a0a0d', borderRadius: 4,
+          fontSize: 11, color: '#e6bd80', marginBottom: 10,
+          padding: '6px 10px', background: '#0f0a0e', borderRadius: 4,
           border: '1px solid #2a1f0a',
         }}>
           {pct}% of ${parseFloat(paycheck).toFixed(2)} = <strong>${(taxCents / 100).toFixed(2)}</strong> to fund
@@ -209,8 +209,8 @@ export function DavidTaxCard() {
         disabled={!paycheck || parseFloat(paycheck) <= 0 || submitting}
         style={{
           width: '100%', padding: 10, borderRadius: 5, border: 'none',
-          background: paycheck && parseFloat(paycheck) > 0 ? '#f4c272' : '#22222a',
-          color: paycheck && parseFloat(paycheck) > 0 ? '#1a0f00' : '#5a5560',
+          background: paycheck && parseFloat(paycheck) > 0 ? '#e6bd80' : '#2b1d29',
+          color: paycheck && parseFloat(paycheck) > 0 ? '#1a0f00' : '#6d5a63',
           fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
           textTransform: 'uppercase', letterSpacing: '0.04em',
         }}
@@ -228,7 +228,7 @@ export function DavidTaxCard() {
       )}
 
       {recentTax.length > 0 && (
-        <div style={{ marginTop: 10, fontSize: 10.5, color: '#8a8690' }}>
+        <div style={{ marginTop: 10, fontSize: 10.5, color: '#9c8590' }}>
           Recent: {recentTax.map(r => `$${r.amount.toFixed(2)}`).join(' · ')}
           {totalTaxedAllTime > 0 && <span style={{ marginLeft: 6, color: '#5fc88f' }}>· last 5 = ${totalTaxedAllTime.toFixed(2)} taxed</span>}
         </div>

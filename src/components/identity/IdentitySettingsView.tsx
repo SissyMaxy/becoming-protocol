@@ -39,8 +39,8 @@ import { DifficultyBandCard } from './DifficultyBandCard';
 const PALETTE = {
   bg: 'linear-gradient(140deg, #1a0f2e 0%, #0f0820 100%)',
   border: '#2d1a4d',
-  borderHover: '#7c3aed',
-  accent: '#c4b5fd',
+  borderHover: '#c9557f',
+  accent: '#edaec5',
   accentBright: '#e9d5ff',
   textBody: '#c8c4cc',
   textMuted: '#8a8690',
@@ -514,7 +514,7 @@ const inputStyle: React.CSSProperties = {
 
 function btnPrimary(disabled: boolean): React.CSSProperties {
   return {
-    background: disabled ? '#2d1a4d' : '#7c3aed',
+    background: disabled ? '#2d1a4d' : '#c9557f',
     color: disabled ? PALETTE.textMuted : '#fff',
     border: 'none',
     borderRadius: 6,

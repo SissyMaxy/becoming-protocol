@@ -46,13 +46,13 @@ function MetricTile({ label, value }: { label: string; value: string }) {
   return (
     <div style={{
       flex: '1 1 80px', minWidth: 80,
-      padding: '8px 10px', background: '#0a0a0d',
-      border: '1px solid #2d1a4d33', borderRadius: 6,
+      padding: '8px 10px', background: '#0f0a0e',
+      border: '1px solid #4a243833', borderRadius: 6,
     }}>
-      <div style={{ fontSize: 9, color: '#8a8690', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>
+      <div style={{ fontSize: 9, color: '#9c8590', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>
         {label}
       </div>
-      <div style={{ fontSize: 14, color: '#e8e6e3', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+      <div style={{ fontSize: 14, color: '#f2e9e6', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
         {value}
       </div>
     </div>
@@ -182,7 +182,7 @@ export function WeeklyRecapCard({ onOpenDetail }: { onOpenDetail?: (recapId: str
           Your week with Mama
         </span>
         {weekRange && (
-          <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto', fontStyle: 'italic' }}>
+          <span style={{ fontSize: 10, color: '#9c8590', marginLeft: 'auto', fontStyle: 'italic' }}>
             {weekRange}
           </span>
         )}
@@ -206,7 +206,7 @@ export function WeeklyRecapCard({ onOpenDetail }: { onOpenDetail?: (recapId: str
 
       {/* Mama's narrative */}
       <div style={{
-        fontSize: 13, color: '#e8e6e3', whiteSpace: 'pre-wrap', lineHeight: 1.55,
+        fontSize: 13, color: '#f2e9e6', whiteSpace: 'pre-wrap', lineHeight: 1.55,
         marginBottom: 12, fontStyle: 'italic',
       }}>
         {card.outreach_message}

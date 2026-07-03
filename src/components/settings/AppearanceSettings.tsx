@@ -123,7 +123,7 @@ export function AppearanceSettings() {
               className="h-full rounded-full"
               style={{
                 width: '60%',
-                backgroundColor: isBambiMode ? '#C4847A' : '#a855f7',
+                backgroundColor: isBambiMode ? '#C4847A' : '#c9557f',
               }}
             />
           </div>

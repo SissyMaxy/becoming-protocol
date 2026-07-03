@@ -45,7 +45,7 @@ export function ProgressRing({ completed, total, size = 120 }: ProgressRingProps
             {isBambiMode ? (
               <>
                 <stop offset="0%" stopColor="#B06B61" />
-                <stop offset="100%" stopColor="#a855f7" />
+                <stop offset="100%" stopColor="#c9557f" />
               </>
             ) : (
               <>

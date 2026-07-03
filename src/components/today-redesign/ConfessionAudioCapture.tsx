@@ -265,9 +265,9 @@ export function ConfessionAudioCapture({
           disabled={busy || phase === 'done'}
           style={{
             padding: '8px 14px',
-            background: recording ? '#c4485a' : busy ? '#22222a' : (mommy ? '#7a3a4a' : '#2d1a4d'),
-            color: recording ? '#fff' : (busy ? '#5a5560' : '#f4a7c4'),
-            border: `1px solid ${recording ? '#c4485a' : (mommy ? '#a86070' : '#7c3aed')}`,
+            background: recording ? '#c4485a' : busy ? '#2b1d29' : (mommy ? '#7a3a4a' : '#4a2438'),
+            color: recording ? '#fff' : (busy ? '#6d5a63' : '#f4a7c4'),
+            border: `1px solid ${recording ? '#c4485a' : (mommy ? '#a86070' : '#c9557f')}`,
             borderRadius: 6,
             fontFamily: 'inherit', fontSize: 11, fontWeight: 700,
             letterSpacing: '0.04em', textTransform: 'uppercase',
@@ -305,8 +305,8 @@ export function ConfessionAudioCapture({
             onClick={cancelRecording}
             style={{
               marginLeft: 'auto',
-              background: 'transparent', border: '1px solid #22222a',
-              color: '#8a8690', fontSize: 10, padding: '4px 8px',
+              background: 'transparent', border: '1px solid #2b1d29',
+              color: '#9c8590', fontSize: 10, padding: '4px 8px',
               borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit',
             }}
           >
@@ -321,7 +321,7 @@ export function ConfessionAudioCapture({
         </div>
       )}
       {phase === 'idle' && !errorMsg && (
-        <div style={{ fontSize: 9.5, color: '#5a5560', fontStyle: 'italic' }}>
+        <div style={{ fontSize: 9.5, color: '#6d5a63', fontStyle: 'italic' }}>
           Hold the mic to record. Release to send. Min {minDurationSec}s.
         </div>
       )}

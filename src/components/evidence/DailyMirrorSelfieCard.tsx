@@ -116,13 +116,13 @@ export function DailyMirrorSelfieCard() {
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
         <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em',
-          color: doneToday ? '#5fc88f' : '#c4b5fd', fontWeight: 700 }}>
+          color: doneToday ? '#5fc88f' : '#edaec5', fontWeight: 700 }}>
           Daily mirror selfie {doneToday ? '· done ✓' : '· today'}
         </span>
         {streakDays > 0 && (
           <span style={{
             fontSize: 10, color: '#fff',
-            background: streakDays >= 7 ? '#5fc88f' : '#7c3aed',
+            background: streakDays >= 7 ? '#5fc88f' : '#c9557f',
             padding: '2px 7px', borderRadius: 8, fontWeight: 700,
             textTransform: 'uppercase', letterSpacing: '0.04em',
           }}>
@@ -139,7 +139,7 @@ export function DailyMirrorSelfieCard() {
           onClick={() => setShowUpload(true)}
           style={{
             width: '100%', padding: '12px 14px', borderRadius: 7, border: 'none',
-            background: '#7c3aed', color: '#fff',
+            background: '#c9557f', color: '#fff',
             fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
             marginBottom: 10,
           }}
@@ -152,7 +152,7 @@ export function DailyMirrorSelfieCard() {
         <div style={{
           background: '#050507', border: '1px solid #2d1a4d', borderRadius: 8, padding: 12, marginBottom: 12,
         }}>
-          <div style={{ fontSize: 11, color: '#c4b5fd', marginBottom: 8, lineHeight: 1.4 }}>
+          <div style={{ fontSize: 11, color: '#edaec5', marginBottom: 8, lineHeight: 1.4 }}>
             Full-body mirror selfie. Whatever you&apos;re wearing, however you look right now. The trajectory only exists
             if every day is on file.
           </div>
@@ -162,7 +162,7 @@ export function DailyMirrorSelfieCard() {
             accept="image/*"
             capture="environment"
             onChange={e => setFile(e.target.files?.[0] ?? null)}
-            style={{ marginBottom: 10, color: '#c4b5fd', fontSize: 12, width: '100%' }}
+            style={{ marginBottom: 10, color: '#edaec5', fontSize: 12, width: '100%' }}
           />
           <input
             type="text"
@@ -191,7 +191,7 @@ export function DailyMirrorSelfieCard() {
               disabled={!file || submitting}
               style={{
                 flex: 1, padding: '7px 12px', borderRadius: 5, border: 'none',
-                background: file && !submitting ? '#7c3aed' : '#22222a',
+                background: file && !submitting ? '#c9557f' : '#22222a',
                 color: file && !submitting ? '#fff' : '#6a656e',
                 fontWeight: 700, fontSize: 11,
                 cursor: file && !submitting ? 'pointer' : 'not-allowed', fontFamily: 'inherit',

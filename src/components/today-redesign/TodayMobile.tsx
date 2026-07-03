@@ -87,7 +87,7 @@ import { HandlerDreamCard } from './HandlerDreamCard';
 import { DailyBriefingCard } from './DailyBriefingCard';
 
 const PHASE_LABELS = ['Foundation', 'Integration', 'Transition', 'Adherence'];
-const HEATMAP_COLORS = ['#1a1a20', '#2d1a4d', '#4d2a75', '#6a2a9a', '#7c3aed'];
+const HEATMAP_COLORS = ['#221722', '#4a2438', '#7e3a57', '#a84468', '#c9557f'];
 
 function truncateWords(text: string, maxWords: number): string {
   const words = text.trim().split(/\s+/);
@@ -209,7 +209,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             style={{
               position: 'absolute', top: 8, right: 12, zIndex: 5,
               width: 32, height: 32, borderRadius: 8, background: 'transparent',
-              border: '1px solid #1a1a20', color: '#8a8690', cursor: 'pointer',
+              border: '1px solid #221722', color: '#9c8590', cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
             }}
           >
@@ -287,7 +287,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             <div className="bar">
               <div className="fill" style={{
                 width: `${data.compliancePct}%`,
-                background: data.compliancePct >= 80 ? '#5fc88f' : data.compliancePct >= 50 ? '#f4c272' : '#f47272',
+                background: data.compliancePct >= 80 ? '#5fc88f' : data.compliancePct >= 50 ? '#e6bd80' : '#f47272',
               }} />
             </div>
           </div>
@@ -318,7 +318,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             onClick={() => setViewMode('focus')}
             style={{
               width: '100%', marginBottom: 12, padding: '8px 12px',
-              background: '#7c3aed', color: '#fff', border: 'none',
+              background: '#c9557f', color: '#fff', border: 'none',
               borderRadius: 6, fontSize: 11, fontWeight: 700,
               textTransform: 'uppercase', letterSpacing: '0.06em',
               fontFamily: 'inherit', cursor: 'pointer',
@@ -364,7 +364,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           </CollapsibleGroup>
 
           {/* REVENUE — sub-funnel work, default closed. */}
-          <CollapsibleGroup id="revenue_work" label="Revenue & Outreach" tone="#f4c272" hint="revenue · david tax · plan · sponsors · DMs · worn">
+          <CollapsibleGroup id="revenue_work" label="Revenue & Outreach" tone="#e6bd80" hint="revenue · david tax · plan · sponsors · DMs · worn">
             <RevenueCard />
             <DavidTaxCard />
             <RevenuePlanCard />
@@ -400,7 +400,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             <BodyMeasurementCard />
             <HandlerEvolutionCard />
           </CollapsibleGroup>
-          <CollapsibleGroup id="handler_systems" label="Handler Systems" tone="#c4b5fd" hint="dreams · slips · evidence">
+          <CollapsibleGroup id="handler_systems" label="Handler Systems" tone="#edaec5" hint="dreams · slips · evidence">
             <HandlerDreamCard />
             <HandlerKnowCard />
             <HandlerRunningCard />
@@ -412,7 +412,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             <RationalizationPatternCard />
             <EvidenceReportsCard />
           </CollapsibleGroup>
-          <CollapsibleGroup id="capture" label="Capture & Evidence" tone="#f4c272" hint="selfie · voice journal · proofs · screenshots · witness · irreversibility">
+          <CollapsibleGroup id="capture" label="Capture & Evidence" tone="#e6bd80" hint="selfie · voice journal · proofs · screenshots · witness · irreversibility">
             <DailyMirrorSelfieCard />
             <VoiceJournalCard />
             <UnifiedCaptureCard />
@@ -427,8 +427,8 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
         const colors = banner.severity === 'critical'
           ? { border: '#7a1f22', bg: 'linear-gradient(92deg, #2a0a0c, #1a0608)', text: '#f47272' }
           : banner.severity === 'high'
-          ? { border: '#7a5a1f', bg: 'linear-gradient(92deg, #2a1f0a, #1f1608)', text: '#f4c272' }
-          : { border: '#2d1a4d', bg: 'linear-gradient(92deg, #1a0f2e, #150a24)', text: '#c4b5fd' };
+          ? { border: '#7a5a1f', bg: 'linear-gradient(92deg, #2a1f0a, #1f1608)', text: '#e6bd80' }
+          : { border: '#4a2438', bg: 'linear-gradient(92deg, #2c1723, #22111c)', text: '#edaec5' };
         return (
           <div key={i} className="tdm-banner" style={{ background: colors.bg, borderColor: colors.border }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={colors.text} strokeWidth="1.8"><circle cx="12" cy="12" r="10" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg>
@@ -447,8 +447,8 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
       {tab === 'today' && (
         <div style={{ display: 'flex', gap: 8, padding: '0 18px 16px', overflowX: 'auto', scrollbarWidth: 'none' }}>
           {[
-            { label: 'Hypno', prompt: "I want to run a hypno session now. Pick the right depth.", color: '#7c3aed' },
-            { label: 'Voice', prompt: "Start voice practice. Give me the target pitch and phrase.", color: '#c4b5fd' },
+            { label: 'Hypno', prompt: "I want to run a hypno session now. Pick the right depth.", color: '#c9557f' },
+            { label: 'Voice', prompt: "Start voice practice. Give me the target pitch and phrase.", color: '#edaec5' },
             { label: 'Edge', prompt: "I want to start an edging session. Tell me the rules.", color: '#f47272' },
           ].map(s => (
             <button
@@ -459,8 +459,8 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
                 onExit?.();
               }}
               style={{
-                flex: '0 0 auto', background: '#111116', border: '1px solid #1a1a20', borderRadius: 10,
-                padding: '8px 12px', fontFamily: 'inherit', color: '#e8e6e3', fontSize: 12, fontWeight: 600,
+                flex: '0 0 auto', background: '#171017', border: '1px solid #221722', borderRadius: 10,
+                padding: '8px 12px', fontFamily: 'inherit', color: '#f2e9e6', fontSize: 12, fontWeight: 600,
                 cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
               }}
             >
@@ -475,22 +475,22 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
         <div className="tdm-sec">
           <div className="tdm-sech">
             <span className="t">HRT funnel</span>
-            <span className="chip" style={{ color: data.hrt.step === 'uncommitted' ? '#f47272' : '#c4b5fd', background: data.hrt.step === 'uncommitted' ? '#2a0f0f' : '#1a1226' }}>
+            <span className="chip" style={{ color: data.hrt.step === 'uncommitted' ? '#f47272' : '#edaec5', background: data.hrt.step === 'uncommitted' ? '#2a0f0f' : '#291823' }}>
               {data.hrt.stepIndex + 1} / {data.hrt.totalSteps}
             </span>
-            {data.hrt.daysStuck >= 7 && <span className="chip" style={{ color: '#f4c272', background: '#2a1f0f' }}>{data.hrt.daysStuck}d stuck</span>}
+            {data.hrt.daysStuck >= 7 && <span className="chip" style={{ color: '#e6bd80', background: '#2a1f0f' }}>{data.hrt.daysStuck}d stuck</span>}
           </div>
           <div className="tdm-card" style={{ padding: '14px 16px' }}>
             <div style={{ fontSize: 20, fontWeight: 650, color: '#fff', letterSpacing: '-0.02em', marginBottom: 6 }}>{data.hrt.stepLabel}</div>
             {data.hrt.provider && (
-              <div style={{ fontSize: 12, color: '#8a8690' }}>Provider: <span style={{ color: '#c4b5fd' }}>{data.hrt.provider}</span></div>
+              <div style={{ fontSize: 12, color: '#9c8590' }}>Provider: <span style={{ color: '#edaec5' }}>{data.hrt.provider}</span></div>
             )}
             {data.hrt.appointmentAt && (
-              <div style={{ fontSize: 12, color: '#8a8690', marginTop: 4 }}>Appointment: <span style={{ color: '#c4b5fd' }}>{new Date(data.hrt.appointmentAt).toLocaleDateString()}</span></div>
+              <div style={{ fontSize: 12, color: '#9c8590', marginTop: 4 }}>Appointment: <span style={{ color: '#edaec5' }}>{new Date(data.hrt.appointmentAt).toLocaleDateString()}</span></div>
             )}
             <div style={{ display: 'flex', gap: 2, marginTop: 12 }}>
               {Array.from({ length: data.hrt.totalSteps }).map((_, i) => (
-                <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= data.hrt!.stepIndex ? '#7c3aed' : '#1a1a20' }} />
+                <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= data.hrt!.stepIndex ? '#c9557f' : '#221722' }} />
               ))}
             </div>
           </div>
@@ -507,13 +507,13 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
               const rounded = Math.abs(Math.round(dose.hoursUntil));
               const humanTime = rounded >= 48 ? `${Math.round(rounded / 24)}d` : `${rounded}h`;
               return (
-                <div key={dose.regimenId} style={{ padding: '12px 14px', borderBottom: '1px solid #15151b' }}>
+                <div key={dose.regimenId} style={{ padding: '12px 14px', borderBottom: '1px solid #1b121a' }}>
                   <div style={{ display: 'flex', alignItems: 'center' }}>
                     <div>
-                      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6a656e', fontWeight: 600 }}>{dose.medicationName}</div>
-                      <div style={{ fontSize: 13, color: dose.isOverdue ? '#f47272' : '#e8e6e3', fontWeight: 500 }}>{dose.isOverdue ? `Overdue by ${humanTime}` : `Due in ${humanTime}`}</div>
+                      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#7f6b74', fontWeight: 600 }}>{dose.medicationName}</div>
+                      <div style={{ fontSize: 13, color: dose.isOverdue ? '#f47272' : '#f2e9e6', fontWeight: 500 }}>{dose.isOverdue ? `Overdue by ${humanTime}` : `Due in ${humanTime}`}</div>
                     </div>
-                    <span className="chip" style={{ marginLeft: 'auto', fontSize: 9.5, color: dose.isOverdue ? '#f47272' : '#c4b5fd', background: dose.isOverdue ? '#2a0f0f' : '#1a1226', padding: '2px 7px', borderRadius: 10, fontWeight: 700, letterSpacing: '0.02em', textTransform: 'uppercase' }}>
+                    <span className="chip" style={{ marginLeft: 'auto', fontSize: 9.5, color: dose.isOverdue ? '#f47272' : '#edaec5', background: dose.isOverdue ? '#2a0f0f' : '#291823', padding: '2px 7px', borderRadius: 10, fontWeight: 700, letterSpacing: '0.02em', textTransform: 'uppercase' }}>
                       {dose.isWeekly ? 'weekly' : 'daily'}
                     </span>
                   </div>
@@ -567,9 +567,9 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
                 onClick={() => setDirectiveFilter('all')}
                 style={{
                   fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 10, fontWeight: 700,
-                  background: directiveFilter === 'all' ? '#1a1226' : '#0a0a0d',
-                  color: directiveFilter === 'all' ? '#c4b5fd' : '#6a656e',
-                  border: '1px solid ' + (directiveFilter === 'all' ? '#2d1a4d' : '#1a1a20'),
+                  background: directiveFilter === 'all' ? '#291823' : '#0f0a0e',
+                  color: directiveFilter === 'all' ? '#edaec5' : '#7f6b74',
+                  border: '1px solid ' + (directiveFilter === 'all' ? '#4a2438' : '#221722'),
                   cursor: 'pointer', fontFamily: 'inherit',
                 }}
               >All</button>
@@ -579,9 +579,9 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
                   onClick={() => setDirectiveFilter(k)}
                   style={{
                     fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 10, fontWeight: 700,
-                    background: directiveFilter === k ? '#1a1226' : '#0a0a0d',
-                    color: directiveFilter === k ? '#c4b5fd' : '#6a656e',
-                    border: '1px solid ' + (directiveFilter === k ? '#2d1a4d' : '#1a1a20'),
+                    background: directiveFilter === k ? '#291823' : '#0f0a0e',
+                    color: directiveFilter === k ? '#edaec5' : '#7f6b74',
+                    border: '1px solid ' + (directiveFilter === k ? '#4a2438' : '#221722'),
                     cursor: 'pointer', fontFamily: 'inherit',
                   }}
                 >{k}</button>
@@ -590,7 +590,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           )}
           <div className="tdm-card">
             {filteredDirectives.length === 0 ? (
-              <div style={{ padding: 14, color: '#6a656e', fontSize: 12.5 }}>{data.directives.length === 0 ? "I haven't assigned anything yet. Sit with that." : `Nothing open under ${directiveFilter}.`}</div>
+              <div style={{ padding: 14, color: '#7f6b74', fontSize: 12.5 }}>{data.directives.length === 0 ? "I haven't assigned anything yet. Sit with that." : `Nothing open under ${directiveFilter}.`}</div>
             ) : filteredDirectives.slice(0, 5).map(d => {
               const expanded = expandedDirective === d.id;
               const bodyText = expanded || d.body.split(/\s+/).length <= 14 ? d.body : truncateWords(d.body, 14);
@@ -684,7 +684,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
               <div className="tdm-phasebar">{phaseDots.map((s, i) => <div key={i} className={`tdm-phasecell ${s}`} />)}</div>
               <div style={{ display: 'flex', gap: 4, marginTop: -6, marginBottom: 10 }}>
                 {PHASE_LABELS.map((label, i) => (
-                  <div key={i} style={{ flex: 1, fontSize: 8.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: i === data.currentPhase ? '#c4b5fd' : i < data.currentPhase ? '#8a8690' : '#3a3540', fontWeight: 600, textAlign: 'center' }}>
+                  <div key={i} style={{ flex: 1, fontSize: 8.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: i === data.currentPhase ? '#edaec5' : i < data.currentPhase ? '#9c8590' : '#46333f', fontWeight: 600, textAlign: 'center' }}>
                     {label}
                   </div>
                 ))}
@@ -703,13 +703,13 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
               <div className="tdm-prrow"><span className="k">Open directives</span><span className={`v ${openDirectives > 0 ? 'warn' : 'ok'}`}>{openDirectives}</span></div>
               {data.heatmap.length > 0 && (
                 <div style={{ marginTop: 14 }}>
-                  <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6a656e', fontWeight: 700, marginBottom: 6 }}>Last 30 days</div>
+                  <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#7f6b74', fontWeight: 700, marginBottom: 6 }}>Last 30 days</div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(30, 1fr)', gap: 2 }}>
                     {data.heatmap.map(d => (
                       <div
                         key={d.date}
                         title={`${d.date}: ${d.count}`}
-                        style={{ width: '100%', aspectRatio: '1', borderRadius: 2, background: HEATMAP_COLORS[d.intensity], outline: d.isToday ? '1px solid #c4b5fd' : undefined }}
+                        style={{ width: '100%', aspectRatio: '1', borderRadius: 2, background: HEATMAP_COLORS[d.intensity], outline: d.isToday ? '1px solid #edaec5' : undefined }}
                       />
                     ))}
                   </div>
@@ -728,7 +728,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           </div>
           <div className="tdm-card">
             {data.queue.length === 0 ? (
-              <div style={{ padding: 14, color: '#6a656e', fontSize: 12.5 }}>Silence on purpose. I reach when it moves the protocol.</div>
+              <div style={{ padding: 14, color: '#7f6b74', fontSize: 12.5 }}>Silence on purpose. I reach when it moves the protocol.</div>
             ) : data.queue.map(m => (
               <button key={m.id} className={`tdm-msg ${m.priority ? 'priority' : ''}`} onClick={() => setQueueDetail({ id: m.id, kind: m.kind, body: m.body, timeAgo: m.timeAgo })} style={{ textAlign: 'left', background: 'none', border: 'none', width: '100%', display: 'block', cursor: 'pointer' }}>
                 <div className="tdm-msghead">
@@ -746,7 +746,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
         <div className="tdm-sec">
           <div className="tdm-sech">
             <span className="t">Arousal</span>
-            <span className="chip" style={{ color: data.arousal === 5 ? '#f47272' : '#c4b5fd', background: data.arousal === 5 ? '#2a0f0f' : '#1a1226' }}>{AROUSAL_LABELS[data.arousal]}</span>
+            <span className="chip" style={{ color: data.arousal === 5 ? '#f47272' : '#edaec5', background: data.arousal === 5 ? '#2a0f0f' : '#291823' }}>{AROUSAL_LABELS[data.arousal]}</span>
           </div>
           <div className="tdm-card">
             <div className="tdm-ar">
@@ -785,8 +785,8 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           <div className="tdm-card">
             <div className="tdm-mring">
               <svg viewBox="0 0 52 52">
-                <circle cx="26" cy="26" r={ringRadius} fill="none" stroke="#1a1a20" strokeWidth="4" />
-                <circle cx="26" cy="26" r={ringRadius} fill="none" stroke="#7c3aed" strokeWidth="4" strokeDasharray={`${ringDash} ${ringCirc}`} strokeLinecap="round" transform="rotate(-90 26 26)" />
+                <circle cx="26" cy="26" r={ringRadius} fill="none" stroke="#221722" strokeWidth="4" />
+                <circle cx="26" cy="26" r={ringRadius} fill="none" stroke="#c9557f" strokeWidth="4" strokeDasharray={`${ringDash} ${ringCirc}`} strokeLinecap="round" transform="rotate(-90 26 26)" />
               </svg>
               <div>
                 <div className="big">{Math.round(data.proteinToday)} <span className="u">/ {data.proteinTarget} g</span></div>
@@ -814,8 +814,8 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
               {data.mealsToday.filter(m => (m.meal_type || '').toLowerCase() === mealTab).length === 0 ? (
                 <div className="tdm-mrow">
                   <span className="when">—</span>
-                  <span className="what" style={{ color: '#5a5560', fontStyle: 'italic' }}>Log {mealTab}</span>
-                  <span className="g" style={{ color: '#5a5560' }}>+</span>
+                  <span className="what" style={{ color: '#6d5a63', fontStyle: 'italic' }}>Log {mealTab}</span>
+                  <span className="g" style={{ color: '#6d5a63' }}>+</span>
                 </div>
               ) : data.mealsToday.filter(m => (m.meal_type || '').toLowerCase() === mealTab).map(m => (
                 <div className="tdm-mrow" key={m.id}>
@@ -837,11 +837,11 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           </div>
           <div className="tdm-card">
             {data.latestProgressPhotoUrl && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderBottom: '1px solid #15151b' }}>
-                <div style={{ flexShrink: 0, width: 54, height: 70, borderRadius: 6, overflow: 'hidden', border: '1px solid #1a1a20' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderBottom: '1px solid #1b121a' }}>
+                <div style={{ flexShrink: 0, width: 54, height: 70, borderRadius: 6, overflow: 'hidden', border: '1px solid #221722' }}>
                   <img src={data.latestProgressPhotoUrl} alt="latest progress" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
-                <div style={{ fontSize: 11, color: '#8a8690', lineHeight: 1.4 }}>
+                <div style={{ fontSize: 11, color: '#9c8590', lineHeight: 1.4 }}>
                   Latest proof photo. Every week the comparison tightens.
                 </div>
               </div>
@@ -863,8 +863,8 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
         <div className="tdm-sec">
           <div className="tdm-sech"><span className="t">Me</span></div>
           <div className="tdm-card" style={{ padding: 14 }}>
-            <div style={{ color: '#c8c4cc', fontSize: 13, marginBottom: 10 }}>Phase {data.currentPhase} · Day {data.denialDay}</div>
-            <div style={{ color: '#8a8690', fontSize: 12 }}>Chastity {data.chastityLocked ? `locked, day ${data.chastityStreakDays}` : 'unlocked'}</div>
+            <div style={{ color: '#d5c3ca', fontSize: 13, marginBottom: 10 }}>Phase {data.currentPhase} · Day {data.denialDay}</div>
+            <div style={{ color: '#9c8590', fontSize: 12 }}>Chastity {data.chastityLocked ? `locked, day ${data.chastityStreakDays}` : 'unlocked'}</div>
             {onExit && (
               <button className="tdm-btn" style={{ marginTop: 14, width: '100%', justifyContent: 'center' }} onClick={onExit}>
                 Back to chat
@@ -902,17 +902,17 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
         <div
           style={{
             position: 'fixed', top: 'calc(16px + env(safe-area-inset-top))', left: 12, right: 12, zIndex: 110,
-            background: 'linear-gradient(92deg, #2d1a4d, #1a0f2e)', border: '1px solid #7c3aed',
-            borderRadius: 10, padding: '12px 14px', color: '#e8dcff', fontSize: 13,
+            background: 'linear-gradient(92deg, #4a2438, #2c1723)', border: '1px solid #c9557f',
+            borderRadius: 10, padding: '12px 14px', color: '#f9dfe9', fontSize: 13,
             display: 'flex', alignItems: 'center', gap: 10,
           }}
         >
           <span style={{ fontSize: 16 }}>↑</span>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#c4b5fd', fontWeight: 700 }}>Phase advanced</div>
+            <div style={{ fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#edaec5', fontWeight: 700 }}>Phase advanced</div>
             <div style={{ fontSize: 12 }}>{PHASE_LABELS[phaseToast.from] || phaseToast.from} → <strong>{PHASE_LABELS[phaseToast.to] || phaseToast.to}</strong></div>
           </div>
-          <button onClick={() => setPhaseToast(null)} style={{ background: 'none', border: 'none', color: '#c4b5fd', fontSize: 18, cursor: 'pointer' }}>×</button>
+          <button onClick={() => setPhaseToast(null)} style={{ background: 'none', border: 'none', color: '#edaec5', fontSize: 18, cursor: 'pointer' }}>×</button>
         </div>
       )}
       {!composeOpen && (
@@ -921,7 +921,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           title="Talk to the Handler"
           style={{
             position: 'fixed', right: 16, bottom: 'calc(80px + env(safe-area-inset-bottom))',
-            width: 48, height: 48, borderRadius: 24, background: '#7c3aed', color: '#fff', border: 'none', cursor: 'pointer',
+            width: 48, height: 48, borderRadius: 24, background: '#c9557f', color: '#fff', border: 'none', cursor: 'pointer',
             boxShadow: '0 4px 16px rgba(124, 58, 237, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontFamily: 'inherit', zIndex: 25,
           }}
@@ -938,9 +938,9 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
         >
           <div
             onClick={e => e.stopPropagation()}
-            style={{ background: '#111116', border: '1px solid #1a1a20', borderRadius: 12, padding: 16, width: '100%', color: '#e8e6e3' }}
+            style={{ background: '#171017', border: '1px solid #221722', borderRadius: 12, padding: 16, width: '100%', color: '#f2e9e6' }}
           >
-            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#c4b5fd', fontWeight: 700, marginBottom: 8 }}>
+            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#edaec5', fontWeight: 700, marginBottom: 8 }}>
               Talk to Handler
             </div>
             <textarea
@@ -949,7 +949,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
               onChange={e => setComposeText(e.target.value)}
               placeholder="Say what you need to say."
               rows={4}
-              style={{ width: '100%', background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 6, padding: '8px 10px', fontFamily: 'inherit', fontSize: 14, color: '#e8e6e3', resize: 'none' }}
+              style={{ width: '100%', background: '#0f0a0e', border: '1px solid #2b1d29', borderRadius: 6, padding: '8px 10px', fontFamily: 'inherit', fontSize: 14, color: '#f2e9e6', resize: 'none' }}
             />
             <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
               <button className="tdm-btn primary" onClick={sendCompose} disabled={!composeText.trim()} style={{ flex: 1, padding: '8px', justifyContent: 'center', textAlign: 'center' }}>
@@ -970,13 +970,13 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
         >
           <div
             onClick={e => e.stopPropagation()}
-            style={{ background: '#111116', border: '1px solid #1a1a20', borderRadius: 12, padding: 18, width: '100%', color: '#e8e6e3' }}
+            style={{ background: '#171017', border: '1px solid #221722', borderRadius: 12, padding: 18, width: '100%', color: '#f2e9e6' }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#c4b5fd', fontWeight: 700 }}>{queueDetail.kind}</span>
-              <span style={{ fontSize: 10.5, color: '#5a5560', marginLeft: 'auto' }}>{queueDetail.timeAgo}</span>
+              <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#edaec5', fontWeight: 700 }}>{queueDetail.kind}</span>
+              <span style={{ fontSize: 10.5, color: '#6d5a63', marginLeft: 'auto' }}>{queueDetail.timeAgo}</span>
             </div>
-            <div style={{ fontSize: 14, lineHeight: 1.55, color: '#e8e6e3', marginBottom: 14 }}>{queueDetail.body}</div>
+            <div style={{ fontSize: 14, lineHeight: 1.55, color: '#f2e9e6', marginBottom: 14 }}>{queueDetail.body}</div>
             <div style={{ display: 'flex', gap: 6 }}>
               <button
                 className="tdm-btn primary"

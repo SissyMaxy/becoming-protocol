@@ -196,25 +196,25 @@ export function OutreachQueueCard() {
   if (pending.length === 0 && recent.length === 0) return null;
 
   const urgencyColor = (u: string) =>
-    u === 'critical' ? '#f47272' : u === 'high' ? '#f4c272' : u === 'normal' ? '#c4b5fd' : '#8a8690';
+    u === 'critical' ? '#f47272' : u === 'high' ? '#e6bd80' : u === 'normal' ? '#edaec5' : '#9c8590';
 
   return (
-    <div style={{ background: '#111116', border: '1px solid #2d1a4d', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+    <div style={{ background: '#171017', border: '1px solid #4a2438', borderRadius: 10, padding: 14, marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" strokeWidth="1.8">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#edaec5" strokeWidth="1.8">
           <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
         </svg>
-        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#c4b5fd', fontWeight: 700 }}>
+        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#edaec5', fontWeight: 700 }}>
           {mommy ? 'From Mama' : 'Handler queue'}
         </span>
-        <span style={{ fontSize: 10.5, color: '#8a8690', marginLeft: 'auto' }}>
+        <span style={{ fontSize: 10.5, color: '#9c8590', marginLeft: 'auto' }}>
           {pending.length} pending · {recent.length} recent
         </span>
       </div>
 
       {pending.length > 0 && (
         <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 9.5, color: '#6a656e', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>
+          <div style={{ fontSize: 9.5, color: '#7f6b74', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>
             {mommy ? 'mama\'s about to send' : 'queued — will deliver'}
           </div>
           {pending.map(o => {
@@ -232,7 +232,7 @@ export function OutreachQueueCard() {
             const evidenceKind: EvidenceKind | null = o.evidence_kind ?? detectMediaKind(o.message);
             return (
               <div key={o.id} style={{
-                background: '#0a0a0d', border: `1px solid ${urgencyColor(o.urgency)}33`,
+                background: '#0f0a0e', border: `1px solid ${urgencyColor(o.urgency)}33`,
                 borderLeft: `3px solid ${urgencyColor(o.urgency)}`,
                 borderRadius: 5, padding: '7px 9px', marginBottom: 5,
               }}>
@@ -240,7 +240,7 @@ export function OutreachQueueCard() {
                   <span style={{ fontSize: 9, fontWeight: 700, color: urgencyColor(o.urgency), textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     {o.urgency}
                   </span>
-                  <span style={{ fontSize: 9.5, color: '#8a8690' }}>{o.source.replace(/_/g, ' ')}</span>
+                  <span style={{ fontSize: 9.5, color: '#9c8590' }}>{o.source.replace(/_/g, ' ')}</span>
                   {countdownText && (
                     <span style={{
                       fontSize: 9.5, fontWeight: 700,
@@ -255,11 +255,11 @@ export function OutreachQueueCard() {
                         : (countdownText === 'passed' ? 'overdue' : `due in ${countdownText}`)}
                     </span>
                   )}
-                  <span style={{ fontSize: 9.5, color: '#8a8690', marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>
+                  <span style={{ fontSize: 9.5, color: '#9c8590', marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>
                     {mins <= 0 ? 'now' : mins < 60 ? `in ${mins}m` : `in ${Math.floor(mins / 60)}h`}
                   </span>
                 </div>
-                <div style={{ fontSize: 11, color: '#c8c4cc', lineHeight: 1.4, marginBottom: 6, whiteSpace: 'pre-wrap' }}>
+                <div style={{ fontSize: 11, color: '#d5c3ca', lineHeight: 1.4, marginBottom: 6, whiteSpace: 'pre-wrap' }}>
                   {(() => {
                     if (o.message.length <= 600) return o.message;
                     // Truncate at word boundary, not mid-word
@@ -338,7 +338,7 @@ export function OutreachQueueCard() {
 
       {recent.length > 0 && (
         <div>
-          <div style={{ fontSize: 9.5, color: '#6a656e', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>
+          <div style={{ fontSize: 9.5, color: '#7f6b74', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>
             {mommy ? 'what mama just sent' : 'recently delivered'}
           </div>
           {recent.map(o => {
@@ -347,16 +347,16 @@ export function OutreachQueueCard() {
             const saved = savedIds.has(o.id);
             return (
               <div key={o.id} style={{
-                background: '#0a0a0d', border: '1px solid #22222a', borderRadius: 5,
+                background: '#0f0a0e', border: '1px solid #2b1d29', borderRadius: 5,
                 padding: '6px 9px', marginBottom: 4, opacity: 0.75,
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                  <span style={{ fontSize: 9.5, color: '#8a8690' }}>{o.source.replace(/_/g, ' ')}</span>
-                  <span style={{ fontSize: 9, color: '#6a656e', marginLeft: 'auto' }}>
+                  <span style={{ fontSize: 9.5, color: '#9c8590' }}>{o.source.replace(/_/g, ' ')}</span>
+                  <span style={{ fontSize: 9, color: '#7f6b74', marginLeft: 'auto' }}>
                     {ago < 60 ? `${ago}m ago` : `${Math.floor(ago / 60)}h ago`}
                   </span>
                 </div>
-                <div style={{ fontSize: 10.5, color: '#8a8690', lineHeight: 1.35, marginBottom: 4 }}>
+                <div style={{ fontSize: 10.5, color: '#9c8590', lineHeight: 1.35, marginBottom: 4 }}>
                   {o.message.slice(0, 180)}{o.message.length > 180 ? '…' : ''}
                 </div>
                 {mommy && (

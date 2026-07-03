@@ -27,13 +27,13 @@ interface Shot {
 
 const PROOF_BADGE: Record<string, { tone: string; label: string }> = {
   photo: { tone: '#ec4899', label: 'PHOTO' },
-  audio: { tone: '#c4b5fd', label: 'AUDIO' },
+  audio: { tone: '#edaec5', label: 'AUDIO' },
   video: { tone: '#f47272', label: 'VIDEO' },
   text: { tone: '#6ee7b7', label: 'TEXT' },
-  journal_entry: { tone: '#f4c272', label: 'JOURNAL' },
-  voice_pitch_sample: { tone: '#c4b5fd', label: 'VOICE' },
+  journal_entry: { tone: '#e6bd80', label: 'JOURNAL' },
+  voice_pitch_sample: { tone: '#edaec5', label: 'VOICE' },
   device_state: { tone: '#f4a7c4', label: 'DEVICE' },
-  none: { tone: '#8a8690', label: 'TASK' },
+  none: { tone: '#9c8590', label: 'TASK' },
 };
 
 function fmtCountdown(deadline: string): { text: string; overdue: boolean } {
@@ -106,7 +106,7 @@ export function NextShotsCard() {
         <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#ec4899', fontWeight: 700 }}>
           Next shots — exact direction
         </span>
-        <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto', fontStyle: 'italic' }}>
+        <span style={{ fontSize: 10, color: '#9c8590', marginLeft: 'auto', fontStyle: 'italic' }}>
           Copy-paste ready. No interpretation.
         </span>
       </div>
@@ -123,7 +123,7 @@ export function NextShotsCard() {
         return (
           <div key={s.id} style={{
             padding: '11px 12px', marginBottom: idx < shots.length - 1 ? 8 : 0,
-            background: '#0a0a0d',
+            background: '#0f0a0e',
             border: `1px solid ${due.overdue ? '#7a1f22' : badge.tone + '44'}`,
             borderLeft: `3px solid ${badge.tone}`, borderRadius: 6,
           }}>
@@ -131,19 +131,19 @@ export function NextShotsCard() {
               <span style={{ fontSize: 9, color: badge.tone, fontWeight: 700, letterSpacing: '0.08em' }}>
                 {idx === 0 ? '▸ NOW · ' : `${idx + 1}. `}{badge.label}
               </span>
-              <span style={{ fontSize: 10, color: due.overdue ? '#f47272' : '#8a8690', marginLeft: 'auto', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+              <span style={{ fontSize: 10, color: due.overdue ? '#f47272' : '#9c8590', marginLeft: 'auto', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
                 {due.text}
               </span>
             </div>
-            <div style={{ fontSize: idx === 0 ? 13 : 12, color: '#e8e6e3', lineHeight: 1.5, marginBottom: 8 }}>
+            <div style={{ fontSize: idx === 0 ? 13 : 12, color: '#f2e9e6', lineHeight: 1.5, marginBottom: 8 }}>
               {s.edict}
             </div>
             {literalText && (
               <div style={{
                 padding: '8px 10px', marginBottom: 8,
-                background: '#050507', border: '1px dashed #2d1a4d', borderRadius: 4,
+                background: '#0a0709', border: '1px dashed #4a2438', borderRadius: 4,
               }}>
-                <div style={{ fontSize: 9, color: '#c4b5fd', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                <div style={{ fontSize: 9, color: '#edaec5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
                   Exact text — copy
                 </div>
                 <div style={{ fontSize: 12, color: '#fff', fontFamily: 'inherit', whiteSpace: 'pre-wrap', lineHeight: 1.45 }}>
@@ -153,8 +153,8 @@ export function NextShotsCard() {
                   onClick={() => copy(s.id, literalText)}
                   style={{
                     marginTop: 6, padding: '4px 10px', borderRadius: 4, border: 'none',
-                    background: copiedId === s.id ? '#5fc88f' : '#c4b5fd',
-                    color: copiedId === s.id ? '#0a1a14' : '#1a1226',
+                    background: copiedId === s.id ? '#5fc88f' : '#edaec5',
+                    color: copiedId === s.id ? '#0a1a14' : '#291823',
                     fontSize: 10.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
                     textTransform: 'uppercase', letterSpacing: '0.04em',
                   }}
@@ -164,7 +164,7 @@ export function NextShotsCard() {
               </div>
             )}
             {s.reasoning && (
-              <div style={{ fontSize: 10, color: '#8a8690', fontStyle: 'italic', marginBottom: 8, lineHeight: 1.4 }}>
+              <div style={{ fontSize: 10, color: '#9c8590', fontStyle: 'italic', marginBottom: 8, lineHeight: 1.4 }}>
                 {s.reasoning}
               </div>
             )}
@@ -181,7 +181,7 @@ export function NextShotsCard() {
               >
                 {completing === s.id ? '…' : 'Done'}
               </button>
-              <span style={{ fontSize: 10, color: '#5a5560', alignSelf: 'center' }}>
+              <span style={{ fontSize: 10, color: '#6d5a63', alignSelf: 'center' }}>
                 miss → {s.consequence}
               </span>
             </div>

@@ -76,18 +76,18 @@ export function MommyAmbientPlayerCard() {
 
   return (
     <div style={{
-      background: 'linear-gradient(135deg, #1a0f2e 0%, #0f0820 100%)',
+      background: 'linear-gradient(135deg, #2c1723 0%, #0f0820 100%)',
       border: '1px solid #4a2a6a',
       borderRadius: 10, padding: 14, marginBottom: 16,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" strokeWidth="1.8">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#edaec5" strokeWidth="1.8">
           <path d="M3 12a9 9 0 0 1 18 0M3 12v3M21 12v3M7 12v3M17 12v3M11 14h2"/>
         </svg>
-        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#c4b5fd', fontWeight: 700 }}>
+        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#edaec5', fontWeight: 700 }}>
           Mama in your ear
         </span>
-        <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto' }}>
+        <span style={{ fontSize: 10, color: '#9c8590', marginLeft: 'auto' }}>
           {availableKinds.length} track{availableKinds.length === 1 ? '' : 's'} ready
         </span>
       </div>
@@ -98,9 +98,9 @@ export function MommyAmbientPlayerCard() {
           return (
             <button key={k} onClick={() => setActiveKind(k)} style={{
               padding: '4px 10px',
-              background: isActive ? '#7c3aed' : '#0a0a0d',
-              color: isActive ? '#fff' : '#c4b5fd',
-              border: `1px solid ${isActive ? '#7c3aed' : '#3a2a4a'}`,
+              background: isActive ? '#c9557f' : '#0f0a0e',
+              color: isActive ? '#fff' : '#edaec5',
+              border: `1px solid ${isActive ? '#c9557f' : '#3a2a4a'}`,
               borderRadius: 4, fontSize: 10, fontWeight: 700,
               textTransform: 'uppercase', letterSpacing: '0.05em',
               cursor: 'pointer', fontFamily: 'inherit',
@@ -113,7 +113,7 @@ export function MommyAmbientPlayerCard() {
         <>
           <div style={{ fontSize: 11, color: '#a89cb8', marginBottom: 8 }}>
             {Math.round(current.duration_seconds / 60)} min · intensity {current.intensity_band}
-            {triggerCount > 0 && <span style={{ marginLeft: 8, color: '#c4b5fd' }}>· {triggerCount} planted</span>}
+            {triggerCount > 0 && <span style={{ marginLeft: 8, color: '#edaec5' }}>· {triggerCount} planted</span>}
           </div>
           <div onClick={onPlay}>
             <ConfessionAudioPlayer

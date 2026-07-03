@@ -180,7 +180,7 @@ export function OutreachReplyComposer({ outreachId, mommy, requiresPhoto, eviden
           disabled={submitting}
           style={{
             background: accentColor,
-            color: '#0a0a0d',
+            color: '#0f0a0e',
             border: 'none',
             padding: '4px 12px',
             borderRadius: 4,

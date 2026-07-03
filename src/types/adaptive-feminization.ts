@@ -358,7 +358,7 @@ export interface PrescriptionCardData {
 
 export const VECTOR_CATEGORIES: Record<VectorCategory, { label: string; color: string }> = {
   feminization: { label: 'Feminization', color: '#B06B61' }, // pink-500
-  sissification: { label: 'Sissification', color: '#a855f7' }, // purple-500
+  sissification: { label: 'Sissification', color: '#c9557f' }, // purple-500
 };
 
 export const FEMINIZATION_GROUPS = {

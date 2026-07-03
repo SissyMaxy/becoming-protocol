@@ -88,18 +88,18 @@ export function PhaseProgressCard() {
 
   return (
     <div style={{
-      background: atGate ? 'linear-gradient(92deg, #0a2a14 0%, #081f10 100%)' : '#111116',
-      border: `1px solid ${atGate ? '#1f6a3a' : '#2d1a4d'}`,
+      background: atGate ? 'linear-gradient(92deg, #0a2a14 0%, #081f10 100%)' : '#171017',
+      border: `1px solid ${atGate ? '#1f6a3a' : '#4a2438'}`,
       borderRadius: 10, padding: 14, marginBottom: 16,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={atGate ? '#6ee7b7' : '#c4b5fd'} strokeWidth="1.8">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={atGate ? '#6ee7b7' : '#edaec5'} strokeWidth="1.8">
           <path d="M12 1v22" /><path d="M5 8l7-7 7 7" />
         </svg>
-        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: atGate ? '#6ee7b7' : '#c4b5fd', fontWeight: 700 }}>
+        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: atGate ? '#6ee7b7' : '#edaec5', fontWeight: 700 }}>
           {t.label}
         </span>
-        <span style={{ fontSize: 10.5, color: '#8a8690', marginLeft: 'auto' }}>
+        <span style={{ fontSize: 10.5, color: '#9c8590', marginLeft: 'auto' }}>
           {crossed}/{total} thresholds · {pct}%
         </span>
       </div>
@@ -115,17 +115,17 @@ export function PhaseProgressCard() {
           const p = Math.min(100, (x.current / x.target) * 100);
           const done = x.current >= x.target;
           return (
-            <div key={i} style={{ fontSize: 10.5, color: '#c8c4cc' }}>
+            <div key={i} style={{ fontSize: 10.5, color: '#d5c3ca' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
                 <span>{x.label}</span>
-                <span style={{ color: done ? '#6ee7b7' : '#8a8690', fontVariantNumeric: 'tabular-nums' }}>
+                <span style={{ color: done ? '#6ee7b7' : '#9c8590', fontVariantNumeric: 'tabular-nums' }}>
                   {x.current} / {x.target}
                 </span>
               </div>
-              <div style={{ height: 4, background: '#0a0a0d', borderRadius: 2, overflow: 'hidden' }}>
+              <div style={{ height: 4, background: '#0f0a0e', borderRadius: 2, overflow: 'hidden' }}>
                 <div style={{
                   width: `${p}%`, height: '100%',
-                  background: done ? '#6ee7b7' : '#c4b5fd',
+                  background: done ? '#6ee7b7' : '#edaec5',
                   transition: 'width 0.3s',
                 }} />
               </div>

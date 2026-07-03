@@ -18,7 +18,7 @@ const STATES: { id: OdometerState; label: string; color: string; position: numbe
   { id: 'coasting', label: 'Coasting', color: '#eab308', position: 2 },
   { id: 'progress', label: 'Progress', color: '#22c55e', position: 3 },
   { id: 'momentum', label: 'Momentum', color: '#3b82f6', position: 4 },
-  { id: 'breakthrough', label: 'Breakthrough', color: '#a855f7', position: 5 },
+  { id: 'breakthrough', label: 'Breakthrough', color: '#c9557f', position: 5 },
 ];
 
 export function IdentityOdometer({ state }: IdentityOdometerProps) {

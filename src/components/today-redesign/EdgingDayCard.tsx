@@ -89,7 +89,7 @@ export function EdgingDayCard() {
         <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#f4a7c4', fontWeight: 700 }}>
           Edging Day
         </span>
-        <span style={{ fontSize: 10, color: '#8a8690', marginLeft: 'auto', fontStyle: 'italic' }}>
+        <span style={{ fontSize: 10, color: '#9c8590', marginLeft: 'auto', fontStyle: 'italic' }}>
           {reviewed ? 'Mama gave her verdict.' : `${c.completed} of ${c.total} for Mama`}
         </span>
       </div>
@@ -97,7 +97,7 @@ export function EdgingDayCard() {
       {reviewed && proto.mommy_review_text ? (
         <div style={{
           padding: '11px 13px',
-          background: proto.release_granted ? 'linear-gradient(135deg,#0e2a14,#0a0a0d)' : 'linear-gradient(135deg,#2a0a0e,#0a0a0d)',
+          background: proto.release_granted ? 'linear-gradient(135deg,#0e2a14,#0f0a0e)' : 'linear-gradient(135deg,#2a0a0e,#0f0a0e)',
           border: `1px solid ${proto.release_granted ? '#2f7a3a' : '#7a1f3a'}`,
           borderLeft: `3px solid ${proto.release_granted ? '#6ee7b7' : '#f4a7c4'}`,
           borderRadius: 6, fontSize: 12.5, lineHeight: 1.5, color: '#f0d7e0',
@@ -143,7 +143,7 @@ export function EdgingDayCard() {
               </div>
             );
           })}
-          <span style={{ fontSize: 10, color: '#8a8690', fontStyle: 'italic', marginTop: 2 }}>
+          <span style={{ fontSize: 10, color: '#9c8590', fontStyle: 'italic', marginTop: 2 }}>
             Mama decides at day's end. Stay where she puts you.
           </span>
         </div>
