@@ -282,6 +282,13 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
     const now = Date.now();
     const todayEndIso = new Date(new Date().setHours(23, 59, 59, 999)).toISOString();
     const nowIso = new Date().toISOString();
+    // Staleness floor: an overdue item more than 7 days past its deadline is
+    // abandoned, not urgent. Surfacing a 2-month-old miss as the critical hero
+    // ("MAMA'S WAITING") is guilt-over-ancient-history — the exact anti-pattern
+    // the supportive-until-evidence rule forbids. Bound the overdue window so
+    // only recent misses can lead; older ones are left for the cleanup sweep.
+    const STALE_FLOOR_DAYS = 7;
+    const staleFloorIso = new Date(now - STALE_FLOOR_DAYS * 86400_000).toISOString();
     const todayStr = new Date().toISOString().slice(0, 10);
 
     // Mama's daily focus pick (mig 491) — when present, prioritize ABOVE all
@@ -302,14 +309,14 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
       // surfacing with no working answer path.
       supabase.from('confession_queue')
         .select('id, prompt, deadline, category').eq('user_id', user.id).is('confessed_at', null)
-        .lt('deadline', nowIso).order('deadline', { ascending: true }).limit(1),
+        .lt('deadline', nowIso).gte('deadline', staleFloorIso).order('deadline', { ascending: false }).limit(1),
       supabase.from('punishment_queue')
         .select('id, title, description, due_by').eq('user_id', user.id)
         .in('status', ['queued', 'active', 'escalated'])
-        .lt('due_by', nowIso).order('due_by', { ascending: true }).limit(1),
+        .lt('due_by', nowIso).gte('due_by', staleFloorIso).order('due_by', { ascending: false }).limit(1),
       supabase.from('handler_decrees')
         .select('id, edict, deadline, proof_type').eq('user_id', user.id).eq('status', 'active')
-        .lt('deadline', nowIso).order('deadline', { ascending: true }).limit(1),
+        .lt('deadline', nowIso).gte('deadline', staleFloorIso).order('deadline', { ascending: false }).limit(1),
       supabase.from('confession_queue')
         .select('id, prompt, deadline, category').eq('user_id', user.id).is('confessed_at', null).eq('missed', false)
         .gte('deadline', nowIso).lte('deadline', todayEndIso)
