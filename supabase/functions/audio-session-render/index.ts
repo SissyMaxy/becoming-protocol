@@ -189,6 +189,19 @@ Deno.serve(async (req: Request) => {
     recentMantraText = (mantraRow as { text?: string } | null)?.text ?? null
   }
 
+  // Active post-hypnotic triggers (Bambi-style) to install + reinforce this
+  // session. Rotate to the least-reinforced so every trigger deepens over time:
+  // Bambi conditioning installs a few per session and loops back to them.
+  const { data: trigRows } = await supabase
+    .from('mommy_post_hypnotic_triggers')
+    .select('id, phrase, intended_response, plant_count')
+    .eq('user_id', userId)
+    .eq('active', true)
+    .order('plant_count', { ascending: true })
+    .order('last_planted_at', { ascending: true, nullsFirst: true })
+    .limit(4)
+  const sessionTriggers = (trigRows ?? []) as Array<{ id: string; phrase: string; intended_response: string; plant_count: number }>
+
   // ── 2. Pick template
   const { data: tplRows } = await supabase
     .from('audio_session_templates')
@@ -263,7 +276,7 @@ Deno.serve(async (req: Request) => {
     // ~15s — a tight, repeatable ~5-min drop. (Longer sessions want chunked
     // parallel TTS; tracked as a follow-up.)
     const wpmTarget = Math.min(600, targetWordCount(template.target_duration_minutes))
-    const prompt = substitutePlaceholders(template.prompt_template, {
+    let prompt = substitutePlaceholders(template.prompt_template, {
       feminine_name: feminine?.feminine_name ?? null,
       honorific: feminine?.current_honorific ?? null,
       phase: currentPhase,
@@ -274,6 +287,16 @@ Deno.serve(async (req: Request) => {
       target_word_count: wpmTarget,
       intensity_tier: tier,
     })
+
+    // Install + reinforce this session's post-hypnotic triggers. Keep the exact
+    // trigger phrases, say each one, pair it clearly with the feeling it carries,
+    // then loop back so it takes — the heart of Bambi-style conditioning.
+    if (sessionTriggers.length) {
+      const list = sessionTriggers
+        .map(t => `- "${t.phrase}" → ${t.intended_response}`)
+        .join('\n')
+      prompt += `\n\nPOST-HYPNOTIC TRIGGERS — work these into the trance and CONDITION them. Speak each exact phrase, pair it plainly with the response it should carry, and return to it as a soft repeated loop so it installs. Use the phrases verbatim:\n${list}`
+    }
 
     // ── 6. Anthropic call — raw fetch, NOT the SDK. The @anthropic-ai/sdk in
     // Deno retries on transient 429/529s with backoff, and stacked on our abort
@@ -361,6 +384,15 @@ Deno.serve(async (req: Request) => {
       status: 'ready',
       error_text: null,
     }).eq('id', renderId)
+
+    // Reinforcement: bump each installed trigger so rotation favours the least-
+    // planted next time and strength accrues over sessions. Non-blocking.
+    for (const t of sessionTriggers) {
+      supabase.from('mommy_post_hypnotic_triggers').update({
+        plant_count: (t.plant_count ?? 0) + 1,
+        last_planted_at: new Date().toISOString(),
+      }).eq('id', t.id).then(() => {}, () => {})
+    }
 
     return jsonResponse({
       ok: true, cached: false,
