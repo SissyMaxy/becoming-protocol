@@ -43,9 +43,17 @@ export function DropPortal() {
   const [lines, setLines] = useState<string[]>([]);
   const [lineIdx, setLineIdx] = useState(0);
 
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  // A stack of audio elements playing the SAME render, staggered and quieter —
+  // the layered Bambi wash (voice doubling over itself) without a second render
+  // or any Web-Audio/CORS tainting risk. [0] is the lead and drives 'ended'.
+  const audioRefs = useRef<HTMLAudioElement[]>([]);
   const driftRef = useRef<number | null>(null);
   const renderIdRef = useRef<string | null>(null);
+
+  const stopAudio = useCallback(() => {
+    for (const el of audioRefs.current) { try { el.pause(); el.src = ''; } catch { /* ignore */ } }
+    audioRefs.current = [];
+  }, []);
 
   // Load safeword gate + real state for the presence line and intensity.
   useEffect(() => {
@@ -82,12 +90,11 @@ export function DropPortal() {
   const surface = useCallback(() => {
     setPhase('surfacing');
     stopDrift();
-    const a = audioRef.current;
-    if (a) { try { a.pause(); } catch { /* ignore */ } audioRef.current = null; }
+    stopAudio();
     window.setTimeout(() => { setPhase('idle'); setLineIdx(0); }, 900);
-  }, [stopDrift]);
+  }, [stopDrift, stopAudio]);
 
-  useEffect(() => () => { stopDrift(); const a = audioRef.current; if (a) { try { a.pause(); } catch { /* ignore */ } } }, [stopDrift]);
+  useEffect(() => () => { stopDrift(); stopAudio(); }, [stopDrift, stopAudio]);
 
   // Intensity + kind scale with real arousal/denial — hungrier state, deeper pull.
   const dropUnder = useCallback(async () => {
@@ -105,12 +112,20 @@ export function DropPortal() {
       setLines(drift.length ? drift : ['Good girl.', 'Let go.', 'Deeper.', 'You don’t have to think.']);
       setLineIdx(0);
 
-      const a = new Audio(r.audioUrl);
-      a.preload = 'auto';
-      audioRef.current = a;
-      a.addEventListener('ended', surface);
-      a.addEventListener('error', () => { setErr('The audio slipped. Come up and try again.'); });
-      try { await a.play(); } catch { /* autoplay may need the gesture we already have; ignore */ }
+      // Layered playback: the lead at full, two quieter echoes staggered behind
+      // it, so the voice washes over itself the way Bambi files layer. Same URL,
+      // separate elements — the browser reuses the cached bytes.
+      const lead = new Audio(r.audioUrl);
+      lead.preload = 'auto';
+      lead.volume = 1;
+      lead.addEventListener('ended', surface);
+      lead.addEventListener('error', () => { setErr('The audio slipped. Come up and try again.'); });
+      const echo1 = new Audio(r.audioUrl); echo1.preload = 'auto'; echo1.volume = 0.34;
+      const echo2 = new Audio(r.audioUrl); echo2.preload = 'auto'; echo2.volume = 0.2;
+      audioRefs.current = [lead, echo1, echo2];
+      try { await lead.play(); } catch { /* the drop click is our gesture; ignore */ }
+      window.setTimeout(() => { echo1.play().catch(() => {}); }, 200);
+      window.setTimeout(() => { echo2.play().catch(() => {}); }, 460);
       markRenderPlayed(r.renderId).catch(() => { /* non-blocking */ });
 
       setPhase('under');
