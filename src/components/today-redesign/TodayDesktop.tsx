@@ -77,6 +77,7 @@ import { OutreachQueueCard } from './OutreachQueueCard';
 import { VoiceLessonCard } from '../voice/VoiceLessonCard';
 import { DossierDripCard } from './DossierDripCard';
 import { BecomingHero } from './BecomingHero';
+import { ComingOutJourneyCard } from './ComingOutJourneyCard';
 import { SlipLogCard } from './SlipLogCard';
 import { RationalizationPatternCard } from './RationalizationPatternCard';
 import { DeviceScheduleCard } from './DeviceScheduleCard';
@@ -280,6 +281,7 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
         <div style={{ maxWidth: 720, margin: '0 auto', padding: '4px 16px 0' }}>
           <MommyDossierBanner />
           <DossierDripCard />
+          <ComingOutJourneyCard />
         </div>
       </>
     );

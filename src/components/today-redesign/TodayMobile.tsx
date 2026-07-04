@@ -76,6 +76,7 @@ import { ArousalLogCard } from './ArousalLogCard';
 import { OutreachQueueCard } from './OutreachQueueCard';
 import { DossierDripCard } from './DossierDripCard';
 import { BecomingHero } from './BecomingHero';
+import { ComingOutJourneyCard } from './ComingOutJourneyCard';
 import { VoiceLessonCard } from '../voice/VoiceLessonCard';
 import { SlipLogCard } from './SlipLogCard';
 import { RationalizationPatternCard } from './RationalizationPatternCard';
@@ -227,6 +228,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
           <MommyDossierBanner />
           <DossierDripCard />
         </div>
+        <ComingOutJourneyCard />
         {/* Mama's messages must reach the DEFAULT surface. The Mommy persona is
             pinned to 'focus' (line ~130) and never opens 'calendar', where this
             card used to live — which is why 9k+ outreach rows never surfaced.
