@@ -30,6 +30,12 @@ const SOURCE_ROOTS = [
 // `regex` is run line-by-line against source.
 const PATTERNS = [
   {
+    name: 'dead-anthropic-model-id',
+    doc: 'incident 2026-07-04: audio-session-render 404 → whole trance pipeline down',
+    why: 'Anthropic model IDs claude-sonnet-4* / claude-opus-4-6 / -4-7 / -4-20250514 / claude-3(-5)-sonnet / claude-3(-5)-haiku are retired or never existed and 404. A hardcoded dead ID silently breaks every AI call in that file. Use current IDs only: claude-sonnet-5, claude-opus-4-8, claude-haiku-4-5-20251001.',
+    regex: /claude-sonnet-4(?![.\d])|claude-opus-4-(?:6|7|20250514)\b|claude-opus-4(?![-.\d])|claude-3-(?:5-)?(?:sonnet|haiku)/,
+  },
+  {
     name: 'additive-on-derived-counter',
     doc: 'feedback_derived_counters_never_additive.md',
     why: 'denial_day / chastity_streak_days are derived counters; mutating them additively desynchronises display from reality (incident 2026-04-28).',

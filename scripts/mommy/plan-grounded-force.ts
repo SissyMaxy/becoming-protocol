@@ -140,7 +140,7 @@ async function main() {
   console.log('Firing 3 architect panels (anthropic / openai / openrouter)…')
   const t0 = Date.now()
   const [anth, oai, orr] = await Promise.all([
-    callAnthropic('claude-opus-4-7', ARCHITECT, brief),
+    callAnthropic('claude-opus-4-8', ARCHITECT, brief),
     callOpenAI('gpt-4o-2024-11-20', ARCHITECT, brief),
     callOpenRouter('deepseek/deepseek-chat', ARCHITECT, brief),
   ])
@@ -162,7 +162,7 @@ Take the strongest concrete mechanism from each where they differ; note where 2+
 
 ${panels.map(p => `═══ ${p.name} ═══\n${p.r.text || '(failed)'}`).join('\n\n')}`
     const judge = ANTHROPIC_KEY
-      ? await callAnthropic('claude-opus-4-7', 'You are the lead architect merging independent plans into one authoritative build spec.', judgeUser, 9000)
+      ? await callAnthropic('claude-opus-4-8', 'You are the lead architect merging independent plans into one authoritative build spec.', judgeUser, 9000)
       : await callOpenAI('gpt-4o-2024-11-20', 'You are the lead architect merging independent plans into one authoritative build spec.', judgeUser, 8000)
     if (judge.text) synthesis = judge.text
     else synthesis = `(synthesis failed: ${judge.error})`

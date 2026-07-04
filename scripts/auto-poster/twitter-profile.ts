@@ -239,7 +239,7 @@ NO commentary, NO preamble. Just the three numbered bios.`;
   while (attempt < 3) {
     attempt++;
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-5',
       max_tokens: 800,
       system: sys,
       messages: [{ role: 'user', content: 'Generate 3 bio candidates for the new Twitter account.' }],
@@ -310,7 +310,7 @@ Format: 1., 2., 3. Just the tweets, no commentary, no preamble.`;
   while (attempt < 3) {
     attempt++;
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-5',
       max_tokens: 800,
       system: sys,
       messages: [{ role: 'user', content: 'Three pinned-tweet candidates for the fresh account.' }],

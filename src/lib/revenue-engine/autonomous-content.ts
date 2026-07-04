@@ -140,7 +140,7 @@ Return ONLY a valid JSON array of planned posts.
   `;
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-5',
     max_tokens: 3000,
     system: MAXY_VOICE_PROMPT + '\nGenerate a daily content calendar. Output only valid JSON array.',
     messages: [{ role: 'user', content: prompt }],
@@ -246,7 +246,7 @@ Write ONE post. Output ONLY the post text, nothing else.
   `;
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-5',
     max_tokens: 300,
     system: MAXY_VOICE_PROMPT,
     messages: [{ role: 'user', content: prompt }],

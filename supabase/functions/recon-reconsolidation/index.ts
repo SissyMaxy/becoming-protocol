@@ -31,7 +31,7 @@ import { requireGate } from '../_shared/conditioning-gate.ts'
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' }
 const USERS = ['8c69b9c8-34eb-4147-9fec-3c1a5bc74b6f', '93327332-7d0d-4888-889a-1607a5776216']
-const MODEL = 'claude-3-5-sonnet-20241022'
+const MODEL = 'claude-sonnet-5'
 
 // deno-lint-ignore no-explicit-any
 type Sb = any

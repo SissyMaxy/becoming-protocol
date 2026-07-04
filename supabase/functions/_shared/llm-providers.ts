@@ -30,7 +30,7 @@ interface CallOpts {
   system?: string;
 }
 
-const ANTHROPIC_MODEL = 'claude-opus-4-7';
+const ANTHROPIC_MODEL = 'claude-opus-4-8';
 const OPENAI_MODEL = 'gpt-4o-2024-11-20';
 // OpenRouter routes to Llama 3.3 70B as a 3rd independent voice (different
 // architecture than Claude/GPT, different training). Adjust freely.

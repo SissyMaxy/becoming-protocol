@@ -176,7 +176,7 @@ Output a JSON object with these exact fields, no other text:
 Output JSON only. No preamble, no code fences, no explanation.`;
 
   const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-5',
     max_tokens: 600,
     system: sys,
     messages: [{ role: 'user', content: 'Issue the decree.' }],

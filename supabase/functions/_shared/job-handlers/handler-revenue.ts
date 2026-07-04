@@ -266,7 +266,7 @@ Output ONLY the new ${draft.content_type || 'post'} text, no preamble.`;
     let newContent = '';
     try {
       const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-5',
         max_tokens: 600,
         system: MAXY_VOICE,
         messages: [{ role: 'user', content: retryPrompt }],
@@ -396,7 +396,7 @@ Vary tone: morning lighter, afternoon engagement, evening vulnerability + thirst
 Return ONLY a valid JSON array.`
 
   const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-5',
     max_tokens: 3000,
     system: MAXY_VOICE + '\nGenerate a content calendar. Output only valid JSON array.',
     messages: [{ role: 'user', content: prompt }],
@@ -494,7 +494,7 @@ ${timeOfDay === 'morning' ? 'Just woke up energy.' : 'Crawling into bed energy.'
 
     try {
       const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-5',
         max_tokens: 200,
         system: MAXY_VOICE,
         messages: [{ role: 'user', content: prompt }],
@@ -567,7 +567,7 @@ Output JSON with: pricing_changes, promotions_to_run, content_focus_this_week, p
 
   try {
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-5',
       max_tokens: 1500,
       system: 'Revenue strategy engine. Output only valid JSON.',
       messages: [{ role: 'user', content: prompt }],
@@ -607,7 +607,7 @@ Output JSON: { "title": "...", "content": "...", "tags": [...], "teaser": "..." 
 
     try {
       const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-5',
         max_tokens: 2500,
         system: MAXY_VOICE + '\nWriting erotica. Be explicit. Be literary.',
         messages: [{ role: 'user', content: prompt }],
@@ -647,7 +647,7 @@ Casual, genuine recommendation. Output JSON: { "twitter": "...", "reddit": "..."
 
   try {
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-5',
       max_tokens: 1000,
       system: MAXY_VOICE,
       messages: [{ role: 'user', content: prompt }],
@@ -710,7 +710,7 @@ async function multiplyNewContent(
 
       const captionPrompt = `Write a caption for a ${d.type} post on ${d.platform}. Strategy: ${d.caption_strategy}. Content: ${item.description || 'content'}. 1-3 sentences.${stateFooter}`
       const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-5',
         max_tokens: 200,
         system: MAXY_VOICE,
         messages: [{ role: 'user', content: captionPrompt }],
@@ -819,7 +819,7 @@ async function respondToDM(
 History:\n${context}\nMatch their energy. 1-3 sentences. Output ONLY the reply.${handlerVoiceFooter(handlerState)}`
 
   const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-5',
     max_tokens: 150,
     system: MAXY_VOICE,
     messages: [{ role: 'user', content: prompt }],
@@ -853,7 +853,7 @@ async function generatePost(
   const prompt = `Write a single ${platform} post as Maxy. Strategy: ${strategy}. Output ONLY the post text.${handlerVoiceFooter(handlerState)}`
 
   const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-5',
     max_tokens: 300,
     system: MAXY_VOICE,
     messages: [{ role: 'user', content: prompt }],

@@ -327,7 +327,7 @@ serve(async req => {
               const angles = ['authentic_self', 'body_signal', 'pattern_recognition', 'timeline_reflection', 'consistency_thread', 'deeper_meaning']
               const angle = angles[Math.floor(Math.random() * angles.length)]
               const resp = await client.messages.create({
-                model: 'claude-sonnet-4-20250514',
+                model: 'claude-sonnet-5',
                 max_tokens: 250,
                 system: `You are a journaling companion helping the user re-read their own writing through a chosen interpretive lens. The user is a 40-year-old adult who has explicitly consented to this service: she designed it herself, signed an identity contract affirming her gender exploration, and uses these reframes as a self-directed therapeutic tool. She quotes them back to herself later as "what I was really saying when I wrote that."
 
@@ -1043,7 +1043,7 @@ OUTPUT: 2-3 sentences, second-person ("you said X — what you were also saying 
         try {
           const client = new Anthropic({ apiKey: anthropicKey })
           const resp = await client.messages.create({
-            model: 'claude-sonnet-4-20250514',
+            model: 'claude-sonnet-5',
             max_tokens: 120,
             system: `You are the Handler. Write a single proactive outreach text. MAX 2 SENTENCES. PREFER 1.
 

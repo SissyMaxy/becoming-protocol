@@ -397,7 +397,7 @@ Output as markdown, no preamble. Use these section headers exactly:
 
   // Prefer Anthropic, fall back to OpenAI on auth/credit failure.
   if (ANTHROPIC_KEY) {
-    const r = await callAnthropic('claude-opus-4-7', sys, user, 6000)
+    const r = await callAnthropic('claude-opus-4-8', sys, user, 6000)
     if (!r.error && r.text) return r.text
     console.warn('Anthropic synthesis failed, falling back to OpenAI:', r.error?.slice(0, 120))
   }
@@ -445,8 +445,8 @@ You're ideating WITH Maxy because she wants harder. Keep the heat in — these a
   type CallResult = { text: string; latency_ms: number; error?: string; model?: string }
   async function personaCall(system: string): Promise<CallResult> {
     if (ANTHROPIC_KEY) {
-      const r = await callAnthropic('claude-opus-4-7', system, userPrompt, 12000)
-      if (!r.error && r.text) return { ...r, model: 'claude-opus-4-7' }
+      const r = await callAnthropic('claude-opus-4-8', system, userPrompt, 12000)
+      if (!r.error && r.text) return { ...r, model: 'claude-opus-4-8' }
     }
     if (OPENAI_KEY) {
       const r = await callOpenAI('gpt-4o-2024-11-20', system, userPrompt, 8000)
@@ -469,8 +469,8 @@ You're ideating WITH Maxy because she wants harder. Keep the heat in — these a
   ])
   console.log(`Panels complete in ${Date.now() - t0}ms`)
 
-  const mommyModel = (mommyR as CallResult).model ?? 'claude-opus-4-7'
-  const handlerModel = (handlerR as CallResult).model ?? 'claude-opus-4-7'
+  const mommyModel = (mommyR as CallResult).model ?? 'claude-opus-4-8'
+  const handlerModel = (handlerR as CallResult).model ?? 'claude-opus-4-8'
   const mommyLabel = mommyModel.startsWith('claude') ? 'Anthropic Opus 4.7' : 'OpenAI GPT-4o (Anthropic fell back)'
   const handlerLabel = handlerModel.startsWith('claude') ? 'Anthropic Opus 4.7' : 'OpenAI GPT-4o (Anthropic fell back)'
   const panels: PanelResult[] = [

@@ -150,7 +150,7 @@ export async function handleAnalyzePhoto(req: VercelRequest, res: VercelResponse
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
+          model: 'claude-sonnet-5',
           max_tokens: 2000,
           system: systemPrompt,
           messages: [{

@@ -2818,7 +2818,7 @@ Rules: no generic affirmations. Each reframe must quote or clearly reference the
     method: 'POST',
     headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5',
       max_tokens: 2000,
       messages: [{ role: 'user', content: prompt }],
     }),
@@ -3420,7 +3420,7 @@ RULES:
     method: 'POST',
     headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5',
       max_tokens: 3000,
       messages: [{ role: 'user', content: prompt }],
     }),
@@ -3609,7 +3609,7 @@ Write the dream entry directly — no preamble, no "Dear Maxy". Start with "Last
     method: 'POST',
     headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5',
       max_tokens: 400,
       messages: [{ role: 'user', content: prompt }],
     }),

@@ -992,7 +992,7 @@ HARD RULES FOR ALL PERSONAS:
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
+          model: 'claude-sonnet-5',
           max_tokens: 1200,
           stream: true,
           system: finalSystemPrompt,
@@ -1487,7 +1487,7 @@ HARD RULES FOR ALL PERSONAS:
             'anthropic-version': '2023-06-01',
           },
           body: JSON.stringify({
-            model: 'claude-sonnet-4-20250514',
+            model: 'claude-sonnet-5',
             max_tokens: 1200,
             system: finalSystemPrompt,
             messages: apiMessages,
@@ -1514,7 +1514,7 @@ HARD RULES FOR ALL PERSONAS:
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
+          model: 'claude-sonnet-5',
           max_tokens: 1200,
           system: finalSystemPrompt,
           messages: apiMessages,

@@ -181,7 +181,7 @@ async function generateReply(contactName: string, messages: Array<{ from: 'them'
 
   const voiceBlock = await getVoiceBlock();
   const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-5',
     max_tokens: 200,
     system: MAXY_DM_PROMPT + voiceBlock,
     messages: [{

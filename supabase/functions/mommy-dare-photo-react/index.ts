@@ -56,7 +56,7 @@ async function callAnthropicVision(base64: string, mediaType: string, userText: 
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6', max_tokens: 400, system: SYSTEM,
+        model: 'claude-sonnet-5', max_tokens: 400, system: SYSTEM,
         messages: [{ role: 'user', content: [
           { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
           { type: 'text', text: userText },

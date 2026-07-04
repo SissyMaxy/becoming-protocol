@@ -277,7 +277,7 @@ Deno.serve(async (req: Request) => {
     // The prefill is passed as a partial assistant message
     // Claude continues from where the prefill ends
     const response = await anthropic.messages.create({
-      model: 'claude-3-haiku-20240307',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 1024,
       system: systemPrompt,
       messages: [

@@ -163,7 +163,7 @@ ${corpusBlock}
 Propose ONE reconditioning target aimed at an uncovered inner-recognition signal, or {"skip": true}.`
 
       const message = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-5',
         max_tokens: 700,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userMessage }],

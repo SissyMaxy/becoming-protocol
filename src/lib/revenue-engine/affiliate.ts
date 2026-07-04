@@ -135,7 +135,7 @@ Output JSON:
   `;
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-5',
     max_tokens: 1000,
     system: MAXY_VOICE_PROMPT,
     messages: [{ role: 'user', content: prompt }],

@@ -154,7 +154,7 @@ async function extractImplants(client: Anthropic, lines: string[], dedupSet: Set
   const userMsg = `BATCH (${lines.length} lines):\n${numbered}${dedupHint}`
 
   const r = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-5',
     max_tokens: 1500,
     system: EXTRACTOR_SYSTEM,
     messages: [{ role: 'user', content: userMsg }],

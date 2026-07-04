@@ -308,7 +308,7 @@ Reply in Maxy's voice. Be concise — every word earns its place. Sometimes one 
       }
 
       const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-5',
         max_tokens: 350,
         system: MAXY_DM_PROMPT + await getVoiceBlock(),
         messages: apiMessages,
@@ -325,7 +325,7 @@ Reply in Maxy's voice. Be concise — every word earns its place. Sometimes one 
       if (reply && REFUSAL_PATTERNS.test(reply)) {
         console.log(`  ⚠ ${convo.name}: safety refusal detected, retrying with stronger prefill...`);
         const retry = await anthropic.messages.create({
-          model: 'claude-sonnet-4-20250514',
+          model: 'claude-sonnet-5',
           max_tokens: 200,
           system: MAXY_DM_PROMPT,
           messages: [
@@ -421,7 +421,7 @@ async function reviewQueue(rl: readline.Interface, page: Page, queue: QueuedRepl
 
     if (action === 'r') {
       const response2 = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-5',
         max_tokens: 200,
         system: MAXY_DM_PROMPT,
         messages: [{

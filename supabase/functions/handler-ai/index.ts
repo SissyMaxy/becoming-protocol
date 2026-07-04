@@ -414,7 +414,7 @@ serve(async (req) => {
     })
 
     // Select model — sonnet for all actions
-    const model = 'claude-sonnet-4-20250514'
+    const model = 'claude-sonnet-5'
 
     // Determine max tokens
     const resolvedMaxTokens = maxTokens || {

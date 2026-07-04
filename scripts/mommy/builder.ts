@@ -290,7 +290,7 @@ Output the JSON now.`
   let response: Awaited<ReturnType<Anthropic['messages']['create']>>
   try {
     response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-5',
       max_tokens: 8000,
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],
@@ -416,7 +416,7 @@ async function recordRun(wishId: string, status: string, opts: {
   await supabase.from('mommy_builder_run').insert({
     wish_id: wishId,
     status,
-    drafter_model: opts.drafterModel ?? 'claude-sonnet-4',
+    drafter_model: opts.drafterModel ?? 'claude-sonnet-5',
     files_modified: opts.files ?? null,
     branch_name: opts.branch ?? null,
     commit_sha: opts.sha ?? null,
@@ -521,7 +521,7 @@ async function processOneWish(mode: 'dry' | 'draft' | 'ship'): Promise<ShipResul
 
   if (mode === 'draft') {
     console.log(`[builder] draft mode — files written; not committing. Wish stays in_progress until you ship or revert.`)
-    await recordRun(wish.id, 'in_progress', { files: written, drafterModel: 'claude-sonnet-4' })
+    await recordRun(wish.id, 'in_progress', { files: written, drafterModel: 'claude-sonnet-5' })
     return 'draft_only'
   }
 
@@ -549,7 +549,7 @@ async function processOneWish(mode: 'dry' | 'draft' | 'ship'): Promise<ShipResul
     shipped_in_commit: commit.sha,
     ship_notes: `Auto-shipped by mommy/builder. ${draft.notes}`.slice(0, 1000),
   }).eq('id', wish.id)
-  await recordRun(wish.id, 'shipped', { files: written, branch: commit.branch, sha: commit.sha, drafterModel: 'claude-sonnet-4' })
+  await recordRun(wish.id, 'shipped', { files: written, branch: commit.branch, sha: commit.sha, drafterModel: 'claude-sonnet-5' })
 
   // Return to main branch so the next iteration can branch off main again,
   // not stack on the previous mommy/* branch

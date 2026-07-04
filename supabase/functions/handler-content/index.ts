@@ -576,7 +576,7 @@ Respond with JSON only:
 
   try {
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-5',
       max_tokens: 1000,
       messages: [{ role: 'user', content: prompt }],
     })
@@ -636,7 +636,7 @@ Respond JSON: {"text": "caption text", "hashtags": ["tag1", "tag2"]}`
 
   try {
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-5',
       max_tokens: 300,
       messages: [{ role: 'user', content: prompt }],
     })

@@ -166,7 +166,7 @@ serve(async (req) => {
 
     // Call Claude
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-5',
       max_tokens: 2000,
       messages: [
         {
@@ -218,7 +218,7 @@ serve(async (req) => {
       context_type: 'prescription',
       user_input: JSON.stringify(context),
       ai_response: JSON.stringify(prescription),
-      model_used: 'claude-sonnet-4-20250514',
+      model_used: 'claude-sonnet-5',
       tokens_used: message.usage.input_tokens + message.usage.output_tokens,
     })
 

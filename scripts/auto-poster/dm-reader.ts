@@ -825,7 +825,7 @@ async function generateDMResponse(
     }
 
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-5',
       max_tokens: 200,
       system: MAXY_DM_PROMPT + voiceBlock + (stateBlock ? `\n\n${stateBlock}` : '') + (sceneBlock ? `\n\n${sceneBlock}` : '') + (contactCtx ? `\n\n${contactCtx}` : ''),
       messages: [{

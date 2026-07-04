@@ -32,7 +32,7 @@ export interface ModelChoice {
 }
 
 const ANTHROPIC_HAIKU = 'claude-haiku-4-5-20251001'
-const ANTHROPIC_SONNET = 'claude-sonnet-4-20250514'
+const ANTHROPIC_SONNET = 'claude-sonnet-5'
 const OPENAI_MINI = 'gpt-4o-mini'
 const OPENAI_4O = 'gpt-4o'
 const OR_GEMINI_FLASH = 'google/gemini-2.0-flash-001'

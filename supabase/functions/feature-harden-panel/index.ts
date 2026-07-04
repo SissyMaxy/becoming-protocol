@@ -97,7 +97,7 @@ async function callPanelist(
 ): Promise<PanelResponse> {
   try {
     const model = provider === 'anthropic'
-      ? { provider: 'anthropic' as const, model: 'claude-sonnet-4-20250514', tier: 'S3' as const }
+      ? { provider: 'anthropic' as const, model: 'claude-sonnet-5', tier: 'S3' as const }
       : provider === 'openai'
         ? { provider: 'openai' as const, model: 'gpt-4o', tier: 'S3' as const }
         : { provider: 'openrouter' as const, model: 'google/gemini-2.0-flash-001', tier: 'S1' as const }

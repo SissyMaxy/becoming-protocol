@@ -169,7 +169,7 @@ Output JSON:
 
   try {
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-5',
       max_tokens: 1500,
       system: 'You are an autonomous revenue strategy engine. Analyze data and make decisions. Output only valid JSON.',
       messages: [{ role: 'user', content: prompt }],

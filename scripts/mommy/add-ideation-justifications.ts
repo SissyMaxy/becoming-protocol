@@ -109,7 +109,7 @@ async function callAnthropic(prompt: string): Promise<{ text: string; error?: st
       method: 'POST',
       headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-opus-4-7',
+        model: 'claude-opus-4-8',
         max_tokens: 4000,
         system: 'You write concise, specific protocol-architect justifications. No fluff. No hedging.',
         messages: [{ role: 'user', content: prompt }],

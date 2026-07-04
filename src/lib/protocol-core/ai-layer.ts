@@ -348,9 +348,9 @@ export class AILayer {
     switch (priority) {
       case 'critical':
       case 'emergency':
-        return 'claude-sonnet-4-20250514';  // Best for vault threats, coercion
+        return 'claude-sonnet-5';  // Best for vault threats, coercion
       case 'strategic':
-        return 'claude-sonnet-4-20250514';  // Good for planning, briefings
+        return 'claude-sonnet-5';  // Good for planning, briefings
       case 'routine':
       default:
         return 'claude-haiku-4-5-20251001'; // Cheap for task enhancement
