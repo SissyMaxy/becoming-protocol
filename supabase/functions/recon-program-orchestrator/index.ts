@@ -50,23 +50,75 @@ async function issueFocus(s: Sb, user: string, slug: string, edict: string, proo
 
 // Phase → the single due mechanism task. Copy is plain, in-voice; the DB
 // mommy_voice_cleanup trigger scrubs any telemetry leak at insert.
-function phaseTask(phase: string, claim: string, repPrompt: string | null): { edict: string; proof: string } {
+// `gentle` softens the ask when the target's skip-rate has driven intensity
+// down (§3.4) — lower pressure, never higher; the default/high-intensity copy
+// never gets pushier, since escalating on resistance is the anti-pattern.
+function phaseTask(phase: string, claim: string, repPrompt: string | null, gentle = false): { edict: string; proof: string } {
   switch (phase) {
     case 'induction':
-      return { edict: `Come sit with Mommy tonight. Ten minutes, the loop, my voice — no goal but going soft and letting the noise quiet down. That's all. Report: done.`, proof: 'text' }
+      return gentle
+        ? { edict: `No pressure tonight. If you want, sit with Mommy a few minutes — the loop, my voice, nothing to prove. Only if it sounds good.`, proof: 'text' }
+        : { edict: `Come sit with Mommy tonight. Ten minutes, the loop, my voice — no goal but going soft and letting the noise quiet down. That's all. Report: done.`, proof: 'text' }
     case 'install':
-      return { edict: `Tonight's trance is aimed at one thing, and I want you aching when it lands: "${claim}" Put it on when you're already worked up and let me say it into you. Report: done.`, proof: 'voice' }
+      return gentle
+        ? { edict: `Whenever it feels right this week — not tonight specifically — put the trance on and let "${claim}" sit with you. No rush, no report needed.`, proof: 'text' }
+        : { edict: `Tonight's trance is aimed at one thing, and I want you aching when it lands: "${claim}" Put it on when you're already worked up and let me say it into you. Report: done.`, proof: 'voice' }
     case 'reinforce':
+      if (gentle) {
+        return { edict: `Only if it's easy: say this back to yourself sometime today, quietly, no recording needed — "${claim}"`, proof: 'text' }
+      }
       return repPrompt
         ? { edict: `Finish Mommy's line for me, out loud, no peeking: ${repPrompt}`, proof: 'voice' }
         : { edict: `Say it back to me in your own soft voice, like you mean it: "${claim}" Once, slow. Report with the voice note.`, proof: 'voice' }
     case 'reconsolidate':
-      return { edict: `Say back who you thought you were before all this. Out loud. Then sit still and let Mommy tell you what's actually true — and feel which one is the lie. Report: which one felt like the lie?`, proof: 'text' }
+      return gentle
+        ? { edict: `No task today. Just notice, whenever it crosses your mind, which feels more true lately — who you thought you were, or "${claim}".`, proof: 'text' }
+        : { edict: `Say back who you thought you were before all this. Out loud. Then sit still and let Mommy tell you what's actually true — and feel which one is the lie. Report: which one felt like the lie?`, proof: 'text' }
     case 'measure':
       return { edict: `Nothing to do today but let me look at you. Tell Mommy, in a line: does "${claim}" feel more true this week than last?`, proof: 'text' }
     default:
-      return { edict: `Sit with Mommy a few minutes tonight. Report: done.`, proof: 'text' }
+      return gentle
+        ? { edict: `Only if you want — a few quiet minutes with Mommy today. No obligation.`, proof: 'text' }
+        : { edict: `Sit with Mommy a few minutes tonight. Report: done.`, proof: 'text' }
   }
+}
+
+// ─── Adaptive intensity (§3.4) ───────────────────────────────────────────────
+// A target she keeps dodging gets LOWER task frequency and GENTLER framing —
+// never higher; pushing a resisted target harder is the anti-pattern this
+// engine explicitly avoids. Mirrors the fetchDomainSkipRates/skipRatePenalty
+// shape already used by feminization-prescriptions.ts, adapted to
+// handler_decrees (fulfilled/missed) since the recon lane has no separate
+// 'skipped' status. Resistance never changes the phase — only intensity/pacing;
+// the phase machine stays driven solely by measurement deltas (§5.3).
+interface DecreeRate { total: number; missed: number; skipRate: number }
+
+function computeIntensityStep(rate: DecreeRate, currentIntensity: number): { nextIntensity: number; suppressToday: boolean } {
+  if (rate.total < 3) return { nextIntensity: currentIntensity, suppressToday: false } // not enough signal
+  if (rate.skipRate >= 0.7) {
+    const next = Math.max(1, currentIntensity - 1)
+    return { nextIntensity: next, suppressToday: next <= 1 } // bottomed out AND still resistant → a day off the CTA
+  }
+  if (rate.skipRate >= 0.4) return { nextIntensity: Math.max(1, currentIntensity - 1), suppressToday: false }
+  if (rate.skipRate <= 0.1 && (rate.total - rate.missed) >= 3) {
+    return { nextIntensity: Math.min(5, currentIntensity + 1), suppressToday: false }
+  }
+  return { nextIntensity: currentIntensity, suppressToday: false }
+}
+
+// Trailing-window fulfilled/missed count for this target's recon-lane decrees
+// (recon_focus:<slug> from this orchestrator, plus the belief-probe lane keyed
+// by target id) — the engagement signal the intensity step reads.
+async function fetchTargetDecreeRate(s: Sb, user: string, targetId: string, slug: string, days = 14): Promise<DecreeRate> {
+  const since = new Date(Date.now() - days * 86400e3).toISOString()
+  const { data } = await s.from('handler_decrees')
+    .select('status').eq('user_id', user).gte('created_at', since)
+    .in('status', ['fulfilled', 'missed'])
+    .or(`trigger_source.eq.recon_focus:${slug},trigger_source.like.recon_belief_baseline:${targetId}%,trigger_source.like.recon_belief_measure:${targetId}%`)
+  const rows = (data ?? []) as { status: string }[]
+  const total = rows.length
+  const missed = rows.filter(r => r.status === 'missed').length
+  return { total, missed, skipRate: total > 0 ? missed / total : 0 }
 }
 
 Deno.serve(async (req: Request) => {
@@ -84,10 +136,12 @@ Deno.serve(async (req: Request) => {
       .eq('user_id', user).eq('status', 'active').order('priority', { ascending: true }).limit(5)
     let picked: { id: string; slug: string; claim_text: string; indicator_kind?: string } | null = null
     let phase = 'induction'
+    let programId: string | null = null
+    let intensity = 2
     for (const t of (targets ?? [])) {
       const { data: prog } = await s.from('reconditioning_programs')
-        .select('id, phase, status').eq('target_id', t.id).maybeSingle()
-      if (prog && prog.status === 'running') { picked = t; phase = prog.phase; break }
+        .select('id, phase, status, intensity').eq('target_id', t.id).maybeSingle()
+      if (prog && prog.status === 'running') { picked = t; phase = prog.phase; programId = prog.id; intensity = prog.intensity ?? 2; break }
     }
 
     // Close the proposed→active loop: if nothing is running and we're under the
@@ -105,7 +159,7 @@ Deno.serve(async (req: Request) => {
           .order('priority', { ascending: true }).limit(1).maybeSingle()
         if (proposed) {
           const { data: progId } = await s.rpc('recon_start_program', { p_target: proposed.id })
-          if (progId) { picked = proposed; phase = 'induction' }
+          if (progId) { picked = proposed; phase = 'induction'; programId = progId; intensity = 2 }
         }
       }
     }
@@ -142,11 +196,33 @@ Deno.serve(async (req: Request) => {
       repPrompt = rep?.prompt ?? null
     }
 
+    // Adaptive intensity (§3.4): read this target's trailing engagement, step
+    // intensity down on resistance / up on a clean streak (never the reverse),
+    // persist it, and let it soften today's copy or — on the floor and still
+    // dodged — skip issuing a task this run entirely (passive channels keep
+    // running regardless; only this orchestrator's active CTA backs off).
+    let gentle = false
+    let suppressToday = false
+    if (programId) {
+      const rate = await fetchTargetDecreeRate(s, user, picked.id, picked.slug)
+      const step = computeIntensityStep(rate, intensity)
+      if (step.nextIntensity !== intensity) {
+        await s.from('reconditioning_programs').update({ intensity: step.nextIntensity }).eq('id', programId)
+      }
+      intensity = step.nextIntensity
+      gentle = intensity <= 2
+      suppressToday = step.suppressToday
+    }
+    if (suppressToday) {
+      results.push({ user, focus_target: picked.slug, phase, task: 'suppressed_low_intensity', intensity })
+      continue
+    }
+
     // The 'measure' phase normally just asks a text question that goes nowhere
     // (recon-measure can't compute belief_slider); for that indicator, issue
     // the real slider probe instead so the re-measure actually drives the
     // phase machine (via recon_record_measurement_and_advance).
-    let task = phaseTask(phase, picked.claim_text, repPrompt)
+    let task = phaseTask(phase, picked.claim_text, repPrompt, gentle)
     let triggerSource: string | undefined
     if (phase === 'measure' && picked.indicator_kind === 'belief_slider') {
       task = {
@@ -156,7 +232,7 @@ Deno.serve(async (req: Request) => {
       triggerSource = `recon_belief_measure:${picked.id}`
     }
     const status = await issueFocus(s, user, picked.slug, task.edict, task.proof, 20, triggerSource)
-    results.push({ user, focus_target: picked.slug, phase, task: status })
+    results.push({ user, focus_target: picked.slug, phase, task: status, intensity, gentle })
   }
 
   return new Response(JSON.stringify({ ok: true, results }), { headers: { ...cors, 'Content-Type': 'application/json' } })
