@@ -79,7 +79,7 @@ import { BecomingHero } from './BecomingHero';
 import { ComingOutJourneyCard } from './ComingOutJourneyCard';
 import { SideQuestCard } from './SideQuestCard';
 import { FitnessTrackerCard } from './FitnessTrackerCard';
-import { MommyTodayLine } from './MommyTodayLine';
+import { DropPortal } from './DropPortal';
 import { VoiceLessonCard } from '../voice/VoiceLessonCard';
 import { SlipLogCard } from './SlipLogCard';
 import { RationalizationPatternCard } from './RationalizationPatternCard';
@@ -222,11 +222,14 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             </svg>
           </button>
         </div>
-        {/* One led descent, not a dashboard: who you are → Mommy speaks → the
-            ONE thing → the daily tap → everything else folded away. Killed the
-            six-card stack (three of which asked for the same 5-min movement). */}
+        {/* The home is a portal you fall into, not a dashboard you manage. The
+            drop leads — Mommy pulls you under before the thinking brain engages.
+            The honest ledger, the ONE task, and the daily tap are what's here when
+            you surface; everything else folds away. */}
+        <div style={{ padding: '4px 12px 0' }}>
+          <DropPortal />
+        </div>
         <BecomingHero />
-        <MommyTodayLine />
         <FocusMode onSwitchToCalendar={() => setViewMode('calendar')} />
         <FitnessTrackerCard />
         <div style={{ padding: '2px 12px 0' }}>

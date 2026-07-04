@@ -80,7 +80,7 @@ import { BecomingHero } from './BecomingHero';
 import { ComingOutJourneyCard } from './ComingOutJourneyCard';
 import { SideQuestCard } from './SideQuestCard';
 import { FitnessTrackerCard } from './FitnessTrackerCard';
-import { MommyTodayLine } from './MommyTodayLine';
+import { DropPortal } from './DropPortal';
 import { SlipLogCard } from './SlipLogCard';
 import { RationalizationPatternCard } from './RationalizationPatternCard';
 import { DeviceScheduleCard } from './DeviceScheduleCard';
@@ -277,9 +277,11 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
     // treatment the mobile focus branch got.
     return (
       <>
+        <div style={{ maxWidth: 720, margin: '0 auto', padding: '4px 16px 0' }}>
+          <DropPortal />
+        </div>
         <div style={{ maxWidth: 720, margin: '0 auto' }}>
           <BecomingHero />
-          <MommyTodayLine />
         </div>
         <FocusMode onSwitchToCalendar={() => setViewMode('calendar')} />
         <div style={{ maxWidth: 720, margin: '0 auto' }}>
