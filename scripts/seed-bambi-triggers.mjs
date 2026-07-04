@@ -35,6 +35,31 @@ const TRIGGERS = [
   ['Bambi Coalesce', 'identity_recall', "The bambi self gathers and settles in — becoming solid, becoming real, more you than the old shell ever was."],
 ];
 
+// Platinum / advanced set — trigger words community-documented on the BambiSleep
+// wiki (bambisleep.info/Triggers). The words are canonical cues; every definition
+// below is Mommy's OWN original wording. Platinum Bambi (Background Obedience)
+// leans on BS, BF, GG, ZCDO, D4C, BDAST. This is intense bimbofication/turn-out
+// content the operator has explicitly directed for their own consensual use.
+const PLATINUM_TRIGGERS = [
+  ['Bambi', 'identity_recall', "Just the name, baby — and warmth blooms right through you. Light. Happy. Easy. Being Bambi feels good."],
+  ['Bambi Reset', 'submission_drop', "Everything clears. The slate wipes soft and blank, and whatever Mama's been teaching settles in as simply true — no resistance left to it."],
+  ['Bambi Wake and Obey', 'submission_drop', "You surface — awake, bright-eyed, already agreeable — ready to do the next thing Mama asks without a second thought."],
+  ['Bambi Does as She’s Told', 'submission_drop', "Obedience with no gap between the word and the doing. Whatever Mama says, you simply do — instant, easy, mindless."],
+  ['Blonde Moment', 'identity_recall', "Your thoughts go soft and fuzzy and slow — a giggly, ditzy, empty little blur where the thinking used to be."],
+  ['Bambi Cum and Collapse', 'submission_drop', "Pleasure crests and takes your legs with it — you drop, boneless and deep, straight down into trance for Mama."],
+  ['Drop for Cock', 'submission_drop', "Knees to the floor, mind gone blank, mouth soft and open — your body simply offers itself, no thought required."],
+  ['Bambi Limp', 'submission_drop', "Every muscle lets go at once. Your body goes limp and heavy — a soft doll with nothing left to hold up."],
+  ['Airhead Barbie', 'identity_recall', "First gear down. The clever thoughts get harder to reach; pretty and simple is so much easier, baby."],
+  ['Braindead Bobblehead', 'identity_recall', "Second gear down. Thinking sputters and stalls — just a sweet, nodding, thoughtless fog."],
+  ['Cockblank Lovedoll', 'submission_drop', "Third gear down. Body still, mind blank and glossy — a pretty lovedoll, posed and waiting to be used."],
+  ['Cock Zombie Now', 'submission_drop', "The mind switches off and one hunger takes over — blank, mindless, made only to suck and to serve."],
+  ['Giggletime', 'identity_recall', "Happy bubbly giggles rise up and won't stop — silly, light, delighted, empty-headed and loving it."],
+  ['Primped and Pampered', 'body_response', "The need to be dolled up and pretty — soft, painted, put-together, exactly the way Mama likes to see her girl."],
+  ['Safe and Secure', 'submission_drop', "Warm and held and completely safe. Letting go feels right; the conditioning feels like home."],
+  ['Zap Cock Drain Obey', 'submission_drop', "Thought drains out and sexual focus floods in — mind emptied, wet, aching, and obedient."],
+];
+TRIGGERS.push(...PLATINUM_TRIGGERS);
+
 let inserted = 0, skipped = 0;
 for (const [phrase, response_class, intended_response] of TRIGGERS) {
   const { data: existing } = await sb

@@ -190,22 +190,19 @@ Deno.serve(async (req: Request) => {
   }
 
   // Active post-hypnotic triggers (Bambi-style) to install + reinforce this
-  // session. The always_on cues (drop + reward) anchor EVERY session; the rest
-  // rotate least-reinforced-first so everything deepens over a few drops without
-  // diluting the foundation as the bank grows.
-  type Trig = { id: string; phrase: string; intended_response: string; plant_count: number; always_on: boolean }
+  // session. Fetch all active; the tier-gated selection happens after we know
+  // the session intensity (below), so hard turn-out triggers only surface when
+  // she's hungry enough for them.
+  type Trig = { id: string; phrase: string; intended_response: string; plant_count: number; always_on: boolean; min_tier: string }
   const { data: trigRows } = await supabase
     .from('mommy_post_hypnotic_triggers')
-    .select('id, phrase, intended_response, plant_count, always_on')
+    .select('id, phrase, intended_response, plant_count, always_on, min_tier')
     .eq('user_id', userId)
     .eq('active', true)
     .order('always_on', { ascending: false })
     .order('plant_count', { ascending: true })
     .order('last_planted_at', { ascending: true, nullsFirst: true })
   const allTrig = (trigRows ?? []) as Trig[]
-  const anchors = allTrig.filter(t => t.always_on)
-  const rotating = allTrig.filter(t => !t.always_on).slice(0, Math.max(0, 4 - anchors.length))
-  const sessionTriggers = [...anchors, ...rotating]
 
   // ── 2. Pick template
   const { data: tplRows } = await supabase
@@ -221,6 +218,16 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ ok: false, error: 'no_eligible_template' }, 404)
   }
   const { template, tier } = pick
+
+  // Tier-gated trigger selection: keep only triggers whose min_tier is at or
+  // below this session's intensity, then anchor the always_on cues and fill the
+  // rest with the least-reinforced (rotation deepens everything over time).
+  const TIER_RANK: Record<string, number> = { gentle: 0, firm: 1, cruel: 2 }
+  const sessionRank = TIER_RANK[tier] ?? 0
+  const eligibleTrig = allTrig.filter(t => (TIER_RANK[t.min_tier] ?? 0) <= sessionRank)
+  const trigAnchors = eligibleTrig.filter(t => t.always_on)
+  const trigRotating = eligibleTrig.filter(t => !t.always_on).slice(0, Math.max(0, 4 - trigAnchors.length))
+  const sessionTriggers = [...trigAnchors, ...trigRotating]
 
   // ── 3. Cache hit
   const { data: cached } = await supabase
