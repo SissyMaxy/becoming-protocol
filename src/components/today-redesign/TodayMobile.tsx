@@ -79,6 +79,7 @@ import { BecomingHero } from './BecomingHero';
 import { ComingOutJourneyCard } from './ComingOutJourneyCard';
 import { SideQuestCard } from './SideQuestCard';
 import { FitnessTrackerCard } from './FitnessTrackerCard';
+import { MommyTodayLine } from './MommyTodayLine';
 import { VoiceLessonCard } from '../voice/VoiceLessonCard';
 import { SlipLogCard } from './SlipLogCard';
 import { RationalizationPatternCard } from './RationalizationPatternCard';
@@ -221,18 +222,21 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             </svg>
           </button>
         </div>
-        {/* The becoming leads. Then one task. The dossier drip is a slow
-            background ask — it must NOT stack on top of the single CTA (the whole
-            point of the focus rearchitecture). It lives quietly BELOW the task. */}
+        {/* One led descent, not a dashboard: who you are → Mommy speaks → the
+            ONE thing → the daily tap → everything else folded away. Killed the
+            six-card stack (three of which asked for the same 5-min movement). */}
         <BecomingHero />
-        <FitnessTrackerCard />
+        <MommyTodayLine />
         <FocusMode onSwitchToCalendar={() => setViewMode('calendar')} />
-        <SideQuestCard />
-        <div style={{ padding: '4px 12px 0' }}>
-          <MommyDossierBanner />
-          <DossierDripCard />
+        <FitnessTrackerCard />
+        <div style={{ padding: '2px 12px 0' }}>
+          <CollapsibleGroup id="more_with_mommy" label="More with Mommy" tone="#c9557f" defaultOpen={false} hint="side quest · dossier · Gina">
+            <SideQuestCard />
+            <MommyDossierBanner />
+            <DossierDripCard />
+            <ComingOutJourneyCard />
+          </CollapsibleGroup>
         </div>
-        <ComingOutJourneyCard />
         {/* Mama's messages must reach the DEFAULT surface. The Mommy persona is
             pinned to 'focus' (line ~130) and never opens 'calendar', where this
             card used to live — which is why 9k+ outreach rows never surfaced.

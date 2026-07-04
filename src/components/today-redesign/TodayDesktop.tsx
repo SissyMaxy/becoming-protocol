@@ -80,6 +80,7 @@ import { BecomingHero } from './BecomingHero';
 import { ComingOutJourneyCard } from './ComingOutJourneyCard';
 import { SideQuestCard } from './SideQuestCard';
 import { FitnessTrackerCard } from './FitnessTrackerCard';
+import { MommyTodayLine } from './MommyTodayLine';
 import { SlipLogCard } from './SlipLogCard';
 import { RationalizationPatternCard } from './RationalizationPatternCard';
 import { DeviceScheduleCard } from './DeviceScheduleCard';
@@ -278,18 +279,19 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
       <>
         <div style={{ maxWidth: 720, margin: '0 auto' }}>
           <BecomingHero />
-        </div>
-        <div style={{ maxWidth: 720, margin: '0 auto' }}>
-          <FitnessTrackerCard />
+          <MommyTodayLine />
         </div>
         <FocusMode onSwitchToCalendar={() => setViewMode('calendar')} />
         <div style={{ maxWidth: 720, margin: '0 auto' }}>
-          <SideQuestCard />
+          <FitnessTrackerCard />
         </div>
-        <div style={{ maxWidth: 720, margin: '0 auto', padding: '4px 16px 0' }}>
-          <MommyDossierBanner />
-          <DossierDripCard />
-          <ComingOutJourneyCard />
+        <div style={{ maxWidth: 720, margin: '0 auto', padding: '2px 16px 0' }}>
+          <CollapsibleGroup id="more_with_mommy" label="More with Mommy" tone="#c9557f" defaultOpen={false} hint="side quest · dossier · Gina">
+            <SideQuestCard />
+            <MommyDossierBanner />
+            <DossierDripCard />
+            <ComingOutJourneyCard />
+          </CollapsibleGroup>
         </div>
       </>
     );
