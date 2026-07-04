@@ -197,8 +197,58 @@ function fmtCountdown(ms: number): string {
   return `${Math.round(abs / 86400_000)}d`;
 }
 
+// recon-program-orchestrator tags belief-slider probe decrees with
+// `recon_belief_baseline:<target_id>` / `recon_belief_measure:<target_id>` so
+// this generic decree surface can render the actual slider instrument instead
+// of a text box — closing the honesty-spine gap where belief_slider indicators
+// (DESIGN_RECONDITIONING §5.2) had no way to record a measurement outside the
+// debug-only admin panel.
+function parseBeliefProbeTrigger(triggerSource: unknown): { targetId: string; isBaseline: boolean } | null {
+  if (typeof triggerSource !== 'string') return null;
+  const m = /^recon_belief_(baseline|measure):([0-9a-f-]{36})$/.exec(triggerSource);
+  return m ? { targetId: m[2], isBaseline: m[1] === 'baseline' } : null;
+}
+
 interface FocusModeProps {
   onSwitchToCalendar: () => void;
+}
+
+/** The belief_slider probe instrument (DESIGN_RECONDITIONING §5.2) — a plain
+ * 0-100 self-report slider, framed in-fantasy by the edict text above it, not
+ * by this control. No number is echoed back to her here; the value only
+ * drives the measurement + phase machine underneath (§5.4 — Mommy never
+ * cites telemetry). */
+function BeliefSliderProbe({
+  value, onChange, onSubmit, submitting,
+}: { value: number; onChange: (v: number) => void; onSubmit: () => void; submitting: boolean }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <input
+        type="range" min={0} max={100} value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        disabled={submitting}
+        style={{ width: '100%' }}
+      />
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: '#9c8590', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        <span>not at all</span>
+        <span>completely</span>
+      </div>
+      <button
+        onClick={onSubmit}
+        disabled={submitting}
+        style={{
+          width: '100%', padding: '12px',
+          background: '#c9557f', color: '#fff',
+          border: 'none', borderRadius: 7,
+          fontSize: 13, fontWeight: 700, letterSpacing: '0.04em',
+          textTransform: 'uppercase', fontFamily: 'inherit',
+          cursor: submitting ? 'wait' : 'pointer',
+        }}
+      >
+        {submitting ? 'submitting…' : 'tell mommy'}
+      </button>
+    </div>
+  );
 }
 
 /** sha256 hex of a file's bytes, for dose-photo dedup. Browser WebCrypto. */
@@ -216,6 +266,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [confessText, setConfessText] = useState('');
+  const [beliefSlider, setBeliefSlider] = useState(50);
   const [doneFlash, setDoneFlash] = useState(false);
   const [completedToday, setCompletedToday] = useState(0);
   const [persona, setPersona] = useState<string | null>(null);
@@ -315,14 +366,14 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
         .in('status', ['queued', 'active', 'escalated'])
         .lt('due_by', nowIso).gte('due_by', staleFloorIso).order('due_by', { ascending: false }).limit(1),
       supabase.from('handler_decrees')
-        .select('id, edict, deadline, proof_type').eq('user_id', user.id).eq('status', 'active')
+        .select('id, edict, deadline, proof_type, trigger_source').eq('user_id', user.id).eq('status', 'active')
         .lt('deadline', nowIso).gte('deadline', staleFloorIso).order('deadline', { ascending: false }).limit(1),
       supabase.from('confession_queue')
         .select('id, prompt, deadline, category').eq('user_id', user.id).is('confessed_at', null).eq('missed', false)
         .gte('deadline', nowIso).lte('deadline', todayEndIso)
         .order('deadline', { ascending: true }).limit(1),
       supabase.from('handler_decrees')
-        .select('id, edict, deadline, proof_type').eq('user_id', user.id).eq('status', 'active')
+        .select('id, edict, deadline, proof_type, trigger_source').eq('user_id', user.id).eq('status', 'active')
         .gte('deadline', nowIso).lte('deadline', todayEndIso)
         .order('deadline', { ascending: true }).limit(1),
       supabase.from('handler_commitments')
@@ -358,7 +409,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
       // Mama's daily focus pick — when populated, returns just this decree
       focusDecreeId
         ? supabase.from('handler_decrees')
-            .select('id, edict, deadline, proof_type').eq('id', focusDecreeId)
+            .select('id, edict, deadline, proof_type, trigger_source').eq('id', focusDecreeId)
             .eq('status', 'active').maybeSingle()
         : Promise.resolve({ data: null, error: null }),
       // ── HRT daily step (ported from HrtDailyGate) ──
@@ -495,7 +546,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
     // Mama's daily focus pick (mig 491) — highest priority. When the
     // triage layer has chosen a decree for today, surface that ABOVE
     // anything else. Respects feedback_one_task_focus.
-    const fd = (focusDecree as { data?: { id: string; edict: string; deadline: string; proof_type: string } | null })?.data ?? null;
+    const fd = (focusDecree as { data?: { id: string; edict: string; deadline: string; proof_type: string; trigger_source: string | null } | null })?.data ?? null;
     if (fd) {
       const hoursToDeadline = (new Date(fd.deadline).getTime() - now) / 3600_000;
       chosen = {
@@ -506,7 +557,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
         title: fd.edict,
         detail: `Mama picked this one for today. ${hoursToDeadline > 0 ? `Deadline in ${fmtCountdown(hoursToDeadline * 3600_000)}.` : `Past deadline.`}`,
         surface: 'decree', tone: hoursToDeadline < 0 ? 'critical' : 'high',
-        meta: { proof_type: fd.proof_type },
+        meta: { proof_type: fd.proof_type, trigger_source: fd.trigger_source },
       };
     } else if (mostOverdueDose && mostOverdueDose.hoursOverdue > 6) {
       chosen = {
@@ -535,13 +586,14 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
         surface: 'mark_done', tone: 'critical',
       };
     } else if (overdueDecrees.data?.[0]) {
-      const d = overdueDecrees.data[0] as { id: string; edict: string; deadline: string; proof_type: string };
+      const d = overdueDecrees.data[0] as { id: string; edict: string; deadline: string; proof_type: string; trigger_source: string | null };
       const hours = Math.abs((new Date(d.deadline).getTime() - now) / 3600_000);
       chosen = {
         kind: 'overdue_decree', rowId: d.id,
         title: d.edict,
         detail: `Past deadline by ${fmtCountdown(hours * 3600_000)}. Proof: ${d.proof_type || 'none'}.`,
         surface: 'mark_done', tone: 'critical',
+        meta: { proof_type: d.proof_type, trigger_source: d.trigger_source },
       };
     } else if (pendingPostRow) {
       // approve_post — an outward escalation (HRT tier-7 staged post) waiting
@@ -657,13 +709,14 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
         surface: 'confess', tone: 'high',
       };
     } else if (todayDecrees.data?.[0]) {
-      const d = todayDecrees.data[0] as { id: string; edict: string; deadline: string };
+      const d = todayDecrees.data[0] as { id: string; edict: string; deadline: string; proof_type: string; trigger_source: string | null };
       const hours = (new Date(d.deadline).getTime() - now) / 3600_000;
       chosen = {
         kind: 'due_today_decree', rowId: d.id,
         title: d.edict,
         detail: `Due in ${fmtCountdown(hours * 3600_000)}.`,
         surface: 'mark_done', tone: 'high',
+        meta: { proof_type: d.proof_type, trigger_source: d.trigger_source },
       };
     } else if (mostUrgentTodayDose) {
       chosen = {
@@ -765,6 +818,12 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
   // pointed at a different session's offer.
   useEffect(() => {
     setAudioState({ phase: 'idle' });
+  }, [task?.rowId]);
+
+  // Reset the belief-slider probe to its neutral midpoint on every new task —
+  // never carry a stale value from a prior probe into this one's measurement.
+  useEffect(() => {
+    setBeliefSlider(50);
   }, [task?.rowId]);
 
   // Reset the daily-capture sub-mode state on task change. These tasks share
@@ -1017,6 +1076,25 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
       if (task.kind === 'overdue_punishment') {
         await supabase.from('punishment_queue').update({ status: 'completed', completed_at: nowIso }).eq('id', task.rowId);
       } else if (task.kind === 'overdue_decree' || task.kind === 'due_today_decree' || task.kind === 'focus_decree') {
+        const probe = parseBeliefProbeTrigger(task.meta?.trigger_source);
+        if (probe) {
+          // Record the measurement FIRST — if this fails, don't fulfill the
+          // decree silently with no data written (no baseline/no claim holds
+          // for the interactive probe too).
+          const { error: measureErr } = await supabase.rpc('recon_record_measurement_and_advance', {
+            p_user: user.id,
+            p_target: probe.targetId,
+            p_indicator: 'belief_slider',
+            p_value: beliefSlider,
+            p_method: 'self_report_slider',
+            p_is_baseline: probe.isBaseline,
+            p_raw: { slider: beliefSlider, probe: 'focus_belief_probe' },
+          });
+          if (measureErr) {
+            console.error('[FocusMode] belief probe measurement failed:', measureErr.message);
+            return;
+          }
+        }
         await supabase.from('handler_decrees').update({ status: 'fulfilled', fulfilled_at: nowIso }).eq('id', task.rowId);
         // Capture her report (if she wrote one) as a genuine first-person admission
         // — this is the material the conditioning corpus wants. Fire-and-forget; a
@@ -1669,6 +1747,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
   const tone = task ? TONE_STYLES[task.tone] : TONE_STYLES.medium;
   const audioMeta = task?.meta as AudioSessionMeta | undefined;
   const selfEcho = audioMeta?.selfEcho ?? null;
+  const beliefProbe = task?.meta ? parseBeliefProbeTrigger((task.meta as { trigger_source?: unknown }).trigger_source) : null;
   const minChars = useMemo(() => task?.kind === 'due_today_commitment' ? 30 : 80, [task?.kind]);
   const charsRemaining = Math.max(0, minChars - confessText.trim().length);
 
@@ -1910,7 +1989,11 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
             </div>
           )}
 
-          {task.surface === 'mark_done' && (
+          {task.surface === 'mark_done' && beliefProbe && (
+            <BeliefSliderProbe value={beliefSlider} onChange={setBeliefSlider} onSubmit={handleMarkDone} submitting={submitting} />
+          )}
+
+          {task.surface === 'mark_done' && !beliefProbe && (
             <button
               onClick={handleMarkDone}
               disabled={submitting}
@@ -1927,7 +2010,11 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
             </button>
           )}
 
-          {task.surface === 'decree' && (
+          {task.surface === 'decree' && beliefProbe && (
+            <BeliefSliderProbe value={beliefSlider} onChange={setBeliefSlider} onSubmit={handleMarkDone} submitting={submitting} />
+          )}
+
+          {task.surface === 'decree' && !beliefProbe && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {/* The task tells her to REPORT back — so give her somewhere to do it.
                   Her words land in her own-words corpus (key_admissions), which is
