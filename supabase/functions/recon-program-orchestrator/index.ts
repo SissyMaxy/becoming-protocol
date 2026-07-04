@@ -22,15 +22,19 @@ type Sb = any
 
 const NO_PUNISH = 'No punishment — this one is an invitation, not a demand. Miss it and the pull just builds.'
 
-// Dedup: one active recon-focus decree per user (the single CTA). Refresh a
-// stale deadline rather than stacking a second card.
-async function issueFocus(s: Sb, user: string, slug: string, edict: string, proof = 'text', hours = 20): Promise<string> {
-  const src = `recon_focus:${slug}`
+// Dedup: one active recon-lane decree per user (the single CTA) — covers this
+// orchestrator's own focus decrees, the belief-slider probes (baseline capture
+// + re-measure), and recon-reconsolidation's decrees, so none of the recon
+// surfaces ever stack a second card on top of another. Refresh a stale
+// deadline rather than issuing a duplicate.
+async function issueFocus(s: Sb, user: string, slug: string, edict: string, proof = 'text', hours = 20, triggerSource?: string): Promise<string> {
+  const src = triggerSource ?? `recon_focus:${slug}`
   const { data: ex } = await s.from('handler_decrees')
     .select('id, deadline, trigger_source').eq('user_id', user).eq('status', 'active')
-    .like('trigger_source', 'recon_focus:%').limit(1).maybeSingle()
+    .or('trigger_source.like.recon_focus:%,trigger_source.like.recon_belief_baseline:%,trigger_source.like.recon_belief_measure:%,trigger_source.like.recon_reconsolidate:%')
+    .limit(1).maybeSingle()
   if (ex) {
-    // Already a live focus task — keep exactly one. Refresh deadline if expired.
+    // Already a live recon-lane task — keep exactly one. Refresh deadline if expired.
     if (ex.deadline && new Date(ex.deadline) < new Date()) {
       await s.from('handler_decrees').update({ deadline: new Date(Date.now() + hours * 3600e3).toISOString() }).eq('id', ex.id)
     }
@@ -76,9 +80,9 @@ Deno.serve(async (req: Request) => {
 
     // Highest-priority active + running target = today's Focus target.
     const { data: targets } = await s.from('reconditioning_targets')
-      .select('id, slug, claim_text, priority, status')
+      .select('id, slug, claim_text, priority, status, indicator_kind')
       .eq('user_id', user).eq('status', 'active').order('priority', { ascending: true }).limit(5)
-    let picked: { id: string; slug: string; claim_text: string } | null = null
+    let picked: { id: string; slug: string; claim_text: string; indicator_kind?: string } | null = null
     let phase = 'induction'
     for (const t of (targets ?? [])) {
       const { data: prog } = await s.from('reconditioning_programs')
@@ -96,12 +100,34 @@ Deno.serve(async (req: Request) => {
         .select('id', { count: 'exact', head: true }).eq('user_id', user).eq('status', 'active')
       if ((activeCount ?? 0) < 3) {
         const { data: proposed } = await s.from('reconditioning_targets')
-          .select('id, slug, claim_text')
+          .select('id, slug, claim_text, indicator_kind')
           .eq('user_id', user).eq('status', 'proposed').not('baseline_captured_at', 'is', null)
           .order('priority', { ascending: true }).limit(1).maybeSingle()
         if (proposed) {
           const { data: progId } = await s.rpc('recon_start_program', { p_target: proposed.id })
           if (progId) { picked = proposed; phase = 'induction' }
+        }
+      }
+    }
+
+    // Still nothing startable — a proposed belief_slider target has no path to
+    // a baseline otherwise (recon-measure can't compute a self-report; the only
+    // other instrument lives behind debug mode). Issue the baseline-capture
+    // probe itself so it can ever leave 'proposed'.
+    if (!picked) {
+      const { count: activeCount } = await s.from('reconditioning_targets')
+        .select('id', { count: 'exact', head: true }).eq('user_id', user).eq('status', 'active')
+      if ((activeCount ?? 0) < 3) {
+        const { data: needsBaseline } = await s.from('reconditioning_targets')
+          .select('id, slug, claim_text')
+          .eq('user_id', user).eq('status', 'proposed').is('baseline_captured_at', null)
+          .eq('indicator_kind', 'belief_slider')
+          .order('priority', { ascending: true }).limit(1).maybeSingle()
+        if (needsBaseline) {
+          const edict = `Before Mommy works "${needsBaseline.claim_text}" into you for real, she needs to know where you're starting from. Rate how true that already feels — there's no wrong answer, just honest.`
+          const status = await issueFocus(s, user, needsBaseline.slug, edict, 'belief_slider', 20, `recon_belief_baseline:${needsBaseline.id}`)
+          results.push({ user, focus_target: needsBaseline.slug, phase: 'baseline_probe', task: status })
+          continue
         }
       }
     }
@@ -116,8 +142,20 @@ Deno.serve(async (req: Request) => {
       repPrompt = rep?.prompt ?? null
     }
 
-    const task = phaseTask(phase, picked.claim_text, repPrompt)
-    const status = await issueFocus(s, user, picked.slug, task.edict, task.proof)
+    // The 'measure' phase normally just asks a text question that goes nowhere
+    // (recon-measure can't compute belief_slider); for that indicator, issue
+    // the real slider probe instead so the re-measure actually drives the
+    // phase machine (via recon_record_measurement_and_advance).
+    let task = phaseTask(phase, picked.claim_text, repPrompt)
+    let triggerSource: string | undefined
+    if (phase === 'measure' && picked.indicator_kind === 'belief_slider') {
+      task = {
+        edict: `Nothing to do today but let Mommy see you honestly. Rate how true this feels right now: "${picked.claim_text}"`,
+        proof: 'belief_slider',
+      }
+      triggerSource = `recon_belief_measure:${picked.id}`
+    }
+    const status = await issueFocus(s, user, picked.slug, task.edict, task.proof, 20, triggerSource)
     results.push({ user, focus_target: picked.slug, phase, task: status })
   }
 

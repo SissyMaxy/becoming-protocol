@@ -53,12 +53,13 @@ async function fetchTarget(s: Sb, targetId: string): Promise<Target | null> {
 }
 
 // One CTA per user across the recon surfaces (mirrors recon-program-orchestrator's
-// recon_focus lane): if a recon_focus OR recon_reconsolidate decree is already
-// live, do not stack a second card.
+// recon_focus lane, which now also covers the belief-slider probe decrees): if a
+// recon_focus, recon_belief_baseline/measure, or recon_reconsolidate decree is
+// already live, do not stack a second card.
 async function ctaOccupied(s: Sb, user: string): Promise<boolean> {
   const { data } = await s.from('handler_decrees')
     .select('id, trigger_source').eq('user_id', user).eq('status', 'active')
-    .or('trigger_source.like.recon_focus:%,trigger_source.like.recon_reconsolidate:%')
+    .or('trigger_source.like.recon_focus:%,trigger_source.like.recon_belief_baseline:%,trigger_source.like.recon_belief_measure:%,trigger_source.like.recon_reconsolidate:%')
     .limit(1).maybeSingle()
   return !!data
 }

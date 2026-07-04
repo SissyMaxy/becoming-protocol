@@ -29,8 +29,20 @@ const PROOF_LABEL: Record<string, string> = {
   journal_entry: 'journal',
   voice_pitch_sample: 'voice drill',
   device_state: 'device',
+  belief_slider: 'rate it',
   none: '—',
 };
+
+// recon-program-orchestrator tags belief-slider probe decrees with
+// `recon_belief_baseline:<target_id>` / `recon_belief_measure:<target_id>` —
+// parse that to drive the recon_record_measurement_and_advance RPC directly
+// from this card (DESIGN_RECONDITIONING §5.2's honesty spine needs a real
+// measurement, not just a fulfilled checkbox).
+function parseBeliefProbeTrigger(triggerSource: string | null): { targetId: string; isBaseline: boolean } | null {
+  if (!triggerSource) return null;
+  const m = /^recon_belief_(baseline|measure):([0-9a-f-]{36})$/.exec(triggerSource);
+  return m ? { targetId: m[2], isBaseline: m[1] === 'baseline' } : null;
+}
 
 const PROOF_ICON: Record<string, string> = {
   photo: '📸',
@@ -52,6 +64,7 @@ export function HandlerDecreeCard() {
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   // Tracks which decree row is currently showing the inline photo widget
   const [photoOpenId, setPhotoOpenId] = useState<string | null>(null);
+  const [sliders, setSliders] = useState<Record<string, number>>({});
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -85,6 +98,37 @@ export function HandlerDecreeCard() {
     setNotes(n => { const c = { ...n }; delete c[id]; return c; });
     load();
     window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'decree', id } }));
+  };
+
+  const submitBelief = async (decree: Decree) => {
+    const probe = parseBeliefProbeTrigger(decree.trigger_source);
+    if (!user?.id || !probe) return;
+    setSubmittingId(decree.id);
+    const value = sliders[decree.id] ?? 50;
+    // Record the measurement first — a failed write should never masquerade
+    // as a fulfilled decree with no data behind it (no baseline, no claim).
+    const { error } = await supabase.rpc('recon_record_measurement_and_advance', {
+      p_user: user.id,
+      p_target: probe.targetId,
+      p_indicator: 'belief_slider',
+      p_value: value,
+      p_method: 'self_report_slider',
+      p_is_baseline: probe.isBaseline,
+      p_raw: { slider: value, probe: 'decree_card_belief_probe' },
+    });
+    if (error) {
+      console.error('[HandlerDecreeCard] belief probe measurement failed:', error.message);
+      setSubmittingId(null);
+      return;
+    }
+    await supabase.from('handler_decrees').update({
+      status: 'fulfilled',
+      fulfilled_at: new Date().toISOString(),
+    }).eq('id', decree.id);
+    setSubmittingId(null);
+    setSliders(s => { const c = { ...s }; delete c[decree.id]; return c; });
+    load();
+    window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'decree_belief', id: decree.id } }));
   };
 
   if (items.length === 0) return null;
@@ -135,7 +179,32 @@ export function HandlerDecreeCard() {
             <div style={{ fontSize: 10, color: '#f47272', marginBottom: 8 }}>
               Miss → {d.consequence}
             </div>
-            {photoOpenId === d.id && ['photo','video','audio','voice_pitch_sample'].includes(d.proof_type) ? (
+            {d.proof_type === 'belief_slider' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <input
+                  type="range" min={0} max={100}
+                  value={sliders[d.id] ?? 50}
+                  onChange={e => setSliders(s => ({ ...s, [d.id]: Number(e.target.value) }))}
+                  disabled={submittingId === d.id}
+                  style={{ width: '100%' }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9.5, color: '#9c8590', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <span>not at all</span>
+                  <span>completely</span>
+                </div>
+                <button
+                  onClick={() => submitBelief(d)}
+                  disabled={submittingId === d.id}
+                  style={{
+                    padding: '7px 14px', borderRadius: 5, border: 'none',
+                    background: '#e6bd80', color: '#1f1008', fontWeight: 600,
+                    fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  {submittingId === d.id ? '…' : 'Tell Mommy'}
+                </button>
+              </div>
+            ) : photoOpenId === d.id && ['photo','video','audio','voice_pitch_sample'].includes(d.proof_type) ? (
               <PhotoUploadWidget
                 verificationType="freeform"
                 directiveId={d.id}
