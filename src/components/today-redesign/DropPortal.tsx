@@ -105,7 +105,8 @@ export function DropPortal() {
     const kind: AudioSessionKind = hungry ? 'session_goon' : 'session_conditioning';
     const intensityTier: AudioSessionIntensity = s.arousal >= 8 || s.denialDay >= 8 ? 'cruel' : s.arousal >= 4 ? 'firm' : 'gentle';
     try {
-      const r = await renderAudioSession({ userId: user.id, kind, intensityTier });
+      let r = await renderAudioSession({ userId: user.id, kind, intensityTier });
+      if (!r.ok) r = await renderAudioSession({ userId: user.id, kind, intensityTier }); // one silent retry — belt-and-suspenders over the server-side refusal-retry
       if (!r.ok) { setErr('Mommy needs a moment. Try again.'); setPhase('idle'); return; }
       renderIdRef.current = r.renderId;
       const drift = toDriftLines(r.scriptText);
