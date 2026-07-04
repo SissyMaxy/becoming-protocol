@@ -1,8 +1,12 @@
 // Becoming Protocol Service Worker
-const CACHE_NAME = 'becoming-protocol-v1';
+// v2 (2026-07-04): the v1 SW cached the app SHELL ('/' + '/index.html') and
+// served it back, so shipped code never reached the user — the "I don't see
+// changes" bug, reproduced live. Fix: NEVER cache or serve the HTML shell from
+// cache when online (navigations are network-only, cache is offline-only
+// fallback), so the shell is always fresh and always points at the current
+// hashed bundles. Bumping the cache name purges every stale v1 asset on activate.
+const CACHE_NAME = 'becoming-protocol-v2';
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
   '/butterfly.svg',
   '/manifest.json'
 ];
@@ -47,11 +51,31 @@ self.addEventListener('fetch', (event) => {
   // Skip API calls and auth endpoints
   if (url.pathname.startsWith('/api') || url.pathname.includes('/auth/')) return;
 
+  // NAVIGATIONS / HTML: network-only with no-store, so the app shell is ALWAYS
+  // the freshest deploy (never a cached stale shell pointing at old bundles).
+  // Only fall back to a cached shell when genuinely offline.
+  const isHTML = request.mode === 'navigate' ||
+    (request.headers.get('accept') || '').includes('text/html');
+  if (isHTML) {
+    event.respondWith(
+      fetch(request, { cache: 'no-store' })
+        .then((response) => {
+          // Keep ONE offline fallback copy, but never serve it while online.
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put('/offline-shell', clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match('/offline-shell').then((r) => r || new Response('Offline', { status: 503 })))
+    );
+    return;
+  }
+
   event.respondWith(
-    // Try network first
+    // Hashed assets (JS/CSS/img) are immutable — network-first, cache on success.
     fetch(request)
       .then((response) => {
-        // Clone and cache successful responses
         if (response.ok) {
           const responseClone = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
@@ -61,14 +85,9 @@ self.addEventListener('fetch', (event) => {
         return response;
       })
       .catch(() => {
-        // Fallback to cache on network failure
         return caches.match(request).then((cachedResponse) => {
           if (cachedResponse) {
             return cachedResponse;
-          }
-          // For navigation requests, return the cached index.html (SPA fallback)
-          if (request.mode === 'navigate') {
-            return caches.match('/index.html');
           }
           return new Response('Offline', { status: 503 });
         });
