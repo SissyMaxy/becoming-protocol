@@ -77,6 +77,7 @@ import { OutreachQueueCard } from './OutreachQueueCard';
 import { DossierDripCard } from './DossierDripCard';
 import { BecomingHero } from './BecomingHero';
 import { ComingOutJourneyCard } from './ComingOutJourneyCard';
+import { SideQuestCard } from './SideQuestCard';
 import { VoiceLessonCard } from '../voice/VoiceLessonCard';
 import { SlipLogCard } from './SlipLogCard';
 import { RationalizationPatternCard } from './RationalizationPatternCard';
@@ -224,6 +225,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             point of the focus rearchitecture). It lives quietly BELOW the task. */}
         <BecomingHero />
         <FocusMode onSwitchToCalendar={() => setViewMode('calendar')} />
+        <SideQuestCard />
         <div style={{ padding: '4px 12px 0' }}>
           <MommyDossierBanner />
           <DossierDripCard />
