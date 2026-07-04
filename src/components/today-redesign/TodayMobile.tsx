@@ -78,6 +78,7 @@ import { DossierDripCard } from './DossierDripCard';
 import { BecomingHero } from './BecomingHero';
 import { ComingOutJourneyCard } from './ComingOutJourneyCard';
 import { SideQuestCard } from './SideQuestCard';
+import { FitnessTrackerCard } from './FitnessTrackerCard';
 import { VoiceLessonCard } from '../voice/VoiceLessonCard';
 import { SlipLogCard } from './SlipLogCard';
 import { RationalizationPatternCard } from './RationalizationPatternCard';
@@ -224,6 +225,7 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             background ask — it must NOT stack on top of the single CTA (the whole
             point of the focus rearchitecture). It lives quietly BELOW the task. */}
         <BecomingHero />
+        <FitnessTrackerCard />
         <FocusMode onSwitchToCalendar={() => setViewMode('calendar')} />
         <SideQuestCard />
         <div style={{ padding: '4px 12px 0' }}>

@@ -50,7 +50,13 @@ export function SideQuestCard() {
       setProg((p.data as Progress) ?? null);
     } catch { setGated(true); }
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [user?.id]);
+  useEffect(() => {
+    load();
+    const onLogged = () => load();
+    window.addEventListener('fitness-logged', onLogged);
+    return () => window.removeEventListener('fitness-logged', onLogged);
+    /* eslint-disable-next-line */
+  }, [user?.id]);
 
   if (gated === null || gated) return null;   // loading or safeword/off → quiet
 

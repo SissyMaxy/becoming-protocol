@@ -79,6 +79,7 @@ import { DossierDripCard } from './DossierDripCard';
 import { BecomingHero } from './BecomingHero';
 import { ComingOutJourneyCard } from './ComingOutJourneyCard';
 import { SideQuestCard } from './SideQuestCard';
+import { FitnessTrackerCard } from './FitnessTrackerCard';
 import { SlipLogCard } from './SlipLogCard';
 import { RationalizationPatternCard } from './RationalizationPatternCard';
 import { DeviceScheduleCard } from './DeviceScheduleCard';
@@ -277,6 +278,9 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
       <>
         <div style={{ maxWidth: 720, margin: '0 auto' }}>
           <BecomingHero />
+        </div>
+        <div style={{ maxWidth: 720, margin: '0 auto' }}>
+          <FitnessTrackerCard />
         </div>
         <FocusMode onSwitchToCalendar={() => setViewMode('calendar')} />
         <div style={{ maxWidth: 720, margin: '0 auto' }}>
