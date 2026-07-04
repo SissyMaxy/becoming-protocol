@@ -132,6 +132,18 @@ jobs:
           done
           echo "Applied $applied new migration(s); skipped $skipped already-applied."
 
+          # Reload PostgREST's schema cache so any NEW table/function a migration
+          # added is immediately reachable over the REST API. Management-API DDL
+          # does NOT auto-reload it, so without this a new frontend-consumed table
+          # 404s until the cache refreshes on its own — the exact bug that hid
+          # coming_out_journey. Harmless when nothing new was added.
+          jq -n '{query: "NOTIFY pgrst, '"'"'reload schema'"'"';"}' > /tmp/reload.json
+          curl -sS -o /dev/null -X POST "$ENDPOINT" \
+            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/reload.json || true
+          echo "PostgREST schema cache reload requested."
+
       - name: Set up Deno (edge runtime)
         if: steps.secrets.outputs.ready == 'true'
         uses: denoland/setup-deno@v1

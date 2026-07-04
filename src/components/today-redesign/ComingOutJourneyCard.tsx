@@ -81,11 +81,17 @@ export function ComingOutJourneyCard() {
 
   const load = async () => {
     if (!user?.id) return;
-    const { data } = await supabase.from('coming_out_journey')
-      .select('current_stage, enabled, told_gina_at').eq('user_id', user.id).maybeSingle();
-    const row = data as { current_stage?: string; enabled?: boolean; told_gina_at?: string | null } | null;
-    setEnabled(!!row?.enabled);
-    setStage(row?.told_gina_at ? 'told' : (row?.current_stage ?? null));
+    try {
+      const { data } = await supabase.from('coming_out_journey')
+        .select('current_stage, enabled, told_gina_at').eq('user_id', user.id).maybeSingle();
+      const row = data as { current_stage?: string; enabled?: boolean; told_gina_at?: string | null } | null;
+      setEnabled(!!row?.enabled);
+      setStage(row?.told_gina_at ? 'told' : (row?.current_stage ?? null));
+    } catch {
+      // Never vanish — degrade to the gentle invitation if the fetch fails.
+      setEnabled(false);
+      setStage(null);
+    }
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [user?.id]);
 
