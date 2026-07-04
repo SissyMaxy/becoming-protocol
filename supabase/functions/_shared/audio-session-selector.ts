@@ -73,7 +73,11 @@ export function selectTemplate(
   )
   if (sameKind.length === 0) return null
 
-  const phaseEligible = sameKind.filter((t) => t.phase_min <= ctx.currentPhase)
+  // Floor at phase 1: a brand-new user (current_phase 0, pre-onboarding) must
+  // still be able to drop into the gentlest entry session — the home portal is
+  // their first surface. Tier stays clamped to 'gentle' by clampTierByPhase.
+  const effPhase = Math.max(ctx.currentPhase, 1)
+  const phaseEligible = sameKind.filter((t) => t.phase_min <= effPhase)
   if (phaseEligible.length === 0) return null
 
   const recent = new Set(ctx.recentTemplateIds)
