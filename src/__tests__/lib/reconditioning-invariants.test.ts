@@ -16,6 +16,7 @@
  *   - Gate arms ...................... supabase/migrations/648 + 651/653 conditioning_gate()
  *   - SM-2-lite rep scheduler ........ supabase/migrations/650 recon_grade_rep()
  *   - Reconsolidation window ......... supabase/migrations/651 recon_turnout_consolidate()
+ *   - Adaptive intensity (§3.4) ...... supabase/functions/recon-program-orchestrator computeIntensityStep()
  */
 
 import { describe, it, expect } from 'vitest';
@@ -332,5 +333,71 @@ describe('recon reconsolidation session — status + window invariants', () => {
     const settled = now - 3 * 60 * 60 * 1000;  // 3h ago
     expect(now - justHappened).toBeLessThan(SETTLE_MS);   // skipped this pass
     expect(now - settled).toBeGreaterThan(SETTLE_MS);      // eligible
+  });
+});
+
+// ─── Adaptive intensity (mirror of recon-program-orchestrator's
+// computeIntensityStep, §3.4) ──────────────────────────────────────────────
+// Resistance to a target lowers task frequency and softens framing — it never
+// raises pressure. Not enough signal (<3 decrees) never moves intensity.
+
+interface DecreeRate { total: number; missed: number; skipRate: number }
+
+function computeIntensityStep(rate: DecreeRate, currentIntensity: number): { nextIntensity: number; suppressToday: boolean } {
+  if (rate.total < 3) return { nextIntensity: currentIntensity, suppressToday: false };
+  if (rate.skipRate >= 0.7) {
+    const next = Math.max(1, currentIntensity - 1);
+    return { nextIntensity: next, suppressToday: next <= 1 };
+  }
+  if (rate.skipRate >= 0.4) return { nextIntensity: Math.max(1, currentIntensity - 1), suppressToday: false };
+  if (rate.skipRate <= 0.1 && (rate.total - rate.missed) >= 3) {
+    return { nextIntensity: Math.min(5, currentIntensity + 1), suppressToday: false };
+  }
+  return { nextIntensity: currentIntensity, suppressToday: false };
+}
+
+describe('recon adaptive intensity — resistance lowers pressure, never raises it', () => {
+  it('fewer than 3 decrees is not enough signal — intensity holds', () => {
+    expect(computeIntensityStep({ total: 2, missed: 2, skipRate: 1 }, 3)).toEqual({ nextIntensity: 3, suppressToday: false });
+  });
+
+  it('heavy resistance (>=0.7 skip) drops intensity by one', () => {
+    const r = computeIntensityStep({ total: 5, missed: 4, skipRate: 0.8 }, 3);
+    expect(r.nextIntensity).toBe(2);
+    expect(r.suppressToday).toBe(false);
+  });
+
+  it('heavy resistance at the floor also suppresses today\'s active task', () => {
+    const r = computeIntensityStep({ total: 5, missed: 4, skipRate: 0.8 }, 2);
+    expect(r.nextIntensity).toBe(1);
+    expect(r.suppressToday).toBe(true);
+  });
+
+  it('moderate resistance (0.4-0.7) drops intensity but never suppresses', () => {
+    const r = computeIntensityStep({ total: 5, missed: 2, skipRate: 0.4 }, 4);
+    expect(r.nextIntensity).toBe(3);
+    expect(r.suppressToday).toBe(false);
+  });
+
+  it('intensity never drops below the floor of 1', () => {
+    expect(computeIntensityStep({ total: 5, missed: 4, skipRate: 0.8 }, 1)).toEqual({ nextIntensity: 1, suppressToday: true });
+  });
+
+  it('a clean engagement streak raises intensity, capped at 5', () => {
+    const r = computeIntensityStep({ total: 5, missed: 0, skipRate: 0 }, 5);
+    expect(r.nextIntensity).toBe(5);
+  });
+  it('a clean streak below the cap raises intensity by one', () => {
+    const r = computeIntensityStep({ total: 4, missed: 0, skipRate: 0 }, 2);
+    expect(r.nextIntensity).toBe(3);
+  });
+
+  it('a clean streak needs at least 3 completions, not just a low rate', () => {
+    // total 3, missed 1 -> skipRate 0.33, completed 2 -> below the +8-style reward floor
+    expect(computeIntensityStep({ total: 3, missed: 1, skipRate: 0.33 }, 3).nextIntensity).toBe(3);
+  });
+
+  it('mid-range engagement (no strong signal either way) holds intensity steady', () => {
+    expect(computeIntensityStep({ total: 5, missed: 1, skipRate: 0.2 }, 3).nextIntensity).toBe(3);
   });
 });
