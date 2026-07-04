@@ -63,7 +63,8 @@ OUTPUT FORMAT (JSON only, no prose):
   "loopholes": [
     {
       "title": "short name",
-      "pattern_evidence": "FIRST-PERSON, BEHAVIORAL: describe what SHE actually does, not what the protocol allows. Lead with 'You' or her behavior; DO NOT write audit-memo language. BAD: 'Subject can avoid protocol by not opening app', 'No mention of emotional support', 'Multiple commitments show cancelled status'. GOOD: 'You marked 3 commitments cancelled this week instead of letting them go missed', 'You skipped voice drills 4 of 7 days last week, all weekends'. The bridge wraps this with 'What is the easier story you tell yourself when you do this?' — so it must be answerable as a thing she did. If you can't cite a specific behavior, omit the loophole.",
+      "pattern_evidence": "FIRST-PERSON, BEHAVIORAL, and GROUNDED IN THE SNAPSHOT — describe a thing she ACTUALLY did that is visible in the state data below. Lead with 'You'. DO NOT write audit-memo language ('Subject can…', 'No mention of…', 'Multiple commitments show…'). CRITICAL — NO FABRICATION: never invent a count, a frequency, a streak, or a day-of-week pattern. Every number or 'N of the last M days' or 'all on weekends' MUST come from actual rows in the snapshot. If the snapshot does not contain the counts to back a specific claim, either state the behavior WITHOUT the fabricated numbers or omit the loophole entirely. This becomes a confession she reads ('what is the easier story you tell yourself when you do this?'), so a made-up statistic is the app lying to her — do not do it.",
+      "evidence_source": "REQUIRED. The exact snapshot data this is derived from, so it can be verified — e.g. 'slip_log: 3 rows in last 7d', 'handler_commitments: 2 with status=cancelled', 'compliance_7d: 40%'. If you cannot name a real field+value from the snapshot below that backs this loophole, DO NOT emit the loophole. An empty loopholes array is the correct answer when the data shows no clear grounded pattern.",
       "suggested_close": "code/system/rule that would seal it"
     }
   ],
@@ -78,7 +79,9 @@ OUTPUT FORMAT (JSON only, no prose):
   "summary": "2-3 sentences in Handler voice — direct, no hedging, no apology. State the verdict and the next move."
 }
 
-Maximum 4 items per array. Prioritize the highest-leverage findings.`
+Maximum 4 items per array. Prioritize the highest-leverage findings.
+
+HARD RULE — NO FABRICATED FACTS: every specific claim about her behavior (a count, a frequency, "N of the last M days", "all on weekends", a streak, a dollar amount) MUST be verifiable in the state snapshot below. If the data does not contain it, you may not assert it. When in doubt, say less or return an empty array — a confession built on a made-up statistic is the system lying to her, and that is never acceptable. Grounded-and-fewer beats specific-and-invented, every time.`
 
 async function buildStateSnapshot(
   supabase: ReturnType<typeof createClient>,
