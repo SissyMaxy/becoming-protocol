@@ -81,6 +81,7 @@ import { ComingOutJourneyCard } from './ComingOutJourneyCard';
 import { SideQuestCard } from './SideQuestCard';
 import { FitnessTrackerCard } from './FitnessTrackerCard';
 import { DropPortal } from './DropPortal';
+import { BambiPlaylistCard } from './BambiPlaylistCard';
 import { SlipLogCard } from './SlipLogCard';
 import { RationalizationPatternCard } from './RationalizationPatternCard';
 import { DeviceScheduleCard } from './DeviceScheduleCard';
@@ -288,8 +289,9 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
           <FitnessTrackerCard />
         </div>
         <div style={{ maxWidth: 720, margin: '0 auto', padding: '2px 16px 0' }}>
-          <CollapsibleGroup id="more_with_mommy" label="More with Mommy" tone="#c9557f" defaultOpen={false} hint="side quest · dossier · Gina">
+          <CollapsibleGroup id="more_with_mommy" label="More with Mommy" tone="#c9557f" defaultOpen={false} hint="side quest · your files · dossier · Gina">
             <SideQuestCard />
+            <BambiPlaylistCard />
             <MommyDossierBanner />
             <DossierDripCard />
             <ComingOutJourneyCard />

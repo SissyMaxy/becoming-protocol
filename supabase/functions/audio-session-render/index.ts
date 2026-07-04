@@ -190,17 +190,22 @@ Deno.serve(async (req: Request) => {
   }
 
   // Active post-hypnotic triggers (Bambi-style) to install + reinforce this
-  // session. Rotate to the least-reinforced so every trigger deepens over time:
-  // Bambi conditioning installs a few per session and loops back to them.
+  // session. The always_on cues (drop + reward) anchor EVERY session; the rest
+  // rotate least-reinforced-first so everything deepens over a few drops without
+  // diluting the foundation as the bank grows.
+  type Trig = { id: string; phrase: string; intended_response: string; plant_count: number; always_on: boolean }
   const { data: trigRows } = await supabase
     .from('mommy_post_hypnotic_triggers')
-    .select('id, phrase, intended_response, plant_count')
+    .select('id, phrase, intended_response, plant_count, always_on')
     .eq('user_id', userId)
     .eq('active', true)
+    .order('always_on', { ascending: false })
     .order('plant_count', { ascending: true })
     .order('last_planted_at', { ascending: true, nullsFirst: true })
-    .limit(4)
-  const sessionTriggers = (trigRows ?? []) as Array<{ id: string; phrase: string; intended_response: string; plant_count: number }>
+  const allTrig = (trigRows ?? []) as Trig[]
+  const anchors = allTrig.filter(t => t.always_on)
+  const rotating = allTrig.filter(t => !t.always_on).slice(0, Math.max(0, 4 - anchors.length))
+  const sessionTriggers = [...anchors, ...rotating]
 
   // ── 2. Pick template
   const { data: tplRows } = await supabase

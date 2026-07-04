@@ -80,6 +80,7 @@ import { ComingOutJourneyCard } from './ComingOutJourneyCard';
 import { SideQuestCard } from './SideQuestCard';
 import { FitnessTrackerCard } from './FitnessTrackerCard';
 import { DropPortal } from './DropPortal';
+import { BambiPlaylistCard } from './BambiPlaylistCard';
 import { VoiceLessonCard } from '../voice/VoiceLessonCard';
 import { SlipLogCard } from './SlipLogCard';
 import { RationalizationPatternCard } from './RationalizationPatternCard';
@@ -233,8 +234,9 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
         <FocusMode onSwitchToCalendar={() => setViewMode('calendar')} />
         <FitnessTrackerCard />
         <div style={{ padding: '2px 12px 0' }}>
-          <CollapsibleGroup id="more_with_mommy" label="More with Mommy" tone="#c9557f" defaultOpen={false} hint="side quest · dossier · Gina">
+          <CollapsibleGroup id="more_with_mommy" label="More with Mommy" tone="#c9557f" defaultOpen={false} hint="side quest · your files · dossier · Gina">
             <SideQuestCard />
+            <BambiPlaylistCard />
             <MommyDossierBanner />
             <DossierDripCard />
             <ComingOutJourneyCard />
