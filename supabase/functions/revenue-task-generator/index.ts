@@ -28,6 +28,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { resolveRung, selectTasks, moneyClaimGuard, buildNeedLine, RUNG_ALL_MET, type RungEvidence } from './logic.ts'
+import { requireGate } from '../_shared/conditioning-gate.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -213,6 +214,16 @@ Deno.serve(async (req: Request) => {
   let body: { user_id?: string; dry_run?: boolean } = {}
   try { body = await req.json() } catch { /* */ }
   const userId = body.user_id || HANDLER_USER
+
+  // SAFEWORD / PAUSE GATE (fail-closed) — the money/cam lane must eject on the
+  // safeword like every other engine. Before this it fired straight through a
+  // safeword, which meant "I'm out" didn't reach the highest-stakes pressure.
+  // conditioning_gate('paid_monetization') covers safeword-latch + pause +
+  // elective toggle + live-meet.
+  const gate = await requireGate(supabase, 'paid_monetization', userId)
+  if (!gate.allowed) {
+    return new Response(JSON.stringify({ ok: true, suppressed: gate.reason }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+  }
 
   // Weekly target (floor recomputes upward to cover the real bill).
   const { data: st, error: stErr } = await supabase.from('user_state')
