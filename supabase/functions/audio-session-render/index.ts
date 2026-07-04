@@ -40,8 +40,8 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-const ANTHROPIC_TIMEOUT_MS = 75_000
-const TTS_TIMEOUT_MS = 60_000
+const ANTHROPIC_TIMEOUT_MS = 70_000
+const TTS_TIMEOUT_MS = 75_000
 const RECENT_TEMPLATE_LOOKBACK = 5
 
 // System framing for script generation. The template prompts read as raw
@@ -58,6 +58,28 @@ const SESSION_SYSTEM_PROMPT = [
   'No preamble, no disclaimers, no meta-commentary, no stage directions in brackets, no',
   'refusals or "I can\'t" — just the script itself, first word to last. Stay fully in',
   'persona and in the second person to the listener throughout.',
+  '',
+  'CADENCE — write in the style of soft feminine "sleep" hypnosis (think Bambi-style',
+  'bimbo/sissy trance): slow, breathy, lulling. Short, simple sentences. Heavy, deliberate',
+  'REPETITION — loop key phrases, triggers and mantras, returning to them again and again',
+  'so they sink in. Use ellipses "..." generously to mark soft pauses and breaths between',
+  'phrases. Build with a gentle induction (breathing, heaviness, sinking), then a repeated',
+  'deepener (counting down "ten... nine... deeper... eight...", drifting further with each',
+  'number), then fractionation (float up a little, then sink twice as deep), then the core',
+  'suggestion looped as a soft mantra she can echo. Warm, dreamy, seductive, hypnotic —',
+  'never clinical, never rushed. Every few lines, come back to the trigger word.',
+].join(' ')
+
+// Delivery spec for gpt-4o-mini-tts. This is the single biggest lever for making
+// the voice sound like soft feminine sleep-hypnosis instead of a flat read.
+const HYPNOSIS_DELIVERY = [
+  'Voice: a soft, breathy, feminine hypnotist — light, airy and higher-pitched, gentle',
+  'and youthful; never deep, husky, or masculine. A tender woman lulling you toward sleep.',
+  'Tone: warm, soothing, maternal and intimate; dreamy, loving, quietly seductive.',
+  'Pacing: very slow and languid. Draw the words out. Leave long, soft pauses at every',
+  'ellipsis and line break, as if the listener sinks deeper with each breath.',
+  'Delivery: almost a whisper, close to the ear; let each sentence trail off softly',
+  'downward. Lulling, repetitive, hypnotic — never bright, sharp, brisk, or upbeat.',
 ].join(' ')
 
 // A voiced refusal is worse than no audio — never TTS a decline as if it were Mommy.
@@ -312,6 +334,7 @@ Deno.serve(async (req: Request) => {
     marks.script_chars = script.length
     const tts = await synthesizeMommySpeech(script, {
       affect: affectForVoice,
+      instructions: HYPNOSIS_DELIVERY,
       timeoutMs: TTS_TIMEOUT_MS,
     })
     marks.tts_ms = Math.round(performance.now() - ttsStart)

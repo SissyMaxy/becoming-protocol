@@ -36,13 +36,19 @@ export interface TtsOptions {
   voiceSettings?: MommyVoiceSettings
   /** Per-call TTS timeout. Default 60s. */
   timeoutMs?: number
-  /** Override the OpenAI voice (default 'shimmer'). */
+  /** Override the OpenAI voice (default 'coral' — clear, warm feminine). */
   openaiVoice?: string
+  /** Full delivery spec for gpt-4o-mini-tts `instructions` (voice/pitch/pacing).
+   *  When set, this leads and any affect hint is appended. Use for calibrated
+   *  styles like the hypnosis delivery, where the affect map is too terse. */
+  instructions?: string
 }
 
 const DEFAULT_TIMEOUT_MS = 60_000
 const OPENAI_TTS_MODEL = 'gpt-4o-mini-tts'
-const OPENAI_TTS_VOICE = 'shimmer'
+// 'coral' reads as a clearer, warmer feminine voice than 'shimmer', which some
+// hear as huskier/lower. The hypnosis delivery spec steers it softer + higher.
+const OPENAI_TTS_VOICE = 'coral'
 const ELEVENLABS_MODEL = 'eleven_multilingual_v2'
 
 /** Which provider will be used, or null if nothing is configured. Pure env read. */
@@ -131,7 +137,12 @@ export async function synthesizeMommySpeech(
   // OpenAI TTS — returns mp3 bytes directly.
   const openaiKey = Deno.env.get('OPENAI_API_KEY')!
   const voice = opts.openaiVoice ?? OPENAI_TTS_VOICE
-  const instructions = affectToInstructions(opts.affect)
+  // A full delivery spec (e.g. the hypnosis calibration) leads; the affect hint,
+  // if any, is appended so mood still nuances the calibrated base.
+  const affectHint = affectToInstructions(opts.affect)
+  const instructions = opts.instructions
+    ? (affectHint ? `${opts.instructions} ${affectHint}` : opts.instructions)
+    : affectHint
   const res = await fetch('https://api.openai.com/v1/audio/speech', {
     method: 'POST',
     signal: AbortSignal.timeout(timeoutMs),
