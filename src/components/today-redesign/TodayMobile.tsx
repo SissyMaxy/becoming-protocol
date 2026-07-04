@@ -218,9 +218,10 @@ export function TodayMobile({ onExit }: TodayMobileProps) {
             </svg>
           </button>
         </div>
-        {/* One task is the hero. The dossier drip is a slow background ask —
-            it must NOT stack on top of the single CTA (the whole point of the
-            focus rearchitecture). It lives quietly BELOW the task now. */}
+        {/* The becoming leads. Then one task. The dossier drip is a slow
+            background ask — it must NOT stack on top of the single CTA (the whole
+            point of the focus rearchitecture). It lives quietly BELOW the task. */}
+        <BecomingHero />
         <FocusMode onSwitchToCalendar={() => setViewMode('calendar')} />
         <div style={{ padding: '4px 12px 0' }}>
           <MommyDossierBanner />

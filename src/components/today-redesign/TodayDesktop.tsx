@@ -267,13 +267,20 @@ export function TodayDesktop({ onExit }: TodayDesktopProps) {
   const currentStep = data.chastityLocked ? `CHASTITY · DAY ${data.chastityStreakDays}` : data.denialDay > 0 ? `DENIAL · DAY ${data.denialDay}` : 'UNCOMMITTED';
 
   if (viewMode === 'focus') {
+    // The focus view is what the Mommy persona actually renders (viewMode is
+    // forced to 'focus'). The hero belongs HERE, and the dossier is a slow
+    // background ask that must not stack on top of the single task — same
+    // treatment the mobile focus branch got.
     return (
       <>
-        <div style={{ maxWidth: 720, margin: '0 auto', padding: '12px 16px 0' }}>
+        <div style={{ maxWidth: 720, margin: '0 auto' }}>
+          <BecomingHero />
+        </div>
+        <FocusMode onSwitchToCalendar={() => setViewMode('calendar')} />
+        <div style={{ maxWidth: 720, margin: '0 auto', padding: '4px 16px 0' }}>
           <MommyDossierBanner />
           <DossierDripCard />
         </div>
-        <FocusMode onSwitchToCalendar={() => setViewMode('calendar')} />
       </>
     );
   }
