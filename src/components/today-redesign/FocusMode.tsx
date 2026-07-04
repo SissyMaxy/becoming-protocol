@@ -209,6 +209,23 @@ function parseBeliefProbeTrigger(triggerSource: unknown): { targetId: string; is
   return m ? { targetId: m[2], isBaseline: m[1] === 'baseline' } : null;
 }
 
+// Same pattern, for the assoc_latency (IAT-lite) instrument — recon-program-
+// orchestrator tags these `recon_iat_baseline:<target_id>` / `recon_iat_measure:<target_id>`.
+function parseIatProbeTrigger(triggerSource: unknown): { targetId: string; isBaseline: boolean } | null {
+  if (typeof triggerSource !== 'string') return null;
+  const m = /^recon_iat_(baseline|measure):([0-9a-f-]{36})$/.exec(triggerSource);
+  return m ? { targetId: m[2], isBaseline: m[1] === 'baseline' } : null;
+}
+
+// recon-program-orchestrator's IAT-probe edicts always embed the bare claim in
+// quotes ("...gut reaction...: "${claim}""). Pull just that out so the reveal
+// step can show the claim in isolation, not buried in Mommy's surrounding
+// sentence — the stimulus should be clean at the exact moment latency starts.
+function extractQuotedClaim(edict: string): string {
+  const m = /"([^"]+)"/.exec(edict);
+  return m ? m[1] : edict;
+}
+
 interface FocusModeProps {
   onSwitchToCalendar: () => void;
 }
@@ -247,6 +264,76 @@ function BeliefSliderProbe({
       >
         {submitting ? 'submitting…' : 'tell mommy'}
       </button>
+    </div>
+  );
+}
+
+/** The assoc_latency (IAT-lite) probe instrument (DESIGN_RECONDITIONING §5.2) —
+ * "the strongest implicit signal": present the claim, tap AGREE / DISAGREE as
+ * fast as possible, and the reaction time (not the choice) is what's recorded.
+ * Faster + agree = a stronger automatic association than a slow, thought-out
+ * agreement. Framed as a gut-reaction game, not a lie-detector. */
+function IatLiteProbe({
+  claim, onSubmit, submitting,
+}: { claim: string; onSubmit: (latencyMs: number, choice: 'agree' | 'disagree') => void; submitting: boolean }) {
+  const [shownAt, setShownAt] = useState<number | null>(null);
+  if (shownAt === null) {
+    return (
+      <button
+        onClick={() => setShownAt(performance.now())}
+        disabled={submitting}
+        style={{
+          width: '100%', padding: '12px',
+          background: '#c9557f', color: '#fff',
+          border: 'none', borderRadius: 7,
+          fontSize: 13, fontWeight: 700, letterSpacing: '0.04em',
+          textTransform: 'uppercase', fontFamily: 'inherit',
+          cursor: submitting ? 'wait' : 'pointer',
+        }}
+      >
+        start — read it, then tap fast
+      </button>
+    );
+  }
+  const tap = (choice: 'agree' | 'disagree') => {
+    const latencyMs = Math.round(performance.now() - shownAt);
+    setShownAt(null);
+    onSubmit(latencyMs, choice);
+  };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <p style={{
+        fontSize: 15, color: '#fff', textAlign: 'center', lineHeight: 1.4,
+        padding: '14px 10px', border: '1px solid #4a2438', borderRadius: 8, margin: 0,
+      }}>
+        "{claim}"
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <button
+          onClick={() => tap('agree')}
+          disabled={submitting}
+          style={{
+            padding: '14px', background: '#c9557f', color: '#fff',
+            border: 'none', borderRadius: 7, fontSize: 13, fontWeight: 700,
+            letterSpacing: '0.04em', textTransform: 'uppercase', fontFamily: 'inherit',
+            cursor: submitting ? 'wait' : 'pointer',
+          }}
+        >
+          agree
+        </button>
+        <button
+          onClick={() => tap('disagree')}
+          disabled={submitting}
+          style={{
+            padding: '14px', background: 'transparent', color: '#a8a3ad',
+            border: '1px solid #4a2438', borderRadius: 7, fontSize: 13, fontWeight: 700,
+            letterSpacing: '0.04em', textTransform: 'uppercase', fontFamily: 'inherit',
+            cursor: submitting ? 'wait' : 'pointer',
+          }}
+        >
+          disagree
+        </button>
+      </div>
     </div>
   );
 }
@@ -1068,7 +1155,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
     }
   };
 
-  const handleMarkDone = async () => {
+  const handleMarkDone = async (iatResult?: { latencyMs: number; choice: 'agree' | 'disagree' }) => {
     if (!task?.rowId || !user?.id) return;
     setSubmitting(true);
     try {
@@ -1077,6 +1164,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
         await supabase.from('punishment_queue').update({ status: 'completed', completed_at: nowIso }).eq('id', task.rowId);
       } else if (task.kind === 'overdue_decree' || task.kind === 'due_today_decree' || task.kind === 'focus_decree') {
         const probe = parseBeliefProbeTrigger(task.meta?.trigger_source);
+        const iatProbe = parseIatProbeTrigger(task.meta?.trigger_source);
         if (probe) {
           // Record the measurement FIRST — if this fails, don't fulfill the
           // decree silently with no data written (no baseline/no claim holds
@@ -1092,6 +1180,20 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
           });
           if (measureErr) {
             console.error('[FocusMode] belief probe measurement failed:', measureErr.message);
+            return;
+          }
+        } else if (iatProbe && iatResult) {
+          const { error: measureErr } = await supabase.rpc('recon_record_measurement_and_advance', {
+            p_user: user.id,
+            p_target: iatProbe.targetId,
+            p_indicator: 'assoc_latency',
+            p_value: iatResult.latencyMs,
+            p_method: 'iat_lite',
+            p_is_baseline: iatProbe.isBaseline,
+            p_raw: { choice: iatResult.choice, latency_ms: iatResult.latencyMs, probe: 'focus_iat_probe' },
+          });
+          if (measureErr) {
+            console.error('[FocusMode] IAT probe measurement failed:', measureErr.message);
             return;
           }
         }
@@ -1748,6 +1850,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
   const audioMeta = task?.meta as AudioSessionMeta | undefined;
   const selfEcho = audioMeta?.selfEcho ?? null;
   const beliefProbe = task?.meta ? parseBeliefProbeTrigger((task.meta as { trigger_source?: unknown }).trigger_source) : null;
+  const iatProbe = task?.meta ? parseIatProbeTrigger((task.meta as { trigger_source?: unknown }).trigger_source) : null;
   const minChars = useMemo(() => task?.kind === 'due_today_commitment' ? 30 : 80, [task?.kind]);
   const charsRemaining = Math.max(0, minChars - confessText.trim().length);
 
@@ -1990,12 +2093,20 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
           )}
 
           {task.surface === 'mark_done' && beliefProbe && (
-            <BeliefSliderProbe value={beliefSlider} onChange={setBeliefSlider} onSubmit={handleMarkDone} submitting={submitting} />
+            <BeliefSliderProbe value={beliefSlider} onChange={setBeliefSlider} onSubmit={() => handleMarkDone()} submitting={submitting} />
           )}
 
-          {task.surface === 'mark_done' && !beliefProbe && (
+          {task.surface === 'mark_done' && iatProbe && (
+            <IatLiteProbe
+              claim={extractQuotedClaim(task.title)}
+              submitting={submitting}
+              onSubmit={(latencyMs, choice) => handleMarkDone({ latencyMs, choice })}
+            />
+          )}
+
+          {task.surface === 'mark_done' && !beliefProbe && !iatProbe && (
             <button
-              onClick={handleMarkDone}
+              onClick={() => handleMarkDone()}
               disabled={submitting}
               style={{
                 width: '100%', padding: '12px',
@@ -2011,10 +2122,18 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
           )}
 
           {task.surface === 'decree' && beliefProbe && (
-            <BeliefSliderProbe value={beliefSlider} onChange={setBeliefSlider} onSubmit={handleMarkDone} submitting={submitting} />
+            <BeliefSliderProbe value={beliefSlider} onChange={setBeliefSlider} onSubmit={() => handleMarkDone()} submitting={submitting} />
           )}
 
-          {task.surface === 'decree' && !beliefProbe && (
+          {task.surface === 'decree' && iatProbe && (
+            <IatLiteProbe
+              claim={extractQuotedClaim(task.title)}
+              submitting={submitting}
+              onSubmit={(latencyMs, choice) => handleMarkDone({ latencyMs, choice })}
+            />
+          )}
+
+          {task.surface === 'decree' && !beliefProbe && !iatProbe && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {/* The task tells her to REPORT back — so give her somewhere to do it.
                   Her words land in her own-words corpus (key_admissions), which is
@@ -2035,7 +2154,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
                 }}
               />
               <button
-                onClick={handleMarkDone}
+                onClick={() => handleMarkDone()}
                 disabled={submitting}
                 style={{
                   width: '100%', padding: '12px',

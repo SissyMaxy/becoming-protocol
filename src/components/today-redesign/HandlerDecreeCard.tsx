@@ -30,6 +30,7 @@ const PROOF_LABEL: Record<string, string> = {
   voice_pitch_sample: 'voice drill',
   device_state: 'device',
   belief_slider: 'rate it',
+  assoc_latency: 'tap test',
   none: '—',
 };
 
@@ -42,6 +43,21 @@ function parseBeliefProbeTrigger(triggerSource: string | null): { targetId: stri
   if (!triggerSource) return null;
   const m = /^recon_belief_(baseline|measure):([0-9a-f-]{36})$/.exec(triggerSource);
   return m ? { targetId: m[2], isBaseline: m[1] === 'baseline' } : null;
+}
+
+// Same pattern, for the assoc_latency (IAT-lite) instrument.
+function parseIatProbeTrigger(triggerSource: string | null): { targetId: string; isBaseline: boolean } | null {
+  if (!triggerSource) return null;
+  const m = /^recon_iat_(baseline|measure):([0-9a-f-]{36})$/.exec(triggerSource);
+  return m ? { targetId: m[2], isBaseline: m[1] === 'baseline' } : null;
+}
+
+// The orchestrator's IAT edicts always embed the bare claim in quotes; pull
+// just that out so the tap-test reveal is a clean stimulus, not buried in
+// Mommy's surrounding sentence.
+function extractQuotedClaim(edict: string): string {
+  const m = /"([^"]+)"/.exec(edict);
+  return m ? m[1] : edict;
 }
 
 const PROOF_ICON: Record<string, string> = {
@@ -65,6 +81,9 @@ export function HandlerDecreeCard() {
   // Tracks which decree row is currently showing the inline photo widget
   const [photoOpenId, setPhotoOpenId] = useState<string | null>(null);
   const [sliders, setSliders] = useState<Record<string, number>>({});
+  // decree id -> performance.now() timestamp of the IAT-lite reveal, for
+  // latency measurement; absent = not yet revealed for that card.
+  const [iatShownAt, setIatShownAt] = useState<Record<string, number>>({});
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -129,6 +148,38 @@ export function HandlerDecreeCard() {
     setSliders(s => { const c = { ...s }; delete c[decree.id]; return c; });
     load();
     window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'decree_belief', id: decree.id } }));
+  };
+
+  const submitIat = async (decree: Decree, choice: 'agree' | 'disagree') => {
+    const probe = parseIatProbeTrigger(decree.trigger_source);
+    const shownAt = iatShownAt[decree.id];
+    if (!user?.id || !probe || !shownAt) return;
+    const latencyMs = Math.round(performance.now() - shownAt);
+    setSubmittingId(decree.id);
+    // Record the measurement first — a failed write should never masquerade
+    // as a fulfilled decree with no data behind it (no baseline, no claim).
+    const { error } = await supabase.rpc('recon_record_measurement_and_advance', {
+      p_user: user.id,
+      p_target: probe.targetId,
+      p_indicator: 'assoc_latency',
+      p_value: latencyMs,
+      p_method: 'iat_lite',
+      p_is_baseline: probe.isBaseline,
+      p_raw: { choice, latency_ms: latencyMs, probe: 'decree_card_iat_probe' },
+    });
+    if (error) {
+      console.error('[HandlerDecreeCard] IAT probe measurement failed:', error.message);
+      setSubmittingId(null);
+      return;
+    }
+    await supabase.from('handler_decrees').update({
+      status: 'fulfilled',
+      fulfilled_at: new Date().toISOString(),
+    }).eq('id', decree.id);
+    setSubmittingId(null);
+    setIatShownAt(s => { const c = { ...s }; delete c[decree.id]; return c; });
+    load();
+    window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'decree_iat', id: decree.id } }));
   };
 
   if (items.length === 0) return null;
@@ -204,6 +255,53 @@ export function HandlerDecreeCard() {
                   {submittingId === d.id ? '…' : 'Tell Mommy'}
                 </button>
               </div>
+            ) : d.proof_type === 'assoc_latency' ? (
+              iatShownAt[d.id] ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <p style={{
+                    fontSize: 13, color: '#f2e9e6', textAlign: 'center', lineHeight: 1.4,
+                    padding: '10px', border: '1px solid #7a5a2a', borderRadius: 6, margin: 0,
+                  }}>
+                    "{extractQuotedClaim(d.edict)}"
+                  </p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <button
+                      onClick={() => submitIat(d, 'agree')}
+                      disabled={submittingId === d.id}
+                      style={{
+                        padding: '10px', borderRadius: 5, border: 'none',
+                        background: '#e6bd80', color: '#1f1008', fontWeight: 700,
+                        fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                      }}
+                    >
+                      agree
+                    </button>
+                    <button
+                      onClick={() => submitIat(d, 'disagree')}
+                      disabled={submittingId === d.id}
+                      style={{
+                        padding: '10px', borderRadius: 5, border: '1px solid #7a5a2a',
+                        background: 'transparent', color: '#9c8590', fontWeight: 700,
+                        fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                      }}
+                    >
+                      disagree
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setIatShownAt(s => ({ ...s, [d.id]: performance.now() }))}
+                  disabled={submittingId === d.id}
+                  style={{
+                    padding: '7px 14px', borderRadius: 5, border: 'none',
+                    background: '#e6bd80', color: '#1f1008', fontWeight: 600,
+                    fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  start — read it, then tap fast
+                </button>
+              )
             ) : photoOpenId === d.id && ['photo','video','audio','voice_pitch_sample'].includes(d.proof_type) ? (
               <PhotoUploadWidget
                 verificationType="freeform"
