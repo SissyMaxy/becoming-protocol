@@ -87,3 +87,8 @@ nul
 scripts/handler-regression/centrality-report.md
 scripts/handler-regression/cohesion-report.md
 scripts/handler-regression/coverage-report.md
+
+# Claude Code session lock — transient per-session {sessionId,pid,procStart,
+# acquiredAt} state, rewritten by every session that touches scheduling.
+# Same perpetual-dirty-tree class as the audit reports above.
+.claude/scheduled_tasks.lock
