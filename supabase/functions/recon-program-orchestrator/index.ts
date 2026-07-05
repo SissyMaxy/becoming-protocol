@@ -31,7 +31,7 @@ async function issueFocus(s: Sb, user: string, slug: string, edict: string, proo
   const src = triggerSource ?? `recon_focus:${slug}`
   const { data: ex } = await s.from('handler_decrees')
     .select('id, deadline, trigger_source').eq('user_id', user).eq('status', 'active')
-    .or('trigger_source.like.recon_focus:%,trigger_source.like.recon_belief_baseline:%,trigger_source.like.recon_belief_measure:%,trigger_source.like.recon_iat_baseline:%,trigger_source.like.recon_iat_measure:%,trigger_source.like.recon_reconsolidate:%')
+    .or('trigger_source.like.recon_focus:%,trigger_source.like.recon_belief_baseline:%,trigger_source.like.recon_belief_measure:%,trigger_source.like.recon_iat_baseline:%,trigger_source.like.recon_iat_measure:%,trigger_source.like.recon_reconsolidate:%,trigger_source.like.recon_rep:%')
     .limit(1).maybeSingle()
   if (ex) {
     // Already a live recon-lane task — keep exactly one. Refresh deadline if expired.
@@ -146,7 +146,7 @@ async function fetchTargetDecreeRate(s: Sb, user: string, targetId: string, slug
   const { data } = await s.from('handler_decrees')
     .select('status').eq('user_id', user).gte('created_at', since)
     .in('status', ['fulfilled', 'missed'])
-    .or(`trigger_source.eq.recon_focus:${slug},trigger_source.like.recon_belief_baseline:${targetId}%,trigger_source.like.recon_belief_measure:${targetId}%,trigger_source.like.recon_iat_baseline:${targetId}%,trigger_source.like.recon_iat_measure:${targetId}%`)
+    .or(`trigger_source.eq.recon_focus:${slug},trigger_source.like.recon_belief_baseline:${targetId}%,trigger_source.like.recon_belief_measure:${targetId}%,trigger_source.like.recon_iat_baseline:${targetId}%,trigger_source.like.recon_iat_measure:${targetId}%,trigger_source.like.recon_rep:${slug}:%`)
   const rows = (data ?? []) as { status: string }[]
   const total = rows.length
   const missed = rows.filter(r => r.status === 'missed').length
@@ -223,11 +223,13 @@ Deno.serve(async (req: Request) => {
 
     // A due retrieval rep, if the reinforce phase has one.
     let repPrompt: string | null = null
+    let repId: string | null = null
     if (phase === 'reinforce') {
       const { data: rep } = await s.from('recon_rep_schedule')
         .select('id, prompt').eq('target_id', picked.id).lte('next_due_at', new Date().toISOString())
         .order('next_due_at', { ascending: true }).limit(1).maybeSingle()
       repPrompt = rep?.prompt ?? null
+      repId = rep?.id ?? null
     }
 
     // Adaptive intensity (§3.4): read this target's trailing engagement, step
@@ -261,6 +263,12 @@ Deno.serve(async (req: Request) => {
     if (phase === 'measure' && picked.indicator_kind && PROBE_TRIGGER_PREFIX[picked.indicator_kind]) {
       task = probeMeasureEdict(picked.indicator_kind, picked.claim_text)
       triggerSource = `${PROBE_TRIGGER_PREFIX[picked.indicator_kind]}_measure:${picked.id}`
+    } else if (phase === 'reinforce' && !gentle && repPrompt && repId) {
+      // This task IS the cued-retrieval card (phaseTask's reinforce+!gentle+
+      // repPrompt branch) — tag it so HandlerDecreeCard grades the answer back
+      // into recon_rep_schedule's SM-2-lite scheduler instead of a plain
+      // checkbox (closes the dead-scheduler gap: mig 668, recon_rep_grade).
+      triggerSource = `recon_rep:${picked.slug}:${repId}`
     }
     const status = await issueFocus(s, user, picked.slug, task.edict, task.proof, 20, triggerSource)
     results.push({ user, focus_target: picked.slug, phase, task: status, intensity, gentle })

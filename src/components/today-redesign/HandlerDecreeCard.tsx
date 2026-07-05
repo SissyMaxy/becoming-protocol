@@ -52,6 +52,16 @@ function parseIatProbeTrigger(triggerSource: string | null): { targetId: string;
   return m ? { targetId: m[2], isBaseline: m[1] === 'baseline' } : null;
 }
 
+// recon-program-orchestrator tags a reinforce-phase cued-retrieval card with
+// `recon_rep:<slug>:<rep_id>` — parse the rep id so a self-graded answer
+// (nailed it / blanked) can feed recon_rep_grade's SM-2-lite scheduler instead
+// of vanishing into a plain "Fulfilled" checkbox (mig 668).
+function parseRepTrigger(triggerSource: string | null): { repId: string } | null {
+  if (!triggerSource) return null;
+  const m = /^recon_rep:[^:]+:([0-9a-f-]{36})$/.exec(triggerSource);
+  return m ? { repId: m[1] } : null;
+}
+
 // The orchestrator's IAT edicts always embed the bare claim in quotes; pull
 // just that out so the tap-test reveal is a clean stimulus, not buried in
 // Mommy's surrounding sentence.
@@ -182,6 +192,34 @@ export function HandlerDecreeCard() {
     window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'decree_iat', id: decree.id } }));
   };
 
+  const submitRepGrade = async (decree: Decree, correct: boolean) => {
+    const rep = parseRepTrigger(decree.trigger_source);
+    if (!user?.id || !rep) return;
+    setSubmittingId(decree.id);
+    const note = (notes[decree.id] || '').trim();
+    // Grade the retrieval card first — a failed write should never masquerade
+    // as a fulfilled decree with no signal behind it (§2.2: correct expands the
+    // interval, a miss/blank contracts it; the scheduler is only as honest as
+    // this write).
+    const { error } = await supabase.rpc('recon_rep_grade', {
+      p_rep_id: rep.repId, p_user: user.id, p_correct: correct,
+    });
+    if (error) {
+      console.error('[HandlerDecreeCard] rep grade failed:', error.message);
+      setSubmittingId(null);
+      return;
+    }
+    await supabase.from('handler_decrees').update({
+      status: 'fulfilled',
+      fulfilled_at: new Date().toISOString(),
+      proof_payload: note ? { note } : null,
+    }).eq('id', decree.id);
+    setSubmittingId(null);
+    setNotes(n => { const c = { ...n }; delete c[decree.id]; return c; });
+    load();
+    window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'decree_rep', id: decree.id } }));
+  };
+
   if (items.length === 0) return null;
 
   return (
@@ -302,6 +340,44 @@ export function HandlerDecreeCard() {
                   start — read it, then tap fast
                 </button>
               )
+            ) : parseRepTrigger(d.trigger_source) ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <textarea
+                  value={note}
+                  onChange={e => setNotes(n => ({ ...n, [d.id]: e.target.value }))}
+                  placeholder="or add a note (optional)"
+                  rows={2}
+                  style={{
+                    width: '100%', background: '#0a0709', border: '1px solid #2b1d29',
+                    borderRadius: 5, padding: '7px 9px', fontSize: 11.5, color: '#f2e9e6',
+                    fontFamily: 'inherit', resize: 'vertical',
+                  }}
+                />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <button
+                    onClick={() => submitRepGrade(d, true)}
+                    disabled={submittingId === d.id}
+                    style={{
+                      padding: '10px', borderRadius: 5, border: 'none',
+                      background: '#e6bd80', color: '#1f1008', fontWeight: 700,
+                      fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                    }}
+                  >
+                    {submittingId === d.id ? '…' : 'nailed it'}
+                  </button>
+                  <button
+                    onClick={() => submitRepGrade(d, false)}
+                    disabled={submittingId === d.id}
+                    style={{
+                      padding: '10px', borderRadius: 5, border: '1px solid #7a5a2a',
+                      background: 'transparent', color: '#9c8590', fontWeight: 700,
+                      fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                    }}
+                  >
+                    blanked
+                  </button>
+                </div>
+              </div>
             ) : photoOpenId === d.id && ['photo','video','audio','voice_pitch_sample'].includes(d.proof_type) ? (
               <PhotoUploadWidget
                 verificationType="freeform"

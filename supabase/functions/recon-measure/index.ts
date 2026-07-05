@@ -6,9 +6,11 @@
 // "zoom out at iteration 2" rule). Measurement never asserts — Mommy's voice
 // never cites these numbers; they only move the machine.
 //
-// Only genuinely-computable behavioral indicators are measured. Indicators that
-// need a probe UI (belief_slider, assoc_latency) are skipped until that ships —
-// no baseline, no claim. This function writes NO user-facing copy, so it runs
+// Only genuinely-computable behavioral indicators are measured here. belief_slider
+// and assoc_latency are self-graded probes wired through the decree card instead
+// (recon_record_measurement_and_advance, migs 656/667) — this cron never sees
+// them. self_ref_drift needs an NLP delta over corpus text and is still unshipped
+// — no baseline, no claim. This function writes NO user-facing copy, so it runs
 // without the conditioning gate; program advancement self-gates (recon_program_advance
 // calls conditioning_gate internally).
 
@@ -25,7 +27,7 @@ const MIN_SAMPLES = 3            // don't claim a baseline off too little data
 const PROGRESS_EPSILON = 0.02    // minimum normalized delta to count as progress
 
 // Returns { value, method, raw } or null when not enough data to be honest.
-async function computeIndicator(s: Sb, user: string, kind: string): Promise<{ value: number; method: string; raw: unknown } | null> {
+async function computeIndicator(s: Sb, user: string, kind: string, targetId: string): Promise<{ value: number; method: string; raw: unknown } | null> {
   if (kind === 'voice_pitch_drift') {
     const since = new Date(Date.now() - 30 * 864e5).toISOString()
     const { data } = await s.from('voice_progress_samples')
@@ -51,8 +53,22 @@ async function computeIndicator(s: Sb, user: string, kind: string): Promise<{ va
     const mean = deltas.reduce((a: number, b: number) => a + b, 0) / deltas.length
     return { value: Math.round(mean * 100) / 100, method: `mean arousal lift (30min−event) over ${deltas.length} events (30d)`, raw: { n: deltas.length } }
   }
-  // belief_slider / assoc_latency / self_ref_drift / habit_adherence:
-  // need a probe screen or per-target obligation linkage not yet shipped.
+  if (kind === 'habit_adherence') {
+    // §2.10: habit targets drill an if-then plan as retrieval-practice cards
+    // (recon_rep_schedule); reps/lapses on those cards ARE the adherence signal
+    // — graded via recon_rep_grade whenever the reinforce-phase card is answered.
+    const { data } = await s.from('recon_rep_schedule')
+      .select('reps, lapses').eq('user_id', user).eq('target_id', targetId)
+    const rows = (data ?? []) as { reps: number; lapses: number }[]
+    const totalReps = rows.reduce((a, r) => a + (r.reps ?? 0), 0)
+    const totalLapses = rows.reduce((a, r) => a + (r.lapses ?? 0), 0)
+    const attempts = totalReps + totalLapses
+    if (attempts < MIN_SAMPLES) return null
+    const rate = totalReps / attempts
+    return { value: Math.round(rate * 1000) / 1000, method: `reps/(reps+lapses) over ${rows.length} retrieval card(s), ${attempts} graded attempt(s)`, raw: { totalReps, totalLapses, cards: rows.length } }
+  }
+  // belief_slider / assoc_latency / self_ref_drift:
+  // self-graded probe (decree card) or NLP delta, not this cron's job.
   return null
 }
 
@@ -67,7 +83,7 @@ Deno.serve(async (req: Request) => {
       .select('id, slug, indicator_kind, baseline_value, baseline_captured_at, target_direction, status')
       .eq('user_id', user).in('status', ['proposed', 'active', 'consolidating'])
     for (const t of (targets ?? [])) {
-      const comp = await computeIndicator(s, user, t.indicator_kind)
+      const comp = await computeIndicator(s, user, t.indicator_kind, t.id)
       if (!comp) { skipped++; continue }
 
       // Baseline capture for anything not yet baselined.
