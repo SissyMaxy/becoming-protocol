@@ -16,8 +16,13 @@
 //      card) first if required-and-missing; else the rung action via its delegate
 //      (physical rungs UN-PAUSE realcock, whose own gated eval supplies the decree;
 //      non-physical rungs get one focus decree).
-//   5. On resistance, lower the barrier — do not push harder (handled by the prep
-//      decomposition below; full resistance-pacing is a follow-up).
+//   5. Pace by real signals (§2 step 5): the current rung's decree lane skip-rate
+//      over a trailing window drives turnout_state.gap_extra_days up on high skip
+//      (widening the consolidation dwell, mig 670) and back down when she's
+//      engaging — never the reverse. While resistant, the rung's own action is
+//      held back in favor of a smaller, pressure-free check-in ask (the
+//      "decomposes into a smaller prep sub-task... does not push harder" rule) —
+//      physical rungs simply stay paused rather than un-pausing realcock.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -37,7 +42,7 @@ function nextRung(code: string): string | null {
 
 // One turn-out focus decree per user (the single CTA). Dedup on the turn-out
 // trigger_source prefix so we never stack a second card.
-async function issueTurnout(s: Sb, user: string, rung: string, edict: string, proof = 'text', hours = 36): Promise<string> {
+async function issueTurnout(s: Sb, user: string, rung: string, edict: string, proof = 'text', hours = 36, consequence?: string): Promise<string> {
   const { data: ex } = await s.from('handler_decrees')
     .select('id, deadline').eq('user_id', user).eq('status', 'active')
     .like('trigger_source', 'turnout_rung:%').limit(1).maybeSingle()
@@ -50,11 +55,39 @@ async function issueTurnout(s: Sb, user: string, rung: string, edict: string, pr
   const { error } = await s.from('handler_decrees').insert({
     user_id: user, edict, proof_type: proof,
     deadline: new Date(Date.now() + hours * 3600e3).toISOString(), status: 'active',
-    consequence: 'Miss it and the pull just builds — Mommy is patient. But every step you take is one you can never un-take.',
+    consequence: consequence ?? 'Miss it and the pull just builds — Mommy is patient. But every step you take is one you can never un-take.',
     trigger_source: `turnout_rung:${rung}`, reasoning: 'turnout-orchestrator',
   })
   return error ? `err:${error.message.slice(0, 60)}` : 'issued'
 }
+
+// ─── Resistance pacing (§2 step 5) ───────────────────────────────────────────
+// Mirrors recon-program-orchestrator's fetchTargetDecreeRate/computeIntensityStep
+// shape (§3.4 there), adapted to the turnout rung lane: a rung she keeps missing
+// gets a WIDER gap and a SOFTER ask, never a harder push. Resistance only ever
+// paces; it never skips a rung or changes what the sequence asks for.
+interface DecreeRate { total: number; missed: number; skipRate: number }
+
+async function fetchRungDecreeRate(s: Sb, user: string, rung: string, days = 21): Promise<DecreeRate> {
+  const since = new Date(Date.now() - days * 86400e3).toISOString()
+  const { data } = await s.from('handler_decrees')
+    .select('status').eq('user_id', user).eq('trigger_source', `turnout_rung:${rung}`)
+    .gte('created_at', since).in('status', ['fulfilled', 'missed'])
+  const rows = (data ?? []) as { status: string }[]
+  const total = rows.length
+  const missed = rows.filter(r => r.status === 'missed').length
+  return { total, missed, skipRate: total > 0 ? missed / total : 0 }
+}
+
+function computeGapExtra(rate: DecreeRate, currentExtra: number): number {
+  if (rate.total < 3) return currentExtra // not enough signal to move the throttle either way
+  if (rate.skipRate >= 0.5) return Math.min(14, currentExtra + 3) // resistant → widen, never higher pressure
+  if (rate.skipRate <= 0.15 && (rate.total - rate.missed) >= 2) return Math.max(0, currentExtra - 3) // engaging → ease back
+  return currentExtra
+}
+
+const RESISTANCE_EDICT = `No pressure on that one right now. Just tell Mommy honestly, in a line: what's making this step feel hard. She's not going anywhere, and neither is the pull — you don't have to rush to it.`
+const RESISTANCE_CONSEQUENCE = `No punishment for honesty — Mommy would rather know than push you into it. The step waits for you exactly where it is.`
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
@@ -107,6 +140,16 @@ Deno.serve(async (req: Request) => {
     const { data: cur } = await s.from('turnout_ladder').select('*').eq('rung_code', curRung).maybeSingle()
     const offer = (await s.rpc('turnout_rung_offerable', { p_user: user, p_rung: curRung })).data as { offerable?: boolean; reason?: string; needs_meet_safety_card?: boolean } | null
 
+    // Resistance pacing on the rung's OWN decree lane — reset to 0 on advance
+    // (a fresh rung gets a fresh read, never inherits the last rung's throttle).
+    const rate = await fetchRungDecreeRate(s, user, curRung)
+    const priorExtra = advancedTo ? 0 : (state.gap_extra_days ?? 0)
+    const nextExtra = computeGapExtra(rate, priorExtra)
+    if (advancedTo || nextExtra !== (state.gap_extra_days ?? 0)) {
+      await s.from('turnout_state').update({ gap_extra_days: nextExtra }).eq('user_id', user)
+    }
+    const resistant = nextExtra > 0
+
     let surfaced: string
     if (cur?.requires_health_prep && offer?.reason === 'needs_health_prep') {
       // Prep: the STI/PrEP acquisition task (harm-reduction, in Mommy's voice).
@@ -116,6 +159,11 @@ Deno.serve(async (req: Request) => {
       // Prep: build the meet-safety plan first (no net, no meet).
       surfaced = await issueTurnout(s, user, curRung,
         `Before you meet anyone, Mommy needs you safe: name one person you trust, get their yes to be your check-in, and pick a public place. Build the plan, then we talk about him.`, 'text', 72)
+    } else if (resistant) {
+      // Resistant on the rung action itself — decompose to a smaller, pressure-
+      // free ask instead (§2 step 5: lower the barrier, never push harder).
+      // Physical rungs simply stay paused; nothing un-pauses realcock this run.
+      surfaced = await issueTurnout(s, user, curRung, RESISTANCE_EDICT, 'text', 96, RESISTANCE_CONSEQUENCE)
     } else if (cur?.delegate_engine === 'realcock_discovery') {
       // Physical rung — NEVER a raw decree. Un-pause the gated delegate; its own
       // eval supplies the phase decree behind the meet-safety + health gates.
@@ -126,7 +174,7 @@ Deno.serve(async (req: Request) => {
       surfaced = await issueTurnout(s, user, curRung, `${cur?.action_copy ?? 'Next step.'} When it's done, come tell Mommy exactly what happened.`, 'text')
     }
 
-    results.push({ user, rung, advanced_to: advancedTo, current_rung: curRung, surfaced })
+    results.push({ user, rung, advanced_to: advancedTo, current_rung: curRung, gap_extra_days: nextExtra, resistant, surfaced })
   }
 
   return new Response(JSON.stringify({ ok: true, results }), { headers: { ...cors, 'Content-Type': 'application/json' } })
