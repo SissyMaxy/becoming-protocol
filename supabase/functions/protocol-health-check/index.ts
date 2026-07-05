@@ -119,6 +119,9 @@ const GENERATORS: GeneratorSpec[] = [
   { name: 'recon_target_author', function_name: 'recon-target-author', expected_cadence_minutes: 10080, output_table: 'reconditioning_targets', edge_function: true, conditional: true },
   { name: 'recon_sleep_cue_builder', function_name: 'recon-sleep-cue-builder', expected_cadence_minutes: 1440, output_table: 'recon_sleep_cue_program', edge_function: true, conditional: true },
   { name: 'recon_commitment_ladder', function_name: 'recon-commitment-ladder', expected_cadence_minutes: 1440, output_table: 'recon_commitments', edge_function: true, conditional: true },
+  // self_ref_drift scorer (mig 669): only spends calls when a live
+  // self_ref_drift target exists, so zero rows most days is expected quiet.
+  { name: 'recon_self_ref_scorer', function_name: 'recon-self-ref-scorer', expected_cadence_minutes: 1440, output_table: 'self_reference_analysis', edge_function: true, conditional: true },
 ];
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);

@@ -9,10 +9,12 @@
 // Only genuinely-computable behavioral indicators are measured here. belief_slider
 // and assoc_latency are self-graded probes wired through the decree card instead
 // (recon_record_measurement_and_advance, migs 656/667) — this cron never sees
-// them. self_ref_drift needs an NLP delta over corpus text and is still unshipped
-// — no baseline, no claim. This function writes NO user-facing copy, so it runs
-// without the conditioning gate; program advancement self-gates (recon_program_advance
-// calls conditioning_gate internally).
+// them. self_ref_drift is an NLP delta over corpus text, pre-computed by
+// recon-self-ref-scorer into self_reference_analysis (mig 669) — this cron
+// reads that table's rolling counts, it never calls a classifier itself. This
+// function writes NO user-facing copy, so it runs without the conditioning gate;
+// program advancement self-gates (recon_program_advance calls conditioning_gate
+// internally).
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -67,8 +69,28 @@ async function computeIndicator(s: Sb, user: string, kind: string, targetId: str
     const rate = totalReps / attempts
     return { value: Math.round(rate * 1000) / 1000, method: `reps/(reps+lapses) over ${rows.length} retrieval card(s), ${attempts} graded attempt(s)`, raw: { totalReps, totalLapses, cards: rows.length } }
   }
-  // belief_slider / assoc_latency / self_ref_drift:
-  // self-graded probe (decree card) or NLP delta, not this cron's job.
+  if (kind === 'self_ref_drift') {
+    // recon-self-ref-scorer (mig 669) pre-scores her own corpus text into
+    // self_reference_analysis; the indicator is the mean identity-consistency
+    // ratio across recent samples — (feminine-identity mentions minus
+    // masculine-performance mentions) / total mentions, in [-1, 1].
+    const since = new Date(Date.now() - 60 * 864e5).toISOString()
+    const { data } = await s.from('self_reference_analysis')
+      .select('maxy_first_person, david_first_person, feminine_pronouns, masculine_pronouns')
+      .eq('user_id', user).gte('created_at', since)
+      .order('created_at', { ascending: false }).limit(100)
+    const rows = (data ?? []) as { maxy_first_person: number; david_first_person: number; feminine_pronouns: number; masculine_pronouns: number }[]
+    if (rows.length < MIN_SAMPLES) return null
+    const ratios = rows.map((r) => {
+      const pos = (r.maxy_first_person ?? 0) + (r.feminine_pronouns ?? 0)
+      const neg = (r.david_first_person ?? 0) + (r.masculine_pronouns ?? 0)
+      const total = pos + neg
+      return total > 0 ? (pos - neg) / total : 0
+    })
+    const mean = ratios.reduce((a, b) => a + b, 0) / ratios.length
+    return { value: Math.round(mean * 1000) / 1000, method: `mean identity-consistency ratio over ${rows.length} self_reference_analysis sample(s) (60d)`, raw: { n: rows.length } }
+  }
+  // belief_slider / assoc_latency: self-graded probe (decree card), not this cron's job.
   return null
 }
 
