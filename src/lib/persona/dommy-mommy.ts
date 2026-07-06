@@ -241,6 +241,22 @@ export function chastityToPhrase(locked: boolean, streakDays: number | null | un
   return "you've been Mama's locked-up boy forever now";
 }
 
+/**
+ * Descent-depth tier (0-5, derived from trance/reconditioning completion —
+ * see src/lib/reconditioning/descentDepth.ts) → sensory phrase. Never a
+ * number, never a day-count (DESIGN_RECONDITIONING_ENGINE §4: "the descent
+ * copy is translated to sensory phrases, not metrics").
+ */
+export function descentTierToPhrase(tier: number | null | undefined): string {
+  const t = Math.max(0, Math.min(5, Math.round(Number(tier ?? 0))));
+  if (t <= 0) return "you're still floating at the surface";
+  if (t === 1) return "you're starting to sink when Mama talks to you";
+  if (t === 2) return "you go under easier for me now";
+  if (t === 3) return "the descent has its own rhythm — you don't fight it anymore";
+  if (t === 4) return "you're deep, baby — the surface is a memory up there";
+  return "you're all the way under now. this is just where you live";
+}
+
 /** "7 hours silent" / "150h since last practice" → quiet-time phrase. */
 export function silentHoursToPhrase(hours: number | null | undefined): string {
   const h = Math.max(0, Math.round(Number(hours ?? 0)));
