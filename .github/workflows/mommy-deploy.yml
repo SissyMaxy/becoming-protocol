@@ -201,3 +201,37 @@ jobs:
             echo "::error::One or more edge function deploys failed (see warnings above)."
             exit 1
           fi
+
+      - name: Sync pg_cron job registrations (pgcron-setup)
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          # pgcron-setup (supabase/functions/pgcron-setup/index.ts) is the ONLY
+          # live mechanism that registers this project's http-post pg_cron jobs
+          # (its JOBS list) — app.settings GUCs are null, so the old
+          # migration-scheduled crons never resolved a URL. It's idempotent
+          # (cron.schedule upserts by job name), but until now nothing called it
+          # automatically: every job added to JOBS since mig 639 (recon-program-
+          # orchestrator, turnout-orchestrator, recon-commitment-ladder,
+          # recon-self-ref-scorer, ...) needed a manual curl to actually start
+          # firing in Postgres. A generator can look fully shipped — migration
+          # applied, function deployed, health-check green (several of these
+          # have no output_table, so silence never even warns) — and still never
+          # run once. Re-sync on every deploy so the live cron schedule can never
+          # drift from the code.
+          if [[ -z "${SUPABASE_SERVICE_ROLE_KEY}" ]]; then
+            echo "::warning::SUPABASE_SERVICE_ROLE_KEY not set — skipping pgcron-setup sync."
+          else
+            code=$(curl -sS -o /tmp/pgcron_resp.json -w '%{http_code}' -X POST \
+              "https://atevwvexapiykchvqvhm.supabase.co/functions/v1/pgcron-setup" \
+              -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+              -H "Content-Type: application/json" \
+              -d '{}' -m 60) || code=000
+            if [[ "$code" -ge 400 || "$code" == "000" ]]; then
+              echo "::warning::pgcron-setup sync failed (HTTP $code): $(cat /tmp/pgcron_resp.json 2>/dev/null | head -c 500)"
+              echo "::warning::pg_cron job registrations may be stale — invoke pgcron-setup manually."
+            else
+              echo "pgcron-setup sync ok (HTTP $code)."
+            fi
+          fi
