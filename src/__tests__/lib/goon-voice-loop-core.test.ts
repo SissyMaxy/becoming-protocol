@@ -106,4 +106,29 @@ describe('buildGoonLoopScript', () => {
   it('defaults the loop count', () => {
     expect(buildGoonLoopScript().loopCount).toBeGreaterThan(1);
   });
+
+  it('weaves in the Focus target claim when one is running, and stays clean', () => {
+    const claim = "The want isn't mine to negotiate. It's Mommy's, and I obey it.";
+    const { script, teaser } = buildGoonLoopScript({ femName: 'Sophie', targetClaim: claim });
+    expect(script).toContain(claim);
+    expect(scoreCorny(script).hits).toEqual([]);
+    expect(mommyVoiceCleanup(script)).toBe(script);
+    expect(mommyVoiceCleanup(teaser)).toBe(teaser);
+    expect(scoreCorny(teaser).hits).toEqual([]);
+  });
+
+  it('weaves in the armed anchor phrase alongside a target claim, and stays clean', () => {
+    const claim = 'My real voice is the soft one.';
+    const anchor = 'sink soft for me now';
+    const { script } = buildGoonLoopScript({ femName: null, targetClaim: claim, anchorPhrase: anchor });
+    expect(script).toContain(claim);
+    expect(script).toContain(anchor);
+    expect(scoreCorny(script).hits).toEqual([]);
+    expect(mommyVoiceCleanup(script)).toBe(script);
+  });
+
+  it('falls back to the generic affirmation with no Focus target running', () => {
+    const { script } = buildGoonLoopScript({ femName: null });
+    expect(script).toContain('you are mine, and you are not going anywhere');
+  });
 });
