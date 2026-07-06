@@ -35,6 +35,8 @@ export function LifeAsWomanSettings({ userId, onSettingsChanged }: Props) {
         kink_curriculum_enabled: false, kink_curriculum_intensity: 2,
         content_editor_enabled: false, content_editor_intensity: 2,
         cross_platform_consistency_enabled: false,
+        recondition_enabled: false, recon_sleep_enabled: false,
+        turnout_enabled: false,
       })
       setLoading(false)
     })
@@ -128,6 +130,21 @@ export function LifeAsWomanSettings({ userId, onSettingsChanged }: Props) {
             { label: 'Cross-platform consistency lint', on: settings.cross_platform_consistency_enabled, onChange: v => patch({ cross_platform_consistency_enabled: v }) },
           ]}
         />
+        <PlainSystemRow
+          label="Reconditioning engine"
+          sublabel="Mommy picks one measurable belief/habit target at a time and works it through trance, spaced retrieval, and reconsolidation sessions. Change is measured, never just asserted. No punishment for a missed rep."
+          on={settings.recondition_enabled}
+          onToggle={v => patch({ recondition_enabled: v })}
+          extras={[
+            { label: 'Sleep cue replay (hardest opt-in — plays back phrases already installed while awake, low-volume, during sleep; never introduces anything new)', on: settings.recon_sleep_enabled, onChange: v => patch({ recon_sleep_enabled: v }) },
+          ]}
+        />
+        <PlainSystemRow
+          label="Turn-out ladder"
+          sublabel="Sequences the existing escalation systems (funnel, meet safety, revenue) one small step at a time instead of each firing on its own. Meet-safety and health-prep gates stay absolute and unaffected by this toggle."
+          on={settings.turnout_enabled}
+          onToggle={v => patch({ turnout_enabled: v })}
+        />
       </div>
     </div>
   )
@@ -144,6 +161,26 @@ function ToggleRow({ label, sublabel, on, onChange }: {
         {sublabel && <div style={{ color: '#888', fontSize: 12 }}>{sublabel}</div>}
       </div>
     </label>
+  )
+}
+
+function PlainSystemRow({ label, sublabel, on, onToggle, extras }: {
+  label: string; sublabel?: string;
+  on: boolean;
+  onToggle: (v: boolean) => void;
+  extras?: Array<{ label: string; on: boolean; onChange: (v: boolean) => void }>;
+}) {
+  return (
+    <div style={{ borderTop: '1px solid #222', padding: '12px 0' }}>
+      <ToggleRow label={label} sublabel={sublabel} on={on} onChange={onToggle} />
+      {extras && extras.length > 0 && (
+        <div style={{ marginLeft: 28, marginTop: 4, opacity: on ? 1 : 0.4, pointerEvents: on ? 'auto' : 'none' }}>
+          {extras.map((e, i) => (
+            <ToggleRow key={i} label={e.label} on={e.on} onChange={e.onChange} />
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
