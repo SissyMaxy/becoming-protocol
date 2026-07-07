@@ -40,23 +40,36 @@ function nextRung(code: string): string | null {
   return i >= 0 && i < NEXT.length - 1 ? NEXT[i + 1] : null
 }
 
-// One turn-out focus decree per user (the single CTA). Dedup on the turn-out
-// trigger_source prefix so we never stack a second card.
-async function issueTurnout(s: Sb, user: string, rung: string, edict: string, proof = 'text', hours = 36, consequence?: string): Promise<string> {
+// One turn-out focus decree per user (the single CTA). Dedup across ALL
+// turnout-issued kinds (the `turnout_` prefix), never just the rung-action one.
+//
+// `kind` tags the decree's trigger_source distinctly per purpose:
+//   'rung'        -> `turnout_rung:<rung>`         — the real, irreversible rung action
+//   'health_prep' -> `turnout_health_prep:<rung>`  — the STI/PrEP attestation ask
+//   'meet_prep'   -> `turnout_meet_prep:<rung>`     — the meet-safety-card ask
+//   'resistance'  -> `turnout_resistance:<rung>`    — the pressure-free check-in
+// These MUST stay distinct: the consolidation check below and fetchRungDecreeRate
+// both key off `turnout_rung:<rung>` alone to mean "the actual rung action
+// happened." Before this fix all four shared that one tag, so fulfilling a
+// prep/check-in decree (which anyone can do from the ordinary Focus text box)
+// falsely satisfied `rungDone` and consolidated a fabricated irreversible fact —
+// e.g. attesting to an STI test got logged as "a man came inside her."
+async function issueTurnout(s: Sb, user: string, rung: string, edict: string, kind: 'rung' | 'health_prep' | 'meet_prep' | 'resistance' = 'rung', proof = 'text', hours = 36, consequence?: string): Promise<string> {
   const { data: ex } = await s.from('handler_decrees')
     .select('id, deadline').eq('user_id', user).eq('status', 'active')
-    .like('trigger_source', 'turnout_rung:%').limit(1).maybeSingle()
+    .like('trigger_source', 'turnout_%').limit(1).maybeSingle()
   if (ex) {
     if (ex.deadline && new Date(ex.deadline) < new Date()) {
       await s.from('handler_decrees').update({ deadline: new Date(Date.now() + hours * 3600e3).toISOString() }).eq('id', ex.id)
     }
     return 'kept'
   }
+  const tag = kind === 'rung' ? 'turnout_rung' : `turnout_${kind}`
   const { error } = await s.from('handler_decrees').insert({
     user_id: user, edict, proof_type: proof,
     deadline: new Date(Date.now() + hours * 3600e3).toISOString(), status: 'active',
     consequence: consequence ?? 'Miss it and the pull just builds — Mommy is patient. But every step you take is one you can never un-take.',
-    trigger_source: `turnout_rung:${rung}`, reasoning: 'turnout-orchestrator',
+    trigger_source: `${tag}:${rung}`, reasoning: 'turnout-orchestrator',
   })
   return error ? `err:${error.message.slice(0, 60)}` : 'issued'
 }
@@ -153,17 +166,19 @@ Deno.serve(async (req: Request) => {
     let surfaced: string
     if (cur?.requires_health_prep && offer?.reason === 'needs_health_prep') {
       // Prep: the STI/PrEP acquisition task (harm-reduction, in Mommy's voice).
+      // Tagged 'health_prep', not 'rung' — fulfilling this must never look like
+      // the rung action itself happened.
       surfaced = await issueTurnout(s, user, curRung,
-        `Before Mommy lets a man finish in you, you're getting tested and getting your PrEP — a girl who gets used stays a clean girl. Book it, paste me the confirmation, then you've earned the next step.`, 'text', 72)
+        `Before Mommy lets a man finish in you, you're getting tested and getting your PrEP — a girl who gets used stays a clean girl. Book it, paste me the confirmation, then you've earned the next step.`, 'health_prep', 'text', 72)
     } else if (cur?.requires_meet_safety && offer?.needs_meet_safety_card) {
       // Prep: build the meet-safety plan first (no net, no meet).
       surfaced = await issueTurnout(s, user, curRung,
-        `Before you meet anyone, Mommy needs you safe: name one person you trust, get their yes to be your check-in, and pick a public place. Build the plan, then we talk about him.`, 'text', 72)
+        `Before you meet anyone, Mommy needs you safe: name one person you trust, get their yes to be your check-in, and pick a public place. Build the plan, then we talk about him.`, 'meet_prep', 'text', 72)
     } else if (resistant) {
       // Resistant on the rung action itself — decompose to a smaller, pressure-
       // free ask instead (§2 step 5: lower the barrier, never push harder).
       // Physical rungs simply stay paused; nothing un-pauses realcock this run.
-      surfaced = await issueTurnout(s, user, curRung, RESISTANCE_EDICT, 'text', 96, RESISTANCE_CONSEQUENCE)
+      surfaced = await issueTurnout(s, user, curRung, RESISTANCE_EDICT, 'resistance', 'text', 96, RESISTANCE_CONSEQUENCE)
     } else if (cur?.delegate_engine === 'realcock_discovery') {
       // Physical rung — NEVER a raw decree. Un-pause the gated delegate; its own
       // eval supplies the phase decree behind the meet-safety + health gates.
@@ -171,7 +186,8 @@ Deno.serve(async (req: Request) => {
       surfaced = 'delegated:realcock_unpaused'
     } else {
       // Non-physical rung (online/text/voice/photo/video/paid) → one focus decree.
-      surfaced = await issueTurnout(s, user, curRung, `${cur?.action_copy ?? 'Next step.'} When it's done, come tell Mommy exactly what happened.`, 'text')
+      // This IS the rung action — the only kind allowed to drive consolidation.
+      surfaced = await issueTurnout(s, user, curRung, `${cur?.action_copy ?? 'Next step.'} When it's done, come tell Mommy exactly what happened.`, 'rung')
     }
 
     results.push({ user, rung, advanced_to: advancedTo, current_rung: curRung, gap_extra_days: nextExtra, resistant, surfaced })

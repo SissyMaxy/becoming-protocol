@@ -217,6 +217,18 @@ function parseIatProbeTrigger(triggerSource: unknown): { targetId: string; isBas
   return m ? { targetId: m[2], isBaseline: m[1] === 'baseline' } : null;
 }
 
+// turnout-orchestrator tags the STI/PrEP health-prep ask `turnout_health_prep:<rung>`
+// (distinct from the real rung-action decree's `turnout_rung:<rung>` — DESIGN_TURNOUT_LADDER
+// §6.3's hard gate had a table + RPC to check it but nothing ever wrote a row, so
+// `turnout_health_prep_ok()` could never clear and this decree just re-fired forever).
+// This surface writes her pasted confirmation into `turnout_health_prep` BEFORE
+// fulfilling the decree, same fail-closed order as the belief/IAT probes above.
+function parseTurnoutHealthPrepTrigger(triggerSource: unknown): { rung: string } | null {
+  if (typeof triggerSource !== 'string') return null;
+  const m = /^turnout_health_prep:(.+)$/.exec(triggerSource);
+  return m ? { rung: m[1] } : null;
+}
+
 // recon-program-orchestrator's IAT-probe edicts always embed the bare claim in
 // quotes ("...gut reaction...: "${claim}""). Pull just that out so the reveal
 // step can show the claim in isolation, not buried in Mommy's surrounding
@@ -1196,6 +1208,24 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
             console.error('[FocusMode] IAT probe measurement failed:', measureErr.message);
             return;
           }
+        } else {
+          const healthPrep = parseTurnoutHealthPrepTrigger(task.meta?.trigger_source);
+          if (healthPrep) {
+            // Write the attestation FIRST — same fail-closed order as the probes
+            // above. No medical data, just her note + a timestamp; this is what
+            // turnout_health_prep_ok() checks before oral+/paid rungs are offered.
+            const note = confessText.trim();
+            if (note.length < 10) {
+              console.error('[FocusMode] health-prep attestation too short — not fulfilling');
+              return;
+            }
+            const { error: healthErr } = await supabase.from('turnout_health_prep')
+              .upsert({ user_id: user.id, attestation_note: note.slice(0, 2000), attested_at: nowIso });
+            if (healthErr) {
+              console.error('[FocusMode] health-prep attestation write failed:', healthErr.message);
+              return;
+            }
+          }
         }
         await supabase.from('handler_decrees').update({ status: 'fulfilled', fulfilled_at: nowIso }).eq('id', task.rowId);
         // Capture her report (if she wrote one) as a genuine first-person admission
@@ -1851,6 +1881,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
   const selfEcho = audioMeta?.selfEcho ?? null;
   const beliefProbe = task?.meta ? parseBeliefProbeTrigger((task.meta as { trigger_source?: unknown }).trigger_source) : null;
   const iatProbe = task?.meta ? parseIatProbeTrigger((task.meta as { trigger_source?: unknown }).trigger_source) : null;
+  const turnoutHealthPrep = task?.meta ? parseTurnoutHealthPrepTrigger((task.meta as { trigger_source?: unknown }).trigger_source) : null;
   const minChars = useMemo(() => task?.kind === 'due_today_commitment' ? 30 : 80, [task?.kind]);
   const charsRemaining = Math.max(0, minChars - confessText.trim().length);
 
@@ -2142,7 +2173,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
               <textarea
                 value={confessText}
                 onChange={(e) => setConfessText(e.target.value)}
-                placeholder="Tell Mama how it felt…"
+                placeholder={turnoutHealthPrep ? 'Paste the confirmation — clinic/pharmacy, appointment or refill, whatever proves you booked it. No test results, just the booking.' : 'Tell Mama how it felt…'}
                 rows={3}
                 disabled={submitting}
                 style={{
@@ -2155,17 +2186,18 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
               />
               <button
                 onClick={() => handleMarkDone()}
-                disabled={submitting}
+                disabled={submitting || (!!turnoutHealthPrep && confessText.trim().length < 10)}
                 style={{
                   width: '100%', padding: '12px',
-                  background: tone.border, color: '#fff',
+                  background: (turnoutHealthPrep && confessText.trim().length < 10) ? '#2b1d29' : tone.border,
+                  color: (turnoutHealthPrep && confessText.trim().length < 10) ? '#7f6b74' : '#fff',
                   border: 'none', borderRadius: 7,
                   fontSize: 13, fontWeight: 700, letterSpacing: '0.04em',
                   textTransform: 'uppercase', fontFamily: 'inherit',
-                  cursor: submitting ? 'wait' : 'pointer',
+                  cursor: (submitting || (!!turnoutHealthPrep && confessText.trim().length < 10)) ? 'not-allowed' : 'pointer',
                 }}
               >
-                {submitting ? 'submitting…' : (confessText.trim() ? 'Give it to Mama' : 'Mark fulfilled')}
+                {submitting ? 'submitting…' : turnoutHealthPrep ? "it's booked — tell Mommy" : (confessText.trim() ? 'Give it to Mama' : 'Mark fulfilled')}
               </button>
               <button
                 onClick={async () => {
