@@ -229,6 +229,15 @@ function parseTurnoutHealthPrepTrigger(triggerSource: unknown): { rung: string }
   return m ? { rung: m[1] } : null;
 }
 
+// Any decree issued by the reconditioning lane (recon-program-orchestrator /
+// recon-reconsolidation) carries one of these trigger_source prefixes. Used
+// to show the "not this one" retire link (DESIGN_RECONDITIONING_ENGINE §6.6:
+// "Retire is sacred and one-tap... from Focus or /admin at any time" — the
+// RPC has existed since mig 649, but nothing on Focus ever called it).
+function isReconLaneTrigger(triggerSource: unknown): boolean {
+  return typeof triggerSource === 'string' && /^recon_(focus|rep|reconsolidate|belief_|iat_)/.test(triggerSource);
+}
+
 // recon-program-orchestrator's IAT-probe edicts always embed the bare claim in
 // quotes ("...gut reaction...: "${claim}""). Pull just that out so the reveal
 // step can show the claim in isolation, not buried in Mommy's surrounding
@@ -1036,6 +1045,23 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
       setDoneFlash(false);
       await pickNext();
     }, 1100);
+  };
+
+  // "Not this one" — retires the reconditioning target behind the current
+  // decree. No completion flash (retiring isn't a done); just moves on.
+  const [retiring, setRetiring] = useState(false);
+  const handleRetireReconTarget = async () => {
+    const triggerSource = (task?.meta as { trigger_source?: unknown } | undefined)?.trigger_source;
+    if (!user?.id || typeof triggerSource !== 'string') return;
+    setRetiring(true);
+    try {
+      await supabase.rpc('recon_retire_from_trigger', { p_user: user.id, p_trigger_source: triggerSource });
+    } catch (e) {
+      console.error('[FocusMode] recon target retire failed:', e);
+    } finally {
+      setRetiring(false);
+      await pickNext();
+    }
   };
 
   // ─── Surface handlers ────────────────────────────────────────────────────
@@ -1988,6 +2014,25 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
             <div style={{ fontSize: 13, color: '#a8a3ad', lineHeight: 1.55, marginBottom: 22 }}>
               {task.detail}
             </div>
+          )}
+
+          {/* Retire — one-tap, always reachable while a recon-lane task is up
+              (DESIGN_RECONDITIONING_ENGINE §6.6). Quiet, not a CTA — she
+              authored this working-into-her; she ends it, no questions asked. */}
+          {isReconLaneTrigger((task.meta as { trigger_source?: unknown } | undefined)?.trigger_source) && (
+            <button
+              onClick={() => { void handleRetireReconTarget(); }}
+              disabled={retiring}
+              style={{
+                display: 'block', marginBottom: 18, marginLeft: 'auto',
+                background: 'transparent', border: 'none',
+                color: '#9c8590', fontSize: 11, fontStyle: 'italic',
+                textDecoration: 'underline', cursor: retiring ? 'wait' : 'pointer',
+                fontFamily: 'inherit', padding: 0,
+              }}
+            >
+              {retiring ? 'letting it go…' : "not this one — stop working it into me"}
+            </button>
           )}
 
           {/* Inline action surface */}
