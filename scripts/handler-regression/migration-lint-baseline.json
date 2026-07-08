@@ -413,6 +413,7 @@
   "supabase/migrations/662_turnout_rung_consolidation_gap.sql::insert-without-on-conflict::INSERT INTO recon_reconsolidation_sessions ... ; (no ON CONFLICT)",
   "supabase/migrations/672_escape_cost_retrieval_feed.sql::insert-without-on-conflict::INSERT INTO recon_rep_schedule ... ; (no ON CONFLICT)",
   "supabase/migrations/673_ambient_saturation_theme_bias.sql::insert-without-on-conflict::INSERT INTO handler_outreach_queue ... ; (no ON CONFLICT)",
+  "supabase/migrations/675_reframe_deck_retrieval_feed.sql::insert-without-on-conflict::INSERT INTO recon_rep_schedule ... ; (no ON CONFLICT)",
   "supabase/migrations/apply_1_tables.sql::insert-without-on-conflict::INSERT INTO supabase_migrations ... ; (no ON CONFLICT)",
   "supabase/migrations/catchup_031_037.sql::alter-table-add-column-needs-if-not-exists::ALTER TABLE mood_checkins ADD COLUMN triggered_by TEXT;",
   "supabase/migrations/catchup_031_037.sql::alter-table-add-column-needs-if-not-exists::ALTER TABLE user_state ADD COLUMN consecutive_survival_days INTEGER DEFAULT 0;",
