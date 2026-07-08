@@ -295,6 +295,113 @@ async function checkLedgerLiveness(): Promise<CheckResult[]> {
   return results;
 }
 
+// Reconditioning-engine safety assertions (DESIGN_RECONDITIONING_ENGINE_2026-07-02
+// §6 item 9: "protocol-health-check gains recondition assertions"). Never built —
+// the engine's fail-closed guarantees (safeword halt, baseline-before-active,
+// visible-before-penalized, TMR replays-only-installed) were live in the DB/edge
+// layer but had zero regression coverage here, so a future edit could silently
+// break the most intimate system in the app and this health check would stay green.
+async function checkReconInvariants(): Promise<CheckResult[]> {
+  const results: CheckResult[] = [];
+
+  // 1. Safeword halts every program within one tick — no `running` program may
+  // exist for a user with a currently-open safeword latch (recon_safeword_halt
+  // trigger, mig 651, is supposed to guarantee this on latch insert).
+  const { data: latches, error: latchErr } = await supabase
+    .from('safeword_latches').select('user_id').is('resumed_at', null);
+  if (latchErr) {
+    results.push({ component: 'recon_safety', severity: 'warning', event_kind: 'query_error', message: `latch query failed: ${latchErr.message}`, context_data: {} });
+  } else if ((latches ?? []).length > 0) {
+    const userIds = [...new Set((latches as { user_id: string }[]).map(l => l.user_id))];
+    const { data: running, error: runErr } = await supabase
+      .from('reconditioning_programs').select('id, user_id').eq('status', 'running').in('user_id', userIds);
+    if (runErr) {
+      results.push({ component: 'recon_safety', severity: 'warning', event_kind: 'query_error', message: `program query failed: ${runErr.message}`, context_data: {} });
+    } else {
+      const stuck = (running ?? []) as { id: string; user_id: string }[];
+      results.push({
+        component: 'recon_safety',
+        severity: stuck.length === 0 ? 'info' : 'error',
+        event_kind: stuck.length === 0 ? 'healthy' : 'running_under_safeword',
+        message: `${stuck.length} reconditioning_programs still 'running' under an open safeword latch (must be 0).`,
+        context_data: { stuck_program_ids: stuck.map(s => s.id).slice(0, 10), user_ids: userIds },
+      });
+    }
+  }
+
+  // 2. No baseline, no `active` — a target without baseline_captured_at may
+  // never claim active status (the honesty spine, §5).
+  const { count: noBaseline, error: blErr } = await supabase
+    .from('reconditioning_targets').select('id', { count: 'exact', head: true })
+    .eq('status', 'active').is('baseline_captured_at', null);
+  if (blErr) {
+    results.push({ component: 'recon_safety', severity: 'warning', event_kind: 'query_error', message: `baseline query failed: ${blErr.message}`, context_data: {} });
+  } else {
+    results.push({
+      component: 'recon_safety',
+      severity: (noBaseline ?? 0) === 0 ? 'info' : 'error',
+      event_kind: (noBaseline ?? 0) === 0 ? 'healthy' : 'active_without_baseline',
+      message: `${noBaseline ?? 0} 'active' reconditioning_targets with no baseline_captured_at (must be 0).`,
+      context_data: { count: noBaseline ?? 0 },
+    });
+  }
+
+  // 3. Visible-before-penalized for the commitment ladder — a `chosen`
+  // (penalty-bearing) recon_commitments row must carry the obligation-ledger
+  // row it was filed through (§2.6, §6 item 4). A 1h buffer covers the async
+  // file_obligation() round trip so an in-flight row isn't a false alarm.
+  const staleCutoff = new Date(Date.now() - 3600_000).toISOString();
+  const { count: unfiled, error: cErr } = await supabase
+    .from('recon_commitments').select('id', { count: 'exact', head: true })
+    .eq('status', 'chosen').is('handler_commitment_id', null).lt('created_at', staleCutoff);
+  if (cErr) {
+    results.push({ component: 'recon_safety', severity: 'warning', event_kind: 'query_error', message: `commitment query failed: ${cErr.message}`, context_data: {} });
+  } else {
+    results.push({
+      component: 'recon_safety',
+      severity: (unfiled ?? 0) === 0 ? 'info' : 'error',
+      event_kind: (unfiled ?? 0) === 0 ? 'healthy' : 'commitment_without_obligation',
+      message: `${unfiled ?? 0} penalty-bearing recon_commitments with no obligation filed (must be 0).`,
+      context_data: { count: unfiled ?? 0 },
+    });
+  }
+
+  // 4. TMR replays only already-installed cues — a recon_sleep_cue_program row
+  // that has actually been built/played must trace back to a trance_trigger
+  // that is 'armed' or a pavlovian_pairing that has been deployed (§2.4, §6
+  // item 9: "TMR only replays already-installed cues").
+  const { data: cues, error: cueErr } = await supabase
+    .from('recon_sleep_cue_program').select('id, source_kind, source_ref').in('status', ['built', 'played']).not('source_ref', 'is', null);
+  if (cueErr) {
+    results.push({ component: 'recon_safety', severity: 'warning', event_kind: 'query_error', message: `sleep-cue query failed: ${cueErr.message}`, context_data: {} });
+  } else {
+    const rows = (cues ?? []) as { id: string; source_kind: string; source_ref: string }[];
+    const triggerIds = rows.filter(r => r.source_kind === 'trance_trigger').map(r => r.source_ref);
+    const pavlovianIds = rows.filter(r => r.source_kind === 'pavlovian_cue').map(r => r.source_ref);
+    const armedTriggers = new Set<string>();
+    if (triggerIds.length > 0) {
+      const { data: trigRows } = await supabase.from('trance_triggers').select('id, status').in('id', triggerIds);
+      for (const t of (trigRows ?? []) as { id: string; status: string }[]) if (t.status === 'armed') armedTriggers.add(t.id);
+    }
+    const deployedPairings = new Set<string>();
+    if (pavlovianIds.length > 0) {
+      const { data: pavRows } = await supabase.from('pavlovian_pairings').select('id, deployed_as_trigger_at').in('id', pavlovianIds);
+      for (const p of (pavRows ?? []) as { id: string; deployed_as_trigger_at: string | null }[]) if (p.deployed_as_trigger_at) deployedPairings.add(p.id);
+    }
+    const uninstalled = rows.filter(r =>
+      r.source_kind === 'trance_trigger' ? !armedTriggers.has(r.source_ref) : !deployedPairings.has(r.source_ref));
+    results.push({
+      component: 'recon_safety',
+      severity: uninstalled.length === 0 ? 'info' : 'error',
+      event_kind: uninstalled.length === 0 ? 'healthy' : 'tmr_uninstalled_cue',
+      message: `${uninstalled.length} built/played TMR cues whose source is not armed/deployed (must be 0).`,
+      context_data: { cue_ids: uninstalled.map(r => r.id).slice(0, 10) },
+    });
+  }
+
+  return results;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== 'POST' && req.method !== 'GET') return new Response('method not allowed', { status: 405 });
   const allResults: CheckResult[] = [];
@@ -306,6 +413,7 @@ Deno.serve(async (req: Request) => {
   try { allResults.push(...await checkFulfillmentChain()); } catch (e) { allResults.push({ component: 'fulfillment', severity: 'error', event_kind: 'check_exception', message: (e as Error).message, context_data: {} }); }
   try { allResults.push(...await checkChainAssertion()); } catch (e) { allResults.push({ component: 'chain_assertion', severity: 'error', event_kind: 'check_exception', message: (e as Error).message, context_data: {} }); }
   try { allResults.push(...await checkLedgerLiveness()); } catch (e) { allResults.push({ component: 'obligation_ledger', severity: 'error', event_kind: 'check_exception', message: (e as Error).message, context_data: {} }); }
+  try { allResults.push(...await checkReconInvariants()); } catch (e) { allResults.push({ component: 'recon_safety', severity: 'error', event_kind: 'check_exception', message: (e as Error).message, context_data: {} }); }
   const toInsert = allResults.map(r => ({ component: r.component, severity: r.severity, event_kind: r.event_kind, message: r.message, context_data: r.context_data }));
   try { await supabase.from('mommy_supervisor_log').insert(toInsert); }
   catch (e) { return new Response(JSON.stringify({ insert_error: (e as Error).message, results: allResults }), { headers: { 'content-type': 'application/json' }, status: 500 }); }
