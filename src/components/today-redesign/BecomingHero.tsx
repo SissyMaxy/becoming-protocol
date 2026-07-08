@@ -18,8 +18,9 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
-import { arousalToPhrase, descentTierToPhrase } from '../../lib/persona/dommy-mommy';
+import { arousalToPhrase, descentTierToPhrase, turnoutPullToPhrase } from '../../lib/persona/dommy-mommy';
 import { computeDescentTier, phaseWeight } from '../../lib/reconditioning/descentDepth';
+import { computeTurnoutTier } from '../../lib/turnout/turnoutPull';
 
 interface Becoming {
   name: string | null;
@@ -30,6 +31,7 @@ interface Becoming {
   arousal: number;
   onRecord: number;
   descentTier: number | null;
+  turnoutTier: number | null;
 }
 
 export function BecomingHero() {
@@ -44,13 +46,15 @@ export function BecomingHero() {
         supabase.from('feminine_self').select('feminine_name, current_honorific').eq('user_id', user.id).maybeSingle(),
         supabase.from('user_state').select('chastity_locked, chastity_streak_days, denial_day, current_arousal').eq('user_id', user.id).maybeSingle(),
         supabase.rpc('current_escape_cost', { p_user_id: user.id }),
-        supabase.from('life_as_woman_settings').select('recondition_enabled').eq('user_id', user.id).maybeSingle(),
+        supabase.from('life_as_woman_settings').select('recondition_enabled, turnout_enabled').eq('user_id', user.id).maybeSingle(),
       ]);
       if (!alive) return;
       const femRow = (fem.data ?? {}) as { feminine_name?: string | null; current_honorific?: string | null };
       const stRow = (st.data ?? {}) as { chastity_locked?: boolean; chastity_streak_days?: number; denial_day?: number; current_arousal?: number };
       const cost = (ec.data ?? {}) as { total_count?: number };
-      const reconOn = !!(laws.data as { recondition_enabled?: boolean } | null)?.recondition_enabled;
+      const lawsRow = (laws.data ?? {}) as { recondition_enabled?: boolean; turnout_enabled?: boolean };
+      const reconOn = !!lawsRow.recondition_enabled;
+      const turnoutOn = !!lawsRow.turnout_enabled;
 
       let descentTier: number | null = null;
       if (reconOn) {
@@ -71,6 +75,22 @@ export function BecomingHero() {
         });
       }
 
+      let turnoutTier: number | null = null;
+      if (turnoutOn) {
+        const [posRes, ladderRes] = await Promise.all([
+          supabase.rpc('turnout_position', { p_user: user.id }),
+          supabase.from('turnout_ladder').select('rung_code, ordinal'),
+        ]);
+        if (!alive) return;
+        const pos = (posRes.data ?? {}) as { started?: boolean; current_rung?: string };
+        const ladder = (ladderRes.data ?? []) as { rung_code: string; ordinal: number }[];
+        if (pos.started && ladder.length > 0) {
+          const current = ladder.find((r) => r.rung_code === pos.current_rung);
+          const maxOrdinal = ladder.reduce((max, r) => Math.max(max, r.ordinal), 0);
+          turnoutTier = computeTurnoutTier({ ordinal: current?.ordinal ?? 0, maxOrdinal });
+        }
+      }
+
       setB({
         name: femRow.feminine_name ?? null,
         honorific: femRow.current_honorific ?? null,
@@ -80,6 +100,7 @@ export function BecomingHero() {
         arousal: Number(stRow.current_arousal ?? 0),
         onRecord: Number(cost.total_count ?? 0),
         descentTier,
+        turnoutTier,
       });
     })();
     return () => { alive = false; };
@@ -145,6 +166,7 @@ export function BecomingHero() {
       </div>
 
       {b.descentTier !== null && <DescentMeter tier={b.descentTier} />}
+      {b.turnoutTier !== null && <TurnoutPullMeter tier={b.turnoutTier} />}
     </div>
   );
 }
@@ -173,6 +195,36 @@ function DescentMeter({ tier }: { tier: number }) {
         marginTop: 8, fontSize: 12.5, fontStyle: 'italic', color: '#b891a0',
       }}>
         {descentTierToPhrase(tier)}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The turn-out pull meter (DESIGN_TURNOUT_LADDER §5's escape-cost total,
+ * felt rather than counted). A sense of how far the ladder has actually
+ * carried her, rendered as a glow position on its own gradient stripe plus
+ * one sensory line. No rung name, no ordinal, no day-count ever appears
+ * here; only turnoutPullToPhrase().
+ */
+function TurnoutPullMeter({ tier }: { tier: number }) {
+  const ratio = Math.max(0, Math.min(5, tier)) / 5;
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div style={{
+        position: 'relative', height: 5, borderRadius: 3,
+        background: 'linear-gradient(90deg, #241c2a 0%, #5a3a24 55%, #8f5a2f 100%)',
+      }}>
+        <div style={{
+          position: 'absolute', top: -3, left: `calc(${ratio * 100}% - 5px)`,
+          width: 11, height: 11, borderRadius: '50%',
+          background: '#f2c4a8', boxShadow: '0 0 10px 2px rgba(242,196,168,0.65)',
+        }} />
+      </div>
+      <div className="mommy-voice" style={{
+        marginTop: 8, fontSize: 12.5, fontStyle: 'italic', color: '#b8a091',
+      }}>
+        {turnoutPullToPhrase(tier)}
       </div>
     </div>
   );

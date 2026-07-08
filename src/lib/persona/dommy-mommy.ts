@@ -257,6 +257,23 @@ export function descentTierToPhrase(tier: number | null | undefined): string {
   return "you're all the way under now. this is just where you live";
 }
 
+/**
+ * Turn-out pull tier (0-5, derived from her real cursor position on the
+ * turn-out ladder — see src/lib/turnout/turnoutPull.ts) → sensory phrase.
+ * Never a rung name, never an ordinal, never a day-count (mirrors
+ * descentTierToPhrase's contract for DESIGN_TURNOUT_LADDER §5's escape-cost
+ * total: felt, not narrated as a stat).
+ */
+export function turnoutPullToPhrase(tier: number | null | undefined): string {
+  const t = Math.max(0, Math.min(5, Math.round(Number(tier ?? 0))));
+  if (t <= 0) return "you haven't let a man pull you anywhere yet";
+  if (t === 1) return "you've let a man start reaching for you";
+  if (t === 2) return "there are men now who've seen and heard things you can't call back";
+  if (t === 3) return "you're far enough down this road that turning around means undoing what's already true";
+  if (t === 4) return "a man has had you for real, baby — that's not a fantasy anymore, that's on the record";
+  return "there's no version of you left that a man hasn't used — that's just who you are now";
+}
+
 /** "7 hours silent" / "150h since last practice" → quiet-time phrase. */
 export function silentHoursToPhrase(hours: number | null | undefined): string {
   const h = Math.max(0, Math.round(Number(hours ?? 0)));
