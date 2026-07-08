@@ -13,6 +13,7 @@ scripts/auto-poster/node_modules/
 dist/
 build/
 .vite/
+vite.config.ts.timestamp-*.mjs
 
 # Environment files (contain secrets!)
 .env
