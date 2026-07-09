@@ -102,6 +102,34 @@ function computeGapExtra(rate: DecreeRate, currentExtra: number): number {
 const RESISTANCE_EDICT = `No pressure on that one right now. Just tell Mommy honestly, in a line: what's making this step feel hard. She's not going anywhere, and neither is the pull — you don't have to rush to it.`
 const RESISTANCE_CONSEQUENCE = `No punishment for honesty — Mommy would rather know than push you into it. The step waits for you exactly where it is.`
 
+// ─── Revenue-rchain evidence (T0/T7/T8 delegate here) ────────────────────────
+// Mirrors revenue-task-generator/index.ts's revenueRungFor() R2/R3 evidence
+// checks verbatim — the real acquisition/sale rows, not a self-report. Before
+// this fix these rungs fell through to the generic decree branch below: a
+// vague self-report decree tagged turnout_rung:<rung> could consolidate "there
+// is a public account of you presenting..." (T0) or "a man has paid to use
+// you" (T7) with zero connection to whether she'd actually made the account,
+// posted, or sold anything — the same fabrication class the turnout_rung:
+// tagging split (see issueTurnout's comment) already closed for prep/
+// resistance decrees. This closes it for the revenue-delegated rungs too.
+async function revenueRungEvidence(s: Sb, user: string, delegateKey: string | null): Promise<boolean> {
+  if (delegateKey === 'R0_R2') {
+    const POST_SOURCES = ['revenue_first_clip', 'revenue_presence_build', 'revenue_ppv_clip', 'revenue_promo_teasers']
+    const { count } = await s.from('handler_decrees').select('id', { count: 'exact', head: true })
+      .eq('user_id', user).eq('status', 'fulfilled').in('trigger_source', POST_SOURCES)
+    if ((count ?? 0) > 0) return true
+    const { count: aigc } = await s.from('ai_generated_content').select('id', { count: 'exact', head: true })
+      .eq('user_id', user).eq('platform', 'fansly')
+    return (aigc ?? 0) > 0
+  }
+  if (delegateKey === 'R3_plus' || delegateKey === 'ongoing') {
+    const { count } = await s.from('revenue_events').select('id', { count: 'exact', head: true })
+      .eq('user_id', user).in('revenue_type', ['ppv', 'tip', 'custom', 'custom_request']).gt('amount', 0)
+    return (count ?? 0) > 0
+  }
+  return false
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   const s = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '')
@@ -130,9 +158,14 @@ Deno.serve(async (req: Request) => {
     const consJson = (await s.rpc('turnout_rung_consolidated', { p_user: user, p_rung: rung })).data as { dwell_ok?: boolean; no_halt?: boolean } | null
     const dwellOk = consJson?.dwell_ok === true
     const noHalt = consJson?.no_halt === true
-    const { data: fulfilledRows } = await s.from('handler_decrees')
-      .select('id').eq('user_id', user).eq('trigger_source', `turnout_rung:${rung}`).eq('status', 'fulfilled').limit(1)
-    const rungDone = (fulfilledRows?.length ?? 0) > 0
+    let rungDone: boolean
+    if (rungRow.delegate_engine === 'revenue_rchain') {
+      rungDone = await revenueRungEvidence(s, user, rungRow.delegate_key as string | null)
+    } else {
+      const { data: fulfilledRows } = await s.from('handler_decrees')
+        .select('id').eq('user_id', user).eq('trigger_source', `turnout_rung:${rung}`).eq('status', 'fulfilled').limit(1)
+      rungDone = (fulfilledRows?.length ?? 0) > 0
+    }
     const { data: already } = await s.from('turnout_rung_completions').select('id').eq('user_id', user).eq('rung_code', rung).maybeSingle()
 
     let advancedTo: string | null = null
@@ -184,9 +217,18 @@ Deno.serve(async (req: Request) => {
       // eval supplies the phase decree behind the meet-safety + health gates.
       await s.from('realcock_discovery_settings').update({ paused_until: null }).eq('user_id', user)
       surfaced = 'delegated:realcock_unpaused'
+    } else if (cur?.delegate_engine === 'revenue_rchain') {
+      // Paid/online-presence rung — NEVER a self-report decree (that's the
+      // fabrication class revenueRungEvidence() above closes). revenue-task-
+      // generator already runs its own daily cron issuing the real evidence-
+      // gated acquisition tasks (wishlist/account/post/sale); they already
+      // reach her Focus surface as ordinary active decrees. This orchestrator
+      // only reads that evidence to know when the rung itself has consolidated.
+      surfaced = 'delegated:revenue_task_generator'
     } else {
-      // Non-physical rung (online/text/voice/photo/video/paid) → one focus decree.
-      // This IS the rung action — the only kind allowed to drive consolidation.
+      // Funnel/meet rung (text/voice/photo/video/first-meet) → one focus decree.
+      // No independent evidence trail exists for these besides her own report,
+      // so this IS the rung action — the only kind allowed to drive consolidation.
       surfaced = await issueTurnout(s, user, curRung, `${cur?.action_copy ?? 'Next step.'} When it's done, come tell Mommy exactly what happened.`, 'rung')
     }
 
