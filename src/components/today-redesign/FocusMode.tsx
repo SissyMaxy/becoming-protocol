@@ -26,7 +26,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
-import { isMommyPersona } from '../../lib/persona/dommy-mommy';
+import { isMommyPersona, arousalToPhrase } from '../../lib/persona/dommy-mommy';
 import { useSurfaceRenderTracking, useAcknowledgeObligation } from '../../lib/surface-render-hooks';
 import { ackSourceForTask } from '../../../supabase/functions/_shared/enforcement-core';
 import { gradeDoseEvidence } from '../../lib/hrt/dose-evidence';
@@ -229,6 +229,17 @@ function parseTurnoutHealthPrepTrigger(triggerSource: unknown): { rung: string }
   return m ? { rung: m[1] } : null;
 }
 
+// turnout-orchestrator tags the post-rung aroused-state debrief ask
+// `turnout_debrief:<rung>` (mig 679, DESIGN_TURNOUT_LADDER §0/§2 step 3b): the
+// rung's irreversible act already happened, and consolidation now holds until
+// a real arousal self-report (>=6/10) lands — closing the gap where every
+// completion consolidated instantly with no debrief ever captured.
+function parseTurnoutDebriefTrigger(triggerSource: unknown): { rung: string } | null {
+  if (typeof triggerSource !== 'string') return null;
+  const m = /^turnout_debrief:(.+)$/.exec(triggerSource);
+  return m ? { rung: m[1] } : null;
+}
+
 // Any decree issued by the reconditioning lane (recon-program-orchestrator /
 // recon-reconsolidation) carries one of these trigger_source prefixes. Used
 // to show the "not this one" retire link (DESIGN_RECONDITIONING_ENGINE §6.6:
@@ -359,6 +370,56 @@ function IatLiteProbe({
   );
 }
 
+/** The post-rung aroused-state debrief instrument (DESIGN_TURNOUT_LADDER §0/§2
+ * step 3b, mig 679) — a plain 0-10 self-report slider on the canonical arousal
+ * scale, plus an optional note. Only the sensory phrase (arousalToPhrase) is
+ * shown live, never the raw number, matching the belief_slider probe's
+ * no-telemetry-in-voice rule. The value drives consolidation underneath; a
+ * calm honest answer holds the rung rather than fabricating the encoding. */
+function ArousalDebriefProbe({
+  value, onChange, note, onNoteChange, onSubmit, submitting,
+}: { value: number; onChange: (v: number) => void; note: string; onNoteChange: (v: string) => void; onSubmit: () => void; submitting: boolean }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <input
+        type="range" min={0} max={10} value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        disabled={submitting}
+        style={{ width: '100%' }}
+      />
+      <div style={{ fontSize: 12, color: '#edaec5', fontStyle: 'italic', textAlign: 'center' }}>
+        {arousalToPhrase(value)}
+      </div>
+      <textarea
+        value={note}
+        onChange={(e) => onNoteChange(e.target.value)}
+        placeholder="what happened (optional)"
+        rows={2}
+        disabled={submitting}
+        style={{
+          width: '100%', padding: '10px 12px', resize: 'vertical',
+          background: '#160c13', color: '#f2e9e6', border: '1px solid #2a2a32',
+          borderRadius: 8, fontSize: 13, lineHeight: 1.5, fontFamily: 'inherit', outline: 'none',
+        }}
+      />
+      <button
+        onClick={onSubmit}
+        disabled={submitting}
+        style={{
+          width: '100%', padding: '12px',
+          background: '#c9557f', color: '#fff',
+          border: 'none', borderRadius: 7,
+          fontSize: 13, fontWeight: 700, letterSpacing: '0.04em',
+          textTransform: 'uppercase', fontFamily: 'inherit',
+          cursor: submitting ? 'wait' : 'pointer',
+        }}
+      >
+        {submitting ? 'submitting…' : 'tell mommy the truth'}
+      </button>
+    </div>
+  );
+}
+
 /** sha256 hex of a file's bytes, for dose-photo dedup. Browser WebCrypto. */
 async function sha256HexOfFile(file: File): Promise<string> {
   const buf = await file.arrayBuffer();
@@ -375,6 +436,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
   const [submitting, setSubmitting] = useState(false);
   const [confessText, setConfessText] = useState('');
   const [beliefSlider, setBeliefSlider] = useState(50);
+  const [debriefArousal, setDebriefArousal] = useState(5);
   const [doneFlash, setDoneFlash] = useState(false);
   const [completedToday, setCompletedToday] = useState(0);
   const [persona, setPersona] = useState<string | null>(null);
@@ -1234,6 +1296,20 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
             console.error('[FocusMode] IAT probe measurement failed:', measureErr.message);
             return;
           }
+        } else if (turnoutDebrief) {
+          // Record the aroused-state debrief FIRST — same fail-closed order as
+          // the probes above (mig 679). A calm honest answer still fulfills
+          // the decree; it just won't clear turnout_rung_consolidated's
+          // aroused_debrief_ok, so the orchestrator holds the rung rather than
+          // fabricating the state-dependent encoding.
+          const { error: debriefErr } = await supabase.rpc('turnout_record_debrief', {
+            p_user: user.id, p_rung: turnoutDebrief.rung, p_arousal: debriefArousal,
+            p_note: confessText.trim() || null,
+          });
+          if (debriefErr) {
+            console.error('[FocusMode] turnout debrief failed:', debriefErr.message);
+            return;
+          }
         } else {
           const healthPrep = parseTurnoutHealthPrepTrigger(task.meta?.trigger_source);
           if (healthPrep) {
@@ -1908,6 +1984,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
   const beliefProbe = task?.meta ? parseBeliefProbeTrigger((task.meta as { trigger_source?: unknown }).trigger_source) : null;
   const iatProbe = task?.meta ? parseIatProbeTrigger((task.meta as { trigger_source?: unknown }).trigger_source) : null;
   const turnoutHealthPrep = task?.meta ? parseTurnoutHealthPrepTrigger((task.meta as { trigger_source?: unknown }).trigger_source) : null;
+  const turnoutDebrief = task?.meta ? parseTurnoutDebriefTrigger((task.meta as { trigger_source?: unknown }).trigger_source) : null;
   const minChars = useMemo(() => task?.kind === 'due_today_commitment' ? 30 : 80, [task?.kind]);
   const charsRemaining = Math.max(0, minChars - confessText.trim().length);
 
@@ -2180,7 +2257,15 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
             />
           )}
 
-          {task.surface === 'mark_done' && !beliefProbe && !iatProbe && (
+          {task.surface === 'mark_done' && !beliefProbe && !iatProbe && turnoutDebrief && (
+            <ArousalDebriefProbe
+              value={debriefArousal} onChange={setDebriefArousal}
+              note={confessText} onNoteChange={setConfessText}
+              onSubmit={() => handleMarkDone()} submitting={submitting}
+            />
+          )}
+
+          {task.surface === 'mark_done' && !beliefProbe && !iatProbe && !turnoutDebrief && (
             <button
               onClick={() => handleMarkDone()}
               disabled={submitting}
@@ -2209,7 +2294,15 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
             />
           )}
 
-          {task.surface === 'decree' && !beliefProbe && !iatProbe && (
+          {task.surface === 'decree' && !beliefProbe && !iatProbe && turnoutDebrief && (
+            <ArousalDebriefProbe
+              value={debriefArousal} onChange={setDebriefArousal}
+              note={confessText} onNoteChange={setConfessText}
+              onSubmit={() => handleMarkDone()} submitting={submitting}
+            />
+          )}
+
+          {task.surface === 'decree' && !beliefProbe && !iatProbe && !turnoutDebrief && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {/* The task tells her to REPORT back — so give her somewhere to do it.
                   Her words land in her own-words corpus (key_admissions), which is

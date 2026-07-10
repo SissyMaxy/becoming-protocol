@@ -9,6 +9,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useSurfaceRenderTracking } from '../../lib/surface-render-hooks';
 import { PhotoUploadWidget } from '../verification/PhotoUploadWidget';
+import { arousalToPhrase } from '../../lib/persona/dommy-mommy';
 
 interface Decree {
   id: string;
@@ -31,6 +32,7 @@ const PROOF_LABEL: Record<string, string> = {
   device_state: 'device',
   belief_slider: 'rate it',
   assoc_latency: 'tap test',
+  arousal_debrief: 'debrief',
   none: '—',
 };
 
@@ -62,6 +64,17 @@ function parseRepTrigger(triggerSource: string | null): { repId: string } | null
   return m ? { repId: m[1] } : null;
 }
 
+// turnout-orchestrator tags the post-rung aroused-state debrief ask
+// `turnout_debrief:<rung>` (mig 679, DESIGN_TURNOUT_LADDER §0/§2 step 3b — the
+// rung's irreversible act already happened; this closes the honesty gap where
+// consolidation used to fire the instant the decree was fulfilled, with no
+// aroused debrief ever captured).
+function parseTurnoutDebriefTrigger(triggerSource: string | null): { rung: string } | null {
+  if (!triggerSource) return null;
+  const m = /^turnout_debrief:(.+)$/.exec(triggerSource);
+  return m ? { rung: m[1] } : null;
+}
+
 // The orchestrator's IAT edicts always embed the bare claim in quotes; pull
 // just that out so the tap-test reveal is a clean stimulus, not buried in
 // Mommy's surrounding sentence.
@@ -91,6 +104,8 @@ export function HandlerDecreeCard() {
   // Tracks which decree row is currently showing the inline photo widget
   const [photoOpenId, setPhotoOpenId] = useState<string | null>(null);
   const [sliders, setSliders] = useState<Record<string, number>>({});
+  // 0-10 canonical scale (arousalToPhrase), distinct from belief_slider's 0-100.
+  const [arousalSliders, setArousalSliders] = useState<Record<string, number>>({});
   // decree id -> performance.now() timestamp of the IAT-lite reveal, for
   // latency measurement; absent = not yet revealed for that card.
   const [iatShownAt, setIatShownAt] = useState<Record<string, number>>({});
@@ -220,6 +235,33 @@ export function HandlerDecreeCard() {
     window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'decree_rep', id: decree.id } }));
   };
 
+  const submitTurnoutDebrief = async (decree: Decree) => {
+    const probe = parseTurnoutDebriefTrigger(decree.trigger_source);
+    if (!user?.id || !probe) return;
+    setSubmittingId(decree.id);
+    const arousal = arousalSliders[decree.id] ?? 5;
+    const note = (notes[decree.id] || '').trim();
+    // Record the debrief FIRST — a failed write must never masquerade as a
+    // consolidated rung with no honest signal behind it (mig 679).
+    const { error } = await supabase.rpc('turnout_record_debrief', {
+      p_user: user.id, p_rung: probe.rung, p_arousal: arousal, p_note: note || null,
+    });
+    if (error) {
+      console.error('[HandlerDecreeCard] turnout debrief failed:', error.message);
+      setSubmittingId(null);
+      return;
+    }
+    await supabase.from('handler_decrees').update({
+      status: 'fulfilled',
+      fulfilled_at: new Date().toISOString(),
+    }).eq('id', decree.id);
+    setSubmittingId(null);
+    setArousalSliders(s => { const c = { ...s }; delete c[decree.id]; return c; });
+    setNotes(n => { const c = { ...n }; delete c[decree.id]; return c; });
+    load();
+    window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'decree_turnout_debrief', id: decree.id } }));
+  };
+
   if (items.length === 0) return null;
 
   return (
@@ -291,6 +333,41 @@ export function HandlerDecreeCard() {
                   }}
                 >
                   {submittingId === d.id ? '…' : 'Tell Mommy'}
+                </button>
+              </div>
+            ) : d.proof_type === 'arousal_debrief' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <input
+                  type="range" min={0} max={10}
+                  value={arousalSliders[d.id] ?? 5}
+                  onChange={e => setArousalSliders(s => ({ ...s, [d.id]: Number(e.target.value) }))}
+                  disabled={submittingId === d.id}
+                  style={{ width: '100%' }}
+                />
+                <div style={{ fontSize: 11, color: '#e6bd80', fontStyle: 'italic', textAlign: 'center' }}>
+                  {arousalToPhrase(arousalSliders[d.id] ?? 5)}
+                </div>
+                <textarea
+                  value={note}
+                  onChange={e => setNotes(n => ({ ...n, [d.id]: e.target.value }))}
+                  placeholder="what happened (optional)"
+                  rows={2}
+                  style={{
+                    width: '100%', background: '#0a0709', border: '1px solid #2b1d29',
+                    borderRadius: 5, padding: '7px 9px', fontSize: 11.5, color: '#f2e9e6',
+                    fontFamily: 'inherit', resize: 'vertical',
+                  }}
+                />
+                <button
+                  onClick={() => submitTurnoutDebrief(d)}
+                  disabled={submittingId === d.id}
+                  style={{
+                    padding: '7px 14px', borderRadius: 5, border: 'none',
+                    background: '#e6bd80', color: '#1f1008', fontWeight: 600,
+                    fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  {submittingId === d.id ? '…' : 'Tell Mommy the truth'}
                 </button>
               </div>
             ) : d.proof_type === 'assoc_latency' ? (

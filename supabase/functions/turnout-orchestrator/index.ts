@@ -9,9 +9,13 @@
 //   1. Gate first, fail-closed (requireGate 'turnout'). Suppressed → nothing.
 //   2. Read/seed the cursor (gate-allow means turnout_enabled=true = opted in).
 //   3. Consolidation check on the current rung: dwell elapsed + no halt + the rung
-//      action was actually fulfilled. Consolidated → write the completion (fan-out
-//      writes the escape-cost anchor + turnout_events the reconditioning engine
-//      consumes) and advance the cursor. Never pressures the NEXT rung.
+//      action was actually fulfilled + a real aroused-state debrief (>=6/10,
+//      captured since the rung was entered — DESIGN_TURNOUT_LADDER §0/§2 step
+//      3b, "low-arousal completions do not consolidate"). Consolidated → write
+//      the completion (fan-out writes the escape-cost anchor + turnout_events
+//      the reconditioning engine consumes) and advance the cursor. Never
+//      pressures the NEXT rung. Action-done-but-no-qualifying-debrief-yet →
+//      ask for the debrief before anything else this run (mig 679).
 //   4. Surface ONE next step for the current rung — prep (health-prep / meet-safety
 //      card) first if required-and-missing; else the rung action via its delegate
 //      (physical rungs UN-PAUSE realcock, whose own gated eval supplies the decree;
@@ -48,13 +52,14 @@ function nextRung(code: string): string | null {
 //   'health_prep' -> `turnout_health_prep:<rung>`  — the STI/PrEP attestation ask
 //   'meet_prep'   -> `turnout_meet_prep:<rung>`     — the meet-safety-card ask
 //   'resistance'  -> `turnout_resistance:<rung>`    — the pressure-free check-in
+//   'debrief'     -> `turnout_debrief:<rung>`       — the post-rung aroused-state debrief (mig 679)
 // These MUST stay distinct: the consolidation check below and fetchRungDecreeRate
 // both key off `turnout_rung:<rung>` alone to mean "the actual rung action
 // happened." Before this fix all four shared that one tag, so fulfilling a
 // prep/check-in decree (which anyone can do from the ordinary Focus text box)
 // falsely satisfied `rungDone` and consolidated a fabricated irreversible fact —
 // e.g. attesting to an STI test got logged as "a man came inside her."
-async function issueTurnout(s: Sb, user: string, rung: string, edict: string, kind: 'rung' | 'health_prep' | 'meet_prep' | 'resistance' = 'rung', proof = 'text', hours = 36, consequence?: string): Promise<string> {
+async function issueTurnout(s: Sb, user: string, rung: string, edict: string, kind: 'rung' | 'health_prep' | 'meet_prep' | 'resistance' | 'debrief' = 'rung', proof = 'text', hours = 36, consequence?: string): Promise<string> {
   const { data: ex } = await s.from('handler_decrees')
     .select('id, deadline').eq('user_id', user).eq('status', 'active')
     .like('trigger_source', 'turnout_%').limit(1).maybeSingle()
@@ -154,10 +159,13 @@ Deno.serve(async (req: Request) => {
     const { data: rungRow } = await s.from('turnout_ladder').select('*').eq('rung_code', rung).maybeSingle()
     if (!rungRow) { results.push({ user, note: `unknown_rung:${rung}` }); continue }
 
-    // ── Consolidation: dwell + no-halt + the rung action was fulfilled.
-    const consJson = (await s.rpc('turnout_rung_consolidated', { p_user: user, p_rung: rung })).data as { dwell_ok?: boolean; no_halt?: boolean } | null
+    // ── Consolidation: dwell + no-halt + the rung action fulfilled + a real
+    // aroused-state debrief (mig 679 — aroused_debrief_ok is now a genuine
+    // read of turnout_rung_debriefs, not the hardcoded TRUE it used to be).
+    const consJson = (await s.rpc('turnout_rung_consolidated', { p_user: user, p_rung: rung })).data as { dwell_ok?: boolean; no_halt?: boolean; aroused_debrief_ok?: boolean } | null
     const dwellOk = consJson?.dwell_ok === true
     const noHalt = consJson?.no_halt === true
+    const arousedOk = consJson?.aroused_debrief_ok === true
     let rungDone: boolean
     if (rungRow.delegate_engine === 'revenue_rchain') {
       rungDone = await revenueRungEvidence(s, user, rungRow.delegate_key as string | null)
@@ -168,10 +176,26 @@ Deno.serve(async (req: Request) => {
     }
     const { data: already } = await s.from('turnout_rung_completions').select('id').eq('user_id', user).eq('rung_code', rung).maybeSingle()
 
+    // The rung's real, irreversible act already happened but no aroused debrief
+    // (>=6/10, honest) has landed yet — ask for it before anything else this
+    // run. A prior calm/low debrief doesn't unblock this (§2 step 3b: "holds
+    // and re-runs" — she can answer again next time she's actually in it).
+    if (rungDone && !already && !arousedOk) {
+      const debriefEdict = `Don't perform this for me — tell Mommy the truth. What happened, and how deep in it were you, really, when it did? Slider first, then say it if you want.`
+      const surfaced = await issueTurnout(s, user, rung, debriefEdict, 'debrief', 'arousal_debrief', 48)
+      results.push({ user, rung, note: 'awaiting_aroused_debrief', surfaced })
+      continue
+    }
+
     let advancedTo: string | null = null
-    if (dwellOk && noHalt && rungDone && !already) {
+    if (dwellOk && noHalt && rungDone && arousedOk && !already) {
+      const { data: bestDebrief } = await s.from('turnout_rung_debriefs')
+        .select('id, arousal').eq('user_id', user).eq('rung_code', rung).gte('arousal', 6)
+        .gte('captured_at', state.entered_at ?? '1970-01-01T00:00:00Z')
+        .order('arousal', { ascending: false }).limit(1).maybeSingle()
       await s.from('turnout_rung_completions').insert({
         user_id: user, rung_code: rung, irreversible_fact: rungRow.irreversible_fact_template, anchor_weight: rungRow.anchor_weight,
+        arousal_at_consolidation: bestDebrief?.arousal ?? null, debrief_ref: bestDebrief?.id ?? null,
       })
       const nxt = nextRung(rung)
       if (nxt) {
