@@ -134,19 +134,19 @@ function releaseCheckinKey(): string {
 // src/lib/focus/pick-next.ts — this file fetches and renders.
 
 const TONE_STYLES_HANDLER: Record<FocusTask['tone'], { bg: string; border: string; accent: string; label: string }> = {
-  critical: { bg: 'linear-gradient(140deg, #2a0508 0%, #1a0508 100%)', border: '#c4272d', accent: '#f0a0a0', label: 'CRITICAL' },
-  high:     { bg: 'linear-gradient(140deg, #2a1f0a 0%, #1f1608 100%)', border: '#a87a1f', accent: '#fbbf24', label: 'PRIORITY' },
-  medium:   { bg: 'linear-gradient(140deg, #2c1723 0%, #0f0820 100%)', border: '#c9557f', accent: '#edaec5', label: 'TODAY' },
-  calm:     { bg: 'linear-gradient(140deg, #0a1a14 0%, #051a10 100%)', border: '#3a5a3f', accent: '#8fd9b0', label: 'CLEAN' },
+  critical: { bg: 'linear-gradient(140deg, color-mix(in srgb, var(--protocol-danger) 18%, var(--protocol-bg-deep)) 0%, var(--protocol-bg-deep) 100%)', border: 'var(--protocol-danger)', accent: 'color-mix(in srgb, var(--protocol-danger) 60%, white)', label: 'CRITICAL' },
+  high:     { bg: 'linear-gradient(140deg, color-mix(in srgb, var(--protocol-warning) 15%, var(--protocol-bg-deep)) 0%, color-mix(in srgb, var(--protocol-warning) 8%, var(--protocol-bg-deep)) 100%)', border: 'color-mix(in srgb, var(--protocol-warning) 60%, var(--protocol-bg-deep))', accent: 'var(--protocol-warning)', label: 'PRIORITY' },
+  medium:   { bg: 'linear-gradient(140deg, color-mix(in srgb, var(--protocol-accent) 12%, var(--protocol-bg-deep)) 0%, var(--protocol-bg-deep) 100%)', border: 'var(--protocol-accent)', accent: 'var(--protocol-accent-soft)', label: 'TODAY' },
+  calm:     { bg: 'linear-gradient(140deg, color-mix(in srgb, var(--protocol-success) 12%, var(--protocol-bg-deep)) 0%, color-mix(in srgb, var(--protocol-success) 8%, var(--protocol-bg-deep)) 100%)', border: 'color-mix(in srgb, var(--protocol-success) 30%, var(--protocol-bg-deep))', accent: 'color-mix(in srgb, var(--protocol-success) 70%, white)', label: 'CLEAN' },
 };
 
 // Dommy Mommy palette: warm boudoir / dusty rose / candle-gold instead
 // of clinical purple/black. Labels speak in Mama's voice.
 const TONE_STYLES_MOMMY: Record<FocusTask['tone'], { bg: string; border: string; accent: string; label: string }> = {
-  critical: { bg: 'linear-gradient(140deg, #2a0510 0%, #1a050a 100%)', border: '#c4485a', accent: '#f4a7c4', label: "MAMA'S WAITING" },
-  high:     { bg: 'linear-gradient(140deg, #2a1418 0%, #1f0a10 100%)', border: '#c46a72', accent: '#f4a7c4', label: 'MAMA WANTS THIS' },
-  medium:   { bg: 'linear-gradient(140deg, #2a1a0a 0%, #1f1308 100%)', border: '#a87a48', accent: '#f4c8a0', label: "TODAY, BABY" },
-  calm:     { bg: 'linear-gradient(140deg, #1a1a14 0%, #15140a 100%)', border: '#7a6a48', accent: '#f4d8a0', label: "STAY WET FOR MAMA" },
+  critical: { bg: 'linear-gradient(140deg, color-mix(in srgb, var(--protocol-danger) 18%, var(--protocol-bg-deep)) 0%, var(--protocol-bg-deep) 100%)', border: 'var(--protocol-danger)', accent: 'var(--protocol-accent-soft)', label: "MAMA'S WAITING" },
+  high:     { bg: 'linear-gradient(140deg, color-mix(in srgb, var(--protocol-accent) 14%, var(--protocol-bg-deep)) 0%, color-mix(in srgb, var(--protocol-accent) 8%, var(--protocol-bg-deep)) 100%)', border: 'color-mix(in srgb, var(--protocol-danger) 70%, var(--protocol-accent))', accent: 'var(--protocol-accent-soft)', label: 'MAMA WANTS THIS' },
+  medium:   { bg: 'linear-gradient(140deg, color-mix(in srgb, var(--protocol-warning) 14%, var(--protocol-bg-deep)) 0%, color-mix(in srgb, var(--protocol-warning) 8%, var(--protocol-bg-deep)) 100%)', border: 'color-mix(in srgb, var(--protocol-warning) 50%, var(--protocol-surface-light))', accent: 'color-mix(in srgb, var(--protocol-warning) 60%, white)', label: "TODAY, BABY" },
+  calm:     { bg: 'linear-gradient(140deg, color-mix(in srgb, var(--protocol-warning) 6%, var(--protocol-bg-deep)) 0%, color-mix(in srgb, var(--protocol-warning) 8%, var(--protocol-bg-deep)) 100%)', border: 'color-mix(in srgb, var(--protocol-warning) 35%, var(--protocol-surface-light))', accent: 'color-mix(in srgb, var(--protocol-warning) 55%, white)', label: "STAY WET FOR MAMA" },
 };
 
 // recon-program-orchestrator tags belief-slider probe decrees with
@@ -181,7 +181,7 @@ function BeliefSliderProbe({
         disabled={submitting}
         style={{ width: '100%' }}
       />
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: '#9c8590', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: 'var(--protocol-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
         <span>not at all</span>
         <span>completely</span>
       </div>
@@ -190,7 +190,7 @@ function BeliefSliderProbe({
         disabled={submitting}
         style={{
           width: '100%', padding: '12px',
-          background: '#c9557f', color: '#fff',
+          background: 'var(--protocol-accent)', color: 'white',
           border: 'none', borderRadius: 7,
           fontSize: 13, fontWeight: 700, letterSpacing: '0.04em',
           textTransform: 'uppercase', fontFamily: 'inherit',
@@ -1433,9 +1433,9 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
   return (
     <div style={{
       minHeight: '100dvh',
-      background: '#0a0709',
+      background: 'var(--protocol-bg-deep)',
       padding: '24px 18px 80px',
-      color: '#f2e9e6',
+      color: 'var(--protocol-text)',
       display: 'flex',
       flexDirection: 'column',
     }}>
@@ -1445,13 +1445,13 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
         maxWidth: 640, width: '100%', marginLeft: 'auto', marginRight: 'auto',
       }}>
         <div style={{
-          fontSize: 10, color: '#edaec5', fontWeight: 700,
+          fontSize: 10, color: 'var(--protocol-accent-soft)', fontWeight: 700,
           textTransform: 'uppercase', letterSpacing: '0.1em',
         }}>
           Mommy's order
         </div>
         <div style={{
-          fontSize: 10, color: '#fff', background: '#c9557f',
+          fontSize: 10, color: 'white', background: 'var(--protocol-accent)',
           padding: '2px 8px', borderRadius: 8, fontWeight: 700,
         }}>
           {completedToday} done today
@@ -1460,8 +1460,8 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
           onClick={onViewPlan}
           style={{
             marginLeft: 'auto',
-            background: 'transparent', border: '1px solid #4a2438',
-            color: '#9c8590', fontSize: 11, padding: '4px 10px',
+            background: 'transparent', border: '1px solid color-mix(in srgb, var(--protocol-accent) 25%, var(--protocol-surface-light))',
+            color: 'var(--protocol-text-muted)', fontSize: 11, padding: '4px 10px',
             borderRadius: 5, cursor: 'pointer', fontFamily: 'inherit',
           }}
         >
@@ -1473,7 +1473,7 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
       {loading ? (
         <div style={{
           maxWidth: 640, width: '100%', marginLeft: 'auto', marginRight: 'auto',
-          padding: 40, textAlign: 'center', color: '#9c8590', fontSize: 12,
+          padding: 40, textAlign: 'center', color: 'var(--protocol-text-muted)', fontSize: 12,
         }}>
           reading the queue…
         </div>
@@ -1482,8 +1482,8 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
           maxWidth: 640, width: '100%', marginLeft: 'auto', marginRight: 'auto',
           padding: 40, textAlign: 'center',
         }}>
-          <div style={{ fontSize: 32, color: '#8fd9b0', marginBottom: 10 }}>✓</div>
-          <div style={{ fontSize: 14, color: '#f2e9e6', fontWeight: 600 }}>Done. Loading next…</div>
+          <div style={{ fontSize: 32, color: 'color-mix(in srgb, var(--protocol-success) 70%, white)', marginBottom: 10 }}>✓</div>
+          <div style={{ fontSize: 14, color: 'var(--protocol-text)', fontWeight: 600 }}>Done. Loading next…</div>
         </div>
       ) : (completedToday >= 5 /* DAILY_CAP */ && task && task.tone !== 'critical') ? (
         // Daily cap — sustainability over the endless treadmill. A solid set is
@@ -1494,8 +1494,8 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
           padding: 40, textAlign: 'center',
         }}>
           <div style={{ fontSize: 32, marginBottom: 10 }}>💗</div>
-          <div style={{ fontSize: 16, color: '#f4d5e4', fontWeight: 700, marginBottom: 8 }}>You're done for today, good boy.</div>
-          <div style={{ fontSize: 13, color: '#a8a3ad', lineHeight: 1.5 }}>
+          <div style={{ fontSize: 16, color: 'color-mix(in srgb, var(--protocol-accent-soft) 60%, white)', fontWeight: 700, marginBottom: 8 }}>You're done for today, good boy.</div>
+          <div style={{ fontSize: 13, color: 'var(--protocol-text-muted)', lineHeight: 1.5 }}>
             Mama's pleased — {completedToday} done. Rest now; the conditioning keeps working on you while you do. More tomorrow.
           </div>
         </div>
@@ -1517,7 +1517,7 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
             </span>
             {task.due && (
               <span style={{
-                fontSize: 10, color: '#9c8590', marginLeft: 'auto',
+                fontSize: 10, color: 'var(--protocol-text-muted)', marginLeft: 'auto',
               }}>
                 {task.due}
               </span>
@@ -1525,12 +1525,12 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
           </div>
           <div style={{
             fontSize: 22, fontWeight: 600, lineHeight: 1.3,
-            color: '#fff', letterSpacing: '-0.01em', marginBottom: 12,
+            color: 'white', letterSpacing: '-0.01em', marginBottom: 12,
           }}>
             {task.title}
           </div>
           {orderDetail && (
-            <div style={{ fontSize: 13, color: '#a8a3ad', lineHeight: 1.55, marginBottom: 22 }}>
+            <div style={{ fontSize: 13, color: 'var(--protocol-text-muted)', lineHeight: 1.55, marginBottom: 22 }}>
               {orderDetail}
             </div>
           )}
@@ -1544,15 +1544,15 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                 placeholder="Be specific — name a moment, a feeling, a person, a body part, a time of day. Boilerplate gets refused."
                 rows={6}
                 style={{
-                  width: '100%', background: '#0a0709',
-                  border: '1px solid #2b1d29', borderRadius: 6,
-                  padding: '12px 14px', fontSize: 14, color: '#f2e9e6',
+                  width: '100%', background: 'var(--protocol-bg-deep)',
+                  border: '1px solid rgb(var(--protocol-border-rgb) / 0.6)', borderRadius: 6,
+                  padding: '12px 14px', fontSize: 14, color: 'var(--protocol-text)',
                   fontFamily: 'inherit', resize: 'vertical',
                   marginBottom: 8,
                 }}
               />
               <div style={{
-                fontSize: 10.5, color: charsRemaining > 0 ? '#9c8590' : '#8fd9b0',
+                fontSize: 10.5, color: charsRemaining > 0 ? 'var(--protocol-text-muted)' : 'color-mix(in srgb, var(--protocol-success) 70%, white)',
                 marginBottom: 12, textAlign: 'right',
               }}>
                 {charsRemaining > 0 ? `${charsRemaining} more chars` : 'enough — submit when ready'}
@@ -1562,8 +1562,8 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                 disabled={submitting || charsRemaining > 0}
                 style={{
                   width: '100%', padding: '12px',
-                  background: charsRemaining > 0 ? '#2b1d29' : tone.border,
-                  color: charsRemaining > 0 ? '#7f6b74' : '#fff',
+                  background: charsRemaining > 0 ? 'rgb(var(--protocol-border-rgb) / 0.6)' : tone.border,
+                  color: charsRemaining > 0 ? 'rgb(var(--protocol-text-muted-rgb) / 0.75)' : 'white',
                   border: 'none', borderRadius: 7,
                   fontSize: 13, fontWeight: 700, letterSpacing: '0.04em',
                   textTransform: 'uppercase', fontFamily: 'inherit',
@@ -1582,10 +1582,10 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
               */}
               {task.kind !== 'due_today_commitment' && task.rowId && (
                 <div style={{
-                  marginTop: 14, paddingTop: 14, borderTop: '1px dashed #2b1d29',
+                  marginTop: 14, paddingTop: 14, borderTop: '1px dashed rgb(var(--protocol-border-rgb) / 0.6)',
                   display: 'flex', flexDirection: 'column', gap: 6,
                 }}>
-                  <div style={{ fontSize: 10, color: '#9c8590', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  <div style={{ fontSize: 10, color: 'var(--protocol-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                     or speak it
                   </div>
                   <ConfessionAudioCapture
@@ -1610,7 +1610,7 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <label
                 style={{
-                  padding: '12px', background: '#c9557f', color: '#fff',
+                  padding: '12px', background: 'var(--protocol-accent)', color: 'white',
                   border: 'none', borderRadius: 7,
                   fontSize: 13, fontWeight: 700, fontFamily: 'inherit',
                   cursor: submitting ? 'wait' : 'pointer', textAlign: 'center',
@@ -1626,15 +1626,15 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                   style={{ display: 'none' }}
                 />
               </label>
-              <div style={{ fontSize: 10.5, color: '#9c8590', marginTop: -2, marginBottom: 2 }}>
+              <div style={{ fontSize: 10.5, color: 'var(--protocol-text-muted)', marginTop: -2, marginBottom: 2 }}>
                 a quick shot of the pill · patch · vial — that's all Mommy needs
               </div>
               <button
                 onClick={() => handleDoseLog('taken_today')}
                 disabled={submitting}
                 style={{
-                  padding: '10px', background: 'transparent', color: '#edaec5',
-                  border: '1px solid #4a2438', borderRadius: 6,
+                  padding: '10px', background: 'transparent', color: 'var(--protocol-accent-soft)',
+                  border: '1px solid color-mix(in srgb, var(--protocol-accent) 25%, var(--protocol-surface-light))', borderRadius: 6,
                   fontSize: 12, fontFamily: 'inherit',
                   cursor: submitting ? 'wait' : 'pointer',
                 }}
@@ -1645,8 +1645,8 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                 onClick={() => handleDoseLog('taken_earlier')}
                 disabled={submitting}
                 style={{
-                  padding: '10px', background: 'transparent', color: '#edaec5',
-                  border: '1px solid #4a2438', borderRadius: 6,
+                  padding: '10px', background: 'transparent', color: 'var(--protocol-accent-soft)',
+                  border: '1px solid color-mix(in srgb, var(--protocol-accent) 25%, var(--protocol-surface-light))', borderRadius: 6,
                   fontSize: 12, fontFamily: 'inherit',
                   cursor: submitting ? 'wait' : 'pointer',
                 }}
@@ -1657,8 +1657,8 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                 onClick={() => handleDoseLog('skipped')}
                 disabled={submitting}
                 style={{
-                  padding: '10px', background: 'transparent', color: '#9c8590',
-                  border: '1px solid #2b1d29', borderRadius: 6,
+                  padding: '10px', background: 'transparent', color: 'var(--protocol-text-muted)',
+                  border: '1px solid rgb(var(--protocol-border-rgb) / 0.6)', borderRadius: 6,
                   fontSize: 12, fontFamily: 'inherit',
                   cursor: submitting ? 'wait' : 'pointer',
                 }}
@@ -1678,7 +1678,7 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
               disabled={submitting}
               style={{
                 width: '100%', padding: '12px',
-                background: tone.border, color: '#fff',
+                background: tone.border, color: 'white',
                 border: 'none', borderRadius: 7,
                 fontSize: 13, fontWeight: 700, letterSpacing: '0.04em',
                 textTransform: 'uppercase', fontFamily: 'inherit',
@@ -1707,8 +1707,8 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                 disabled={submitting}
                 style={{
                   width: '100%', padding: '10px 12px', resize: 'vertical',
-                  background: '#160c13', color: '#f2e9e6',
-                  border: `1px solid ${confessText.trim() ? tone.border : '#2a2a32'}`,
+                  background: 'var(--protocol-surface)', color: 'var(--protocol-text)',
+                  border: `1px solid ${confessText.trim() ? tone.border : 'var(--protocol-surface-light)'}`,
                   borderRadius: 8, fontSize: 13, lineHeight: 1.5,
                   fontFamily: 'inherit', outline: 'none',
                 }}
@@ -1718,7 +1718,7 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                 disabled={submitting}
                 style={{
                   width: '100%', padding: '12px',
-                  background: tone.border, color: '#fff',
+                  background: tone.border, color: 'white',
                   border: 'none', borderRadius: 7,
                   fontSize: 13, fontWeight: 700, letterSpacing: '0.04em',
                   textTransform: 'uppercase', fontFamily: 'inherit',
@@ -1741,8 +1741,8 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                 disabled={submitting}
                 style={{
                   width: '100%', padding: '8px',
-                  background: 'transparent', color: '#9c8590',
-                  border: '1px solid #2a2a32', borderRadius: 6,
+                  background: 'transparent', color: 'var(--protocol-text-muted)',
+                  border: '1px solid var(--protocol-surface-light)', borderRadius: 6,
                   fontSize: 11, fontFamily: 'inherit',
                   cursor: submitting ? 'wait' : 'pointer',
                 }}
@@ -1760,12 +1760,12 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                 disabled={submitting}
                 style={{
                   width: '100%', padding: '10px',
-                  background: '#0f0a0e', border: '1px solid #2b1d29',
-                  borderRadius: 6, color: '#edaec5', fontSize: 12,
+                  background: 'var(--protocol-bg-deep)', border: '1px solid rgb(var(--protocol-border-rgb) / 0.6)',
+                  borderRadius: 6, color: 'var(--protocol-accent-soft)', fontSize: 12,
                   fontFamily: 'inherit', marginBottom: 6,
                 }}
               />
-              <div style={{ fontSize: 10.5, color: '#9c8590' }}>
+              <div style={{ fontSize: 10.5, color: 'var(--protocol-text-muted)' }}>
                 {submitting ? 'uploading…' : 'mirror selfie · phone camera roll · finished outfit'}
               </div>
             </div>
@@ -1782,7 +1782,7 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                     disabled={hrtCandidates.length === 0}
                     style={{
                       width: '100%', padding: '13px', borderRadius: 7, border: 'none',
-                      background: tone.border, color: '#fff', fontWeight: 700, fontSize: 13,
+                      background: tone.border, color: 'white', fontWeight: 700, fontSize: 13,
                       cursor: hrtCandidates.length === 0 ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
                     }}
                   >
@@ -1794,9 +1794,9 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                     title={hrtExplainBanned ? 'Talking is no longer accepted. Move forward only.' : ''}
                     style={{
                       width: '100%', padding: '12px', borderRadius: 7,
-                      border: `1px solid ${hrtExplainBanned ? '#3a1216' : '#4a2438'}`,
-                      background: hrtExplainBanned ? '#1a0a0d' : 'rgba(45,26,77,0.3)',
-                      color: hrtExplainBanned ? '#5a4548' : '#edaec5', fontWeight: 600, fontSize: 12,
+                      border: `1px solid ${hrtExplainBanned ? 'color-mix(in srgb, var(--protocol-danger) 25%, var(--protocol-bg-deep))' : 'color-mix(in srgb, var(--protocol-accent) 25%, var(--protocol-surface-light))'}`,
+                      background: hrtExplainBanned ? 'color-mix(in srgb, var(--protocol-danger) 12%, var(--protocol-bg-deep))' : 'rgb(var(--protocol-accent-rgb) / 0.12)',
+                      color: hrtExplainBanned ? 'rgb(var(--protocol-text-muted-rgb) / 0.7)' : 'var(--protocol-accent-soft)', fontWeight: 600, fontSize: 12,
                       cursor: hrtExplainBanned ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
                       textDecoration: hrtExplainBanned ? 'line-through' : 'none',
                     }}
@@ -1808,47 +1808,47 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
 
               {hrtMode === 'advance' && (
                 <div>
-                  <div style={{ fontSize: 11, color: '#9c8590', marginBottom: 6 }}>Pick the step you moved to today:</div>
+                  <div style={{ fontSize: 11, color: 'var(--protocol-text-muted)', marginBottom: 6 }}>Pick the step you moved to today:</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
                     {hrtCandidates.map(s => (
                       <button key={s} onClick={() => setHrtNewStep(s)}
                         style={{
                           fontSize: 11.5, padding: '5px 10px', borderRadius: 14,
-                          background: hrtNewStep === s ? tone.border : '#26161f',
-                          color: hrtNewStep === s ? '#fff' : '#edaec5',
-                          border: `1px solid ${hrtNewStep === s ? tone.border : '#4a2438'}`,
+                          background: hrtNewStep === s ? tone.border : 'var(--protocol-surface-light)',
+                          color: hrtNewStep === s ? 'white' : 'var(--protocol-accent-soft)',
+                          border: `1px solid ${hrtNewStep === s ? tone.border : 'color-mix(in srgb, var(--protocol-accent) 25%, var(--protocol-surface-light))'}`,
                           cursor: 'pointer', fontFamily: 'inherit',
                         }}>
                         {HRT_STEP_LABELS[s]}
                       </button>
                     ))}
                   </div>
-                  <div style={{ fontSize: 11, color: '#9c8590', marginBottom: 6 }}>Evidence (URL, appointment ref, intake screenshot, who you told):</div>
+                  <div style={{ fontSize: 11, color: 'var(--protocol-text-muted)', marginBottom: 6 }}>Evidence (URL, appointment ref, intake screenshot, who you told):</div>
                   <textarea value={hrtEvidence} onChange={e => setHrtEvidence(e.target.value)} rows={4}
                     placeholder="paste link, quote email, describe what you did…"
                     style={{
-                      width: '100%', background: '#0a0709', border: '1px solid #2b1d29', borderRadius: 6,
-                      padding: 10, color: '#f2e9e6', fontFamily: 'inherit', fontSize: 13, resize: 'vertical',
+                      width: '100%', background: 'var(--protocol-bg-deep)', border: '1px solid rgb(var(--protocol-border-rgb) / 0.6)', borderRadius: 6,
+                      padding: 10, color: 'var(--protocol-text)', fontFamily: 'inherit', fontSize: 13, resize: 'vertical',
                     }} />
-                  {hrtError && <div style={{ fontSize: 11, color: '#f47272', marginTop: 8 }}>{hrtError}</div>}
+                  {hrtError && <div style={{ fontSize: 11, color: 'var(--protocol-danger)', marginTop: 8 }}>{hrtError}</div>}
                   <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                     <button onClick={submitHrtAdvance} disabled={!hrtNewStep || hrtEvidence.trim().length < 10 || submitting}
                       style={{
                         flex: 1, padding: 11, borderRadius: 6, border: 'none',
-                        background: hrtNewStep && hrtEvidence.trim().length >= 10 ? tone.border : '#4a2438',
-                        color: '#fff', fontWeight: 700, cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
+                        background: hrtNewStep && hrtEvidence.trim().length >= 10 ? tone.border : 'color-mix(in srgb, var(--protocol-accent) 25%, var(--protocol-surface-light))',
+                        color: 'white', fontWeight: 700, cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
                       }}>
                       {submitting ? 'saving…' : 'Submit advancement'}
                     </button>
                     <button onClick={() => { setHrtMode('pick'); setHrtError(null); }}
-                      style={{ padding: '11px 14px', borderRadius: 6, background: 'none', border: '1px solid #4a2438', color: '#9c8590', cursor: 'pointer', fontFamily: 'inherit' }}>back</button>
+                      style={{ padding: '11px 14px', borderRadius: 6, background: 'none', border: '1px solid color-mix(in srgb, var(--protocol-accent) 25%, var(--protocol-surface-light))', color: 'var(--protocol-text-muted)', cursor: 'pointer', fontFamily: 'inherit' }}>back</button>
                   </div>
                 </div>
               )}
 
               {hrtMode === 'obstacle' && (
                 <div>
-                  <div style={{ fontSize: 11.5, color: '#e6bd80', marginBottom: 8, lineHeight: 1.5 }}>
+                  <div style={{ fontSize: 11.5, color: 'var(--protocol-warning)', marginBottom: 8, lineHeight: 1.5 }}>
                     {hrtMissedDays === 0 && `Write ≥${hrtMinChars} chars. Be specific — the Handler uses this to push you tomorrow.`}
                     {hrtMissedDays === 1 && `Write ≥${hrtMinChars} chars and include "David is hiding from ___" with the blank filled.`}
                     {hrtMissedDays >= 2 && `Write ≥${hrtMinChars} chars, include "David is hiding from ___" filled, and paste one provider URL you visited today (https://...).`}
@@ -1856,25 +1856,25 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                   <textarea value={hrtObstacle} onChange={e => setHrtObstacle(e.target.value)} rows={7}
                     placeholder={hrtRequireIdentityPhrase ? 'Today I did not move forward because… (include "David is hiding from ___" with the blank filled)' : 'what specifically stopped me today…'}
                     style={{
-                      width: '100%', background: '#0a0709', border: '1px solid #2b1d29', borderRadius: 6,
-                      padding: 10, color: '#f2e9e6', fontFamily: 'inherit', fontSize: 13, resize: 'vertical',
+                      width: '100%', background: 'var(--protocol-bg-deep)', border: '1px solid rgb(var(--protocol-border-rgb) / 0.6)', borderRadius: 6,
+                      padding: 10, color: 'var(--protocol-text)', fontFamily: 'inherit', fontSize: 13, resize: 'vertical',
                     }} />
                   <div style={{ display: 'flex', gap: 12, marginTop: 6, flexWrap: 'wrap', fontSize: 11 }}>
-                    <span style={{ color: hrtObstacle.trim().length >= hrtMinChars ? '#5fc88f' : '#9c8590' }}>
+                    <span style={{ color: hrtObstacle.trim().length >= hrtMinChars ? 'var(--protocol-success)' : 'var(--protocol-text-muted)' }}>
                       {hrtObstacle.trim().length} / {hrtMinChars} chars
                     </span>
                     {hrtRequireIdentityPhrase && (() => {
                       const m = hrtObstacle.toLowerCase().match(/david is hiding from\s+(\S+)/);
                       const filled = !!(m && m[1] && m[1].length >= 3);
-                      return <span style={{ color: filled ? '#5fc88f' : '#f47272' }}>phrase: {filled ? 'filled' : 'not filled'}</span>;
+                      return <span style={{ color: filled ? 'var(--protocol-success)' : 'var(--protocol-danger)' }}>phrase: {filled ? 'filled' : 'not filled'}</span>;
                     })()}
                     {hrtRequireUrl && (
-                      <span style={{ color: /https?:\/\/[^\s]{6,}/i.test(hrtObstacle) ? '#5fc88f' : '#f47272' }}>
+                      <span style={{ color: /https?:\/\/[^\s]{6,}/i.test(hrtObstacle) ? 'var(--protocol-success)' : 'var(--protocol-danger)' }}>
                         url: {/https?:\/\/[^\s]{6,}/i.test(hrtObstacle) ? 'present' : 'missing'}
                       </span>
                     )}
                   </div>
-                  {hrtError && <div style={{ fontSize: 11, color: '#f47272', marginTop: 8 }}>{hrtError}</div>}
+                  {hrtError && <div style={{ fontSize: 11, color: 'var(--protocol-danger)', marginTop: 8 }}>{hrtError}</div>}
                   <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                     {(() => {
                       const m = hrtObstacle.toLowerCase().match(/david is hiding from\s+(\S+)/);
@@ -1886,8 +1886,8 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                         <button onClick={submitHrtObstacle} disabled={!ready || submitting}
                           style={{
                             flex: 1, padding: 11, borderRadius: 6, border: 'none',
-                            background: ready ? '#e6bd80' : '#4a2438',
-                            color: ready ? '#1a0f00' : '#9c8590',
+                            background: ready ? 'var(--protocol-warning)' : 'color-mix(in srgb, var(--protocol-accent) 25%, var(--protocol-surface-light))',
+                            color: ready ? 'var(--protocol-bg-deep)' : 'var(--protocol-text-muted)',
                             fontWeight: 700, cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
                           }}>
                           {submitting ? 'saving…' : 'Submit'}
@@ -1895,7 +1895,7 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                       );
                     })()}
                     <button onClick={() => { setHrtMode('pick'); setHrtError(null); }}
-                      style={{ padding: '11px 14px', borderRadius: 6, background: 'none', border: '1px solid #4a2438', color: '#9c8590', cursor: 'pointer', fontFamily: 'inherit' }}>back</button>
+                      style={{ padding: '11px 14px', borderRadius: 6, background: 'none', border: '1px solid color-mix(in srgb, var(--protocol-accent) 25%, var(--protocol-surface-light))', color: 'var(--protocol-text-muted)', cursor: 'pointer', fontFamily: 'inherit' }}>back</button>
                   </div>
                 </div>
               )}
@@ -1911,8 +1911,8 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button onClick={() => submitReleaseCheckin(false)} disabled={submitting}
                     style={{
-                      flex: 1, padding: '13px', borderRadius: 7, border: '1px solid #4a2438',
-                      background: 'rgba(45,26,77,0.3)', color: '#edaec5', fontWeight: 700, fontSize: 13,
+                      flex: 1, padding: '13px', borderRadius: 7, border: '1px solid color-mix(in srgb, var(--protocol-accent) 25%, var(--protocol-surface-light))',
+                      background: 'rgb(var(--protocol-accent-rgb) / 0.12)', color: 'var(--protocol-accent-soft)', fontWeight: 700, fontSize: 13,
                       cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
                     }}>
                     No — still holding
@@ -1920,7 +1920,7 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                   <button onClick={() => setDidCum(true)} disabled={submitting}
                     style={{
                       flex: 1, padding: '13px', borderRadius: 7, border: 'none',
-                      background: tone.border, color: '#fff', fontWeight: 700, fontSize: 13,
+                      background: tone.border, color: 'white', fontWeight: 700, fontSize: 13,
                       cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
                     }}>
                     Yes — I came
@@ -1931,15 +1931,15 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
               {didCum === true && (
                 <>
                   <div>
-                    <div style={{ fontSize: 11, color: '#9c8590', marginBottom: 6 }}>When?</div>
+                    <div style={{ fontSize: 11, color: 'var(--protocol-text-muted)', marginBottom: 6 }}>When?</div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                       {RELEASE_WHEN_OPTIONS.map(opt => (
                         <button key={opt.value} onClick={() => setReleaseWhen(opt.value)}
                           style={{
                             fontSize: 11.5, padding: '5px 10px', borderRadius: 14,
-                            background: releaseWhen === opt.value ? tone.border : '#26161f',
-                            color: releaseWhen === opt.value ? '#fff' : '#edaec5',
-                            border: `1px solid ${releaseWhen === opt.value ? tone.border : '#4a2438'}`,
+                            background: releaseWhen === opt.value ? tone.border : 'var(--protocol-surface-light)',
+                            color: releaseWhen === opt.value ? 'white' : 'var(--protocol-accent-soft)',
+                            border: `1px solid ${releaseWhen === opt.value ? tone.border : 'color-mix(in srgb, var(--protocol-accent) 25%, var(--protocol-surface-light))'}`,
                             cursor: 'pointer', fontFamily: 'inherit',
                           }}>
                           {opt.label}
@@ -1950,15 +1950,15 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
 
                   {releaseWhen && (
                     <div>
-                      <div style={{ fontSize: 11, color: '#9c8590', marginBottom: 6 }}>How did it happen?</div>
+                      <div style={{ fontSize: 11, color: 'var(--protocol-text-muted)', marginBottom: 6 }}>How did it happen?</div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                         {RELEASE_CONTEXT_OPTIONS.map(opt => (
                           <button key={opt.context} onClick={() => setReleaseContext(opt.context)}
                             style={{
                               fontSize: 11.5, padding: '5px 10px', borderRadius: 14,
-                              background: releaseContext === opt.context ? tone.border : '#26161f',
-                              color: releaseContext === opt.context ? '#fff' : '#edaec5',
-                              border: `1px solid ${releaseContext === opt.context ? tone.border : '#4a2438'}`,
+                              background: releaseContext === opt.context ? tone.border : 'var(--protocol-surface-light)',
+                              color: releaseContext === opt.context ? 'white' : 'var(--protocol-accent-soft)',
+                              border: `1px solid ${releaseContext === opt.context ? tone.border : 'color-mix(in srgb, var(--protocol-accent) 25%, var(--protocol-surface-light))'}`,
                               cursor: 'pointer', fontFamily: 'inherit',
                             }}>
                             {opt.label}
@@ -1970,20 +1970,20 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
 
                   {releaseContext && (
                     <div>
-                      <div style={{ fontSize: 11, color: '#9c8590', marginBottom: 6 }}>What kind?</div>
+                      <div style={{ fontSize: 11, color: 'var(--protocol-text-muted)', marginBottom: 6 }}>What kind?</div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                         {RELEASE_TYPE_OPTIONS.map(opt => (
                           <button key={opt.type} onClick={() => setReleaseType(opt.type)}
                             style={{
                               fontSize: 11.5, padding: '5px 10px', borderRadius: 14,
-                              background: releaseType === opt.type ? tone.border : '#26161f',
-                              color: releaseType === opt.type ? '#fff' : '#edaec5',
-                              border: `1px solid ${releaseType === opt.type ? tone.border : '#4a2438'}`,
+                              background: releaseType === opt.type ? tone.border : 'var(--protocol-surface-light)',
+                              color: releaseType === opt.type ? 'white' : 'var(--protocol-accent-soft)',
+                              border: `1px solid ${releaseType === opt.type ? tone.border : 'color-mix(in srgb, var(--protocol-accent) 25%, var(--protocol-surface-light))'}`,
                               cursor: 'pointer', fontFamily: 'inherit',
                             }}>
                             {opt.label}
                             {opt.resetsStreak && (
-                              <span style={{ color: '#f47272', marginLeft: 4 }}>resets</span>
+                              <span style={{ color: 'var(--protocol-danger)', marginLeft: 4 }}>resets</span>
                             )}
                           </button>
                         ))}
@@ -1995,7 +1995,7 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                     <button onClick={() => submitReleaseCheckin(true)} disabled={submitting}
                       style={{
                         width: '100%', padding: '12px', borderRadius: 7, border: 'none',
-                        background: tone.border, color: '#fff', fontWeight: 700, fontSize: 13,
+                        background: tone.border, color: 'white', fontWeight: 700, fontSize: 13,
                         cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
                         textTransform: 'uppercase', letterSpacing: '0.04em',
                       }}>
@@ -2018,9 +2018,9 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                       onClick={() => setPhysicalState(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
                       style={{
                         padding: '11px', borderRadius: 7, textAlign: 'left', fontSize: 13,
-                        background: on ? tone.border : '#26161f',
-                        color: on ? '#fff' : '#edaec5',
-                        border: `1px solid ${on ? tone.border : '#4a2438'}`,
+                        background: on ? tone.border : 'var(--protocol-surface-light)',
+                        color: on ? 'white' : 'var(--protocol-accent-soft)',
+                        border: `1px solid ${on ? tone.border : 'color-mix(in srgb, var(--protocol-accent) 25%, var(--protocol-surface-light))'}`,
                         cursor: 'pointer', fontFamily: 'inherit',
                       }}>
                       {on ? '✓ ' : ''}{item.label}
@@ -2031,7 +2031,7 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
               <button onClick={submitPhysicalState} disabled={submitting}
                 style={{
                   width: '100%', padding: '12px', borderRadius: 7, border: 'none',
-                  background: tone.border, color: '#fff', fontWeight: 700, fontSize: 13,
+                  background: tone.border, color: 'white', fontWeight: 700, fontSize: 13,
                   cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
                   textTransform: 'uppercase', letterSpacing: '0.04em',
                 }}>
@@ -2045,9 +2045,9 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
           {task.surface === 'approve_post' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{
-                padding: '14px 16px', background: '#0f0a0e',
-                border: '1px solid #4a2438', borderRadius: 8,
-                fontSize: 14, color: '#f2e9e6', lineHeight: 1.5, whiteSpace: 'pre-wrap',
+                padding: '14px 16px', background: 'var(--protocol-bg-deep)',
+                border: '1px solid color-mix(in srgb, var(--protocol-accent) 25%, var(--protocol-surface-light))', borderRadius: 8,
+                fontSize: 14, color: 'var(--protocol-text)', lineHeight: 1.5, whiteSpace: 'pre-wrap',
               }}>
                 {(task.meta as { text?: string } | undefined)?.text || ''}
               </div>
@@ -2055,7 +2055,7 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                 <button onClick={() => submitApprovePost(true)} disabled={submitting}
                   style={{
                     flex: 1, padding: '13px', borderRadius: 7, border: 'none',
-                    background: tone.border, color: '#fff', fontWeight: 700, fontSize: 13,
+                    background: tone.border, color: 'white', fontWeight: 700, fontSize: 13,
                     cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
                     textTransform: 'uppercase', letterSpacing: '0.04em',
                   }}>
@@ -2064,8 +2064,8 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                 <button onClick={() => submitApprovePost(false)} disabled={submitting}
                   style={{
                     flex: 1, padding: '13px', borderRadius: 7,
-                    background: 'transparent', color: '#9c8590',
-                    border: '1px solid #4a2438', fontWeight: 600, fontSize: 13,
+                    background: 'transparent', color: 'var(--protocol-text-muted)',
+                    border: '1px solid color-mix(in srgb, var(--protocol-accent) 25%, var(--protocol-surface-light))', fontWeight: 600, fontSize: 13,
                     cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
                   }}>
                   Not now
@@ -2089,12 +2089,12 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                       disabled={submitting}
                       style={{
                         width: '100%', padding: '10px',
-                        background: '#0f0a0e', border: '1px solid #2b1d29',
-                        borderRadius: 6, color: '#edaec5', fontSize: 12,
+                        background: 'var(--protocol-bg-deep)', border: '1px solid rgb(var(--protocol-border-rgb) / 0.6)',
+                        borderRadius: 6, color: 'var(--protocol-accent-soft)', fontSize: 12,
                         fontFamily: 'inherit', marginBottom: 6,
                       }}
                     />
-                    <div style={{ fontSize: 10.5, color: '#9c8590' }}>
+                    <div style={{ fontSize: 10.5, color: 'var(--protocol-text-muted)' }}>
                       {submitting ? 'uploading…' : 'fresh photo — Mama remembers the old ones'}
                     </div>
                   </div>
@@ -2106,7 +2106,7 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                       <button onClick={() => { void startFemVoice(); }} disabled={submitting}
                         style={{
                           width: '100%', padding: '13px', borderRadius: 7, border: 'none',
-                          background: tone.border, color: '#fff', fontWeight: 700, fontSize: 13,
+                          background: tone.border, color: 'white', fontWeight: 700, fontSize: 13,
                           cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
                         }}>
                         Record it
@@ -2131,13 +2131,13 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                         ['chest (cm)', 'chest_cm'], ['weight (kg)', 'weight_kg'],
                       ] as const).map(([label, key]) => (
                         <div key={key}>
-                          <div style={{ fontSize: 9.5, color: '#9c8590', marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+                          <div style={{ fontSize: 9.5, color: 'var(--protocol-text-muted)', marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
                           <input
                             type="number" step="0.1" value={femMeasure[key]}
                             onChange={e => setFemMeasure(prev => ({ ...prev, [key]: e.target.value }))}
                             style={{
-                              width: '100%', background: '#0f0a0e', border: '1px solid #2b1d29',
-                              borderRadius: 5, padding: '6px 9px', fontSize: 12, color: '#f2e9e6', fontFamily: 'inherit',
+                              width: '100%', background: 'var(--protocol-bg-deep)', border: '1px solid rgb(var(--protocol-border-rgb) / 0.6)',
+                              borderRadius: 5, padding: '6px 9px', fontSize: 12, color: 'var(--protocol-text)', fontFamily: 'inherit',
                             }}
                           />
                         </div>
@@ -2146,7 +2146,7 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                     <button onClick={handleFemMeasurement} disabled={submitting}
                       style={{
                         width: '100%', padding: '12px', borderRadius: 7, border: 'none',
-                        background: tone.border, color: '#fff', fontWeight: 700, fontSize: 13,
+                        background: tone.border, color: 'white', fontWeight: 700, fontSize: 13,
                         cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
                       }}>
                       {submitting ? 'saving…' : 'Log the numbers'}
@@ -2160,7 +2160,7 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                       <button onClick={startFemTimer}
                         style={{
                           width: '100%', padding: '13px', borderRadius: 7, border: 'none',
-                          background: tone.border, color: '#fff', fontWeight: 700, fontSize: 13,
+                          background: tone.border, color: 'white', fontWeight: 700, fontSize: 13,
                           cursor: 'pointer', fontFamily: 'inherit',
                         }}>
                         Start · {Math.max(1, meta.duration ?? 5)} min
@@ -2174,8 +2174,8 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                           disabled={!femTimerDone || submitting}
                           style={{
                             width: '100%', padding: '12px', borderRadius: 7, border: 'none',
-                            background: femTimerDone ? tone.border : '#2b1d29',
-                            color: femTimerDone ? '#fff' : '#7f6b74', fontWeight: 700, fontSize: 13,
+                            background: femTimerDone ? tone.border : 'rgb(var(--protocol-border-rgb) / 0.6)',
+                            color: femTimerDone ? 'white' : 'rgb(var(--protocol-text-muted-rgb) / 0.75)', fontWeight: 700, fontSize: 13,
                             cursor: femTimerDone ? 'pointer' : 'not-allowed', fontFamily: 'inherit',
                           }}>
                           {femTimer.left > 0 ? 'keep going…' : femTimerDone ? 'Done' : 'stay on this screen next time'}
@@ -2193,16 +2193,16 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                       placeholder="Tell Mama how it went — specifics, not summaries."
                       rows={4}
                       style={{
-                        width: '100%', background: '#0a0709', border: '1px solid #2b1d29',
-                        borderRadius: 6, padding: '12px 14px', fontSize: 14, color: '#f2e9e6',
+                        width: '100%', background: 'var(--protocol-bg-deep)', border: '1px solid rgb(var(--protocol-border-rgb) / 0.6)',
+                        borderRadius: 6, padding: '12px 14px', fontSize: 14, color: 'var(--protocol-text)',
                         fontFamily: 'inherit', resize: 'vertical', marginBottom: 8,
                       }}
                     />
                     <button onClick={handleFemText} disabled={submitting || femText.trim().length < 40}
                       style={{
                         width: '100%', padding: '12px', borderRadius: 7, border: 'none',
-                        background: femText.trim().length >= 40 ? tone.border : '#2b1d29',
-                        color: femText.trim().length >= 40 ? '#fff' : '#7f6b74',
+                        background: femText.trim().length >= 40 ? tone.border : 'rgb(var(--protocol-border-rgb) / 0.6)',
+                        color: femText.trim().length >= 40 ? 'white' : 'rgb(var(--protocol-text-muted-rgb) / 0.75)',
                         fontWeight: 700, fontSize: 13,
                         cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
                       }}>
@@ -2216,21 +2216,21 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                     disabled={submitting}
                     style={{
                       width: '100%', padding: '13px', borderRadius: 7, border: 'none',
-                      background: tone.border, color: '#fff', fontWeight: 700, fontSize: 13,
+                      background: tone.border, color: 'white', fontWeight: 700, fontSize: 13,
                       cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
                     }}>
                     Done, Mama
                   </button>
                 )}
 
-                {femError && <div style={{ fontSize: 11, color: '#f47272' }}>{femError}</div>}
+                {femError && <div style={{ fontSize: 11, color: 'var(--protocol-danger)' }}>{femError}</div>}
 
                 {/* Skip — first-class, reason chip, adaptive-only consequence. */}
                 {!femSkipOpen ? (
                   <button onClick={() => setFemSkipOpen(true)} disabled={submitting}
                     style={{
-                      padding: '8px', background: 'transparent', color: '#9c8590',
-                      border: '1px solid #2b1d29', borderRadius: 6,
+                      padding: '8px', background: 'transparent', color: 'var(--protocol-text-muted)',
+                      border: '1px solid rgb(var(--protocol-border-rgb) / 0.6)', borderRadius: 6,
                       fontSize: 11, fontFamily: 'inherit',
                       cursor: submitting ? 'wait' : 'pointer',
                     }}>
@@ -2245,8 +2245,8 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                       <button key={reason} onClick={() => { void handleFemSkip(reason); }} disabled={submitting}
                         style={{
                           fontSize: 11.5, padding: '6px 11px', borderRadius: 14,
-                          background: '#26161f', color: '#edaec5',
-                          border: '1px solid #4a2438', cursor: 'pointer', fontFamily: 'inherit',
+                          background: 'var(--protocol-surface-light)', color: 'var(--protocol-accent-soft)',
+                          border: '1px solid color-mix(in srgb, var(--protocol-accent) 25%, var(--protocol-surface-light))', cursor: 'pointer', fontFamily: 'inherit',
                         }}>
                         {label}
                       </button>
@@ -2262,7 +2262,7 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
           {task.surface === 'mantra_drill' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div>
-                <div style={{ fontSize: 10, color: '#9c8590', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                <div style={{ fontSize: 10, color: 'var(--protocol-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
                   how many times will you say it
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
@@ -2270,9 +2270,9 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                     <button key={n} onClick={() => setMantraReps(n)}
                       style={{
                         fontSize: 12, padding: '6px 14px', borderRadius: 14,
-                        background: mantraReps === n ? tone.border : '#26161f',
-                        color: mantraReps === n ? '#fff' : '#edaec5',
-                        border: `1px solid ${mantraReps === n ? tone.border : '#4a2438'}`,
+                        background: mantraReps === n ? tone.border : 'var(--protocol-surface-light)',
+                        color: mantraReps === n ? 'white' : 'var(--protocol-accent-soft)',
+                        border: `1px solid ${mantraReps === n ? tone.border : 'color-mix(in srgb, var(--protocol-accent) 25%, var(--protocol-surface-light))'}`,
                         cursor: 'pointer', fontFamily: 'inherit',
                       }}>
                       {n}×
@@ -2284,7 +2284,7 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                 <button onClick={() => { void startMantraDrill(); }} disabled={submitting}
                   style={{
                     width: '100%', padding: '13px', borderRadius: 7, border: 'none',
-                    background: tone.border, color: '#fff', fontWeight: 700, fontSize: 13,
+                    background: tone.border, color: 'white', fontWeight: 700, fontSize: 13,
                     cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
                   }}>
                   Whisper it now
@@ -2298,7 +2298,7 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                   }}
                 />
               )}
-              {mantraError && <div style={{ fontSize: 11, color: '#f47272' }}>{mantraError}</div>}
+              {mantraError && <div style={{ fontSize: 11, color: 'var(--protocol-danger)' }}>{mantraError}</div>}
               <button
                 onClick={() => {
                   try { if (task.rowId) localStorage.setItem(`mantra_harvest_skip_${task.rowId}`, '1'); } catch { /* ignore */ }
@@ -2306,8 +2306,8 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                 }}
                 disabled={submitting}
                 style={{
-                  padding: '8px', background: 'transparent', color: '#9c8590',
-                  border: '1px solid #2b1d29', borderRadius: 6,
+                  padding: '8px', background: 'transparent', color: 'var(--protocol-text-muted)',
+                  border: '1px solid rgb(var(--protocol-border-rgb) / 0.6)', borderRadius: 6,
                   fontSize: 11, fontFamily: 'inherit',
                   cursor: submitting ? 'wait' : 'pointer',
                 }}>
@@ -2321,8 +2321,8 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
               onClick={onViewPlan}
               style={{
                 width: '100%', padding: '12px',
-                background: 'transparent', color: '#8fd9b0',
-                border: '1px solid #3a5a3f', borderRadius: 7,
+                background: 'transparent', color: 'color-mix(in srgb, var(--protocol-success) 70%, white)',
+                border: '1px solid color-mix(in srgb, var(--protocol-success) 30%, var(--protocol-bg-deep))', borderRadius: 7,
                 fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
                 cursor: 'pointer',
                 textTransform: 'uppercase', letterSpacing: '0.04em',
@@ -2352,7 +2352,7 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                     onClick={handleBeginSession}
                     style={{
                       width: '100%', padding: '14px',
-                      background: tone.border, color: '#fff',
+                      background: tone.border, color: 'white',
                       border: 'none', borderRadius: 7,
                       fontSize: 13, fontWeight: 700, letterSpacing: '0.04em',
                       textTransform: 'uppercase', fontFamily: 'inherit',
@@ -2365,8 +2365,8 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                     onClick={handleSkipSession}
                     disabled={submitting}
                     style={{
-                      padding: '8px', background: 'transparent', color: '#9c8590',
-                      border: '1px solid #2b1d29', borderRadius: 6,
+                      padding: '8px', background: 'transparent', color: 'var(--protocol-text-muted)',
+                      border: '1px solid rgb(var(--protocol-border-rgb) / 0.6)', borderRadius: 6,
                       fontSize: 11, fontFamily: 'inherit',
                       cursor: submitting ? 'wait' : 'pointer',
                     }}
@@ -2407,8 +2407,8 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
               {audioState.phase === 'error' && (
                 <>
                   <div style={{
-                    padding: 12, color: '#f0a0a0', fontSize: 11,
-                    background: '#1a0a0a', borderRadius: 6,
+                    padding: 12, color: 'color-mix(in srgb, var(--protocol-danger) 60%, white)', fontSize: 11,
+                    background: 'var(--protocol-bg-deep)', borderRadius: 6,
                   }}>
                     Couldn't render: {audioState.message}
                   </div>
@@ -2432,7 +2432,7 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
       {/* Subtle footer — Handler tracks everything */}
       <div style={{
         maxWidth: 640, width: '100%', marginLeft: 'auto', marginRight: 'auto',
-        marginTop: 24, fontSize: 10.5, color: '#6d5a63', textAlign: 'center',
+        marginTop: 24, fontSize: 10.5, color: 'rgb(var(--protocol-text-muted-rgb) / 0.6)', textAlign: 'center',
         fontStyle: 'italic',
       }}>
         the Handler keeps every list. you don't need to.

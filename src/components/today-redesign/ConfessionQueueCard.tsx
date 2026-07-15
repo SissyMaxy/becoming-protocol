@@ -39,14 +39,14 @@ interface Receipt {
 }
 
 const CATEGORY_TONE: Record<string, string> = {
-  slip: '#f47272',
-  arousal_spike: '#ec4899',
-  rationalization: '#e6bd80',
-  scheduled_daily: '#edaec5',
-  resistance: '#f47272',
-  desire_owning: '#ec4899',
-  identity_acknowledgement: '#6ee7b7',
-  handler_triggered: '#edaec5',
+  slip: 'var(--protocol-danger)',
+  arousal_spike: 'var(--protocol-accent)',
+  rationalization: 'var(--protocol-warning)',
+  scheduled_daily: 'var(--protocol-accent-soft)',
+  resistance: 'var(--protocol-danger)',
+  desire_owning: 'var(--protocol-accent)',
+  identity_acknowledgement: 'var(--protocol-success)',
+  handler_triggered: 'var(--protocol-accent-soft)',
 };
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
@@ -182,18 +182,18 @@ export function ConfessionQueueCard() {
 
   return (
     <div id="card-confession-queue" style={{
-      background: 'linear-gradient(135deg, #2a0a1a 0%, #1a050e 100%)',
-      border: '1px solid #7a1f3a', borderRadius: 10, padding: 14, marginBottom: 16,
+      background: 'linear-gradient(135deg, color-mix(in srgb, var(--protocol-accent) 14%, var(--protocol-bg-deep)) 0%, var(--protocol-bg-deep) 100%)',
+      border: '1px solid color-mix(in srgb, var(--protocol-accent) 45%, var(--protocol-surface-light))', borderRadius: 10, padding: 14, marginBottom: 16,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f4a7c4" strokeWidth="1.8">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--protocol-accent-soft)" strokeWidth="1.8">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           <path d="M8 9h8M8 13h5"/>
         </svg>
-        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#f4a7c4', fontWeight: 700 }}>
+        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.09em', color: 'var(--protocol-accent-soft)', fontWeight: 700 }}>
           {mommy ? `Tell Mama (${items.length})` : `Confess (${items.length})`}
         </span>
-        <span style={{ fontSize: 10, color: '#9c8590', marginLeft: 'auto', fontStyle: 'italic' }}>
+        <span style={{ fontSize: 10, color: 'var(--protocol-text-muted)', marginLeft: 'auto', fontStyle: 'italic' }}>
           {items.length > 0
             ? (mommy ? 'Mama\'s waiting, baby.' : 'Handler is waiting.')
             : `${totalReceipts} on file · ${totalPlaybacks} playbacks`}
@@ -203,15 +203,15 @@ export function ConfessionQueueCard() {
       {gateActive && mommy && items.length > 0 && (
         <div style={{
           padding: '10px 12px', marginBottom: 10,
-          background: 'linear-gradient(135deg, #1a050e 0%, #0f0a0e 100%)',
-          border: '1px solid #7a1f3a', borderLeft: '3px solid #f4a7c4', borderRadius: 6,
+          background: 'linear-gradient(135deg, var(--protocol-bg-deep) 0%, var(--protocol-bg-deep) 100%)',
+          border: '1px solid color-mix(in srgb, var(--protocol-accent) 45%, var(--protocol-surface-light))', borderLeft: '3px solid var(--protocol-accent-soft)', borderRadius: 6,
           display: 'flex', alignItems: 'center', gap: 10,
         }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f4a7c4" strokeWidth="1.8">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--protocol-accent-soft)" strokeWidth="1.8">
             <rect x="3" y="11" width="18" height="11" rx="2"/>
             <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
           </svg>
-          <span style={{ fontSize: 11.5, color: '#f4a7c4', lineHeight: 1.4, fontStyle: 'italic' }}>
+          <span style={{ fontSize: 11.5, color: 'var(--protocol-accent-soft)', lineHeight: 1.4, fontStyle: 'italic' }}>
             Mama's holding the morning. Answer her first — then you get her back.
           </span>
         </div>
@@ -220,22 +220,22 @@ export function ConfessionQueueCard() {
       {totalReceipts > 0 && (
         <div style={{
           padding: '8px 10px', marginBottom: items.length > 0 ? 10 : 0,
-          background: '#0f0a0e', border: '1px solid #4a2438',
-          borderLeft: '3px solid #edaec5', borderRadius: 5,
+          background: 'var(--protocol-bg-deep)', border: '1px solid color-mix(in srgb, var(--protocol-accent) 25%, var(--protocol-surface-light))',
+          borderLeft: '3px solid var(--protocol-accent-soft)', borderRadius: 5,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: showReceipts ? 8 : 0 }}>
-            <span style={{ fontSize: 9, color: '#edaec5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            <span style={{ fontSize: 9, color: 'var(--protocol-accent-soft)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               receipts · {totalReceipts} confessed
             </span>
-            <span style={{ fontSize: 9.5, color: '#9c8590' }}>
+            <span style={{ fontSize: 9.5, color: 'var(--protocol-text-muted)' }}>
               quoted back {totalPlaybacks}× · {receipts.filter(r => r.promoted_to_implant_id).length} promoted to implants
             </span>
             <button
               onClick={() => setShowReceipts(s => !s)}
               style={{
                 marginLeft: 'auto', padding: '2px 8px', borderRadius: 3,
-                background: 'transparent', border: '1px solid #4a2438',
-                color: '#edaec5', fontSize: 9.5, cursor: 'pointer', fontFamily: 'inherit',
+                background: 'transparent', border: '1px solid color-mix(in srgb, var(--protocol-accent) 25%, var(--protocol-surface-light))',
+                color: 'var(--protocol-accent-soft)', fontSize: 9.5, cursor: 'pointer', fontFamily: 'inherit',
               }}
             >
               {showReceipts ? 'hide' : 'show last 5'}
@@ -248,19 +248,19 @@ export function ConfessionQueueCard() {
                 const ago = Math.round((Date.now() - at.getTime()) / 3600000);
                 const agoStr = ago < 24 ? `${ago}h` : `${Math.round(ago / 24)}d`;
                 return (
-                  <div key={r.id} style={{ fontSize: 10.5, color: '#d5c3ca', lineHeight: 1.45 }}>
-                    <span style={{ color: '#9c8590' }}>{agoStr} · [{r.category}]</span>
+                  <div key={r.id} style={{ fontSize: 10.5, color: 'rgb(var(--protocol-text-rgb) / 0.82)', lineHeight: 1.45 }}>
+                    <span style={{ color: 'var(--protocol-text-muted)' }}>{agoStr} · [{r.category}]</span>
                     {r.playback_count > 0 && (
-                      <span style={{ color: '#e6bd80', marginLeft: 6 }}>·{r.playback_count}× quoted</span>
+                      <span style={{ color: 'var(--protocol-warning)', marginLeft: 6 }}>·{r.playback_count}× quoted</span>
                     )}
                     {r.promoted_to_implant_id && (
-                      <span style={{ color: '#6ee7b7', marginLeft: 6 }}>·implant</span>
+                      <span style={{ color: 'var(--protocol-success)', marginLeft: 6 }}>·implant</span>
                     )}
                     {r.audio_storage_path && (
-                      <span style={{ color: '#f4a7c4', marginLeft: 6 }}>·voice</span>
+                      <span style={{ color: 'var(--protocol-accent-soft)', marginLeft: 6 }}>·voice</span>
                     )}
                     {r.response_text && (
-                      <div style={{ fontStyle: 'italic', color: '#f2e9e6', marginTop: 2 }}>
+                      <div style={{ fontStyle: 'italic', color: 'var(--protocol-text)', marginTop: 2 }}>
                         "{r.response_text.slice(0, 200)}{r.response_text.length > 200 ? '…' : ''}"
                       </div>
                     )}
@@ -286,27 +286,27 @@ export function ConfessionQueueCard() {
         const dueMs = new Date(c.deadline).getTime() - now;
         const overdue = dueMs < 0;
         const hoursLeft = Math.max(0, Math.round(dueMs / 3600000));
-        const tone = CATEGORY_TONE[c.category] || '#edaec5';
+        const tone = CATEGORY_TONE[c.category] || 'var(--protocol-accent-soft)';
         const draft = drafts[c.id] || '';
         return (
           <div key={c.id} style={{
             padding: '10px 12px', marginBottom: 8,
-            background: '#0f0a0e', border: `1px solid ${tone}44`,
+            background: 'var(--protocol-bg-deep)', border: `1px solid ${tone}44`,
             borderLeft: `3px solid ${tone}`, borderRadius: 6,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
               <span style={{ fontSize: 9, color: tone, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                 {c.category.replace(/_/g, ' ')}
               </span>
-              <span style={{ fontSize: 9.5, color: overdue ? '#f47272' : '#9c8590', marginLeft: 'auto' }}>
+              <span style={{ fontSize: 9.5, color: overdue ? 'var(--protocol-danger)' : 'var(--protocol-text-muted)', marginLeft: 'auto' }}>
                 {overdue ? `overdue by ${Math.abs(hoursLeft)}h` : hoursLeft >= 24 ? `${Math.round(hoursLeft / 24)}d left` : `${hoursLeft}h left`}
               </span>
             </div>
-            <div style={{ fontSize: 12.5, color: '#f2e9e6', lineHeight: 1.45, marginBottom: c.context_note ? 4 : 8 }}>
+            <div style={{ fontSize: 12.5, color: 'var(--protocol-text)', lineHeight: 1.45, marginBottom: c.context_note ? 4 : 8 }}>
               {c.prompt}
             </div>
             {c.context_note && (
-              <div style={{ fontSize: 10.5, color: '#9c8590', fontStyle: 'italic', marginBottom: 8 }}>
+              <div style={{ fontSize: 10.5, color: 'var(--protocol-text-muted)', fontStyle: 'italic', marginBottom: 8 }}>
                 {c.context_note}
               </div>
             )}
@@ -322,33 +322,33 @@ export function ConfessionQueueCard() {
               placeholder={mommy ? 'Say it for Mama, baby. No softening.' : 'Say it. In your own words. No softening.'}
               rows={3}
               style={{
-                width: '100%', background: '#0a0709', border: '1px solid #2b1d29',
-                borderRadius: 5, padding: '7px 9px', fontSize: 11.5, color: '#f2e9e6',
+                width: '100%', background: 'var(--protocol-bg-deep)', border: '1px solid rgb(var(--protocol-border-rgb) / 0.6)',
+                borderRadius: 5, padding: '7px 9px', fontSize: 11.5, color: 'var(--protocol-text)',
                 fontFamily: 'inherit', resize: 'vertical',
               }}
             />
             <div style={{
               display: 'flex', justifyContent: 'space-between', fontSize: 9.5,
-              color: draft.length >= 30 ? '#5fc88f' : '#9c8590', marginTop: 3,
+              color: draft.length >= 30 ? 'var(--protocol-success)' : 'var(--protocol-text-muted)', marginTop: 3,
             }}>
               <span>{draft.length} chars · 30+ name a specific (a task, a feeling, a moment, a person)</span>
-              {draft.length >= 30 && <span style={{ color: '#5fc88f' }}>length ok</span>}
+              {draft.length >= 30 && <span style={{ color: 'var(--protocol-success)' }}>length ok</span>}
             </div>
             {gateRejection[c.id] && (
               <div style={{
                 marginTop: 6, padding: '7px 9px',
-                background: '#2a0a0c', border: '1px solid #7a1f22', borderRadius: 4,
+                background: 'color-mix(in srgb, var(--protocol-danger) 16%, var(--protocol-bg-deep))', border: '1px solid color-mix(in srgb, var(--protocol-danger) 45%, var(--protocol-surface-light))', borderRadius: 4,
               }}>
-                <div style={{ fontSize: 10, color: '#f47272', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>
+                <div style={{ fontSize: 10, color: 'var(--protocol-danger)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>
                   rejected — try once more, then it accepts
                 </div>
-                <div style={{ fontSize: 11, color: '#f4a7c4', lineHeight: 1.4 }}>
+                <div style={{ fontSize: 11, color: 'var(--protocol-accent-soft)', lineHeight: 1.4 }}>
                   {gateRejection[c.id].reason}
                 </div>
-                <div style={{ fontSize: 10.5, color: '#d5c3ca', marginTop: 3, fontStyle: 'italic' }}>
+                <div style={{ fontSize: 10.5, color: 'rgb(var(--protocol-text-rgb) / 0.82)', marginTop: 3, fontStyle: 'italic' }}>
                   {gateRejection[c.id].hint}
                 </div>
-                <div style={{ fontSize: 9.5, color: '#9c8590', marginTop: 4 }}>
+                <div style={{ fontSize: 9.5, color: 'var(--protocol-text-muted)', marginTop: 4 }}>
                   {mommy
                     ? 'After 2 rejects, Mama takes whatever you give her — tap again to send as-is.'
                     : 'After 2 rejects the gate steps back. Click Confess again to submit as-is — the Handler reads what you actually wrote.'}
@@ -361,8 +361,8 @@ export function ConfessionQueueCard() {
                 disabled={!draft.trim() || submittingId === c.id}
                 style={{
                   padding: '6px 14px', borderRadius: 5, border: 'none',
-                  background: draft.trim() ? tone : '#2b1d29',
-                  color: draft.trim() ? '#0f0a0e' : '#6d5a63',
+                  background: draft.trim() ? tone : 'rgb(var(--protocol-border-rgb) / 0.6)',
+                  color: draft.trim() ? 'var(--protocol-bg-deep)' : 'rgb(var(--protocol-text-muted-rgb) / 0.6)',
                   fontWeight: 600, fontSize: 11,
                   cursor: draft.trim() ? 'pointer' : 'not-allowed',
                   fontFamily: 'inherit',
@@ -370,7 +370,7 @@ export function ConfessionQueueCard() {
               >
                 {submittingId === c.id ? '…' : mommy ? 'Tell Mama' : 'Confess'}
               </button>
-              <span style={{ fontSize: 9.5, color: '#6d5a63', alignSelf: 'center' }}>
+              <span style={{ fontSize: 9.5, color: 'rgb(var(--protocol-text-muted-rgb) / 0.6)', alignSelf: 'center' }}>
                 or
               </span>
               <ConfessionAudioCapture
@@ -379,7 +379,7 @@ export function ConfessionQueueCard() {
                 onTranscribed={() => load()}
               />
             </div>
-            <div style={{ fontSize: 9.5, color: '#6d5a63', marginTop: 6, fontStyle: 'italic' }}>
+            <div style={{ fontSize: 9.5, color: 'rgb(var(--protocol-text-muted-rgb) / 0.6)', marginTop: 6, fontStyle: 'italic' }}>
               Type, or hold to speak. Either lands as a confession on file.
             </div>
           </div>
