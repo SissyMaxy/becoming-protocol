@@ -9,6 +9,14 @@
 import React from 'react';
 import { useBambiMode } from '../../../context/BambiModeContext';
 import { Heart, Check, X, Sparkles } from 'lucide-react';
+import { PROTOCOL } from '../../../lib/theme-tokens';
+
+export { Modal } from './Modal';
+export { CardHeader } from './CardHeader';
+// CollapsibleGroup grew up in today-redesign; it's the standard collapsed
+// section primitive now — re-exported here so new surfaces import it from
+// ui/themed. (Physical move deferred to avoid churning its many importers.)
+export { CollapsibleGroup } from '../../today-redesign/CollapsibleGroup';
 
 // ============================================
 // CARD COMPONENT
@@ -23,11 +31,16 @@ interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
 export function Card({ children, className = '', glow = false, hover = false, ...props }: CardProps) {
   const { isBambiMode } = useBambiMode();
 
+  // Non-bambi composes the .card utility (index.css) — literally one card
+  // definition app-wide: bg-protocol-surface border-protocol-border/60
+  // rounded-2xl.
   const baseClass = isBambiMode
     ? `bg-white border-2 border-pink-200 rounded-3xl shadow-[0_4px_20px_rgba(196,132,122,0.3)] ${
         hover ? 'hover:shadow-[0_10px_40px_rgba(196,132,122,0.35)] hover:border-pink-300 transition-all' : ''
       } ${glow ? 'animate-bambi-glow' : ''}`
-    : `bg-protocol-surface border border-protocol-border rounded-lg`;
+    : `card ${hover ? 'hover:shadow-velvet hover:border-protocol-accent/40 transition-all' : ''} ${
+        glow ? 'shadow-velvet-glow' : ''
+      }`;
 
   return (
     <div className={`${baseClass} ${className}`} {...props}>
@@ -74,15 +87,18 @@ export function Button({
           return 'bg-pink-600 text-white font-medium rounded-full hover:bg-pink-700 transition-colors';
       }
     } else {
+      // Primary/secondary compose the index.css .btn-velvet* visuals (the
+      // rose-gradient CTA) so there is one button definition app-wide; the
+      // old flat bg-protocol-accent variant was the drifted one.
       switch (variant) {
         case 'primary':
-          return 'bg-protocol-accent hover:bg-protocol-accent-soft text-white font-medium rounded-lg transition-colors';
+          return 'btn-velvet';
         case 'secondary':
-          return 'bg-protocol-surface-light hover:bg-protocol-border text-protocol-text font-medium rounded-lg border border-protocol-border transition-colors';
+          return 'btn-velvet-secondary';
         case 'ghost':
-          return 'text-protocol-text-muted hover:text-protocol-text hover:bg-protocol-surface rounded-lg transition-colors';
+          return 'text-protocol-text-muted hover:text-protocol-text hover:bg-protocol-surface rounded-xl transition-colors';
         case 'danger':
-          return 'bg-protocol-danger hover:bg-red-600 text-white font-medium rounded-lg transition-colors';
+          return 'bg-protocol-danger hover:bg-protocol-danger/80 text-white font-medium rounded-xl transition-colors';
       }
     }
   };
@@ -359,18 +375,19 @@ export function ProgressRing({
   const circumference = radius * 2 * Math.PI;
   const offset = circumference - (progress / 100) * circumference;
 
-  const bgColor = isBambiMode ? '#E8CFC5' : '#2a2a3a';
-  const fillColor = isBambiMode ? '#C4847A' : '#c9557f';
+  const bgColor = isBambiMode ? '#E8CFC5' : PROTOCOL.surfaceLight;
+  const fillColor = isBambiMode ? '#C4847A' : PROTOCOL.accent;
 
   return (
     <div className={`relative ${className}`} style={{ width: size, height: size }}>
       <svg width={size} height={size} className="transform -rotate-90">
-        {/* Background circle */}
+        {/* Background circle — stroke via style: SVG presentation attributes
+            don't resolve var(--protocol-*) custom properties. */}
         <circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke={bgColor}
+          style={{ stroke: bgColor }}
           strokeWidth={strokeWidth}
           fill="none"
         />
@@ -379,7 +396,7 @@ export function ProgressRing({
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke={fillColor}
+          style={{ stroke: fillColor }}
           strokeWidth={strokeWidth}
           fill="none"
           strokeLinecap="round"

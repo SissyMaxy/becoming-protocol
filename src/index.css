@@ -193,19 +193,34 @@ body {
     @apply bg-protocol-surface border border-protocol-border/60 rounded-2xl;
   }
 
+  /* The signature velvet CTA. .btn-velvet is the visual (no padding) so the
+     ui/themed Button can compose it with its own size classes; .btn-primary
+     keeps the default padding for direct class users. ONE definition — the
+     old flat bg-protocol-accent Button variant was the drifted one. */
+  .btn-velvet,
   .btn-primary {
-    @apply text-white font-medium py-2 px-4 rounded-xl transition-all;
+    @apply text-white font-medium rounded-xl transition-all;
     background: linear-gradient(135deg, var(--protocol-accent-hover), var(--protocol-accent));
     box-shadow: var(--shadow-velvet);
   }
 
+  .btn-velvet:hover,
   .btn-primary:hover {
     background: linear-gradient(135deg, var(--protocol-accent-bright), var(--protocol-accent-hover));
     box-shadow: var(--shadow-velvet-glow);
   }
 
+  .btn-primary {
+    @apply py-2 px-4;
+  }
+
+  .btn-velvet-secondary,
   .btn-secondary {
-    @apply bg-protocol-surface-light hover:bg-protocol-border text-protocol-text font-medium py-2 px-4 rounded-xl transition-colors border border-protocol-border/60;
+    @apply bg-protocol-surface-light hover:bg-protocol-border text-protocol-text font-medium rounded-xl transition-colors border border-protocol-border/60;
+  }
+
+  .btn-secondary {
+    @apply py-2 px-4;
   }
 
   /* Bambi Mode utility classes */
