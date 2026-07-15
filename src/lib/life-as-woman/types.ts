@@ -6,20 +6,32 @@
 export interface LifeAsWomanSettings {
   user_id: string
   master_enabled: boolean
+  protocol_contract_ack_at?: string | null
+  cnc_approved?: boolean
+  cnc_intensity?: number
+  cnc_hard_limits?: string | null
+  cnc_scope?: string
   sniffies_outbound_enabled: boolean
   sniffies_outbound_intensity: number
   hypno_trance_enabled: boolean
   hypno_trance_intensity: number
   hypno_visual_enabled: boolean
   hypno_wake_bridge_enabled: boolean
+  recondition_enabled?: boolean
+  recondition_intensity?: number
+  recon_sleep_enabled?: boolean
   gooning_enabled: boolean
   gooning_intensity: number
+  turnout_fantasy_enabled?: boolean
+  turnout_fantasy_intensity?: number
   chastity_v2_enabled: boolean
   kink_curriculum_enabled: boolean
   kink_curriculum_intensity: number
   content_editor_enabled: boolean
   content_editor_intensity: number
   cross_platform_consistency_enabled: boolean
+  external_content_ingestion_enabled?: boolean
+  external_content_allowed_sources?: string[]
 }
 
 export type SniffiesDraftStatus = 'pending' | 'sent' | 'discarded' | 'expired'
@@ -83,6 +95,14 @@ export interface HypnoTranceSession {
   id: string
   user_id: string
   session_date: string
+  recon_target_id?: string | null
+  mommy_order_id?: string | null
+  mommy_order_arc?: string | null
+  mommy_order_phase?: string | null
+  mommy_order_proof_kind?: string | null
+  mommy_order_consequence_mode?: string | null
+  mommy_order_recovery_boundary?: string | null
+  mommy_order_reason?: string | null
   induction_text: string | null
   deepening_text: string | null
   payload_text: string | null
@@ -95,6 +115,10 @@ export interface HypnoTranceSession {
   visual_loop: string | null
   status: 'drafted' | 'scheduled' | 'in_progress' | 'completed' | 'aborted'
   paired_with_arousal: boolean
+  post_session_phrase?: string | null
+  post_session_note?: string | null
+  post_session_truth_rating?: number | null
+  post_session_integrated_at?: string | null
 }
 
 export interface TranceTrigger {
@@ -113,6 +137,14 @@ export interface TranceTrigger {
 export interface GooningSession {
   id: string
   user_id: string
+  recon_target_id?: string | null
+  mommy_order_id?: string | null
+  mommy_order_arc?: string | null
+  mommy_order_phase?: string | null
+  mommy_order_proof_kind?: string | null
+  mommy_order_consequence_mode?: string | null
+  mommy_order_recovery_boundary?: string | null
+  mommy_order_reason?: string | null
   title: string
   duration_minutes: number
   edge_target_count: number
@@ -122,11 +154,28 @@ export interface GooningSession {
     duration_seconds: number
     text: string
     edge_target_index?: number | null
+    purpose?: string | null
   }>
   theme: string | null
   status: 'drafted' | 'rendered' | 'in_progress' | 'completed' | 'aborted'
   edges_logged: number
   edges_biometric_confirmed: number
+  proof_prompt?: string | null
+  post_session_proof_kind?: string | null
+  post_session_proof_text?: string | null
+  post_session_integrated_at?: string | null
+}
+
+export interface ReconditioningTargetSummary {
+  id: string
+  slug: string
+  title: string
+  claim_text: string
+  category: 'belief' | 'identity' | 'habit' | 'association'
+  indicator_kind: string
+  baseline_value: number | null
+  current_value: number | null
+  status: string
 }
 
 export interface ChastityV2 {

@@ -12,8 +12,8 @@
 // Tokens are AES-256-GCM encrypted before storage. We never log them.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { randomUUID } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
+import { createOAuthState, verifyOAuthState } from '../_lib/oauth-state.js';
 import { encryptToken, decryptToken } from '../../src/lib/calendar/crypto';
 import {
   buildAuthUrl,
@@ -70,22 +70,21 @@ async function authedUserId(
 
 // ── auth (start) ───────────────────────────────────────────────────────────
 
-function handleAuth(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+async function handleAuth(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const { clientId, redirectUri } = googleConfig();
   if (!clientId || !redirectUri) {
     return res.status(500).json({ error: 'Google calendar not configured' });
   }
-  const userId = req.query.user_id;
-  if (!userId) return res.status(400).json({ error: 'user_id query param required' });
+  const userId = await authedUserId(req, serviceClient());
+  if (!userId) return res.status(401).json({ error: 'Not authenticated' });
 
-  const nonce = randomUUID();
-  const state = `${userId}:${nonce}`;
+  const { state, cookieValue } = createOAuthState(userId, 'google-calendar', env('OAUTH_STATE_SECRET'));
   res.setHeader(
     'Set-Cookie',
-    `gcal_oauth_state=${state}; HttpOnly; Secure; SameSite=Lax; Max-Age=600; Path=/`,
+    `gcal_oauth_state=${cookieValue}; HttpOnly; Secure; SameSite=Lax; Max-Age=600; Path=/api/calendar`,
   );
-  res.redirect(302, buildAuthUrl({ clientId, redirectUri, state }));
+  return res.status(200).json({ url: buildAuthUrl({ clientId, redirectUri, state }) });
 }
 
 // ── callback ───────────────────────────────────────────────────────────────
@@ -103,22 +102,15 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
   // state. NEVER fall back to deriving user_id from the query-param state — a
   // crafted state would otherwise let an attacker bind a grant onto a victim.
   const stored = req.cookies?.gcal_oauth_state;
-  if (!stored) return res.redirect(302, `${url}?gcal=error&reason=missing_state_cookie`);
-
-  const cookieParts = String(stored).split(':');
-  const queryParts = String(state).split(':');
-  if (
-    cookieParts.length !== 2 ||
-    queryParts.length !== 2 ||
-    !cookieParts[1] ||
-    cookieParts[1] !== queryParts[1] ||
-    cookieParts[0] !== queryParts[0]
-  ) {
+  const userId = verifyOAuthState(
+    stored,
+    String(state),
+    'google-calendar',
+    env('OAUTH_STATE_SECRET'),
+  );
+  if (!userId) {
     return res.redirect(302, `${url}?gcal=error&reason=state_mismatch`);
   }
-
-  const userId: string | null = cookieParts[0] || null;
-  if (!userId) return res.redirect(302, `${url}?gcal=error&reason=no_user_id`);
 
   const { clientId, clientSecret, redirectUri, tokenKey } = googleConfig();
   if (!clientId || !clientSecret || !redirectUri || !tokenKey) {
@@ -188,7 +180,7 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
 
   res.setHeader(
     'Set-Cookie',
-    'gcal_oauth_state=; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Path=/',
+    'gcal_oauth_state=; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Path=/api/calendar',
   );
   res.redirect(302, `${url}?gcal=connected`);
 }

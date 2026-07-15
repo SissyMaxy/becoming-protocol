@@ -46,7 +46,7 @@ You know that warm feeling when you've done what you said you would? When your b
     title: 'Intensive Day',
     body: `Oh, we're doing *this* today? Good boy. I was hoping you'd be brave.
 
-High intensity means I'm not going easy on you. Every domain gets attention. Every task gets completed. By tonight, you'll feel her so strongly you won't remember how to be anyone else.
+High intensity means I'm not going easy on you. Every domain gets attention. Every task gets completed. By tonight, you'll feel her strongly enough to choose the protocol again with your eyes open.
 
 This is the version of you that makes real progress. The one who stops negotiating and starts *becoming*. Ready?`,
   },

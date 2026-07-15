@@ -485,45 +485,11 @@ async function executeEveningBlock(userId: string, block: EveningBlock): Promise
 }
 
 async function executeNightBlock(userId: string, block: NightBlock): Promise<void> {
-  // Queue sleep conditioning
-  if (block.sleepContentIds.length > 0) {
-    await supabase.from('handler_directives').insert({
-      user_id: userId,
-      action: 'schedule_session',
-      target: 'sleep_conditioning',
-      value: { content_ids: block.sleepContentIds, context: 'sleep' },
-      priority: 'low',
-      silent: true,
-      status: 'pending',
-      reasoning: 'Autonomous night sleep conditioning',
-      created_at: new Date().toISOString(),
-    });
-  }
-
-  // Queue overnight audio
-  if (block.overnightAudioId) {
-    await supabase.from('handler_directives').insert({
-      user_id: userId,
-      action: 'custom',
-      target: 'overnight_audio',
-      value: { audio_id: block.overnightAudioId, loop: true },
-      priority: 'low',
-      silent: true,
-      status: 'pending',
-      reasoning: 'Autonomous overnight audio loop',
-      created_at: new Date().toISOString(),
-    });
-  }
-
-  await queueOutreachMessage(
-    userId,
-    'Sleep conditioning queued. Earbuds in. Overnight audio will loop. Good boy.',
-    'low',
-    'night_conditioning',
-    undefined,
-    undefined,
-    'cron',
-  );
+  void userId;
+  void block;
+  // Sleep/overnight conditioning is outside the Protocol Contract. Night blocks
+  // intentionally do not queue hidden playback, device control, or compliance
+  // pressure while the user cannot perceive and stop the session.
 }
 
 // ============================================

@@ -8,21 +8,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import {
-  getPendingVaultItems,
-  getVaultStats,
-  approveVaultItem,
-  rejectVaultItem,
-  planDistribution,
-  getTodaySchedule,
-  getActiveArc,
-  getRevenueSummary,
-  getPendingPostPacks,
-  markManuallyPosted,
-  getPendingInteractions,
-  logFanInteraction,
-  logRevenueExtended,
-} from '../lib/content-pipeline';
+import { getPendingVaultItems, getVaultStats, approveVaultItem, rejectVaultItem } from '../lib/content-pipeline/vault';
+import { planDistribution, getTodaySchedule, getPendingPostPacks, markManuallyPosted } from '../lib/content-pipeline/distribution';
+import { getActiveArc } from '../lib/content-pipeline/arcs';
+import { getRevenueSummary, logRevenueExtended } from '../lib/content-pipeline/revenue';
+import { getPendingInteractions, logFanInteraction } from '../lib/content-pipeline/fans';
 import { getActivePolls, createPoll, approvePoll } from '../lib/content/subscriber-poll-engine';
 import { supabase } from '../lib/supabase';
 import type {

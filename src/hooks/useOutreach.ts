@@ -142,9 +142,13 @@ export function useOutreach() {
     }
   }, [reload]);
 
-  const connectReddit = useCallback(() => {
+  const connectReddit = useCallback(async () => {
     if (!user?.id) return;
-    window.location.href = `/api/outreach/auth-reddit?user_id=${user.id}`;
+    const res = await authedFetch('/api/outreach/auth-reddit', { method: 'POST' });
+    if (!res.ok) throw new Error('Unable to start Reddit authorization');
+    const data = await res.json() as { url?: string };
+    if (!data.url) throw new Error('Reddit authorization URL missing');
+    window.location.assign(data.url);
   }, [user?.id]);
 
   const disconnectReddit = useCallback(async () => {

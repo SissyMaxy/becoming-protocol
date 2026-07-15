@@ -8,6 +8,7 @@ import { supabase } from '../supabase'
 import type {
   LifeAsWomanSettings, SniffiesDraft, HypnoTranceSession,
   GooningSession, MommyEditorialNote, MommyContentPrompt, TranceTrigger,
+  ReconditioningTargetSummary,
 } from './types'
 
 // ─── Settings ──────────────────────────────────────────────────────────
@@ -116,6 +117,22 @@ export async function loadTranceTriggers(userId: string): Promise<TranceTrigger[
     return []
   }
   return (data || []) as TranceTrigger[]
+}
+
+export async function loadReconditioningTarget(
+  targetId: string | null | undefined,
+): Promise<ReconditioningTargetSummary | null> {
+  if (!targetId) return null
+  const { data, error } = await supabase
+    .from('reconditioning_targets')
+    .select('id, slug, title, claim_text, category, indicator_kind, baseline_value, current_value, status')
+    .eq('id', targetId)
+    .maybeSingle()
+  if (error) {
+    console.warn('[life-as-woman] loadReconditioningTarget failed', error.message)
+    return null
+  }
+  return (data as ReconditioningTargetSummary | null) ?? null
 }
 
 export async function markTranceSessionStatus(

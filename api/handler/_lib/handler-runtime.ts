@@ -135,8 +135,10 @@ export async function searchContent(query: string, count: number = 5): Promise<A
     });
 
     if (!res.ok) return [];
-    const data = await res.json();
-    return (data.web?.results || []).map((r: any) => ({
+    const data = await res.json() as {
+      web?: { results?: Array<{ title?: string; url?: string; description?: string }> };
+    };
+    return (data.web?.results || []).map((r) => ({
       title: r.title || '',
       url: r.url || '',
       description: (r.description || '').substring(0, 150),
@@ -239,11 +241,15 @@ export async function retryWithOpenRouter(systemPrompt: string, messages: Array<
         }),
       });
       if (!fallbackRes.ok) return null;
-      const fallbackData = await fallbackRes.json();
+      const fallbackData = await fallbackRes.json() as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
       return fallbackData.choices?.[0]?.message?.content || null;
     }
 
-    const data = await res.json();
+    const data = await res.json() as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
     return data.choices?.[0]?.message?.content || null;
   } catch (err) {
     console.error('[OpenRouter] Request failed:', err);
@@ -424,7 +430,7 @@ export async function semanticMemorySearch(
 
   if (!embeddingRes.ok) return [];
 
-  const embeddingData = await embeddingRes.json();
+  const embeddingData = await embeddingRes.json() as { data?: Array<{ embedding?: number[] }> };
   const embedding = embeddingData.data?.[0]?.embedding;
   if (!embedding || !Array.isArray(embedding)) return [];
 
@@ -467,7 +473,7 @@ export async function embedMemoryAsync(memoryId: string): Promise<void> {
 
     if (!embeddingRes.ok) return;
 
-    const embeddingData = await embeddingRes.json();
+    const embeddingData = await embeddingRes.json() as { data?: Array<{ embedding?: number[] }> };
     const embedding = embeddingData.data?.[0]?.embedding;
     if (!embedding || !Array.isArray(embedding)) return;
 
@@ -913,7 +919,7 @@ export async function executeDeviceCommand(
       body: JSON.stringify(payload),
     });
 
-    const result = await res.json();
+    const result = await res.json() as { code?: number; message?: string };
     const success = result.code === 200 || result.code === 0;
     console.log(`[Device] Result: ${success ? 'SUCCESS' : 'FAILED'}`, result);
 
@@ -958,7 +964,7 @@ Write a 2-sentence private reflection: what worked in this exchange and what to 
     });
 
     if (!res.ok) return;
-    const data = await res.json();
+    const data = await res.json() as { content?: Array<{ text?: string }> };
     const reflection = data.content?.[0]?.text || '';
     if (!reflection) return;
 

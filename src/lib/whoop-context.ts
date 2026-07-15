@@ -27,16 +27,6 @@ export async function buildWhoopContext(userId: string): Promise<WhoopBiometricC
     dayStrain: null,
   };
 
-  // Check if Whoop is connected
-  const { data: tokenRow } = await supabase
-    .from('whoop_tokens')
-    .select('id')
-    .eq('user_id', userId)
-    .is('disconnected_at', null)
-    .maybeSingle();
-
-  if (!tokenRow) return empty;
-
   // Get latest metrics
   const { data: metrics } = await supabase
     .from('whoop_metrics')

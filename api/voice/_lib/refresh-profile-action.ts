@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
+import { timingSafeEqual } from 'node:crypto';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
@@ -9,9 +10,29 @@ const supabase = createClient(
 // Cron-callable endpoint. Refreshes voice profiles for every user
 // who has any corpus samples. Call once daily via Vercel Cron or external trigger.
 export async function handleRefreshProfile(req: VercelRequest, res: VercelResponse) {
-  // Simple shared-secret guard for cron calls
-  const secret = req.headers['x-cron-secret'];
-  if (process.env.CRON_SECRET && secret !== process.env.CRON_SECRET) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const expected = process.env.CRON_SECRET;
+  if (!expected) {
+    return res.status(503).json({ error: 'Cron authentication is not configured' });
+  }
+
+  const authorization = Array.isArray(req.headers.authorization)
+    ? req.headers.authorization[0]
+    : req.headers.authorization;
+  const cronHeader = Array.isArray(req.headers['x-cron-secret'])
+    ? req.headers['x-cron-secret'][0]
+    : req.headers['x-cron-secret'];
+  const provided = authorization?.startsWith('Bearer ')
+    ? authorization.slice('Bearer '.length)
+    : cronHeader;
+  const expectedBytes = Buffer.from(expected);
+  const providedBytes = Buffer.from(provided ?? '');
+  const authenticated = expectedBytes.length === providedBytes.length
+    && timingSafeEqual(expectedBytes, providedBytes);
+  if (!authenticated) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 

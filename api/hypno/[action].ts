@@ -23,8 +23,85 @@ const COMMANDING_VOICE_ID = process.env.ELEVENLABS_COMMANDING_VOICE_ID || 'pFZP5
 const MODAL_WORKER_URL = process.env.MODAL_WORKER_URL || '';
 
 const BUCKET = 'hypno';
+const MAX_DIRECT_AUDIO_BYTES = 25 * 1024 * 1024;
 
 export const config = { api: { bodyParser: { sizeLimit: '10mb' } } };
+
+function validateOwnedStoragePath(userId: string, rawPath: string): string {
+  const path = rawPath.trim();
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(path);
+  } catch {
+    throw new Error('Invalid storage path encoding');
+  }
+  if (
+    !path.startsWith(`${userId}/`) ||
+    decoded.includes('..') ||
+    decoded.includes('\\') ||
+    /^https?:\/\//i.test(decoded)
+  ) {
+    throw new Error('Storage path must be inside your hypno folder');
+  }
+  return path;
+}
+
+function validateHypnoSourceUrl(rawUrl: string): string {
+  const allowedHosts = (process.env.HYPNO_SOURCE_HOSTS || '')
+    .split(',')
+    .map((host) => host.trim().toLowerCase())
+    .filter(Boolean);
+  if (allowedHosts.length === 0) {
+    throw new Error('Direct URL ingestion is disabled; upload the audio to your hypno storage folder');
+  }
+
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    throw new Error('Invalid source URL');
+  }
+  const hostname = url.hostname.toLowerCase();
+  const hostAllowed = allowedHosts.some((allowed) =>
+    allowed.startsWith('*.')
+      ? hostname.endsWith(allowed.slice(1)) && hostname !== allowed.slice(2)
+      : hostname === allowed,
+  );
+  if (
+    url.protocol !== 'https:' ||
+    url.username ||
+    url.password ||
+    (url.port && url.port !== '443') ||
+    !hostAllowed
+  ) {
+    throw new Error('Source URL host is not allowed');
+  }
+  url.hash = '';
+  return url.toString();
+}
+
+async function readResponseWithLimit(response: Response, maxBytes: number): Promise<Buffer> {
+  const declaredLength = Number(response.headers.get('content-length') || '0');
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    throw new Error('Audio exceeds the 25 MB direct-ingest limit');
+  }
+  if (!response.body) return Buffer.alloc(0);
+
+  const reader = response.body.getReader();
+  const chunks: Buffer[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      throw new Error('Audio exceeds the 25 MB direct-ingest limit');
+    }
+    chunks.push(Buffer.from(value));
+  }
+  return Buffer.concat(chunks, total);
+}
 
 // ---------- generate.ts ----------
 
@@ -363,20 +440,28 @@ async function handleIngest(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Provide sourceUrl, storagePath, or sourceId' });
   }
 
+  const ingestBody: IngestBody = { ...body };
+  try {
+    if (ingestBody.sourceUrl) ingestBody.sourceUrl = validateHypnoSourceUrl(ingestBody.sourceUrl);
+    if (ingestBody.storagePath) ingestBody.storagePath = validateOwnedStoragePath(userId, ingestBody.storagePath);
+  } catch (error) {
+    return res.status(400).json({ error: error instanceof Error ? error.message : 'Invalid audio source' });
+  }
+
   try {
     // 1. Create or resume source row
-    let sourceId = body.sourceId;
+    let sourceId = ingestBody.sourceId;
     if (!sourceId) {
       const { data: src, error } = await supabase
         .from('hypno_sources')
         .insert({
           user_id: userId,
-          title: body.title || null,
-          creator: body.creator || null,
-          source_url: body.sourceUrl || null,
-          storage_path: body.storagePath || null,
-          user_rating: body.userRating || null,
-          notes: body.notes || null,
+          title: ingestBody.title || null,
+          creator: ingestBody.creator || null,
+          source_url: ingestBody.sourceUrl || null,
+          storage_path: ingestBody.storagePath || null,
+          user_rating: ingestBody.userRating || null,
+          notes: ingestBody.notes || null,
           ingest_status: 'downloading',
         })
         .select('id')
@@ -384,17 +469,37 @@ async function handleIngest(req: VercelRequest, res: VercelResponse) {
       if (error) throw error;
       sourceId = src!.id;
     } else {
-      await supabase
+      const { data: ownedSource, error: sourceError } = await supabase
         .from('hypno_sources')
+        .select('id, source_url, storage_path')
+        .eq('id', sourceId)
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (sourceError) throw sourceError;
+      if (!ownedSource) return res.status(404).json({ error: 'Source not found' });
+
+      if (!ingestBody.sourceUrl && !ingestBody.storagePath) {
+        try {
+          if (ownedSource.storage_path) {
+            ingestBody.storagePath = validateOwnedStoragePath(userId, ownedSource.storage_path);
+          } else if (ownedSource.source_url) {
+            ingestBody.sourceUrl = validateHypnoSourceUrl(ownedSource.source_url);
+          }
+        } catch (error) {
+          return res.status(400).json({ error: error instanceof Error ? error.message : 'Invalid stored audio source' });
+        }
+      }
+
+      await supabase.from('hypno_sources')
         .update({ ingest_status: 'downloading' })
         .eq('id', sourceId)
         .eq('user_id', userId);
     }
 
     // 2. Fetch audio
-    const audioBuffer = await fetchAudio(userId, body);
+    const audioBuffer = await fetchAudio(userId, ingestBody);
     if (!audioBuffer || audioBuffer.length < 1000) {
-      await markFailed(sourceId!, 'Audio fetch returned empty');
+      await markFailed(sourceId!, userId, 'Audio fetch returned empty');
       return res.status(400).json({ error: 'Audio fetch returned empty' });
     }
 
@@ -402,10 +507,10 @@ async function handleIngest(req: VercelRequest, res: VercelResponse) {
     // Whisper tolerates stereo + levels OK for our quality bar.
 
     // 3. Whisper transcription
-    await supabase.from('hypno_sources').update({ ingest_status: 'transcribing' }).eq('id', sourceId);
+    await supabase.from('hypno_sources').update({ ingest_status: 'transcribing' }).eq('id', sourceId).eq('user_id', userId);
     const { text: transcript, segments } = await whisperTranscribe(audioBuffer);
     if (!transcript) {
-      await markFailed(sourceId!, 'Whisper returned empty transcript');
+      await markFailed(sourceId!, userId, 'Whisper returned empty transcript');
       return res.status(500).json({ error: 'Empty transcript' });
     }
 
@@ -418,7 +523,7 @@ async function handleIngest(req: VercelRequest, res: VercelResponse) {
     });
 
     // 4. Feature extraction via OpenRouter (uncensored)
-    await supabase.from('hypno_sources').update({ ingest_status: 'extracting' }).eq('id', sourceId);
+    await supabase.from('hypno_sources').update({ ingest_status: 'extracting' }).eq('id', sourceId).eq('user_id', userId);
     const features = await extractFeatures(transcript);
 
     // 5. Insert feature rows (dedupe via ON CONFLICT at the unique index)
@@ -466,7 +571,8 @@ async function handleIngest(req: VercelRequest, res: VercelResponse) {
     await supabase
       .from('hypno_sources')
       .update({ ingest_status: 'ready', ingested_at: new Date().toISOString() })
-      .eq('id', sourceId);
+      .eq('id', sourceId)
+      .eq('user_id', userId);
 
     await supabase.rpc('refresh_erotic_preference_profile', { p_user_id: userId });
 
@@ -479,34 +585,37 @@ async function handleIngest(req: VercelRequest, res: VercelResponse) {
   } catch (e) {
     console.error('[hypno/ingest]', e);
     const msg = e instanceof Error ? e.message : String(e);
-    if (body.sourceId) await markFailed(body.sourceId, msg);
+    if (body.sourceId) await markFailed(body.sourceId, userId, msg);
     return res.status(500).json({ error: msg });
   }
 }
 
-async function markFailed(sourceId: string, error: string): Promise<void> {
+async function markFailed(sourceId: string, userId: string, error: string): Promise<void> {
   await supabase
     .from('hypno_sources')
     .update({ ingest_status: 'failed', ingest_error: error.slice(0, 1000) })
-    .eq('id', sourceId);
+    .eq('id', sourceId)
+    .eq('user_id', userId);
 }
 
 async function fetchAudio(userId: string, body: IngestBody): Promise<Buffer | null> {
   if (body.storagePath) {
-    const { data, error } = await supabase.storage.from('hypno').download(body.storagePath);
+    const storagePath = validateOwnedStoragePath(userId, body.storagePath);
+    const { data, error } = await supabase.storage.from('hypno').download(storagePath);
     if (error || !data) throw new Error(`Storage download failed: ${error?.message}`);
+    if (data.size > MAX_DIRECT_AUDIO_BYTES) throw new Error('Audio exceeds the 25 MB direct-ingest limit');
     return Buffer.from(await data.arrayBuffer());
   }
   if (body.sourceUrl) {
-    const resp = await fetch(body.sourceUrl);
+    const sourceUrl = validateHypnoSourceUrl(body.sourceUrl);
+    const resp = await fetch(sourceUrl, { redirect: 'error' });
     if (!resp.ok) throw new Error(`URL fetch failed: ${resp.status}`);
-    const contentLength = parseInt(resp.headers.get('content-length') || '0', 10);
-    if (contentLength > 25 * 1024 * 1024) {
-      throw new Error('Audio > 25MB — route through Modal worker and pass storagePath instead');
+    const contentType = (resp.headers.get('content-type') || '').toLowerCase();
+    if (!contentType.startsWith('audio/') && !contentType.startsWith('application/octet-stream')) {
+      throw new Error('Source URL did not return audio');
     }
-    return Buffer.from(await resp.arrayBuffer());
+    return readResponseWithLimit(resp, MAX_DIRECT_AUDIO_BYTES);
   }
-  void userId;
   return null;
 }
 
@@ -526,7 +635,7 @@ async function whisperTranscribe(
   const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${OPENAI_KEY}` },
-    body: form as unknown as BodyInit,
+    body: form as unknown as RequestInit['body'],
   });
   if (!resp.ok) throw new Error(`Whisper ${resp.status}: ${await resp.text()}`);
   const data = (await resp.json()) as {
@@ -631,13 +740,20 @@ async function handleIngestUrl(req: VercelRequest, res: VercelResponse) {
   const { sourceUrl, title, creator } = req.body as { sourceUrl?: string; title?: string; creator?: string };
   if (!sourceUrl) return res.status(400).json({ error: 'sourceUrl required' });
 
+  let validatedSourceUrl: string;
+  try {
+    validatedSourceUrl = validateHypnoSourceUrl(sourceUrl);
+  } catch (error) {
+    return res.status(400).json({ error: error instanceof Error ? error.message : 'Invalid source URL' });
+  }
+
   try {
     const resp = await fetch(`${MODAL_WORKER_URL}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         user_jwt: token,
-        source_url: sourceUrl,
+        source_url: validatedSourceUrl,
         title: title || null,
         creator: creator || null,
       }),

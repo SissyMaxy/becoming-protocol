@@ -40,16 +40,6 @@ export async function getSleepPhaseRecommendation(
   userId: string,
 ): Promise<SleepPhaseRecommendation | null> {
   try {
-    // Check Whoop connection
-    const { data: tokenRow } = await supabase
-      .from('whoop_tokens')
-      .select('id')
-      .eq('user_id', userId)
-      .is('disconnected_at', null)
-      .maybeSingle();
-
-    if (!tokenRow) return null;
-
     // Get most recent sleep metrics (today or yesterday)
     const today = new Date().toISOString().split('T')[0];
     const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];

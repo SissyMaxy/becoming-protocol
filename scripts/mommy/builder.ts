@@ -56,6 +56,13 @@ import { execSync } from 'node:child_process'
 import { writeFile, mkdir } from 'node:fs/promises'
 import { readdirSync } from 'node:fs'
 import { dirname } from 'node:path'
+import {
+  FORBIDDEN_PATH_SUBSTRINGS,
+  isForbiddenPath,
+  draftRlsViolation,
+  draftSafetyViolation,
+  surfacesTouchProtected,
+} from './builder-safety-gate'
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
@@ -65,32 +72,10 @@ if (!SUPABASE_URL || !SERVICE_KEY) {
 }
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } })
 
-// Forbidden as SUBSTRINGS (not ^-anchored regexes): a ^-anchor was bypassable
-// with a leading "./" and never matched paths embedded in the affected_surfaces
-// JSON blob at all (audit #8). Substring matching on a normalized path closes both.
-const FORBIDDEN_PATH_SUBSTRINGS = [
-  'scripts/handler-regression/',
-  'api/auth/',
-  '.github/workflows/',
-  'payment',
-  'stripe',
-]
-
-/** Normalize a repo-relative path: backslashes→/, strip ./, collapse .. segments. */
-function normalizePath(p: string): string {
-  const parts: string[] = []
-  for (const seg of p.replace(/\\/g, '/').split('/')) {
-    if (seg === '' || seg === '.') continue
-    if (seg === '..') { parts.pop(); continue }
-    parts.push(seg)
-  }
-  return parts.join('/')
-}
-
-function isForbiddenPath(p: string): boolean {
-  const n = normalizePath(p).toLowerCase()
-  return FORBIDDEN_PATH_SUBSTRINGS.some((s) => n.includes(s))
-}
+// Path allowlist, RLS scan, and the safety-object gate live in
+// ./builder-safety-gate (pure + unit-tested). The loop is forbidden from
+// editing that module (scripts/mommy/ is itself a FORBIDDEN_PATH_SUBSTRING),
+// so it cannot file down its own brake.
 
 /** Highest numeric migration prefix + 1 (so auto-shipped migrations actually apply
  *  instead of being silently skipped as already-applied — the hardcoded "294" bug). */
@@ -105,23 +90,6 @@ function nextMigrationNumber(): number {
   } catch {
     return 587
   }
-}
-
-/** Deterministic authority-boundary gate: scan the builder's OWN drafted .sql for
- *  access-loosening. The drafter is instructed never to write these, but an LLM
- *  instruction is not a gate — this is. Returns a reason string if it must be
- *  routed to human review, else null. (Scoped to drafted files, not the 300+
- *  legacy policies, so it stays precise.) */
-function draftRlsViolation(files: Array<{ path: string; content: string }>): string | null {
-  for (const f of files) {
-    if (!/\.sql$/i.test(f.path)) continue
-    const c = f.content
-    if (/\b(?:USING|WITH\s+CHECK)\s*\(\s*true\s*\)/i.test(c)) return `${f.path}: policy USING(true)/WITH CHECK(true)`
-    if (/\bGRANT\b[^;]*\bTO\b[^;]*\b(?:anon|public)\b/i.test(c)) return `${f.path}: GRANT ... TO anon/public`
-    if (/\bDISABLE\s+ROW\s+LEVEL\s+SECURITY\b/i.test(c)) return `${f.path}: DISABLE ROW LEVEL SECURITY`
-    if (/\bDROP\s+POLICY\b/i.test(c)) return `${f.path}: DROP POLICY`
-  }
-  return null
 }
 
 interface Wish {
@@ -445,6 +413,19 @@ async function processOneWish(mode: 'dry' | 'draft' | 'ship'): Promise<ShipResul
     return 'requires_review'
   }
 
+  // Safety-surface floor: a wish that even DECLARES it touches the safeword /
+  // kill-switch / hard-reset / reality-mechanic machinery goes to review before
+  // we spend a drafter call. The cord stays outside the loop's reach.
+  const hitSafety = surfacesTouchProtected(surfacesJson)
+  if (hitSafety) {
+    console.error(`[builder] REFUSED — affected_surfaces names protected safety object "${hitSafety}"`)
+    await supabase.from('mommy_code_wishes').update({
+      auto_ship_eligible: false,
+      auto_ship_blockers: ['safety_surface_needs_review'],
+    }).eq('id', wish.id)
+    return 'requires_review'
+  }
+
   if (mode === 'ship' || mode === 'draft') {
     const { data: claimed } = await supabase
       .from('mommy_code_wishes')
@@ -503,6 +484,22 @@ async function processOneWish(mode: 'dry' | 'draft' | 'ship'): Promise<ShipResul
       auto_ship_blockers: ['rls_loosening_needs_review'],
     }).eq('id', wish.id)
     await recordRun(wish.id, 'requires_review', { files: draft.files.map((f) => f.path), failureReason: `rls_loosening: ${rlsViolation}` })
+    return 'requires_review'
+  }
+
+  // Safety boundary: never auto-ship a draft that modifies the user's ability to
+  // stop — the safeword/exit spine, the fail-closed gate, the elective kill
+  // switch, the hard-reset, or the gates/brakes on the reality-attack mechanics.
+  // The operator can still change these by hand; the unattended loop cannot.
+  const safetyViolation = draftSafetyViolation(draft.files)
+  if (safetyViolation) {
+    console.error(`[builder] REFUSED auto-ship — draft modifies a protected safety surface (${safetyViolation}); routing to human review`)
+    await supabase.from('mommy_code_wishes').update({
+      status: 'queued',
+      auto_ship_eligible: false,
+      auto_ship_blockers: ['safety_surface_needs_review'],
+    }).eq('id', wish.id)
+    await recordRun(wish.id, 'requires_review', { files: draft.files.map((f) => f.path), failureReason: `safety_surface: ${safetyViolation}` })
     return 'requires_review'
   }
 

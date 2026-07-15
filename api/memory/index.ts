@@ -127,7 +127,7 @@ async function handleEmbed(req: VercelRequest, res: VercelResponse) {
       return res.status(502).json({ error: `OpenAI API error: ${embeddingRes.status}` });
     }
 
-    const embeddingData = await embeddingRes.json();
+    const embeddingData = await embeddingRes.json() as { data?: Array<{ embedding?: number[] }> };
     const embedding = embeddingData.data?.[0]?.embedding;
 
     if (!embedding || !Array.isArray(embedding)) {
@@ -216,7 +216,7 @@ async function handleSearch(req: VercelRequest, res: VercelResponse) {
       return fallbackKeywordSearch(res, user.id, query, matchCount);
     }
 
-    const embeddingData = await embeddingRes.json();
+    const embeddingData = await embeddingRes.json() as { data?: Array<{ embedding?: number[] }> };
     const embedding = embeddingData.data?.[0]?.embedding;
 
     if (!embedding || !Array.isArray(embedding)) {

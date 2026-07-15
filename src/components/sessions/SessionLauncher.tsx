@@ -32,6 +32,7 @@ import {
   type RecommendationContext,
 } from '../../lib/session-recommendations';
 import { getRecommendedProtocols } from '../../lib/edge-protocols';
+import { composeMommyOrder } from '../../lib/session-command';
 
 type SessionType = 'edge' | 'goon' | 'denial' | 'freestyle' | 'conditioning' | null;
 
@@ -134,20 +135,21 @@ export function SessionLauncher({ className = '' }: SessionLauncherProps) {
   const [lastSessionStats, setLastSessionStats] = useState<any>(null);
   const [showAllSessions, setShowAllSessions] = useState(false);
   const [showProtocols, setShowProtocols] = useState(false);
+  const [showChoices, setShowChoices] = useState(false);
 
   const isConnected = lovense.status === 'connected' || lovense.cloudConnected;
 
-  // Generate smart recommendations
-  const recommendations = useMemo(() => {
-    const context: RecommendationContext = {
-      arousalState: currentState || 'building',
-      denialDay: denial.currentDay,
-      timeOfDay: getTimeOfDay(),
-      isWeekend: isWeekend(),
-      isInSweetSpot: currentState === 'sweet_spot',
-    };
-    return getSessionRecommendations(context);
-  }, [currentState, denial.currentDay]);
+  // Shared context → the recommender (menu) AND Mommy's order (command).
+  const context = useMemo<RecommendationContext>(() => ({
+    arousalState: currentState || 'building',
+    denialDay: denial.currentDay,
+    timeOfDay: getTimeOfDay(),
+    isWeekend: isWeekend(),
+    isInSweetSpot: currentState === 'sweet_spot',
+  }), [currentState, denial.currentDay]);
+  const recommendations = useMemo(() => getSessionRecommendations(context), [context]);
+  // Mommy decides one thing tonight; the menu is the override, not the default.
+  const order = useMemo(() => composeMommyOrder(context), [context]);
 
   // Get top 3 recommendations
   const topRecommendations = recommendations.slice(0, 3);
@@ -244,19 +246,38 @@ export function SessionLauncher({ className = '' }: SessionLauncherProps) {
       {/* Denial Tracker */}
       <DenialTracker compact className="mb-4" />
 
-      {/* Recommended Sessions */}
+      {/* Mommy's order — she decides one thing tonight; the menu is the override. */}
+      <div className={`rounded-2xl p-5 mb-4 text-white ${
+        isBambiMode
+          ? 'bg-gradient-to-br from-pink-500 to-fuchsia-600'
+          : 'bg-gradient-to-br from-protocol-accent to-purple-700'
+      }`}>
+        <div className="text-[11px] uppercase tracking-[0.22em] font-bold opacity-80 mb-2">
+          {order.headline}
+        </div>
+        <p className="mommy-voice text-lg leading-relaxed italic mb-2">{order.command}</p>
+        <p className="text-sm opacity-90 mb-4">{order.stipulation}</p>
+        <button
+          onClick={() => setActiveSession(order.sessionType)}
+          className="w-full py-3 rounded-xl font-bold bg-white/95 text-protocol-accent hover:bg-white transition-colors"
+        >
+          {order.obeyLabel}
+        </button>
+        <button
+          onClick={() => setShowChoices((v) => !v)}
+          className="mt-3 text-xs underline underline-offset-4 opacity-75 hover:opacity-100"
+        >
+          {showChoices ? 'hide the menu' : `${order.declineLabel} — let me choose`}
+        </button>
+      </div>
+
+      {showChoices && (<>
+      {/* Mommy's session drawer */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-3">
           <h3 className={`text-sm font-semibold ${isBambiMode ? 'text-pink-600' : 'text-protocol-text-muted'}`}>
-            Recommended For You
+            Mommy's session drawer
           </h3>
-          {currentState && (
-            <span className={`text-xs px-2 py-1 rounded-full ${
-              isBambiMode ? 'bg-pink-100 text-pink-600' : 'bg-protocol-accent/20 text-protocol-accent'
-            }`}>
-              {currentState.replace('_', ' ')} · Day {denial.currentDay}
-            </span>
-          )}
         </div>
 
         <div className="space-y-2">
@@ -406,6 +427,7 @@ export function SessionLauncher({ className = '' }: SessionLauncherProps) {
           />
         </div>
       )}
+      </>)}
 
       {/* Session Complete Modal */}
       {showSessionComplete && lastSessionStats && (

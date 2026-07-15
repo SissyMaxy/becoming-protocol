@@ -78,7 +78,7 @@ export async function exchangeAuthCode(params: {
     }),
   });
   if (!resp.ok) throw new RedditApiError(resp.status, await resp.text());
-  return resp.json();
+  return resp.json() as Promise<TokenExchangeResult>;
 }
 
 export async function refreshAccessToken(params: {
@@ -99,7 +99,7 @@ export async function refreshAccessToken(params: {
     }),
   });
   if (!resp.ok) throw new RedditApiError(resp.status, await resp.text());
-  return resp.json();
+  return resp.json() as Promise<TokenExchangeResult>;
 }
 
 export async function revokeRefreshToken(params: {

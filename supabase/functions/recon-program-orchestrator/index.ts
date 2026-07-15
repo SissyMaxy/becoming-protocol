@@ -3,7 +3,7 @@
 // Per user, per run: gate first (fail-closed); pick the ONE highest-priority
 // active+running target as today's Focus target; emit EXACTLY ONE phase-appropriate
 // task into the single Focus surface (one-task-at-a-time, Mommy-presses-not-blocks).
-// All other targets + passive mechanisms (ambient, TMR, already-scheduled trance)
+// All other targets + passive mechanisms (ambient, already-scheduled trance)
 // run in the background with no task and no deadline — they don't compete for the CTA.
 //
 // Reps/trance/reconsolidation are INVITATIONAL: no punishment for a miss (a missed
@@ -27,8 +27,30 @@ const NO_PUNISH = 'No punishment — this one is an invitation, not a demand. Mi
 // + re-measure), and recon-reconsolidation's decrees, so none of the recon
 // surfaces ever stack a second card on top of another. Refresh a stale
 // deadline rather than issuing a duplicate.
-async function issueFocus(s: Sb, user: string, slug: string, edict: string, proof = 'text', hours = 20, triggerSource?: string): Promise<string> {
+function reconPhaseToOrderPhase(phase: string): string {
+  switch (phase) {
+    case 'induction': return 'induct'
+    case 'install': return 'install'
+    case 'reinforce': return 'reinforce'
+    case 'reconsolidate': return 'reinforce'
+    case 'measure': return 'test'
+    case 'retain': return 'integrate'
+    default: return 'install'
+  }
+}
+
+async function issueFocus(
+  s: Sb,
+  user: string,
+  slug: string,
+  edict: string,
+  proof = 'text',
+  hours = 20,
+  triggerSource?: string,
+  order?: { targetId?: string; phase?: string; claim?: string },
+): Promise<string> {
   const src = triggerSource ?? `recon_focus:${slug}`
+  const orderPhase = reconPhaseToOrderPhase(order?.phase ?? 'install')
   const { data: ex } = await s.from('handler_decrees')
     .select('id, deadline, trigger_source').eq('user_id', user).eq('status', 'active')
     .or('trigger_source.like.recon_focus:%,trigger_source.like.recon_belief_baseline:%,trigger_source.like.recon_belief_measure:%,trigger_source.like.recon_reconsolidate:%')
@@ -36,7 +58,17 @@ async function issueFocus(s: Sb, user: string, slug: string, edict: string, proo
   if (ex) {
     // Already a live recon-lane task — keep exactly one. Refresh deadline if expired.
     if (ex.deadline && new Date(ex.deadline) < new Date()) {
-      await s.from('handler_decrees').update({ deadline: new Date(Date.now() + hours * 3600e3).toISOString() }).eq('id', ex.id)
+      await s.from('handler_decrees').update({
+        deadline: new Date(Date.now() + hours * 3600e3).toISOString(),
+        recon_target_id: order?.targetId ?? null,
+        mommy_order_arc: 'reconditioning',
+        mommy_order_phase: orderPhase,
+        mommy_order_consequence_mode: 'invitational',
+        mommy_order_recovery_boundary: 'scene_bound',
+        mommy_order_reason: order?.claim
+          ? `Mommy selected this because it is the active thing she is working into you: ${order.claim}`
+          : 'Mommy selected this because it is the active reconditioning order.',
+      }).eq('id', ex.id)
     }
     return 'kept'
   }
@@ -44,6 +76,14 @@ async function issueFocus(s: Sb, user: string, slug: string, edict: string, proo
     user_id: user, edict, proof_type: proof,
     deadline: new Date(Date.now() + hours * 3600e3).toISOString(), status: 'active',
     consequence: NO_PUNISH, trigger_source: src, reasoning: 'recon-program-orchestrator',
+    recon_target_id: order?.targetId ?? null,
+    mommy_order_arc: 'reconditioning',
+    mommy_order_phase: orderPhase,
+    mommy_order_consequence_mode: 'invitational',
+    mommy_order_recovery_boundary: 'scene_bound',
+    mommy_order_reason: order?.claim
+      ? `Mommy selected this because it is the active thing she is working into you: ${order.claim}`
+      : 'Mommy selected this because it is the active reconditioning order.',
   })
   return error ? `err:${error.message.slice(0, 60)}` : 'issued'
 }
@@ -179,7 +219,16 @@ Deno.serve(async (req: Request) => {
           .order('priority', { ascending: true }).limit(1).maybeSingle()
         if (needsBaseline) {
           const edict = `Before Mommy works "${needsBaseline.claim_text}" into you for real, she needs to know where you're starting from. Rate how true that already feels — there's no wrong answer, just honest.`
-          const status = await issueFocus(s, user, needsBaseline.slug, edict, 'belief_slider', 20, `recon_belief_baseline:${needsBaseline.id}`)
+          const status = await issueFocus(
+            s,
+            user,
+            needsBaseline.slug,
+            edict,
+            'belief_slider',
+            20,
+            `recon_belief_baseline:${needsBaseline.id}`,
+            { targetId: needsBaseline.id, phase: 'measure', claim: needsBaseline.claim_text },
+          )
           results.push({ user, focus_target: needsBaseline.slug, phase: 'baseline_probe', task: status })
           continue
         }
@@ -231,7 +280,16 @@ Deno.serve(async (req: Request) => {
       }
       triggerSource = `recon_belief_measure:${picked.id}`
     }
-    const status = await issueFocus(s, user, picked.slug, task.edict, task.proof, 20, triggerSource)
+    const status = await issueFocus(
+      s,
+      user,
+      picked.slug,
+      task.edict,
+      task.proof,
+      20,
+      triggerSource,
+      { targetId: picked.id, phase, claim: picked.claim_text },
+    )
     results.push({ user, focus_target: picked.slug, phase, task: status, intensity, gentle })
   }
 

@@ -31,7 +31,7 @@ import { useBambiMode } from '../../context/BambiModeContext';
 import { useAuth } from '../../context/AuthContext';
 import { getComplianceState, type ComplianceState } from '../../lib/handler-engines/enforcement-engine';
 import { getFund, type MaxyFund } from '../../lib/handler-engines/financial-engine';
-import { getActiveBriefs, generateQuickTask, type ContentBrief } from '../../lib/handler-engines/content-engine';
+import { getActiveBriefs, generateQuickTask, submitContent, type ContentBrief } from '../../lib/handler-engines/content-engine';
 import { getAccounts, type PlatformAccount } from '../../lib/handler-engines/platform-manager';
 import { getStrategy, type StrategyState, type Phase } from '../../lib/handler-engines/strategy-engine';
 
@@ -388,7 +388,6 @@ export function HandlerAutonomousView({ onBack }: HandlerAutonomousViewProps) {
     }
 
     try {
-      const { submitContent } = await import('../../lib/handler-engines/content-engine');
       const fileEntries = Array.from(files).map((file) => ({
         path: URL.createObjectURL(file),
         type: file.type,

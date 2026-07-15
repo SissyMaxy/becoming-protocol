@@ -66,15 +66,18 @@ export async function queueOutreachMessage(
     // delivery is gated via deliver_after.
     let deliverAfter: Date | null = null;
     try {
-      const { data: cred } = await supabase
-        .from('calendar_credentials')
-        .select('busy_aware_delivery')
-        .eq('user_id', userId)
-        .eq('provider', 'google')
-        .is('disconnected_at', null)
-        .maybeSingle();
+      const session = await supabase.auth.getSession();
+      const accessToken = session.data.session?.access_token;
+      const statusResponse = accessToken
+        ? await fetch('/api/calendar/status', {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          })
+        : null;
+      const calendarStatus = statusResponse?.ok
+        ? await statusResponse.json() as { connected?: boolean; busy_aware_delivery?: boolean }
+        : null;
 
-      if (cred?.busy_aware_delivery) {
+      if (calendarStatus?.connected && calendarStatus.busy_aware_delivery) {
         const { data: windows } = await supabase
           .from('freebusy_cache')
           .select('window_start, window_end')

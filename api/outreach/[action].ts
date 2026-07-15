@@ -23,8 +23,8 @@
 // inline supabase client construction with process.env.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { randomUUID } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
+import { createOAuthState, verifyOAuthState } from '../_lib/oauth-state.js';
 import { encryptToken, decryptToken } from '../../src/lib/outreach/crypto.js';
 import {
   buildRedditAuthUrl,
@@ -82,22 +82,21 @@ async function authedUserId(
 
 // ── Reddit OAuth start ────────────────────────────────────────────────────
 
-function handleAuthReddit(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+async function handleAuthReddit(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const { clientId, redirectUri } = redditConfig();
   if (!clientId || !redirectUri) {
     return res.status(500).json({ error: 'Reddit OAuth not configured' });
   }
-  const userId = req.query.user_id;
-  if (!userId) return res.status(400).json({ error: 'user_id query param required' });
+  const userId = await authedUserId(req, serviceClient());
+  if (!userId) return res.status(401).json({ error: 'Not authenticated' });
 
-  const nonce = randomUUID();
-  const state = `${userId}:${nonce}`;
+  const { state, cookieValue } = createOAuthState(userId, 'reddit', env('OAUTH_STATE_SECRET'));
   res.setHeader(
     'Set-Cookie',
-    `reddit_oauth_state=${state}; HttpOnly; Secure; SameSite=Lax; Max-Age=600; Path=/`,
+    `reddit_oauth_state=${cookieValue}; HttpOnly; Secure; SameSite=Lax; Max-Age=600; Path=/api/outreach`,
   );
-  res.redirect(302, buildRedditAuthUrl({ clientId, redirectUri, state }));
+  return res.status(200).json({ url: buildRedditAuthUrl({ clientId, redirectUri, state }) });
 }
 
 // ── Reddit OAuth callback ─────────────────────────────────────────────────
@@ -118,22 +117,10 @@ async function handleCallbackReddit(req: VercelRequest, res: VercelResponse) {
   // state. NEVER fall back to deriving user_id from the query-param state — a
   // crafted state would otherwise let an attacker bind a grant onto a victim.
   const stored = req.cookies?.reddit_oauth_state;
-  if (!stored) return res.redirect(302, `${url}?reddit=error&reason=missing_state_cookie`);
-
-  const cookieParts = String(stored).split(':');
-  const queryParts = String(state).split(':');
-  if (
-    cookieParts.length !== 2 ||
-    queryParts.length !== 2 ||
-    !cookieParts[1] ||
-    cookieParts[1] !== queryParts[1] ||
-    cookieParts[0] !== queryParts[0]
-  ) {
+  const userId = verifyOAuthState(stored, String(state), 'reddit', env('OAUTH_STATE_SECRET'));
+  if (!userId) {
     return res.redirect(302, `${url}?reddit=error&reason=state_mismatch`);
   }
-
-  const userId: string | null = cookieParts[0] || null;
-  if (!userId) return res.redirect(302, `${url}?reddit=error&reason=no_user_id`);
 
   const { clientId, clientSecret, redirectUri, tokenKey } = redditConfig();
   if (!clientId || !clientSecret || !redirectUri || !tokenKey) {
@@ -193,7 +180,7 @@ async function handleCallbackReddit(req: VercelRequest, res: VercelResponse) {
 
   res.setHeader(
     'Set-Cookie',
-    'reddit_oauth_state=; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Path=/',
+    'reddit_oauth_state=; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Path=/api/outreach',
   );
   res.redirect(302, `${url}?reddit=connected#/community/list`);
 }

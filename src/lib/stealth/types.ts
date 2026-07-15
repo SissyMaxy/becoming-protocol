@@ -2,6 +2,7 @@ export type StealthIconVariant = 'default' | 'calculator' | 'notes';
 
 export interface StealthSettings {
   icon_variant: StealthIconVariant;
+  sanitized_fitness_mode: boolean;
   neutral_notifications: boolean;
   panic_close_enabled: boolean;
   pin_lock_enabled: boolean;
@@ -9,6 +10,7 @@ export interface StealthSettings {
 
 export const DEFAULT_STEALTH_SETTINGS: StealthSettings = {
   icon_variant: 'default',
+  sanitized_fitness_mode: false,
   neutral_notifications: false,
   panic_close_enabled: false,
   pin_lock_enabled: false,

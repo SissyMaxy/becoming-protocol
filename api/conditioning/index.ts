@@ -146,7 +146,7 @@ Write naturally in second person ("you"), include [pause] and [breathe in] / [br
       return res.status(502).json({ error: `Claude API error: ${claudeRes.status}`, detail: err });
     }
 
-    const claudeData = await claudeRes.json();
+    const claudeData = await claudeRes.json() as { content?: Array<{ text?: string }> };
     const rawText = claudeData.content?.[0]?.text || '';
     const scriptText = '[breathe in]\n\nClose your eyes, Maxy. Let everything else fall away. ' + rawText;
 
@@ -566,7 +566,7 @@ Write naturally in second person ("you"), include [pause] and [breathe in] / [br
         continue;
       }
 
-      const claudeData = await claudeRes.json();
+      const claudeData = await claudeRes.json() as { content?: Array<{ text?: string }> };
       const rawText = claudeData.content?.[0]?.text || '';
       const scriptText = '[breathe in]\n\nClose your eyes, Maxy. Let everything else fall away. ' + rawText;
 
