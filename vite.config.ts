@@ -37,7 +37,7 @@ export default defineConfig({
         // Manual chunk splitting for better caching
         manualChunks: {
           // Vendor chunks
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-react': ['react', 'react-dom'],
           'vendor-supabase': ['@supabase/supabase-js'],
           'vendor-ui': ['lucide-react'],
 
@@ -66,7 +66,7 @@ export default defineConfig({
   },
   // Dependency optimization
   optimizeDeps: {
-    include: ['react', 'react-dom', 'react-router-dom', '@supabase/supabase-js'],
+    include: ['react', 'react-dom', '@supabase/supabase-js'],
     exclude: [],
   },
 })

@@ -8,7 +8,7 @@
 import { useState } from 'react';
 import { X, AlarmClock, SkipForward } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
-import { CompletionInput } from '../today/CompletionInput';
+import { CompletionInput } from '../task-inputs/CompletionInput';
 import type { ScheduledAmbush } from '../../types/scheduled-ambush';
 import type { CompletionData, TaskCompletionType } from '../../types/task-bank';
 import { truncateToLimit, NOTIFICATION_LIMITS } from '../../lib/handler-engines/popup-utils';

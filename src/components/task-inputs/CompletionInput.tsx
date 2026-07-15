@@ -5,7 +5,7 @@
  */
 
 import type { CompletionData, TaskCompletionType, CaptureFieldDef } from '../../types/task-bank';
-import { BinaryInput, DurationInput, ScaleInput, CountInput, BatchCountInput, CheckInInput, ReflectInput, LogEntryInput, PhotoCaptureInput } from './inputs';
+import { BinaryInput, DurationInput, ScaleInput, CountInput, BatchCountInput, CheckInInput, ReflectInput, LogEntryInput, PhotoCaptureInput } from './index';
 import { DEFAULT_LOG_FIELDS } from '../../lib/default-log-fields';
 
 interface CompletionInputProps {

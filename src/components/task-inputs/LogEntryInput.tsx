@@ -6,8 +6,8 @@
 
 import { useState, useMemo } from 'react';
 import { Check, Loader2 } from 'lucide-react';
-import { useBambiMode } from '../../../context/BambiModeContext';
-import type { CompletionData, CaptureFieldDef } from '../../../types/task-bank';
+import { useBambiMode } from '../../context/BambiModeContext';
+import type { CompletionData, CaptureFieldDef } from '../../types/task-bank';
 
 interface LogEntryInputProps {
   captureFields: CaptureFieldDef[];

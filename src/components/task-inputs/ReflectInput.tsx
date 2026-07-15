@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
 import { Check, Loader2 } from 'lucide-react';
-import { useBambiMode } from '../../../context/BambiModeContext';
-import { getReflectionPrompt } from '../../../lib/reflection-prompts';
-import type { CompletionData } from '../../../types/task-bank';
+import { useBambiMode } from '../../context/BambiModeContext';
+import { getReflectionPrompt } from '../../lib/reflection-prompts';
+import type { CompletionData } from '../../types/task-bank';
 
 interface ReflectInputProps {
   placeholder?: string;

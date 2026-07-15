@@ -5,11 +5,11 @@
 
 import { useState, useRef } from 'react';
 import { Camera, Upload, Check, Loader2, X } from 'lucide-react';
-import { useBambiMode } from '../../../context/BambiModeContext';
-import { stripImageMetadata } from '../../../lib/imageUtils';
-import { uploadEvidence } from '../../../lib/evidence';
-import { supabase } from '../../../lib/supabase';
-import type { CompletionData } from '../../../types/task-bank';
+import { useBambiMode } from '../../context/BambiModeContext';
+import { stripImageMetadata } from '../../lib/imageUtils';
+import { uploadEvidence } from '../../lib/evidence';
+import { supabase } from '../../lib/supabase';
+import type { CompletionData } from '../../types/task-bank';
 
 interface PhotoCaptureInputProps {
   intensity: number;

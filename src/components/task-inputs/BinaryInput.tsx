@@ -1,6 +1,6 @@
 import { Loader2, Check } from 'lucide-react';
-import { useBambiMode } from '../../../context/BambiModeContext';
-import type { CompletionData } from '../../../types/task-bank';
+import { useBambiMode } from '../../context/BambiModeContext';
+import type { CompletionData } from '../../types/task-bank';
 
 interface BinaryInputProps {
   intensity: number;

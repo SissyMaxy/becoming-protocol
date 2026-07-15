@@ -6,8 +6,8 @@
 
 import { useState } from 'react';
 import { Check, Clock, Loader2 } from 'lucide-react';
-import { useBambiMode } from '../../../context/BambiModeContext';
-import type { CompletionData } from '../../../types/task-bank';
+import { useBambiMode } from '../../context/BambiModeContext';
+import type { CompletionData } from '../../types/task-bank';
 
 interface CheckInInputProps {
   durationMinutes?: number;

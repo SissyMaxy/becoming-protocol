@@ -8,7 +8,7 @@ import { ProtocolProvider, useProtocol } from './context/ProtocolContext';
 import { BambiModeProvider, useBambiMode, FloatingHearts } from './context/BambiModeContext';
 import { RewardProvider, useRewardOptional } from './context/RewardContext';
 import { DebugModeProvider } from './context/DebugContext';
-import { OpacityProvider, useOpacity } from './context/OpacityContext';
+import { OpacityProvider } from './context/OpacityContext';
 import { HandlerProvider, useHandlerContext } from './context/HandlerContext';
 import { AmbushProvider } from './components/ambush';
 import { ModalOrchestratorProvider } from './context/ModalOrchestrator';
@@ -19,7 +19,8 @@ import { useDisassociationRecovery } from './hooks/useDisassociationRecovery';
 import { useCompulsoryGate } from './hooks/useCompulsoryGate';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Auth } from './components/Auth';
-import { StealthShell } from './components/stealth';
+import { SanitizedFitnessHome, SanitizedSettingsView, StealthShell } from './components/stealth';
+import { useStealthSettings } from './hooks/useStealthSettings';
 // MorningBriefing / CompulsoryGateScreen / VoiceGate imports removed
 // 2026-06-21 — the blocking entry-gate chain was deleted. The flows remain in
 // the codebase, reachable for deliberate replay; they no longer wall first open.
@@ -27,6 +28,8 @@ import { ProgressDashboard } from './components/ProgressDashboard';
 import { History } from './components/History';
 // SealedContentView removed — accessible via Handler conversation
 import { MenuView } from './components/MenuView';
+import { BaselineIntakeView } from './components/body/BaselineIntakeView';
+import { BodyProtocolView } from './components/today-redesign/BodyProtocolView';
 import { OnboardingFlow } from './components/Onboarding';
 import { OnboardingWizard } from './components/onboarding-welcome';
 import { loadOnboardingState } from './lib/onboarding/storage';
@@ -137,6 +140,7 @@ const DEEP_LINK_VIEWS: Record<string, string> = {
   '/dashboard': 'dashboard',
   '/journal': 'journal',
   '/settings': 'settings',
+  '/baseline-intake': 'baseline-intake',
   '/identity': 'identity',
   '/community/queue': 'community-queue',
   '/community/list': 'community-list',
@@ -166,7 +170,8 @@ function parseDeepLinkView(): string | null {
   return DEEP_LINK_VIEWS[path] || null;
 }
 
-type Tab = 'protocol' | 'progress' | 'sealed' | 'menu';
+// Tab type removed — activeTab was vestigial: nothing in the render tree
+// branched on it. Screen selection is menuSubView + overlay flags.
 
 // Navigation and Header removed — conversation IS the app.
 
@@ -179,7 +184,11 @@ function LoadingScreen() {
   );
 }
 
-type MenuSubView = 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | 'hypno-learning' | 'goon-session' | 'progress-page' | 'sealed-page' | 'content-capture' | 'content-queue' | 'content-calendar' | 'content-fans' | 'content-polls' | 'content-revenue' | 'content-settings' | 'vault-browser' | 'log-release' | 'conditioning-library' | 'social-dashboard' | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol' | 'escalation_ladder' | 'force' | 'wardrobe' | 'trajectory' | 'mommy-dossier' | 'identity' | 'verification-vault' | 'community-queue' | 'community-list' | 'community-log' | 'letters' | 'dossier' | 'recaps' | 'recap-detail' | 'life-as-woman' | null;
+type MenuSubView = 'body' | 'baseline-intake' | 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | 'hypno-learning' | 'goon-session' | 'content-capture' | 'content-queue' | 'content-calendar' | 'content-fans' | 'content-polls' | 'content-revenue' | 'content-settings' | 'vault-browser' | 'log-release' | 'conditioning-library' | 'social-dashboard' | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol' | 'escalation_ladder' | 'force' | 'wardrobe' | 'trajectory' | 'mommy-dossier' | 'identity' | 'verification-vault' | 'community-queue' | 'community-list' | 'community-log' | 'letters' | 'dossier' | 'recaps' | 'recap-detail' | 'life-as-woman' | null;
+
+function isSanitizedAllowedView(view: MenuSubView): boolean {
+  return view == null || view === 'body' || view === 'baseline-intake' || view === 'settings' || view === 'help';
+}
 
 /** Session picker → launches immersive SessionContainer */
 function SessionPickerOrContainer({ onBack }: { onBack: () => void }) {
@@ -236,9 +245,10 @@ function SessionPickerOrContainer({ onBack }: { onBack: () => void }) {
 
 function AuthenticatedAppInner() {
   const { isLoading, investmentMilestone, dismissInvestmentMilestone, userName, progress } = useProtocol();
-  const { canSee } = useOpacity();
   const rewardContext = useRewardOptional();
   const { dismissIntervention, completeIntervention, respondToIntervention } = useHandlerContext();
+  const { settings: stealthSettings, loading: stealthSettingsLoading } = useStealthSettings();
+  const sanitizedFitnessMode = stealthSettings.sanitized_fitness_mode;
 
   // Calculate days on protocol from total days in progress (minimum of 1)
   const daysOnProtocol = Math.max(1, progress?.totalDays ?? 1);
@@ -329,7 +339,6 @@ function AuthenticatedAppInner() {
   }, []);
   const initialRecapId = parseRecapDetailId();
   const [recapDetailId, setRecapDetailId] = useState<string | null>(initialRecapId);
-  const [activeTab, setActiveTab] = useState<Tab>(deepLinkView || initialRecapId ? 'menu' : 'protocol');
   const [menuSubView, setMenuSubView] = useState<MenuSubView>(
     initialRecapId ? 'recap-detail' : ((deepLinkView as MenuSubView) || null)
   );
@@ -341,11 +350,9 @@ function AuthenticatedAppInner() {
       if (id) {
         setRecapDetailId(id);
         setMenuSubView('recap-detail');
-        setActiveTab('menu');
       } else if (window.location.hash === '#/recaps' || window.location.hash === '#/recaps/') {
         setRecapDetailId(null);
         setMenuSubView('recaps');
-        setActiveTab('menu');
       }
     };
     window.addEventListener('hashchange', onHash);
@@ -362,14 +369,18 @@ function AuthenticatedAppInner() {
     const onHash = () => {
       const view = parseDeepLinkView();
       if (!view) return;
+      const requestedView = view as MenuSubView;
+      const nextView = sanitizedFitnessMode && !isSanitizedAllowedView(requestedView)
+        ? null
+        : requestedView;
       setShowTodayRedesign(false);
       setShowSettings(true);
-      setMenuSubView(view as MenuSubView);
-      window.history.pushState({ tab: 'menu', subView: view, settings: true, today: false }, '');
+      setMenuSubView(nextView);
+      window.history.pushState({ nav: true, subView: nextView, settings: true, today: false }, '');
     };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
-  }, []);
+  }, [sanitizedFitnessMode]);
   // (Disclosure rehearsal surface removed 2026-07-01 — policy: no disclosure
   // to Gina; nothing is rehearsed toward disclosing, migration 624.)
   // Hash-routable WhisperToMama — audio-only intimate confession ("Whisper
@@ -405,6 +416,13 @@ function AuthenticatedAppInner() {
   const [showSettings, setShowSettings] = useState(!!deepLinkView);
   // voiceGatePassed / reportCardDone state removed 2026-06-21 along with the
   // blocking voice gate and after-7pm report card.
+
+  useEffect(() => {
+    if (!sanitizedFitnessMode || isSanitizedAllowedView(menuSubView)) return;
+    setShowSettings(true);
+    setShowTodayRedesign(false);
+    setMenuSubView(null);
+  }, [sanitizedFitnessMode, menuSubView]);
 
   // Failsafe: force past loading after 10 seconds
   const [loadingTimedOut, setLoadingTimedOut] = useState(false);
@@ -510,57 +528,49 @@ function AuthenticatedAppInner() {
 
   // Listen for navigation events from components
   useEffect(() => {
+    // 'investments' and 'wishlist' both land on ProgressDashboard (the
+    // 'wishlist' sub-view) — the old investments handler set a tab that
+    // rendered nothing.
     const handleNavigateToInvestments = () => {
-      setActiveTab('progress');
-      // The ProgressDashboard has its own sub-tab for investments
+      setMenuSubView('wishlist');
     };
     const handleNavigateToWishlist = () => {
-      setActiveTab('menu');
       setMenuSubView('wishlist');
     };
     const handleNavigateToSettings = () => {
-      setActiveTab('menu');
       setMenuSubView('settings');
     };
     const handleNavigateToHandler = () => {
-      setActiveTab('menu');
       setMenuSubView('handler-autonomous');
     };
     const handleNavigateToExercise = () => {
-      setActiveTab('menu');
       setMenuSubView('exercise');
     };
     const handleNavigateToCam = () => {
-      setActiveTab('menu');
       setMenuSubView('cam-session');
     };
     const handleNavigateToHypno = () => {
-      setActiveTab('menu');
       setMenuSubView('hypno-session');
     };
     const handleNavigateToHypnoLearning = () => {
-      setActiveTab('menu');
       setMenuSubView('hypno-learning');
     };
     const handleNavigateToIdentity = () => {
-      setActiveTab('menu');
       setMenuSubView('identity');
     };
     // useAutoCapture fires this when a task wants the content-capture surface.
     const handleNavigateToContentCapture = () => {
-      setActiveTab('menu');
       setShowTodayRedesign(false);
       setShowSettings(true);
       setMenuSubView('content-capture');
-      window.history.pushState({ tab: 'menu', subView: 'content-capture', settings: true, today: false }, '');
+      window.history.pushState({ subView: 'content-capture', settings: true, today: false }, '');
     };
     // VaultView fires this from its "manage permissions" affordance.
     const handleNavigateToVaultPermissions = () => {
-      setActiveTab('menu');
       setShowTodayRedesign(false);
       setShowSettings(true);
       setMenuSubView('vault-permissions');
-      window.history.pushState({ tab: 'menu', subView: 'vault-permissions', settings: true, today: false }, '');
+      window.history.pushState({ subView: 'vault-permissions', settings: true, today: false }, '');
     };
     const handleOpenReleaseLog = () => setShowOrgasmLog(true);
     window.addEventListener('navigate-to-investments', handleNavigateToInvestments);
@@ -591,15 +601,8 @@ function AuthenticatedAppInner() {
     };
   }, []);
 
-  // Redirect away from gated tabs when opacity hides them
-  useEffect(() => {
-    if (activeTab === 'progress' && !canSee('progress_page')) {
-      setActiveTab('protocol');
-    }
-    if (activeTab === 'sealed' && !canSee('sealed_content')) {
-      setActiveTab('protocol');
-    }
-  }, [activeTab, canSee]);
+  // Opacity tab-redirect effect removed with activeTab — the gated 'progress'
+  // and 'sealed' tabs no longer exist as destinations.
 
   // Check if onboarding is complete
   useEffect(() => {
@@ -639,21 +642,20 @@ function AuthenticatedAppInner() {
   // Browser history: push/pop state for back button support
   useEffect(() => {
     // Replace initial state so first back doesn't exit the app. Record the
-    // full screen (tab + subView + overlay flags) so Back can restore it.
+    // full screen (subView + overlay flags) so Back can restore it.
     window.history.replaceState(
-      { tab: 'protocol', subView: null, settings: false, today: showTodayRedesign },
+      { nav: true, subView: null, settings: false, today: showTodayRedesign },
       ''
     );
 
     const handlePop = (e: PopStateEvent) => {
       const state = e.state as {
-        tab?: Tab;
+        nav?: boolean;
         subView?: MenuSubView;
         settings?: boolean;
         today?: boolean;
       } | null;
-      if (state?.tab) {
-        setActiveTab(state.tab);
+      if (state?.nav) {
         setMenuSubView(state.subView ?? null);
         // Restore the overlay flags too — otherwise Back after opening a menu
         // sub-view (e.g. from the dossier banner via 'open-menu-subview')
@@ -663,7 +665,6 @@ function AuthenticatedAppInner() {
         setShowSettings(state.settings ?? state.subView != null);
         setShowTodayRedesign(state.today ?? false);
       } else {
-        setActiveTab('protocol');
         setMenuSubView(null);
         setShowSettings(false);
         setShowTodayRedesign(false);
@@ -675,26 +676,22 @@ function AuthenticatedAppInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Handle menu navigation — special cases for progress/sealed pages
+  // Handle menu navigation. The old 'progress-page'/'sealed-page' special
+  // cases set a tab that rendered nothing — removed with activeTab.
   const handleMenuNavigate = (view: MenuSubView) => {
+    if (sanitizedFitnessMode && !isSanitizedAllowedView(view)) {
+      setShowTodayRedesign(false);
+      setShowSettings(true);
+      setMenuSubView(null);
+      window.history.pushState({ nav: true, subView: null, settings: true, today: false }, '');
+      return;
+    }
     if (view === 'log-release' as MenuSubView) {
       window.dispatchEvent(new Event('open-release-log'));
       return;
     }
-    if (view === 'progress-page') {
-      setActiveTab('progress');
-      setMenuSubView(null);
-      window.history.pushState({ tab: 'progress', subView: null, settings: showSettings, today: false }, '');
-      return;
-    }
-    if (view === 'sealed-page') {
-      setActiveTab('sealed');
-      setMenuSubView(null);
-      window.history.pushState({ tab: 'sealed', subView: null, settings: showSettings, today: false }, '');
-      return;
-    }
     setMenuSubView(view);
-    window.history.pushState({ tab: activeTab, subView: view, settings: true, today: false }, '');
+    window.history.pushState({ nav: true, subView: view, settings: true, today: false }, '');
   };
 
   // Open a menu sub-view from anywhere (e.g. the dossier banner on Focus).
@@ -703,19 +700,20 @@ function AuthenticatedAppInner() {
     const handler = (e: Event) => {
       const view = (e as CustomEvent).detail?.view as MenuSubView | undefined;
       if (!view) return;
+      const nextView = sanitizedFitnessMode && !isSanitizedAllowedView(view) ? null : view;
       window.location.hash = '';
       // Push a 'home' marker for the Today/Focus surface we're leaving, so the
       // first Back restores the home instead of the popstate handler's stale
       // state. Then push the sub-view entry the user is navigating into.
-      window.history.pushState({ tab: 'protocol', subView: null, settings: false, today: true }, '');
+      window.history.pushState({ nav: true, subView: null, settings: false, today: true }, '');
       setShowTodayRedesign(false);
       setShowSettings(true);
-      setMenuSubView(view);
-      window.history.pushState({ tab: 'menu', subView: view, settings: true, today: false }, '');
+      setMenuSubView(nextView);
+      window.history.pushState({ nav: true, subView: nextView, settings: true, today: false }, '');
     };
     window.addEventListener('open-menu-subview', handler);
     return () => window.removeEventListener('open-menu-subview', handler);
-  }, []);
+  }, [sanitizedFitnessMode]);
 
   // Handle back from menu sub-view
   const handleBackFromSubView = () => {
@@ -727,6 +725,15 @@ function AuthenticatedAppInner() {
       return;
     }
     window.history.back();
+  };
+
+  const openSanitizedMenuView = (view: MenuSubView) => {
+    const nextView = isSanitizedAllowedView(view) ? view : null;
+    window.location.hash = '';
+    setShowTodayRedesign(false);
+    setShowSettings(true);
+    setMenuSubView(nextView);
+    window.history.pushState({ nav: true, subView: nextView, settings: true, today: false }, '');
   };
 
   // Handle starting edit intake mode
@@ -781,7 +788,7 @@ function AuthenticatedAppInner() {
     }
   };
 
-  if ((isLoading || showOnboarding === null || (showOnboarding === false && showWelcome === null) || compulsoryLoading) && !loadingTimedOut) {
+  if ((isLoading || stealthSettingsLoading || showOnboarding === null || (showOnboarding === false && showWelcome === null) || compulsoryLoading) && !loadingTimedOut) {
     return <LoadingScreen />;
   }
 
@@ -846,6 +853,10 @@ function AuthenticatedAppInner() {
 
   // Render menu sub-view content
   const renderMenuSubView = () => {
+    if (sanitizedFitnessMode && !isSanitizedAllowedView(menuSubView)) {
+      return <MenuView onNavigate={handleMenuNavigate} />;
+    }
+
     switch (menuSubView) {
       case 'history':
         return (
@@ -907,6 +918,10 @@ function AuthenticatedAppInner() {
         return (
           <SessionPickerOrContainer onBack={handleBackFromSubView} />
         );
+      case 'body':
+        return <BodyProtocolView onBack={handleBackFromSubView} />;
+      case 'baseline-intake':
+        return <BaselineIntakeView onClose={handleBackFromSubView} />;
       case 'exercise':
         return <WorkoutSessionPage onBack={handleBackFromSubView} />;
       case 'her-world':
@@ -917,7 +932,7 @@ function AuthenticatedAppInner() {
             onBack={handleBackFromSubView}
             onManagePermissions={() => {
               setMenuSubView('vault-permissions');
-              window.history.pushState({ tab: activeTab, subView: 'vault-permissions', settings: true, today: false }, '');
+              window.history.pushState({ nav: true, subView: 'vault-permissions', settings: true, today: false }, '');
             }}
           />
         );
@@ -951,7 +966,7 @@ function AuthenticatedAppInner() {
             onBack={handleBackFromSubView}
             onAffirmationGame={() => {
               setMenuSubView('voice-game');
-              window.history.pushState({ tab: activeTab, subView: 'voice-game', settings: true, today: false }, '');
+              window.history.pushState({ nav: true, subView: 'voice-game', settings: true, today: false }, '');
             }}
           />
         );
@@ -1026,7 +1041,7 @@ function AuthenticatedAppInner() {
               window.location.hash = `#/recaps/${id}`;
               setMenuSubView('recap-detail');
               setRecapDetailId(id);
-              window.history.pushState({ tab: activeTab, subView: 'recap-detail', recapId: id, settings: true, today: false }, '');
+              window.history.pushState({ nav: true, subView: 'recap-detail', recapId: id, settings: true, today: false }, '');
             }}
           />
         );
@@ -1039,7 +1054,7 @@ function AuthenticatedAppInner() {
               window.location.hash = '#/recaps';
               setMenuSubView('recaps');
               setRecapDetailId(null);
-              window.history.pushState({ tab: activeTab, subView: 'recaps', settings: true, today: false }, '');
+              window.history.pushState({ nav: true, subView: 'recaps', settings: true, today: false }, '');
             }}
           />
         );
@@ -1173,6 +1188,9 @@ function AuthenticatedAppInner() {
           </div>
         );
       case 'settings':
+        if (sanitizedFitnessMode) {
+          return <SanitizedSettingsView onBack={handleBackFromSubView} />;
+        }
         return (
           <SettingsView
             onBack={handleBackFromSubView}
@@ -1193,11 +1211,14 @@ function AuthenticatedAppInner() {
             <div className="card p-6 space-y-4">
               <h3 className="text-lg font-semibold text-protocol-text">Help & Support</h3>
               <p className="text-sm text-protocol-text-muted">
-                Becoming Protocol is your daily companion for personal transformation.
+                {sanitizedFitnessMode
+                  ? 'This app helps track training, recovery, measurements, and steady body-composition progress.'
+                  : 'Becoming Protocol is your daily companion for personal transformation.'}
               </p>
               <p className="text-sm text-protocol-text-muted">
-                Complete your daily tasks, journal your reflections, and track your progress
-                as you become who you're meant to be.
+                {sanitizedFitnessMode
+                  ? 'Use the baseline intake for helper-assisted measurements, then repeat check-ins consistently.'
+                  : "Complete your daily tasks, journal your reflections, and track your progress as you become who you're meant to be."}
               </p>
             </div>
           </div>
@@ -1210,6 +1231,42 @@ function AuthenticatedAppInner() {
   // Handler-Directed UI: Conversation is the primary screen.
   // Settings accessible via gear icon in chat header.
   // NOTE: showSettings useState moved above early returns (was causing Rules of Hooks violation / #310)
+
+  if (sanitizedFitnessMode) {
+    if (!showSettings) {
+      return (
+        <SanitizedFitnessHome
+          onOpenBody={() => openSanitizedMenuView('body')}
+          onOpenBaselineIntake={() => openSanitizedMenuView('baseline-intake')}
+          onOpenMenu={() => openSanitizedMenuView(null)}
+          onOpenSettings={() => openSanitizedMenuView('settings')}
+        />
+      );
+    }
+
+    const content = <Suspense fallback={<LoadingScreen />}>{renderMenuSubView()}</Suspense>;
+    const framed = menuSubView == null || menuSubView === 'help';
+
+    return (
+      <div className="min-h-screen bg-protocol-bg">
+        {framed ? (
+          <div className="max-w-lg mx-auto px-4 py-4">
+            <button
+              onClick={() => {
+                setShowSettings(false);
+                setShowTodayRedesign(true);
+                setMenuSubView(null);
+              }}
+              className="mb-4 text-sm text-gray-400 hover:text-white transition-colors"
+            >
+              &larr; Back to dashboard
+            </button>
+            {content}
+          </div>
+        ) : content}
+      </div>
+    );
+  }
 
   if (showTodayRedesign) {
     return (
@@ -1263,7 +1320,9 @@ function AuthenticatedAppInner() {
       )}
 
       {/* SETTINGS: Accessed via gear icon in chat header */}
-      {showSettings && (
+      {showSettings && menuSubView === 'baseline-intake' ? (
+        <Suspense fallback={<LoadingScreen />}>{renderMenuSubView()}</Suspense>
+      ) : showSettings && (
         <div className="min-h-screen bg-protocol-bg">
           <div className="max-w-lg mx-auto px-4 py-4">
             <button
