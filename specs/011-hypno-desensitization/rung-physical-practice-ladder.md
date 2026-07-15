@@ -91,15 +91,19 @@ No real partner in any drill; no real-meet arrangement; no size/step that skips
 safe progression or risks injury; no non-faceless or third-party content; no
 public presentation; no conditioning of the in-the-moment veto.
 
-## 8. Open questions
-- [NEEDS CLARIFICATION: track seeds — operator-authored oral + bottoming
-  progressions (starter step → terminal step) and prop list, so sizing/intensity
-  has defined safe bounds.]
-- [NEEDS CLARIFICATION: does the physical ladder reuse the existing realcock-
-  ladder rows (mig 584) as its data spine, or a new physical-rung table keyed to
-  011? (plan-level)]
-- [NEEDS CLARIFICATION: health-prep gate — reuse the STI/PrEP/date-first
-  attestation pattern for the bottoming-track prep step?]
+## 8. Open questions — RESOLVED (operator "build it", 2026-07-15)
+- ~~track seeds~~ → **RESOLVED:** Oral track (1 familiarization → 2 technique →
+  3 depth/gag desensitization → 4 endurance/realism → 5 integration) and
+  Bottoming track (0 prep ritual → 1 entry → 2 relax-on-demand → 3 size
+  progression → 4 movement/riding → 5 integration), seeded as data with a
+  per-rung prop list. Sizing/intensity carries defined safe bounds; size steps
+  are strictly ordered and non-skippable.
+- ~~data spine~~ → **RESOLVED:** a NEW physical-rung table keyed to 011 (not the
+  realcock-ladder rows, mig 584, to avoid overloading their semantics); the
+  realcock ladder is read for phase gating only if needed.
+- ~~health-prep gate~~ → **RESOLVED:** reuse the existing STI/PrEP / date-first
+  attestation PATTERN for the bottoming-track prep step (a prep attestation
+  gating size progression), not a new mechanism.
 
 ---
 ## Constitution Check
