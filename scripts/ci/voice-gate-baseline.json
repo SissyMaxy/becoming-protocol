@@ -87,7 +87,6 @@
     "src/components/today-redesign/HrtDailyGate.tsx::intake_submitted: 'You submitted intake forms but have not attended the consult.',",
     "src/components/today-redesign/HrtDailyGate.tsx::what: `HRT step \"${STEP_LABELS[currentStep]}\" — make 1 provider contact attempt by tomorrow 10pm. Submit screenshot of dialer/email/intake p",
     "src/components/today-redesign/IrreversibilityLedger.tsx::appointment_booked: 'Appointment', intake_submitted: 'Intake', prescription_filled: 'Rx',",
-    "src/components/today-redesign/useTodayData.ts::intake_submitted: 'Intake submitted',",
     "src/data/weekend-activities.ts::feminizationBenefit: 'Phytoestrogen intake, domestic femininity',",
     "src/lib/task-bank.ts::- \"log_entry\" — asks for SPECIFIC DATA: numbers, ratings, intake reports, check-ins with multiple fields. STRUCTURED FORM. Must also include",
     "src/navigation/registry.tsx::'baseline-intake': {",

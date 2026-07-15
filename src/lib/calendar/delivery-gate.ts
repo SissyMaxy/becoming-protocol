@@ -5,8 +5,8 @@
 // freebusy_cache. If `nowOrSchedule` falls inside a busy window, return the
 // window-end + 5min as `deliverAfter`. Otherwise return null.
 //
-// The consumer queries (proactive-outreach.ts:getPendingOutreach + the Today
-// queue read in useTodayData.ts) gate by:
+// The consumer queries (proactive-outreach.ts:getPendingOutreach + the
+// OutreachQueueCard read on the Today home) gate by:
 //   (deliver_after IS NULL OR deliver_after <= now())
 
 export interface BusyWindow {

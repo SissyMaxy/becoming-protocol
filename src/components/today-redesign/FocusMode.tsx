@@ -46,6 +46,7 @@ import { SelfEchoPlayer } from './SelfEchoPlayer';
 import { ConfessionAudioCapture } from './ConfessionAudioCapture';
 import { savePhysicalStateLog, type PhysicalState } from '../../lib/compulsory-elements';
 import { HRT_STEPS, HRT_STEP_LABELS, HRT_STEP_NEXT_ACTION } from '../../lib/handler-context/hrt-steps';
+import { mommyOrderDetail, mommyOrderFromFocusTask } from '../../lib/mommy-orders';
 
 // ─── HRT funnel (labels live in the shared step module) ────────────────────
 // ET-anchored day key — matches HrtDailyGate's localStorage marker.
@@ -210,7 +211,7 @@ function parseBeliefProbeTrigger(triggerSource: unknown): { targetId: string; is
 }
 
 interface FocusModeProps {
-  onSwitchToCalendar: () => void;
+  onViewPlan: () => void;
 }
 
 /** The belief_slider probe instrument (DESIGN_RECONDITIONING §5.2) — a plain
@@ -260,7 +261,7 @@ async function sha256HexOfFile(file: File): Promise<string> {
     .join('');
 }
 
-export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
+export function FocusMode({ onViewPlan }: FocusModeProps) {
   const { user } = useAuth();
   const [task, setTask] = useState<FocusTask | null>(null);
   const [loading, setLoading] = useState(true);
@@ -366,14 +367,14 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
         .in('status', ['queued', 'active', 'escalated'])
         .lt('due_by', nowIso).gte('due_by', staleFloorIso).order('due_by', { ascending: false }).limit(1),
       supabase.from('handler_decrees')
-        .select('id, edict, deadline, proof_type, trigger_source').eq('user_id', user.id).eq('status', 'active')
+        .select('id, edict, deadline, proof_type, trigger_source, recon_target_id, mommy_order_arc, mommy_order_phase, mommy_order_consequence_mode, mommy_order_recovery_boundary, mommy_order_reason').eq('user_id', user.id).eq('status', 'active')
         .lt('deadline', nowIso).gte('deadline', staleFloorIso).order('deadline', { ascending: false }).limit(1),
       supabase.from('confession_queue')
         .select('id, prompt, deadline, category').eq('user_id', user.id).is('confessed_at', null).eq('missed', false)
         .gte('deadline', nowIso).lte('deadline', todayEndIso)
         .order('deadline', { ascending: true }).limit(1),
       supabase.from('handler_decrees')
-        .select('id, edict, deadline, proof_type, trigger_source').eq('user_id', user.id).eq('status', 'active')
+        .select('id, edict, deadline, proof_type, trigger_source, recon_target_id, mommy_order_arc, mommy_order_phase, mommy_order_consequence_mode, mommy_order_recovery_boundary, mommy_order_reason').eq('user_id', user.id).eq('status', 'active')
         .gte('deadline', nowIso).lte('deadline', todayEndIso)
         .order('deadline', { ascending: true }).limit(1),
       supabase.from('handler_commitments')
@@ -403,13 +404,13 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
       // alongside mommy_touch (high tone) but lower priority — a touch task
       // is 30s, a session is 5-10min.
       supabase.from('audio_session_offers')
-        .select('id, kind, intensity_tier, teaser, expires_at')
+        .select('id, kind, intensity_tier, teaser, expires_at, recon_target_id, mommy_order_arc, mommy_order_phase, mommy_order_proof_kind, mommy_order_consequence_mode, mommy_order_recovery_boundary, mommy_order_reason')
         .eq('user_id', user.id).is('completed_at', null)
         .gt('expires_at', nowIso).order('created_at', { ascending: false }).limit(1),
       // Mama's daily focus pick — when populated, returns just this decree
       focusDecreeId
         ? supabase.from('handler_decrees')
-            .select('id, edict, deadline, proof_type, trigger_source').eq('id', focusDecreeId)
+            .select('id, edict, deadline, proof_type, trigger_source, recon_target_id, mommy_order_arc, mommy_order_phase, mommy_order_consequence_mode, mommy_order_recovery_boundary, mommy_order_reason').eq('id', focusDecreeId)
             .eq('status', 'active').maybeSingle()
         : Promise.resolve({ data: null, error: null }),
       // ── HRT daily step (ported from HrtDailyGate) ──
@@ -543,10 +544,24 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
 
     let chosen: FocusTask | null = null;
 
+    type DecreeOrderRow = {
+      id: string;
+      edict: string;
+      deadline: string;
+      proof_type: string;
+      trigger_source: string | null;
+      recon_target_id?: string | null;
+      mommy_order_arc?: string | null;
+      mommy_order_phase?: string | null;
+      mommy_order_consequence_mode?: string | null;
+      mommy_order_recovery_boundary?: string | null;
+      mommy_order_reason?: string | null;
+    };
+
     // Mama's daily focus pick (mig 491) — highest priority. When the
     // triage layer has chosen a decree for today, surface that ABOVE
     // anything else. Respects feedback_one_task_focus.
-    const fd = (focusDecree as { data?: { id: string; edict: string; deadline: string; proof_type: string; trigger_source: string | null } | null })?.data ?? null;
+    const fd = (focusDecree as { data?: DecreeOrderRow | null })?.data ?? null;
     if (fd) {
       const hoursToDeadline = (new Date(fd.deadline).getTime() - now) / 3600_000;
       chosen = {
@@ -557,7 +572,16 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
         title: fd.edict,
         detail: `Mama picked this one for today. ${hoursToDeadline > 0 ? `Deadline in ${fmtCountdown(hoursToDeadline * 3600_000)}.` : `Past deadline.`}`,
         surface: 'decree', tone: hoursToDeadline < 0 ? 'critical' : 'high',
-        meta: { proof_type: fd.proof_type, trigger_source: fd.trigger_source },
+        meta: {
+          proof_type: fd.proof_type,
+          trigger_source: fd.trigger_source,
+          recon_target_id: fd.recon_target_id ?? undefined,
+          mommy_order_reason: fd.mommy_order_reason ?? undefined,
+          mommy_order_arc: fd.mommy_order_arc ?? undefined,
+          mommy_order_phase: fd.mommy_order_phase ?? undefined,
+          mommy_order_consequence_mode: fd.mommy_order_consequence_mode ?? undefined,
+          mommy_order_recovery_boundary: fd.mommy_order_recovery_boundary ?? undefined,
+        },
       };
     } else if (mostOverdueDose && mostOverdueDose.hoursOverdue > 6) {
       chosen = {
@@ -586,14 +610,23 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
         surface: 'mark_done', tone: 'critical',
       };
     } else if (overdueDecrees.data?.[0]) {
-      const d = overdueDecrees.data[0] as { id: string; edict: string; deadline: string; proof_type: string; trigger_source: string | null };
+      const d = overdueDecrees.data[0] as DecreeOrderRow;
       const hours = Math.abs((new Date(d.deadline).getTime() - now) / 3600_000);
       chosen = {
         kind: 'overdue_decree', rowId: d.id,
         title: d.edict,
         detail: `Past deadline by ${fmtCountdown(hours * 3600_000)}. Proof: ${d.proof_type || 'none'}.`,
         surface: 'mark_done', tone: 'critical',
-        meta: { proof_type: d.proof_type, trigger_source: d.trigger_source },
+        meta: {
+          proof_type: d.proof_type,
+          trigger_source: d.trigger_source,
+          recon_target_id: d.recon_target_id ?? undefined,
+          mommy_order_reason: d.mommy_order_reason ?? undefined,
+          mommy_order_arc: d.mommy_order_arc ?? undefined,
+          mommy_order_phase: d.mommy_order_phase ?? undefined,
+          mommy_order_consequence_mode: d.mommy_order_consequence_mode ?? undefined,
+          mommy_order_recovery_boundary: d.mommy_order_recovery_boundary ?? undefined,
+        },
       };
     } else if (pendingPostRow) {
       // approve_post — an outward escalation (HRT tier-7 staged post) waiting
@@ -661,6 +694,13 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
       const o = audioOffer.data[0] as {
         id: string; kind: AudioSessionKind; intensity_tier: AudioSessionIntensity;
         teaser: string; expires_at: string;
+        recon_target_id?: string | null;
+        mommy_order_arc?: string | null;
+        mommy_order_phase?: string | null;
+        mommy_order_proof_kind?: string | null;
+        mommy_order_consequence_mode?: string | null;
+        mommy_order_recovery_boundary?: string | null;
+        mommy_order_reason?: string | null;
       };
       const minsLeft = Math.max(1, Math.round((new Date(o.expires_at).getTime() - now) / 60_000));
       const kindLabel = o.kind.replace(/^session_/, '').replace(/^primer_/, 'primer · ').replace(/_/g, ' ');
@@ -688,7 +728,19 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
           ? `Mama looped your own voice under hers · ${minsLeft}m`
           : `Mama queued an audio session · ${kindLabel} · ${minsLeft}m`,
         surface: 'audio_session', tone: 'high',
-        meta: { kind: o.kind, intensity: o.intensity_tier, selfEcho } satisfies AudioSessionMeta,
+        meta: {
+          kind: o.kind,
+          intensity: o.intensity_tier,
+          selfEcho,
+          recon_target_id: o.recon_target_id ?? undefined,
+          mommy_order_reason: o.mommy_order_reason ?? undefined,
+          mommy_order_arc: o.mommy_order_arc ?? undefined,
+          mommy_order_phase: o.mommy_order_phase ?? undefined,
+          proof_type: o.mommy_order_proof_kind ?? undefined,
+          mommy_order_proof_kind: o.mommy_order_proof_kind ?? undefined,
+          mommy_order_consequence_mode: o.mommy_order_consequence_mode ?? undefined,
+          mommy_order_recovery_boundary: o.mommy_order_recovery_boundary ?? undefined,
+        } satisfies AudioSessionMeta & Record<string, unknown>,
       };
     } else if (todayConfs.data?.[0]) {
       const c = todayConfs.data[0] as { id: string; prompt: string; deadline: string };
@@ -709,14 +761,23 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
         surface: 'confess', tone: 'high',
       };
     } else if (todayDecrees.data?.[0]) {
-      const d = todayDecrees.data[0] as { id: string; edict: string; deadline: string; proof_type: string; trigger_source: string | null };
+      const d = todayDecrees.data[0] as DecreeOrderRow;
       const hours = (new Date(d.deadline).getTime() - now) / 3600_000;
       chosen = {
         kind: 'due_today_decree', rowId: d.id,
         title: d.edict,
         detail: `Due in ${fmtCountdown(hours * 3600_000)}.`,
         surface: 'mark_done', tone: 'high',
-        meta: { proof_type: d.proof_type, trigger_source: d.trigger_source },
+        meta: {
+          proof_type: d.proof_type,
+          trigger_source: d.trigger_source,
+          recon_target_id: d.recon_target_id ?? undefined,
+          mommy_order_reason: d.mommy_order_reason ?? undefined,
+          mommy_order_arc: d.mommy_order_arc ?? undefined,
+          mommy_order_phase: d.mommy_order_phase ?? undefined,
+          mommy_order_consequence_mode: d.mommy_order_consequence_mode ?? undefined,
+          mommy_order_recovery_boundary: d.mommy_order_recovery_boundary ?? undefined,
+        },
       };
     } else if (mostUrgentTodayDose) {
       chosen = {
@@ -1750,6 +1811,8 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
   const beliefProbe = task?.meta ? parseBeliefProbeTrigger((task.meta as { trigger_source?: unknown }).trigger_source) : null;
   const minChars = useMemo(() => task?.kind === 'due_today_commitment' ? 30 : 80, [task?.kind]);
   const charsRemaining = Math.max(0, minChars - confessText.trim().length);
+  const mommyOrder = task && user?.id ? mommyOrderFromFocusTask(task, user.id) : null;
+  const orderDetail = mommyOrder ? mommyOrderDetail(mommyOrder, task?.detail) : task?.detail;
 
   return (
     <div style={{
@@ -1769,7 +1832,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
           fontSize: 10, color: '#edaec5', fontWeight: 700,
           textTransform: 'uppercase', letterSpacing: '0.1em',
         }}>
-          Focus
+          Mommy's order
         </div>
         <div style={{
           fontSize: 10, color: '#fff', background: '#c9557f',
@@ -1778,7 +1841,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
           {completedToday} done today
         </div>
         <button
-          onClick={onSwitchToCalendar}
+          onClick={onViewPlan}
           style={{
             marginLeft: 'auto',
             background: 'transparent', border: '1px solid #4a2438',
@@ -1850,9 +1913,9 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
           }}>
             {task.title}
           </div>
-          {task.detail && (
+          {orderDetail && (
             <div style={{ fontSize: 13, color: '#a8a3ad', lineHeight: 1.55, marginBottom: 22 }}>
-              {task.detail}
+              {orderDetail}
             </div>
           )}
 
@@ -2639,7 +2702,7 @@ export function FocusMode({ onSwitchToCalendar }: FocusModeProps) {
 
           {task.surface === 'message' && (
             <button
-              onClick={onSwitchToCalendar}
+              onClick={onViewPlan}
               style={{
                 width: '100%', padding: '12px',
                 background: 'transparent', color: '#8fd9b0',

@@ -63,6 +63,8 @@ import { ConditioningLibrary } from '../components/conditioning';
 import { SocialMediaDashboard } from '../components/social/SocialMediaDashboard';
 import { CommunityQueue, CommunityList, CommunityLog } from '../components/community';
 
+import { PlanView } from '../components/today-redesign/PlanView';
+
 const LettersArchiveView = lazy(() => import('../components/letters').then((m) => ({ default: m.LettersArchiveView })));
 const LifeAsWomanView = lazy(() => import('../components/life-as-woman').then((m) => ({ default: m.LifeAsWomanView })));
 const KinkQuizView = lazy(() => import('../components/kink-quiz').then((m) => ({ default: m.KinkQuizView })));
@@ -79,6 +81,7 @@ const SubscriberPolls = lazy(() => import('../components/content/SubscriberPolls
 const RevenueView = lazy(() => import('../components/content/RevenueView').then((m) => ({ default: m.RevenueView })));
 
 export type ViewId =
+  | 'plan'
   | 'body' | 'baseline-intake' | 'history' | 'wishlist' | 'settings' | 'help'
   | 'sessions' | 'quiz' | 'timeline' | 'service' | 'service-analytics'
   | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors'
@@ -205,6 +208,14 @@ function SessionPickerOrContainer({ onBack }: { onBack: () => void }) {
 }
 
 export const VIEW_REGISTRY: Record<ViewId, ViewDef> = {
+  // ── The plan — the full deadline ledger behind the Focus home ────────────
+  plan: {
+    frame: 'self',
+    chrome: 'bare',
+    hashPaths: ['/plan'],
+    render: (ctx) => <PlanView onBack={ctx.onBack} />,
+  },
+
   // ── Your becoming ─────────────────────────────────────────────────────────
   body: {
     frame: 'self',

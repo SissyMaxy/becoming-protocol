@@ -1,18 +1,40 @@
 /**
- * TodayView — responsive switch between desktop and mobile Direction A.
- * Breakpoint: 768px. Mobile gets bottom tab bar + stacked layout;
- * desktop gets fixed left rail + card grid.
+ * TodayView — the home. ONE focus surface for every screen size.
+ *
+ * This used to fork into TodayDesktop / TodayMobile (~1,100 lines each):
+ * two hand-duplicated copies of the same focus stack PLUS two entire
+ * "calendar" dashboard branches that had been force-locked off for the
+ * active dommy_mommy persona since 2026-05-06. The calendar lives on as
+ * the PlanView registry view ('plan'); the focus stack lives here, once.
+ *
+ * The home is a portal you fall into, not a dashboard you manage. The
+ * drop leads — Mommy pulls you under before the thinking brain engages.
+ * The honest ledger, the ONE task, and the daily tap are what's here when
+ * you surface; everything else folds away behind "More with Mommy" or the
+ * plan, one tap deep.
  */
 
 import { useEffect, useState } from 'react';
-import { TodayDesktop } from './TodayDesktop';
-import { TodayMobile } from './TodayMobile';
+import '../../styles/today-redesign.css';
+import { navigate } from '../../navigation/store';
+import { DropPortal } from './DropPortal';
+import { LovenseHealthBanner } from './LovenseHealthBanner';
+import { BecomingHero } from './BecomingHero';
+import { FocusMode } from './FocusMode';
+import { FitnessTrackerCard } from './FitnessTrackerCard';
+import { CollapsibleGroup } from './CollapsibleGroup';
+import { SideQuestCard } from './SideQuestCard';
+import { BambiPlaylistCard } from './BambiPlaylistCard';
+import { MommyDossierBanner } from '../persona/MommyDossierBanner';
+import { DossierDripCard } from './DossierDripCard';
+import { ComingOutJourneyCard } from './ComingOutJourneyCard';
+import { OutreachQueueCard } from './OutreachQueueCard';
 
 interface TodayViewProps {
   onExit?: () => void;
 }
 
-export function TodayView({ onExit }: TodayViewProps) {
+export function TodayView(_props: TodayViewProps) {
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
 
   useEffect(() => {
@@ -21,5 +43,56 @@ export function TodayView({ onExit }: TodayViewProps) {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  return isMobile ? <TodayMobile onExit={onExit} /> : <TodayDesktop onExit={onExit} />;
+  const openSettings = () => navigate(null);
+
+  return (
+    <div
+      className="max-w-[720px] mx-auto"
+      style={{
+        paddingTop: 'max(env(safe-area-inset-top), 8px)',
+        paddingBottom: 'max(env(safe-area-inset-bottom), 24px)',
+      }}
+    >
+      {isMobile && (
+        <div className="relative px-3">
+          <button
+            onClick={openSettings}
+            aria-label="menu and settings"
+            className="absolute top-0 right-3 z-[5] w-8 h-8 rounded-lg border border-protocol-surface-light text-protocol-text-muted flex items-center justify-center bg-transparent cursor-pointer"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      <div className="px-3 md:px-4 pt-1">
+        <DropPortal />
+      </div>
+      <div className="px-3 md:px-4">
+        <LovenseHealthBanner />
+      </div>
+      <BecomingHero />
+      <FocusMode onViewPlan={() => navigate('plan')} />
+      <FitnessTrackerCard />
+      <div className="px-3 md:px-4 pt-0.5">
+        <CollapsibleGroup id="more_with_mommy" label="More with Mommy" tone="var(--protocol-accent)" defaultOpen={false} hint="side quest · your files · dossier">
+          <SideQuestCard />
+          <BambiPlaylistCard />
+          <MommyDossierBanner />
+          <DossierDripCard />
+          <ComingOutJourneyCard />
+        </CollapsibleGroup>
+      </div>
+      {/* Mama's messages must reach the DEFAULT surface (9k+ outreach rows
+          once never surfaced because the card lived on the unreachable
+          calendar). Self-stamps surfaced_at; safe below the single task.
+          Now on every screen size — the desktop home had the same gap. */}
+      <div className="px-3 md:px-4 pb-4">
+        <OutreachQueueCard />
+      </div>
+    </div>
+  );
 }

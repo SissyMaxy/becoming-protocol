@@ -18,7 +18,7 @@ interface CollapsibleGroupProps {
 }
 
 export function CollapsibleGroup({
-  id, label, hint, defaultOpen = false, tone = '#edaec5', children,
+  id, label, hint, defaultOpen = false, tone = 'var(--protocol-accent-soft)', children,
 }: CollapsibleGroupProps) {
   const storageKey = `td_group_${id}`;
   const [open, setOpen] = useState<boolean>(() => {
@@ -40,11 +40,12 @@ export function CollapsibleGroup({
         style={{
           width: '100%',
           padding: '10px 14px',
-          background: '#0f0a0e',
-          border: `1px solid ${open ? tone + '55' : '#2b1d29'}`,
+          background: 'var(--protocol-bg-deep)',
+          // color-mix so tone works as hex OR var(--protocol-*)
+          border: `1px solid ${open ? `color-mix(in srgb, ${tone} 34%, transparent)` : 'rgb(var(--protocol-border-rgb) / 0.6)'}`,
           borderLeft: `3px solid ${tone}`,
           borderRadius: 6,
-          color: '#f2e9e6',
+          color: 'var(--protocol-text)',
           cursor: 'pointer',
           fontFamily: 'inherit',
           display: 'flex',
@@ -66,7 +67,7 @@ export function CollapsibleGroup({
           {label}
         </span>
         {hint && (
-          <span style={{ fontSize: 10.5, color: '#9c8590', marginLeft: 'auto', fontStyle: 'italic' }}>
+          <span style={{ fontSize: 10.5, color: 'var(--protocol-text-muted)', marginLeft: 'auto', fontStyle: 'italic' }}>
             {hint}
           </span>
         )}

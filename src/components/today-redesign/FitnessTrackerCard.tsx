@@ -9,11 +9,14 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { useStealthSettings } from '../../hooks/useStealthSettings';
 
 interface Status { logged_today: boolean; total_sessions: number; sessions_this_week: number; current_streak_weeks: number; }
 
 export function FitnessTrackerCard() {
   const { user } = useAuth();
+  const { settings } = useStealthSettings();
+  const sanitized = settings.sanitized_fitness_mode;
   const [st, setSt] = useState<Status | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -50,7 +53,9 @@ export function FitnessTrackerCard() {
           Every day
         </div>
         <div style={{ fontSize: 15, color: '#f2e9e6', fontWeight: 600 }}>
-          {st.logged_today ? 'You moved for Mommy today ♥' : 'Did you move today, baby?'}
+          {sanitized
+            ? (st.logged_today ? 'Movement logged today' : 'Did you move today?')
+            : (st.logged_today ? 'You moved for Mommy today ♥' : 'Did you move today, baby?')}
         </div>
         <div style={{ fontSize: 11.5, color: '#7f6b74', marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
           {st.sessions_this_week} this week · {st.total_sessions} total

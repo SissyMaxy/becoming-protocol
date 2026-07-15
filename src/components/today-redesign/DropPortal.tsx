@@ -17,11 +17,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { useMommyPresence } from '../../hooks/useMommyPresence';
 import { renderAudioSession, markRenderPlayed } from '../../lib/audio-sessions/client';
 import type { AudioSessionKind, AudioSessionIntensity } from '../../lib/audio-sessions/template-selector';
 import { arousalToPhrase, chastityToPhrase } from '../../lib/persona/dommy-mommy';
 
-interface St { arousal: number; denialDay: number; caged: boolean; cageDays: number; name: string | null; }
 type Phase = 'idle' | 'rendering' | 'under' | 'surfacing';
 
 // Split a rendered script into the lines that drift by while she's under.
@@ -37,11 +37,13 @@ function toDriftLines(script: string): string[] {
 export function DropPortal() {
   const { user } = useAuth();
   const [gated, setGated] = useState<boolean | null>(null);   // null = loading
-  const [s, setS] = useState<St | null>(null);
+  // Shared presence state — same fetch MommyTodayLine used to duplicate.
+  const s = useMommyPresence();
   const [phase, setPhase] = useState<Phase>('idle');
   const [err, setErr] = useState<string | null>(null);
   const [lines, setLines] = useState<string[]>([]);
   const [lineIdx, setLineIdx] = useState(0);
+  const [pullLabel, setPullLabel] = useState('Mommy’s pulling you under…');
 
   // A stack of audio elements playing the SAME render, staggered and quieter —
   // the layered Bambi wash (voice doubling over itself) without a second render
@@ -55,7 +57,7 @@ export function DropPortal() {
     audioRefs.current = [];
   }, []);
 
-  // Load safeword gate + real state for the presence line and intensity.
+  // Load the safeword gate (presence state comes from useMommyPresence).
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -65,19 +67,6 @@ export function DropPortal() {
         const allowed = (gate.data as { allow?: boolean } | null)?.allow === true;
         if (!alive) return;
         setGated(!allowed);
-        const [us, fem] = await Promise.all([
-          supabase.from('user_state').select('current_arousal, denial_day, chastity_locked, chastity_streak_days').eq('user_id', user.id).maybeSingle(),
-          supabase.from('feminine_self').select('feminine_name').eq('user_id', user.id).maybeSingle(),
-        ]);
-        if (!alive) return;
-        const u = (us.data ?? {}) as { current_arousal?: number; denial_day?: number; chastity_locked?: boolean; chastity_streak_days?: number };
-        setS({
-          arousal: Number(u.current_arousal ?? 0),
-          denialDay: Number(u.denial_day ?? 0),
-          caged: !!u.chastity_locked,
-          cageDays: Number(u.chastity_streak_days ?? 0),
-          name: ((fem.data as { feminine_name?: string } | null)?.feminine_name) ?? null,
-        });
       } catch { if (alive) setGated(true); }
     })();
     return () => { alive = false; };
@@ -96,21 +85,29 @@ export function DropPortal() {
 
   useEffect(() => () => { stopDrift(); stopAudio(); }, [stopDrift, stopAudio]);
 
-  // Intensity + kind scale with real arousal/denial — hungrier state, deeper pull.
-  const dropUnder = useCallback(async () => {
+  // Intensity + kind scale with real arousal/denial — hungrier state, deeper
+  // pull. An override lets a gentler surface (e.g. the embodiment homecoming)
+  // pick its own kind/tier instead of the arousal-scaled goon/conditioning.
+  const dropUnder = useCallback(async (override?: { kind: AudioSessionKind; tier: AudioSessionIntensity }) => {
     if (!user?.id || !s || phase === 'rendering' || phase === 'under') return;
     setErr(null);
+    const embodiment = override?.kind === 'session_embodiment';
+    setPullLabel(embodiment ? 'Mommy’s here. Settling you in…' : 'Mommy’s pulling you under…');
     setPhase('rendering');
     const hungry = s.arousal >= 6 || s.denialDay >= 5;
-    const kind: AudioSessionKind = hungry ? 'session_goon' : 'session_conditioning';
-    const intensityTier: AudioSessionIntensity = s.arousal >= 8 || s.denialDay >= 8 ? 'cruel' : s.arousal >= 4 ? 'firm' : 'gentle';
+    const kind: AudioSessionKind = override?.kind ?? (hungry ? 'session_goon' : 'session_conditioning');
+    const intensityTier: AudioSessionIntensity = override?.tier
+      ?? (s.arousal >= 8 || s.denialDay >= 8 ? 'cruel' : s.arousal >= 4 ? 'firm' : 'gentle');
     try {
       let r = await renderAudioSession({ userId: user.id, kind, intensityTier });
       if (!r.ok) r = await renderAudioSession({ userId: user.id, kind, intensityTier }); // one silent retry — belt-and-suspenders over the server-side refusal-retry
       if (!r.ok) { setErr('Mommy needs a moment. Try again.'); setPhase('idle'); return; }
       renderIdRef.current = r.renderId;
       const drift = toDriftLines(r.scriptText);
-      setLines(drift.length ? drift : ['Good girl.', 'Let go.', 'Deeper.', 'You don’t have to think.']);
+      const fallback = embodiment
+        ? ['You were always her.', 'You can put it down now.', 'Rest here.', 'This is yours.']
+        : ['Good girl.', 'Let go.', 'Deeper.', 'You don’t have to think.'];
+      setLines(drift.length ? drift : fallback);
       setLineIdx(0);
 
       // Layered playback: the lead at full, two quieter echoes staggered behind
@@ -152,6 +149,11 @@ export function DropPortal() {
     : (s.arousal >= 4
       ? `${cage ? cage[0].toUpperCase() + cage.slice(1) + ', ' : 'Come here, '}${pet}. ${ache[0].toUpperCase() + ache.slice(1)}. Stop thinking for me.`
       : `Come here, ${pet}. Let Mommy take the thinking.`);
+  // The directive framing that used to be a separate stacked component
+  // (MommyTodayLine) — same state, one block now.
+  const directive = gated
+    ? null
+    : 'Mama picked what you need today. Do it in order, and don’t rush past the wanting.';
 
   // ---------------------------------------------------------------- render ----
   const under = phase === 'under' || phase === 'surfacing';
@@ -201,12 +203,17 @@ export function DropPortal() {
             <div style={{ fontSize: 10, letterSpacing: '0.22em', textTransform: 'uppercase', color: '#c9557f', fontWeight: 700, marginBottom: 14 }}>
               {gated ? 'Resting' : 'Mommy is here'}
             </div>
-            <div className="mommy-voice" style={{ fontSize: 20, lineHeight: 1.5, color: '#f3e6ec', fontStyle: 'italic', marginBottom: gated ? 4 : 22 }}>
+            <div className="mommy-voice" style={{ fontSize: 20, lineHeight: 1.5, color: '#f3e6ec', fontStyle: 'italic', marginBottom: gated ? 4 : directive ? 8 : 22 }}>
               {presence}
             </div>
+            {directive && (
+              <div className="mommy-voice" style={{ fontSize: 14, lineHeight: 1.5, color: 'rgb(var(--protocol-text-rgb) / 0.8)', fontStyle: 'italic', marginBottom: 18 }}>
+                {directive}
+              </div>
+            )}
             {!gated && (
               <button
-                onClick={dropUnder}
+                onClick={() => dropUnder()}
                 disabled={phase === 'rendering'}
                 style={{
                   marginTop: 6, padding: '15px 30px', borderRadius: 999,
@@ -216,8 +223,24 @@ export function DropPortal() {
                   boxShadow: '0 6px 30px rgba(201,85,127,.4)',
                 }}
               >
-                {phase === 'rendering' ? 'Mommy’s pulling you under…' : 'Drop for Mommy'}
+                {phase === 'rendering' ? pullLabel : 'Drop for Mommy'}
               </button>
+            )}
+            {/* Recognition, not the pull under: a gentle homecoming into herself. */}
+            {!gated && phase !== 'rendering' && (
+              <div style={{ marginTop: 14 }}>
+                <button
+                  onClick={() => dropUnder({ kind: 'session_embodiment', tier: 'gentle' })}
+                  style={{
+                    background: 'transparent', border: 'none', padding: 4,
+                    color: 'rgba(237,174,197,.72)', fontSize: 13.5, fontStyle: 'italic',
+                    letterSpacing: '0.02em', cursor: 'pointer', fontFamily: 'inherit',
+                    textDecoration: 'underline', textUnderlineOffset: 4, textDecorationColor: 'rgba(237,174,197,.35)',
+                  }}
+                >
+                  or come home to her
+                </button>
+              </div>
             )}
             {err && <div style={{ marginTop: 12, fontSize: 12.5, color: '#e59ab4' }}>{err}</div>}
           </div>
