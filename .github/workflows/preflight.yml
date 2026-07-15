@@ -62,6 +62,9 @@ jobs:
       - name: Pattern lint (fails on NEW hits beyond baseline)
         run: npm run lint:patterns
 
+      - name: UI lint (Velvet design-system drift; fails on NEW hits beyond baseline)
+        run: npm run lint:ui
+
       - name: Voice gate (bans clinical/disclaimer phrases in user-facing copy; fails on NEW hits beyond baseline)
         run: npm run lint:voice
 
