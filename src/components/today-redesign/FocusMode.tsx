@@ -41,7 +41,6 @@ import { SelfEchoPlayer } from './SelfEchoPlayer';
 import { ConfessionAudioCapture } from './ConfessionAudioCapture';
 import { savePhysicalStateLog, type PhysicalState } from '../../lib/compulsory-elements';
 import { HRT_STEPS, HRT_STEP_LABELS } from '../../lib/handler-context/hrt-steps';
-import { mommyOrderDetail, mommyOrderFromFocusTask } from '../../lib/mommy-orders';
 import {
   chooseFocusTask,
   type FocusTask, type FocusInputs, type AudioSessionMeta,
@@ -488,14 +487,14 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
         .in('status', ['queued', 'active', 'escalated'])
         .lt('due_by', nowIso).gte('due_by', staleFloorIso).order('due_by', { ascending: false }).limit(1),
       supabase.from('handler_decrees')
-        .select('id, edict, deadline, proof_type, trigger_source, recon_target_id, mommy_order_arc, mommy_order_phase, mommy_order_consequence_mode, mommy_order_recovery_boundary, mommy_order_reason').eq('user_id', user.id).eq('status', 'active')
+        .select('id, edict, deadline, proof_type, trigger_source').eq('user_id', user.id).eq('status', 'active')
         .lt('deadline', nowIso).gte('deadline', staleFloorIso).order('deadline', { ascending: false }).limit(1),
       supabase.from('confession_queue')
         .select('id, prompt, deadline, category').eq('user_id', user.id).is('confessed_at', null).eq('missed', false)
         .gte('deadline', nowIso).lte('deadline', todayEndIso)
         .order('deadline', { ascending: true }).limit(1),
       supabase.from('handler_decrees')
-        .select('id, edict, deadline, proof_type, trigger_source, recon_target_id, mommy_order_arc, mommy_order_phase, mommy_order_consequence_mode, mommy_order_recovery_boundary, mommy_order_reason').eq('user_id', user.id).eq('status', 'active')
+        .select('id, edict, deadline, proof_type, trigger_source').eq('user_id', user.id).eq('status', 'active')
         .gte('deadline', nowIso).lte('deadline', todayEndIso)
         .order('deadline', { ascending: true }).limit(1),
       supabase.from('handler_commitments')
@@ -525,13 +524,13 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
       // alongside mommy_touch (high tone) but lower priority — a touch task
       // is 30s, a session is 5-10min.
       supabase.from('audio_session_offers')
-        .select('id, kind, intensity_tier, teaser, expires_at, recon_target_id, mommy_order_arc, mommy_order_phase, mommy_order_proof_kind, mommy_order_consequence_mode, mommy_order_recovery_boundary, mommy_order_reason')
+        .select('id, kind, intensity_tier, teaser, expires_at, recon_target_id')
         .eq('user_id', user.id).is('completed_at', null)
         .gt('expires_at', nowIso).order('created_at', { ascending: false }).limit(1),
       // Mama's daily focus pick — when populated, returns just this decree
       focusDecreeId
         ? supabase.from('handler_decrees')
-            .select('id, edict, deadline, proof_type, trigger_source, recon_target_id, mommy_order_arc, mommy_order_phase, mommy_order_consequence_mode, mommy_order_recovery_boundary, mommy_order_reason').eq('id', focusDecreeId)
+            .select('id, edict, deadline, proof_type, trigger_source').eq('id', focusDecreeId)
             .eq('status', 'active').maybeSingle()
         : Promise.resolve({ data: null, error: null }),
       // ── HRT daily step (ported from HrtDailyGate) ──
@@ -1664,8 +1663,8 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
   const turnoutDebrief = task?.meta ? parseTurnoutDebriefTrigger((task.meta as { trigger_source?: unknown }).trigger_source) : null;
   const minChars = useMemo(() => task?.kind === 'due_today_commitment' ? 30 : 80, [task?.kind]);
   const charsRemaining = Math.max(0, minChars - confessText.trim().length);
-  const mommyOrder = task && user?.id ? mommyOrderFromFocusTask(task, user.id) : null;
-  const orderDetail = mommyOrder ? mommyOrderDetail(mommyOrder, task?.detail) : task?.detail;
+  // mommy-orders subsystem removed on main; detail is the task's own line.
+  const orderDetail = task?.detail;
 
   return (
     <div style={{

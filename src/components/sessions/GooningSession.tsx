@@ -1,7 +1,7 @@
 // GooningSession.tsx
 // Immersive gooning/hypnotic session with visual synchronization and audio
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   X,
   Play,
@@ -22,13 +22,10 @@ import { useHypnoPlayer, buildHypnoPlaylist, formatPlayTime } from '../../hooks/
 import { useHandlerContextOptional } from '../../context/HandlerContext';
 import { getContentLibrary } from '../../lib/content';
 import type { RewardContent } from '../../types/rewards';
-import { buildSessionPayloadDeck, type MommyOrder } from '../../lib/mommy-orders';
 
 interface GooningSessionProps {
   onClose: () => void;
   onSessionComplete?: (stats: GooningStats) => void;
-  mommyOrder?: MommyOrder | null;
-  targetClaim?: string | null;
 }
 
 interface GooningStats {
@@ -59,7 +56,7 @@ const AFFIRMATIONS = [
   "Perfect... just like that...",
 ];
 
-export function GooningSession({ onClose, onSessionComplete, mommyOrder = null, targetClaim = null }: GooningSessionProps) {
+export function GooningSession({ onClose, onSessionComplete }: GooningSessionProps) {
   const lovense = useLovense();
   const [hypnoState, hypnoActions] = useHypnoPlayer();
   const handlerContext = useHandlerContextOptional();
@@ -84,10 +81,6 @@ export function GooningSession({ onClose, onSessionComplete, mommyOrder = null, 
   const [hue, setHue] = useState(0);
   const [showAudioControls, setShowAudioControls] = useState(false);
   const [audioTracksPlayed, setAudioTracksPlayed] = useState(0);
-  const payloadDeck = useMemo(() => {
-    const targeted = buildSessionPayloadDeck({ sessionType: 'goon', order: mommyOrder, targetClaim });
-    return targeted.length > 0 ? targeted : AFFIRMATIONS;
-  }, [mommyOrder, targetClaim]);
 
   // Refs
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -200,9 +193,9 @@ export function GooningSession({ onClose, onSessionComplete, mommyOrder = null, 
 
   // Update affirmation
   const updateAffirmation = useCallback(() => {
-    const randomAffirmation = payloadDeck[Math.floor(Math.random() * payloadDeck.length)];
+    const randomAffirmation = AFFIRMATIONS[Math.floor(Math.random() * AFFIRMATIONS.length)];
     setCurrentAffirmation(randomAffirmation);
-  }, [payloadDeck]);
+  }, []);
 
   // Run phase cycle
   const runCycle = useCallback(async () => {
@@ -569,16 +562,6 @@ export function GooningSession({ onClose, onSessionComplete, mommyOrder = null, 
               An immersive, hypnotic experience. Let go and surrender to the sensations.
               The intensity will build, peak, and deny in cycles.
             </p>
-            {mommyOrder?.targetId && (
-              <div className="mb-6 rounded-xl border border-white/15 bg-black/35 p-4">
-                <div className="text-xs font-bold uppercase tracking-[0.22em] opacity-60">
-                  Mommy's target
-                </div>
-                <div className="mt-2 text-sm opacity-90">
-                  {targetClaim || 'Stay with the target Mommy selected.'}
-                </div>
-              </div>
-            )}
 
             <div className="flex items-center justify-center gap-4 mb-8 text-sm opacity-75">
               <div className="flex items-center gap-2">

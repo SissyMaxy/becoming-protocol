@@ -11,9 +11,9 @@
  *   4. in-app calls           → navigate()/goHome()/goChat()/back()
  *
  * Deliberately a plain module store (useSyncExternalStore), not a router:
- * the IA is state-first — sanitized/stealth mode must REWRITE destinations
- * and suppress URL traces, which fights URL-as-truth routers — and a plain
- * TS module is unit-testable in the lib-only vitest suite.
+ * the IA is state-first and stealth mode suppresses URL traces, which fights
+ * URL-as-truth routers — and a plain TS module is unit-testable in the
+ * lib-only vitest suite.
  *
  * Not owned here (unchanged contracts):
  *   - `#/wishlist/<token>` + `type=recovery` — pre-auth, handled in AppInner
@@ -22,7 +22,7 @@
 
 import { useSyncExternalStore } from 'react';
 import {
-  HASH_TO_VIEW, LEGACY_EVENT_TO_VIEW, isSanitizedAllowed, resolveViewId,
+  HASH_TO_VIEW, LEGACY_EVENT_TO_VIEW, resolveViewId,
   type ViewId,
 } from './registry';
 
@@ -46,7 +46,6 @@ const HOME: NavState = { surface: 'home', viewId: null, recapId: null, overlay: 
 // Lazily seeded from the URL on first read so a deep-linked boot paints the
 // target view on the FIRST render (init effects run after first paint).
 let state: NavState | null = null;
-let sanitizedMode = false;
 const listeners = new Set<() => void>();
 
 function getState(): NavState {
@@ -96,38 +95,17 @@ export function initialNavState(): NavState {
   if (recapId) return { surface: 'view', viewId: 'recap-detail', recapId, overlay: null };
   const deepLink = parseDeepLinkView();
   if (deepLink) {
-    return { surface: 'view', viewId: applySanitized(deepLink), recapId: null, overlay: null };
+    return { surface: 'view', viewId: deepLink, recapId: null, overlay: null };
   }
   return HOME;
 }
 
-// ── sanitized/stealth rewrite ───────────────────────────────────────────────
-
-function applySanitized(view: ViewId | null): ViewId | null {
-  return sanitizedMode && !isSanitizedAllowed(view) ? null : view;
-}
-
-/**
- * App syncs the stealth flag here. If the flag flips on while a disallowed
- * view is showing, the store rewrites to the menu drawer (was 6 duplicated
- * guard sites in App.tsx).
- */
-export function setSanitizedMode(flag: boolean) {
-  if (sanitizedMode === flag) return;
-  sanitizedMode = flag;
-  const s = getState();
-  if (flag && s.surface === 'view' && !isSanitizedAllowed(s.viewId)) {
-    setState({ surface: 'view', viewId: null, recapId: null, overlay: null }, { push: true });
-  }
-}
-
 // ── actions ─────────────────────────────────────────────────────────────────
 
-/** Open a view (null = the MenuView drawer). Sanitized rewrite applies. */
+/** Open a view (null = the MenuView drawer). */
 export function navigate(view: ViewId | null, opts: { recapId?: string | null } = {}) {
-  const target = applySanitized(view);
   setState(
-    { surface: 'view', viewId: target, recapId: opts.recapId ?? null, overlay: null },
+    { surface: 'view', viewId: view, recapId: opts.recapId ?? null, overlay: null },
     { push: true }
   );
 }
@@ -213,7 +191,7 @@ function onHashChange() {
   const view = HASH_TO_VIEW[h];
   if (view) {
     setState(
-      { surface: 'view', viewId: applySanitized(view), recapId: null, overlay: null },
+      { surface: 'view', viewId: view, recapId: null, overlay: null },
       { push: true }
     );
   }
@@ -288,7 +266,6 @@ export function useNav(): NavState {
 // Test-only: reset module state between cases.
 export function __resetForTests() {
   state = null;
-  sanitizedMode = false;
   initialized = false;
   listeners.clear();
 }

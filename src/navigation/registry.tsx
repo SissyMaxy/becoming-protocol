@@ -4,13 +4,12 @@
  * One entry per view id. Everything that used to be five parallel systems
  * reads from here:
  *   - App renders a view via its `render` function (was a 60-case switch)
- *   - MenuView derives its groups from `menu` / `sanitizedMenu`
+ *   - MenuView derives its groups from `menu`
  *   - the nav store resolves hash deep-links via `hashPaths`
  *   - the nav store adapts legacy `navigate-to-*` CustomEvents via `legacyEvents`
- *   - sanitized/stealth mode allows a view iff `sanitizedAllowed`
  *
  * Adding a screen = adding ONE entry here. navigation-registry.test.ts locks
- * the invariants (unique hash paths, menu ids resolve, sanitized whitelist).
+ * the invariants (unique hash paths, menu ids resolve).
  */
 
 import { useState, lazy, type ReactNode } from 'react';
@@ -18,15 +17,13 @@ import type { LucideIcon } from 'lucide-react';
 import {
   Settings, HelpCircle, Calendar, Eye, FileText, Mail, PauseCircle,
   ArrowUpRight, Flame, Shirt, BarChart3, Camera, Clock, BookOpen, Heart,
-  User, Sparkles, Headphones, Mic, Library, TrendingUp, ClipboardCheck,
+  User, Sparkles, Headphones, Mic, Library, TrendingUp,
 } from 'lucide-react';
 
 import { useBambiMode } from '../context/BambiModeContext';
 import type { SessionConfig } from '../components/session';
 
-const BaselineIntakeView = lazy(() => import('../components/body/BaselineIntakeView').then((m) => ({ default: m.BaselineIntakeView })));
 const BodyProtocolView = lazy(() => import('../components/today-redesign/BodyProtocolView').then((m) => ({ default: m.BodyProtocolView })));
-const SanitizedSettingsView = lazy(() => import('../components/stealth').then((m) => ({ default: m.SanitizedSettingsView })));
 const PlanView = lazy(() => import('../components/today-redesign/PlanView').then((m) => ({ default: m.PlanView })));
 const ProgressDashboard = lazy(() => import('../components/ProgressDashboard').then((m) => ({ default: m.ProgressDashboard })));
 const History = lazy(() => import('../components/History').then((m) => ({ default: m.History })));
@@ -92,7 +89,7 @@ const RevenueView = lazy(() => import('../components/content/RevenueView').then(
 
 export type ViewId =
   | 'plan'
-  | 'body' | 'baseline-intake' | 'history' | 'wishlist' | 'settings' | 'help'
+  | 'body' | 'history' | 'wishlist' | 'settings' | 'help'
   | 'sessions' | 'quiz' | 'timeline' | 'service' | 'service-analytics'
   | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors'
   | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal'
@@ -114,6 +111,7 @@ export const VIEW_ALIASES: Record<string, ViewId | null> = {
   'log-release': null,         // dead special case — zero emitters existed
   'progress-page': null,       // set a tab that rendered nothing
   'sealed-page': null,         // SealedContentView was removed
+  'baseline-intake': null,     // removed with the sanitized-fitness disguise mode
 };
 
 /** Menu palette keys — MenuView maps these to its Velvet colors. */
@@ -139,7 +137,6 @@ export interface ViewRenderContext {
   openRecap: (id: string) => void;
   userName?: string;
   onEditIntake: () => void;
-  sanitized: boolean;
 }
 
 export interface ViewDef {
@@ -153,10 +150,6 @@ export interface ViewDef {
   /** 'bare' views escape the boxed max-w-lg settings column (own layout). */
   chrome?: 'boxed' | 'bare';
   menu?: MenuEntry;
-  /** Menu entry when sanitized/stealth mode is on (different copy). */
-  sanitizedMenu?: MenuEntry;
-  /** Reachable while sanitized_fitness_mode is on. Default false. */
-  sanitizedAllowed?: boolean;
   /** Hash paths (without '#') that deep-link here, e.g. '/journal'. */
   hashPaths?: string[];
   /** Legacy window CustomEvent names that navigate here. */
@@ -229,9 +222,7 @@ export const VIEW_REGISTRY: Record<ViewId, ViewDef> = {
   // ── Your becoming ─────────────────────────────────────────────────────────
   body: {
     frame: 'self',
-    sanitizedAllowed: true,
     menu: { heading: 'Your becoming', label: 'Build your body', description: 'The one thing, front and center: training, the shape coming in, your proof. No noise.', icon: Flame, color: 'rose' },
-    sanitizedMenu: { heading: 'Aesthetic fitness', label: 'Training plan', description: 'Workouts, recovery, nutrition, and body metrics.', icon: Flame, color: 'green' },
     render: (ctx) => <BodyProtocolView onBack={ctx.onBack} />,
   },
   'life-as-woman': {
@@ -326,22 +317,17 @@ export const VIEW_REGISTRY: Record<ViewId, ViewDef> = {
   // ── Settings ──────────────────────────────────────────────────────────────
   settings: {
     frame: 'self',
-    sanitizedAllowed: true,
     hashPaths: ['/settings'],
     legacyEvents: ['navigate-to-settings'],
     menu: { heading: 'Settings', label: 'Settings', description: 'Account, preferences, integrations.', icon: Settings, color: 'muted' },
-    sanitizedMenu: { heading: 'Aesthetic fitness', label: 'Settings & privacy', description: 'Display, notifications, privacy, and app access.', icon: Settings, color: 'muted' },
-    render: (ctx) =>
-      ctx.sanitized ? (
-        <SanitizedSettingsView onBack={ctx.onBack} />
-      ) : (
-        <SettingsView
-          onBack={ctx.onBack}
-          onEditIntake={ctx.onEditIntake}
-          onOpenDossierStatus={() => ctx.navigate('dossier')}
-          onOpenDossierQuiz={() => ctx.navigate('mommy-dossier')}
-        />
-      ),
+    render: (ctx) => (
+      <SettingsView
+        onBack={ctx.onBack}
+        onEditIntake={ctx.onEditIntake}
+        onOpenDossierStatus={() => ctx.navigate('dossier')}
+        onOpenDossierQuiz={() => ctx.navigate('mommy-dossier')}
+      />
+    ),
   },
   pause_protocol: {
     frame: 'framed',
@@ -364,34 +350,18 @@ export const VIEW_REGISTRY: Record<ViewId, ViewDef> = {
   },
   help: {
     frame: 'framed',
-    sanitizedAllowed: true,
     menu: { heading: 'Settings', label: 'Help & Feedback', description: 'Get support or tell me what you need.', icon: HelpCircle, color: 'muted' },
-    sanitizedMenu: { heading: 'Aesthetic fitness', label: 'Help & feedback', description: 'Support and app notes.', icon: HelpCircle, color: 'muted' },
-    render: (ctx) => (
+    render: () => (
       <div className="card p-6 space-y-4">
         <h3 className="text-lg font-semibold text-protocol-text">Help & Support</h3>
         <p className="text-sm text-protocol-text-muted">
-          {ctx.sanitized
-            ? 'This app helps track training, recovery, measurements, and steady body-composition progress.'
-            : 'Becoming Protocol is your daily companion for personal transformation.'}
+          Becoming Protocol is your daily companion for personal transformation.
         </p>
         <p className="text-sm text-protocol-text-muted">
-          {ctx.sanitized
-            ? 'Use the baseline intake for helper-assisted measurements, then repeat check-ins consistently.'
-            : "Complete your daily tasks, journal your reflections, and track your progress as you become who you're meant to be."}
+          Complete your daily tasks, journal your reflections, and track your progress as you become who you're meant to be.
         </p>
       </div>
     ),
-  },
-
-  // ── Sanitized-only surface ───────────────────────────────────────────────
-  'baseline-intake': {
-    frame: 'self',
-    chrome: 'bare',
-    sanitizedAllowed: true,
-    hashPaths: ['/baseline-intake'],
-    sanitizedMenu: { heading: 'Aesthetic fitness', label: 'Baseline intake', description: 'Helper-assisted measurements for the starting point.', icon: ClipboardCheck, color: 'gold' },
-    render: (ctx) => <BaselineIntakeView onClose={ctx.onBack} />,
   },
 
   // ── Archive tail (folded "Everything else") ──────────────────────────────
@@ -579,10 +549,6 @@ export function resolveViewId(v: string | null | undefined): ViewId | null {
   if (isViewId(v)) return v;
   const alias = VIEW_ALIASES[v];
   return alias ?? null;
-}
-
-export function isSanitizedAllowed(view: ViewId | null): boolean {
-  return view == null || VIEW_REGISTRY[view].sanitizedAllowed === true;
 }
 
 /** hash path (no '#', no trailing slash) → view id, from registry hashPaths. */

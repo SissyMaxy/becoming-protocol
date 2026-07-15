@@ -36,7 +36,6 @@ import { Loader2 } from 'lucide-react';
 const PrivacyPage = lazy(() => import('./components/PrivacyPage').then((m) => ({ default: m.PrivacyPage })));
 const HandlerChat = lazy(() => import('./components/handler/HandlerChat').then((m) => ({ default: m.HandlerChat })));
 const Auth = lazy(() => import('./components/Auth').then((m) => ({ default: m.Auth })));
-const SanitizedFitnessHome = lazy(() => import('./components/stealth').then((m) => ({ default: m.SanitizedFitnessHome })));
 const StealthShell = lazy(() => import('./components/stealth').then((m) => ({ default: m.StealthShell })));
 const MenuView = lazy(() => import('./components/MenuView').then((m) => ({ default: m.MenuView })));
 const OnboardingFlow = lazy(() => import('./components/Onboarding').then((m) => ({ default: m.OnboardingFlow })));
@@ -57,12 +56,12 @@ const ConditioningPlayer = lazy(() => import('./components/conditioning').then((
 // All screen selection lives in src/navigation. The store owns the single
 // hashchange/popstate listeners and the legacy CustomEvent adapters; the
 // registry is the declarative id → view map (menu grouping, deep links,
-// sanitized whitelist, render). App.tsx just renders what the store says.
+// render). App.tsx just renders what the store says.
 import {
   useNav, initNavigation, navigate, openMenu, goHome, goChat, back,
-  openRecap, setSanitizedMode,
+  openRecap,
 } from './navigation/store';
-import { VIEW_REGISTRY, isSanitizedAllowed, type ViewRenderContext } from './navigation/registry';
+import { VIEW_REGISTRY, type ViewRenderContext } from './navigation/registry';
 import { SubViewFrame } from './navigation/SubViewFrame';
 
 // Parse hash route for shared wishlist (pre-auth surface — not nav-store owned)
@@ -85,16 +84,11 @@ function AuthenticatedAppInner() {
   const { isLoading, investmentMilestone, dismissInvestmentMilestone, userName, progress } = useProtocol();
   const rewardContext = useRewardOptional();
   const { dismissIntervention, completeIntervention, respondToIntervention } = useHandlerContext();
-  const { settings: stealthSettings, loading: stealthSettingsLoading } = useStealthSettings();
-  const sanitizedFitnessMode = stealthSettings.sanitized_fitness_mode;
+  const { loading: stealthSettingsLoading } = useStealthSettings();
 
   // ── Navigation ────────────────────────────────────────────────────────────
   const nav = useNav();
   useEffect(() => initNavigation(), []);
-  // Stealth flag → store (rewrites a disallowed live view to the menu).
-  useEffect(() => {
-    setSanitizedMode(sanitizedFitnessMode);
-  }, [sanitizedFitnessMode]);
 
   // Calculate days on protocol from total days in progress (minimum of 1)
   const daysOnProtocol = Math.max(1, progress?.totalDays ?? 1);
@@ -393,7 +387,7 @@ function AuthenticatedAppInner() {
 
   // Render the current registry view (was a 60-case switch).
   const renderView = () => {
-    const viewId = sanitizedFitnessMode && !isSanitizedAllowed(nav.viewId) ? null : nav.viewId;
+    const viewId = nav.viewId;
     if (viewId == null) {
       return <MenuView onNavigate={navigate} />;
     }
@@ -405,7 +399,6 @@ function AuthenticatedAppInner() {
       openRecap,
       userName: userName ?? undefined,
       onEditIntake: handleEditIntake,
-      sanitized: sanitizedFitnessMode,
     };
     const content = def.render(ctx);
     if (def.frame === 'framed') {
@@ -420,38 +413,6 @@ function AuthenticatedAppInner() {
 
   const inView = nav.surface === 'view';
   const showWhisper = nav.overlay === 'whisper';
-
-  if (sanitizedFitnessMode) {
-    if (!inView) {
-      return (
-        <SanitizedFitnessHome
-          onOpenBody={() => navigate('body')}
-          onOpenBaselineIntake={() => navigate('baseline-intake')}
-          onOpenMenu={() => openMenu()}
-          onOpenSettings={() => navigate('settings')}
-        />
-      );
-    }
-
-    const content = <Suspense fallback={<LoadingScreen />}>{renderView()}</Suspense>;
-    const framed = nav.viewId == null || nav.viewId === 'help';
-
-    return (
-      <div className="min-h-screen bg-protocol-bg">
-        {framed ? (
-          <div className="max-w-lg mx-auto px-4 py-4">
-            <button
-              onClick={() => goHome()}
-              className="mb-4 text-sm text-protocol-text-muted hover:text-protocol-text transition-colors"
-            >
-              &larr; Back to dashboard
-            </button>
-            {content}
-          </div>
-        ) : content}
-      </div>
-    );
-  }
 
   if (nav.surface === 'home') {
     return (
