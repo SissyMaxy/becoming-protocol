@@ -1,11 +1,11 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { PrivacyPage } from './components/PrivacyPage';
 import { HandlerChat } from './components/handler/HandlerChat';
 import { getPendingOutreach, evaluateAndQueueOutreach } from './lib/outreach/engine';
 import { HandlerParameters } from './lib/handler-parameters';
 import { useAuth } from './context/AuthContext';
 import { ProtocolProvider, useProtocol } from './context/ProtocolContext';
-import { BambiModeProvider, useBambiMode, FloatingHearts } from './context/BambiModeContext';
+import { BambiModeProvider, FloatingHearts } from './context/BambiModeContext';
 import { RewardProvider, useRewardOptional } from './context/RewardContext';
 import { DebugModeProvider } from './context/DebugContext';
 import { OpacityProvider } from './context/OpacityContext';
@@ -19,53 +19,21 @@ import { useDisassociationRecovery } from './hooks/useDisassociationRecovery';
 import { useCompulsoryGate } from './hooks/useCompulsoryGate';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Auth } from './components/Auth';
-import { SanitizedFitnessHome, SanitizedSettingsView, StealthShell } from './components/stealth';
+import { SanitizedFitnessHome, StealthShell } from './components/stealth';
 import { useStealthSettings } from './hooks/useStealthSettings';
-// MorningBriefing / CompulsoryGateScreen / VoiceGate imports removed
-// 2026-06-21 — the blocking entry-gate chain was deleted. The flows remain in
-// the codebase, reachable for deliberate replay; they no longer wall first open.
-import { ProgressDashboard } from './components/ProgressDashboard';
-import { History } from './components/History';
-// SealedContentView removed — accessible via Handler conversation
 import { MenuView } from './components/MenuView';
-import { BaselineIntakeView } from './components/body/BaselineIntakeView';
-import { BodyProtocolView } from './components/today-redesign/BodyProtocolView';
 import { OnboardingFlow } from './components/Onboarding';
 import { OnboardingWizard } from './components/onboarding-welcome';
 import { loadOnboardingState } from './lib/onboarding/storage';
-// DayIncompleteModal removed - navigation is now unrestricted
-// InvestmentMilestoneModal now rendered via useOrchestratedModals
 import { SharedWishlistView } from './components/wishlist';
-// AchievementModal, RewardLevelUpModal now rendered via useOrchestratedModals
-import { SettingsView, SystemAuditView } from './components/settings';
-import { WitnessManager, CaseFileView, SealedEnvelopesPage, QuitFrictionGate, EscalationLadder } from './components/handler';
-import { ForceDashboard } from './components/force/ForceDashboard';
 import { ForceStatusStrip } from './components/force/ForceStatusStrip';
 import { TodayView as TodayRedesignView } from './components/today-redesign';
-// Blocking daily-gate overlays (CompulsoryConfessionGate, HrtDailyGate,
-// MorningMantraGate, EveningConfessionGate) removed from the render tree
-// 2026-06-21 — demands now surface as the single FocusMode task, not overlays.
 import { WhisperToMama } from './components/confession/WhisperToMama';
 import { LivePhotoPingResponder } from './components/live-photo/LivePhotoPingResponder';
 import { MamaPhoneOverlay } from './components/push/MamaPhoneOverlay';
-import { MommyDossierQuiz } from './components/persona/MommyDossierQuiz';
-import { VerificationVault } from './components/verification/VerificationVault';
-const LettersArchiveView = lazy(() => import('./components/letters').then((m) => ({ default: m.LettersArchiveView })));
-const LifeAsWomanView = lazy(() => import('./components/life-as-woman').then((m) => ({ default: m.LifeAsWomanView })));
-import { MommyDossierStatus } from './components/persona/MommyDossierStatus';
 import { usePunishmentNotifications } from './hooks/usePunishmentNotifications';
-// DailyReportCard import removed 2026-06-21 — the after-7pm blocking report
-// card is gone; the reflection it wanted is an optional FocusMode task now.
-import { SessionContainer } from './components/session';
-import type { SessionConfig } from './components/session';
-const KinkQuizView = lazy(() => import('./components/kink-quiz').then((m) => ({ default: m.KinkQuizView })));
-const WorkoutSessionPage = lazy(() => import('./components/exercise').then((m) => ({ default: m.WorkoutSessionPage })));
-const HerWorldPage = lazy(() => import('./components/collections').then((m) => ({ default: m.HerWorldPage })));
-// MorningBookend import removed 2026-06-21 — morning greeting no longer walls
-// the app; EveningDebrief (its evening counterpart) stays as a non-blocking close.
 import { EveningDebrief } from './components/EveningDebrief';
 import { useBookends } from './hooks/useBookends';
-// import { useAmbientVoiceMonitor } from './hooks/useAmbientVoiceMonitor';
 import { useSubliminalUI } from './hooks/useSubliminalUI';
 import { OrgasmLogModal } from './components/arousal/OrgasmLogModal';
 import { PostReleaseOverlay } from './components/post-release/PostReleaseOverlay';
@@ -73,172 +41,39 @@ import { DeletionInterceptModal } from './components/post-release/DeletionInterc
 import { usePostReleaseProtocol } from './hooks/usePostReleaseProtocol';
 import { useArousalState } from './hooks/useArousalState';
 import type { OrgasmLogInput } from './types/arousal';
-// MicroTaskCard + useMicroTasks removed — micro-tasks disabled
-// MomentLoggerFAB removed — absorbed by QuickStateStrip + JournalPrompt
-// ReminderModal now rendered via useOrchestratedModals
 import { useReminders } from './hooks/useReminders';
 import { usePatternNotifications } from './hooks/usePatternNotifications';
 import { useNotificationActionRouter } from './hooks/useNotificationActionRouter';
-// useDopamineNotifications removed — dopamine notifications disabled
-import { TimelineView } from './components/timeline';
-import { ServiceProgressionView, ServiceAnalyticsDashboard } from './components/service';
-import { ContentEscalationView, VaultSwipe } from './components/content';
-import { PermissionsManager } from './components/content/PermissionsManager';
-const ContentCapture = lazy(() => import('./components/content/ContentCapture').then((m) => ({ default: m.ContentCapture })));
-const PostingQueue = lazy(() => import('./components/content/PostingQueue').then((m) => ({ default: m.PostingQueue })));
-const ContentCalendar = lazy(() => import('./components/content/ContentCalendar').then((m) => ({ default: m.ContentCalendar })));
-const PlatformSettings = lazy(() => import('./components/content/PlatformSettings').then((m) => ({ default: m.PlatformSettings })));
-const VaultView = lazy(() => import('./components/content/VaultView').then((m) => ({ default: m.VaultView })));
-const FanDashboard = lazy(() => import('./components/content/FanDashboard').then((m) => ({ default: m.FanDashboard })));
-const SubscriberPolls = lazy(() => import('./components/content/SubscriberPolls').then((m) => ({ default: m.SubscriberPolls })));
-const RevenueView = lazy(() => import('./components/content/RevenueView').then((m) => ({ default: m.RevenueView })));
-import { ContentDashboard } from './components/admin/ContentDashboard';
-import { DomainEscalationView } from './components/domains';
-import { PatternCatchView } from './components/patterns';
-import { TriggerAuditDashboard } from './components/triggers';
-// NotificationToastStack removed — notifications disabled
-import { TaskCurationView } from './components/curation';
-import { SeedsView } from './components/seeds';
-import { VectorGridView } from './components/adaptive-feminization';
-import { VoiceAffirmationGame } from './components/voice-game';
-import { VoiceDrillView } from './components/voice-game/VoiceDrillView';
-import { Dashboard } from './components/dashboard';
-import { WardrobeInventoryView } from './components/wardrobe';
-import { IdentitySettingsView } from './components/identity';
-import { TrajectoryArchiveView } from './components/trajectory';
-import { RecapsIndexView } from './components/recaps/RecapsIndexView';
-import { RecapDetailView } from './components/recaps/RecapDetailView';
-import { JournalView } from './components/journal';
-import { ProtocolAnalytics } from './components/analytics/ProtocolAnalytics';
-import { HandlerAutonomousView } from './components/autonomous';
-import { CamDashboard } from './components/cam/CamDashboard';
-import { HypnoDashboard, HypnoLearningView } from './components/hypno';
-const GoonSessionView = lazy(() => import('./components/sessions/GoonSessionView').then((m) => ({ default: m.GoonSessionView })));
 import { SleepContentPlayer } from './components/sleep-content';
-import { ConditioningLibrary, ConditioningPlayer } from './components/conditioning';
-import { SocialMediaDashboard } from './components/social/SocialMediaDashboard';
-import { CommunityQueue, CommunityList, CommunityLog } from './components/community';
-// getTodayDate import removed 2026-06-21 — its only callers were the deleted
-// daily entry gates (voice gate, report card, morning-flow trigger).
+import { ConditioningPlayer } from './components/conditioning';
 import { profileStorage, letterStorage } from './lib/storage';
-// useTaskBank, useGoals, useWeekend — now used only inside TodayView (badge removed)
 import type { UserProfile, SealedLetter } from './components/Onboarding/types';
 import { Loader2 } from 'lucide-react';
 
-// Parse hash route for shared wishlist
+// ── Navigation: ONE store + ONE registry ────────────────────────────────────
+// All screen selection lives in src/navigation. The store owns the single
+// hashchange/popstate listeners and the legacy CustomEvent adapters; the
+// registry is the declarative id → view map (menu grouping, deep links,
+// sanitized whitelist, render). App.tsx just renders what the store says.
+import {
+  useNav, initNavigation, navigate, openMenu, goHome, goChat, back,
+  openRecap, setSanitizedMode,
+} from './navigation/store';
+import { VIEW_REGISTRY, isSanitizedAllowed, type ViewRenderContext } from './navigation/registry';
+import { SubViewFrame } from './navigation/SubViewFrame';
+
+// Parse hash route for shared wishlist (pre-auth surface — not nav-store owned)
 function parseWishlistToken(): string | null {
   const hash = window.location.hash;
   const match = hash.match(/#\/wishlist\/([a-zA-Z0-9]+)/);
   return match ? match[1] : null;
 }
 
-// Parse URL path for deep-linking into menu sub-views (e.g. /social-dashboard)
-const DEEP_LINK_VIEWS: Record<string, string> = {
-  '/social-dashboard': 'social-dashboard',
-  '/socials': 'social-dashboard',
-  '/content-dashboard': 'content-dashboard',
-  '/dashboard': 'dashboard',
-  '/journal': 'journal',
-  '/settings': 'settings',
-  '/baseline-intake': 'baseline-intake',
-  '/identity': 'identity',
-  '/community/queue': 'community-queue',
-  '/community/list': 'community-list',
-  '/community/log': 'community-log',
-  '/recaps': 'recaps',
-};
-
-// Parse `/recaps/<recap_id>` deep link → returns the id, or null.
-function parseRecapDetailId(): string | null {
-  const hash = window.location.hash;
-  const m = hash.match(/^#\/recaps\/([0-9a-f-]+)\/?$/i);
-  if (m) return m[1];
-  const path = window.location.pathname;
-  const m2 = path.match(/^\/recaps\/([0-9a-f-]+)\/?$/i);
-  return m2 ? m2[1] : null;
-}
-
-function parseDeepLinkView(): string | null {
-  // Check hash first (app uses hash routing: /#/social-dashboard)
-  const hash = window.location.hash;
-  if (hash) {
-    const hashPath = hash.replace('#', '');
-    if (DEEP_LINK_VIEWS[hashPath]) return DEEP_LINK_VIEWS[hashPath];
-  }
-  // Fallback to pathname for non-hash deploys
-  const path = window.location.pathname;
-  return DEEP_LINK_VIEWS[path] || null;
-}
-
-// Tab type removed — activeTab was vestigial: nothing in the render tree
-// branched on it. Screen selection is menuSubView + overlay flags.
-
-// Navigation and Header removed — conversation IS the app.
-
 function LoadingScreen() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center" style={{ backgroundColor: '#120b10' }}>
-      <Loader2 className="w-10 h-10 text-pink-400 animate-spin mb-4" />
-      <p className="text-pink-600 text-sm">Loading...</p>
-    </div>
-  );
-}
-
-type MenuSubView = 'body' | 'baseline-intake' | 'history' | 'investments' | 'wishlist' | 'settings' | 'help' | 'sessions' | 'quiz' | 'timeline' | 'service' | 'service-analytics' | 'content' | 'domains' | 'patterns' | 'curation' | 'seeds' | 'vectors' | 'trigger-audit' | 'voice-game' | 'voice-drills' | 'dashboard' | 'journal' | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world' | 'vault-swipe' | 'vault-permissions' | 'content-dashboard' | 'cam-session' | 'hypno-session' | 'hypno-learning' | 'goon-session' | 'content-capture' | 'content-queue' | 'content-calendar' | 'content-fans' | 'content-polls' | 'content-revenue' | 'content-settings' | 'vault-browser' | 'log-release' | 'conditioning-library' | 'social-dashboard' | 'witnesses' | 'case_file' | 'envelopes' | 'system_audit' | 'pause_protocol' | 'escalation_ladder' | 'force' | 'wardrobe' | 'trajectory' | 'mommy-dossier' | 'identity' | 'verification-vault' | 'community-queue' | 'community-list' | 'community-log' | 'letters' | 'dossier' | 'recaps' | 'recap-detail' | 'life-as-woman' | null;
-
-function isSanitizedAllowedView(view: MenuSubView): boolean {
-  return view == null || view === 'body' || view === 'baseline-intake' || view === 'settings' || view === 'help';
-}
-
-/** Session picker → launches immersive SessionContainer */
-function SessionPickerOrContainer({ onBack }: { onBack: () => void }) {
-  const { isBambiMode } = useBambiMode();
-  const [config, setConfig] = useState<SessionConfig | null>(null);
-
-  if (config) {
-    return (
-      <SessionContainer
-        config={config}
-        onComplete={() => setConfig(null)}
-        onCancel={() => setConfig(null)}
-      />
-    );
-  }
-
-  const SESSION_TYPES: { type: SessionConfig['sessionType']; label: string; desc: string; edges: number }[] = [
-    { type: 'anchoring', label: 'Anchoring', desc: 'Build edge control with guided recovery', edges: 10 },
-    { type: 'exploration', label: 'Exploration', desc: 'Push limits with shorter recovery windows', edges: 15 },
-    { type: 'endurance', label: 'Endurance', desc: 'Extended session, maximum edge count', edges: 20 },
-  ];
-
-  return (
-    <div>
-      <button
-        onClick={onBack}
-        className="mb-4 text-protocol-text-muted hover:text-protocol-text transition-colors"
-      >
-        &larr; Back to Menu
-      </button>
-      <div className="space-y-3">
-        <h2 className={`text-lg font-semibold ${isBambiMode ? 'text-pink-700' : 'text-protocol-text'}`}>
-          Edge Sessions
-        </h2>
-        {SESSION_TYPES.map(s => (
-          <button
-            key={s.type}
-            onClick={() => setConfig({ sessionType: s.type, targetEdges: s.edges, prescribed: false })}
-            className={`w-full p-4 rounded-2xl border text-left transition-all ${
-              isBambiMode
-                ? 'bg-pink-50 border-pink-200 hover:border-pink-400'
-                : 'bg-protocol-surface border-protocol-border hover:border-protocol-accent/50'
-            }`}
-          >
-            <p className={`font-semibold ${isBambiMode ? 'text-pink-700' : 'text-protocol-text'}`}>{s.label}</p>
-            <p className={`text-sm mt-1 ${isBambiMode ? 'text-pink-500' : 'text-protocol-text-muted'}`}>{s.desc}</p>
-            <p className={`text-xs mt-1.5 ${isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted/60'}`}>{s.edges} edges</p>
-          </button>
-        ))}
-      </div>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-protocol-bg">
+      <Loader2 className="w-10 h-10 text-protocol-accent animate-spin mb-4" />
+      <p className="text-protocol-accent text-sm">Loading...</p>
     </div>
   );
 }
@@ -249,6 +84,14 @@ function AuthenticatedAppInner() {
   const { dismissIntervention, completeIntervention, respondToIntervention } = useHandlerContext();
   const { settings: stealthSettings, loading: stealthSettingsLoading } = useStealthSettings();
   const sanitizedFitnessMode = stealthSettings.sanitized_fitness_mode;
+
+  // ── Navigation ────────────────────────────────────────────────────────────
+  const nav = useNav();
+  useEffect(() => initNavigation(), []);
+  // Stealth flag → store (rewrites a disallowed live view to the menu).
+  useEffect(() => {
+    setSanitizedMode(sanitizedFitnessMode);
+  }, [sanitizedFitnessMode]);
 
   // Calculate days on protocol from total days in progress (minimum of 1)
   const daysOnProtocol = Math.max(1, progress?.totalDays ?? 1);
@@ -267,14 +110,8 @@ function AuthenticatedAppInner() {
   // Morning/Evening bookend system
   const bookends = useBookends();
 
-  // Ambient voice monitoring DISABLED — causes persistent mic access that disrupts UX
-  // useAmbientVoiceMonitor(isLoading || compulsoryLoading);
-
   // Subliminal UI reinforcement (P12.8) — progressive CSS shifts over months
   useSubliminalUI();
-
-  // Micro-tasks disabled — user found pop-ups disruptive
-  // const microTasks = useMicroTasks();
 
   // Arousal state — for orgasm logging
   const { logOrgasm, metrics: arousalMetrics } = useArousalState();
@@ -313,116 +150,15 @@ function AuthenticatedAppInner() {
   // and keeps the SW's auth token fresh. Deep-link contract: ?complete_outreach.
   useNotificationActionRouter();
 
-  const deepLinkView = parseDeepLinkView();
-  // Re-architecture 2026-06-21: the single-task Focus surface (TodayView →
-  // FocusMode under the dommy_mommy persona) IS the home now. The user stopped
-  // logging in because opening the app meant walking a wall of blocking gates
-  // before reaching one usable thing. Default home = one task. The conversation
-  // and the full plan stay one tap away (onExit / "view plan"). Only skip the
-  // home when the user deep-links somewhere specific (settings view, recap,
-  // welcome, disclosure, whisper) — those set their own hashes/state.
-  const [showTodayRedesign, setShowTodayRedesign] = useState(() => {
-    const h = window.location.hash.replace('#', '').replace(/\/$/, '');
-    if (deepLinkView || parseRecapDetailId()) return false;
-    return h === '' || h === '/today';
-  });
-  useEffect(() => {
-    const onHash = () => {
-      const h = window.location.hash.replace('#', '').replace(/\/$/, '');
-      // Empty hash returns home to the Focus surface; an explicit non-today
-      // hash (settings/recap/etc.) leaves it, letting the deep-linked view show.
-      const otherDeepLink = ['/whisper', '/welcome'].includes(h);
-      setShowTodayRedesign((h === '' || h === '/today') && !otherDeepLink);
-    };
-    window.addEventListener('hashchange', onHash);
-    return () => window.removeEventListener('hashchange', onHash);
-  }, []);
-  const initialRecapId = parseRecapDetailId();
-  const [recapDetailId, setRecapDetailId] = useState<string | null>(initialRecapId);
-  const [menuSubView, setMenuSubView] = useState<MenuSubView>(
-    initialRecapId ? 'recap-detail' : ((deepLinkView as MenuSubView) || null)
-  );
-
-  // Hash routing for /recaps and /recaps/<id> — kept in sync with menuSubView.
-  useEffect(() => {
-    const onHash = () => {
-      const id = parseRecapDetailId();
-      if (id) {
-        setRecapDetailId(id);
-        setMenuSubView('recap-detail');
-      } else if (window.location.hash === '#/recaps' || window.location.hash === '#/recaps/') {
-        setRecapDetailId(null);
-        setMenuSubView('recaps');
-      }
-    };
-    window.addEventListener('hashchange', onHash);
-    return () => window.removeEventListener('hashchange', onHash);
-  }, []);
-
-  // Deep-link sub-views at RUNTIME (not just initial mount). Navigating to
-  // hashes like #/journal, #/identity, #/settings, #/dashboard,
-  // #/social-dashboard while the app is open must switch the rendered view,
-  // not just the URL. parseDeepLinkView() resolves the hash → a MenuSubView;
-  // we open the settings overlay and render it, leaving the Today/Focus home.
-  // Mirrors the recaps/disclosure hashchange effects above.
-  useEffect(() => {
-    const onHash = () => {
-      const view = parseDeepLinkView();
-      if (!view) return;
-      const requestedView = view as MenuSubView;
-      const nextView = sanitizedFitnessMode && !isSanitizedAllowedView(requestedView)
-        ? null
-        : requestedView;
-      setShowTodayRedesign(false);
-      setShowSettings(true);
-      setMenuSubView(nextView);
-      window.history.pushState({ nav: true, subView: nextView, settings: true, today: false }, '');
-    };
-    window.addEventListener('hashchange', onHash);
-    return () => window.removeEventListener('hashchange', onHash);
-  }, [sanitizedFitnessMode]);
-  // (Disclosure rehearsal surface removed 2026-07-01 — policy: no disclosure
-  // to Gina; nothing is rehearsed toward disclosing, migration 624.)
-  // Hash-routable WhisperToMama — audio-only intimate confession ("Whisper
-  // Your Secrets to Mama").
-  const [showWhisper, setShowWhisper] = useState<boolean>(() =>
-    typeof window !== 'undefined' && window.location.hash.replace('#', '').replace(/\/$/, '') === '/whisper'
-  );
-  useEffect(() => {
-    const onHash = () => {
-      const h = window.location.hash.replace('#', '').replace(/\/$/, '');
-      setShowWhisper(h === '/whisper');
-    };
-    window.addEventListener('hashchange', onHash);
-    return () => window.removeEventListener('hashchange', onHash);
-  }, []);
-
-  // showMorningFlow state removed 2026-06-21 with the blocking MorningBriefing.
   const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
   // Welcome wizard — kink-companion onboarding (persona/intensity/safeword/aftercare).
   // Independent of the legacy intake `OnboardingFlow`; runs after it. Null = not
   // yet checked; true = needs to run; false = already done.
   const [showWelcome, setShowWelcome] = useState<boolean | null>(null);
-  // Hash route `#/welcome` lets the user replay the wizard from Settings.
-  const [welcomeReplay, setWelcomeReplay] = useState<boolean>(() => {
-    const h = window.location.hash.replace('#', '');
-    return h === '/welcome' || h === '/welcome/';
-  });
   const [editIntakeMode, setEditIntakeMode] = useState(false);
   const [editIntakeProfile, setEditIntakeProfile] = useState<Partial<UserProfile> | null>(null);
   const [showSleepContent, setShowSleepContent] = useState(false);
-  // showHandlerChat removed — chat is now always visible as primary UI
   const [pendingOutreach, setPendingOutreach] = useState<{ id: string; openingLine: string } | null>(null);
-  const [showSettings, setShowSettings] = useState(!!deepLinkView);
-  // voiceGatePassed / reportCardDone state removed 2026-06-21 along with the
-  // blocking voice gate and after-7pm report card.
-
-  useEffect(() => {
-    if (!sanitizedFitnessMode || isSanitizedAllowedView(menuSubView)) return;
-    setShowSettings(true);
-    setShowTodayRedesign(false);
-    setMenuSubView(null);
-  }, [sanitizedFitnessMode, menuSubView]);
 
   // Failsafe: force past loading after 10 seconds
   const [loadingTimedOut, setLoadingTimedOut] = useState(false);
@@ -494,12 +230,7 @@ function AuthenticatedAppInner() {
   // Pattern notifications disabled — user found pop-ups disruptive
   usePatternNotifications({ enabled: false });
 
-  // Dopamine delivery system - delayed rewards + periodic notifications
-  // Dopamine notifications disabled — user found pop-ups disruptive
-  // useDopamineNotifications();
-
   // Orchestrated modals - prevents modal stacking, shows one at a time
-  // Orchestrated modals — reminders and recovery disabled (user found pop-ups disruptive)
   // Only event-driven modals remain: interventions, milestones, achievements, level-ups
   useOrchestratedModals({
     currentReminder: null, // Disabled
@@ -524,217 +255,12 @@ function AuthenticatedAppInner() {
     onDismissLevelUp: rewardContext?.dismissLevelUp || (() => {}),
   });
 
-  // Task bank, goals, and weekend — used by TodayView directly, no longer for nav badge
-
-  // Listen for navigation events from components
+  // Release-log modal — event-opened (FocusMode / decree surfaces dispatch it).
   useEffect(() => {
-    // 'investments' and 'wishlist' both land on ProgressDashboard (the
-    // 'wishlist' sub-view) — the old investments handler set a tab that
-    // rendered nothing.
-    const handleNavigateToInvestments = () => {
-      setMenuSubView('wishlist');
-    };
-    const handleNavigateToWishlist = () => {
-      setMenuSubView('wishlist');
-    };
-    const handleNavigateToSettings = () => {
-      setMenuSubView('settings');
-    };
-    const handleNavigateToHandler = () => {
-      setMenuSubView('handler-autonomous');
-    };
-    const handleNavigateToExercise = () => {
-      setMenuSubView('exercise');
-    };
-    const handleNavigateToCam = () => {
-      setMenuSubView('cam-session');
-    };
-    const handleNavigateToHypno = () => {
-      setMenuSubView('hypno-session');
-    };
-    const handleNavigateToHypnoLearning = () => {
-      setMenuSubView('hypno-learning');
-    };
-    const handleNavigateToIdentity = () => {
-      setMenuSubView('identity');
-    };
-    // useAutoCapture fires this when a task wants the content-capture surface.
-    const handleNavigateToContentCapture = () => {
-      setShowTodayRedesign(false);
-      setShowSettings(true);
-      setMenuSubView('content-capture');
-      window.history.pushState({ subView: 'content-capture', settings: true, today: false }, '');
-    };
-    // VaultView fires this from its "manage permissions" affordance.
-    const handleNavigateToVaultPermissions = () => {
-      setShowTodayRedesign(false);
-      setShowSettings(true);
-      setMenuSubView('vault-permissions');
-      window.history.pushState({ subView: 'vault-permissions', settings: true, today: false }, '');
-    };
     const handleOpenReleaseLog = () => setShowOrgasmLog(true);
-    window.addEventListener('navigate-to-investments', handleNavigateToInvestments);
-    window.addEventListener('navigate-to-wishlist', handleNavigateToWishlist);
-    window.addEventListener('navigate-to-settings', handleNavigateToSettings);
-    window.addEventListener('navigate-to-handler', handleNavigateToHandler);
-    window.addEventListener('navigate-to-exercise', handleNavigateToExercise);
-    window.addEventListener('navigate-to-cam', handleNavigateToCam);
-    window.addEventListener('navigate-to-hypno', handleNavigateToHypno);
-    window.addEventListener('navigate-to-hypno-learning', handleNavigateToHypnoLearning);
-    window.addEventListener('navigate-to-identity', handleNavigateToIdentity);
-    window.addEventListener('navigate-to-content-capture', handleNavigateToContentCapture);
-    window.addEventListener('navigate-to-vault-permissions', handleNavigateToVaultPermissions);
     window.addEventListener('open-release-log', handleOpenReleaseLog);
-    return () => {
-      window.removeEventListener('navigate-to-investments', handleNavigateToInvestments);
-      window.removeEventListener('navigate-to-wishlist', handleNavigateToWishlist);
-      window.removeEventListener('navigate-to-settings', handleNavigateToSettings);
-      window.removeEventListener('navigate-to-handler', handleNavigateToHandler);
-      window.removeEventListener('navigate-to-exercise', handleNavigateToExercise);
-      window.removeEventListener('navigate-to-cam', handleNavigateToCam);
-      window.removeEventListener('navigate-to-hypno', handleNavigateToHypno);
-      window.removeEventListener('navigate-to-hypno-learning', handleNavigateToHypnoLearning);
-      window.removeEventListener('navigate-to-identity', handleNavigateToIdentity);
-      window.removeEventListener('navigate-to-content-capture', handleNavigateToContentCapture);
-      window.removeEventListener('navigate-to-vault-permissions', handleNavigateToVaultPermissions);
-      window.removeEventListener('open-release-log', handleOpenReleaseLog);
-    };
+    return () => window.removeEventListener('open-release-log', handleOpenReleaseLog);
   }, []);
-
-  // Opacity tab-redirect effect removed with activeTab — the gated 'progress'
-  // and 'sealed' tabs no longer exist as destinations.
-
-  // Check if onboarding is complete
-  useEffect(() => {
-    async function checkOnboarding() {
-      const isComplete = await profileStorage.isOnboardingComplete();
-      setShowOnboarding(!isComplete);
-    }
-    checkOnboarding();
-  }, []);
-
-  // Check if welcome wizard (kink-companion onboarding) is complete.
-  // Runs after the legacy intake — only checked once authUser is known.
-  const authUserId = authUser?.id;
-  useEffect(() => {
-    if (!authUserId) return;
-    let cancelled = false;
-    loadOnboardingState(authUserId)
-      .then(s => { if (!cancelled) setShowWelcome(!s.completedAt); })
-      .catch(() => { if (!cancelled) setShowWelcome(false); });
-    return () => { cancelled = true; };
-  }, [authUserId]);
-
-  // Listen for `#/welcome` hash so users can replay onboarding from Settings.
-  useEffect(() => {
-    const onHash = () => {
-      const h = window.location.hash.replace('#', '');
-      setWelcomeReplay(h === '/welcome' || h === '/welcome/');
-    };
-    window.addEventListener('hashchange', onHash);
-    return () => window.removeEventListener('hashchange', onHash);
-  }, []);
-
-  // Morning-flow auto-trigger effect removed 2026-06-21 — it only existed to
-  // raise the blocking MorningBriefing wall, which is gone. The home is the
-  // single-task Focus surface; the briefing stays reachable from the menu.
-
-  // Browser history: push/pop state for back button support
-  useEffect(() => {
-    // Replace initial state so first back doesn't exit the app. Record the
-    // full screen (subView + overlay flags) so Back can restore it.
-    window.history.replaceState(
-      { nav: true, subView: null, settings: false, today: showTodayRedesign },
-      ''
-    );
-
-    const handlePop = (e: PopStateEvent) => {
-      const state = e.state as {
-        nav?: boolean;
-        subView?: MenuSubView;
-        settings?: boolean;
-        today?: boolean;
-      } | null;
-      if (state?.nav) {
-        setMenuSubView(state.subView ?? null);
-        // Restore the overlay flags too — otherwise Back after opening a menu
-        // sub-view (e.g. from the dossier banner via 'open-menu-subview')
-        // leaves showSettings/showTodayRedesign stale and lands on the wrong
-        // screen. When the marker doesn't carry the flags, derive sane defaults
-        // from the popped subView.
-        setShowSettings(state.settings ?? state.subView != null);
-        setShowTodayRedesign(state.today ?? false);
-      } else {
-        setMenuSubView(null);
-        setShowSettings(false);
-        setShowTodayRedesign(false);
-      }
-    };
-
-    window.addEventListener('popstate', handlePop);
-    return () => window.removeEventListener('popstate', handlePop);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Handle menu navigation. The old 'progress-page'/'sealed-page' special
-  // cases set a tab that rendered nothing — removed with activeTab.
-  const handleMenuNavigate = (view: MenuSubView) => {
-    if (sanitizedFitnessMode && !isSanitizedAllowedView(view)) {
-      setShowTodayRedesign(false);
-      setShowSettings(true);
-      setMenuSubView(null);
-      window.history.pushState({ nav: true, subView: null, settings: true, today: false }, '');
-      return;
-    }
-    if (view === 'log-release' as MenuSubView) {
-      window.dispatchEvent(new Event('open-release-log'));
-      return;
-    }
-    setMenuSubView(view);
-    window.history.pushState({ nav: true, subView: view, settings: true, today: false }, '');
-  };
-
-  // Open a menu sub-view from anywhere (e.g. the dossier banner on Focus).
-  // Leaves the Today/Focus home and renders the requested sub-view.
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const view = (e as CustomEvent).detail?.view as MenuSubView | undefined;
-      if (!view) return;
-      const nextView = sanitizedFitnessMode && !isSanitizedAllowedView(view) ? null : view;
-      window.location.hash = '';
-      // Push a 'home' marker for the Today/Focus surface we're leaving, so the
-      // first Back restores the home instead of the popstate handler's stale
-      // state. Then push the sub-view entry the user is navigating into.
-      window.history.pushState({ nav: true, subView: null, settings: false, today: true }, '');
-      setShowTodayRedesign(false);
-      setShowSettings(true);
-      setMenuSubView(nextView);
-      window.history.pushState({ nav: true, subView: nextView, settings: true, today: false }, '');
-    };
-    window.addEventListener('open-menu-subview', handler);
-    return () => window.removeEventListener('open-menu-subview', handler);
-  }, [sanitizedFitnessMode]);
-
-  // Handle back from menu sub-view
-  const handleBackFromSubView = () => {
-    // If we deep-linked in, close settings overlay and reset URL instead of history.back()
-    if (window.location.pathname !== '/') {
-      window.history.replaceState({}, '', '/');
-      setShowSettings(false);
-      setMenuSubView(null);
-      return;
-    }
-    window.history.back();
-  };
-
-  const openSanitizedMenuView = (view: MenuSubView) => {
-    const nextView = isSanitizedAllowedView(view) ? view : null;
-    window.location.hash = '';
-    setShowTodayRedesign(false);
-    setShowSettings(true);
-    setMenuSubView(nextView);
-    window.history.pushState({ nav: true, subView: nextView, settings: true, today: false }, '');
-  };
 
   // Handle starting edit intake mode
   const handleEditIntake = async () => {
@@ -742,9 +268,10 @@ function AuthenticatedAppInner() {
       const profile = await profileStorage.getProfile();
       setEditIntakeProfile(profile || {});
       setEditIntakeMode(true);
-      setMenuSubView(null);
     } catch (error) {
       console.error('Error loading profile for edit:', error);
+      setEditIntakeProfile({});
+      setEditIntakeMode(true);
     }
   };
 
@@ -788,6 +315,27 @@ function AuthenticatedAppInner() {
     }
   };
 
+  // Check if onboarding is complete
+  useEffect(() => {
+    async function checkOnboarding() {
+      const isComplete = await profileStorage.isOnboardingComplete();
+      setShowOnboarding(!isComplete);
+    }
+    checkOnboarding();
+  }, []);
+
+  // Check if welcome wizard (kink-companion onboarding) is complete.
+  // Runs after the legacy intake — only checked once authUser is known.
+  const authUserId = authUser?.id;
+  useEffect(() => {
+    if (!authUserId) return;
+    let cancelled = false;
+    loadOnboardingState(authUserId)
+      .then(s => { if (!cancelled) setShowWelcome(!s.completedAt); })
+      .catch(() => { if (!cancelled) setShowWelcome(false); });
+    return () => { cancelled = true; };
+  }, [authUserId]);
+
   if ((isLoading || stealthSettingsLoading || showOnboarding === null || (showOnboarding === false && showWelcome === null) || compulsoryLoading) && !loadingTimedOut) {
     return <LoadingScreen />;
   }
@@ -799,9 +347,10 @@ function AuthenticatedAppInner() {
 
   // Show welcome wizard if first-run kink-companion onboarding hasn't
   // happened yet — runs AFTER the legacy intake. Also entered via the
-  // `#/welcome` hash from Settings → Replay onboarding (welcomeReplay).
+  // `#/welcome` hash from Settings → Replay onboarding (nav.overlay).
   // The first check intentionally lets `null` (loading) fall through so
   // the user doesn't see a flash of Today before we know.
+  const welcomeReplay = nav.overlay === 'welcome';
   if (
     !editIntakeMode &&
     showOnboarding === false &&
@@ -812,12 +361,9 @@ function AuthenticatedAppInner() {
       <ErrorBoundary componentName="OnboardingWizard">
         <OnboardingWizard
           onComplete={() => {
-            // If this was a replay, just clear the hash. If it was the
-            // first run, also flip the local flag so we don't re-mount.
-            if (welcomeReplay) {
-              window.location.hash = '';
-              setWelcomeReplay(false);
-            }
+            // If this was a replay, clear the hash + overlay (goHome). If it
+            // was the first run, also flip the local flag so we don't re-mount.
+            if (welcomeReplay) goHome();
             setShowWelcome(false);
           }}
         />
@@ -838,426 +384,62 @@ function AuthenticatedAppInner() {
   }
 
   // ── Re-architecture 2026-06-21: the daily entry-gate wall is GONE. ──────────
-  // The user stopped opening the app because reaching one usable action meant
-  // clearing four full-screen blockers in a row: morning bookend → morning
-  // briefing → speak-a-mantra voice gate → compulsory lockout. That is the exact
-  // pattern memory already condemned (feedback_mommy_presses_not_blocks,
-  // feedback_one_task_focus, "fixed-inset-0 components are a smell"). Every one
-  // of those demands is still owned by the protocol — it now surfaces as the
-  // single task inside FocusMode (overdue confession, decree, dose, mantra) and
-  // through push/outreach, instead of as a turnstile in front of the door.
-  // Mama presses; she does not bar the door. The morning bookend still appears
-  // as the evening debrief's counterpart via bookends (non-blocking), and the
-  // morning briefing/voice/compulsory flows remain reachable for deliberate
-  // replay — they just no longer hijack first open.
+  // Every former blocking gate's demand surfaces as the single task inside
+  // FocusMode (overdue confession, decree, dose, mantra) and through push/
+  // outreach. Mama presses; she does not bar the door.
 
-  // Render menu sub-view content
-  const renderMenuSubView = () => {
-    if (sanitizedFitnessMode && !isSanitizedAllowedView(menuSubView)) {
-      return <MenuView onNavigate={handleMenuNavigate} />;
+  // Render the current registry view (was a 60-case switch).
+  const renderView = () => {
+    const viewId = sanitizedFitnessMode && !isSanitizedAllowed(nav.viewId) ? null : nav.viewId;
+    if (viewId == null) {
+      return <MenuView onNavigate={navigate} />;
     }
-
-    switch (menuSubView) {
-      case 'history':
-        return (
-          <div>
-            <button
-              onClick={handleBackFromSubView}
-              className="mb-4 text-protocol-text-muted hover:text-protocol-text transition-colors"
-            >
-              &larr; Back to Menu
-            </button>
-            <History />
-          </div>
-        );
-      case 'mommy-dossier':
-        return (
-          <div>
-            <button
-              onClick={handleBackFromSubView}
-              className="mb-4 text-protocol-text-muted hover:text-protocol-text transition-colors"
-            >
-              &larr; Back
-            </button>
-            <MommyDossierQuiz onClose={handleBackFromSubView} />
-          </div>
-        );
-      case 'verification-vault':
-        return <VerificationVault onBack={handleBackFromSubView} />;
-      case 'letters':
-        return <LettersArchiveView onBack={handleBackFromSubView} />;
-      case 'life-as-woman':
-        return <LifeAsWomanView onBack={handleBackFromSubView} />;
-      case 'dossier':
-        return (
-          <div>
-            <button
-              onClick={handleBackFromSubView}
-              className="mb-4 text-protocol-text-muted hover:text-protocol-text transition-colors"
-            >
-              &larr; Back
-            </button>
-            <MommyDossierStatus onOpenQuiz={() => setMenuSubView('mommy-dossier')} />
-          </div>
-        );
-      case 'investments':
-      case 'wishlist':
-        // These are now in ProgressDashboard, redirect there
-        return (
-          <div>
-            <button
-              onClick={handleBackFromSubView}
-              className="mb-4 text-protocol-text-muted hover:text-protocol-text transition-colors"
-            >
-              &larr; Back to Menu
-            </button>
-            <ProgressDashboard />
-          </div>
-        );
-      case 'sessions':
-        return (
-          <SessionPickerOrContainer onBack={handleBackFromSubView} />
-        );
-      case 'body':
-        return <BodyProtocolView onBack={handleBackFromSubView} />;
-      case 'baseline-intake':
-        return <BaselineIntakeView onClose={handleBackFromSubView} />;
-      case 'exercise':
-        return <WorkoutSessionPage onBack={handleBackFromSubView} />;
-      case 'her-world':
-        return <HerWorldPage onBack={handleBackFromSubView} />;
-      case 'vault-swipe':
-        return (
-          <VaultSwipe
-            onBack={handleBackFromSubView}
-            onManagePermissions={() => {
-              setMenuSubView('vault-permissions');
-              window.history.pushState({ nav: true, subView: 'vault-permissions', settings: true, today: false }, '');
-            }}
-          />
-        );
-      case 'vault-permissions':
-        return <PermissionsManager onBack={handleBackFromSubView} />;
-      case 'vault-browser':
-        return <VaultView onBack={handleBackFromSubView} />;
-      case 'content-capture':
-        return <ContentCapture onBack={handleBackFromSubView} />;
-      case 'content-queue':
-        return <PostingQueue onBack={handleBackFromSubView} />;
-      case 'content-calendar':
-        return <ContentCalendar onBack={handleBackFromSubView} />;
-      case 'content-fans':
-        return <FanDashboard onBack={handleBackFromSubView} />;
-      case 'content-polls':
-        return <SubscriberPolls onBack={handleBackFromSubView} />;
-      case 'content-revenue':
-        return <RevenueView onBack={handleBackFromSubView} />;
-      case 'content-settings':
-        return <PlatformSettings onBack={handleBackFromSubView} />;
-      case 'content-dashboard':
-        return <ContentDashboard onBack={handleBackFromSubView} />;
-      case 'quiz':
-        return <KinkQuizView onBack={handleBackFromSubView} />;
-      case 'voice-game':
-        return <VoiceAffirmationGame onBack={handleBackFromSubView} />;
-      case 'voice-drills':
-        return (
-          <VoiceDrillView
-            onBack={handleBackFromSubView}
-            onAffirmationGame={() => {
-              setMenuSubView('voice-game');
-              window.history.pushState({ nav: true, subView: 'voice-game', settings: true, today: false }, '');
-            }}
-          />
-        );
-      case 'timeline':
-        return <TimelineView onBack={handleBackFromSubView} userName={userName ?? undefined} />;
-      case 'service':
-        return <ServiceProgressionView onBack={handleBackFromSubView} />;
-      case 'service-analytics':
-        return <ServiceAnalyticsDashboard onBack={handleBackFromSubView} />;
-      case 'trigger-audit':
-        return <TriggerAuditDashboard onBack={handleBackFromSubView} />;
-      case 'content':
-        return <ContentEscalationView onBack={handleBackFromSubView} />;
-      case 'domains':
-        return <DomainEscalationView onBack={handleBackFromSubView} />;
-      case 'patterns':
-        return <PatternCatchView onBack={handleBackFromSubView} />;
-      case 'curation':
-        return <TaskCurationView onBack={handleBackFromSubView} />;
-      case 'seeds':
-        return <SeedsView onBack={handleBackFromSubView} />;
-      case 'vectors':
-        return (
-          <div>
-            <button
-              onClick={handleBackFromSubView}
-              className="mb-4 text-protocol-text-muted hover:text-protocol-text transition-colors"
-            >
-              &larr; Back to Menu
-            </button>
-            <VectorGridView />
-          </div>
-        );
-      case 'protocol-analytics':
-        return <ProtocolAnalytics onBack={handleBackFromSubView} />;
-      case 'handler-autonomous':
-        return <HandlerAutonomousView onBack={handleBackFromSubView} />;
-      case 'cam-session':
-        return <CamDashboard onBack={handleBackFromSubView} />;
-      case 'hypno-session':
-        return <HypnoDashboard onBack={handleBackFromSubView} />;
-      case 'hypno-learning':
-        return (
-          <div className="min-h-screen bg-protocol-bg">
-            <div className="px-4 py-3 flex items-center gap-2 border-b border-protocol-border/50">
-              <button
-                onClick={handleBackFromSubView}
-                className="text-gray-400 hover:text-gray-200 text-sm"
-              >
-                &larr; Back
-              </button>
-              <span className="text-sm font-medium text-gray-200">Hypno Learning</span>
-            </div>
-            <HypnoLearningView />
-          </div>
-        );
-      case 'goon-session':
-        return <GoonSessionView onBack={handleBackFromSubView} />;
-      case 'conditioning-library':
-        return <ConditioningLibrary onBack={handleBackFromSubView} />;
-      case 'wardrobe':
-        return <WardrobeInventoryView onBack={handleBackFromSubView} />;
-      case 'identity':
-        return <IdentitySettingsView onBack={handleBackFromSubView} />;
-      case 'trajectory':
-        return <TrajectoryArchiveView onBack={handleBackFromSubView} />;
-      case 'recaps':
-        return (
-          <RecapsIndexView
-            onBack={handleBackFromSubView}
-            onOpen={(id) => {
-              window.location.hash = `#/recaps/${id}`;
-              setMenuSubView('recap-detail');
-              setRecapDetailId(id);
-              window.history.pushState({ nav: true, subView: 'recap-detail', recapId: id, settings: true, today: false }, '');
-            }}
-          />
-        );
-      case 'recap-detail':
-        if (!recapDetailId) return null;
-        return (
-          <RecapDetailView
-            recapId={recapDetailId}
-            onBack={() => {
-              window.location.hash = '#/recaps';
-              setMenuSubView('recaps');
-              setRecapDetailId(null);
-              window.history.pushState({ nav: true, subView: 'recaps', settings: true, today: false }, '');
-            }}
-          />
-        );
-      case 'social-dashboard':
-        return <SocialMediaDashboard onBack={handleBackFromSubView} />;
-      case 'community-queue':
-        return <CommunityQueue onBack={handleBackFromSubView} />;
-      case 'community-list':
-        return <CommunityList onBack={handleBackFromSubView} />;
-      case 'community-log':
-        return <CommunityLog onBack={handleBackFromSubView} />;
-      case 'dashboard':
-        return (
-          <div>
-            <button
-              onClick={handleBackFromSubView}
-              className="mb-4 text-protocol-text-muted hover:text-protocol-text transition-colors"
-            >
-              &larr; Back to Menu
-            </button>
-            <Dashboard />
-          </div>
-        );
-      case 'journal':
-        return (
-          <div>
-            <button
-              onClick={handleBackFromSubView}
-              className="mb-4 text-protocol-text-muted hover:text-protocol-text transition-colors"
-            >
-              &larr; Back to Menu
-            </button>
-            <JournalView />
-          </div>
-        );
-      case 'witnesses':
-        return (
-          <div>
-            <button
-              onClick={handleBackFromSubView}
-              className="mb-4 text-protocol-text-muted hover:text-protocol-text transition-colors"
-            >
-              &larr; Back to Menu
-            </button>
-            <WitnessManager />
-          </div>
-        );
-      case 'case_file':
-        return (
-          <div>
-            <button
-              onClick={handleBackFromSubView}
-              className="mb-4 text-protocol-text-muted hover:text-protocol-text transition-colors"
-            >
-              &larr; Back to Menu
-            </button>
-            <CaseFileView />
-          </div>
-        );
-      case 'envelopes':
-        return (
-          <div>
-            <button
-              onClick={handleBackFromSubView}
-              className="mb-4 text-protocol-text-muted hover:text-protocol-text transition-colors"
-            >
-              &larr; Back to Menu
-            </button>
-            <SealedEnvelopesPage />
-          </div>
-        );
-      case 'system_audit':
-        return (
-          <div>
-            <button
-              onClick={handleBackFromSubView}
-              className="mb-4 text-protocol-text-muted hover:text-protocol-text transition-colors"
-            >
-              &larr; Back to Menu
-            </button>
-            <SystemAuditView />
-          </div>
-        );
-      case 'pause_protocol':
-        return (
-          <div>
-            <button
-              onClick={handleBackFromSubView}
-              className="mb-4 text-protocol-text-muted hover:text-protocol-text transition-colors"
-            >
-              &larr; Back to Menu
-            </button>
-            <div className="card p-6 space-y-4">
-              <h3 className="text-lg font-semibold text-protocol-text">Pause Protocol</h3>
-              <p className="text-sm text-protocol-text-muted">
-                Pausing the protocol is a permanent decision the Handler will see and reference.
-                Each attempt doubles the next cooldown. The architect-version of you committed.
-              </p>
-              <div className="pt-2">
-                <QuitFrictionGate
-                  attemptType="pause_protocol"
-                  triggerLabel="I need to pause the protocol"
-                />
-              </div>
-            </div>
-          </div>
-        );
-      case 'escalation_ladder':
-        return (
-          <div>
-            <button
-              onClick={handleBackFromSubView}
-              className="mb-4 text-protocol-text-muted hover:text-protocol-text transition-colors"
-            >
-              &larr; Back to Menu
-            </button>
-            <EscalationLadder />
-          </div>
-        );
-      case 'force':
-        return (
-          <div>
-            <button
-              onClick={handleBackFromSubView}
-              className="mb-4 text-protocol-text-muted hover:text-protocol-text transition-colors"
-            >
-              &larr; Back to Menu
-            </button>
-            <h2 className="text-lg font-semibold mb-3">Force Layer</h2>
-            <ForceDashboard />
-          </div>
-        );
-      case 'settings':
-        if (sanitizedFitnessMode) {
-          return <SanitizedSettingsView onBack={handleBackFromSubView} />;
-        }
-        return (
-          <SettingsView
-            onBack={handleBackFromSubView}
-            onEditIntake={handleEditIntake}
-            onOpenDossierStatus={() => setMenuSubView('dossier')}
-            onOpenDossierQuiz={() => setMenuSubView('mommy-dossier')}
-          />
-        );
-      case 'help':
-        return (
-          <div>
-            <button
-              onClick={handleBackFromSubView}
-              className="mb-4 text-protocol-text-muted hover:text-protocol-text transition-colors"
-            >
-              &larr; Back to Menu
-            </button>
-            <div className="card p-6 space-y-4">
-              <h3 className="text-lg font-semibold text-protocol-text">Help & Support</h3>
-              <p className="text-sm text-protocol-text-muted">
-                {sanitizedFitnessMode
-                  ? 'This app helps track training, recovery, measurements, and steady body-composition progress.'
-                  : 'Becoming Protocol is your daily companion for personal transformation.'}
-              </p>
-              <p className="text-sm text-protocol-text-muted">
-                {sanitizedFitnessMode
-                  ? 'Use the baseline intake for helper-assisted measurements, then repeat check-ins consistently.'
-                  : "Complete your daily tasks, journal your reflections, and track your progress as you become who you're meant to be."}
-              </p>
-            </div>
-          </div>
-        );
-      default:
-        return <MenuView onNavigate={handleMenuNavigate} />;
+    const def = VIEW_REGISTRY[viewId];
+    const ctx: ViewRenderContext = {
+      onBack: back,
+      navigate,
+      recapId: nav.recapId,
+      openRecap,
+      userName: userName ?? undefined,
+      onEditIntake: handleEditIntake,
+      sanitized: sanitizedFitnessMode,
+    };
+    const content = def.render(ctx);
+    if (def.frame === 'framed') {
+      return (
+        <SubViewFrame onBack={back} backLabel={def.backLabel}>
+          {content}
+        </SubViewFrame>
+      );
     }
+    return <>{content}</>;
   };
 
-  // Handler-Directed UI: Conversation is the primary screen.
-  // Settings accessible via gear icon in chat header.
-  // NOTE: showSettings useState moved above early returns (was causing Rules of Hooks violation / #310)
+  const inView = nav.surface === 'view';
+  const showWhisper = nav.overlay === 'whisper';
 
   if (sanitizedFitnessMode) {
-    if (!showSettings) {
+    if (!inView) {
       return (
         <SanitizedFitnessHome
-          onOpenBody={() => openSanitizedMenuView('body')}
-          onOpenBaselineIntake={() => openSanitizedMenuView('baseline-intake')}
-          onOpenMenu={() => openSanitizedMenuView(null)}
-          onOpenSettings={() => openSanitizedMenuView('settings')}
+          onOpenBody={() => navigate('body')}
+          onOpenBaselineIntake={() => navigate('baseline-intake')}
+          onOpenMenu={() => openMenu()}
+          onOpenSettings={() => navigate('settings')}
         />
       );
     }
 
-    const content = <Suspense fallback={<LoadingScreen />}>{renderMenuSubView()}</Suspense>;
-    const framed = menuSubView == null || menuSubView === 'help';
+    const content = <Suspense fallback={<LoadingScreen />}>{renderView()}</Suspense>;
+    const framed = nav.viewId == null || nav.viewId === 'help';
 
     return (
       <div className="min-h-screen bg-protocol-bg">
         {framed ? (
           <div className="max-w-lg mx-auto px-4 py-4">
             <button
-              onClick={() => {
-                setShowSettings(false);
-                setShowTodayRedesign(true);
-                setMenuSubView(null);
-              }}
-              className="mb-4 text-sm text-gray-400 hover:text-white transition-colors"
+              onClick={() => goHome()}
+              className="mb-4 text-sm text-protocol-text-muted hover:text-protocol-text transition-colors"
             >
               &larr; Back to dashboard
             </button>
@@ -1268,25 +450,11 @@ function AuthenticatedAppInner() {
     );
   }
 
-  if (showTodayRedesign) {
+  if (nav.surface === 'home') {
     return (
       <>
-        <TodayRedesignView
-          onExit={() => {
-            window.location.hash = '';
-            setShowTodayRedesign(false);
-          }}
-        />
-        {/* Blocking daily gates (confession / HRT / mantra / evening) removed
-            2026-06-21 — their demands surface as the single FocusMode task, not
-            as overlays the user has to dodge. GinaSessionRecorder removed
-            2026-06-28 — Gina dropped. */}
-        {showWhisper && (
-          <WhisperToMama onClose={() => {
-            window.location.hash = '';
-            setShowWhisper(false);
-          }} />
-        )}
+        <TodayRedesignView onExit={() => goChat()} />
+        {showWhisper && <WhisperToMama onClose={() => goHome()} />}
         <LivePhotoPingResponder />
         <MamaPhoneOverlay />
       </>
@@ -1295,72 +463,50 @@ function AuthenticatedAppInner() {
 
   return (
     <div className="min-h-screen bg-protocol-bg">
-      {/* PRIMARY: The Conversation — always visible unless settings open */}
-      {!showSettings && (
+      {/* PRIMARY: The Conversation — always visible unless a view is open */}
+      {!inView && (
         <>
           <div className="hidden md:block">
-            <ForceStatusStrip
-              onNavigate={() => {
-                setShowSettings(true);
-                setMenuSubView('force');
-              }}
-            />
+            <ForceStatusStrip onNavigate={() => navigate('force')} />
           </div>
           <ErrorBoundary componentName="HandlerChat">
             <HandlerChat
               onClose={() => {}} // Can't close — it IS the app
               openingLine={pendingOutreach?.openingLine}
-              onOpenSettings={() => {
-                setShowSettings(true);
-                setMenuSubView(null);
-              }}
+              onOpenSettings={() => openMenu()}
             />
           </ErrorBoundary>
         </>
       )}
 
-      {/* SETTINGS: Accessed via gear icon in chat header */}
-      {showSettings && menuSubView === 'baseline-intake' ? (
-        <Suspense fallback={<LoadingScreen />}>{renderMenuSubView()}</Suspense>
-      ) : showSettings && (
+      {/* VIEWS: registry screens — boxed column unless the view owns its layout */}
+      {inView && (nav.viewId && VIEW_REGISTRY[nav.viewId]?.chrome === 'bare' ? (
+        <Suspense fallback={<LoadingScreen />}>{renderView()}</Suspense>
+      ) : (
         <div className="min-h-screen bg-protocol-bg">
           <div className="max-w-lg mx-auto px-4 py-4">
             <button
-              onClick={() => setShowSettings(false)}
-              className="mb-4 text-sm text-gray-400 hover:text-white transition-colors"
+              onClick={() => goChat()}
+              className="mb-4 text-sm text-protocol-text-muted hover:text-protocol-text transition-colors"
             >
               &larr; Back to Handler
             </button>
-            <Suspense fallback={<LoadingScreen />}>{renderMenuSubView()}</Suspense>
+            <Suspense fallback={<LoadingScreen />}>{renderView()}</Suspense>
           </div>
         </div>
-      )}
+      ))}
 
       <FloatingHearts />
 
-      {/* Blocking daily gates removed 2026-06-21 (confession lockdown, HRT
-          gate, compulsory morning-mantra typing, evening confession wall).
-          They were the "dodge these overlays too" friction on top of the
-          gate chain. Each demand is preserved as a FocusMode task + push,
-          per feedback_mommy_presses_not_blocks / feedback_one_task_focus. */}
-
       {/* Whisper-to-Mama — hash-routable via /#/whisper. Audio-only intimate
           confession surface. Mama processes async via confession-watcher-cron. */}
-      {showWhisper && (
-        <WhisperToMama onClose={() => {
-          window.location.hash = '';
-          setShowWhisper(false);
-        }} />
-      )}
+      {showWhisper && <WhisperToMama onClose={() => goHome()} />}
 
-      {/* Live photo ping responder — self-gating overlay. Mama pings via
-          push + live_photo_pings row; this component detects the pending
-          row and renders the camera-only response UI. */}
+      {/* Live photo ping responder — self-gating overlay. */}
       <LivePhotoPingResponder />
 
       {/* Mama-phone overlay — force-prompts push registration when the
-          user has no active push_subscriptions row. Self-gating; mounts
-          unconditionally but only renders if Mama can't reach the phone. */}
+          user has no active push_subscriptions row. Self-gating. */}
       <MamaPhoneOverlay />
 
       {/* Whoop OAuth callback toast */}
@@ -1368,8 +514,8 @@ function AuthenticatedAppInner() {
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[80] animate-slide-down">
           <div className={`px-5 py-3 rounded-xl shadow-lg flex items-center gap-3 ${
             whoopToast === 'connected'
-              ? 'bg-green-900 border border-green-500/50 text-green-100'
-              : 'bg-red-900 border border-red-500/50 text-red-100'
+              ? 'bg-protocol-success/20 border border-protocol-success/50 text-protocol-success'
+              : 'bg-protocol-danger/20 border border-protocol-danger/50 text-protocol-danger'
           }`}>
             <span className="text-lg">{whoopToast === 'connected' ? '✓' : '✕'}</span>
             <span className="font-medium text-sm">
@@ -1380,12 +526,6 @@ function AuthenticatedAppInner() {
           </div>
         </div>
       )}
-
-      {/* Micro-task card overlay — disabled, user found pop-ups disruptive */}
-
-      {/* Daily Report Card removed 2026-06-21 — it blocked the whole app after
-          7pm until submitted. The evening reflection it wanted is now an
-          optional FocusMode task, never a wall. */}
 
       {/* Evening Debrief overlay */}
       {bookends.showEveningBookend && bookends.daySummary && bookends.config && (
@@ -1460,7 +600,7 @@ function AuthenticatedAppInner() {
       />
 
       {/* Modals (Investment, Achievement, LevelUp, Reminder, Intervention, Recovery)
-          are now rendered via useOrchestratedModals - only one shows at a time */}
+          are rendered via useOrchestratedModals - only one shows at a time */}
     </div>
   );
 }

@@ -28,6 +28,7 @@ const ROOT = join(__dirname, '..', '..');
 const SOURCE_ROOTS = [
   join(ROOT, 'src', 'components'),
   join(ROOT, 'src', 'styles'),
+  join(ROOT, 'src', 'navigation'),
 ];
 
 // Files allowed to define raw values — the token sources themselves.
