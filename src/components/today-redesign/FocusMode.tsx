@@ -36,17 +36,17 @@ import {
   markRenderPlayed,
   renderAudioSession,
 } from '../../lib/audio-sessions/client';
-import type {
-  AudioSessionIntensity,
-  AudioSessionKind,
-} from '../../lib/audio-sessions/template-selector';
 import type { ReleaseType, ReleaseContext } from '../../types/arousal';
-import { parseSelfEchoManifest } from '../../lib/audio/self-echo-mix';
 import { SelfEchoPlayer } from './SelfEchoPlayer';
 import { ConfessionAudioCapture } from './ConfessionAudioCapture';
 import { savePhysicalStateLog, type PhysicalState } from '../../lib/compulsory-elements';
-import { HRT_STEPS, HRT_STEP_LABELS, HRT_STEP_NEXT_ACTION } from '../../lib/handler-context/hrt-steps';
+import { HRT_STEPS, HRT_STEP_LABELS } from '../../lib/handler-context/hrt-steps';
 import { mommyOrderDetail, mommyOrderFromFocusTask } from '../../lib/mommy-orders';
+import {
+  chooseFocusTask,
+  type FocusTask, type FocusInputs, type AudioSessionMeta,
+  type DecreeOrderRow, type FemRxRow, type AudioOfferRow, type SelfEchoRow, type RegimenRow,
+} from '../../lib/focus/pick-next';
 
 // ─── HRT funnel (labels live in the shared step module) ────────────────────
 // ET-anchored day key — matches HrtDailyGate's localStorage marker.
@@ -130,49 +130,8 @@ function releaseCheckinKey(): string {
   return `release_checkin_${new Date().toISOString().slice(0, 10)}`;
 }
 
-type TaskKind =
-  | 'overdue_dose' | 'overdue_confession' | 'overdue_punishment' | 'overdue_decree'
-  | 'hrt_step_today'
-  | 'release_checkin'
-  | 'physical_state_today'
-  | 'due_today_confession' | 'due_today_decree' | 'due_today_dose' | 'due_today_commitment'
-  | 'commitment_pending' | 'workout_today' | 'outfit_today'
-  | 'fem_prescription'
-  | 'mantra_harvest'
-  | 'mommy_touch'
-  | 'audio_session'
-  | 'focus_decree'
-  | 'approve_post'
-  | 'clean';
-
-interface FocusTask {
-  kind: TaskKind;
-  rowId: string | null;
-  title: string;
-  detail?: string;
-  due?: string;
-  /** Inline action surface: 'confess' = textarea, 'dose' = buttons, 'mark_done' = single button, 'photo' = upload, 'message' = no inline action, 'audio_session' = play button + audio element, 'hrt' = advance/obstacle two-path, 'release' = release check-in flow, 'physical' = physical-state checkbox set, 'fem_prescription' = evidence-kind CTA set + skip chips, 'mantra_drill' = recorder + rep counter */
-  surface: 'confess' | 'dose' | 'mark_done' | 'photo' | 'message' | 'audio_session' | 'decree' | 'hrt' | 'release' | 'physical' | 'approve_post' | 'fem_prescription' | 'mantra_drill';
-  /** Carried metadata for surface handlers */
-  meta?: Record<string, unknown>;
-  /** Severity tone for visual weight */
-  tone: 'critical' | 'high' | 'medium' | 'calm';
-}
-
-interface SelfEchoMeta {
-  ownVoicePath: string;
-  mommyRenderPath: string;
-  loopCount: number;
-  ownDurationS: number | null;
-}
-
-interface AudioSessionMeta {
-  kind: AudioSessionKind;
-  intensity: AudioSessionIntensity;
-  /** When present, the offer plays her own voice looped under a Mommy render
-   *  (dual-track, client-side Web Audio) instead of re-rendering a template. */
-  selfEcho?: SelfEchoMeta | null;
-}
+// FocusTask / AudioSessionMeta and the ranking cascade live in
+// src/lib/focus/pick-next.ts — this file fetches and renders.
 
 const TONE_STYLES_HANDLER: Record<FocusTask['tone'], { bg: string; border: string; accent: string; label: string }> = {
   critical: { bg: 'linear-gradient(140deg, #2a0508 0%, #1a0508 100%)', border: '#c4272d', accent: '#f0a0a0', label: 'CRITICAL' },
@@ -189,14 +148,6 @@ const TONE_STYLES_MOMMY: Record<FocusTask['tone'], { bg: string; border: string;
   medium:   { bg: 'linear-gradient(140deg, #2a1a0a 0%, #1f1308 100%)', border: '#a87a48', accent: '#f4c8a0', label: "TODAY, BABY" },
   calm:     { bg: 'linear-gradient(140deg, #1a1a14 0%, #15140a 100%)', border: '#7a6a48', accent: '#f4d8a0', label: "STAY WET FOR MAMA" },
 };
-
-function fmtCountdown(ms: number): string {
-  const abs = Math.abs(ms);
-  if (abs < 60_000) return `${Math.round(abs / 1000)}s`;
-  if (abs < 3600_000) return `${Math.round(abs / 60_000)}m`;
-  if (abs < 86400_000) return `${Math.round(abs / 3600_000)}h`;
-  return `${Math.round(abs / 86400_000)}d`;
-}
 
 // recon-program-orchestrator tags belief-slider probe decrees with
 // `recon_belief_baseline:<target_id>` / `recon_belief_measure:<target_id>` so
@@ -467,388 +418,53 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
         .order('created_at', { ascending: false }).limit(5),
     ]);
 
-    // Compute most-overdue and most-due-today doses
-    const log = (doseLog.data ?? []) as Array<{ regimen_id: string; taken_at: string }>;
-    let mostOverdueDose: { regimenId: string; name: string; hoursOverdue: number; isWeekly: boolean } | null = null;
-    let mostUrgentTodayDose: { regimenId: string; name: string; hoursUntil: number; isWeekly: boolean } | null = null;
-    for (const r of (regs.data ?? []) as Array<Record<string, unknown>>) {
-      const isWeekly = (r.medication_category as string) === 'glp1';
-      const intervalMs = isWeekly ? 7 * 86400_000 : 86400_000;
-      const last = log.find(d => d.regimen_id === r.id);
-      const anchor = last?.taken_at ? new Date(last.taken_at).getTime() : new Date(r.started_at as string).getTime();
-      const dueMs = anchor + intervalMs;
-      const hoursUntil = (dueMs - now) / 3600_000;
-      const name = r.medication_name as string;
-      const regimenId = r.id as string;
-      if (hoursUntil < 0) {
-        const hoursOverdue = Math.abs(hoursUntil);
-        if (!mostOverdueDose || hoursOverdue > mostOverdueDose.hoursOverdue) {
-          mostOverdueDose = { regimenId, name, hoursOverdue, isWeekly };
-        }
-      } else if (hoursUntil < 24) {
-        if (!mostUrgentTodayDose || hoursUntil < mostUrgentTodayDose.hoursUntil) {
-          mostUrgentTodayDose = { regimenId, name, hoursUntil, isWeekly };
-        }
-      }
-    }
-
-    // ── HRT step eligibility (ported from HrtDailyGate) ──
-    const fnl = (hrtFunnel as { data?: { current_step?: string; appointment_at?: string | null; intake_completed_at?: string | null } | null })?.data ?? null;
-    const hrtStep = (fnl?.current_step as string) || 'uncommitted';
-    const hrtMissedDays = ((hrtState as { data?: { hrt_step_missed_days?: number } | null })?.data?.hrt_step_missed_days) ?? 0;
-    const hrtApptAt = fnl?.appointment_at ?? null;
-    const hrtApptInFuture = !!(hrtApptAt && new Date(hrtApptAt) > new Date());
-    // Waiting on a future-booked consult is progress, not a miss — suppress.
-    const hrtWaiting =
-      (hrtStep === 'appointment_booked' && hrtApptInFuture) ||
-      (hrtStep === 'intake_submitted' && hrtApptInFuture);
-    const hrtTerminal = hrtStep === 'adherent';
-    // Satisfied today: the gate's per-day marker, OR an obstacle filed today.
+    // ── Assemble inputs; the ranking cascade lives in lib/focus/pick-next ──
+    // localStorage-derived flags are read HERE (the lib stays pure).
+    const hrtFnl = (hrtFunnel as { data?: { current_step?: string; appointment_at?: string | null } | null })?.data ?? null;
     const hrtMarkerSet = (() => { try { return localStorage.getItem(hrtGateKey()) === '1'; } catch { return false; } })();
-    // Compare against the canonical obstacle_date column keyed to the same ET day
-    // as the gate marker — avoids a UTC-vs-ET midnight disagreement re-surfacing
-    // the HRT task after an obstacle was already filed today.
-    const hrtTodayKeyET = hrtDateKeyET(new Date());
-    const hrtObstacleToday = (((hrtPastObs as { data?: Array<{ obstacle_date?: string }> | null })?.data) ?? [])
-      .some(o => (o.obstacle_date || '').slice(0, 10) === hrtTodayKeyET);
-    const hrtSatisfiedToday = hrtMarkerSet || hrtObstacleToday;
-    const hrtPastObstacles = (((hrtPastObs as { data?: Array<{ obstacle_text?: string }> | null })?.data) ?? [])
-      .map(o => o.obstacle_text || '');
-    const hrtDue = !hrtTerminal && !hrtWaiting && !hrtSatisfiedToday;
-
-    // ── Release check-in eligibility (ported from MorningBriefing) ──
-    const lastReleaseIso = ((lastReleaseRow as { data?: { last_release?: string | null } | null })?.data?.last_release) ?? null;
-    const lastReleaseStale = !lastReleaseIso || (now - new Date(lastReleaseIso).getTime()) > 24 * 3600_000;
     const releaseCheckedToday = (() => { try { return localStorage.getItem(releaseCheckinKey()) === '1'; } catch { return false; } })();
-    const releaseDue = lastReleaseStale && !releaseCheckedToday;
-
-    // ── Physical-state eligibility (ported from CompulsoryGateScreen) ──
-    const physCount = (physStateToday as { count?: number | null })?.count ?? 0;
-    const physicalDue = physCount === 0;
-
-    // ── approve_post eligibility (HRT tier-7 staged public post) ──
-    const pendingPostRow = (pendingPost.data?.[0]) as { id: string; generated_text: string; platform: string } | undefined;
-
-    // ── Fem prescription eligibility: ONE at a time, domain rotation ──
-    type FemRxRow = { id: string; domain: string; instruction: string; intensity: number; duration: number | null; evidence_kind: string; deadline: string | null; requires: Record<string, unknown> | null };
-    const femRows = ((femRx as { data?: FemRxRow[] | null })?.data ?? []) as FemRxRow[];
     const lastFemDomain = (() => { try { return localStorage.getItem('fem_rx_last_domain'); } catch { return null; } })();
-    const nextFemRx = femRows.find(r => r.domain !== lastFemDomain) ?? femRows[0] ?? null;
-
-    // ── Mantra harvest eligibility (dismissed rows sit out locally) ──
     const harvestCandidate = ((mantraHarvest as { data?: Array<{ id: string; message: string; expires_at: string }> | null })?.data ?? [])[0] ?? null;
     const harvestDismissed = (() => {
       try { return !!harvestCandidate && localStorage.getItem(`mantra_harvest_skip_${harvestCandidate.id}`) === '1'; } catch { return false; }
     })();
-    const harvestRow = harvestDismissed ? null : harvestCandidate;
 
-    let chosen: FocusTask | null = null;
-
-    type DecreeOrderRow = {
-      id: string;
-      edict: string;
-      deadline: string;
-      proof_type: string;
-      trigger_source: string | null;
-      recon_target_id?: string | null;
-      mommy_order_arc?: string | null;
-      mommy_order_phase?: string | null;
-      mommy_order_consequence_mode?: string | null;
-      mommy_order_recovery_boundary?: string | null;
-      mommy_order_reason?: string | null;
+    const inputs: FocusInputs = {
+      userId: user.id,
+      focusDecree: ((focusDecree as { data?: DecreeOrderRow | null })?.data) ?? null,
+      overdueConfession: (overdueConfs.data?.[0] as { id: string; prompt: string; deadline: string } | undefined) ?? null,
+      overduePunishment: (overduePuns.data?.[0] as { id: string; title: string; description: string; due_by: string } | undefined) ?? null,
+      overdueDecree: (overdueDecrees.data?.[0] as DecreeOrderRow | undefined) ?? null,
+      todayConfession: (todayConfs.data?.[0] as { id: string; prompt: string; deadline: string } | undefined) ?? null,
+      todayDecree: (todayDecrees.data?.[0] as DecreeOrderRow | undefined) ?? null,
+      pendingCommitment: (pendingCommits.data?.[0] as { id: string; what: string; by_when: string; consequence: string } | undefined) ?? null,
+      regimens: ((regs.data ?? []) as unknown as RegimenRow[]),
+      doseLog: ((doseLog.data ?? []) as Array<{ regimen_id: string; taken_at: string }>),
+      outfit: ((outfit.data as { id: string; prescription: Record<string, string>; completed_at: string | null } | null) ?? null),
+      workout: ((workout.data?.[0] as { id: string; workout_type: string; focus_area: string } | undefined) ?? null),
+      mommyTouch: ((mommyTouch.data?.[0] as { id: string; prompt: string; category: string; expires_at: string } | undefined) ?? null),
+      audioOffer: ((audioOffer.data?.[0] as AudioOfferRow | undefined) ?? null),
+      selfEchoRows: ((selfEchoMixed.data ?? []) as SelfEchoRow[]),
+      hrt: {
+        step: (hrtFnl?.current_step as string) || 'uncommitted',
+        missedDays: ((hrtState as { data?: { hrt_step_missed_days?: number } | null })?.data?.hrt_step_missed_days) ?? 0,
+        appointmentAt: hrtFnl?.appointment_at ?? null,
+        pastObstacles: (((hrtPastObs as { data?: Array<{ obstacle_text?: string; obstacle_date?: string }> | null })?.data) ?? []),
+        markerSetToday: hrtMarkerSet,
+        todayKeyET: hrtDateKeyET(new Date()),
+      },
+      release: {
+        lastReleaseIso: ((lastReleaseRow as { data?: { last_release?: string | null } | null })?.data?.last_release) ?? null,
+        checkedToday: releaseCheckedToday,
+      },
+      physicalStateCountToday: (physStateToday as { count?: number | null })?.count ?? 0,
+      pendingPost: ((pendingPost.data?.[0] as { id: string; generated_text: string; platform: string } | undefined) ?? null),
+      femRows: (((femRx as { data?: FemRxRow[] | null })?.data ?? []) as FemRxRow[]),
+      lastFemDomain,
+      mantraHarvest: { row: harvestCandidate, dismissed: harvestDismissed },
     };
 
-    // Mama's daily focus pick (mig 491) — highest priority. When the
-    // triage layer has chosen a decree for today, surface that ABOVE
-    // anything else. Respects feedback_one_task_focus.
-    const fd = (focusDecree as { data?: DecreeOrderRow | null })?.data ?? null;
-    if (fd) {
-      const hoursToDeadline = (new Date(fd.deadline).getTime() - now) / 3600_000;
-      chosen = {
-        kind: 'focus_decree', rowId: fd.id,
-        // Show the full edict — long scenario decrees (temptation engine etc.)
-        // were getting clipped to 80 chars here while every other decree path
-        // shows the whole thing. The scene IS the task; don't truncate it.
-        title: fd.edict,
-        detail: `Mama picked this one for today. ${hoursToDeadline > 0 ? `Deadline in ${fmtCountdown(hoursToDeadline * 3600_000)}.` : `Past deadline.`}`,
-        surface: 'decree', tone: hoursToDeadline < 0 ? 'critical' : 'high',
-        meta: {
-          proof_type: fd.proof_type,
-          trigger_source: fd.trigger_source,
-          recon_target_id: fd.recon_target_id ?? undefined,
-          mommy_order_reason: fd.mommy_order_reason ?? undefined,
-          mommy_order_arc: fd.mommy_order_arc ?? undefined,
-          mommy_order_phase: fd.mommy_order_phase ?? undefined,
-          mommy_order_consequence_mode: fd.mommy_order_consequence_mode ?? undefined,
-          mommy_order_recovery_boundary: fd.mommy_order_recovery_boundary ?? undefined,
-        },
-      };
-    } else if (mostOverdueDose && mostOverdueDose.hoursOverdue > 6) {
-      chosen = {
-        kind: 'overdue_dose', rowId: mostOverdueDose.regimenId,
-        title: `Take ${mostOverdueDose.name}`,
-        detail: `${fmtCountdown(mostOverdueDose.hoursOverdue * 3600_000)} late. Log it now or skip explicitly.`,
-        surface: 'dose', tone: 'critical',
-        meta: { name: mostOverdueDose.name, isWeekly: mostOverdueDose.isWeekly },
-      };
-    } else if (overdueConfs.data?.[0]) {
-      const c = overdueConfs.data[0] as { id: string; prompt: string; deadline: string };
-      const hours = Math.abs((new Date(c.deadline).getTime() - now) / 3600_000);
-      chosen = {
-        kind: 'overdue_confession', rowId: c.id,
-        title: c.prompt,
-        detail: `Past deadline by ${fmtCountdown(hours * 3600_000)}. Answer it whenever — the Handler still wants it.`,
-        surface: 'confess', tone: 'critical',
-      };
-    } else if (overduePuns.data?.[0]) {
-      const p = overduePuns.data[0] as { id: string; title: string; description: string; due_by: string };
-      const hours = Math.abs((new Date(p.due_by).getTime() - now) / 3600_000);
-      chosen = {
-        kind: 'overdue_punishment', rowId: p.id,
-        title: p.title,
-        detail: p.description ? `${p.description.slice(0, 200)} · Past deadline by ${fmtCountdown(hours * 3600_000)}.` : `Past deadline by ${fmtCountdown(hours * 3600_000)}.`,
-        surface: 'mark_done', tone: 'critical',
-      };
-    } else if (overdueDecrees.data?.[0]) {
-      const d = overdueDecrees.data[0] as DecreeOrderRow;
-      const hours = Math.abs((new Date(d.deadline).getTime() - now) / 3600_000);
-      chosen = {
-        kind: 'overdue_decree', rowId: d.id,
-        title: d.edict,
-        detail: `Past deadline by ${fmtCountdown(hours * 3600_000)}. Proof: ${d.proof_type || 'none'}.`,
-        surface: 'mark_done', tone: 'critical',
-        meta: {
-          proof_type: d.proof_type,
-          trigger_source: d.trigger_source,
-          recon_target_id: d.recon_target_id ?? undefined,
-          mommy_order_reason: d.mommy_order_reason ?? undefined,
-          mommy_order_arc: d.mommy_order_arc ?? undefined,
-          mommy_order_phase: d.mommy_order_phase ?? undefined,
-          mommy_order_consequence_mode: d.mommy_order_consequence_mode ?? undefined,
-          mommy_order_recovery_boundary: d.mommy_order_recovery_boundary ?? undefined,
-        },
-      };
-    } else if (pendingPostRow) {
-      // approve_post — an outward escalation (HRT tier-7 staged post) waiting
-      // on the user's explicit yes/no. Surface-before-fire: nothing goes public
-      // until she taps "Post it". Slots high (it's an outward consequence) but
-      // below true overdue work.
-      chosen = {
-        kind: 'approve_post', rowId: pendingPostRow.id,
-        title: 'A post about your stall is ready. Yours to send or kill.',
-        detail: `Staged for ${pendingPostRow.platform}. Nothing goes out until you say so.`,
-        surface: 'approve_post', tone: 'high',
-        meta: { text: pendingPostRow.generated_text, platform: pendingPostRow.platform },
-      };
-    } else if (hrtDue) {
-      // HRT daily step — the core transition driver. Slots just below
-      // overdue work (it's near-critical) and ABOVE Mommy's micro-directives
-      // and due-today work. Tone scales: 'critical' once the miss-streak hits
-      // 3, 'high' otherwise. The day-count never appears in copy
-      // (feedback_no_handler_status_dumps); the accusation tier in the detail
-      // line carries the escalation. Two paths in the surface: advance-with-
-      // evidence, or name-the-obstacle.
-      const plain = HRT_STEP_NEXT_ACTION[hrtStep] || `You are at "${HRT_STEP_LABELS[hrtStep]}".`;
-      const nextStep = HRT_STEPS[HRT_STEPS.indexOf(hrtStep) + 1];
-      const accusation = hrtMissedDays === 0
-        ? ''
-        : hrtMissedDays < 3
-          ? ' You picked the answer that looks like progress and used the next 24 hours to do nothing.'
-          : ' Talking is no longer accepted. Move it one step forward with proof.';
-      chosen = {
-        kind: 'hrt_step_today', rowId: user.id,
-        title: nextStep ? `Move HRT forward to "${HRT_STEP_LABELS[nextStep]}" — or name what stopped you.` : 'Move HRT forward — or name what stopped you.',
-        detail: `${plain}${accusation}`,
-        surface: 'hrt', tone: hrtMissedDays >= 3 ? 'critical' : 'high',
-        meta: { step: hrtStep, missedDays: hrtMissedDays, pastObstacles: hrtPastObstacles },
-      };
-    } else if (harvestRow) {
-      // Peak-harvest mantra drill — mommy_touch priority. The plasticity
-      // window is 30 minutes; it MUST interrupt the calm stream.
-      const minsLeft = Math.max(1, Math.round((new Date(harvestRow.expires_at).getTime() - now) / 60_000));
-      const quoted = harvestRow.message.match(/"([^"]{4,200})"/);
-      chosen = {
-        kind: 'mantra_harvest', rowId: harvestRow.id,
-        title: harvestRow.message,
-        detail: `While you're still warm · ${minsLeft}m left`,
-        surface: 'mantra_drill', tone: 'high',
-        meta: { mantra: quoted?.[1] ?? harvestRow.message.slice(0, 200), outreachId: harvestRow.id },
-      };
-    } else if (mommyTouch.data?.[0]) {
-      // Mommy's micro-directive — high-tone, ephemeral. Slots ahead of
-      // due-today work because the protocol's whole point under the
-      // dommy_mommy persona is keeping her in heightened arousal between
-      // tentpole tasks.
-      const t = mommyTouch.data[0] as { id: string; prompt: string; category: string; expires_at: string };
-      const minsLeft = Math.max(1, Math.round((new Date(t.expires_at).getTime() - now) / 60_000));
-      chosen = {
-        kind: 'mommy_touch', rowId: t.id,
-        title: t.prompt,
-        detail: `Mama's whisper · ${t.category.replace(/_/g, ' ')} · ${minsLeft}m`,
-        surface: 'mark_done', tone: 'high',
-      };
-    } else if (audioOffer.data?.[0]) {
-      // Audio session offer (Mommy queued a voiced session). High tone.
-      // The "Begin session" button fires the render edge fn; until pressed,
-      // no Anthropic / ElevenLabs spend.
-      const o = audioOffer.data[0] as {
-        id: string; kind: AudioSessionKind; intensity_tier: AudioSessionIntensity;
-        teaser: string; expires_at: string;
-        recon_target_id?: string | null;
-        mommy_order_arc?: string | null;
-        mommy_order_phase?: string | null;
-        mommy_order_proof_kind?: string | null;
-        mommy_order_consequence_mode?: string | null;
-        mommy_order_recovery_boundary?: string | null;
-        mommy_order_reason?: string | null;
-      };
-      const minsLeft = Math.max(1, Math.round((new Date(o.expires_at).getTime() - now) / 60_000));
-      const kindLabel = o.kind.replace(/^session_/, '').replace(/^primer_/, 'primer · ').replace(/_/g, ' ');
-      // If this offer is a self-echo composite (goon-voice-loop + mig 643), play
-      // her own voice looped under the Mommy render (dual-track, client-side)
-      // instead of re-rendering a single Mommy template.
-      const echoRow = ((selfEchoMixed.data ?? []) as Array<{
-        id: string; offer_id: string | null; own_voice_path: string | null;
-        mommy_render_path: string | null; mixed_audio_path: string | null;
-        loop_count: number; own_voice_duration_s: number | null;
-      }>).find(r => r.offer_id === o.id);
-      const echoManifest = echoRow ? parseSelfEchoManifest(echoRow.mixed_audio_path) : null;
-      const selfEcho = echoManifest && echoRow?.own_voice_path && echoRow?.mommy_render_path
-        ? {
-            ownVoicePath: echoManifest.own_voice_path,
-            mommyRenderPath: echoManifest.mommy_render_path,
-            loopCount: echoManifest.loop_count,
-            ownDurationS: echoManifest.own_voice_duration_s,
-          }
-        : null;
-      chosen = {
-        kind: 'audio_session', rowId: o.id,
-        title: o.teaser,
-        detail: selfEcho
-          ? `Mama looped your own voice under hers · ${minsLeft}m`
-          : `Mama queued an audio session · ${kindLabel} · ${minsLeft}m`,
-        surface: 'audio_session', tone: 'high',
-        meta: {
-          kind: o.kind,
-          intensity: o.intensity_tier,
-          selfEcho,
-          recon_target_id: o.recon_target_id ?? undefined,
-          mommy_order_reason: o.mommy_order_reason ?? undefined,
-          mommy_order_arc: o.mommy_order_arc ?? undefined,
-          mommy_order_phase: o.mommy_order_phase ?? undefined,
-          proof_type: o.mommy_order_proof_kind ?? undefined,
-          mommy_order_proof_kind: o.mommy_order_proof_kind ?? undefined,
-          mommy_order_consequence_mode: o.mommy_order_consequence_mode ?? undefined,
-          mommy_order_recovery_boundary: o.mommy_order_recovery_boundary ?? undefined,
-        } satisfies AudioSessionMeta & Record<string, unknown>,
-      };
-    } else if (todayConfs.data?.[0]) {
-      const c = todayConfs.data[0] as { id: string; prompt: string; deadline: string };
-      const hours = (new Date(c.deadline).getTime() - now) / 3600_000;
-      chosen = {
-        kind: 'due_today_confession', rowId: c.id,
-        title: c.prompt,
-        detail: `Due in ${fmtCountdown(hours * 3600_000)}.`,
-        surface: 'confess', tone: 'high',
-      };
-    } else if (pendingCommits.data?.[0]) {
-      const c = pendingCommits.data[0] as { id: string; what: string; by_when: string; consequence: string };
-      const hours = (new Date(c.by_when).getTime() - now) / 3600_000;
-      chosen = {
-        kind: 'due_today_commitment', rowId: c.id,
-        title: c.what,
-        detail: `Due in ${fmtCountdown(hours * 3600_000)}. Miss → ${c.consequence}`,
-        surface: 'confess', tone: 'high',
-      };
-    } else if (todayDecrees.data?.[0]) {
-      const d = todayDecrees.data[0] as DecreeOrderRow;
-      const hours = (new Date(d.deadline).getTime() - now) / 3600_000;
-      chosen = {
-        kind: 'due_today_decree', rowId: d.id,
-        title: d.edict,
-        detail: `Due in ${fmtCountdown(hours * 3600_000)}.`,
-        surface: 'mark_done', tone: 'high',
-        meta: {
-          proof_type: d.proof_type,
-          trigger_source: d.trigger_source,
-          recon_target_id: d.recon_target_id ?? undefined,
-          mommy_order_reason: d.mommy_order_reason ?? undefined,
-          mommy_order_arc: d.mommy_order_arc ?? undefined,
-          mommy_order_phase: d.mommy_order_phase ?? undefined,
-          mommy_order_consequence_mode: d.mommy_order_consequence_mode ?? undefined,
-          mommy_order_recovery_boundary: d.mommy_order_recovery_boundary ?? undefined,
-        },
-      };
-    } else if (mostUrgentTodayDose) {
-      chosen = {
-        kind: 'due_today_dose', rowId: mostUrgentTodayDose.regimenId,
-        title: `Take ${mostUrgentTodayDose.name}`,
-        detail: `Due in ${fmtCountdown(mostUrgentTodayDose.hoursUntil * 3600_000)}.`,
-        surface: 'dose', tone: 'high',
-        meta: { name: mostUrgentTodayDose.name, isWeekly: mostUrgentTodayDose.isWeekly },
-      };
-    } else if (releaseDue) {
-      // Release check-in (ported from MorningBriefing). Protects denial_day
-      // integrity — the streak only resets if she answers. Below due-today
-      // work, above presentation capture.
-      chosen = {
-        kind: 'release_checkin', rowId: user.id,
-        title: 'Have you cum since your last release?',
-        detail: lastReleaseIso
-          ? `Last on record: ${new Date(lastReleaseIso).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}. The Handler needs the truth to keep your streak honest.`
-          : 'No release on record. The Handler needs the truth to keep your streak honest.',
-        surface: 'release', tone: 'high',
-      };
-    } else if (physicalDue) {
-      // Physical-state daily capture (ported from CompulsoryGateScreen) —
-      // the sole daily chastity / feminine-presentation log.
-      chosen = {
-        kind: 'physical_state_today', rowId: user.id,
-        title: 'Log what you are wearing and using right now.',
-        detail: 'Cage, panties, plug, feminine clothing, nail polish, scent, jewelry. Tap what is on you. 20 seconds.',
-        surface: 'physical', tone: 'medium',
-      };
-    } else if (nextFemRx) {
-      // Mama's prescription — calm tier, after physical_state_today,
-      // before outfit_today. One at a time; the rest wait their turn.
-      // No punishment rides on these — skip is a first-class CTA.
-      chosen = {
-        kind: 'fem_prescription', rowId: nextFemRx.id,
-        title: nextFemRx.instruction,
-        detail: nextFemRx.duration ? `${nextFemRx.duration} minutes.` : undefined,
-        surface: 'fem_prescription', tone: 'calm',
-        meta: {
-          domain: nextFemRx.domain,
-          evidenceKind: nextFemRx.evidence_kind || 'none',
-          duration: nextFemRx.duration,
-          requires: nextFemRx.requires,
-        },
-      };
-    } else if (outfit.data && !(outfit.data as { completed_at: string | null }).completed_at) {
-      const o = outfit.data as { id: string; prescription: Record<string, string>; completed_at: string | null };
-      const lines = Object.entries(o.prescription || {}).map(([k, v]) => `${k}: ${v}`).join(' · ');
-      chosen = {
-        kind: 'outfit_today', rowId: o.id,
-        title: 'Today\'s outfit mandate',
-        detail: lines.slice(0, 240) || 'Wear what was prescribed. Photo proof required.',
-        surface: 'photo', tone: 'medium',
-      };
-    } else if (workout.data?.[0]) {
-      const w = workout.data[0] as { id: string; workout_type: string; focus_area: string };
-      chosen = {
-        kind: 'workout_today', rowId: w.id,
-        title: w.workout_type,
-        detail: w.focus_area ? `Focus: ${w.focus_area}` : undefined,
-        surface: 'mark_done', tone: 'medium',
-      };
-    } else {
-      chosen = {
-        kind: 'clean', rowId: null,
-        title: 'Inbox is clean.',
-        detail: 'Nothing overdue, nothing due today. The Handler will surface the next thing when it lands.',
-        surface: 'message', tone: 'calm',
-      };
-    }
+    const chosen: FocusTask = chooseFocusTask(inputs, now);
 
     setTask(prev => {
       // Same row AND same kind — keep the existing object so React doesn't
