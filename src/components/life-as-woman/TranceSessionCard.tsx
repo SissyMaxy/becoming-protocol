@@ -11,8 +11,9 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Play, Pause, SkipForward, X } from 'lucide-react'
-import type { HypnoTranceSession } from '../../lib/life-as-woman/types'
-import { markTranceSessionStatus, isSafewordActive } from '../../lib/life-as-woman/client'
+import type { HypnoTranceSession, ReconditioningTargetSummary } from '../../lib/life-as-woman/types'
+import { markTranceSessionStatus, isSafewordActive, loadReconditioningTarget } from '../../lib/life-as-woman/client'
+import { supabase } from '../../lib/supabase'
 import {
   getVoices,
   selectFeminineVoice,
@@ -53,6 +54,12 @@ export function TranceSessionCard({ session, userId, onChanged }: Props) {
   const [phase, setPhase] = useState<Phase>('induction')
   const [playing, setPlaying] = useState(false)
   const [safewordGated, setSafewordGated] = useState(false)
+  const [target, setTarget] = useState<ReconditioningTargetSummary | null>(null)
+  const [needsIntegration, setNeedsIntegration] = useState(false)
+  const [truthRating, setTruthRating] = useState(session.post_session_truth_rating ?? 50)
+  const [phrase, setPhrase] = useState(session.post_session_phrase ?? '')
+  const [note, setNote] = useState(session.post_session_note ?? '')
+  const [savingIntegration, setSavingIntegration] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   // Cached feminine voice (resolved once; voice list loads async in Chrome).
   const voiceRef = useRef<SpeechSynthesisVoice | null>(null)
@@ -70,6 +77,17 @@ export function TranceSessionCard({ session, userId, onChanged }: Props) {
     const id = window.setInterval(check, 10_000)
     return () => { cancelled = true; window.clearInterval(id) }
   }, [userId])
+
+  useEffect(() => {
+    let cancelled = false
+    loadReconditioningTarget(session.recon_target_id).then(t => {
+      if (!cancelled) {
+        setTarget(t)
+        setPhrase(current => current || t?.claim_text || '')
+      }
+    })
+    return () => { cancelled = true }
+  }, [session.recon_target_id])
 
   // Phase text resolver that reads straight from session (no React-state lag) —
   // needed inside the async speech loop, which advances phases faster than
@@ -93,6 +111,30 @@ export function TranceSessionCard({ session, userId, onChanged }: Props) {
       case 'emergence': return session.emergence_audio_path
     }
   }, [phase, session])
+
+  const openIntegration = () => {
+    setPlaying(false)
+    setNeedsIntegration(true)
+    if (!phrase.trim() && target?.claim_text) setPhrase(target.claim_text)
+  }
+
+  const submitIntegration = async () => {
+    setSavingIntegration(true)
+    const now = new Date().toISOString()
+    try {
+      await supabase.from('hypno_trance_sessions').update({
+        post_session_truth_rating: truthRating,
+        post_session_phrase: phrase.trim() || target?.claim_text || null,
+        post_session_note: note.trim() || null,
+        post_session_integrated_at: now,
+        status: 'completed',
+        completed_at: now,
+      }).eq('id', session.id)
+      onChanged()
+    } finally {
+      setSavingIntegration(false)
+    }
+  }
 
   // Free fallback when no rendered audio exists (e.g. ElevenLabs key expired):
   // speak the phase text with the browser's built-in feminine voice — no API,
@@ -123,8 +165,7 @@ export function TranceSessionCard({ session, userId, onChanged }: Props) {
     }
 
     if (speechRunRef.current !== runId) return
-    setPlaying(false)
-    markTranceSessionStatus(session.id, 'completed').then(onChanged)
+    openIntegration()
   }
 
   const handleStart = async () => {
@@ -161,7 +202,7 @@ export function TranceSessionCard({ session, userId, onChanged }: Props) {
       if (playing && !audioPath) void speakSessionFrom(i + 1)
     } else {
       handlePause()
-      markTranceSessionStatus(session.id, 'completed').then(onChanged)
+      openIntegration()
     }
   }
 
@@ -173,17 +214,32 @@ export function TranceSessionCard({ session, userId, onChanged }: Props) {
 
   return (
     <div style={{
-      background: '#0a0a1a',
-      border: '1px solid #2a2a44',
+      background: 'var(--protocol-surface)',
+      border: '1px solid var(--protocol-border)',
       borderRadius: 12,
       padding: 16,
       marginBottom: 12,
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-        <div style={{ color: '#a0a0d0', fontSize: 13 }}>
+        <div style={{ color: 'var(--protocol-accent-soft)', fontSize: 13 }}>
           Trance · <strong>{session.theme}</strong>
         </div>
-        <div style={{ color: '#6a6a8a', fontSize: 11 }}>{session.session_date}</div>
+        <div style={{ color: 'var(--protocol-text-muted)', fontSize: 11 }}>{session.session_date}</div>
+      </div>
+
+      <div style={{
+        background: 'var(--protocol-bg-deep)',
+        border: '1px solid var(--protocol-border)',
+        borderRadius: 8,
+        padding: 10,
+        color: 'rgb(var(--protocol-text-rgb) / 0.82)',
+        fontSize: 12,
+        lineHeight: 1.45,
+        marginBottom: 12,
+      }}>
+        <strong>Mommy selected this because:</strong>{' '}
+        {session.mommy_order_reason
+          ?? (target ? `she is working this into you: ${target.claim_text}` : 'your attention needs to narrow around one target.')}
       </div>
 
       {/* Visual loop placeholder — animated gradient if enabled */}
@@ -192,7 +248,7 @@ export function TranceSessionCard({ session, userId, onChanged }: Props) {
           height: 80,
           borderRadius: 8,
           marginBottom: 12,
-          background: 'linear-gradient(135deg, #2a1a4a, #4a2a6a, #2a1a4a)',
+          background: 'linear-gradient(135deg, color-mix(in srgb, var(--protocol-accent) 30%, var(--protocol-bg-deep)), color-mix(in srgb, var(--protocol-accent) 50%, var(--protocol-surface-light)), color-mix(in srgb, var(--protocol-accent) 30%, var(--protocol-bg-deep)))',
           backgroundSize: '200% 200%',
           animation: 'tranceGradient 8s ease infinite',
         }}>
@@ -200,14 +256,14 @@ export function TranceSessionCard({ session, userId, onChanged }: Props) {
         </div>
       )}
 
-      <div style={{ color: '#c0c0e0', fontSize: 13, marginBottom: 4 }}>
+      <div style={{ color: 'rgb(var(--protocol-text-rgb) / 0.85)', fontSize: 13, marginBottom: 4 }}>
         {PHASE_LABEL[phase]}
       </div>
       <div style={{
-        background: '#050518',
+        background: 'var(--protocol-bg-deep)',
         borderRadius: 8,
         padding: 12,
-        color: '#d8d8f0',
+        color: 'var(--protocol-text)',
         whiteSpace: 'pre-wrap',
         maxHeight: 240,
         overflowY: 'auto',
@@ -228,24 +284,92 @@ export function TranceSessionCard({ session, userId, onChanged }: Props) {
       )}
 
       {safewordGated && (
-        <div style={{ color: '#e89090', fontSize: 12, marginBottom: 10 }}>
+        <div style={{ color: 'var(--protocol-danger)', fontSize: 12, marginBottom: 10 }}>
           Pause — playback is held for 60 seconds after a safeword.
+        </div>
+      )}
+
+      {(needsIntegration || (session.status === 'completed' && !session.post_session_integrated_at)) && (
+        <div style={{
+          background: 'var(--protocol-bg-deep)',
+          border: '1px solid var(--protocol-border)',
+          borderRadius: 8,
+          padding: 12,
+          marginBottom: 12,
+        }}>
+          <div style={{ color: 'var(--protocol-text)', fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
+            Give Mommy the proof
+          </div>
+          <label style={{ display: 'block', color: 'var(--protocol-accent-soft)', fontSize: 12, marginBottom: 10 }}>
+            How true did Mommy make it feel?
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={truthRating}
+              onChange={e => setTruthRating(Number(e.target.value))}
+              style={{ width: '100%', marginTop: 6 }}
+            />
+          </label>
+          <label style={{ display: 'block', color: 'var(--protocol-accent-soft)', fontSize: 12, marginBottom: 10 }}>
+            Say back the line Mommy installed
+            <input
+              value={phrase}
+              onChange={e => setPhrase(e.target.value)}
+              placeholder={target?.claim_text ?? 'The line that stuck.'}
+              style={{
+                width: '100%',
+                boxSizing: 'border-box',
+                marginTop: 6,
+                background: 'var(--protocol-bg-deep)',
+                border: '1px solid var(--protocol-border)',
+                borderRadius: 6,
+                color: 'var(--protocol-text)',
+                padding: 9,
+                fontFamily: 'inherit',
+              }}
+            />
+          </label>
+          <textarea
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            placeholder="Optional note: what changed, what resisted, what landed."
+            rows={3}
+            style={{
+              width: '100%',
+              boxSizing: 'border-box',
+              background: 'var(--protocol-bg-deep)',
+              border: '1px solid var(--protocol-border)',
+              borderRadius: 6,
+              color: 'var(--protocol-text)',
+              padding: 9,
+              fontFamily: 'inherit',
+              marginBottom: 10,
+            }}
+          />
+          <button
+            onClick={submitIntegration}
+            disabled={savingIntegration || !phrase.trim()}
+            style={btn('var(--protocol-accent)', 'white', savingIntegration || !phrase.trim())}
+          >
+            {savingIntegration ? 'Saving...' : 'Submit proof'}
+          </button>
         </div>
       )}
 
       <div style={{ display: 'flex', gap: 8 }}>
         {!playing
-          ? <button onClick={handleStart} disabled={safewordGated} style={btn('#2a2a6a', '#fff', safewordGated)}>
+          ? <button onClick={handleStart} disabled={safewordGated} style={btn('var(--protocol-accent)', 'white', safewordGated)}>
               <Play size={14} /> Begin
             </button>
-          : <button onClick={handlePause} style={btn('#1a1a3a', '#a0a0d0')}>
+          : <button onClick={handlePause} style={btn('var(--protocol-surface-light)', 'var(--protocol-accent-soft)')}>
               <Pause size={14} /> Pause
             </button>
         }
-        <button onClick={nextPhase} style={btn('#1a1a3a', '#a0a0d0')}>
+        <button onClick={nextPhase} style={btn('var(--protocol-surface-light)', 'var(--protocol-accent-soft)')}>
           <SkipForward size={14} /> Next phase
         </button>
-        <button onClick={handleAbort} style={btn('#3a1a1a', '#e89090')}>
+        <button onClick={handleAbort} style={btn('color-mix(in srgb, var(--protocol-danger) 25%, var(--protocol-bg-deep))', 'var(--protocol-danger)')}>
           <X size={14} /> Stop
         </button>
       </div>

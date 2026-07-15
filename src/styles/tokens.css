@@ -59,4 +59,13 @@
   --font-sans: 'Quicksand', 'Nunito', 'Poppins', sans-serif;
   --font-handler: 'Inter', 'Quicksand', system-ui, sans-serif;
   --font-display: 'Playfair Display', Georgia, serif;
+
+  /* Immersive session atmosphere — full-bleed players (DropPortal, session
+     views) keep their bespoke gradients, but sourced from these tokens so
+     they read as deep plum, not the pre-Velvet black/violet. Promoted from
+     DropPortal's original bespoke radial-gradient stops. */
+  --immersive-bg: #0b0509;
+  --immersive-bg-rgb: 11 5 9;
+  --immersive-glow-a: #241019;
+  --immersive-glow-b: #16090f;
 }

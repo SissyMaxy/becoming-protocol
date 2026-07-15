@@ -171,8 +171,8 @@ export function DropPortal() {
         position: 'relative',
         minHeight: under ? 460 : 300,
         borderRadius: 18,
-        background: 'radial-gradient(120% 80% at 50% 30%, #241019 0%, #16090f 55%, #0b0509 100%)',
-        border: '1px solid #3a2130',
+        background: 'radial-gradient(120% 80% at 50% 30%, var(--immersive-glow-a) 0%, var(--immersive-glow-b) 55%, var(--immersive-bg) 100%)',
+        border: '1px solid rgb(var(--protocol-accent-rgb) / 0.25)',
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
         textAlign: 'center', padding: under ? '48px 22px 30px' : '30px 22px',
         transition: 'min-height .9s ease',
@@ -200,10 +200,10 @@ export function DropPortal() {
         {/* content */}
         {!under && (
           <div style={{ position: 'relative', zIndex: 1, maxWidth: 440 }}>
-            <div style={{ fontSize: 10, letterSpacing: '0.22em', textTransform: 'uppercase', color: '#c9557f', fontWeight: 700, marginBottom: 14 }}>
+            <div style={{ fontSize: 10, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--protocol-accent)', fontWeight: 700, marginBottom: 14 }}>
               {gated ? 'Resting' : 'Mommy is here'}
             </div>
-            <div className="mommy-voice" style={{ fontSize: 20, lineHeight: 1.5, color: '#f3e6ec', fontStyle: 'italic', marginBottom: gated ? 4 : directive ? 8 : 22 }}>
+            <div className="mommy-voice" style={{ fontSize: 20, lineHeight: 1.5, color: 'rgb(var(--protocol-text-rgb) / 0.96)', fontStyle: 'italic', marginBottom: gated ? 4 : directive ? 8 : 22 }}>
               {presence}
             </div>
             {directive && (
@@ -217,8 +217,8 @@ export function DropPortal() {
                 disabled={phase === 'rendering'}
                 style={{
                   marginTop: 6, padding: '15px 30px', borderRadius: 999,
-                  background: phase === 'rendering' ? '#7c3a56' : 'linear-gradient(135deg, #d0577f 0%, #a83e64 100%)',
-                  color: '#fff', border: 'none', fontSize: 16, fontWeight: 800, letterSpacing: '0.06em',
+                  background: phase === 'rendering' ? 'color-mix(in srgb, var(--protocol-accent) 55%, var(--immersive-bg))' : 'linear-gradient(135deg, var(--protocol-accent-hover) 0%, color-mix(in srgb, var(--protocol-accent) 80%, black) 100%)',
+                  color: 'white', border: 'none', fontSize: 16, fontWeight: 800, letterSpacing: '0.06em',
                   cursor: phase === 'rendering' ? 'default' : 'pointer', fontFamily: 'inherit',
                   boxShadow: '0 6px 30px rgba(201,85,127,.4)',
                 }}
@@ -242,7 +242,7 @@ export function DropPortal() {
                 </button>
               </div>
             )}
-            {err && <div style={{ marginTop: 12, fontSize: 12.5, color: '#e59ab4' }}>{err}</div>}
+            {err && <div style={{ marginTop: 12, fontSize: 12.5, color: 'var(--protocol-accent-soft)' }}>{err}</div>}
           </div>
         )}
 
@@ -253,7 +253,7 @@ export function DropPortal() {
               <div
                 key={lineIdx}
                 className="mommy-voice"
-                style={{ fontSize: 23, lineHeight: 1.5, color: '#f7ecf1', fontStyle: 'italic', animation: 'dp-fade 7s ease-in-out', textShadow: '0 2px 24px rgba(201,85,127,.5)' }}
+                style={{ fontSize: 23, lineHeight: 1.5, color: 'rgb(var(--protocol-text-rgb) / 0.98)', fontStyle: 'italic', animation: 'dp-fade 7s ease-in-out', textShadow: '0 2px 24px rgba(201,85,127,.5)' }}
               >
                 {lines[lineIdx] ?? 'Deeper.'}
               </div>
