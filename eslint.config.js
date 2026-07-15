@@ -23,7 +23,6 @@ export default tseslint.config(
       '.claude',
       'coverage',
       'scripts/auto-poster',
-      'supabase/functions',
       '*.config.js',
       '*.config.ts',
       'scripts/handler-regression/coverage-report.md',
@@ -69,6 +68,26 @@ export default tseslint.config(
     files: ['scripts/handler-regression/**/*.{mjs,js,ts}'],
     languageOptions: {
       globals: { ...globals.node },
+    },
+  },
+  {
+    // Supabase Edge Functions run on Deno. They are part of the production
+    // attack surface and must not be excluded from static analysis.
+    files: ['supabase/functions/**/*.{ts,tsx}'],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        Deno: 'readonly',
+        EdgeRuntime: 'readonly',
+      },
+    },
+    rules: {
+      // Historical Deno files contain harmless string escapes and mutable
+      // declarations; keep the production-relevant rules active without
+      // turning this first inclusion pass into a formatting migration.
+      'no-useless-escape': 'off',
+      'prefer-const': 'off',
+      '@typescript-eslint/no-empty-object-type': 'off',
     },
   },
 );

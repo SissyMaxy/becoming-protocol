@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+.pnpm-store/
 
 # Auto-poster sensitive data
 scripts/auto-poster/.browser-profiles/

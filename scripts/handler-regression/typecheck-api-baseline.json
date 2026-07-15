@@ -1,3 +1,0 @@
-[
-  "api/whoop/[action].ts::TS2538::Type 'undefined' cannot be used as an index type."
-]

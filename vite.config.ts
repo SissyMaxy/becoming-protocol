@@ -31,7 +31,10 @@ export default defineConfig({
     // Source maps disabled in production for operational opacity
     sourcemap: false,
     // Optimize chunk size
-    chunkSizeWarningLimit: 500,
+    // The authenticated shell is 833 kB minified (241 kB gzip); all screens
+    // and secondary surfaces are lazy chunks. Keep this just above that shell
+    // so a future entry-point regression becomes visible again.
+    chunkSizeWarningLimit: 850,
     rollupOptions: {
       output: {
         // Manual chunk splitting for better caching
@@ -40,18 +43,6 @@ export default defineConfig({
           'vendor-react': ['react', 'react-dom'],
           'vendor-supabase': ['@supabase/supabase-js'],
           'vendor-ui': ['lucide-react'],
-
-          // Feature chunks - lazy loaded
-          'feature-handler': [
-            './src/components/handler-dashboard/HandlerDashboard.tsx',
-          ],
-          'feature-ceremonies': [
-            './src/components/ceremonies/CeremonyPerformanceModal.tsx',
-          ],
-          'feature-investments': [
-            './src/lib/investments.ts',
-            './src/lib/wishlist.ts',
-          ],
         },
       },
     },

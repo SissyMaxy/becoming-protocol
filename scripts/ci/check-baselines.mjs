@@ -2,7 +2,7 @@
 /**
  * Baseline drift detection.
  *
- * Each linter (pattern-lint, migration-lint, centrality, typecheck-api) keeps
+ * Each baseline-driven linter (pattern-lint, migration-lint, centrality) keeps
  * a JSON baseline of pre-existing violations. The linter only fails on NEW
  * entries; STALE baseline entries (the violation has been fixed but the
  * baseline still lists it) are silently ignored, so the baseline ratchets
@@ -51,11 +51,6 @@ const baselines = [
     name: 'centrality',
     file: join(ROOT, 'scripts/handler-regression/centrality-baseline.json'),
     refresh: 'node scripts/handler-regression/centrality-audit.mjs --update-baseline',
-  },
-  {
-    name: 'typecheck-api',
-    file: join(ROOT, 'scripts/handler-regression/typecheck-api-baseline.json'),
-    refresh: 'node scripts/ci/typecheck-api.mjs --update-baseline',
   },
 ];
 

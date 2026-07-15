@@ -18,7 +18,6 @@ const targets = [
   ['voice-gate',     'node scripts/ci/voice-gate.mjs --update-baseline'],
   ['migration-lint', 'node scripts/handler-regression/migration-lint.mjs --update-baseline'],
   ['centrality',     'node scripts/handler-regression/centrality-audit.mjs --update-baseline'],
-  ['typecheck-api',  'node scripts/ci/typecheck-api.mjs --update-baseline'],
 ];
 
 for (const [name, cmd] of targets) {
