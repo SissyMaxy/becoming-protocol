@@ -128,9 +128,11 @@ Deno.serve(async (req: Request) => {
       results.push({ user, suppressed: 'recon_sleep_disabled' }); continue
     }
 
-    // Active targets for this user.
+    // Active AND retained targets for this user — retain-phase gets "occasional
+    // ambient + TMR" per DESIGN §3.2, not a hard cutoff. A retained target's cues
+    // are already installed/armed; this just keeps replaying what's already there.
     const { data: targets } = await s.from('reconditioning_targets')
-      .select('id').eq('user_id', user).eq('status', 'active')
+      .select('id').eq('user_id', user).in('status', ['active', 'retained'])
     const activeIds = (targets ?? []).map((t: { id: string }) => t.id)
     if (activeIds.length === 0) { results.push({ user, note: 'no_active_targets' }); continue }
 

@@ -9,6 +9,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useSurfaceRenderTracking } from '../../lib/surface-render-hooks';
 import { PhotoUploadWidget } from '../verification/PhotoUploadWidget';
+import { arousalToPhrase } from '../../lib/persona/dommy-mommy';
 
 interface Decree {
   id: string;
@@ -30,6 +31,8 @@ const PROOF_LABEL: Record<string, string> = {
   voice_pitch_sample: 'voice drill',
   device_state: 'device',
   belief_slider: 'rate it',
+  assoc_latency: 'tap test',
+  arousal_debrief: 'debrief',
   none: '—',
 };
 
@@ -42,6 +45,42 @@ function parseBeliefProbeTrigger(triggerSource: string | null): { targetId: stri
   if (!triggerSource) return null;
   const m = /^recon_belief_(baseline|measure):([0-9a-f-]{36})$/.exec(triggerSource);
   return m ? { targetId: m[2], isBaseline: m[1] === 'baseline' } : null;
+}
+
+// Same pattern, for the assoc_latency (IAT-lite) instrument.
+function parseIatProbeTrigger(triggerSource: string | null): { targetId: string; isBaseline: boolean } | null {
+  if (!triggerSource) return null;
+  const m = /^recon_iat_(baseline|measure):([0-9a-f-]{36})$/.exec(triggerSource);
+  return m ? { targetId: m[2], isBaseline: m[1] === 'baseline' } : null;
+}
+
+// recon-program-orchestrator tags a reinforce-phase cued-retrieval card with
+// `recon_rep:<slug>:<rep_id>` — parse the rep id so a self-graded answer
+// (nailed it / blanked) can feed recon_rep_grade's SM-2-lite scheduler instead
+// of vanishing into a plain "Fulfilled" checkbox (mig 668).
+function parseRepTrigger(triggerSource: string | null): { repId: string } | null {
+  if (!triggerSource) return null;
+  const m = /^recon_rep:[^:]+:([0-9a-f-]{36})$/.exec(triggerSource);
+  return m ? { repId: m[1] } : null;
+}
+
+// turnout-orchestrator tags the post-rung aroused-state debrief ask
+// `turnout_debrief:<rung>` (mig 679, DESIGN_TURNOUT_LADDER §0/§2 step 3b — the
+// rung's irreversible act already happened; this closes the honesty gap where
+// consolidation used to fire the instant the decree was fulfilled, with no
+// aroused debrief ever captured).
+function parseTurnoutDebriefTrigger(triggerSource: string | null): { rung: string } | null {
+  if (!triggerSource) return null;
+  const m = /^turnout_debrief:(.+)$/.exec(triggerSource);
+  return m ? { rung: m[1] } : null;
+}
+
+// The orchestrator's IAT edicts always embed the bare claim in quotes; pull
+// just that out so the tap-test reveal is a clean stimulus, not buried in
+// Mommy's surrounding sentence.
+function extractQuotedClaim(edict: string): string {
+  const m = /"([^"]+)"/.exec(edict);
+  return m ? m[1] : edict;
 }
 
 const PROOF_ICON: Record<string, string> = {
@@ -65,6 +104,11 @@ export function HandlerDecreeCard() {
   // Tracks which decree row is currently showing the inline photo widget
   const [photoOpenId, setPhotoOpenId] = useState<string | null>(null);
   const [sliders, setSliders] = useState<Record<string, number>>({});
+  // 0-10 canonical scale (arousalToPhrase), distinct from belief_slider's 0-100.
+  const [arousalSliders, setArousalSliders] = useState<Record<string, number>>({});
+  // decree id -> performance.now() timestamp of the IAT-lite reveal, for
+  // latency measurement; absent = not yet revealed for that card.
+  const [iatShownAt, setIatShownAt] = useState<Record<string, number>>({});
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -129,6 +173,93 @@ export function HandlerDecreeCard() {
     setSliders(s => { const c = { ...s }; delete c[decree.id]; return c; });
     load();
     window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'decree_belief', id: decree.id } }));
+  };
+
+  const submitIat = async (decree: Decree, choice: 'agree' | 'disagree') => {
+    const probe = parseIatProbeTrigger(decree.trigger_source);
+    const shownAt = iatShownAt[decree.id];
+    if (!user?.id || !probe || !shownAt) return;
+    const latencyMs = Math.round(performance.now() - shownAt);
+    setSubmittingId(decree.id);
+    // Record the measurement first — a failed write should never masquerade
+    // as a fulfilled decree with no data behind it (no baseline, no claim).
+    const { error } = await supabase.rpc('recon_record_measurement_and_advance', {
+      p_user: user.id,
+      p_target: probe.targetId,
+      p_indicator: 'assoc_latency',
+      p_value: latencyMs,
+      p_method: 'iat_lite',
+      p_is_baseline: probe.isBaseline,
+      p_raw: { choice, latency_ms: latencyMs, probe: 'decree_card_iat_probe' },
+    });
+    if (error) {
+      console.error('[HandlerDecreeCard] IAT probe measurement failed:', error.message);
+      setSubmittingId(null);
+      return;
+    }
+    await supabase.from('handler_decrees').update({
+      status: 'fulfilled',
+      fulfilled_at: new Date().toISOString(),
+    }).eq('id', decree.id);
+    setSubmittingId(null);
+    setIatShownAt(s => { const c = { ...s }; delete c[decree.id]; return c; });
+    load();
+    window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'decree_iat', id: decree.id } }));
+  };
+
+  const submitRepGrade = async (decree: Decree, correct: boolean) => {
+    const rep = parseRepTrigger(decree.trigger_source);
+    if (!user?.id || !rep) return;
+    setSubmittingId(decree.id);
+    const note = (notes[decree.id] || '').trim();
+    // Grade the retrieval card first — a failed write should never masquerade
+    // as a fulfilled decree with no signal behind it (§2.2: correct expands the
+    // interval, a miss/blank contracts it; the scheduler is only as honest as
+    // this write).
+    const { error } = await supabase.rpc('recon_rep_grade', {
+      p_rep_id: rep.repId, p_user: user.id, p_correct: correct,
+    });
+    if (error) {
+      console.error('[HandlerDecreeCard] rep grade failed:', error.message);
+      setSubmittingId(null);
+      return;
+    }
+    await supabase.from('handler_decrees').update({
+      status: 'fulfilled',
+      fulfilled_at: new Date().toISOString(),
+      proof_payload: note ? { note } : null,
+    }).eq('id', decree.id);
+    setSubmittingId(null);
+    setNotes(n => { const c = { ...n }; delete c[decree.id]; return c; });
+    load();
+    window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'decree_rep', id: decree.id } }));
+  };
+
+  const submitTurnoutDebrief = async (decree: Decree) => {
+    const probe = parseTurnoutDebriefTrigger(decree.trigger_source);
+    if (!user?.id || !probe) return;
+    setSubmittingId(decree.id);
+    const arousal = arousalSliders[decree.id] ?? 5;
+    const note = (notes[decree.id] || '').trim();
+    // Record the debrief FIRST — a failed write must never masquerade as a
+    // consolidated rung with no honest signal behind it (mig 679).
+    const { error } = await supabase.rpc('turnout_record_debrief', {
+      p_user: user.id, p_rung: probe.rung, p_arousal: arousal, p_note: note || null,
+    });
+    if (error) {
+      console.error('[HandlerDecreeCard] turnout debrief failed:', error.message);
+      setSubmittingId(null);
+      return;
+    }
+    await supabase.from('handler_decrees').update({
+      status: 'fulfilled',
+      fulfilled_at: new Date().toISOString(),
+    }).eq('id', decree.id);
+    setSubmittingId(null);
+    setArousalSliders(s => { const c = { ...s }; delete c[decree.id]; return c; });
+    setNotes(n => { const c = { ...n }; delete c[decree.id]; return c; });
+    load();
+    window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'decree_turnout_debrief', id: decree.id } }));
   };
 
   if (items.length === 0) return null;
@@ -203,6 +334,126 @@ export function HandlerDecreeCard() {
                 >
                   {submittingId === d.id ? '…' : 'Tell Mommy'}
                 </button>
+              </div>
+            ) : d.proof_type === 'arousal_debrief' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <input
+                  type="range" min={0} max={10}
+                  value={arousalSliders[d.id] ?? 5}
+                  onChange={e => setArousalSliders(s => ({ ...s, [d.id]: Number(e.target.value) }))}
+                  disabled={submittingId === d.id}
+                  style={{ width: '100%' }}
+                />
+                <div style={{ fontSize: 11, color: '#e6bd80', fontStyle: 'italic', textAlign: 'center' }}>
+                  {arousalToPhrase(arousalSliders[d.id] ?? 5)}
+                </div>
+                <textarea
+                  value={note}
+                  onChange={e => setNotes(n => ({ ...n, [d.id]: e.target.value }))}
+                  placeholder="what happened (optional)"
+                  rows={2}
+                  style={{
+                    width: '100%', background: '#0a0709', border: '1px solid #2b1d29',
+                    borderRadius: 5, padding: '7px 9px', fontSize: 11.5, color: '#f2e9e6',
+                    fontFamily: 'inherit', resize: 'vertical',
+                  }}
+                />
+                <button
+                  onClick={() => submitTurnoutDebrief(d)}
+                  disabled={submittingId === d.id}
+                  style={{
+                    padding: '7px 14px', borderRadius: 5, border: 'none',
+                    background: '#e6bd80', color: '#1f1008', fontWeight: 600,
+                    fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  {submittingId === d.id ? '…' : 'Tell Mommy the truth'}
+                </button>
+              </div>
+            ) : d.proof_type === 'assoc_latency' ? (
+              iatShownAt[d.id] ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <p style={{
+                    fontSize: 13, color: '#f2e9e6', textAlign: 'center', lineHeight: 1.4,
+                    padding: '10px', border: '1px solid #7a5a2a', borderRadius: 6, margin: 0,
+                  }}>
+                    "{extractQuotedClaim(d.edict)}"
+                  </p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <button
+                      onClick={() => submitIat(d, 'agree')}
+                      disabled={submittingId === d.id}
+                      style={{
+                        padding: '10px', borderRadius: 5, border: 'none',
+                        background: '#e6bd80', color: '#1f1008', fontWeight: 700,
+                        fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                      }}
+                    >
+                      agree
+                    </button>
+                    <button
+                      onClick={() => submitIat(d, 'disagree')}
+                      disabled={submittingId === d.id}
+                      style={{
+                        padding: '10px', borderRadius: 5, border: '1px solid #7a5a2a',
+                        background: 'transparent', color: '#9c8590', fontWeight: 700,
+                        fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                      }}
+                    >
+                      disagree
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setIatShownAt(s => ({ ...s, [d.id]: performance.now() }))}
+                  disabled={submittingId === d.id}
+                  style={{
+                    padding: '7px 14px', borderRadius: 5, border: 'none',
+                    background: '#e6bd80', color: '#1f1008', fontWeight: 600,
+                    fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  start — read it, then tap fast
+                </button>
+              )
+            ) : parseRepTrigger(d.trigger_source) ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <textarea
+                  value={note}
+                  onChange={e => setNotes(n => ({ ...n, [d.id]: e.target.value }))}
+                  placeholder="or add a note (optional)"
+                  rows={2}
+                  style={{
+                    width: '100%', background: '#0a0709', border: '1px solid #2b1d29',
+                    borderRadius: 5, padding: '7px 9px', fontSize: 11.5, color: '#f2e9e6',
+                    fontFamily: 'inherit', resize: 'vertical',
+                  }}
+                />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <button
+                    onClick={() => submitRepGrade(d, true)}
+                    disabled={submittingId === d.id}
+                    style={{
+                      padding: '10px', borderRadius: 5, border: 'none',
+                      background: '#e6bd80', color: '#1f1008', fontWeight: 700,
+                      fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                    }}
+                  >
+                    {submittingId === d.id ? '…' : 'nailed it'}
+                  </button>
+                  <button
+                    onClick={() => submitRepGrade(d, false)}
+                    disabled={submittingId === d.id}
+                    style={{
+                      padding: '10px', borderRadius: 5, border: '1px solid #7a5a2a',
+                      background: 'transparent', color: '#9c8590', fontWeight: 700,
+                      fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                    }}
+                  >
+                    blanked
+                  </button>
+                </div>
               </div>
             ) : photoOpenId === d.id && ['photo','video','audio','voice_pitch_sample'].includes(d.proof_type) ? (
               <PhotoUploadWidget

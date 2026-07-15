@@ -30,6 +30,9 @@ import {
   type BedtimeStepKey,
 } from '../lib/bedtime/ritual';
 import { BedtimeLock } from '../components/bedtime/BedtimeLock';
+import { SleepCuePill } from '../components/bedtime/SleepCuePill';
+import { getTonightSleepCue, markSleepCuePlayed } from '../lib/bedtime/sleep-cue';
+import { getSignedAssetUrl } from '../lib/storage/signed-url';
 
 interface ActiveRitual {
   row: BedtimeRitualRow;
@@ -56,6 +59,9 @@ export function BedtimeRitualProvider({ children }: { children: ReactNode }) {
   // keyed by ISO of tonight's window-start. Prevents a re-poll from
   // re-mounting after the user skipped / completed.
   const [snoozedFor, setSnoozedFor] = useState<string | null>(null);
+  // TMR sleep-onset cue (DESIGN_RECONDITIONING_ENGINE §2.4) — independent of
+  // `active` so closing the bedtime overlay to go to sleep doesn't cut it.
+  const [sleepCue, setSleepCue] = useState<{ id: string; url: string } | null>(null);
 
   const evaluate = useCallback(async () => {
     if (!user?.id) return;
@@ -152,6 +158,23 @@ export function BedtimeRitualProvider({ children }: { children: ReactNode }) {
     return () => window.clearInterval(iv);
   }, [evaluate]);
 
+  const beginSleepCue = useCallback(async () => {
+    if (!user?.id) return;
+    const cue = await getTonightSleepCue(supabase, user.id);
+    if (!cue) return;
+    const url = await getSignedAssetUrl('audio', cue.audio_path, 3600);
+    if (!url) return;
+    setSleepCue({ id: cue.id, url });
+  }, [user?.id]);
+
+  const handleSleepCueFirstPlay = useCallback(() => {
+    if (sleepCue) void markSleepCuePlayed(supabase, sleepCue.id);
+  }, [sleepCue]);
+
+  const handleSleepCueDismiss = useCallback(() => {
+    setSleepCue(null);
+  }, []);
+
   const handleClose = useCallback(() => {
     if (active) {
       // Snooze the rest of this window so a re-open doesn't re-mount.
@@ -175,6 +198,15 @@ export function BedtimeRitualProvider({ children }: { children: ReactNode }) {
           prefersVoice={active.prefersVoice}
           chastityEnabled={active.chastityEnabled}
           onClose={handleClose}
+          onCompleted={beginSleepCue}
+        />
+      )}
+      {sleepCue && (
+        <SleepCuePill
+          audioUrl={sleepCue.url}
+          onFirstPlay={handleSleepCueFirstPlay}
+          onDismiss={handleSleepCueDismiss}
+          forceStop={!!aftercare?.isActive}
         />
       )}
     </BedtimeContext.Provider>

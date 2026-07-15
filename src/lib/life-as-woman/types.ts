@@ -20,6 +20,9 @@ export interface LifeAsWomanSettings {
   content_editor_enabled: boolean
   content_editor_intensity: number
   cross_platform_consistency_enabled: boolean
+  recondition_enabled: boolean
+  recon_sleep_enabled: boolean
+  turnout_enabled: boolean
 }
 
 export type SniffiesDraftStatus = 'pending' | 'sent' | 'discarded' | 'expired'

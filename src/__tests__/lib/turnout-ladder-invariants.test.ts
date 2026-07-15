@@ -230,3 +230,56 @@ describe('turnout gate wiring', () => {
     expect(rungOfferable('T1', true, false)).toEqual({ offerable: true, reason: 'ok' });
   });
 });
+
+// ─── Decree trigger_source tagging (turnout-orchestrator's issueTurnout) ──────
+//
+// Regression for a real fabrication bug: before this fix every decree the
+// orchestrator issued for a rung — the real rung action, the STI/PrEP prep ask,
+// the meet-safety-card prep ask, and the pressure-free resistance check-in — all
+// shared the identical trigger_source `turnout_rung:<rung>`. The orchestrator's
+// consolidation check treats ANY fulfilled decree tagged `turnout_rung:<rung>`
+// as proof the rung's irreversible act happened. Fulfilling a prep/check-in
+// decree from the ordinary Focus text box (which anyone can do — it's just a
+// textarea + button) would therefore have logged a fabricated irreversible fact
+// (e.g. attesting to booking an STI test recorded as "a man came inside her" in
+// turnout_rung_completions/escape_cost_anchors). Only the 'rung' kind may ever
+// produce the `turnout_rung:` tag; every other kind must be provably distinct.
+describe('turnout decree tagging — only the real rung action may tag turnout_rung:<rung>', () => {
+  type DecreeKind = 'rung' | 'health_prep' | 'meet_prep' | 'resistance';
+
+  // Mirror of issueTurnout's tag construction in turnout-orchestrator/index.ts.
+  function tagFor(rung: string, kind: DecreeKind): string {
+    const tag = kind === 'rung' ? 'turnout_rung' : `turnout_${kind}`;
+    return `${tag}:${rung}`;
+  }
+
+  // Mirror of the consolidation check's exact-match query:
+  // `.eq('trigger_source', \`turnout_rung:${rung}\`)`.
+  function looksLikeRungAction(triggerSource: string, rung: string): boolean {
+    return triggerSource === `turnout_rung:${rung}`;
+  }
+
+  it('only kind=rung produces the turnout_rung: tag the consolidation check looks for', () => {
+    const rung = '6c';
+    expect(looksLikeRungAction(tagFor(rung, 'rung'), rung)).toBe(true);
+    for (const kind of ['health_prep', 'meet_prep', 'resistance'] as const) {
+      expect(looksLikeRungAction(tagFor(rung, kind), rung), `kind=${kind} must not look like the rung action`).toBe(false);
+    }
+  });
+
+  it('every non-rung tag is distinct from every other kind, per rung', () => {
+    const rung = 'T7';
+    const tags = (['rung', 'health_prep', 'meet_prep', 'resistance'] as const).map(k => tagFor(rung, k));
+    expect(new Set(tags).size).toBe(tags.length);
+  });
+
+  it('the health-prep tag round-trips through the FocusMode parser shape', () => {
+    // Mirror of parseTurnoutHealthPrepTrigger's regex in FocusMode.tsx.
+    const parse = (s: string) => /^turnout_health_prep:(.+)$/.exec(s);
+    const tag = tagFor('6b', 'health_prep');
+    const m = parse(tag);
+    expect(m?.[1]).toBe('6b');
+    // The real rung-action tag must NOT parse as a health-prep trigger.
+    expect(parse(tagFor('6b', 'rung'))).toBeNull();
+  });
+});

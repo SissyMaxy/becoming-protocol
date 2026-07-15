@@ -23,6 +23,16 @@
 // no-punishment consequence line. Identity-target self-narrative work reuses the
 // surviving ego mechanic's opt-in: it only runs when ego_mechanic_active(
 // 'recall_corrector') is true. Gate first, fail-closed.
+//
+// (C) monthly retain-phase booster (DESIGN §3.2 "retain: minimal maintenance —
+//     occasional ambient + TMR + a monthly reconsolidation booster"): a target
+//     that HELD (reconditioning_targets.status = 'retained') otherwise goes dark
+//     forever — recon-program-orchestrator never picks it (only 'active'), and
+//     the turn-out consolidator only opens sessions for 'active'/'consolidating'
+//     targets. Once/month, open a bare session for it exactly like the turn-out
+//     trigger does, then let Pass A below author + issue it through the same
+//     pipeline — no new cap, no new CTA path, no fabricated mismatch (empty
+//     mismatch_evidence already degrades gracefully in author()/fallbackAuthor).
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -43,6 +53,10 @@ const NO_PUNISH = 'No punishment — this is an invitation, not a demand. The wi
 // reconsolidation is potent; over-firing degrades it).
 const MAX_AUTHOR_PER_RUN = 2
 const MAX_PER_TARGET_PER_WEEK = 2
+
+// A retained target gets a booster at most this often — "minimal maintenance",
+// not a new campaign (§3.2).
+const RETAIN_BOOSTER_INTERVAL_DAYS = 30
 
 interface Target { id: string; slug: string; category: string; claim_text: string; title: string | null }
 
@@ -187,8 +201,28 @@ Deno.serve(async (req: Request) => {
       egoOk = data === true
     } catch (_e) { egoOk = false }
 
-    let authored = 0, issued = 0, reps = 0, skipped = 0
+    let authored = 0, issued = 0, reps = 0, skipped = 0, boosted = 0
     let ctaTaken = await ctaOccupied(s, user)
+
+    // ---- Pass 0: open a monthly maintenance booster for retained targets ----
+    const { data: retained } = await s.from('reconditioning_targets')
+      .select('id, claim_text').eq('user_id', user).eq('status', 'retained')
+    for (const t of (retained ?? []) as { id: string; claim_text: string }[]) {
+      const { data: openOrPending } = await s.from('recon_reconsolidation_sessions')
+        .select('id').eq('target_id', t.id).in('status', ['opened', 'reencoded']).limit(1).maybeSingle()
+      if (openOrPending) continue // already has one in flight — don't stack a second
+      const { data: lastBooster } = await s.from('recon_reconsolidation_sessions')
+        .select('created_at').eq('target_id', t.id).eq('source_event_table', 'retain_booster')
+        .order('created_at', { ascending: false }).limit(1).maybeSingle()
+      const due = !lastBooster || (Date.now() - new Date(lastBooster.created_at).getTime()) >= RETAIN_BOOSTER_INTERVAL_DAYS * 86400e3
+      if (!due) continue
+      const { error } = await s.from('recon_reconsolidation_sessions').insert({
+        user_id: user, target_id: t.id, reencode_claim: t.claim_text,
+        source_event_table: 'retain_booster',
+        labile_until: new Date(Date.now() + 2 * 3600e3).toISOString(), status: 'opened',
+      })
+      if (!error) boosted++
+    }
 
     // ---- Pass A: author + advance 'opened' sessions ----
     const { data: opened } = await s.from('recon_reconsolidation_sessions')
@@ -235,7 +269,7 @@ Deno.serve(async (req: Request) => {
       if (st === 'rep_fired' || st === 'rep_kept') reps++
     }
 
-    results.push({ user, authored, decree_issued: issued, micro_reps: reps, skipped, ego_ok: egoOk })
+    results.push({ user, authored, decree_issued: issued, micro_reps: reps, skipped, boosted, ego_ok: egoOk })
   }
 
   return new Response(JSON.stringify({ ok: true, results }), { headers: { ...cors, 'Content-Type': 'application/json' } })

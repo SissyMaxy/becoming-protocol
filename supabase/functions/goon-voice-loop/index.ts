@@ -119,7 +119,38 @@ Deno.serve(async (req: Request) => {
     .maybeSingle()
   const femName = (fem as { feminine_name?: string } | null)?.feminine_name ?? null
 
-  const authored = buildGoonLoopScript({ femName })
+  // DESIGN_RECONDITIONING_ENGINE §4: wire the loop to today's Focus target —
+  // the same "highest-priority active target with a running program" pick
+  // recon-program-orchestrator uses. No target running is a normal state (the
+  // recon engine is opt-in) — falls back to the generic script untouched.
+  let targetId: string | null = null
+  let targetClaim: string | null = null
+  let anchorPhrase: string | null = null
+  const { data: targets } = await supabase
+    .from('reconditioning_targets')
+    .select('id, claim_text')
+    .eq('user_id', userId).eq('status', 'active')
+    .order('priority', { ascending: true }).limit(5)
+  for (const t of (targets ?? []) as Array<{ id: string; claim_text: string }>) {
+    const { data: prog } = await supabase
+      .from('reconditioning_programs')
+      .select('status').eq('target_id', t.id).maybeSingle()
+    if (prog && (prog as { status: string }).status === 'running') {
+      targetId = t.id
+      targetClaim = t.claim_text
+      break
+    }
+  }
+  if (targetId) {
+    const { data: trigger } = await supabase
+      .from('trance_triggers')
+      .select('phrase')
+      .eq('user_id', userId).eq('recon_target_id', targetId).eq('status', 'armed')
+      .order('armed_at', { ascending: false }).limit(1).maybeSingle()
+    anchorPhrase = (trigger as { phrase?: string } | null)?.phrase ?? null
+  }
+
+  const authored = buildGoonLoopScript({ femName, targetClaim, anchorPhrase })
   const script = mommyVoiceCleanup(authored.script)
   const teaser = mommyVoiceCleanup(authored.teaser)
   const craft = scoreCorny(script)
@@ -142,6 +173,7 @@ Deno.serve(async (req: Request) => {
       mommy_script_text: script,
       loop_count: authored.loopCount,
       mix_status: 'pending_mix',
+      recon_target_id: targetId,
     })
     .select('id')
     .single()
@@ -189,5 +221,6 @@ Deno.serve(async (req: Request) => {
     clip_id: clip.id,
     mix_status: 'pending_mix',
     trigger,
+    recon_target_id: targetId,
   })
 })

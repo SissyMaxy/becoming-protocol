@@ -23,15 +23,15 @@ type Sb = any
 const NO_PUNISH = 'No punishment — this one is an invitation, not a demand. Miss it and the pull just builds.'
 
 // Dedup: one active recon-lane decree per user (the single CTA) — covers this
-// orchestrator's own focus decrees, the belief-slider probes (baseline capture
-// + re-measure), and recon-reconsolidation's decrees, so none of the recon
-// surfaces ever stack a second card on top of another. Refresh a stale
-// deadline rather than issuing a duplicate.
+// orchestrator's own focus decrees, the belief-slider + IAT-lite probes
+// (baseline capture + re-measure), and recon-reconsolidation's decrees, so
+// none of the recon surfaces ever stack a second card on top of another.
+// Refresh a stale deadline rather than issuing a duplicate.
 async function issueFocus(s: Sb, user: string, slug: string, edict: string, proof = 'text', hours = 20, triggerSource?: string): Promise<string> {
   const src = triggerSource ?? `recon_focus:${slug}`
   const { data: ex } = await s.from('handler_decrees')
     .select('id, deadline, trigger_source').eq('user_id', user).eq('status', 'active')
-    .or('trigger_source.like.recon_focus:%,trigger_source.like.recon_belief_baseline:%,trigger_source.like.recon_belief_measure:%,trigger_source.like.recon_reconsolidate:%')
+    .or('trigger_source.like.recon_focus:%,trigger_source.like.recon_belief_baseline:%,trigger_source.like.recon_belief_measure:%,trigger_source.like.recon_iat_baseline:%,trigger_source.like.recon_iat_measure:%,trigger_source.like.recon_reconsolidate:%,trigger_source.like.recon_rep:%')
     .limit(1).maybeSingle()
   if (ex) {
     // Already a live recon-lane task — keep exactly one. Refresh deadline if expired.
@@ -53,6 +53,38 @@ async function issueFocus(s: Sb, user: string, slug: string, edict: string, proo
 // `gentle` softens the ask when the target's skip-rate has driven intensity
 // down (§3.4) — lower pressure, never higher; the default/high-intensity copy
 // never gets pushier, since escalating on resistance is the anti-pattern.
+// Probe indicators (§5.2) that need an interactive instrument rather than
+// computed data — recon-measure explicitly skips these. Each maps to a
+// trigger-source prefix that FocusMode/HandlerDecreeCard parse to render the
+// real instrument (slider / IAT-lite tap test) instead of a plain checkbox.
+const PROBE_TRIGGER_PREFIX: Record<string, string> = { belief_slider: 'recon_belief', assoc_latency: 'recon_iat' }
+
+function probeBaselineEdict(kind: string, claim: string): { edict: string; proof: string } {
+  if (kind === 'assoc_latency') {
+    return {
+      edict: `Before Mommy works "${claim}" into you for real, she wants your gut reaction, not your thought-out one. One quick tap test — read the line, tap AGREE or DISAGREE as fast as you honestly can.`,
+      proof: 'assoc_latency',
+    }
+  }
+  return {
+    edict: `Before Mommy works "${claim}" into you for real, she needs to know where you're starting from. Rate how true that already feels — there's no wrong answer, just honest.`,
+    proof: 'belief_slider',
+  }
+}
+
+function probeMeasureEdict(kind: string, claim: string): { edict: string; proof: string } {
+  if (kind === 'assoc_latency') {
+    return {
+      edict: `Nothing to do today but the quick tap test again — read the line, tap fast, don't think it through: "${claim}"`,
+      proof: 'assoc_latency',
+    }
+  }
+  return {
+    edict: `Nothing to do today but let Mommy see you honestly. Rate how true this feels right now: "${claim}"`,
+    proof: 'belief_slider',
+  }
+}
+
 function phaseTask(phase: string, claim: string, repPrompt: string | null, gentle = false): { edict: string; proof: string } {
   switch (phase) {
     case 'induction':
@@ -114,7 +146,7 @@ async function fetchTargetDecreeRate(s: Sb, user: string, targetId: string, slug
   const { data } = await s.from('handler_decrees')
     .select('status').eq('user_id', user).gte('created_at', since)
     .in('status', ['fulfilled', 'missed'])
-    .or(`trigger_source.eq.recon_focus:${slug},trigger_source.like.recon_belief_baseline:${targetId}%,trigger_source.like.recon_belief_measure:${targetId}%`)
+    .or(`trigger_source.eq.recon_focus:${slug},trigger_source.like.recon_belief_baseline:${targetId}%,trigger_source.like.recon_belief_measure:${targetId}%,trigger_source.like.recon_iat_baseline:${targetId}%,trigger_source.like.recon_iat_measure:${targetId}%,trigger_source.like.recon_rep:${slug}:%`)
   const rows = (data ?? []) as { status: string }[]
   const total = rows.length
   const missed = rows.filter(r => r.status === 'missed').length
@@ -164,22 +196,24 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Still nothing startable — a proposed belief_slider target has no path to
-    // a baseline otherwise (recon-measure can't compute a self-report; the only
-    // other instrument lives behind debug mode). Issue the baseline-capture
-    // probe itself so it can ever leave 'proposed'.
+    // Still nothing startable — a proposed target whose indicator needs an
+    // interactive probe (belief_slider / assoc_latency) has no path to a
+    // baseline otherwise (recon-measure can't compute a self-report or a
+    // reaction-time read; the only other instrument lives behind debug mode).
+    // Issue the baseline-capture probe itself so it can ever leave 'proposed'.
     if (!picked) {
       const { count: activeCount } = await s.from('reconditioning_targets')
         .select('id', { count: 'exact', head: true }).eq('user_id', user).eq('status', 'active')
       if ((activeCount ?? 0) < 3) {
         const { data: needsBaseline } = await s.from('reconditioning_targets')
-          .select('id, slug, claim_text')
+          .select('id, slug, claim_text, indicator_kind')
           .eq('user_id', user).eq('status', 'proposed').is('baseline_captured_at', null)
-          .eq('indicator_kind', 'belief_slider')
+          .in('indicator_kind', Object.keys(PROBE_TRIGGER_PREFIX))
           .order('priority', { ascending: true }).limit(1).maybeSingle()
         if (needsBaseline) {
-          const edict = `Before Mommy works "${needsBaseline.claim_text}" into you for real, she needs to know where you're starting from. Rate how true that already feels — there's no wrong answer, just honest.`
-          const status = await issueFocus(s, user, needsBaseline.slug, edict, 'belief_slider', 20, `recon_belief_baseline:${needsBaseline.id}`)
+          const probe = probeBaselineEdict(needsBaseline.indicator_kind, needsBaseline.claim_text)
+          const prefix = PROBE_TRIGGER_PREFIX[needsBaseline.indicator_kind]
+          const status = await issueFocus(s, user, needsBaseline.slug, probe.edict, probe.proof, 20, `${prefix}_baseline:${needsBaseline.id}`)
           results.push({ user, focus_target: needsBaseline.slug, phase: 'baseline_probe', task: status })
           continue
         }
@@ -189,11 +223,13 @@ Deno.serve(async (req: Request) => {
 
     // A due retrieval rep, if the reinforce phase has one.
     let repPrompt: string | null = null
+    let repId: string | null = null
     if (phase === 'reinforce') {
       const { data: rep } = await s.from('recon_rep_schedule')
         .select('id, prompt').eq('target_id', picked.id).lte('next_due_at', new Date().toISOString())
         .order('next_due_at', { ascending: true }).limit(1).maybeSingle()
       repPrompt = rep?.prompt ?? null
+      repId = rep?.id ?? null
     }
 
     // Adaptive intensity (§3.4): read this target's trailing engagement, step
@@ -219,17 +255,20 @@ Deno.serve(async (req: Request) => {
     }
 
     // The 'measure' phase normally just asks a text question that goes nowhere
-    // (recon-measure can't compute belief_slider); for that indicator, issue
-    // the real slider probe instead so the re-measure actually drives the
-    // phase machine (via recon_record_measurement_and_advance).
+    // (recon-measure can't compute belief_slider/assoc_latency); for those
+    // indicators, issue the real probe instead so the re-measure actually
+    // drives the phase machine (via recon_record_measurement_and_advance).
     let task = phaseTask(phase, picked.claim_text, repPrompt, gentle)
     let triggerSource: string | undefined
-    if (phase === 'measure' && picked.indicator_kind === 'belief_slider') {
-      task = {
-        edict: `Nothing to do today but let Mommy see you honestly. Rate how true this feels right now: "${picked.claim_text}"`,
-        proof: 'belief_slider',
-      }
-      triggerSource = `recon_belief_measure:${picked.id}`
+    if (phase === 'measure' && picked.indicator_kind && PROBE_TRIGGER_PREFIX[picked.indicator_kind]) {
+      task = probeMeasureEdict(picked.indicator_kind, picked.claim_text)
+      triggerSource = `${PROBE_TRIGGER_PREFIX[picked.indicator_kind]}_measure:${picked.id}`
+    } else if (phase === 'reinforce' && !gentle && repPrompt && repId) {
+      // This task IS the cued-retrieval card (phaseTask's reinforce+!gentle+
+      // repPrompt branch) — tag it so HandlerDecreeCard grades the answer back
+      // into recon_rep_schedule's SM-2-lite scheduler instead of a plain
+      // checkbox (closes the dead-scheduler gap: mig 668, recon_rep_grade).
+      triggerSource = `recon_rep:${picked.slug}:${repId}`
     }
     const status = await issueFocus(s, user, picked.slug, task.edict, task.proof, 20, triggerSource)
     results.push({ user, focus_target: picked.slug, phase, task: status, intensity, gentle })

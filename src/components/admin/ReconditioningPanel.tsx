@@ -8,7 +8,7 @@
  * Dark monospace "control panel" aesthetic — matches CorruptionDashboard.
  *
  * Reads: reconditioning_targets, reconditioning_programs, recon_measurements,
- *        recon_rep_schedule.
+ *        recon_rep_schedule, recon_commitments, recon_reconsolidation_sessions.
  * Writes (probes only): recon_record_measurement RPC — belief_slider (0-100 slider)
  *        and assoc_latency (IAT-lite two-button reaction-time stub).
  */
@@ -58,6 +58,34 @@ interface RepRow {
   next_due_at: string | null;
 }
 
+interface CommitmentRow {
+  id: string;
+  target_id: string;
+  rung: number;
+  commitment_text: string;
+  handler_commitment_id: string | null;
+  chosen_at: string;
+  fulfilled_at: string | null;
+  status: string;
+}
+
+interface ReconsolidationRow {
+  id: string;
+  target_id: string;
+  labile_until: string | null;
+  micro_rep_done_at: string | null;
+  arousal_paired: boolean;
+  status: string;
+  created_at: string;
+}
+
+const COMMITMENT_STATUS_COLORS: Record<string, string> = {
+  chosen: '#f59e0b',
+  fulfilled: '#22c55e',
+  skipped: '#6b7280',
+  cancelled: '#4b5563',
+};
+
 const STATUS_COLORS: Record<string, string> = {
   proposed: '#6b7280',
   active: '#22c55e',
@@ -98,6 +126,8 @@ export function ReconditioningPanel({ onBack }: ReconditioningPanelProps) {
   const [targets, setTargets] = useState<TargetRow[]>([]);
   const [programs, setPrograms] = useState<ProgramRow[]>([]);
   const [reps, setReps] = useState<RepRow[]>([]);
+  const [commitments, setCommitments] = useState<CommitmentRow[]>([]);
+  const [reconsolidations, setReconsolidations] = useState<ReconsolidationRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -106,7 +136,7 @@ export function ReconditioningPanel({ onBack }: ReconditioningPanelProps) {
     setIsLoading(true);
     setError(null);
     try {
-      const [targetsRes, programsRes, repsRes] = await Promise.all([
+      const [targetsRes, programsRes, repsRes, commitmentsRes, reconsolidationsRes] = await Promise.all([
         supabase
           .from('reconditioning_targets')
           .select(
@@ -122,12 +152,24 @@ export function ReconditioningPanel({ onBack }: ReconditioningPanelProps) {
           .from('recon_rep_schedule')
           .select('target_id, reps, lapses, next_due_at')
           .eq('user_id', user.id),
+        supabase
+          .from('recon_commitments')
+          .select('id, target_id, rung, commitment_text, handler_commitment_id, chosen_at, fulfilled_at, status')
+          .eq('user_id', user.id)
+          .order('rung', { ascending: true }),
+        supabase
+          .from('recon_reconsolidation_sessions')
+          .select('id, target_id, labile_until, micro_rep_done_at, arousal_paired, status, created_at')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false }),
       ]);
 
       if (targetsRes.error) throw targetsRes.error;
       setTargets((targetsRes.data || []) as TargetRow[]);
       setPrograms((programsRes.data || []) as ProgramRow[]);
       setReps((repsRes.data || []) as RepRow[]);
+      setCommitments((commitmentsRes.data || []) as CommitmentRow[]);
+      setReconsolidations((reconsolidationsRes.data || []) as ReconsolidationRow[]);
     } catch (err) {
       console.error('[ReconditioningPanel] Load failed:', err);
       setError(err instanceof Error ? err.message : String(err));
@@ -235,6 +277,21 @@ export function ReconditioningPanel({ onBack }: ReconditioningPanelProps) {
           const noBaseline = t.baseline_captured_at === null;
           const stalledMovement = hasDelta && Math.abs(rawDelta) < 0.01 && (prog?.measures_held ?? 0) >= 2;
           const highSkip = skip !== null && skip.rate >= 0.4;
+          const targetCommitments = commitments
+            .filter((c) => c.target_id === t.id)
+            .sort((a, b) => a.rung - b.rung);
+          const staleCutoffMs = Date.now() - 3600_000;
+          const unfiledCommitment = targetCommitments.some(
+            (c) => c.status === 'chosen' && !c.handler_commitment_id && new Date(c.chosen_at).getTime() < staleCutoffMs,
+          );
+          const targetReconsolidations = reconsolidations.filter((r) => r.target_id === t.id);
+          const closedLabileWindow = targetReconsolidations.some(
+            (r) =>
+              r.status !== 'cancelled' &&
+              !r.micro_rep_done_at &&
+              r.labile_until &&
+              new Date(r.labile_until).getTime() < Date.now(),
+          );
 
           return (
             <div key={t.id} className="border border-green-900 rounded-lg p-3 space-y-2">
@@ -342,12 +399,71 @@ export function ReconditioningPanel({ onBack }: ReconditioningPanelProps) {
               )}
 
               {/* Stall flags */}
-              {(measureOverdue || noBaseline || stalledMovement || highSkip) && (
+              {(measureOverdue || noBaseline || stalledMovement || highSkip || unfiledCommitment || closedLabileWindow) && (
                 <div className="flex flex-wrap gap-1 pt-1">
                   {noBaseline && <Flag label="NO BASELINE" />}
                   {measureOverdue && <Flag label="MEASURE OVERDUE" />}
                   {stalledMovement && <Flag label="STALLED" />}
                   {highSkip && <Flag label="HIGH SKIP" />}
+                  {unfiledCommitment && <Flag label="COMMITMENT UNFILED" />}
+                  {closedLabileWindow && <Flag label="LABILE WINDOW CLOSED" />}
+                </div>
+              )}
+
+              {/* Commitment ladder — foot-in-the-door rungs 1..5 (§2.6) */}
+              {targetCommitments.length > 0 && (
+                <div className="space-y-1 pt-1 border-t border-green-950">
+                  <p className="text-[9px] text-green-800 uppercase tracking-wider">Commitment ladder</p>
+                  <div className="flex flex-wrap gap-1">
+                    {targetCommitments.map((c) => {
+                      const color = COMMITMENT_STATUS_COLORS[c.status] || '#6b7280';
+                      return (
+                        <span
+                          key={c.id}
+                          title={`rung ${c.rung}: ${c.commitment_text}`}
+                          className="text-[9px] px-1.5 py-0.5 rounded font-bold"
+                          style={{ backgroundColor: `${color}20`, color }}
+                        >
+                          R{c.rung} {c.status}
+                          {c.status === 'chosen' && !c.handler_commitment_id ? ' (unfiled)' : ''}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Reconsolidation sessions — recall → mismatch → re-encode (§2.1) */}
+              {targetReconsolidations.length > 0 && (
+                <div className="space-y-1 pt-1 border-t border-green-950">
+                  <p className="text-[9px] text-green-800 uppercase tracking-wider">
+                    Reconsolidation sessions ({targetReconsolidations.length})
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {targetReconsolidations.slice(0, 8).map((r) => {
+                      const windowClosed =
+                        r.status !== 'cancelled' && !r.micro_rep_done_at && r.labile_until && new Date(r.labile_until).getTime() < Date.now();
+                      const color = windowClosed
+                        ? '#ef4444'
+                        : r.status === 'micro_rep_done'
+                          ? '#22c55e'
+                          : r.status === 'cancelled'
+                            ? '#4b5563'
+                            : '#3b82f6';
+                      return (
+                        <span
+                          key={r.id}
+                          title={new Date(r.created_at).toLocaleString()}
+                          className="text-[9px] px-1.5 py-0.5 rounded font-bold"
+                          style={{ backgroundColor: `${color}20`, color }}
+                        >
+                          {r.status}
+                          {r.arousal_paired ? ' ⚡' : ''}
+                          {windowClosed ? ' (window closed)' : ''}
+                        </span>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 

@@ -152,6 +152,16 @@ const JOBS: CronJob[] = [
     fn: 'recon-commitment-ladder',
     body: `jsonb_build_object('trigger','pg_cron')`,
   },
+  {
+    // self_ref_drift scorer (mig 669): scores unscored corpus samples into
+    // self_reference_analysis so `the_man_is_the_costume` (mig 648, the only
+    // live self_ref_drift target) can ever leave 'proposed'. Gated + only
+    // spends calls when a live self_ref_drift target exists. 06:00 UTC.
+    name: 'recon-self-ref-scorer-daily',
+    schedule: '0 6 * * *',
+    fn: 'recon-self-ref-scorer',
+    body: `jsonb_build_object('trigger','pg_cron')`,
+  },
 ]
 
 function jobSql(j: CronJob, key: string): string {
