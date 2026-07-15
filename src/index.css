@@ -1,3 +1,5 @@
+@import './styles/tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -15,15 +17,15 @@ html {
    Bambi mode re-lights its own tree via .bambi-mode; nothing else may. */
 body {
   margin: 0;
-  color: #f2e9e6;
+  color: var(--protocol-text);
   min-height: 100dvh;
   /* Velvet boudoir — not flat near-black. A warm plum floor with a low rose
      glow bleeding up from the bottom, like candlelight. This is the signature. */
-  background-color: #120b10;
+  background-color: var(--protocol-bg);
   background-image:
-    radial-gradient(120% 80% at 50% 108%, rgba(201, 85, 127, 0.16) 0%, rgba(201, 85, 127, 0) 55%),
+    radial-gradient(120% 80% at 50% 108%, rgb(var(--protocol-accent-rgb) / 0.16) 0%, rgb(var(--protocol-accent-rgb) / 0) 55%),
     radial-gradient(90% 60% at 15% -10%, rgba(120, 58, 87, 0.18) 0%, rgba(120, 58, 87, 0) 50%),
-    linear-gradient(180deg, #160c13 0%, #120b10 45%, #0f0a0e 100%);
+    linear-gradient(180deg, var(--protocol-bg-warm) 0%, var(--protocol-bg) 45%, var(--protocol-bg-deep) 100%);
   background-attachment: fixed;
 }
 
@@ -44,16 +46,16 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #1a1118;
+  background: var(--protocol-surface);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #3b2635;
+  background: var(--protocol-border);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #c9557f;
+  background: var(--protocol-accent);
 }
 
 /* Animations */
@@ -103,12 +105,13 @@ body {
   }
 }
 
+/* Rose glow — was the pre-Velvet copper rgba(196,132,122); Velvet glows rose. */
 @keyframes glow-pulse {
   0%, 100% {
-    box-shadow: 0 0 20px rgba(196, 132, 122, 0.3);
+    box-shadow: 0 0 20px rgb(var(--protocol-accent-rgb) / 0.3);
   }
   50% {
-    box-shadow: 0 0 40px rgba(196, 132, 122, 0.5);
+    box-shadow: 0 0 40px rgb(var(--protocol-accent-rgb) / 0.5);
   }
 }
 
@@ -192,13 +195,13 @@ body {
 
   .btn-primary {
     @apply text-white font-medium py-2 px-4 rounded-xl transition-all;
-    background: linear-gradient(135deg, #d76a92, #c9557f);
-    box-shadow: 0 4px 24px rgba(201, 85, 127, 0.25);
+    background: linear-gradient(135deg, var(--protocol-accent-hover), var(--protocol-accent));
+    box-shadow: var(--shadow-velvet);
   }
 
   .btn-primary:hover {
-    background: linear-gradient(135deg, #e388a8, #d76a92);
-    box-shadow: 0 0 32px rgba(201, 85, 127, 0.35);
+    background: linear-gradient(135deg, var(--protocol-accent-bright), var(--protocol-accent-hover));
+    box-shadow: var(--shadow-velvet-glow);
   }
 
   .btn-secondary {

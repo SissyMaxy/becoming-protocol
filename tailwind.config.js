@@ -8,22 +8,25 @@ export default {
     extend: {
       colors: {
         // Velvet — the one design language (2026-07-03 overhaul). Deep warm
-        // plum-black boudoir + rose accent + ivory text. Every surface in the
-        // app reads from these tokens; bambi mode is the only sanctioned
-        // exception (a deliberate altered-state skin, not a second system).
+        // plum-black boudoir + rose accent + ivory text. Values live in
+        // src/styles/tokens.css (:root custom properties) — the single source
+        // of truth; Tailwind reads the -rgb triplet form so alpha modifiers
+        // (bg-protocol-accent/20) keep working. Bambi mode is the only
+        // sanctioned exception (a deliberate altered-state skin).
         'protocol': {
-          'bg': '#120b10',
-          'surface': '#1a1118',
-          'surface-light': '#241722',
-          'border': '#3b2635',
-          'text': '#f2e9e6',
-          'text-muted': '#a8929c',
-          'text-warm': '#f7efe9',
-          'accent': '#c9557f',
-          'accent-soft': '#edaec5',
-          'success': '#6fbf94',
-          'warning': '#e0b36a',
-          'danger': '#e06a6a',
+          'bg': 'rgb(var(--protocol-bg-rgb) / <alpha-value>)',
+          'bg-deep': 'rgb(var(--protocol-bg-deep-rgb) / <alpha-value>)',
+          'surface': 'rgb(var(--protocol-surface-rgb) / <alpha-value>)',
+          'surface-light': 'rgb(var(--protocol-surface-light-rgb) / <alpha-value>)',
+          'border': 'rgb(var(--protocol-border-rgb) / <alpha-value>)',
+          'text': 'rgb(var(--protocol-text-rgb) / <alpha-value>)',
+          'text-muted': 'rgb(var(--protocol-text-muted-rgb) / <alpha-value>)',
+          'text-warm': 'rgb(var(--protocol-text-warm-rgb) / <alpha-value>)',
+          'accent': 'rgb(var(--protocol-accent-rgb) / <alpha-value>)',
+          'accent-soft': 'rgb(var(--protocol-accent-soft-rgb) / <alpha-value>)',
+          'success': 'rgb(var(--protocol-success-rgb) / <alpha-value>)',
+          'warning': 'rgb(var(--protocol-warning-rgb) / <alpha-value>)',
+          'danger': 'rgb(var(--protocol-danger-rgb) / <alpha-value>)',
         },
         // Bambi Mode colors — warm blush / rose gold
         'bambi': {
@@ -72,9 +75,10 @@ export default {
         'bambi-glow': '0 0 30px rgba(196, 132, 122, 0.4)',
         'bambi-lg': '0 10px 40px rgba(196, 132, 122, 0.35)',
         // Velvet glows — rose, soft, used for the single CTA + her presence.
-        'velvet': '0 4px 24px rgba(201, 85, 127, 0.25)',
-        'velvet-glow': '0 0 32px rgba(201, 85, 127, 0.35)',
-        'velvet-lg': '0 12px 48px rgba(201, 85, 127, 0.3)',
+        // Values defined in src/styles/tokens.css.
+        'velvet': 'var(--shadow-velvet)',
+        'velvet-glow': 'var(--shadow-velvet-glow)',
+        'velvet-lg': 'var(--shadow-velvet-lg)',
       },
       animation: {
         'sparkle': 'sparkle 1.5s ease-in-out infinite',

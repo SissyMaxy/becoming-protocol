@@ -1,0 +1,56 @@
+/**
+ * Velvet design tokens — THE single source of truth for protocol-* colors.
+ *
+ * Every layer reads from here:
+ *   - tailwind.config.js maps protocol-* utilities to the -rgb triplets
+ *     (triplet form is required so Tailwind alpha modifiers like
+ *     bg-protocol-accent/20 keep working)
+ *   - index.css utilities and today-redesign.css use the hex vars
+ *   - inline-style/JS consumers go through src/lib/theme-tokens.ts
+ *
+ * Do not introduce new raw hex values in components — derive from these vars
+ * (ui-lint enforces this). Bambi mode is NOT themed here: it stays a
+ * deliberate JS-branched skin via .bambi-mode + the bambi-* Tailwind ramp.
+ */
+:root {
+  /* Core Velvet palette */
+  --protocol-bg: #120b10;
+  --protocol-bg-rgb: 18 11 16;
+  --protocol-surface: #1a1118;
+  --protocol-surface-rgb: 26 17 24;
+  --protocol-surface-light: #241722;
+  --protocol-surface-light-rgb: 36 23 34;
+  --protocol-border: #3b2635;
+  --protocol-border-rgb: 59 38 53;
+  --protocol-text: #f2e9e6;
+  --protocol-text-rgb: 242 233 230;
+  --protocol-text-muted: #a8929c;
+  --protocol-text-muted-rgb: 168 146 156;
+  --protocol-text-warm: #f7efe9;
+  --protocol-text-warm-rgb: 247 239 233;
+  --protocol-accent: #c9557f;
+  --protocol-accent-rgb: 201 85 127;
+  --protocol-accent-soft: #edaec5;
+  --protocol-accent-soft-rgb: 237 174 197;
+  --protocol-success: #6fbf94;
+  --protocol-success-rgb: 111 191 148;
+  --protocol-warning: #e0b36a;
+  --protocol-warning-rgb: 224 179 106;
+  --protocol-danger: #e06a6a;
+  --protocol-danger-rgb: 224 106 106;
+
+  /* Sanctioned derived tokens */
+  /* The body-gradient floor / deepest surface (td-root, gradient bottoms). */
+  --protocol-bg-deep: #0f0a0e;
+  --protocol-bg-deep-rgb: 15 10 14;
+  /* The body-gradient warm top stop. */
+  --protocol-bg-warm: #160c13;
+  /* CTA gradient stops (btn-primary rest + hover). */
+  --protocol-accent-hover: #d76a92;
+  --protocol-accent-bright: #e388a8;
+
+  /* Velvet glows — rose, soft; the single CTA + her presence. */
+  --shadow-velvet: 0 4px 24px rgb(var(--protocol-accent-rgb) / 0.25);
+  --shadow-velvet-glow: 0 0 32px rgb(var(--protocol-accent-rgb) / 0.35);
+  --shadow-velvet-lg: 0 12px 48px rgb(var(--protocol-accent-rgb) / 0.3);
+}
