@@ -53,4 +53,10 @@
   --shadow-velvet: 0 4px 24px rgb(var(--protocol-accent-rgb) / 0.25);
   --shadow-velvet-glow: 0 0 32px rgb(var(--protocol-accent-rgb) / 0.35);
   --shadow-velvet-lg: 0 12px 48px rgb(var(--protocol-accent-rgb) / 0.3);
+
+  /* The three faces. Quicksand is the base sans (html root); Inter is the
+     Handler's voice; Playfair is Mommy's serif (wordmarks, hero lines). */
+  --font-sans: 'Quicksand', 'Nunito', 'Poppins', sans-serif;
+  --font-handler: 'Inter', 'Quicksand', system-ui, sans-serif;
+  --font-display: 'Playfair Display', Georgia, serif;
 }
