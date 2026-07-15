@@ -4022,7 +4022,6 @@
     "src/components/arousal-planner/CheckInModal.tsx::className=\"absolute inset-0 bg-black/60 backdrop-blur-sm\"",
     "src/components/arousal/ArousalCheckInModal.tsx::<div className=\"fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50\">",
     "src/components/arousal/ConditioningSession.tsx::className={`fixed inset-0 z-50 flex items-center justify-center bg-black/80 ${className}`}",
-    "src/components/arousal/OrgasmLogModal.tsx::<div className=\"fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50\">",
     "src/components/arousal/SeedTracker.tsx::<div className=\"fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50\">",
     "src/components/autonomous/ContentSubmissionModal.tsx::className=\"absolute inset-0 bg-black/70 backdrop-blur-sm\"",
     "src/components/autonomous/ContentSubmissionModal.tsx::className=\"absolute top-1 right-1 p-1 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity\"",

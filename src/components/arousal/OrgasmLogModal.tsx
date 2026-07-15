@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { X, AlertTriangle, Check } from 'lucide-react';
+import { AlertTriangle, Check } from 'lucide-react';
 import { useBambiMode } from '../../context/BambiModeContext';
+import { Modal } from '../ui/themed';
 import type {
   ReleaseType,
   ReleaseContext,
@@ -95,12 +96,8 @@ export function OrgasmLogModal({
   // Confirmation view
   if (showConfirmation) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-        <div
-          className={`w-full max-w-sm rounded-2xl p-6 ${
-            isBambiMode ? 'bg-white' : 'bg-protocol-bg'
-          }`}
-        >
+      <Modal open onClose={() => setShowConfirmation(false)} maxWidth="max-w-sm">
+        <div>
           <div className="text-center mb-6">
             <div
               className={`w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center ${
@@ -154,43 +151,18 @@ export function OrgasmLogModal({
             </button>
           </div>
         </div>
-      </div>
+      </Modal>
     );
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-      <div
-        className={`w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl ${
-          isBambiMode ? 'bg-white' : 'bg-protocol-bg'
-        }`}
-      >
-        {/* Header */}
-        <div
-          className={`sticky top-0 z-10 flex items-center justify-between p-4 border-b ${
-            isBambiMode ? 'bg-white border-pink-200' : 'bg-protocol-bg border-protocol-border'
-          }`}
-        >
-          <h2
-            className={`text-lg font-semibold ${
-              isBambiMode ? 'text-pink-700' : 'text-protocol-text'
-            }`}
-          >
-            Log Release
-          </h2>
-          <button
-            onClick={onClose}
-            className={`p-2 rounded-full ${
-              isBambiMode
-                ? 'hover:bg-pink-100 text-pink-400'
-                : 'hover:bg-protocol-surface text-protocol-text-muted'
-            }`}
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="p-4 space-y-6">
+    <Modal
+      open
+      onClose={onClose}
+      title="Log Release"
+      maxWidth="max-w-md"
+    >
+      <div className="space-y-6">
           {/* Release Type Selection */}
           <div>
             <label
@@ -506,7 +478,6 @@ export function OrgasmLogModal({
                 : 'Log Release'}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
