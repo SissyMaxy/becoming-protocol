@@ -44,6 +44,9 @@ interface BedtimeLockProps {
   prefersVoice?: boolean;
   chastityEnabled?: boolean;
   onClose: () => void;
+  /** Fired once the ritual actually completes (never on skip) — the
+   * sleep-cue TMR player (§2.4) hangs off this, not off onClose. */
+  onCompleted?: () => void;
 }
 
 const PALETTE = {
@@ -73,6 +76,7 @@ export function BedtimeLock({
   prefersVoice,
   chastityEnabled,
   onClose,
+  onCompleted,
 }: BedtimeLockProps) {
   // Prune chastity step if user doesn't have chastity tracking on.
   const activeSteps = useMemo(
@@ -126,6 +130,7 @@ export function BedtimeLock({
         await completeRitual(supabase, row.id, goodnight?.id ?? null);
         setGoodnightMessage(goodnight?.message ?? null);
         setDone(true);
+        onCompleted?.();
       } else {
         setStepIdx(stepIdx + 1);
         setPostureSecondsLeft(POSTURE_HOLD_SECONDS);

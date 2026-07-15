@@ -5,8 +5,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  VIEW_REGISTRY, VIEW_ALIASES, resolveViewId, isSanitizedAllowed,
-  HASH_TO_VIEW, LEGACY_EVENT_TO_VIEW, type ViewId,
+  VIEW_REGISTRY, VIEW_ALIASES, resolveViewId,
+  HASH_TO_VIEW, LEGACY_EVENT_TO_VIEW,
 } from '../../navigation/registry';
 
 /**
@@ -41,7 +41,6 @@ const PRE_REFACTOR_DEEP_LINKS: Record<string, string> = {
   '/dashboard': 'dashboard',
   '/journal': 'journal',
   '/settings': 'settings',
-  '/baseline-intake': 'baseline-intake',
   '/identity': 'identity',
   '/community/queue': 'community-queue',
   '/community/list': 'community-list',
@@ -111,14 +110,6 @@ describe('legacy navigation events', () => {
   });
 });
 
-describe('sanitized/stealth whitelist', () => {
-  it('is exactly {menu, body, baseline-intake, settings, help}', () => {
-    const allowed = (Object.keys(VIEW_REGISTRY) as ViewId[]).filter(id => isSanitizedAllowed(id));
-    expect(allowed.sort()).toEqual(['baseline-intake', 'body', 'help', 'settings']);
-    expect(isSanitizedAllowed(null)).toBe(true);
-  });
-});
-
 describe('menu integrity', () => {
   it('every menu entry has label, description, icon, and a known heading', () => {
     const HEADINGS = ['Your becoming', 'You', 'Practice', 'Record', 'Settings', 'Archive'];
@@ -139,11 +130,4 @@ describe('menu integrity', () => {
     }
   });
 
-  it('sanitized menu covers exactly the sanitized-allowed views', () => {
-    const withSanitizedMenu = Object.entries(VIEW_REGISTRY)
-      .filter(([, def]) => def.sanitizedMenu)
-      .map(([id]) => id)
-      .sort();
-    expect(withSanitizedMenu).toEqual(['baseline-intake', 'body', 'help', 'settings']);
-  });
 });

@@ -8,7 +8,8 @@
  * Dark monospace "control panel" aesthetic — matches CorruptionDashboard.
  *
  * Reads: turnout_position(uid) RPC, turnout_rung_completions, turnout_events.
- * Writes: turnout_state.retired_at (Retire), turnout_state.paused_until (Pause toggle).
+ * Writes: turnout_state.retired_at (Retire), turnout_state.paused_until (Pause toggle),
+ * turnout_purge_escape_cost(uid) RPC (Purge, retired-only).
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -142,6 +143,24 @@ export function TurnoutPanel({ onBack }: TurnoutPanelProps) {
     }
   }, [user?.id, load]);
 
+  const handlePurgeEscapeCost = useCallback(async () => {
+    if (!user?.id) return;
+    if (!window.confirm('Purge the turn-out escape-cost record? Deletes the turnout_rung anchors backing the weight total. The rung-completion ledger (facts) is kept.')) return;
+    setBusy(true);
+    try {
+      const { data, error } = await supabase.rpc('turnout_purge_escape_cost', { p_user: user.id });
+      if (error) throw error;
+      const purged = (data as { purged_count?: number } | null)?.purged_count ?? 0;
+      window.alert(`Purged ${purged} escape-cost anchor${purged === 1 ? '' : 's'}.`);
+      await load();
+    } catch (err) {
+      console.error('[TurnoutPanel] Purge escape cost failed:', err);
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [user?.id, load]);
+
   const handlePauseToggle = useCallback(async () => {
     if (!user?.id) return;
     const currentlyPaused = pos?.paused_until && new Date(pos.paused_until).getTime() > Date.now();
@@ -267,6 +286,16 @@ export function TurnoutPanel({ onBack }: TurnoutPanelProps) {
               <Lock className="w-4 h-4" /> {isRetired ? 'RETIRED' : 'RETIRE'}
             </button>
           </div>
+
+          {isRetired && (
+            <button
+              onClick={handlePurgeEscapeCost}
+              disabled={busy}
+              className="w-full py-2 rounded bg-purple-900/40 text-purple-400 text-xs font-bold hover:bg-purple-900/70 transition-colors disabled:opacity-40 flex items-center justify-center gap-1"
+            >
+              <Anchor className="w-4 h-4" /> PURGE ESCAPE-COST RECORD
+            </button>
+          )}
 
           {/* Completions / irreversible facts */}
           <div className="space-y-2">

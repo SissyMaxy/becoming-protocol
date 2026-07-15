@@ -97,12 +97,6 @@ export interface DecreeOrderRow {
   deadline: string;
   proof_type: string;
   trigger_source: string | null;
-  recon_target_id?: string | null;
-  mommy_order_arc?: string | null;
-  mommy_order_phase?: string | null;
-  mommy_order_consequence_mode?: string | null;
-  mommy_order_recovery_boundary?: string | null;
-  mommy_order_reason?: string | null;
 }
 
 export interface RegimenRow {
@@ -122,12 +116,6 @@ export interface AudioOfferRow {
   id: string; kind: AudioSessionKind; intensity_tier: AudioSessionIntensity;
   teaser: string; expires_at: string;
   recon_target_id?: string | null;
-  mommy_order_arc?: string | null;
-  mommy_order_phase?: string | null;
-  mommy_order_proof_kind?: string | null;
-  mommy_order_consequence_mode?: string | null;
-  mommy_order_recovery_boundary?: string | null;
-  mommy_order_reason?: string | null;
 }
 
 export interface SelfEchoRow {
@@ -231,12 +219,6 @@ function decreeMeta(d: DecreeOrderRow): Record<string, unknown> {
   return {
     proof_type: d.proof_type,
     trigger_source: d.trigger_source,
-    recon_target_id: d.recon_target_id ?? undefined,
-    mommy_order_reason: d.mommy_order_reason ?? undefined,
-    mommy_order_arc: d.mommy_order_arc ?? undefined,
-    mommy_order_phase: d.mommy_order_phase ?? undefined,
-    mommy_order_consequence_mode: d.mommy_order_consequence_mode ?? undefined,
-    mommy_order_recovery_boundary: d.mommy_order_recovery_boundary ?? undefined,
   };
 }
 
@@ -395,13 +377,6 @@ export function chooseFocusTask(inputs: FocusInputs, now: number): FocusTask {
         intensity: o.intensity_tier,
         selfEcho,
         recon_target_id: o.recon_target_id ?? undefined,
-        mommy_order_reason: o.mommy_order_reason ?? undefined,
-        mommy_order_arc: o.mommy_order_arc ?? undefined,
-        mommy_order_phase: o.mommy_order_phase ?? undefined,
-        proof_type: o.mommy_order_proof_kind ?? undefined,
-        mommy_order_proof_kind: o.mommy_order_proof_kind ?? undefined,
-        mommy_order_consequence_mode: o.mommy_order_consequence_mode ?? undefined,
-        mommy_order_recovery_boundary: o.mommy_order_recovery_boundary ?? undefined,
       } satisfies AudioSessionMeta & Record<string, unknown>,
     };
   }

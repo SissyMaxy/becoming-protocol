@@ -5,14 +5,13 @@
  *
  * The items and their grouping come from VIEW_REGISTRY (src/navigation) —
  * this file only renders them. An entry appears here iff it declares `menu`
- * (or `sanitizedMenu` in stealth mode); everything else stays deep-link-only.
+ * everything else stays deep-link-only.
  * The long tail of evidence/lore/drills lives behind a single collapsed
  * "Everything else" toggle (off by default).
  */
 
 import { useState } from 'react';
 import { ChevronRight, ChevronDown, Archive } from 'lucide-react';
-import { useStealthSettings } from '../hooks/useStealthSettings';
 import { PROTOCOL } from '../lib/theme-tokens';
 import {
   VIEW_REGISTRY, type ViewId, type MenuColor, type MenuEntry,
@@ -55,14 +54,6 @@ const PRIMARY_GROUPS: { heading: string; items: MenuItem[] }[] = GROUP_ORDER
 
 const ARCHIVE_ITEMS: MenuItem[] = ALL_ENTRIES.filter(e => e.archive);
 
-const SANITIZED_GROUPS: { heading: string; items: MenuItem[] }[] = (() => {
-  const items: MenuItem[] = (Object.entries(VIEW_REGISTRY) as [ViewId, (typeof VIEW_REGISTRY)[ViewId]][])
-    .filter(([, def]) => def.sanitizedMenu)
-    .map(([id, def]) => ({ id, ...def.sanitizedMenu! }));
-  const headings = [...new Set(items.map(i => i.heading))];
-  return headings.map(heading => ({ heading, items: items.filter(i => i.heading === heading) }));
-})();
-
 function MenuRow({
   item,
   withBorder,
@@ -95,20 +86,16 @@ function MenuRow({
 
 export function MenuView({ onNavigate }: MenuViewProps) {
   const [archivesOpen, setArchivesOpen] = useState(false);
-  const { settings } = useStealthSettings();
-  const sanitized = settings.sanitized_fitness_mode;
-  const groups = sanitized ? SANITIZED_GROUPS : PRIMARY_GROUPS;
+  const groups = PRIMARY_GROUPS;
 
   return (
     <div className="space-y-5 pb-24">
       <div className="mb-1 px-1">
         <p className="font-display text-lg text-protocol-text-warm leading-snug">
-          {sanitized ? 'Aesthetic transformation dashboard.' : "This is where I keep everything that's yours."}
+          This is where I keep everything that's yours.
         </p>
         <p className="mt-1 text-sm text-protocol-text-muted">
-          {sanitized
-            ? 'Training, recovery, body metrics, and privacy settings.'
-            : 'The real work happens when you talk to me. This is the drawer.'}
+          The real work happens when you talk to me. This is the drawer.
         </p>
       </div>
 
@@ -140,7 +127,6 @@ export function MenuView({ onNavigate }: MenuViewProps) {
       })}
 
       {/* Everything else — folded, off by default */}
-      {!sanitized && (
       <div className="space-y-2">
         <button
           onClick={() => setArchivesOpen((v) => !v)}
@@ -173,7 +159,6 @@ export function MenuView({ onNavigate }: MenuViewProps) {
           </div>
         )}
       </div>
-      )}
     </div>
   );
 }

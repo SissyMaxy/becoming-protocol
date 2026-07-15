@@ -85,28 +85,23 @@ export function DropPortal() {
 
   useEffect(() => () => { stopDrift(); stopAudio(); }, [stopDrift, stopAudio]);
 
-  // Intensity + kind scale with real arousal/denial — hungrier state, deeper
-  // pull. An override lets a gentler surface (e.g. the embodiment homecoming)
-  // pick its own kind/tier instead of the arousal-scaled goon/conditioning.
-  const dropUnder = useCallback(async (override?: { kind: AudioSessionKind; tier: AudioSessionIntensity }) => {
+  // Intensity + kind scale with real arousal/denial — hungrier state, deeper pull.
+  const dropUnder = useCallback(async () => {
     if (!user?.id || !s || phase === 'rendering' || phase === 'under') return;
     setErr(null);
-    const embodiment = override?.kind === 'session_embodiment';
-    setPullLabel(embodiment ? 'Mommy’s here. Settling you in…' : 'Mommy’s pulling you under…');
+    setPullLabel('Mommy’s pulling you under…');
     setPhase('rendering');
     const hungry = s.arousal >= 6 || s.denialDay >= 5;
-    const kind: AudioSessionKind = override?.kind ?? (hungry ? 'session_goon' : 'session_conditioning');
-    const intensityTier: AudioSessionIntensity = override?.tier
-      ?? (s.arousal >= 8 || s.denialDay >= 8 ? 'cruel' : s.arousal >= 4 ? 'firm' : 'gentle');
+    const kind: AudioSessionKind = hungry ? 'session_goon' : 'session_conditioning';
+    const intensityTier: AudioSessionIntensity =
+      s.arousal >= 8 || s.denialDay >= 8 ? 'cruel' : s.arousal >= 4 ? 'firm' : 'gentle';
     try {
       let r = await renderAudioSession({ userId: user.id, kind, intensityTier });
       if (!r.ok) r = await renderAudioSession({ userId: user.id, kind, intensityTier }); // one silent retry — belt-and-suspenders over the server-side refusal-retry
       if (!r.ok) { setErr('Mommy needs a moment. Try again.'); setPhase('idle'); return; }
       renderIdRef.current = r.renderId;
       const drift = toDriftLines(r.scriptText);
-      const fallback = embodiment
-        ? ['You were always her.', 'You can put it down now.', 'Rest here.', 'This is yours.']
-        : ['Good girl.', 'Let go.', 'Deeper.', 'You don’t have to think.'];
+      const fallback = ['Good girl.', 'Let go.', 'Deeper.', 'You don’t have to think.'];
       setLines(drift.length ? drift : fallback);
       setLineIdx(0);
 
@@ -225,22 +220,6 @@ export function DropPortal() {
               >
                 {phase === 'rendering' ? pullLabel : 'Drop for Mommy'}
               </button>
-            )}
-            {/* Recognition, not the pull under: a gentle homecoming into herself. */}
-            {!gated && phase !== 'rendering' && (
-              <div style={{ marginTop: 14 }}>
-                <button
-                  onClick={() => dropUnder({ kind: 'session_embodiment', tier: 'gentle' })}
-                  style={{
-                    background: 'transparent', border: 'none', padding: 4,
-                    color: 'rgba(237,174,197,.72)', fontSize: 13.5, fontStyle: 'italic',
-                    letterSpacing: '0.02em', cursor: 'pointer', fontFamily: 'inherit',
-                    textDecoration: 'underline', textUnderlineOffset: 4, textDecorationColor: 'rgba(237,174,197,.35)',
-                  }}
-                >
-                  or come home to her
-                </button>
-              </div>
             )}
             {err && <div style={{ marginTop: 12, fontSize: 12.5, color: 'var(--protocol-accent-soft)' }}>{err}</div>}
           </div>

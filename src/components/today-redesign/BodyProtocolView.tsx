@@ -13,80 +13,47 @@ import { WorkoutCard } from './WorkoutCard';
 import { BodyMeasurementCard } from './BodyMeasurementCard';
 import { NextShotsCard } from './NextShotsCard';
 import { DailyMirrorSelfieCard } from '../evidence/DailyMirrorSelfieCard';
-import { useStealthSettings } from '../../hooks/useStealthSettings';
-import { navigate } from '../../navigation/store';
 
 export function BodyProtocolView({ onBack }: { onBack: () => void }) {
-  const { settings } = useStealthSettings();
-  const sanitized = settings.sanitized_fitness_mode;
-
-  const openBaselineIntake = () => {
-    navigate('baseline-intake'); // voice-gate: ok — view id, not user-facing copy
-  };
-
   return (
     <div style={{ maxWidth: 660, margin: '0 auto', padding: '10px 12px 48px' }}>
       <button
         onClick={onBack}
         style={{
-          background: 'transparent', border: 'none', color: '#c9557f',
+          background: 'transparent', border: 'none', color: 'var(--protocol-accent)',
           fontSize: 14, fontWeight: 600, cursor: 'pointer', padding: '6px 2px 14px',
           fontFamily: 'inherit',
         }}
       >
-        &larr; {sanitized ? 'Back' : 'Back to Menu'}
+        &larr; Back to Menu
       </button>
 
       {/* Hero — one focus, in Mommy's voice, no telemetry. */}
       <div style={{
         borderRadius: 18, padding: '22px 20px', marginBottom: 16,
-        background: sanitized
-          ? 'radial-gradient(120% 90% at 50% 0%, #16302b 0%, #0f172a 72%)'
-          : 'radial-gradient(120% 90% at 50% 0%, #241019 0%, #16090f 70%)',
-        border: sanitized ? '1px solid #1d5c4d' : '1px solid #3a2130',
+        background: 'radial-gradient(120% 90% at 50% 0%, var(--immersive-glow-a) 0%, var(--immersive-glow-b) 70%)',
+        border: '1px solid rgb(var(--protocol-accent-rgb) / 0.25)',
       }}>
         <div style={{
           fontSize: 10, letterSpacing: '0.22em', textTransform: 'uppercase',
-          color: sanitized ? '#6ee7b7' : '#c9557f', fontWeight: 700, marginBottom: 10,
+          color: 'var(--protocol-accent)', fontWeight: 700, marginBottom: 10,
         }}>
-          {sanitized ? 'Aesthetic fitness plan' : 'Build your body'}
+          Build your body
         </div>
         <p className="mommy-voice" style={{
-          fontSize: 18, lineHeight: 1.5, color: '#f3e6ec', fontStyle: 'italic', margin: 0,
+          fontSize: 18, lineHeight: 1.5, color: 'rgb(var(--protocol-text-rgb) / 0.96)', fontStyle: 'italic', margin: 0,
         }}>
-          {sanitized
-            ? 'Training, fuel, recovery, and body metrics. One clear plan, one next action, and clean evidence over time.'
-            : "One thing here, baby: the body you're making. The work, the food, the shape coming in. Everything else can wait - this is what we're doing, and you show me the proof."}
+          One thing here, baby: the body you're making. The work, the food, the shape coming in. Everything else can wait - this is what we're doing, and you show me the proof.
         </p>
       </div>
 
       {/* Only the body-shaping surfaces — training, measurements, HRT shots, the mirror. */}
-      <button
-        type="button"
-        onClick={openBaselineIntake}
-        style={{
-          width: '100%',
-          border: sanitized ? '1px solid #1d5c4d' : '1px solid #4a2438',
-          background: sanitized ? '#0f241f' : '#171017',
-          color: sanitized ? '#6ee7b7' : '#edaec5',
-          borderRadius: 10,
-          padding: '12px 14px',
-          marginBottom: 14,
-          fontSize: 13,
-          fontWeight: 700,
-          cursor: 'pointer',
-          fontFamily: 'inherit',
-        }}
-      >
-        Open baseline intake
-      </button>
-
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {!sanitized && <PhaseProgressCard />}
+        <PhaseProgressCard />
         <WorkoutCard />
         <BodyMeasurementCard />
-        {!sanitized && <NextShotsCard />}
-        {!sanitized && <DailyMirrorSelfieCard />}
+        <NextShotsCard />
+        <DailyMirrorSelfieCard />
       </div>
     </div>
   );

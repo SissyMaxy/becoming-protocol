@@ -3,11 +3,10 @@
  * Full-screen video with flashing text overlay - used by all session types
  */
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Play, Pause, Volume2, VolumeX, SkipForward, MessageSquare, MessageSquareOff } from 'lucide-react';
 import { useLovense } from '../../hooks/useLovense';
 import { useSessionBiometrics } from '../../hooks/useSessionBiometrics';
-import { buildSessionPayloadDeck, type MommyOrder } from '../../lib/mommy-orders';
 
 export type SessionType = 'edge' | 'goon' | 'conditioning' | 'freestyle' | 'denial';
 
@@ -15,8 +14,6 @@ interface UnifiedSessionProps {
   sessionType: SessionType;
   onClose: () => void;
   onComplete?: (stats: SessionStats) => void;
-  mommyOrder?: MommyOrder | null;
-  targetClaim?: string | null;
 }
 
 export interface SessionStats {
@@ -86,8 +83,6 @@ export function UnifiedSessionView({
   sessionType,
   onClose,
   onComplete,
-  mommyOrder = null,
-  targetClaim = null,
 }: UnifiedSessionProps) {
   // Lovense integration
   const lovense = useLovense();
@@ -119,10 +114,6 @@ export function UnifiedSessionView({
   // Guards against endSession running twice (e.g. End-Session button + close
   // confirm) and against onComplete firing after the component has torn down.
   const endedRef = useRef(false);
-  const payloadDeck = useMemo(() => {
-    const targeted = buildSessionPayloadDeck({ sessionType, order: mommyOrder, targetClaim });
-    return targeted.length > 0 ? targeted : AFFIRMATIONS[sessionType];
-  }, [sessionType, mommyOrder, targetClaim]);
 
   // Load videos from public/videos/sessions/{sessionType}/ folder
   // Videos are configured in public/videos/manifest.json. Empty array
@@ -161,7 +152,8 @@ export function UnifiedSessionView({
 
   // Text flash cycle
   const cycleText = useCallback(() => {
-    const randomText = payloadDeck[Math.floor(Math.random() * payloadDeck.length)];
+    const affirmations = AFFIRMATIONS[sessionType];
+    const randomText = affirmations[Math.floor(Math.random() * affirmations.length)];
 
     setCurrentText(randomText);
     setTextVisible(true);
@@ -170,7 +162,7 @@ export function UnifiedSessionView({
     setTimeout(() => {
       setTextVisible(false);
     }, 2000);
-  }, [payloadDeck]);
+  }, [sessionType]);
 
   // Start text cycling
   useEffect(() => {
@@ -372,17 +364,6 @@ export function UnifiedSessionView({
 
       {/* Dark overlay for text readability */}
       <div className="absolute inset-0 bg-black/40" />
-
-      {mommyOrder?.targetId && (
-        <div className="absolute top-16 left-4 right-4 z-40 mx-auto max-w-xl rounded-lg border border-white/15 bg-black/55 px-4 py-3 text-center text-white/90 backdrop-blur">
-          <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-white/60">
-            Mommy's target
-          </div>
-          <div className="mt-1 text-sm">
-            {targetClaim || 'Stay with the target Mommy selected.'}
-          </div>
-        </div>
-      )}
 
       {/* Header - z-40 to stay above start screen overlay (z-30) */}
       <div className="absolute top-0 left-0 right-0 z-40 p-4 flex items-center justify-between">

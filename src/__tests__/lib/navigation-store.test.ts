@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   initialNavState, initNavigation, navigate, navigateLoose, goHome, goChat,
-  openMenu, setSanitizedMode, __resetForTests, __getStateForTests as getState,
+  openMenu, __resetForTests, __getStateForTests as getState,
 } from '../../navigation/store';
 import { HASH_TO_VIEW } from '../../navigation/registry';
 
@@ -94,36 +94,6 @@ describe('actions push complete history markers', () => {
     expect(getState()).toMatchObject({ viewId: 'wishlist' });
     navigateLoose('progress-page'); // tombstone → menu drawer
     expect(getState()).toMatchObject({ surface: 'view', viewId: null });
-  });
-});
-
-describe('sanitized/stealth rewrite', () => {
-  beforeEach(() => {
-    cleanup = initNavigation();
-  });
-
-  it('navigate() to a disallowed view lands on the menu drawer', () => {
-    setSanitizedMode(true);
-    navigate('journal');
-    expect(getState()).toMatchObject({ surface: 'view', viewId: null });
-  });
-
-  it('navigate() to an allowed view passes through', () => {
-    setSanitizedMode(true);
-    navigate('body');
-    expect(getState()).toMatchObject({ viewId: 'body' });
-  });
-
-  it('flipping sanitized ON rewrites a live disallowed view', () => {
-    navigate('journal');
-    setSanitizedMode(true);
-    expect(getState()).toMatchObject({ surface: 'view', viewId: null });
-  });
-
-  it('boot state applies the rewrite for deep links', () => {
-    setSanitizedMode(true);
-    window.location.hash = '#/journal';
-    expect(initialNavState()).toMatchObject({ surface: 'view', viewId: null });
   });
 });
 

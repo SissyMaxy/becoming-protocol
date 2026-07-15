@@ -26,7 +26,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
-import { isMommyPersona } from '../../lib/persona/dommy-mommy';
+import { isMommyPersona, arousalToPhrase } from '../../lib/persona/dommy-mommy';
 import { useSurfaceRenderTracking, useAcknowledgeObligation } from '../../lib/surface-render-hooks';
 import { ackSourceForTask } from '../../../supabase/functions/_shared/enforcement-core';
 import { gradeDoseEvidence } from '../../lib/hrt/dose-evidence';
@@ -41,7 +41,6 @@ import { SelfEchoPlayer } from './SelfEchoPlayer';
 import { ConfessionAudioCapture } from './ConfessionAudioCapture';
 import { savePhysicalStateLog, type PhysicalState } from '../../lib/compulsory-elements';
 import { HRT_STEPS, HRT_STEP_LABELS } from '../../lib/handler-context/hrt-steps';
-import { mommyOrderDetail, mommyOrderFromFocusTask } from '../../lib/mommy-orders';
 import {
   chooseFocusTask,
   type FocusTask, type FocusInputs, type AudioSessionMeta,
@@ -161,6 +160,55 @@ function parseBeliefProbeTrigger(triggerSource: unknown): { targetId: string; is
   return m ? { targetId: m[2], isBaseline: m[1] === 'baseline' } : null;
 }
 
+// Same pattern, for the assoc_latency (IAT-lite) instrument — recon-program-
+// orchestrator tags these `recon_iat_baseline:<target_id>` / `recon_iat_measure:<target_id>`.
+function parseIatProbeTrigger(triggerSource: unknown): { targetId: string; isBaseline: boolean } | null {
+  if (typeof triggerSource !== 'string') return null;
+  const m = /^recon_iat_(baseline|measure):([0-9a-f-]{36})$/.exec(triggerSource);
+  return m ? { targetId: m[2], isBaseline: m[1] === 'baseline' } : null;
+}
+
+// turnout-orchestrator tags the STI/PrEP health-prep ask `turnout_health_prep:<rung>`
+// (distinct from the real rung-action decree's `turnout_rung:<rung>` — DESIGN_TURNOUT_LADDER
+// §6.3's hard gate had a table + RPC to check it but nothing ever wrote a row, so
+// `turnout_health_prep_ok()` could never clear and this decree just re-fired forever).
+// This surface writes her pasted confirmation into `turnout_health_prep` BEFORE
+// fulfilling the decree, same fail-closed order as the belief/IAT probes above.
+function parseTurnoutHealthPrepTrigger(triggerSource: unknown): { rung: string } | null {
+  if (typeof triggerSource !== 'string') return null;
+  const m = /^turnout_health_prep:(.+)$/.exec(triggerSource);
+  return m ? { rung: m[1] } : null;
+}
+
+// turnout-orchestrator tags the post-rung aroused-state debrief ask
+// `turnout_debrief:<rung>` (mig 679, DESIGN_TURNOUT_LADDER §0/§2 step 3b): the
+// rung's irreversible act already happened, and consolidation now holds until
+// a real arousal self-report (>=6/10) lands — closing the gap where every
+// completion consolidated instantly with no debrief ever captured.
+function parseTurnoutDebriefTrigger(triggerSource: unknown): { rung: string } | null {
+  if (typeof triggerSource !== 'string') return null;
+  const m = /^turnout_debrief:(.+)$/.exec(triggerSource);
+  return m ? { rung: m[1] } : null;
+}
+
+// Any decree issued by the reconditioning lane (recon-program-orchestrator /
+// recon-reconsolidation) carries one of these trigger_source prefixes. Used
+// to show the "not this one" retire link (DESIGN_RECONDITIONING_ENGINE §6.6:
+// "Retire is sacred and one-tap... from Focus or /admin at any time" — the
+// RPC has existed since mig 649, but nothing on Focus ever called it).
+function isReconLaneTrigger(triggerSource: unknown): boolean {
+  return typeof triggerSource === 'string' && /^recon_(focus|rep|reconsolidate|belief_|iat_)/.test(triggerSource);
+}
+
+// recon-program-orchestrator's IAT-probe edicts always embed the bare claim in
+// quotes ("...gut reaction...: "${claim}""). Pull just that out so the reveal
+// step can show the claim in isolation, not buried in Mommy's surrounding
+// sentence — the stimulus should be clean at the exact moment latency starts.
+function extractQuotedClaim(edict: string): string {
+  const m = /"([^"]+)"/.exec(edict);
+  return m ? m[1] : edict;
+}
+
 interface FocusModeProps {
   onViewPlan: () => void;
 }
@@ -203,6 +251,126 @@ function BeliefSliderProbe({
   );
 }
 
+/** The assoc_latency (IAT-lite) probe instrument (DESIGN_RECONDITIONING §5.2) —
+ * "the strongest implicit signal": present the claim, tap AGREE / DISAGREE as
+ * fast as possible, and the reaction time (not the choice) is what's recorded.
+ * Faster + agree = a stronger automatic association than a slow, thought-out
+ * agreement. Framed as a gut-reaction game, not a lie-detector. */
+function IatLiteProbe({
+  claim, onSubmit, submitting,
+}: { claim: string; onSubmit: (latencyMs: number, choice: 'agree' | 'disagree') => void; submitting: boolean }) {
+  const [shownAt, setShownAt] = useState<number | null>(null);
+  if (shownAt === null) {
+    return (
+      <button
+        onClick={() => setShownAt(performance.now())}
+        disabled={submitting}
+        style={{
+          width: '100%', padding: '12px',
+          background: '#c9557f', color: '#fff',
+          border: 'none', borderRadius: 7,
+          fontSize: 13, fontWeight: 700, letterSpacing: '0.04em',
+          textTransform: 'uppercase', fontFamily: 'inherit',
+          cursor: submitting ? 'wait' : 'pointer',
+        }}
+      >
+        start — read it, then tap fast
+      </button>
+    );
+  }
+  const tap = (choice: 'agree' | 'disagree') => {
+    const latencyMs = Math.round(performance.now() - shownAt);
+    setShownAt(null);
+    onSubmit(latencyMs, choice);
+  };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <p style={{
+        fontSize: 15, color: '#fff', textAlign: 'center', lineHeight: 1.4,
+        padding: '14px 10px', border: '1px solid #4a2438', borderRadius: 8, margin: 0,
+      }}>
+        "{claim}"
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <button
+          onClick={() => tap('agree')}
+          disabled={submitting}
+          style={{
+            padding: '14px', background: '#c9557f', color: '#fff',
+            border: 'none', borderRadius: 7, fontSize: 13, fontWeight: 700,
+            letterSpacing: '0.04em', textTransform: 'uppercase', fontFamily: 'inherit',
+            cursor: submitting ? 'wait' : 'pointer',
+          }}
+        >
+          agree
+        </button>
+        <button
+          onClick={() => tap('disagree')}
+          disabled={submitting}
+          style={{
+            padding: '14px', background: 'transparent', color: '#a8a3ad',
+            border: '1px solid #4a2438', borderRadius: 7, fontSize: 13, fontWeight: 700,
+            letterSpacing: '0.04em', textTransform: 'uppercase', fontFamily: 'inherit',
+            cursor: submitting ? 'wait' : 'pointer',
+          }}
+        >
+          disagree
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** The post-rung aroused-state debrief instrument (DESIGN_TURNOUT_LADDER §0/§2
+ * step 3b, mig 679) — a plain 0-10 self-report slider on the canonical arousal
+ * scale, plus an optional note. Only the sensory phrase (arousalToPhrase) is
+ * shown live, never the raw number, matching the belief_slider probe's
+ * no-telemetry-in-voice rule. The value drives consolidation underneath; a
+ * calm honest answer holds the rung rather than fabricating the encoding. */
+function ArousalDebriefProbe({
+  value, onChange, note, onNoteChange, onSubmit, submitting,
+}: { value: number; onChange: (v: number) => void; note: string; onNoteChange: (v: string) => void; onSubmit: () => void; submitting: boolean }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <input
+        type="range" min={0} max={10} value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        disabled={submitting}
+        style={{ width: '100%' }}
+      />
+      <div style={{ fontSize: 12, color: '#edaec5', fontStyle: 'italic', textAlign: 'center' }}>
+        {arousalToPhrase(value)}
+      </div>
+      <textarea
+        value={note}
+        onChange={(e) => onNoteChange(e.target.value)}
+        placeholder="what happened (optional)"
+        rows={2}
+        disabled={submitting}
+        style={{
+          width: '100%', padding: '10px 12px', resize: 'vertical',
+          background: '#160c13', color: '#f2e9e6', border: '1px solid #2a2a32',
+          borderRadius: 8, fontSize: 13, lineHeight: 1.5, fontFamily: 'inherit', outline: 'none',
+        }}
+      />
+      <button
+        onClick={onSubmit}
+        disabled={submitting}
+        style={{
+          width: '100%', padding: '12px',
+          background: '#c9557f', color: '#fff',
+          border: 'none', borderRadius: 7,
+          fontSize: 13, fontWeight: 700, letterSpacing: '0.04em',
+          textTransform: 'uppercase', fontFamily: 'inherit',
+          cursor: submitting ? 'wait' : 'pointer',
+        }}
+      >
+        {submitting ? 'submitting…' : 'tell mommy the truth'}
+      </button>
+    </div>
+  );
+}
+
 /** sha256 hex of a file's bytes, for dose-photo dedup. Browser WebCrypto. */
 async function sha256HexOfFile(file: File): Promise<string> {
   const buf = await file.arrayBuffer();
@@ -219,6 +387,7 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
   const [submitting, setSubmitting] = useState(false);
   const [confessText, setConfessText] = useState('');
   const [beliefSlider, setBeliefSlider] = useState(50);
+  const [debriefArousal, setDebriefArousal] = useState(5);
   const [doneFlash, setDoneFlash] = useState(false);
   const [completedToday, setCompletedToday] = useState(0);
   const [persona, setPersona] = useState<string | null>(null);
@@ -318,14 +487,14 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
         .in('status', ['queued', 'active', 'escalated'])
         .lt('due_by', nowIso).gte('due_by', staleFloorIso).order('due_by', { ascending: false }).limit(1),
       supabase.from('handler_decrees')
-        .select('id, edict, deadline, proof_type, trigger_source, recon_target_id, mommy_order_arc, mommy_order_phase, mommy_order_consequence_mode, mommy_order_recovery_boundary, mommy_order_reason').eq('user_id', user.id).eq('status', 'active')
+        .select('id, edict, deadline, proof_type, trigger_source').eq('user_id', user.id).eq('status', 'active')
         .lt('deadline', nowIso).gte('deadline', staleFloorIso).order('deadline', { ascending: false }).limit(1),
       supabase.from('confession_queue')
         .select('id, prompt, deadline, category').eq('user_id', user.id).is('confessed_at', null).eq('missed', false)
         .gte('deadline', nowIso).lte('deadline', todayEndIso)
         .order('deadline', { ascending: true }).limit(1),
       supabase.from('handler_decrees')
-        .select('id, edict, deadline, proof_type, trigger_source, recon_target_id, mommy_order_arc, mommy_order_phase, mommy_order_consequence_mode, mommy_order_recovery_boundary, mommy_order_reason').eq('user_id', user.id).eq('status', 'active')
+        .select('id, edict, deadline, proof_type, trigger_source').eq('user_id', user.id).eq('status', 'active')
         .gte('deadline', nowIso).lte('deadline', todayEndIso)
         .order('deadline', { ascending: true }).limit(1),
       supabase.from('handler_commitments')
@@ -355,13 +524,13 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
       // alongside mommy_touch (high tone) but lower priority — a touch task
       // is 30s, a session is 5-10min.
       supabase.from('audio_session_offers')
-        .select('id, kind, intensity_tier, teaser, expires_at, recon_target_id, mommy_order_arc, mommy_order_phase, mommy_order_proof_kind, mommy_order_consequence_mode, mommy_order_recovery_boundary, mommy_order_reason')
+        .select('id, kind, intensity_tier, teaser, expires_at, recon_target_id')
         .eq('user_id', user.id).is('completed_at', null)
         .gt('expires_at', nowIso).order('created_at', { ascending: false }).limit(1),
       // Mama's daily focus pick — when populated, returns just this decree
       focusDecreeId
         ? supabase.from('handler_decrees')
-            .select('id, edict, deadline, proof_type, trigger_source, recon_target_id, mommy_order_arc, mommy_order_phase, mommy_order_consequence_mode, mommy_order_recovery_boundary, mommy_order_reason').eq('id', focusDecreeId)
+            .select('id, edict, deadline, proof_type, trigger_source').eq('id', focusDecreeId)
             .eq('status', 'active').maybeSingle()
         : Promise.resolve({ data: null, error: null }),
       // ── HRT daily step (ported from HrtDailyGate) ──
@@ -616,6 +785,23 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
     }, 1100);
   };
 
+  // "Not this one" — retires the reconditioning target behind the current
+  // decree. No completion flash (retiring isn't a done); just moves on.
+  const [retiring, setRetiring] = useState(false);
+  const handleRetireReconTarget = async () => {
+    const triggerSource = (task?.meta as { trigger_source?: unknown } | undefined)?.trigger_source;
+    if (!user?.id || typeof triggerSource !== 'string') return;
+    setRetiring(true);
+    try {
+      await supabase.rpc('recon_retire_from_trigger', { p_user: user.id, p_trigger_source: triggerSource });
+    } catch (e) {
+      console.error('[FocusMode] recon target retire failed:', e);
+    } finally {
+      setRetiring(false);
+      await pickNext();
+    }
+  };
+
   // ─── Surface handlers ────────────────────────────────────────────────────
 
   const handleConfess = async () => {
@@ -745,7 +931,7 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
     }
   };
 
-  const handleMarkDone = async () => {
+  const handleMarkDone = async (iatResult?: { latencyMs: number; choice: 'agree' | 'disagree' }) => {
     if (!task?.rowId || !user?.id) return;
     setSubmitting(true);
     try {
@@ -754,6 +940,7 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
         await supabase.from('punishment_queue').update({ status: 'completed', completed_at: nowIso }).eq('id', task.rowId);
       } else if (task.kind === 'overdue_decree' || task.kind === 'due_today_decree' || task.kind === 'focus_decree') {
         const probe = parseBeliefProbeTrigger(task.meta?.trigger_source);
+        const iatProbe = parseIatProbeTrigger(task.meta?.trigger_source);
         if (probe) {
           // Record the measurement FIRST — if this fails, don't fulfill the
           // decree silently with no data written (no baseline/no claim holds
@@ -770,6 +957,52 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
           if (measureErr) {
             console.error('[FocusMode] belief probe measurement failed:', measureErr.message);
             return;
+          }
+        } else if (iatProbe && iatResult) {
+          const { error: measureErr } = await supabase.rpc('recon_record_measurement_and_advance', {
+            p_user: user.id,
+            p_target: iatProbe.targetId,
+            p_indicator: 'assoc_latency',
+            p_value: iatResult.latencyMs,
+            p_method: 'iat_lite',
+            p_is_baseline: iatProbe.isBaseline,
+            p_raw: { choice: iatResult.choice, latency_ms: iatResult.latencyMs, probe: 'focus_iat_probe' },
+          });
+          if (measureErr) {
+            console.error('[FocusMode] IAT probe measurement failed:', measureErr.message);
+            return;
+          }
+        } else if (turnoutDebrief) {
+          // Record the aroused-state debrief FIRST — same fail-closed order as
+          // the probes above (mig 679). A calm honest answer still fulfills
+          // the decree; it just won't clear turnout_rung_consolidated's
+          // aroused_debrief_ok, so the orchestrator holds the rung rather than
+          // fabricating the state-dependent encoding.
+          const { error: debriefErr } = await supabase.rpc('turnout_record_debrief', {
+            p_user: user.id, p_rung: turnoutDebrief.rung, p_arousal: debriefArousal,
+            p_note: confessText.trim() || null,
+          });
+          if (debriefErr) {
+            console.error('[FocusMode] turnout debrief failed:', debriefErr.message);
+            return;
+          }
+        } else {
+          const healthPrep = parseTurnoutHealthPrepTrigger(task.meta?.trigger_source);
+          if (healthPrep) {
+            // Write the attestation FIRST — same fail-closed order as the probes
+            // above. No medical data, just her note + a timestamp; this is what
+            // turnout_health_prep_ok() checks before oral+/paid rungs are offered.
+            const note = confessText.trim();
+            if (note.length < 10) {
+              console.error('[FocusMode] health-prep attestation too short — not fulfilling');
+              return;
+            }
+            const { error: healthErr } = await supabase.from('turnout_health_prep')
+              .upsert({ user_id: user.id, attestation_note: note.slice(0, 2000), attested_at: nowIso });
+            if (healthErr) {
+              console.error('[FocusMode] health-prep attestation write failed:', healthErr.message);
+              return;
+            }
           }
         }
         await supabase.from('handler_decrees').update({ status: 'fulfilled', fulfilled_at: nowIso }).eq('id', task.rowId);
@@ -1425,10 +1658,13 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
   const audioMeta = task?.meta as AudioSessionMeta | undefined;
   const selfEcho = audioMeta?.selfEcho ?? null;
   const beliefProbe = task?.meta ? parseBeliefProbeTrigger((task.meta as { trigger_source?: unknown }).trigger_source) : null;
+  const iatProbe = task?.meta ? parseIatProbeTrigger((task.meta as { trigger_source?: unknown }).trigger_source) : null;
+  const turnoutHealthPrep = task?.meta ? parseTurnoutHealthPrepTrigger((task.meta as { trigger_source?: unknown }).trigger_source) : null;
+  const turnoutDebrief = task?.meta ? parseTurnoutDebriefTrigger((task.meta as { trigger_source?: unknown }).trigger_source) : null;
   const minChars = useMemo(() => task?.kind === 'due_today_commitment' ? 30 : 80, [task?.kind]);
   const charsRemaining = Math.max(0, minChars - confessText.trim().length);
-  const mommyOrder = task && user?.id ? mommyOrderFromFocusTask(task, user.id) : null;
-  const orderDetail = mommyOrder ? mommyOrderDetail(mommyOrder, task?.detail) : task?.detail;
+  // mommy-orders subsystem removed on main; detail is the task's own line.
+  const orderDetail = task?.detail;
 
   return (
     <div style={{
@@ -1533,6 +1769,25 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
             <div style={{ fontSize: 13, color: 'var(--protocol-text-muted)', lineHeight: 1.55, marginBottom: 22 }}>
               {orderDetail}
             </div>
+          )}
+
+          {/* Retire — one-tap, always reachable while a recon-lane task is up
+              (DESIGN_RECONDITIONING_ENGINE §6.6). Quiet, not a CTA — she
+              authored this working-into-her; she ends it, no questions asked. */}
+          {isReconLaneTrigger((task.meta as { trigger_source?: unknown } | undefined)?.trigger_source) && (
+            <button
+              onClick={() => { void handleRetireReconTarget(); }}
+              disabled={retiring}
+              style={{
+                display: 'block', marginBottom: 18, marginLeft: 'auto',
+                background: 'transparent', border: 'none',
+                color: '#9c8590', fontSize: 11, fontStyle: 'italic',
+                textDecoration: 'underline', cursor: retiring ? 'wait' : 'pointer',
+                fontFamily: 'inherit', padding: 0,
+              }}
+            >
+              {retiring ? 'letting it go…' : "not this one — stop working it into me"}
+            </button>
           )}
 
           {/* Inline action surface */}
@@ -1669,12 +1924,28 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
           )}
 
           {task.surface === 'mark_done' && beliefProbe && (
-            <BeliefSliderProbe value={beliefSlider} onChange={setBeliefSlider} onSubmit={handleMarkDone} submitting={submitting} />
+            <BeliefSliderProbe value={beliefSlider} onChange={setBeliefSlider} onSubmit={() => handleMarkDone()} submitting={submitting} />
           )}
 
-          {task.surface === 'mark_done' && !beliefProbe && (
+          {task.surface === 'mark_done' && iatProbe && (
+            <IatLiteProbe
+              claim={extractQuotedClaim(task.title)}
+              submitting={submitting}
+              onSubmit={(latencyMs, choice) => handleMarkDone({ latencyMs, choice })}
+            />
+          )}
+
+          {task.surface === 'mark_done' && !beliefProbe && !iatProbe && turnoutDebrief && (
+            <ArousalDebriefProbe
+              value={debriefArousal} onChange={setDebriefArousal}
+              note={confessText} onNoteChange={setConfessText}
+              onSubmit={() => handleMarkDone()} submitting={submitting}
+            />
+          )}
+
+          {task.surface === 'mark_done' && !beliefProbe && !iatProbe && !turnoutDebrief && (
             <button
-              onClick={handleMarkDone}
+              onClick={() => handleMarkDone()}
               disabled={submitting}
               style={{
                 width: '100%', padding: '12px',
@@ -1690,10 +1961,26 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
           )}
 
           {task.surface === 'decree' && beliefProbe && (
-            <BeliefSliderProbe value={beliefSlider} onChange={setBeliefSlider} onSubmit={handleMarkDone} submitting={submitting} />
+            <BeliefSliderProbe value={beliefSlider} onChange={setBeliefSlider} onSubmit={() => handleMarkDone()} submitting={submitting} />
           )}
 
-          {task.surface === 'decree' && !beliefProbe && (
+          {task.surface === 'decree' && iatProbe && (
+            <IatLiteProbe
+              claim={extractQuotedClaim(task.title)}
+              submitting={submitting}
+              onSubmit={(latencyMs, choice) => handleMarkDone({ latencyMs, choice })}
+            />
+          )}
+
+          {task.surface === 'decree' && !beliefProbe && !iatProbe && turnoutDebrief && (
+            <ArousalDebriefProbe
+              value={debriefArousal} onChange={setDebriefArousal}
+              note={confessText} onNoteChange={setConfessText}
+              onSubmit={() => handleMarkDone()} submitting={submitting}
+            />
+          )}
+
+          {task.surface === 'decree' && !beliefProbe && !iatProbe && !turnoutDebrief && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {/* The task tells her to REPORT back — so give her somewhere to do it.
                   Her words land in her own-words corpus (key_admissions), which is
@@ -1702,7 +1989,7 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
               <textarea
                 value={confessText}
                 onChange={(e) => setConfessText(e.target.value)}
-                placeholder="Tell Mama how it felt…"
+                placeholder={turnoutHealthPrep ? 'Paste the confirmation — clinic/pharmacy, appointment or refill, whatever proves you booked it. No test results, just the booking.' : 'Tell Mama how it felt…'}
                 rows={3}
                 disabled={submitting}
                 style={{
@@ -1714,18 +2001,19 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
                 }}
               />
               <button
-                onClick={handleMarkDone}
-                disabled={submitting}
+                onClick={() => handleMarkDone()}
+                disabled={submitting || (!!turnoutHealthPrep && confessText.trim().length < 10)}
                 style={{
                   width: '100%', padding: '12px',
-                  background: tone.border, color: 'white',
+                  background: (turnoutHealthPrep && confessText.trim().length < 10) ? 'rgb(var(--protocol-border-rgb) / 0.6)' : tone.border,
+                  color: (turnoutHealthPrep && confessText.trim().length < 10) ? 'rgb(var(--protocol-text-muted-rgb) / 0.75)' : 'white',
                   border: 'none', borderRadius: 7,
                   fontSize: 13, fontWeight: 700, letterSpacing: '0.04em',
                   textTransform: 'uppercase', fontFamily: 'inherit',
-                  cursor: submitting ? 'wait' : 'pointer',
+                  cursor: (submitting || (!!turnoutHealthPrep && confessText.trim().length < 10)) ? 'not-allowed' : 'pointer',
                 }}
               >
-                {submitting ? 'submitting…' : (confessText.trim() ? 'Give it to Mama' : 'Mark fulfilled')}
+                {submitting ? 'submitting…' : turnoutHealthPrep ? "it's booked — tell Mommy" : (confessText.trim() ? 'Give it to Mama' : 'Mark fulfilled')}
               </button>
               <button
                 onClick={async () => {

@@ -73,6 +73,19 @@ export interface GoonLoopScriptCtx {
   /** Her chosen feminine name — used as address, never a pet name (budget-safe). */
   femName?: string | null
   loopCount?: number
+  /**
+   * DESIGN_RECONDITIONING_ENGINE §4: today's Focus target's claim_text, if any
+   * is running. When present the line she says back becomes the target claim
+   * instead of the generic affirmation — the self-echo loop aims at something
+   * measured, not just a mood.
+   */
+  targetClaim?: string | null
+  /**
+   * That target's armed post-hypnotic anchor phrase (trance_triggers.phrase,
+   * status='armed'), if one exists. Woven in as the retrieval cue so hearing
+   * it later (trance, casual use) reactivates this exact session.
+   */
+  anchorPhrase?: string | null
 }
 
 export interface GoonLoopScript {
@@ -96,15 +109,31 @@ export function buildGoonLoopScript(ctx: GoonLoopScriptCtx = {}): GoonLoopScript
       ? `You've done so well, ${name}, and I want you to hear it.`
       : `You've done so well, baby, and I want you to hear it.`
 
-  const script = [
+  const claim = (ctx.targetClaim ?? '').trim()
+  const anchor = (ctx.anchorPhrase ?? '').trim()
+
+  const lines = [
     opener,
     `This is your own voice now — the one that tells you the truth about who you are.`,
     `Stay right where you are and keep listening.`,
-    `Breathe slow, and let each word settle into you.`,
-    `Say it back until you believe it: you are mine, and you are not going anywhere.`,
-  ].join(' ')
+  ]
 
-  const teaser = `You've done so well. Come sit with me and listen — your own voice, saying what you are now.`
+  if (claim.length > 0) {
+    lines.push(`Say it back until it's the only thing that's true: "${claim}"`)
+  } else {
+    lines.push(`Breathe slow, and let each word settle into you.`)
+    lines.push(`Say it back until you believe it: you are mine, and you are not going anywhere.`)
+  }
+
+  if (anchor.length > 0) {
+    lines.push(`And when you hear "${anchor}" again, this is what it means — go under, believe it.`)
+  }
+
+  const script = lines.join(' ')
+
+  const teaser = claim.length > 0
+    ? `You've done so well. Come sit with me and listen — your own voice, telling you what's already true.`
+    : `You've done so well. Come sit with me and listen — your own voice, saying what you are now.`
 
   return {
     teaser,

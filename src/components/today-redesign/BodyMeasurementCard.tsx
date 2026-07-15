@@ -12,7 +12,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
-import { useStealthSettings } from '../../hooks/useStealthSettings';
 
 interface Measurement {
   id: string;
@@ -29,8 +28,6 @@ const TARGETS = { waist_cm: 76, hips_cm: 95, chest_cm: 95 };
 
 export function BodyMeasurementCard() {
   const { user } = useAuth();
-  const { settings } = useStealthSettings();
-  const sanitized = settings.sanitized_fitness_mode;
   const [history, setHistory] = useState<Measurement[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
@@ -169,9 +166,7 @@ export function BodyMeasurementCard() {
 
       {isStale && (
         <div style={{ fontSize: 11.5, color: '#e6bd80', marginBottom: 10, lineHeight: 1.5 }}>
-          {sanitized
-            ? `Weekly measurement check-in due. ${latest ? 'Data is over a week old.' : 'Nothing logged yet.'} Log current numbers so the plan can adjust from evidence.`
-            : `Weekly measurement mandate. ${latest ? 'Data is over a week old.' : 'Nothing logged yet.'} Miss the 48h deadline and slip +3 + bleed +$15. Log today or explain the refusal.`}
+          {`Weekly measurement mandate. ${latest ? 'Data is over a week old.' : 'Nothing logged yet.'} Miss the 48h deadline and slip +3 + bleed +$15. Log today or explain the refusal.`}
         </div>
       )}
 
@@ -189,7 +184,7 @@ export function BodyMeasurementCard() {
           <Field label="weight (kg)" value={form.weight_kg} onChange={v => setForm({ ...form, weight_kg: v })} placeholder="e.g. 89.5" />
           <Field label="waist (cm)" value={form.waist_cm} onChange={v => setForm({ ...form, waist_cm: v })} placeholder="narrowest" />
           <Field label="hips (cm)" value={form.hips_cm} onChange={v => setForm({ ...form, hips_cm: v })} placeholder="widest" />
-          <Field label="chest (cm)" value={form.chest_cm} onChange={v => setForm({ ...form, chest_cm: v })} placeholder={sanitized ? 'fullest point' : 'across nipples'} />
+          <Field label="chest (cm)" value={form.chest_cm} onChange={v => setForm({ ...form, chest_cm: v })} placeholder="across nipples" />
           <Field label="thigh (cm)" value={form.thigh_cm} onChange={v => setForm({ ...form, thigh_cm: v })} placeholder="widest" />
           <Field label="neck (cm)" value={form.neck_cm} onChange={v => setForm({ ...form, neck_cm: v })} placeholder="middle" />
           <div style={{ gridColumn: '1 / -1' }}>

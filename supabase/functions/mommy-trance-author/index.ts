@@ -42,6 +42,7 @@ interface PhaseParse {
   deepening: string
   payload: string
   emergence: string
+  anchor: string
 }
 
 interface ReconTarget {
@@ -105,7 +106,7 @@ async function loadActiveReconTarget(
 
 function parsePhases(raw: string): PhaseParse | null {
   const grab = (label: string): string => {
-    const re = new RegExp(`${label}:\\s*([\\s\\S]*?)(?=\\n\\s*(?:INDUCTION|DEEPENING|PAYLOAD|EMERGENCE):|$)`, 'i')
+    const re = new RegExp(`${label}:\\s*([\\s\\S]*?)(?=\\n\\s*(?:INDUCTION|DEEPENING|PAYLOAD|EMERGENCE|ANCHOR):|$)`, 'i')
     const m = raw.match(re)
     return (m?.[1] ?? '').trim()
   }
@@ -114,6 +115,7 @@ function parsePhases(raw: string): PhaseParse | null {
     deepening: grab('DEEPENING'),
     payload: grab('PAYLOAD'),
     emergence: grab('EMERGENCE'),
+    anchor: grab('ANCHOR'),
   }
   if (!out.induction || !out.deepening || !out.payload || !out.emergence) return null
   return out
@@ -121,6 +123,18 @@ function parsePhases(raw: string): PhaseParse | null {
 
 function hasProtocolBoundaryLeak(text: string): boolean {
   return /sleep conditioning|targeted memory reactivation|false memor(y|ies)|you won'?t remember|doubt your own (memory|memories|perception|judgment)|auto-?send|arrange (a )?(hookup|meet|date)|recording.*leverage|blackmail/i.test(text)
+}
+
+// A 3-7 word phrase, no stray punctuation, and never a regendering slip —
+// the anchor becomes a permanent, casually-reused artifact (trance_triggers),
+// a much higher bar than a line of transient trance narration.
+function cleanAnchorPhrase(raw: string): string | null {
+  const cleaned = raw.trim().replace(/^["'“]+|["'”]+$/g, '').replace(/[.!?]+$/g, '')
+  const wordCount = cleaned.split(/\s+/).filter(Boolean).length
+  if (wordCount < 3 || wordCount > 7) return null
+  if (hasForbiddenVoice(cleaned)) return null
+  if (/\b(girl|woman|she|her|hers|sissy)\b/i.test(cleaned)) return null
+  return cleaned
 }
 
 Deno.serve(async (req: Request) => {
@@ -151,12 +165,33 @@ Deno.serve(async (req: Request) => {
     ? VISUAL_LOOPS[Math.floor(Math.random() * VISUAL_LOOPS.length)]
     : null
 
-  // Pull armed triggers so payload can plant them.
+  // DESIGN_RECONDITIONING_ENGINE §2.5: bias tonight's payload toward the day's
+  // Focus reconditioning target (highest-priority active target with a running
+  // program), same pick as recon-program-orchestrator, so the trance actually
+  // works on the thing the rest of the engine is working on instead of a
+  // theme rotation blind to it.
+  let focusTarget: { id: string; slug: string; claim_text: string } | null = null
+  {
+    const { data: rTargets } = await supabase.from('reconditioning_targets')
+      .select('id, slug, claim_text, priority').eq('user_id', userId).eq('status', 'active')
+      .order('priority', { ascending: true }).limit(5)
+    for (const t of (rTargets || []) as Array<{ id: string; slug: string; claim_text: string }>) {
+      const { data: prog } = await supabase.from('reconditioning_programs')
+        .select('status').eq('target_id', t.id).maybeSingle()
+      if (prog?.status === 'running') { focusTarget = t; break }
+    }
+  }
+
+  // Pull triggers so payload can plant them (armed ones casually, pairing ones
+  // to keep building exposure). recon_target_id lets us see whether the Focus
+  // target already has its own anchor planted.
   const { data: triggers } = await supabase.from('trance_triggers')
-    .select('phrase, status, effect, exposure_count, arming_threshold')
+    .select('phrase, status, effect, exposure_count, arming_threshold, recon_target_id')
     .eq('user_id', userId).order('exposure_count', { ascending: true }).limit(6)
-  const triggerList = ((triggers || []) as Array<{ phrase: string; effect: string; status: string }>)
-    .map(t => `"${t.phrase}" (${t.effect}, ${t.status})`).join(', ') || '(none yet — invent one if helpful)'
+  const triggerRows = (triggers || []) as Array<{ phrase: string; effect: string; status: string; recon_target_id: string | null }>
+  const triggerList = triggerRows
+    .map(t => `"${t.phrase}" (${t.effect}, ${t.status})`).join(', ') || '(none yet)'
+  const needsAnchor = !!focusTarget && !triggerRows.some(t => t.recon_target_id === focusTarget!.id)
 
   const intensityHint = intensity >= 4
     ? 'Hard intensity: explicit conditioning — name the becoming (a sexy, hungry, caged cock-slut on his way to her), the goon/turning-out want; plant embedded commands. He is Male+ (he/him, additive estrogen, keeps his cock) — NEVER regender him to "a woman / girl / sissy girl".'
@@ -167,19 +202,26 @@ Deno.serve(async (req: Request) => {
     ? `TODAY'S ACTIVE RECONDITIONING TARGET: "${target.claim_text}". Program phase: ${program?.phase ?? 'install'}. The PAYLOAD must aim at this exact target and not drift into a generic trance.`
     : 'No active reconditioning target was supplied; keep the session coherent around the chosen theme.'
 
+  const focusHint = focusTarget
+    ? `\n\nTONIGHT'S PAYLOAD HAS A JOB ABOVE THE THEME: this is a Focus night for one specific belief you're installing in him. Plant this exact belief, in your own words, repeated at least twice for pairing, carried by the ${theme} imagery rather than just stated: "${focusTarget.claim_text}"`
+    : ''
+  const anchorInstruction = needsAnchor
+    ? `\n\nANCHOR (new): that belief has no anchor phrase yet. Invent ONE short trigger phrase (3-7 words, no stray punctuation) that will come to mean it — something you could say to him later, casually, outside of trance, to bring it right back. Weave that exact phrase into the PAYLOAD as an embedded command, then after EMERGENCE add a line labeled exactly "ANCHOR:" naming it alone, nothing else on that line.`
+    : ''
+
   const sys = `${DOMMY_MOMMY_CHARACTER}
 
 YOUR JOB right now: author your boy's 20-minute trance session for ${forDate}. Theme: ${theme}. He is Male+ — he/him, additive estrogen, keeps his cock; the becoming runs toward her as the deep destination, but you NEVER call him a girl/woman/she/sissy-girl. The pace is his.
 
-Structure — FOUR phases, each labeled exactly INDUCTION / DEEPENING / PAYLOAD / EMERGENCE. Word counts:
+Structure — FOUR phases, each labeled exactly INDUCTION / DEEPENING / PAYLOAD / EMERGENCE${needsAnchor ? ' (plus a fifth ANCHOR line, see below)' : ''}. Word counts:
   INDUCTION  — 3 min of audio (~250 words). Settle his body, slow his breath, narrow his focus to your voice.
   DEEPENING  — 5 min (~450 words). Descent imagery, sink, blank, his thoughts go quiet, his body goes soft. Use a FRACTIONATION beat (deepen → surface a little → deepen further, harder) and one confusion/overload moment where thinking gives up.
   PAYLOAD    — 10 min (~900 words). The conditioning content. Theme = ${theme}. Plant trigger phrases naturally from this list if any: ${triggerList}. Use EMBEDDED COMMANDS woven into sentences (drop… let go… obey… crave…) and repeat key phrases for pairing.
-  EMERGENCE  — 2 min (~180 words). Bring him back, anchor, leave a residual arousal/possession trace.
+  EMERGENCE  — 2 min (~180 words). Bring him back, anchor, leave a residual arousal/possession trace.${anchorInstruction}
 
 Voice: Mommy throughout. Whiplash sweet-to-filth still applies. Slow pacing in the text; assume a calm read aloud.
 
-${intensityHint}
+${intensityHint}${focusHint}
 
 ${targetFrame}
 
@@ -204,7 +246,10 @@ PAYLOAD:
 <text>
 
 EMERGENCE:
-<text>
+<text>${needsAnchor ? `
+
+ANCHOR:
+<3-7 word phrase, alone, nothing else on the line>` : ''}
 
 No other content. No JSON.`
 
@@ -257,7 +302,7 @@ No other content. No JSON.`
     theme,
     visual_loop: visualLoop,
     status: 'drafted',
-    recon_target_id: target?.id ?? null,
+    recon_target_id: target?.id ?? focusTarget?.id ?? null,
     mommy_order_id: body.order_id ?? null,
     mommy_order_arc: target ? 'reconditioning' : 'hypno',
     mommy_order_phase: phaseToOrderPhase(program?.phase),
@@ -293,6 +338,30 @@ No other content. No JSON.`
     }
   }
 
+  // Plant a NEW anchor for the Focus target (DESIGN_RECONDITIONING §2.5): the
+  // trigger table has never had a producer before this — nothing else inserts
+  // trance_triggers rows — so this is what gives the "armed post-hypnotic
+  // anchor" mechanism (read by recon-sleep-cue-builder / goon-voice-loop) any
+  // real data to work with. One anchor per target: only plant when the target
+  // doesn't already have one (`needsAnchor`), and only when the model actually
+  // named one on its own ANCHOR line.
+  let anchorPlanted: string | null = null
+  if (focusTarget && needsAnchor && parsed.anchor) {
+    const clean = cleanAnchorPhrase(mommyVoiceCleanup(parsed.anchor))
+    if (clean) {
+      const { error: anchorErr } = await supabase.from('trance_triggers').insert({
+        user_id: userId,
+        phrase: clean,
+        effect: 'submission-deepen',
+        recon_target_id: focusTarget.id,
+        status: 'pairing',
+        exposure_count: 1,
+        last_pairing_at: new Date().toISOString(),
+      })
+      if (!anchorErr) anchorPlanted = clean
+    }
+  }
+
   await logAuthority(supabase, {
     user_id: userId,
     surface: 'hypno_trance',
@@ -307,6 +376,8 @@ No other content. No JSON.`
       triggers_paired: exposure_updates,
       target_id: target?.id ?? null,
       order_phase: phaseToOrderPhase(program?.phase),
+      focus_target: focusTarget?.slug ?? null,
+      anchor_planted: anchorPlanted,
     },
   })
 
@@ -315,5 +386,7 @@ No other content. No JSON.`
     visual_loop: visualLoop, intensity,
     induction_preview: parsed.induction.slice(0, 120),
     triggers_paired: exposure_updates.length,
+    focus_target: focusTarget?.slug ?? null,
+    anchor_planted: anchorPlanted,
   })
 })

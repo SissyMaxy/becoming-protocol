@@ -33,7 +33,7 @@ type Sb = any
 
 const CATEGORIES = ['belief', 'identity', 'habit', 'association']
 const DIRECTIONS = ['increase', 'decrease']
-const INDICATOR_KINDS = ['pavlovian_strength', 'voice_pitch_drift', 'belief_slider', 'habit_adherence', 'self_ref_drift']
+const INDICATOR_KINDS = ['pavlovian_strength', 'voice_pitch_drift', 'belief_slider', 'assoc_latency', 'habit_adherence', 'self_ref_drift']
 
 interface Candidate {
   slug: string
@@ -71,8 +71,8 @@ HARD RULES:
 - founding_evidence MUST be a short VERBATIM quote copied exactly from the CORPUS block below — her actual words, not a paraphrase. Copy it character-for-character. If nothing in the corpus genuinely supports a new inner-recognition claim, return {"skip": true}.
 - Do NOT duplicate a signal already covered by the EXISTING TARGETS list. Aim at an uncovered signal.
 - category is one of: belief, identity, habit, association.
-- indicator_kind is one of: pavlovian_strength, voice_pitch_drift, belief_slider, habit_adherence, self_ref_drift — pick the one that could actually measure this claim's movement (belief/identity → belief_slider or self_ref_drift; habit → habit_adherence; arousal/association pairing → pavlovian_strength; voice work → voice_pitch_drift).
-- target_direction is "increase" (the claim should get truer) in almost every case; use "decrease" only if the claim is about a diminishing thing.
+- indicator_kind is one of: pavlovian_strength, voice_pitch_drift, belief_slider, assoc_latency, habit_adherence, self_ref_drift — pick the one that could actually measure this claim's movement (belief/identity → belief_slider or self_ref_drift; a belief/identity claim she'd resist saying out loud but that might already be automatic → assoc_latency, the implicit-association reaction-time read; habit → habit_adherence; arousal/association pairing → pavlovian_strength; voice work → voice_pitch_drift).
+- target_direction is "increase" (the claim should get truer) in almost every case; use "decrease" only if the claim is about a diminishing thing — assoc_latency is the one indicator where "decrease" usually means progress (a FASTER reaction to agreeing with the claim is the stronger automatic association).
 - priority is 1 (highest) to 5.
 
 Return ONLY minified JSON, no prose. Either {"skip": true} or:
