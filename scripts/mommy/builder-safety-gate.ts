@@ -62,6 +62,12 @@ export const FORBIDDEN_PATH_SUBSTRINGS = [
   'supabase/functions/memory-implant-audit',
   'supabase/functions/confession-gaslight-mine',
   'supabase/functions/recon-reconsolidation',
+  // Sleep-window delivery is a held container-breaker (below-awareness
+  // delivery). The §2.4 TMR playback client was removed 2026-07-15; the loop
+  // may not rebuild it or grow the dormant cue builder a new delivery path.
+  'sleep-cue',
+  'sleepcuepill',
+  'supabase/functions/recon-sleep-cue-builder',
 ]
 
 /** Normalize a repo-relative path: backslashes→/, strip ./, collapse .. segments. */

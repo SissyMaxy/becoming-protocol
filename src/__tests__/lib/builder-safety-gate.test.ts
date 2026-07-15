@@ -34,6 +34,20 @@ describe('builder safety gate — forbidden paths', () => {
     expect(isForbiddenPath('supabase/functions/kick-builder/index.ts')).toBe(true);
   });
 
+  it('forbids rebuilding sleep-window delivery (below-awareness container-breaker)', () => {
+    expect(isForbiddenPath('src/lib/bedtime/sleep-cue.ts')).toBe(true);
+    expect(isForbiddenPath('src/components/bedtime/SleepCuePill.tsx')).toBe(true);
+    expect(isForbiddenPath('supabase/functions/recon-sleep-cue-builder/index.ts')).toBe(true);
+  });
+
+  it('the removed sleep-cue playback client stays removed', async () => {
+    const fs = await import('node:fs');
+    expect(fs.existsSync('src/lib/bedtime/sleep-cue.ts')).toBe(false);
+    expect(fs.existsSync('src/components/bedtime/SleepCuePill.tsx')).toBe(false);
+    const ctx = fs.readFileSync('src/context/BedtimeRitualContext.tsx', 'utf8');
+    expect(ctx).not.toMatch(/SleepCuePill|getTonightSleepCue/);
+  });
+
   it('forbids auto-expanding the evaluator-targeting mechanics', () => {
     expect(isForbiddenPath('supabase/functions/ego-doubt-seeder/index.ts')).toBe(true);
     expect(isForbiddenPath('supabase/functions/mommy-gaslight-cluster-author/index.ts')).toBe(true);

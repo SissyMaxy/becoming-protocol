@@ -249,7 +249,7 @@ export function BaselineIntakeView({ onClose }: { onClose: () => void }) {
       .map((option) => option.label.toLowerCase());
 
     const intakeNotes = [
-      'Baseline intake',
+      'Baseline intake', // voice-gate: ok — clinical decoy copy; the fitness disguise must not read in Mommy's voice
       helperName.trim() ? `helper=${helperName.trim()}` : null,
       `units=${unitSystem}`,
       completedPhotos.length > 0 ? `photos=${completedPhotos.join(', ')}` : 'photos=not recorded',
@@ -294,7 +294,7 @@ export function BaselineIntakeView({ onClose }: { onClose: () => void }) {
     }
 
     setSavedId((data as { id?: string } | null)?.id ?? 'saved');
-    window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'baseline-intake' } }));
+    window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'baseline-intake' } })); // voice-gate: ok — internal event name, never user-facing
   }
 
   if (savedId) {

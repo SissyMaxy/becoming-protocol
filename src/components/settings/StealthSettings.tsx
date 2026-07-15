@@ -232,7 +232,7 @@ export function StealthSettings() {
         </h3>
         <ToggleRow
           label="Aesthetic fitness surface"
-          description="Shared screens show training, recovery, measurements, helper intake, integrations, and privacy controls."
+          description="Shared screens show training, recovery, measurements, helper setup, integrations, and privacy controls."
           checked={settings.sanitized_fitness_mode}
           isBambiMode={isBambiMode}
           disabled={saving !== 'idle'}

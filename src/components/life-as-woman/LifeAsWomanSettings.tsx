@@ -35,7 +35,7 @@ export function LifeAsWomanSettings({ userId, onSettingsChanged }: Props) {
         kink_curriculum_enabled: false, kink_curriculum_intensity: 2,
         content_editor_enabled: false, content_editor_intensity: 2,
         cross_platform_consistency_enabled: false,
-        recondition_enabled: false, recon_sleep_enabled: false,
+        recondition_enabled: false,
         turnout_enabled: false,
       })
       setLoading(false)
@@ -133,16 +133,13 @@ export function LifeAsWomanSettings({ userId, onSettingsChanged }: Props) {
         <PlainSystemRow
           label="Reconditioning engine"
           sublabel="Mommy picks one measurable belief/habit target at a time and works it through trance, spaced retrieval, and reconsolidation sessions. Change is measured, never just asserted. No punishment for a missed rep."
-          on={settings.recondition_enabled}
+          on={!!settings.recondition_enabled}
           onToggle={v => patch({ recondition_enabled: v })}
-          extras={[
-            { label: 'Sleep cue replay (hardest opt-in — plays back phrases already installed while awake, low-volume, during sleep; never introduces anything new)', on: settings.recon_sleep_enabled, onChange: v => patch({ recon_sleep_enabled: v }) },
-          ]}
         />
         <PlainSystemRow
           label="Turn-out ladder"
           sublabel="Sequences the existing escalation systems (funnel, meet safety, revenue) one small step at a time instead of each firing on its own. Meet-safety and health-prep gates stay absolute and unaffected by this toggle."
-          on={settings.turnout_enabled}
+          on={!!settings.turnout_enabled}
           onToggle={v => patch({ turnout_enabled: v })}
         />
       </div>

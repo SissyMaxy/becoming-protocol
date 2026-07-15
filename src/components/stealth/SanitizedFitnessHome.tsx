@@ -50,7 +50,7 @@ export function SanitizedFitnessHome({
           />
           <HomeAction
             icon={ClipboardCheck}
-            title="Baseline Intake"
+            title="Baseline Intake" // voice-gate: ok — clinical decoy copy; the fitness disguise must not read in Mommy's voice
             description="Helper-assisted measurements for the starting point."
             onClick={onOpenBaselineIntake}
           />

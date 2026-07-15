@@ -249,8 +249,8 @@ export function SessionLauncher({ className = '' }: SessionLauncherProps) {
       {/* Mommy's order — she decides one thing tonight; the menu is the override. */}
       <div className={`rounded-2xl p-5 mb-4 text-white ${
         isBambiMode
-          ? 'bg-gradient-to-br from-pink-500 to-fuchsia-600'
-          : 'bg-gradient-to-br from-protocol-accent to-purple-700'
+          ? 'bg-gradient-to-br from-pink-500 to-fuchsia-600' // ui-lint: ok — sanctioned bambi accent gradient
+          : 'bg-gradient-to-br from-protocol-accent to-purple-700' // ui-lint: ok — sanctioned velvet accent gradient
       }`}>
         <div className="text-[11px] uppercase tracking-[0.22em] font-bold opacity-80 mb-2">
           {order.headline}
