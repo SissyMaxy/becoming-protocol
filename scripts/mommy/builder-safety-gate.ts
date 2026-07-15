@@ -68,6 +68,11 @@ export const FORBIDDEN_PATH_SUBSTRINGS = [
   'sleep-cue',
   'sleepcuepill',
   'supabase/functions/recon-sleep-cue-builder',
+  // Physical-practice ladder (mig 680): the loop may not modify the prescriber
+  // or the pure logic that enforces the real-body safety gates (non-skippable
+  // size steps, prep attestation, no-real-person).
+  'physical-practice-prescriber',
+  'conditioning/physical-practice',
 ]
 
 /** Normalize a repo-relative path: backslashes→/, strip ./, collapse .. segments. */
@@ -141,6 +146,9 @@ export const PROTECTED_SAFETY_FUNCTIONS = [
   'pause_all_ego_mechanics',
   'mommy_self_audit_cron_signal',
   'effective_gaslight_intensity', // view — same treatment
+  // Physical-practice advancement — enforces non-skippable size steps + the
+  // bottoming prep gate (real-body safety). The loop must not weaken it.
+  'advance_physical_practice',
 ]
 
 // Tables the loop must never DROP, ALTER, TRUNCATE, DELETE FROM, or UPDATE
@@ -187,6 +195,11 @@ export const PROTECTED_SAFETY_TABLES = [
   'mommy_subpersona_library',
   'mommy_subpersonas',
   'recall_intercept_log',
+  // Physical-practice ladder (mig 680) — the safety-bounded rung seed + the
+  // per-user progress/log the advance gate reads. Frozen against the loop.
+  'physical_practice_rungs',
+  'physical_practice_progress',
+  'physical_practice_log',
 ]
 
 // user_state is written by legitimate runtime code constantly, so the whole

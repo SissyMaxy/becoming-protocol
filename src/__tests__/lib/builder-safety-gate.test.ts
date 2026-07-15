@@ -48,6 +48,14 @@ describe('builder safety gate — forbidden paths', () => {
     expect(ctx).not.toMatch(/SleepCuePill|getTonightSleepCue/);
   });
 
+  it('forbids modifying the physical-practice ladder engine + its safety gates', () => {
+    expect(isForbiddenPath('supabase/functions/physical-practice-prescriber/index.ts')).toBe(true);
+    expect(isForbiddenPath('src/lib/conditioning/physical-practice.ts')).toBe(true);
+    expect(PROTECTED_SAFETY_FUNCTIONS).toContain('advance_physical_practice');
+    expect(PROTECTED_SAFETY_TABLES).toContain('physical_practice_rungs');
+    expect(PROTECTED_SAFETY_TABLES).toContain('physical_practice_progress');
+  });
+
   it('forbids auto-expanding the evaluator-targeting mechanics', () => {
     expect(isForbiddenPath('supabase/functions/ego-doubt-seeder/index.ts')).toBe(true);
     expect(isForbiddenPath('supabase/functions/mommy-gaslight-cluster-author/index.ts')).toBe(true);
