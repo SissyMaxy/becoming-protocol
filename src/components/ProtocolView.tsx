@@ -48,6 +48,7 @@ import { JournalGate } from './JournalGate';
 import { UnusedInvestmentsPreview } from './UnusedInvestmentsPreview';
 import { EveningJournal } from './EveningJournal';
 import { ImmersiveTaskModal } from './ImmersiveTaskModal';
+import { navigate } from '../navigation/store';
 
 const timeBlockIcons = {
   morning: Sunrise,
@@ -617,11 +618,8 @@ export function ProtocolView() {
     }
   };
 
-  // Navigate to investments (handled by parent via tab change)
   const handleViewInvestments = () => {
-    // This would ideally trigger a tab change to Progress > Investments
-    // For now, we could emit a custom event or use a callback
-    window.dispatchEvent(new CustomEvent('navigate-to-investments'));
+    navigate('wishlist'); // ProgressDashboard (investments live there)
   };
 
   if (!currentEntry) {

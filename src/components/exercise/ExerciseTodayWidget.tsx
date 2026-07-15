@@ -7,6 +7,7 @@
 
 import { Flame, Dumbbell, ChevronRight, Lock } from 'lucide-react';
 import { useExercise } from '../../hooks/useExercise';
+import { navigate } from '../../navigation/store';
 
 export function ExerciseTodayWidget() {
   const { streakData, recommendedTemplate, latestMeasurement, isLoading } = useExercise();
@@ -14,7 +15,7 @@ export function ExerciseTodayWidget() {
   if (isLoading || !streakData) return null;
 
   const handleStart = () => {
-    window.dispatchEvent(new CustomEvent('navigate-to-exercise'));
+    navigate('exercise');
   };
 
   return (

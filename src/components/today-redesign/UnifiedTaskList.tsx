@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { goChat } from '../../navigation/store';
 
 type Source = 'commitment' | 'decree' | 'outfit' | 'workout' | 'punishment' | 'directive' | 'hrt_gate';
 type Bucket = 'momentum' | 'debt';
@@ -368,7 +369,8 @@ function TaskSection({ tasks, headerLabel, headerHint, accent, urgentAccent, urg
               sessionStorage.setItem('handler_chat_resolve_decree_id', rawId);
             }
             sessionStorage.setItem('handler_chat_prefill', `Re: ${rightNow.label.slice(0, 120)}\n\n`);
-            window.location.hash = '';
+            // land on the conversation so the prefill is actually seen
+            goChat();
           }}
           style={{
             padding: '8px 14px', borderRadius: 6, border: 'none',

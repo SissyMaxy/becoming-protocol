@@ -18,6 +18,7 @@ import { HypnoSummaryView } from './HypnoSummaryView';
 import { HypnoSessionCard } from './HypnoSessionCard';
 import { HYPNO_TASK_CODES } from '../../lib/content/hypno-tasks';
 import type { HypnoLibraryItem, HypnoPostSessionState } from '../../types/hypno-bridge';
+import { navigate } from '../../navigation/store';
 
 interface PrescribedContent {
   id: string;
@@ -212,7 +213,7 @@ export function HypnoDashboard({
         <div className="px-4 space-y-4">
           {/* Learning + generation entry */}
           <button
-            onClick={() => window.dispatchEvent(new CustomEvent('navigate-to-hypno-learning'))}
+            onClick={() => navigate('hypno-learning')}
             className="w-full flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-pink-600/20 to-purple-600/20 border border-pink-500/30 hover:border-pink-400/50 transition-all"
           >
             <div className="text-left">

@@ -10,6 +10,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { goChat } from '../../navigation/store';
 
 interface Stage {
   overline: string;
@@ -100,7 +101,9 @@ export function ComingOutJourneyCard() {
 
   const talkToMommy = (prefill: string) => {
     sessionStorage.setItem('handler_chat_prefill', prefill);
-    window.dispatchEvent(new Event('navigate-to-handler'));
+    // goChat, not the handler-autonomous view — the old event never actually
+    // opened the conversation, so the prefill sat unused.
+    goChat();
   };
 
   const start = async () => {

@@ -14,13 +14,14 @@ import { BodyMeasurementCard } from './BodyMeasurementCard';
 import { NextShotsCard } from './NextShotsCard';
 import { DailyMirrorSelfieCard } from '../evidence/DailyMirrorSelfieCard';
 import { useStealthSettings } from '../../hooks/useStealthSettings';
+import { navigate } from '../../navigation/store';
 
 export function BodyProtocolView({ onBack }: { onBack: () => void }) {
   const { settings } = useStealthSettings();
   const sanitized = settings.sanitized_fitness_mode;
 
   const openBaselineIntake = () => {
-    window.location.hash = '/baseline-intake';
+    navigate('baseline-intake'); // voice-gate: ok — view id, not user-facing copy
   };
 
   return (

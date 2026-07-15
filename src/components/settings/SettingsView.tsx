@@ -72,6 +72,7 @@ import { SniffiesSettings } from './SniffiesSettings';
 import { PhaseProgressPanel } from '../identity/PhaseProgressPanel';
 import { WeeklyRecapSettings } from './WeeklyRecapSettings';
 import { EgoDeconstructionSettings } from './EgoDeconstructionSettings';
+import { navigate } from '../../navigation/store';
 
 const DIFFICULTY_LEVELS = [
   { id: 'gentle', label: 'Gentle', desc: 'Lighter load, longer timers' },
@@ -631,7 +632,7 @@ export function SettingsView({ onBack, onEditIntake, onOpenDossierQuiz, onOpenDo
 
                 {/* Identity layer — feminine name, pronouns, honorific, wardrobe, phase */}
                 <button
-                  onClick={() => window.dispatchEvent(new Event('navigate-to-identity'))}
+                  onClick={() => navigate('identity')}
                   className={`w-full p-4 rounded-xl border flex items-center gap-4 text-left transition-all ${
                     isBambiMode
                       ? 'bg-pink-50 border-pink-200 hover:border-pink-300'

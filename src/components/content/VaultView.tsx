@@ -14,6 +14,7 @@ import { VaultSwipe } from './VaultSwipe';
 import { SignedMedia } from '../common/SignedMedia';
 import { browseVaultItems, getPendingVaultItems } from '../../lib/content-pipeline';
 import type { VaultItem } from '../../types/content-pipeline';
+import { navigate } from '../../navigation/store';
 
 interface VaultViewProps {
   onBack: () => void;
@@ -96,9 +97,7 @@ export function VaultView({ onBack }: VaultViewProps) {
         </div>
         <VaultSwipe
           onBack={onBack}
-          onManagePermissions={() => {
-            window.dispatchEvent(new CustomEvent('navigate-to-vault-permissions'));
-          }}
+          onManagePermissions={() => navigate('vault-permissions')}
         />
       </div>
     );

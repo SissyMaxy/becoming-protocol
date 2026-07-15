@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { usePersona } from '../../hooks/usePersona';
+import { goHome } from '../../navigation/store';
 
 interface Directive {
   id: string;
@@ -131,7 +132,7 @@ export function BodyDirectiveChecklist() {
 
   return (
     <button
-      onClick={() => { window.location.hash = '/today'; }}
+      onClick={() => goHome()}
       className={`w-full flex items-center justify-between px-4 py-2.5 border-b border-l-2 text-left hover:bg-gray-900/40 transition-colors ${
         overdue.length > 0
           ? 'border-l-red-500 border-b-red-500/30 bg-red-500/5'

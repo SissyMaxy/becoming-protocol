@@ -11,6 +11,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { usePersona } from '../../hooks/usePersona';
 import { DOSSIER_QUESTIONS } from '../../lib/persona/mommy-dossier-questions';
+import { navigate } from '../../navigation/store';
 
 interface Props {
   onOpen?: () => void;
@@ -59,10 +60,7 @@ export function MommyDossierBanner({ onOpen }: Props) {
     if (onOpen) {
       onOpen();
     } else {
-      // Open the dossier quiz via the app's menu-subview event. (The old
-      // query-param path was dead — nothing reads ?tab/?view, so it just
-      // reloaded straight back to Focus.)
-      window.dispatchEvent(new CustomEvent('open-menu-subview', { detail: { view: 'mommy-dossier' } }));
+      navigate('mommy-dossier');
     }
   };
 

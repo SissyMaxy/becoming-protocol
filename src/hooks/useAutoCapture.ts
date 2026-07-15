@@ -4,6 +4,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { getTaskCaptureContext, type CaptureContext } from '../lib/content/auto-capture';
+import { navigate } from '../navigation/store';
 
 export interface UseAutoCaptureReturn {
   captureContext: CaptureContext | null;
@@ -33,10 +34,7 @@ export function useAutoCapture(taskId: string | null): UseAutoCaptureReturn {
   const triggerCapture = useCallback(() => {
     if (captureContext) {
       setShouldCapture(true);
-      // Dispatch event to navigate to content-capture with task context
-      window.dispatchEvent(new CustomEvent('navigate-to-content-capture', {
-        detail: captureContext,
-      }));
+      navigate('content-capture');
     }
   }, [captureContext]);
 

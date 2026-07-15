@@ -23,6 +23,7 @@ import { useAuth } from '../../context/AuthContext';
 import { usePronounAutocorrect } from '../../lib/ego-deconstruction/use-pronoun-autocorrect';
 import { useRealNameLockout } from '../../lib/real-name-lockout/use-real-name-lockout';
 import { detectMediaKind, type EvidenceKind } from '../../lib/outreach/reply-cues';
+import { goHome } from '../../navigation/store';
 
 interface HandlerChatProps {
   onClose: () => void;
@@ -475,7 +476,7 @@ export function HandlerChat({ openingLine, onOpenSettings }: HandlerChatProps) {
             {ambientAudio.enabled ? 'AMB ON' : 'AMB'}
           </button>
           <button
-            onClick={() => { window.location.hash = '/today'; }}
+            onClick={() => goHome()}
             className="text-[11px] font-medium px-2.5 py-1 rounded-lg text-protocol-accent-soft bg-protocol-accent/20 hover:bg-protocol-accent/30 transition-colors"
             aria-label="Open Today screen"
             title="Today — directives, protocol, queue"

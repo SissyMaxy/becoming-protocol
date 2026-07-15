@@ -1,6 +1,4 @@
-import { useState, useEffect, Suspense } from 'react';
-import { PrivacyPage } from './components/PrivacyPage';
-import { HandlerChat } from './components/handler/HandlerChat';
+import { useState, useEffect, Suspense, lazy } from 'react';
 import { getPendingOutreach, evaluateAndQueueOutreach } from './lib/outreach/engine';
 import { HandlerParameters } from './lib/handler-parameters';
 import { useAuth } from './context/AuthContext';
@@ -18,37 +16,41 @@ import { useOrchestratedModals } from './hooks/useOrchestratedModals';
 import { useDisassociationRecovery } from './hooks/useDisassociationRecovery';
 import { useCompulsoryGate } from './hooks/useCompulsoryGate';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { Auth } from './components/Auth';
-import { SanitizedFitnessHome, StealthShell } from './components/stealth';
 import { useStealthSettings } from './hooks/useStealthSettings';
-import { MenuView } from './components/MenuView';
-import { OnboardingFlow } from './components/Onboarding';
-import { OnboardingWizard } from './components/onboarding-welcome';
 import { loadOnboardingState } from './lib/onboarding/storage';
-import { SharedWishlistView } from './components/wishlist';
 import { ForceStatusStrip } from './components/force/ForceStatusStrip';
-import { TodayView as TodayRedesignView } from './components/today-redesign';
-import { WhisperToMama } from './components/confession/WhisperToMama';
-import { LivePhotoPingResponder } from './components/live-photo/LivePhotoPingResponder';
-import { MamaPhoneOverlay } from './components/push/MamaPhoneOverlay';
 import { usePunishmentNotifications } from './hooks/usePunishmentNotifications';
-import { EveningDebrief } from './components/EveningDebrief';
 import { useBookends } from './hooks/useBookends';
 import { useSubliminalUI } from './hooks/useSubliminalUI';
-import { OrgasmLogModal } from './components/arousal/OrgasmLogModal';
-import { PostReleaseOverlay } from './components/post-release/PostReleaseOverlay';
-import { DeletionInterceptModal } from './components/post-release/DeletionInterceptModal';
 import { usePostReleaseProtocol } from './hooks/usePostReleaseProtocol';
 import { useArousalState } from './hooks/useArousalState';
 import type { OrgasmLogInput } from './types/arousal';
 import { useReminders } from './hooks/useReminders';
 import { usePatternNotifications } from './hooks/usePatternNotifications';
 import { useNotificationActionRouter } from './hooks/useNotificationActionRouter';
-import { SleepContentPlayer } from './components/sleep-content';
-import { ConditioningPlayer } from './components/conditioning';
 import { profileStorage, letterStorage } from './lib/storage';
 import type { UserProfile, SealedLetter } from './components/Onboarding/types';
 import { Loader2 } from 'lucide-react';
+
+const PrivacyPage = lazy(() => import('./components/PrivacyPage').then((m) => ({ default: m.PrivacyPage })));
+const HandlerChat = lazy(() => import('./components/handler/HandlerChat').then((m) => ({ default: m.HandlerChat })));
+const Auth = lazy(() => import('./components/Auth').then((m) => ({ default: m.Auth })));
+const SanitizedFitnessHome = lazy(() => import('./components/stealth').then((m) => ({ default: m.SanitizedFitnessHome })));
+const StealthShell = lazy(() => import('./components/stealth').then((m) => ({ default: m.StealthShell })));
+const MenuView = lazy(() => import('./components/MenuView').then((m) => ({ default: m.MenuView })));
+const OnboardingFlow = lazy(() => import('./components/Onboarding').then((m) => ({ default: m.OnboardingFlow })));
+const OnboardingWizard = lazy(() => import('./components/onboarding-welcome').then((m) => ({ default: m.OnboardingWizard })));
+const SharedWishlistView = lazy(() => import('./components/wishlist').then((m) => ({ default: m.SharedWishlistView })));
+const TodayRedesignView = lazy(() => import('./components/today-redesign').then((m) => ({ default: m.TodayView })));
+const WhisperToMama = lazy(() => import('./components/confession/WhisperToMama').then((m) => ({ default: m.WhisperToMama })));
+const LivePhotoPingResponder = lazy(() => import('./components/live-photo/LivePhotoPingResponder').then((m) => ({ default: m.LivePhotoPingResponder })));
+const MamaPhoneOverlay = lazy(() => import('./components/push/MamaPhoneOverlay').then((m) => ({ default: m.MamaPhoneOverlay })));
+const EveningDebrief = lazy(() => import('./components/EveningDebrief').then((m) => ({ default: m.EveningDebrief })));
+const OrgasmLogModal = lazy(() => import('./components/arousal/OrgasmLogModal').then((m) => ({ default: m.OrgasmLogModal })));
+const PostReleaseOverlay = lazy(() => import('./components/post-release/PostReleaseOverlay').then((m) => ({ default: m.PostReleaseOverlay })));
+const DeletionInterceptModal = lazy(() => import('./components/post-release/DeletionInterceptModal').then((m) => ({ default: m.DeletionInterceptModal })));
+const SleepContentPlayer = lazy(() => import('./components/sleep-content').then((m) => ({ default: m.SleepContentPlayer })));
+const ConditioningPlayer = lazy(() => import('./components/conditioning').then((m) => ({ default: m.ConditioningPlayer })));
 
 // ── Navigation: ONE store + ONE registry ────────────────────────────────────
 // All screen selection lives in src/navigation. The store owns the single
@@ -691,7 +693,9 @@ function AppInner() {
 
 export default function App() {
   // Standalone pages (no auth required) — must be outside hook-using component
-  if (window.location.pathname === '/privacy') return <PrivacyPage />;
-
-  return <AppInner />;
+  return (
+    <Suspense fallback={<LoadingScreen />}>
+      {window.location.pathname === '/privacy' ? <PrivacyPage /> : <AppInner />}
+    </Suspense>
+  );
 }

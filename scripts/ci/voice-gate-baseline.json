@@ -82,7 +82,6 @@
     "src/components/settings/DataExportView.tsx::{ id: 'profile', label: 'Profile', icon: User, description: 'Identity, preferences, intake data' },",
     "src/components/settings/StealthSettings.tsx::description=\"Shared screens show training, recovery, measurements, helper intake, integrations, and privacy controls.\"",
     "src/components/stealth/SanitizedFitnessHome.tsx::title=\"Baseline Intake\"",
-    "src/components/today-redesign/BodyProtocolView.tsx::window.location.hash = '/baseline-intake';",
     "src/components/today-redesign/HrtDailyGate.tsx::appointment_booked: 'Appointment booked', intake_submitted: 'Intake submitted',",
     "src/components/today-redesign/HrtDailyGate.tsx::intake_submitted: 'You submitted intake forms but have not attended the consult.',",
     "src/components/today-redesign/HrtDailyGate.tsx::what: `HRT step \"${STEP_LABELS[currentStep]}\" — make 1 provider contact attempt by tomorrow 10pm. Submit screenshot of dialer/email/intake p",

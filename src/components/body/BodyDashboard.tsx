@@ -23,6 +23,7 @@ import type { ExerciseDomainLevel } from '../../types/exercise';
 import { shouldPromptMeasurement } from '../../types/measurement';
 import { ProteinSection } from './ProteinSection';
 import { MeasurementForm } from './MeasurementForm';
+import { navigate } from '../../navigation/store';
 
 export function BodyDashboard() {
   const protein = useProtein();
@@ -44,7 +45,7 @@ export function BodyDashboard() {
   const showMeasurePrompt = shouldPromptMeasurement(latestMeasurement);
 
   const handleStartWorkout = () => {
-    window.dispatchEvent(new CustomEvent('navigate-to-exercise'));
+    navigate('exercise');
   };
 
   return (

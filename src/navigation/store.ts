@@ -233,6 +233,10 @@ function onPopState(e: PopStateEvent) {
 
 function onLegacyEvent(e: Event) {
   const type = e.type;
+  // A3 (2026-07-15) migrated all in-repo emitters to direct store calls.
+  // This adapter stays one release as a safety net for anything missed;
+  // a firing here means an emitter escaped the migration — fix it.
+  console.warn(`[nav] deprecated CustomEvent '${type}' — call navigation/store directly`);
   if (type === 'open-menu-subview') {
     const view = (e as CustomEvent).detail?.view as string | undefined;
     if (view !== undefined) navigateLoose(view);
