@@ -165,17 +165,44 @@ function phaseTask(phase: string, claim: string, repPrompt: string | null, gentl
 // the phase machine stays driven solely by measurement deltas (§5.3).
 interface DecreeRate { total: number; missed: number; skipRate: number }
 
-function computeIntensityStep(rate: DecreeRate, currentIntensity: number): { nextIntensity: number; suppressToday: boolean } {
-  if (rate.total < 3) return { nextIntensity: currentIntensity, suppressToday: false } // not enough signal
+// Phase 2 (mig 681/682): 2-D (engagement × efficacy) steering. Disengagement is
+// still soften-only (never push a resisting user). But an ENGAGED user who is not
+// measurably moving now gets escalated AND switched to a different mechanism — the
+// authorized ratchet on a consenting sub. `efficacy` is classified from
+// recon_measurement_trend vs the target's target_direction. Mirrors the tested
+// policy in src/lib/conditioning/efficacy-steering.ts.
+type Efficacy = 'rising' | 'flat' | 'wrong' | 'unknown'
+function computeIntensityStep(
+  rate: DecreeRate, currentIntensity: number, efficacy: Efficacy = 'unknown',
+): { nextIntensity: number; suppressToday: boolean; switchMechanism: boolean } {
+  if (rate.total < 3) return { nextIntensity: currentIntensity, suppressToday: false, switchMechanism: false }
   if (rate.skipRate >= 0.7) {
     const next = Math.max(1, currentIntensity - 1)
-    return { nextIntensity: next, suppressToday: next <= 1 } // bottomed out AND still resistant → a day off the CTA
+    return { nextIntensity: next, suppressToday: next <= 1, switchMechanism: false } // resisted → soften, never switch
   }
-  if (rate.skipRate >= 0.4) return { nextIntensity: Math.max(1, currentIntensity - 1), suppressToday: false }
+  if (rate.skipRate >= 0.4) return { nextIntensity: Math.max(1, currentIntensity - 1), suppressToday: false, switchMechanism: false }
   if (rate.skipRate <= 0.1 && (rate.total - rate.missed) >= 3) {
-    return { nextIntensity: Math.min(5, currentIntensity + 1), suppressToday: false }
+    const up = Math.min(5, currentIntensity + 1)
+    // Engaged but not moving → ratchet AND change approach; moving/unknown → ride it.
+    const switchMechanism = efficacy === 'flat' || efficacy === 'wrong'
+    return { nextIntensity: up, suppressToday: false, switchMechanism }
   }
-  return { nextIntensity: currentIntensity, suppressToday: false }
+  return { nextIntensity: currentIntensity, suppressToday: false, switchMechanism: false }
+}
+
+// Classify a target's measured trend (recon_measurement_trend, mig 681) against
+// its desired direction into the efficacy signal the steering policy reads.
+async function fetchEfficacy(
+  s: Sb, targetId: string, indicatorKind: string | undefined, targetDir: string | undefined,
+): Promise<Efficacy> {
+  if (!indicatorKind || !targetDir) return 'unknown'
+  const { data } = await s.rpc('recon_measurement_trend', { p_target: targetId, p_indicator: indicatorKind, p_window: 5 })
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row || (Number(row.n) || 0) < 2) return 'unknown'
+  const dir = Number(row.direction) || 0
+  if (dir === 0) return 'flat'
+  const good = targetDir === 'increase' ? dir > 0 : dir < 0
+  return good ? 'rising' : 'wrong'
 }
 
 // Trailing-window fulfilled/missed count for this target's recon-lane decrees
@@ -204,16 +231,17 @@ Deno.serve(async (req: Request) => {
 
     // Highest-priority active + running target = today's Focus target.
     const { data: targets } = await s.from('reconditioning_targets')
-      .select('id, slug, claim_text, priority, status, indicator_kind')
+      .select('id, slug, claim_text, priority, status, indicator_kind, target_direction')
       .eq('user_id', user).eq('status', 'active').order('priority', { ascending: true }).limit(5)
-    let picked: { id: string; slug: string; claim_text: string; indicator_kind?: string } | null = null
+    let picked: { id: string; slug: string; claim_text: string; indicator_kind?: string; target_direction?: string } | null = null
     let phase = 'induction'
     let programId: string | null = null
     let intensity = 2
+    let rotation = 0
     for (const t of (targets ?? [])) {
       const { data: prog } = await s.from('reconditioning_programs')
-        .select('id, phase, status, intensity').eq('target_id', t.id).maybeSingle()
-      if (prog && prog.status === 'running') { picked = t; phase = prog.phase; programId = prog.id; intensity = prog.intensity ?? 2; break }
+        .select('id, phase, status, intensity, mechanism_rotation').eq('target_id', t.id).maybeSingle()
+      if (prog && prog.status === 'running') { picked = t; phase = prog.phase; programId = prog.id; intensity = prog.intensity ?? 2; rotation = prog.mechanism_rotation ?? 0; break }
     }
 
     // THE UNLOCK (mig 681): walk the program through the early phase edges
@@ -298,13 +326,21 @@ Deno.serve(async (req: Request) => {
     // running regardless; only this orchestrator's active CTA backs off).
     let gentle = false
     let suppressToday = false
+    let switched = false
     if (programId) {
       const rate = await fetchTargetDecreeRate(s, user, picked.id, picked.slug)
-      const step = computeIntensityStep(rate, intensity)
-      if (step.nextIntensity !== intensity) {
-        await s.from('reconditioning_programs').update({ intensity: step.nextIntensity }).eq('id', programId)
+      const efficacy = await fetchEfficacy(s, picked.id, picked.indicator_kind, picked.target_direction)
+      const step = computeIntensityStep(rate, intensity, efficacy)
+      const updates: Record<string, unknown> = {}
+      if (step.nextIntensity !== intensity) updates.intensity = step.nextIntensity
+      // Engaged but not moving → record the mechanism switch (Phase-3 selection
+      // rotates the delivered mechanism by this counter).
+      if (step.switchMechanism) { updates.mechanism_rotation = rotation + 1; switched = true }
+      if (Object.keys(updates).length > 0) {
+        await s.from('reconditioning_programs').update(updates).eq('id', programId)
       }
       intensity = step.nextIntensity
+      if (switched) rotation += 1
       gentle = intensity <= 2
       suppressToday = step.suppressToday
     }
@@ -339,7 +375,7 @@ Deno.serve(async (req: Request) => {
       triggerSource,
       { targetId: picked.id, phase, claim: picked.claim_text },
     )
-    results.push({ user, focus_target: picked.slug, phase, task: status, intensity, gentle })
+    results.push({ user, focus_target: picked.slug, phase, task: status, intensity, gentle, switched_mechanism: switched, rotation })
   }
 
   return new Response(JSON.stringify({ ok: true, results }), { headers: { ...cors, 'Content-Type': 'application/json' } })
