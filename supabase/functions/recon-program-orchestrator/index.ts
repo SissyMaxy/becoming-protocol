@@ -47,7 +47,7 @@ async function issueFocus(
   proof = 'text',
   hours = 20,
   triggerSource?: string,
-  order?: { targetId?: string; phase?: string; claim?: string },
+  order?: { targetId?: string; phase?: string; claim?: string; mechanism?: string },
 ): Promise<string> {
   const src = triggerSource ?? `recon_focus:${slug}`
   const orderPhase = reconPhaseToOrderPhase(order?.phase ?? 'install')
@@ -77,6 +77,7 @@ async function issueFocus(
     deadline: new Date(Date.now() + hours * 3600e3).toISOString(), status: 'active',
     consequence: NO_PUNISH, trigger_source: src, reasoning: 'recon-program-orchestrator',
     recon_target_id: order?.targetId ?? null,
+    mechanism: order?.mechanism ?? null,
     mommy_order_arc: 'reconditioning',
     mommy_order_phase: orderPhase,
     mommy_order_consequence_mode: 'invitational',
@@ -365,6 +366,20 @@ Deno.serve(async (req: Request) => {
       // checkbox (closes the dead-scheduler gap: mig 668, recon_rep_grade).
       triggerSource = `recon_rep:${picked.slug}:${repId}`
     }
+    // Phase 3: tag the delivery with its mechanism so a later measured shift can be
+    // attributed to it. A measure-phase probe is a MEASUREMENT (no mechanism); a
+    // reinforce rep IS retrieval; otherwise pick the mechanism biased toward what
+    // works for this user/target (recon_select_mechanism), rotated by the Phase-2
+    // switch counter so an engaged-but-flat switch actually changes the approach.
+    let mechanism: string | undefined
+    if (phase !== 'measure') {
+      if (triggerSource && triggerSource.startsWith('recon_rep:')) {
+        mechanism = 'retrieval'
+      } else if (programId) {
+        const { data: mech } = await s.rpc('recon_select_mechanism', { p_user: user, p_target: picked.id, p_rotation: rotation })
+        if (typeof mech === 'string' && mech) mechanism = mech
+      }
+    }
     const status = await issueFocus(
       s,
       user,
@@ -373,9 +388,9 @@ Deno.serve(async (req: Request) => {
       task.proof,
       20,
       triggerSource,
-      { targetId: picked.id, phase, claim: picked.claim_text },
+      { targetId: picked.id, phase, claim: picked.claim_text, mechanism },
     )
-    results.push({ user, focus_target: picked.slug, phase, task: status, intensity, gentle, switched_mechanism: switched, rotation })
+    results.push({ user, focus_target: picked.slug, phase, task: status, intensity, gentle, switched_mechanism: switched, rotation, mechanism: mechanism ?? null })
   }
 
   return new Response(JSON.stringify({ ok: true, results }), { headers: { ...cors, 'Content-Type': 'application/json' } })

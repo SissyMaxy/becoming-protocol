@@ -153,6 +153,10 @@ export const PROTECTED_SAFETY_FUNCTIONS = [
   // advancement through the safeword-gated legal-transition machine. The loop
   // must not weaken it (would let programs escalate past the gates).
   'recon_program_walk',
+  // Efficacy engine attribution + mechanism selection (mig 683) — the loop must
+  // not tamper with what the engine learns works, or how it steers.
+  'recon_attribute_efficacy',
+  'recon_select_mechanism',
 ]
 
 // Tables the loop must never DROP, ALTER, TRUNCATE, DELETE FROM, or UPDATE
