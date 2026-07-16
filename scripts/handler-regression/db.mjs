@@ -246,6 +246,32 @@ await test('v3.1: all SQL functions execute without error', async () => {
   eq(failures.length, 0, `function failures: ${failures.join(' | ') || '(none)'}`);
 });
 
+// Regression (migs 685/686): the two invariants those migrations fixed must be
+// GREEN for Maxy. Each calls its check function, then reads the freshest log row.
+await test('invariant: chastity_streak_matches_session is green for Maxy', async () => {
+  const { error: rpcErr } = await supa.rpc('check_system_invariants');
+  if (rpcErr) throw rpcErr;
+  const { data } = await supa.from('system_invariants_log')
+    .select('status, detail, checked_at')
+    .eq('invariant_name', 'chastity_streak_matches_session')
+    .eq('user_id', UID)
+    .order('checked_at', { ascending: false }).limit(1);
+  truthy(data && data.length > 0, 'expected a chastity_streak_matches_session row');
+  eq(data[0].status, 'ok', `chastity_streak_matches_session detail=${JSON.stringify(data[0].detail)}`);
+});
+
+await test('invariant: gina_topology_freshness is green for Maxy', async () => {
+  const { error: rpcErr } = await supa.rpc('check_v31_freshness');
+  if (rpcErr) throw rpcErr;
+  const { data } = await supa.from('system_invariants_log')
+    .select('status, detail, checked_at')
+    .eq('invariant_name', 'gina_topology_freshness')
+    .eq('user_id', UID)
+    .order('checked_at', { ascending: false }).limit(1);
+  truthy(data && data.length > 0, 'expected a gina_topology_freshness row');
+  eq(data[0].status, 'ok', `gina_topology_freshness detail=${JSON.stringify(data[0].detail)}`);
+});
+
 // v3.1 — every TRIGGER I shipped must fire without error. Test by performing
 // the action that triggers it.
 await test('v3.1: confession_queue triggers fire cleanly', async () => {
