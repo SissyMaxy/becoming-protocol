@@ -91,13 +91,20 @@ jobs:
           set -euo pipefail
           ENDPOINT="https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query"
 
-          # Snapshot already-applied migration numbers.
-          curl -sS -X POST "$ENDPOINT" \
+          # Snapshot already-applied migration numbers. Defensive: a bad/expired
+          # token or an API error returns an OBJECT ({"message":...}), not the
+          # row array — surface the real HTTP status + body instead of a cryptic
+          # `jq: Cannot index string with string "n"` crash.
+          SNAP_CODE=$(curl -sS -o /tmp/snap.json -w '%{http_code}' -X POST "$ENDPOINT" \
             -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
             -H "Content-Type: application/json" \
-            --data '{"query":"select regexp_replace(version, '\''^0+'\'', '\'''\'') as n from supabase_migrations.schema_migrations"}' \
-            | jq -r '.[].n' | sort -u > /tmp/applied_nums.txt || {
-              echo "::error::could not read schema_migrations"; exit 1; }
+            --data '{"query":"select regexp_replace(version, '\''^0+'\'', '\'''\'') as n from supabase_migrations.schema_migrations"}')
+          if [ "${SNAP_CODE:-000}" -ge 400 ] || ! jq -e 'type == "array"' /tmp/snap.json >/dev/null 2>&1; then
+            echo "::error::could not read schema_migrations (HTTP ${SNAP_CODE}): $(head -c 500 /tmp/snap.json)"
+            echo "::error::Most likely SUPABASE_ACCESS_TOKEN is expired/invalid. Regenerate a Supabase personal access token and update the repo secret (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+          jq -r '.[].n' /tmp/snap.json | sort -u > /tmp/applied_nums.txt
 
           applied=0; skipped=0
           for f in $(ls supabase/migrations/*.sql | sort -V); do
