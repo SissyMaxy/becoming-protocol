@@ -46,6 +46,9 @@ import {
   type FocusTask, type FocusInputs, type AudioSessionMeta,
   type DecreeOrderRow, type FemRxRow, type AudioOfferRow, type SelfEchoRow, type RegimenRow,
 } from '../../lib/focus/pick-next';
+import { WorkoutSessionLogger } from './WorkoutSessionLogger';
+import { useBodyOrderToday } from '../../hooks/useBodyOrderToday';
+import { fulfillWorkoutDecree, creditMovementDay } from '../../lib/workout/client';
 
 // ─── HRT funnel (labels live in the shared step module) ────────────────────
 // ET-anchored day key — matches HrtDailyGate's localStorage marker.
@@ -382,6 +385,9 @@ async function sha256HexOfFile(file: File): Promise<string> {
 
 export function FocusMode({ onViewPlan }: FocusModeProps) {
   const { user } = useAuth();
+  // Today's body-program order — used when a body_program_ decree surfaces as
+  // the Focus task, so tapping it opens the real set logger.
+  const { order: bodyOrder } = useBodyOrderToday();
   const [task, setTask] = useState<FocusTask | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -1957,6 +1963,34 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
               }}
             >
               {submitting ? 'submitting…' : 'Mark complete'}
+            </button>
+          )}
+
+          {task.surface === 'workout_session' && bodyOrder && bodyOrder.blocks.length > 0 && (
+            <WorkoutSessionLogger
+              blocks={bodyOrder.blocks}
+              sessionName={bodyOrder.sessionName}
+              programWeek={bodyOrder.weekIndex}
+              programDay={bodyOrder.sessionName}
+              onDone={async () => {
+                await fulfillWorkoutDecree();
+                pickNext();
+              }}
+            />
+          )}
+          {task.surface === 'workout_session' && (!bodyOrder || bodyOrder.blocks.length === 0) && (
+            <button
+              onClick={async () => { await fulfillWorkoutDecree(); if (user?.id) await creditMovementDay(user.id); handleMarkDone(); }}
+              disabled={submitting}
+              style={{
+                width: '100%', padding: '12px',
+                background: tone.border, color: 'white', border: 'none', borderRadius: 7,
+                fontSize: 13, fontWeight: 700, letterSpacing: '0.04em',
+                textTransform: 'uppercase', fontFamily: 'inherit',
+                cursor: submitting ? 'wait' : 'pointer',
+              }}
+            >
+              {submitting ? 'submitting…' : 'Mark trained'}
             </button>
           )}
 

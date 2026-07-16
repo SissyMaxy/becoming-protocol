@@ -1,19 +1,21 @@
 /**
  * BodyProgramCard — the workout engine's home surface.
  *
- * Computes today's mommy-led body order (pure, from the target's program_start)
- * and puts a REAL prescribed, progressive session on the home: train days open
- * the set logger; fuel/rest/measure days show the directive. Replaces the
- * one-tap "did you move" boolean with an actual program that tracks.
+ * Shows today's mommy-led body order (computed pure from the target's
+ * program_start) and puts a REAL prescribed, progressive session on the home:
+ * train days open the set logger; fuel/rest/measure days show the directive.
  *
- * If the program isn't started, it offers to start it (seeds the target).
+ * Enforcement: on a train day it ensures today's session is a real
+ * deadline-bearing decree (body_program_ensure_decree) — so it also surfaces
+ * as the pressing Focus task and skipping it feeds the slip/penalty ledger.
+ * Finishing here fulfills that decree.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Dumbbell, Utensils, Moon, Camera } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { bodyProgramDay, type BodyOrder } from '../../lib/body-program';
+import { useBodyOrderToday } from '../../hooks/useBodyOrderToday';
 import {
-  loadBodyProgramTarget, startBodyProgram, todayLocalISO, creditMovementDay,
+  startBodyProgram, creditMovementDay, ensureWorkoutDecree, fulfillWorkoutDecree,
 } from '../../lib/workout/client';
 import { WorkoutSessionLogger } from './WorkoutSessionLogger';
 
@@ -21,26 +23,23 @@ const KIND_ICON = { train: Dumbbell, fuel: Utensils, rest: Moon, measure: Camera
 
 export function BodyProgramCard() {
   const { user } = useAuth();
-  const [state, setState] = useState<'loading' | 'none' | 'active'>('loading');
-  const [order, setOrder] = useState<BodyOrder | null>(null);
+  const { order, started, loading, reload } = useBodyOrderToday();
   const [logging, setLogging] = useState(false);
   const [dayDone, setDayDone] = useState(false);
   const [starting, setStarting] = useState(false);
+  const ensuredRef = useRef(false);
 
-  const load = useCallback(async () => {
-    if (!user?.id) return;
-    const target = await loadBodyProgramTarget(user.id);
-    if (!target?.config.program_start) { setState('none'); return; }
-    setOrder(bodyProgramDay(target.config.program_start, todayLocalISO()));
-    setState('active');
-  }, [user?.id]);
-
-  useEffect(() => { load(); }, [load]);
+  // On a train day, make today's session a real enforced decree.
+  useEffect(() => {
+    if (!order || order.kind !== 'train' || ensuredRef.current) return;
+    ensuredRef.current = true;
+    ensureWorkoutDecree(order.command, order.sessionName);
+  }, [order]);
 
   const start = async () => {
     setStarting(true);
     await startBodyProgram();
-    await load();
+    reload();
     setStarting(false);
   };
 
@@ -49,10 +48,10 @@ export function BodyProgramCard() {
     setDayDone(true);
   };
 
-  if (state === 'loading') return null;
+  if (loading) return null;
 
   // ── Not started: the invitation to begin ──
-  if (state === 'none') {
+  if (!started) {
     return (
       <div className="mx-3 md:mx-4 mb-3 card p-4">
         <div className="flex items-center gap-2 mb-1">
@@ -96,7 +95,7 @@ export function BodyProgramCard() {
           sessionName={order.sessionName}
           programWeek={order.weekIndex}
           programDay={order.sessionName}
-          onDone={() => { setLogging(false); setDayDone(true); }}
+          onDone={async () => { await fulfillWorkoutDecree(); setLogging(false); setDayDone(true); }}
         />
       ) : (
         <>

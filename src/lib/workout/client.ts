@@ -90,3 +90,17 @@ export async function loadLastWeights(userId: string, exerciseNames: string[]): 
 export async function creditMovementDay(userId: string): Promise<void> {
   await supabase.rpc('fitness_log_session', { p_user: userId });
 }
+
+/**
+ * Ensure today's train-day is a real deadline-bearing decree — so it surfaces
+ * as the pressing Focus task and skipping it feeds the slip/penalty ledger.
+ * No-op off train days / when the program isn't active. Idempotent per day.
+ */
+export async function ensureWorkoutDecree(edict: string, sessionName: string): Promise<void> {
+  await supabase.rpc('body_program_ensure_decree', { p_edict: edict, p_session_name: sessionName });
+}
+
+/** Mark today's train decree fulfilled (resolves the obligation). */
+export async function fulfillWorkoutDecree(): Promise<void> {
+  await supabase.rpc('body_program_fulfill');
+}

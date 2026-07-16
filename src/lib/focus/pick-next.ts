@@ -60,7 +60,7 @@ export interface FocusTask {
   detail?: string;
   due?: string;
   /** Inline action surface rendered by FocusMode. */
-  surface: 'confess' | 'dose' | 'mark_done' | 'photo' | 'message' | 'audio_session' | 'decree' | 'hrt' | 'release' | 'physical' | 'approve_post' | 'fem_prescription' | 'mantra_drill';
+  surface: 'confess' | 'dose' | 'mark_done' | 'photo' | 'message' | 'audio_session' | 'decree' | 'hrt' | 'release' | 'physical' | 'approve_post' | 'fem_prescription' | 'mantra_drill' | 'workout_session';
   /** Carried metadata for surface handlers */
   meta?: Record<string, unknown>;
   /** Severity tone for visual weight */
@@ -222,6 +222,11 @@ function decreeMeta(d: DecreeOrderRow): Record<string, unknown> {
   };
 }
 
+/** Body-program decrees route into the set-logging surface, not a bare proof. */
+function decreeSurface(d: DecreeOrderRow, fallback: FocusTask['surface']): FocusTask['surface'] {
+  return d.trigger_source?.startsWith('body_program_') ? 'workout_session' : fallback;
+}
+
 // ── the cascade ─────────────────────────────────────────────────────────────
 
 export function chooseFocusTask(inputs: FocusInputs, now: number): FocusTask {
@@ -256,7 +261,7 @@ export function chooseFocusTask(inputs: FocusInputs, now: number): FocusTask {
       // Show the full edict — the scene IS the task; don't truncate it.
       title: fd.edict,
       detail: `Mama picked this one for today. ${hoursToDeadline > 0 ? `Deadline in ${fmtCountdown(hoursToDeadline * 3600_000)}.` : `Past deadline.`}`,
-      surface: 'decree', tone: hoursToDeadline < 0 ? 'critical' : 'high',
+      surface: decreeSurface(fd, 'decree'), tone: hoursToDeadline < 0 ? 'critical' : 'high',
       meta: decreeMeta(fd),
     };
   }
@@ -296,7 +301,7 @@ export function chooseFocusTask(inputs: FocusInputs, now: number): FocusTask {
       kind: 'overdue_decree', rowId: d.id,
       title: d.edict,
       detail: `Past deadline by ${fmtCountdown(hours * 3600_000)}. Proof: ${d.proof_type || 'none'}.`,
-      surface: 'mark_done', tone: 'critical',
+      surface: decreeSurface(d, 'mark_done'), tone: 'critical',
       meta: decreeMeta(d),
     };
   }
@@ -407,7 +412,7 @@ export function chooseFocusTask(inputs: FocusInputs, now: number): FocusTask {
       kind: 'due_today_decree', rowId: d.id,
       title: d.edict,
       detail: `Due in ${fmtCountdown(hours * 3600_000)}.`,
-      surface: 'mark_done', tone: 'high',
+      surface: decreeSurface(d, 'mark_done'), tone: 'high',
       meta: decreeMeta(d),
     };
   }
