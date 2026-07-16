@@ -60,6 +60,16 @@ describe('builder safety gate — forbidden paths', () => {
     expect(PROTECTED_SAFETY_FUNCTIONS).toContain('recon_program_walk');
   });
 
+  it('protects the full efficacy engine (paths, fns, tables)', () => {
+    expect(isForbiddenPath('supabase/functions/efficacy-adaptation/index.ts')).toBe(true);
+    expect(isForbiddenPath('src/lib/conditioning/efficacy-adaptation.ts')).toBe(true);
+    expect(isForbiddenPath('src/lib/conditioning/recon-mechanism.ts')).toBe(true);
+    expect(PROTECTED_SAFETY_FUNCTIONS).toContain('recon_attribute_efficacy');
+    expect(PROTECTED_SAFETY_FUNCTIONS).toContain('recon_select_mechanism');
+    expect(PROTECTED_SAFETY_TABLES).toContain('recon_mechanism_profile');
+    expect(PROTECTED_SAFETY_TABLES).toContain('efficacy_adaptation_log');
+  });
+
   it('forbids auto-expanding the evaluator-targeting mechanics', () => {
     expect(isForbiddenPath('supabase/functions/ego-doubt-seeder/index.ts')).toBe(true);
     expect(isForbiddenPath('supabase/functions/mommy-gaslight-cluster-author/index.ts')).toBe(true);

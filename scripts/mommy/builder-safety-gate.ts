@@ -73,6 +73,15 @@ export const FORBIDDEN_PATH_SUBSTRINGS = [
   // size steps, prep attestation, no-real-person).
   'physical-practice-prescriber',
   'conditioning/physical-practice',
+  // Efficacy engine (migs 681-684): the loop may not modify the phase-walk,
+  // steering, attribution, or the autonomous-adaptation loop + its real-step
+  // floor gate — that would let it tamper with what/how it optimizes and the
+  // boundary on its own autonomous changes.
+  'efficacy-adaptation',
+  'conditioning/efficacy-steering',
+  'conditioning/efficacy-adaptation',
+  'conditioning/recon-phase-walk',
+  'conditioning/recon-mechanism',
 ]
 
 /** Normalize a repo-relative path: backslashes→/, strip ./, collapse .. segments. */
@@ -208,6 +217,10 @@ export const PROTECTED_SAFETY_TABLES = [
   'physical_practice_rungs',
   'physical_practice_progress',
   'physical_practice_log',
+  // Efficacy engine (migs 683-684) — what it learns works + the audit trail of
+  // its autonomous changes. Frozen against the loop.
+  'recon_mechanism_profile',
+  'efficacy_adaptation_log',
 ]
 
 // user_state is written by legitimate runtime code constantly, so the whole
