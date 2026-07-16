@@ -149,6 +149,10 @@ export const PROTECTED_SAFETY_FUNCTIONS = [
   // Physical-practice advancement — enforces non-skippable size steps + the
   // bottoming prep gate (real-body safety). The loop must not weaken it.
   'advance_physical_practice',
+  // Efficacy engine phase-walk (mig 681) — drives reconditioning phase
+  // advancement through the safeword-gated legal-transition machine. The loop
+  // must not weaken it (would let programs escalate past the gates).
+  'recon_program_walk',
 ]
 
 // Tables the loop must never DROP, ALTER, TRUNCATE, DELETE FROM, or UPDATE

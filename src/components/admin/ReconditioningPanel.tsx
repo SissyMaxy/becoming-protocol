@@ -128,6 +128,9 @@ export function ReconditioningPanel({ onBack }: ReconditioningPanelProps) {
   const [reps, setReps] = useState<RepRow[]>([]);
   const [commitments, setCommitments] = useState<CommitmentRow[]>([]);
   const [reconsolidations, setReconsolidations] = useState<ReconsolidationRow[]>([]);
+  // Efficacy trend (mig 681 recon_measurement_trend) per target — direction +
+  // velocity over the last N measurements, not a single baseline-vs-current delta.
+  const [trends, setTrends] = useState<Record<string, { n: number; delta: number; slope_per_day: number; direction: number }>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -170,6 +173,29 @@ export function ReconditioningPanel({ onBack }: ReconditioningPanelProps) {
       setReps((repsRes.data || []) as RepRow[]);
       setCommitments((commitmentsRes.data || []) as CommitmentRow[]);
       setReconsolidations((reconsolidationsRes.data || []) as ReconsolidationRow[]);
+
+      // Efficacy trends: one recon_measurement_trend call per active target with
+      // a known indicator. Operator-facing only (this is /admin) — never voiced.
+      const activeForTrend = (targetsRes.data || []).filter(
+        (t) => (t as TargetRow).status === 'active' && (t as TargetRow).indicator_kind,
+      ) as TargetRow[];
+      const trendPairs = await Promise.all(
+        activeForTrend.map(async (t) => {
+          const { data } = await supabase.rpc('recon_measurement_trend', {
+            p_target: t.id,
+            p_indicator: t.indicator_kind,
+            p_window: 5,
+          });
+          const row = Array.isArray(data) ? data[0] : data;
+          return row ? [t.id, {
+            n: Number(row.n) || 0,
+            delta: Number(row.delta) || 0,
+            slope_per_day: Number(row.slope_per_day) || 0,
+            direction: Number(row.direction) || 0,
+          }] as const : null;
+        }),
+      );
+      setTrends(Object.fromEntries(trendPairs.filter(Boolean) as Array<readonly [string, { n: number; delta: number; slope_per_day: number; direction: number }]>));
     } catch (err) {
       console.error('[ReconditioningPanel] Load failed:', err);
       setError(err instanceof Error ? err.message : String(err));
@@ -270,6 +296,21 @@ export function ReconditioningPanel({ onBack }: ReconditioningPanelProps) {
           const towardTarget =
             t.target_direction === 'increase' ? rawDelta > 0 : rawDelta < 0;
 
+          // Efficacy trend (mig 681): slope over the last N measures, judged
+          // against target_direction. This is the real "is the want moving"
+          // signal that replaces the single-point delta.
+          const trend = trends[t.id];
+          const trendGood = trend
+            ? (t.target_direction === 'increase' ? trend.direction > 0 : trend.direction < 0)
+            : null;
+          const trendLabel = !trend || trend.n < 2
+            ? 'trend: n/a'
+            : trendGood
+              ? `trend: ↑ moving (${trend.n} pts)`
+              : trend.direction === 0
+                ? `trend: → flat (${trend.n} pts)`
+                : `trend: ↓ wrong way (${trend.n} pts)`;
+
           // Stall flags:
           const measureOverdue = prog?.next_measure_due_at
             ? new Date(prog.next_measure_due_at).getTime() < Date.now()
@@ -338,6 +379,13 @@ export function ReconditioningPanel({ onBack }: ReconditioningPanelProps) {
                     style={{ color: !hasDelta ? '#6b7280' : towardTarget ? '#22c55e' : '#ef4444' }}
                   >
                     {hasDelta ? `${rawDelta > 0 ? '+' : ''}${fmtNum(rawDelta)}` : 'no delta'}
+                  </span>
+                  <span
+                    className="text-[9px] font-semibold"
+                    style={{ color: trendGood === null ? '#6b7280' : trendGood ? '#22c55e' : trend && trend.direction === 0 ? '#eab308' : '#ef4444' /* ui-lint: ok — operator /admin panel palette */ }}
+                    title="Efficacy trend over the last measurements (mig 681)"
+                  >
+                    {trendLabel}
                   </span>
                 </div>
                 <div className="text-center">

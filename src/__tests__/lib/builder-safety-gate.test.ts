@@ -56,6 +56,10 @@ describe('builder safety gate — forbidden paths', () => {
     expect(PROTECTED_SAFETY_TABLES).toContain('physical_practice_progress');
   });
 
+  it('protects the efficacy-engine phase-walk driver', () => {
+    expect(PROTECTED_SAFETY_FUNCTIONS).toContain('recon_program_walk');
+  });
+
   it('forbids auto-expanding the evaluator-targeting mechanics', () => {
     expect(isForbiddenPath('supabase/functions/ego-doubt-seeder/index.ts')).toBe(true);
     expect(isForbiddenPath('supabase/functions/mommy-gaslight-cluster-author/index.ts')).toBe(true);

@@ -216,6 +216,16 @@ Deno.serve(async (req: Request) => {
       if (prog && prog.status === 'running') { picked = t; phase = prog.phase; programId = prog.id; intensity = prog.intensity ?? 2; break }
     }
 
+    // THE UNLOCK (mig 681): walk the program through the early phase edges
+    // (induction→install→reinforce→measure) on dwell/delivery/timer, so it
+    // actually reaches the efficacy loop instead of emitting induction tasks
+    // forever. Advances only through the legal-transition gate (self-gated on
+    // safeword/pause); returns the resulting phase.
+    if (programId) {
+      const { data: walkedPhase } = await s.rpc('recon_program_walk', { p_program: programId })
+      if (typeof walkedPhase === 'string' && walkedPhase) phase = walkedPhase
+    }
+
     // Close the proposed→active loop: if nothing is running and we're under the
     // ≤3-active cap, start the top-priority proposed target that already has a
     // baseline (recon-measure captures those weekly; no baseline → skip, honesty
