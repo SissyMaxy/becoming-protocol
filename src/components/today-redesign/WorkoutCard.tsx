@@ -120,7 +120,7 @@ export function WorkoutCard() {
               {firstOfPhase && (
                 <div style={{
                   fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.1em',
-                  color: '#9c8590', fontWeight: 700, margin: '6px 2px 4px',
+                  color: 'var(--protocol-text-muted)', fontWeight: 700, margin: '6px 2px 4px',
                 }}>
                   {PHASE_LABELS[ex.phase!] ?? ex.phase}
                 </div>
@@ -140,7 +140,7 @@ export function WorkoutCard() {
                   )}
                 </div>
                 {ex.notes && (
-                  <div style={{ fontSize: 10.5, color: '#9c8590', marginTop: 3 }}>
+                  <div style={{ fontSize: 10.5, color: 'var(--protocol-text-muted)', marginTop: 3 }}>
                     {ex.notes}
                   </div>
                 )}
