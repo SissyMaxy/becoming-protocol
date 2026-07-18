@@ -60,10 +60,16 @@ export function WorkoutCard() {
       completed_at: new Date().toISOString(),
       completion_notes: note || null,
     }).eq('id', today.id);
+    // Completing the prescription IS today's movement — credit the fitness
+    // streak too (RPC is idempotent per day) so one tap feeds both ledgers.
+    if (user?.id) {
+      await supabase.rpc('fitness_log_session', { p_user: user.id }).then(() => {}, () => {});
+    }
     setSubmitting(false);
     setNote('');
     load();
     window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'workout', id: today.id } }));
+    window.dispatchEvent(new Event('fitness-logged'));
   };
 
   const isDone = today.status === 'completed';

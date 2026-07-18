@@ -2,6 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.24.3'
 import { requireServiceRole } from '../_shared/request-auth.ts'
+import { selectWorkout } from '../_shared/workout-select.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -110,22 +111,6 @@ const WORKOUT_TEMPLATES: Record<string, { name: string; focus: string; exercises
   },
 }
 
-function selectWorkout(recovery: number | null, streak: number, preference: string | null): string {
-  if (recovery !== null && recovery < 34) return 'recovery_stretch'
-  if (recovery !== null && recovery < 50) {
-    const light = ['flexibility', 'yoga_flow', 'posture_feminine']
-    return light[Math.floor(Math.random() * light.length)]
-  }
-
-  // Rotate based on streak day to hit all areas
-  const rotation = ['glute_sculpt', 'hip_widening', 'waist_slimming', 'posture_feminine', 'flexibility', 'yoga_flow', 'dance_cardio']
-  if (preference && rotation.includes(preference)) {
-    // Weight toward preference but still rotate
-    if (Math.random() < 0.4) return preference
-  }
-  return rotation[streak % rotation.length]
-}
-
 serve(async req => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   const unauthorized = await requireServiceRole(req, corsHeaders)
@@ -141,7 +126,7 @@ serve(async req => {
 
     const { data: users } = await supa
       .from('user_state')
-      .select('user_id, workout_streak_days, workout_focus_preference')
+      .select('user_id, workout_focus_preference')
       .limit(50)
 
     let prescribed = 0
@@ -169,10 +154,9 @@ serve(async req => {
         .maybeSingle()
 
       const recovery = whoop ? (whoop as any).recovery_score as number : null
-      const streak = (user.workout_streak_days as number) || 0
       const preference = (user.workout_focus_preference as string) || null
 
-      const workoutType = selectWorkout(recovery, streak, preference)
+      const workoutType = selectWorkout({ recovery, dateISO: today, preference })
       const template = WORKOUT_TEMPLATES[workoutType]
       if (!template) continue
 
@@ -190,7 +174,7 @@ serve(async req => {
       // Queue outreach
       await supa.from('handler_outreach_queue').insert({
         user_id: userId,
-        message: `Today's workout: ${template.name} (${template.duration}min). Focus: ${template.focus}. ${recovery !== null && recovery < 50 ? 'Recovery is low — I adjusted intensity.' : 'Recovery looks good — push hard.'} Check Force Layer for the full exercise list.`,
+        message: `Today's workout: ${template.name} (${template.duration}min). Focus: ${template.focus}. ${recovery !== null && recovery < 50 ? 'Recovery is low — I adjusted intensity.' : 'Recovery looks good — push hard.'} The full routine is on your home screen.`,
         urgency: 'normal',
         trigger_reason: 'daily_workout',
         scheduled_for: new Date().toISOString(),
