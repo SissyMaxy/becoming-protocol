@@ -1672,11 +1672,13 @@ export function FocusMode({ onViewPlan }: FocusModeProps) {
   // mommy-orders subsystem removed on main; detail is the task's own line.
   const orderDetail = task?.detail;
 
+  // Embedded section of TodayView — it sizes to its content. The old
+  // minHeight:100dvh + opaque background were relics of FocusMode-as-the-
+  // whole-screen: mid-page they carved a viewport-tall black void and a
+  // solid stripe over the body's velvet gradient.
   return (
     <div style={{
-      minHeight: '100dvh',
-      background: 'var(--protocol-bg-deep)',
-      padding: '24px 18px 80px',
+      padding: '20px 12px 24px',
       color: 'var(--protocol-text)',
       display: 'flex',
       flexDirection: 'column',

@@ -81,11 +81,12 @@ interface BambiModeContextType {
 const THEME_KEY = 'bp-theme-preference';
 
 function getStoredTheme(): 'light' | 'dark' {
+  // Velvet default (2026-07-19): the app IS dark. Bambi/light is the opt-in
+  // skin, kept only for users who explicitly stored 'light'.
   try {
-    const stored = localStorage.getItem(THEME_KEY);
-    if (stored === 'dark') return 'dark';
+    if (localStorage.getItem(THEME_KEY) === 'light') return 'light';
   } catch {}
-  return 'light'; // default
+  return 'dark';
 }
 
 function storeTheme(theme: 'light' | 'dark') {
@@ -198,10 +199,15 @@ export function BambiModeProvider({ children }: { children: React.ReactNode }) {
     storeTheme(next);
   }, []);
 
-  // Sync body bg when theme changes
+  // The body is styled ONCE, by index.css (Velvet: dark plum + rose glow).
+  // This effect used to stomp an inline #FAF7F5/#0b0a10 background on <body>,
+  // which overrode the Velvet gradient for every user who never toggled the
+  // theme — white overscroll bands around a dark app. Bambi mode re-lights
+  // its own tree via .bambi-mode; the body is never its canvas. Clear any
+  // inline value a previous session may have left behind.
   useEffect(() => {
-    document.body.style.backgroundColor = isDarkMode ? '#0b0a10' : '#FAF7F5';
-    document.body.style.color = isDarkMode ? '#e8e6ed' : '#3D2B2B';
+    document.body.style.removeProperty('background-color');
+    document.body.style.removeProperty('color');
   }, [isDarkMode]);
 
   // Get time-based greeting

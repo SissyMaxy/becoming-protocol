@@ -164,7 +164,9 @@ export function DropPortal() {
 
       <div style={{
         position: 'relative',
-        minHeight: under ? 460 : 300,
+        // Resting shows one quiet line — don't reserve a hero's worth of
+        // empty glow for it. Full height only when there's a drop to take.
+        minHeight: under ? 460 : gated ? 150 : 300,
         borderRadius: 18,
         background: 'radial-gradient(120% 80% at 50% 30%, var(--immersive-glow-a) 0%, var(--immersive-glow-b) 55%, var(--immersive-bg) 100%)',
         border: '1px solid rgb(var(--protocol-accent-rgb) / 0.25)',
