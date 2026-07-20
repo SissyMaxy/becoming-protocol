@@ -143,8 +143,14 @@ for (const [name, hits] of byPattern) {
 }
 
 if (updateBaseline) {
+  // Sort BOTH the pattern keys and each entry list so the baseline is
+  // byte-deterministic across OSes — the Map's insertion order follows the
+  // file-walk (readdir) order, which differs Windows↔Linux and was making
+  // check-baselines report phantom drift in CI (preflight red).
   const out = {};
-  for (const [name, set] of currentHitKeys) out[name] = [...set].sort();
+  for (const name of [...currentHitKeys.keys()].sort()) {
+    out[name] = [...currentHitKeys.get(name)].sort();
+  }
   writeFileSync(baselinePath, JSON.stringify(out, null, 2) + '\n');
   console.log(`[ui-lint] Baseline updated: ${totalHits} hits captured at ${relative(ROOT, baselinePath)}`);
   process.exit(0);

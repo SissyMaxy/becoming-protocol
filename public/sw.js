@@ -5,7 +5,7 @@
 // cache when online (navigations are network-only, cache is offline-only
 // fallback), so the shell is always fresh and always points at the current
 // hashed bundles. Bumping the cache name purges every stale v1 asset on activate.
-const CACHE_NAME = 'becoming-protocol-v2';
+const CACHE_NAME = 'becoming-protocol-v3';
 const STATIC_ASSETS = [
   '/butterfly.svg',
   '/manifest.json'

@@ -20,13 +20,23 @@ body {
   color: var(--protocol-text);
   min-height: 100dvh;
   /* Velvet boudoir — not flat near-black. A warm plum floor with a low rose
-     glow bleeding up from the bottom, like candlelight. This is the signature. */
+     glow bleeding up from the bottom, like candlelight. This is the signature.
+     The gradient lives on a fixed pseudo-element, not background-attachment:
+     fixed — which iOS Safari ignores and desktop repaints on every scroll
+     frame (measured renderer stalls on the long Today page). */
   background-color: var(--protocol-bg);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   background-image:
     radial-gradient(120% 80% at 50% 108%, rgb(var(--protocol-accent-rgb) / 0.16) 0%, rgb(var(--protocol-accent-rgb) / 0) 55%),
     radial-gradient(90% 60% at 15% -10%, rgba(120, 58, 87, 0.18) 0%, rgba(120, 58, 87, 0) 50%),
     linear-gradient(180deg, var(--protocol-bg-warm) 0%, var(--protocol-bg) 45%, var(--protocol-bg-deep) 100%);
-  background-attachment: fixed;
 }
 
 #root {

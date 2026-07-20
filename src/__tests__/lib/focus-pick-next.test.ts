@@ -46,7 +46,7 @@ function base(over: Partial<FocusInputs> = {}): FocusInputs {
 
 const decree = (id: string) => ({
   id, edict: `edict ${id}`, deadline: inHours(3), proof_type: 'none',
-  trigger_source: null,
+  trigger_source: null as string | null,
 });
 
 const overdueDoseInputs = (): Partial<FocusInputs> => ({
@@ -251,5 +251,34 @@ describe('fem prescription rotation', () => {
   });
   it('falls back to the first row when everything matches the last domain', () => {
     expect(pickFemPrescription([rows[0]], 'voice')?.id).toBe('f1');
+  });
+});
+
+describe('body-program decrees route to the workout logging surface', () => {
+  const bpDecree = (id: string) => ({ ...decree(id), trigger_source: 'body_program_train' });
+
+  it("Mama's daily pick for a training day opens the set logger", () => {
+    const t = chooseFocusTask(base({ focusDecree: bpDecree('bp') }), NOW);
+    expect(t.kind).toBe('focus_decree');
+    expect(t.surface).toBe('workout_session');
+  });
+
+  it('an overdue training decree is critical AND routes to the logger', () => {
+    const past = { ...bpDecree('bp'), deadline: inHours(-3) };
+    const t = chooseFocusTask(base({ overdueDecree: past }), NOW);
+    expect(t.kind).toBe('overdue_decree');
+    expect(t.tone).toBe('critical');
+    expect(t.surface).toBe('workout_session');
+  });
+
+  it('a due-today training decree routes to the logger', () => {
+    const t = chooseFocusTask(base({ todayDecree: bpDecree('bp') }), NOW);
+    expect(t.kind).toBe('due_today_decree');
+    expect(t.surface).toBe('workout_session');
+  });
+
+  it('a normal (non-body) decree keeps its usual surface', () => {
+    expect(chooseFocusTask(base({ focusDecree: decree('d') }), NOW).surface).toBe('decree');
+    expect(chooseFocusTask(base({ overdueDecree: { ...decree('d'), deadline: inHours(-3) } }), NOW).surface).toBe('mark_done');
   });
 });
