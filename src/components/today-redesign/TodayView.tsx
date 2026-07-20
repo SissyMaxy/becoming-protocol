@@ -19,6 +19,8 @@ import '../../styles/today-redesign.css';
 import { navigate } from '../../navigation/store';
 import { DropPortal } from './DropPortal';
 import { LovenseHealthBanner } from './LovenseHealthBanner';
+import { HerWord } from './HerWord';
+import { DebtsAndRules } from './DebtsAndRules';
 import { BecomingHero } from './BecomingHero';
 import { FocusMode } from './FocusMode';
 import { FitnessTrackerCard } from './FitnessTrackerCard';
@@ -69,7 +71,15 @@ export function TodayView(_props: TodayViewProps) {
         </div>
       )}
 
+      {/* Her word leads. The screen used to open with a presence card — a
+          component that announced the dynamic instead of being it. Now the
+          first thing here is the last thing she actually said, dated, with his
+          own words quoted back underneath it. The message IS the relationship;
+          everything below is consequence. */}
       <div className="px-3 md:px-4 pt-1">
+        <HerWord />
+      </div>
+      <div className="px-3 md:px-4">
         <DropPortal />
       </div>
       <div className="px-3 md:px-4">
@@ -77,6 +87,10 @@ export function TodayView(_props: TodayViewProps) {
       </div>
       <BecomingHero />
       <FocusMode onViewPlan={() => navigate('plan')} />
+      {/* The ledger and the standing terms. Neither competes with FocusMode —
+          that shows the ONE thing to do now; these sit underneath as what's
+          owed and what he lives under. */}
+      <DebtsAndRules />
       {/* Today's prescribed routine, on the default surface. It previously
           lived only inside Build your body / Plan (and at the bottom of the
           focus ranking), so the daily prescription was invisible from home. */}
