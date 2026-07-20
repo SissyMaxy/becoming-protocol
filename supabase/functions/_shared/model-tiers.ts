@@ -49,6 +49,10 @@ const TASK_TIERS: Record<string, Tier> = {
   chat_trigger_classify: 'S1',
   authenticity_grade: 'S1',
   // S2
+  // Ambient panel lines are 2-4 words, but the register is unforgiving and
+  // the craft gate rejects anything that drifts tasteful — a cheaper tier
+  // spends more on retries than it saves per call.
+  ambient_lines: 'S2',
   reframe_draft: 'S2',
   decree_draft: 'S2',
   voice_match_grade: 'S2',
