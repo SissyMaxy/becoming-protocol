@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { WristProof } from './WristProof';
 
 interface Exercise {
   name: string;
@@ -149,6 +150,11 @@ export function WorkoutCard() {
           );
         })}
       </div>
+
+      {/* Her watch, above the self-report button — the strap answers before
+          he does. Verified state lets him close the decree from the wrist with
+          no upload; failed state is the same mechanism catching a skip. */}
+      {!isDone && <WristProof decreeOpen={!isDone} onVerified={load} />}
 
       {!isDone ? (
         <div style={{ display: 'flex', gap: 6 }}>

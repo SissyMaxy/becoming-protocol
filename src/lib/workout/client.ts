@@ -104,3 +104,32 @@ export async function ensureWorkoutDecree(edict: string, sessionName: string): P
 export async function fulfillWorkoutDecree(): Promise<void> {
   await supabase.rpc('body_program_fulfill');
 }
+
+export type WristStatus =
+  | { state: 'none' }
+  | { state: 'below_floor'; minutes: number }
+  | { state: 'verified'; minutes: number; avg_hr: number | null; max_hr: number | null; sport: string | null };
+
+/**
+ * What her watch saw today, without committing anything (mig 689). Drives the
+ * proof line on the order card — "her watch saw it · 34 min · heart at 156" or
+ * the failed-proof line — before the user acts. Visible before it's committed.
+ */
+export async function wristWorkoutStatus(): Promise<WristStatus> {
+  const { data, error } = await supabase.rpc('wrist_workout_status');
+  if (error || !data) return { state: 'none' };
+  return data as WristStatus;
+}
+
+/**
+ * Fulfill today's train decree from a real Whoop workout row — no upload, no
+ * self-report. Returns whether the strap actually cleared the floor. This is
+ * the proof path that catches a skip: if it returns verified:false, nothing
+ * landed on the wrist and the self-report path stays the only way to close it.
+ */
+export async function wristVerifyWorkout(): Promise<{ verified: boolean; decreeFulfilled: boolean }> {
+  const { data, error } = await supabase.rpc('wrist_verify_workout');
+  if (error || !data) return { verified: false, decreeFulfilled: false };
+  const r = data as { verified?: boolean; decree_fulfilled?: boolean };
+  return { verified: !!r.verified, decreeFulfilled: !!r.decree_fulfilled };
+}
