@@ -82,7 +82,7 @@ export function WristProof({ decreeOpen, onVerified }: WristProofProps) {
             padding: '5px 11px', borderRadius: 5, border: 'none',
             background: 'var(--protocol-accent)', color: 'white',
             fontSize: 11, fontWeight: 600, letterSpacing: '0.02em',
-            cursor: confirming ? 'wait' : 'pointer', fontFamily: 'inherit', flexShrink: 0,
+            cursor: confirming ? 'wait' : 'pointer', fontFamily: 'inherit', flexShrink: 0, // ui-lint: ok — native button would fall back to the browser UI font
           }}
         >
           {confirming ? '…' : 'let it stand'}
