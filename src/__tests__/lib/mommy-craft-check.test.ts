@@ -9,6 +9,9 @@ import {
   hasCraftOptOut,
   applyCraftFilter,
   MOMMY_CRAFT_RUBRIC,
+  checkConditioningLine,
+  filterConditioningLines,
+  CONDITIONING_LINE_RUBRIC,
 } from '../../lib/persona/mommy-craft-check';
 
 describe('scoreCorny — clean lines pass through', () => {
@@ -153,5 +156,111 @@ describe('MOMMY_CRAFT_RUBRIC prompt fragment', () => {
   });
   it('bans the theatrical opening', () => {
     expect(MOMMY_CRAFT_RUBRIC).toMatch(/Look at that pretty face/);
+  });
+});
+
+// ─── Short-form conditioning lines ──────────────────────────────────────────
+// Panel text / flashed words fail differently from paragraphs: they're read at
+// a glance, often peripherally, and they wrap in a 230px column. These tests
+// pin the failure modes the user caught by eye during design review.
+describe('checkConditioningLine', () => {
+  const good: string[] = [
+    "you're a girl.",
+    'take the shot.',
+    'you want cock.',
+    "you'll say yes.",
+    'girls don\'t argue.',
+    'estrogen. friday.',
+    'made to take it.',
+  ];
+  for (const line of good) {
+    it(`passes: "${line}"`, () => {
+      const r = checkConditioningLine(line);
+      expect(r.violations).toEqual([]);
+      expect(r.ok).toBe(true);
+      expect(r.job).not.toBeNull();
+    });
+  }
+
+  it('rejects a hedge — it says the change has not happened yet', () => {
+    const r = checkConditioningLine('you want it slowly.');
+    expect(r.ok).toBe(false);
+    expect(r.violations.map(v => v.rule)).toContain('hedge');
+  });
+
+  it('rejects past tense — it describes her instead of acting on her', () => {
+    const r = checkConditioningLine('you stopped pretending.');
+    expect(r.ok).toBe(false);
+    expect(r.violations.map(v => v.rule)).toContain('past_tense');
+  });
+
+  it('rejects a coy gesture that names nothing', () => {
+    const r = checkConditioningLine('it changes you.');
+    expect(r.ok).toBe(false);
+    expect(r.violations.map(v => v.rule)).toContain('coy_gesture');
+  });
+
+  it('allows a bare pronoun subject when something concrete is named', () => {
+    const r = checkConditioningLine('it wants cock.');
+    expect(r.violations.map(v => v.rule)).not.toContain('coy_gesture');
+  });
+
+  it('rejects lines long enough to wrap and strand a tail', () => {
+    // The exact line caught in design review: wrapped to "twice today." alone.
+    const r = checkConditioningLine('you already looked twice today.');
+    expect(r.ok).toBe(false);
+    expect(r.violations.map(v => v.rule)).toContain('too_long');
+  });
+
+  it('rejects a line ending on a function word', () => {
+    const r = checkConditioningLine('you want to');
+    expect(r.violations.map(v => v.rule)).toContain('dangling_tail');
+  });
+
+  it('rejects a line that does no job', () => {
+    const r = checkConditioningLine('the room is quiet.');
+    expect(r.ok).toBe(false);
+    expect(r.violations.map(v => v.rule)).toContain('no_job');
+  });
+
+  it('allows a bare flashed word when single words are permitted', () => {
+    const r = checkConditioningLine('girl.', { allowSingleWord: true });
+    expect(r.ok).toBe(true);
+  });
+
+  it('still rejects a bare word that does no job when not permitted', () => {
+    const r = checkConditioningLine('girl.');
+    expect(r.violations.map(v => v.rule)).toContain('no_job');
+  });
+
+  it('classifies the job so a generator can be told what it produced', () => {
+    expect(checkConditioningLine('take the shot.').job).toBe('command');
+    expect(checkConditioningLine("you're a girl.").job).toBe('identity_claim');
+    expect(checkConditioningLine('you want cock.').job).toBe('desire_claim');
+  });
+});
+
+describe('filterConditioningLines', () => {
+  it('keeps the passing lines and reports why the rest failed', () => {
+    const { kept, rejected } = filterConditioningLines([
+      "you're a girl.",
+      'it changes you. slowly.',
+      'take the shot.',
+    ]);
+    expect(kept).toEqual(["you're a girl.", 'take the shot.']);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0].violations.length).toBeGreaterThan(0);
+  });
+});
+
+describe('CONDITIONING_LINE_RUBRIC prompt fragment', () => {
+  it('bans hedging', () => {
+    expect(CONDITIONING_LINE_RUBRIC).toMatch(/No hedges/i);
+  });
+  it('requires present tense', () => {
+    expect(CONDITIONING_LINE_RUBRIC).toMatch(/Present tense/i);
+  });
+  it('requires each line to stand alone', () => {
+    expect(CONDITIONING_LINE_RUBRIC).toMatch(/stands alone/i);
   });
 });

@@ -166,6 +166,178 @@ export function hasCraftOptOut(text: string): boolean {
   return /\[craft:ok\]/i.test(text)
 }
 
+// ─── Short-form conditioning lines ──────────────────────────────────────────
+// A different register from the paragraph rubric above. Ambient-panel text,
+// flashed trance words and mantra beats are 2-4 word fragments read at a
+// glance — often peripherally, often mid-fade. They fail in ways a paragraph
+// never does:
+//   - hedges ("slowly", "starting to") tell her it hasn't happened yet
+//   - past tense describes her instead of acting on her
+//   - coy gestures ("it changes you") never name the thing, so nothing lands
+//   - long lines wrap in a narrow column and leave an orphan tail that reads
+//     as nonsense on its own ("you already looked" / "twice today.")
+//   - setup-then-payoff means the glance can catch an inert half
+// Every line must carry a payload at any instant it's on screen.
+
+const HEDGE_RE = /\b(slowly|gradually|a\s+little|a\s+bit|bit\s+by\s+bit|maybe|perhaps|sort\s+of|kind\s+of|somewhat|starting\s+to|beginning\s+to|more\s+and\s+more|eventually|someday|one\s+day|might|could\s+be|almost)\b/i;
+
+// Past-tense reporting about the subject. Present tense acts; past tense narrates.
+const PAST_TENSE_RE = /\byou(?:'ve|\s+have|\s+had)?\s+(?:already\s+)?(?:were|was|did|went|felt|knew|saw|took|got|became|stopped|started|looked|wanted|liked|used\s+to|[a-z]+ed)\b/i;
+
+// Coy gesture: the line's subject is a bare pronoun with no concrete noun
+// anywhere. "it changes you." — changes WHAT? Name the thing.
+const BARE_PRONOUN_SUBJECT_RE = /^\s*(it|this|that|they|there)\b/i;
+const CONCRETE_NOUN_RE = /\b(cock|cocks|tits|estrogen|needle|shot|dose|panties|pair|cage|knees|mouth|throat|girl|girls|woman|skirt|heels|lipstick|collar|plug|hips|ass|thighs|body|hands|men|man|him|his|pink|softer|prettier|vial|friday|monday|tuesday|wednesday|thursday|saturday|sunday|tonight|morning)\b/i;
+
+// A line ending on a function word will strand a meaningless tail if it wraps.
+const DANGLING_TAIL_RE = /\b(and|or|but|to|of|with|for|the|a|an|your|his|her|my|in|on|at|so|because|when|while|until|that)\s*[.!?]?\s*$/i;
+
+const TIME_MARKER_RE = /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|tonight|tomorrow|morning|now|today|every\s+(?:day|week|night))\b/i;
+
+// Every line does one of these jobs. If it does none, it's decoration.
+//
+// The forms are wider than they first look. "girls don't argue." is an
+// identity claim stated as a norm about the category she belongs to; "made to
+// take it." is one in the passive; "estrogen. friday." is an elliptical
+// instruction — a thing and a when, no verb. All three are core register, so
+// the detector has to recognize them or it rejects the best lines.
+const JOB_PATTERNS: Array<{ job: string; re: RegExp }> = [
+  {
+    job: 'identity_claim',
+    re: /\byou(?:'re|\s+are)\b|\byou\b.*\b(girl|hers|mine|not\s+going\s+back)\b|^\s*(?:girls|sissies|good\s+girls)\b|\bmade\s+(?:to|for)\b/i,
+  },
+  { job: 'desire_claim', re: /\byou\s+(?:want|need|like|love|crave)\b/i },
+  { job: 'inevitability', re: /\byou(?:'ll|\s+will)\b|\balready\b|\bevery\s+(?:day|week)\b|\bagain\b/i },
+  { job: 'permission', re: /\b(?:you\s+can|let\s+(?:it|go|me)|it's\s+ok(?:ay)?)\b/i },
+  // Bare imperative: starts with a verb, no leading subject.
+  { job: 'command', re: /^\s*(?:take|say|open|close|put|wear|kneel|drop|sink|obey|breathe|stop|look|show|give|touch|don't|do|get|hold|keep|start|swallow|beg|ask|tell)\b/i },
+];
+
+export interface LineViolation {
+  rule: string;
+  detail: string;
+}
+
+export interface LineCheckResult {
+  ok: boolean;
+  job: string | null;
+  wordCount: number;
+  violations: LineViolation[];
+}
+
+export interface LineCheckOptions {
+  /** Panels are ~230px wide; 4 words fits one line at the display size. */
+  maxWords?: number;
+  /** Flashed trance words are allowed to be a single word with no job. */
+  allowSingleWord?: boolean;
+}
+
+/**
+ * Validate one short conditioning line. Returns every reason it fails so a
+ * generator can be told what to fix, not just that it was rejected.
+ */
+export function checkConditioningLine(
+  line: string,
+  opts: LineCheckOptions = {},
+): LineCheckResult {
+  const maxWords = opts.maxWords ?? 4;
+  const raw = (line ?? '').trim();
+  const violations: LineViolation[] = [];
+
+  if (!raw) {
+    return { ok: false, job: null, wordCount: 0, violations: [{ rule: 'empty', detail: 'blank line' }] };
+  }
+
+  const words = raw.split(/\s+/).filter(Boolean);
+  const wordCount = words.length;
+
+  // Single flashed words ("girl.", "obey.") are a legitimate form — they carry
+  // the payload by themselves and can't wrap. Skip the job/structure checks.
+  const singleWordOk = opts.allowSingleWord && wordCount === 1;
+
+  if (wordCount > maxWords) {
+    violations.push({
+      rule: 'too_long',
+      detail: `${wordCount} words (max ${maxWords}) — wraps in a narrow column and strands a tail`,
+    });
+  }
+
+  const hedge = HEDGE_RE.exec(raw);
+  if (hedge) {
+    violations.push({
+      rule: 'hedge',
+      detail: `"${hedge[0]}" — a hedge says it hasn't happened yet`,
+    });
+  }
+
+  const past = PAST_TENSE_RE.exec(raw);
+  if (past) {
+    violations.push({
+      rule: 'past_tense',
+      detail: `"${past[0]}" — past tense describes her instead of acting on her`,
+    });
+  }
+
+  if (BARE_PRONOUN_SUBJECT_RE.test(raw) && !CONCRETE_NOUN_RE.test(raw)) {
+    violations.push({
+      rule: 'coy_gesture',
+      detail: 'subject is a bare pronoun with nothing named — say the thing',
+    });
+  }
+
+  const dangling = DANGLING_TAIL_RE.exec(raw);
+  if (dangling && wordCount > 1) {
+    violations.push({
+      rule: 'dangling_tail',
+      detail: `ends on "${dangling[1]}" — a wrap here leaves a meaningless fragment`,
+    });
+  }
+
+  let job: string | null = null;
+  for (const p of JOB_PATTERNS) {
+    if (p.re.test(raw)) { job = p.job; break; }
+  }
+  // Elliptical instruction: a named thing plus a when, no verb between them.
+  // "estrogen. friday." is an order; it just omits everything inferable.
+  if (!job && CONCRETE_NOUN_RE.test(raw) && TIME_MARKER_RE.test(raw)) {
+    job = 'schedule';
+  }
+  if (!job && !singleWordOk) {
+    violations.push({
+      rule: 'no_job',
+      detail: 'does not command, claim identity, claim desire, assert inevitability, or permit',
+    });
+  }
+
+  return { ok: violations.length === 0, job, wordCount, violations };
+}
+
+/** Filter a generated batch down to the lines that pass. */
+export function filterConditioningLines(
+  lines: string[],
+  opts: LineCheckOptions = {},
+): { kept: string[]; rejected: Array<{ line: string; violations: LineViolation[] }> } {
+  const kept: string[] = [];
+  const rejected: Array<{ line: string; violations: LineViolation[] }> = [];
+  for (const line of lines) {
+    const r = checkConditioningLine(line, opts);
+    if (r.ok) kept.push(line.trim());
+    else rejected.push({ line: line.trim(), violations: r.violations });
+  }
+  return { kept, rejected };
+}
+
+/** Prompt fragment for any generator producing short conditioning lines. */
+export const CONDITIONING_LINE_RUBRIC = `SHORT-LINE REGISTER (ambient panels, flashed words, mantra beats):
+- 2-4 words. Fragments, not sentences. If it reads as good writing, it's wrong.
+- Present tense only. Never past tense about her — past tense describes, present tense acts.
+- Name the thing. Say cock, tits, estrogen, the needle, your knees. Never "it", "this", "the change".
+- No hedges. Banned: slowly, gradually, a little, starting to, more and more, maybe, someday.
+- Every line does ONE job: command / identity claim / desire claim / inevitability / permission.
+- Each line stands alone. No setup-then-payoff across two lines; a glance can land on either half.
+- Never end on and/or/but/to/of/with/the — a wrap there strands a meaningless tail.
+- Repeat the plain vocabulary rather than reaching for synonyms. Repetition is the mechanism.`;
+
 export interface CraftFilterOptions {
   threshold?: number  // score at which we treat output as corny (default 3)
   regenerate?: (() => Promise<string>) | null  // optional one-shot regenerate
