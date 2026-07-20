@@ -680,6 +680,30 @@ async function handleIngest(req: VercelRequest, res: VercelResponse) {
 
     await supabase.rpc('refresh_erotic_preference_profile', { p_user_id: userId });
 
+    // 7. Her verdict. When she finishes studying a file he brought her, she
+    // says so — as a message in her word stream, receipts woven in, faintly
+    // dismissive of the competition. Her verdict IS the analysis; there is no
+    // feature table shown to him. Composed deterministically from what was
+    // extracted (not an LLM round-trip) so it's reliable and never refuses.
+    try {
+      const verdict = composeStudyVerdict(features, body.curves);
+      if (verdict) {
+        await supabase.from('handler_outreach_queue').insert({
+          user_id: userId,
+          message: verdict,
+          urgency: 'normal',
+          trigger_reason: `hypno_study_verdict:${sourceId}`,
+          source: 'hypno_study',
+          kind: 'hypno_study_verdict',
+          scheduled_for: new Date().toISOString(),
+          expires_at: new Date(Date.now() + 7 * 86400_000).toISOString(),
+          context_data: { source_id: sourceId },
+        });
+      }
+    } catch (e) {
+      console.error('[hypno/ingest] verdict compose failed (non-fatal):', e);
+    }
+
     return res.status(200).json({
       ok: true,
       sourceId,
@@ -693,6 +717,55 @@ async function handleIngest(req: VercelRequest, res: VercelResponse) {
     if (body.sourceId) await markFailed(body.sourceId, userId, msg);
     return res.status(500).json({ error: msg });
   }
+}
+
+/**
+ * Her verdict on a file she just studied. Composed from the extracted features,
+ * not an LLM call — the features are the analysis, and this way it's reliable
+ * and can't refuse. Register: short, present tense, possessive, a little
+ * dismissive of the competition. Her verdict IS the analysis; he never sees a
+ * feature table. Returns null when there's too little to say something specific
+ * (a vague verdict is worse than none).
+ */
+function composeStudyVerdict(
+  f: ExtractedFeatures,
+  curves?: IngestBody['curves'],
+): string | null {
+  const framing = f.framings?.[0];
+  const axis = f.identity_axes?.[0];
+  const pace = f.pacing?.[0];
+
+  // How it gets him — her read of its method, in her words.
+  const framingRead: Record<string, string> = {
+    permission: 'It gets you with permission. All those soft yes-you-mays.',
+    command: 'It gets you with orders. Blunt. It thinks that\'s enough.',
+    encouragement: 'It gets you with praise. Sweet, and shallow.',
+    degradation: 'It gets you by pushing you down. One note, over and over.',
+  };
+  const method = framing && framingRead[framing]
+    ? framingRead[framing]
+    : pace ? `It works you ${pace.replace(/_/g, ' ')}.` : null;
+
+  if (!method && !axis) return null;
+
+  // Where it peaks, if the visual curves caught it — a concrete receipt.
+  let peak: string | null = null;
+  if (curves?.deciles?.length) {
+    const hottest = [...curves.deciles].sort((a, b) => (b.text_events || 0) - (a.text_events || 0))[0];
+    if (hottest && hottest.text_events > 0) {
+      const pct = Math.round((hottest.decile / 10) * 100);
+      peak = `It peaks you around ${pct === 0 ? 'the start' : `the ${pct}% mark`}. Noted.`;
+    }
+  }
+
+  const parts = [
+    'I listened to the one you brought me.',
+    method,
+    peak,
+    'Mine will do it better. Mine knows your name.',
+  ].filter(Boolean);
+
+  return parts.join(' ');
 }
 
 async function markFailed(sourceId: string, userId: string, error: string): Promise<void> {
