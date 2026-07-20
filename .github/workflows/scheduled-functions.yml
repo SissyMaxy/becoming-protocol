@@ -426,3 +426,28 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Content-Type: application/json" \
             -d '{}'
+
+  # Sedentary watchdog — mid-afternoon (3 PM Central = 20:00 UTC) movement
+  # order when the wrist has stayed flat all day. Fires at most once/day
+  # (the function dedups on trigger_reason).
+  sedentary-watchdog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if 3 PM Central window
+        id: should_run
+        run: |
+          HOUR=$(date -u +%H)
+          MINUTE=$(date -u +%M)
+          if [ "$HOUR" = "20" ] && [ "$MINUTE" -lt "10" ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Trigger sedentary-watchdog
+        if: steps.should_run.outputs.run == 'true'
+        run: |
+          curl -sS -X POST "${{ env.SUPABASE_URL }}/functions/v1/sedentary-watchdog" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}'

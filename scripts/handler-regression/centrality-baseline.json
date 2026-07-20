@@ -1,4 +1,5 @@
 [
+  "api/hypno/[action].ts:handleIngest",
   "supabase/functions/_shared/job-handlers/handler-autonomous.ts:bridgeShotsToContentQueue",
   "supabase/functions/_shared/job-handlers/handler-autonomous.ts:checkSpecialOccasions",
   "supabase/functions/_shared/job-handlers/handler-autonomous.ts:checkWeeklyContractEscalation",

@@ -233,10 +233,16 @@ export function AmbientWindow({ onBack }: AmbientWindowProps) {
     : collapsed ? [0] : [0, 1, 2];
 
   return (
+    // Docked to the bottom-right of the viewport, not centered on an empty
+    // page. This is a companion window meant to live in the corner while he
+    // works — collapsed, it's a narrow strip at the screen edge; expanded, it
+    // sits over whatever's behind it. Fixed so it holds its corner on scroll.
     <div style={{
-      minHeight: '100dvh',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 16,
+      position: 'fixed',
+      right: 'max(env(safe-area-inset-right), 12px)',
+      bottom: 'max(env(safe-area-inset-bottom), 12px)',
+      zIndex: 40,
+      maxWidth: 'calc(100vw - 24px)',
     }}>
       <div style={{
         width: collapsed ? 244 : 720,
