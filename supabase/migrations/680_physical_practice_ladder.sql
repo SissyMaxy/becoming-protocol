@@ -47,7 +47,7 @@ CREATE POLICY pp_progress_rw ON public.physical_practice_progress
   FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 -- ── Each drill completion + comfort rating (drives advancement + evidence) ──
-CREATE TABLE IF NOT EXISTS public.physical_practice_log (
+CREATE TABLE IF NOT EXISTS public.practice_ladder_log (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   rung_id uuid NOT NULL REFERENCES public.physical_practice_rungs(id),
@@ -57,13 +57,13 @@ CREATE TABLE IF NOT EXISTS public.physical_practice_log (
   content_captured boolean NOT NULL DEFAULT false,
   completed_at timestamptz NOT NULL DEFAULT now()
 );
-ALTER TABLE public.physical_practice_log ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS pp_log_rw ON public.physical_practice_log;
-CREATE POLICY pp_log_rw ON public.physical_practice_log
+ALTER TABLE public.practice_ladder_log ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS practice_ladder_log_rw ON public.practice_ladder_log;
+CREATE POLICY practice_ladder_log_rw ON public.practice_ladder_log
   FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
-CREATE INDEX IF NOT EXISTS pp_log_user_track_rung
-  ON public.physical_practice_log (user_id, track, rung_order, completed_at DESC);
+CREATE INDEX IF NOT EXISTS practice_ladder_log_user_track_rung
+  ON public.practice_ladder_log (user_id, track, rung_order, completed_at DESC);
 
 -- ── Comfort-gated, non-skippable, prep-gated advancement ──
 -- Returns the resulting active_rung_order. Advances by exactly +1 (so a size
@@ -93,7 +93,7 @@ BEGIN
   -- Count comfortable completions among the most recent v_needed at this rung.
   SELECT count(*) FILTER (WHERE comfort_rating >= v_threshold) INTO v_comfortable
     FROM (
-      SELECT comfort_rating FROM public.physical_practice_log
+      SELECT comfort_rating FROM public.practice_ladder_log
        WHERE user_id = p_user AND track = p_track AND rung_order = v_active
        ORDER BY completed_at DESC
        LIMIT v_needed
