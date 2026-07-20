@@ -409,6 +409,25 @@ interface IngestBody {
   userRating?: number;
   notes?: string;
   visionTags?: Array<{ tag: string; frame_count: number; prevalence: number }>;
+  durationS?: number;
+  // Timestamped visual craft from the Modal worker (slice 4). The aggregate
+  // tags above answer "what is this file about"; the timeline answers "what
+  // happens WHEN" — which is the part a pacing template is built from.
+  timeline?: {
+    cuts?: number[];
+    textEvents?: Array<{ value: string; t_start_s: number; t_end_s: number }>;
+    visionSamples?: Array<{ t_start_s: number; tags?: string[]; caption?: string | null }>;
+  };
+  curves?: {
+    deciles?: Array<{
+      decile: number;
+      cuts: number;
+      text_events: number;
+      avg_text_hold_s: number | null;
+      cuts_per_min: number;
+      words: number;
+    }>;
+  };
 }
 
 interface ExtractedFeatures {
@@ -529,6 +548,9 @@ async function handleIngest(req: VercelRequest, res: VercelResponse) {
     // 5. Insert feature rows (dedupe via ON CONFLICT at the unique index)
     const rows: Array<{
       source_id: string; user_id: string; feature_type: string; value: string; weight: number;
+      // Set only by the curve-derived craft features (5c): 0-1 position in the
+      // runtime, so a template transfers across files of different lengths.
+      position_hint?: number;
     }> = [];
     const push = (type: string, values: string[]) => {
       for (const v of values) {
@@ -559,12 +581,94 @@ async function handleIngest(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    // 5c. Derived craft features from the decile curves (mig 687). These are
+    // the numbers generation reads: how long text holds and how fast cuts come
+    // at each tenth of the runtime. Stored normalized (position_hint 0-1) so a
+    // 6-minute file and an 18-minute file yield a comparable template.
+    if (body.curves?.deciles?.length) {
+      for (const d of body.curves.deciles) {
+        if (d.avg_text_hold_s != null) {
+          rows.push({
+            source_id: sourceId!,
+            user_id: userId,
+            feature_type: 'text_cadence',
+            value: `hold_${d.avg_text_hold_s}s@d${d.decile}`,
+            weight: d.text_events || 1,
+            position_hint: d.decile / 10,
+          });
+        }
+        if (d.cuts > 0) {
+          rows.push({
+            source_id: sourceId!,
+            user_id: userId,
+            feature_type: 'cut_rhythm',
+            value: `cuts_${d.cuts_per_min}pm@d${d.decile}`,
+            weight: d.cuts,
+            position_hint: d.decile / 10,
+          });
+        }
+      }
+    }
+
     if (rows.length > 0) {
       // Upsert to dedupe — source_id+feature_type+value unique
       await supabase.from('hypno_features').upsert(rows, {
         onConflict: 'source_id,feature_type,value',
         ignoreDuplicates: true,
       });
+    }
+
+    // 5d. Persist the fine-grained timeline. hypno_features is the summary
+    // layer; this is the raw evidence under it, so "what was on screen at
+    // 4:32" stays answerable and templates can be re-derived without a
+    // re-ingest (GPU time is the expensive part — never throw it away).
+    const durationS = body.durationS && body.durationS > 0 ? body.durationS : null;
+    const norm = (t: number) => (durationS ? Math.min(1, Math.max(0, t / durationS)) : null);
+    const timelineRows: Array<Record<string, unknown>> = [];
+
+    for (const t of body.timeline?.cuts ?? []) {
+      timelineRows.push({
+        source_id: sourceId!, user_id: userId, kind: 'cut',
+        t_start_s: t, t_end_s: t, position_norm: norm(t),
+      });
+    }
+    for (const e of body.timeline?.textEvents ?? []) {
+      const val = (e.value || '').trim().slice(0, 500);
+      if (!val) continue;
+      timelineRows.push({
+        source_id: sourceId!, user_id: userId, kind: 'text',
+        t_start_s: e.t_start_s, t_end_s: e.t_end_s,
+        position_norm: norm(e.t_start_s), value: val,
+      });
+    }
+    for (const s of body.timeline?.visionSamples ?? []) {
+      if (s.caption) {
+        timelineRows.push({
+          source_id: sourceId!, user_id: userId, kind: 'caption',
+          t_start_s: s.t_start_s, t_end_s: s.t_start_s,
+          position_norm: norm(s.t_start_s), value: s.caption.slice(0, 2000),
+        });
+      }
+      if (s.tags?.length) {
+        timelineRows.push({
+          source_id: sourceId!, user_id: userId, kind: 'tag',
+          t_start_s: s.t_start_s, t_end_s: s.t_start_s,
+          position_norm: norm(s.t_start_s),
+          value: s.tags.slice(0, 30).join(', ').slice(0, 500),
+        });
+      }
+    }
+
+    if (timelineRows.length > 0) {
+      // Chunked — a dense OCR pass on a long file produces thousands of rows.
+      for (let i = 0; i < timelineRows.length; i += 500) {
+        const { error: tlErr } = await supabase
+          .from('hypno_visual_timeline')
+          .insert(timelineRows.slice(i, i + 500));
+        // Never fail the whole ingest over timeline persistence — the audio
+        // features are the primary artifact and are already written.
+        if (tlErr) console.error('[hypno/ingest] timeline chunk failed:', tlErr.message);
+      }
     }
 
     // 6. Mark ready + refresh profile
@@ -581,6 +685,7 @@ async function handleIngest(req: VercelRequest, res: VercelResponse) {
       sourceId,
       transcriptChars: transcript.length,
       featureCount: rows.length,
+      timelineEvents: timelineRows.length,
     });
   } catch (e) {
     console.error('[hypno/ingest]', e);
