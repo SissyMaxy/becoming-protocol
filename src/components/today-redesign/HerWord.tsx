@@ -25,6 +25,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { isTestPollution } from '../../lib/persona/dommy-mommy';
 
 interface HerMessage {
   id: string;
@@ -79,7 +80,10 @@ export function HerWord() {
           .limit(1),
         // His own words, most recent first. This is the receipt — the thing
         // that makes her sound like she's been paying attention rather than
-        // performing authority.
+        // performing authority. Pull several, not one: the newest row can be a
+        // system-authored lifecycle marker ([RETIRED …]) rather than a real
+        // confession, and quoting that back as "you told me" is the exact
+        // pollution-never-surfaces failure. Filter, then take the first clean.
         supabase
           .from('confession_queue')
           .select('response_text, confessed_at')
@@ -87,7 +91,7 @@ export function HerWord() {
           .not('response_text', 'is', null)
           .not('confessed_at', 'is', null)
           .order('confessed_at', { ascending: false })
-          .limit(1),
+          .limit(8),
       ]);
       if (!alive) return;
 
@@ -96,8 +100,11 @@ export function HerWord() {
         setMsg({ id: o.id, message: o.message, createdAt: o.created_at });
       }
 
-      const c = (confession.data ?? [])[0] as { response_text: string; confessed_at: string } | undefined;
-      if (c?.response_text && c.response_text.trim().length > 12) {
+      const candidates = (confession.data ?? []) as Array<{ response_text: string; confessed_at: string }>;
+      const c = candidates.find(
+        (r) => r.response_text && r.response_text.trim().length > 12 && !isTestPollution(r.response_text),
+      );
+      if (c) {
         setReceipt({
           text: toQuote(c.response_text),
           when: new Date(c.confessed_at).toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase(),
