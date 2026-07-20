@@ -386,7 +386,13 @@ export function mommyVoiceCleanup(text: string): string {
  * Triggered by 2026-05-01 incident: a Today briefing surfaced
  * `_probe_1777642757983_3s9ioj_` as the user's own words from May 1.
  */
-const TEST_POLLUTION_RE = /(_probe_[a-z0-9_]+|\[regression(?:[-_][a-z0-9]+)?\]|\[test\]|\[probe[^\]]*\]|<placeholder>|\bTEST regression\b|\bregression test\b|\bTEST_USER\b|\bregression admission\b|\bregression auto-bind\b|\bregression_fixture\b|\bregression_probe\b|\bSCRATCH\b|\bFIXTURE\b)/i;
+// Also catches decree/row lifecycle markers that are system-authored, never
+// his words — e.g. `[RETIRED 2026-05-15: parent decree cancelled as clerical
+// busy-work]`. 2026-07-20 incident: HerWord's confession quote-back surfaced
+// exactly that as "You told me friday…". Any leading all-caps bracketed
+// lifecycle tag ([RETIRED…], [CANCELLED…], [SUPERSEDED…]) is a marker, not a
+// confession.
+const TEST_POLLUTION_RE = /(_probe_[a-z0-9_]+|\[regression(?:[-_][a-z0-9]+)?\]|\[test\]|\[probe[^\]]*\]|<placeholder>|\[(?:RETIRED|CANCELLED|CANCELED|SUPERSEDED|EXPIRED|DEPRECATED|VOID|ARCHIVED)\b[^\]]*\]|\bTEST regression\b|\bregression test\b|\bTEST_USER\b|\bregression admission\b|\bregression auto-bind\b|\bregression_fixture\b|\bregression_probe\b|\bSCRATCH\b|\bFIXTURE\b)/i;
 
 export function isTestPollution(text: string | null | undefined): boolean {
   if (!text) return false;
