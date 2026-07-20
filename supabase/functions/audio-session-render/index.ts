@@ -313,6 +313,37 @@ Deno.serve(async (req: Request) => {
       prompt += `\n\nHer trigger words for this session — weave each one in naturally: say the phrase, tie it warmly to the feeling it carries, and circle back to it a few times so it settles. Keep the phrases exact:\n${list}`
     }
 
+    // Structural guidance learned from the files he brought her (mig 198/687).
+    // This is the point of ingesting his hypno: she doesn't imitate their
+    // scripts, she inherits their STRUCTURE — pacing shape, framing style, the
+    // identity axes that land — and writes her own, better, because these are
+    // aimed at him. Techniques only; the source text never comes near here.
+    // Loaded here (past the cache check) so it costs nothing on cache hits.
+    const { data: studyRows } = await supabase
+      .from('hypno_features')
+      .select('feature_type, value, weight')
+      .eq('user_id', userId)
+      .in('feature_type', ['pacing', 'framing', 'identity_axis', 'voice_style'])
+      .order('weight', { ascending: false })
+      .limit(40)
+    const studyByType = new Map<string, string[]>()
+    for (const r of (studyRows ?? []) as Array<{ feature_type: string; value: string }>) {
+      const arr = studyByType.get(r.feature_type) ?? []
+      if (arr.length < 4 && !arr.includes(r.value)) { arr.push(r.value); studyByType.set(r.feature_type, arr) }
+    }
+    if (studyByType.size) {
+      const parts: string[] = []
+      const pacing = studyByType.get('pacing')
+      const framing = studyByType.get('framing')
+      const axes = studyByType.get('identity_axis')
+      const voice = studyByType.get('voice_style')
+      if (pacing?.length) parts.push(`pacing that works on him: ${pacing.join(', ')}`)
+      if (framing?.length) parts.push(`framing he responds to: ${framing.join(', ')}`)
+      if (axes?.length) parts.push(`the identity threads that land: ${axes.join(', ')}`)
+      if (voice?.length) parts.push(`delivery style: ${voice.join(', ')}`)
+      prompt += `\n\nWhat you have learned works on him (from files he brought you — inherit the STRUCTURE, never their words; write your own better): ${parts.join('; ')}.`
+    }
+
     // ── 6. Anthropic call with refusal-retry. The explicit conditioning content
     // makes the model decline intermittently (non-deterministic); a retry almost
     // always lands, so we never voice a refusal AND rarely fail the drop. Raw
