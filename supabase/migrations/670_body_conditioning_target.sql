@@ -1,0 +1,11 @@
+-- 670 - body-conditioning target data boundary.
+--
+-- A standing body-conditioning plan is represented by a per-user
+-- reconditioning target. This migration intentionally contains no user UUIDs,
+-- private narrative, or deployment-time dates.
+--
+-- The authenticated application flow (or a separately reviewed operator data
+-- migration) must create the target with an explicit user, consent state,
+-- deterministic program start date, and user-supplied evidence. Keeping that
+-- data out of the schema history makes fresh environments reproducible and
+-- prevents production identities from leaking into source control.

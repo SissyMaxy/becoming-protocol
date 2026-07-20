@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+.pnpm-store/
 
 # Auto-poster sensitive data
 scripts/auto-poster/.browser-profiles/
@@ -75,6 +76,8 @@ specs/About_Gina.txt
 /*_test.py
 New Text Document.txt
 nul
+# (literal '#'-prefixed loose notes dropped at repo root)
+\#*.txt
 
 .vercel
 .env*.local

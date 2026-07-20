@@ -184,11 +184,8 @@ export function PublicDareCard() {
     // Mama reacts to the proof photo with body-specific commentary (wish
     // 15a8f6e0). Fire-and-forget; the reaction arrives as outreach.
     if (mommy && user?.id) {
-      const base = import.meta.env.VITE_SUPABASE_URL as string;
-      void fetch(`${base}/functions/v1/mommy-dare-photo-react`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: user.id, assignment_id: dare.id, photo_artifact_id: photoId }),
+      void supabase.functions.invoke('mommy-dare-photo-react', {
+        body: { assignment_id: dare.id },
       }).catch(() => { /* non-fatal */ });
     }
     await load();

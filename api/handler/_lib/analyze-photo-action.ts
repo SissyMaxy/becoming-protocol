@@ -76,17 +76,12 @@ export async function handleAnalyzePhoto(req: VercelRequest, res: VercelResponse
   const { data: { user }, error: authError } = await supabase.auth.getUser(token);
   if (authError || !user) return res.status(401).json({ error: 'Unauthorized' });
 
-  const { photoId, photoUrl, taskType, caption, directiveKind, directiveId } = req.body as {
+  const { photoId } = req.body as {
     photoId: string;
-    photoUrl: string;
-    taskType: string;
-    caption?: string;
-    directiveKind?: 'wardrobe_prescription';
-    directiveId?: string;
   };
 
-  if (!photoId || !photoUrl) {
-    return res.status(400).json({ error: 'photoId and photoUrl required' });
+  if (!photoId) {
+    return res.status(400).json({ error: 'photoId required' });
   }
 
   if (!process.env.ANTHROPIC_API_KEY) {
@@ -94,6 +89,42 @@ export async function handleAnalyzePhoto(req: VercelRequest, res: VercelResponse
   }
 
   try {
+    // The authenticated, user-owned row is the only source of truth. Never
+    // fetch a caller-supplied URL: that would make this an SSRF proxy.
+    const { data: photoRow, error: photoError } = await supabase
+      .from('verification_photos')
+      .select('photo_url, task_type, caption, prescription_id, media_type')
+      .eq('id', photoId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (photoError) throw photoError;
+    if (!photoRow) return res.status(404).json({ error: 'Photo not found' });
+
+    const row = photoRow as {
+      photo_url: string;
+      task_type: string;
+      caption: string | null;
+      prescription_id: string | null;
+      media_type: string | null;
+    };
+    const photoUrl = row.photo_url;
+    const taskType = row.task_type;
+    const caption = row.caption ?? undefined;
+    const directiveKind = row.prescription_id ? 'wardrobe_prescription' as const : undefined;
+    const directiveId = row.prescription_id ?? undefined;
+
+    if (row.media_type && row.media_type !== 'photo') {
+      return res.status(400).json({ error: 'Only photos can be analyzed' });
+    }
+    if (
+      !photoUrl.startsWith(`${user.id}/`) ||
+      photoUrl.includes('..') ||
+      photoUrl.includes('\\') ||
+      /^https?:\/\//i.test(photoUrl)
+    ) {
+      return res.status(400).json({ error: 'Invalid photo storage path' });
+    }
     // Persona detection — Mama-voice when handler_persona = dommy_mommy
     const { data: stateRow } = await supabase
       .from('user_state')
@@ -105,24 +136,24 @@ export async function handleAnalyzePhoto(req: VercelRequest, res: VercelResponse
     const systemPrompt = promptSet[taskType] || promptSet.general;
     const voiceLabel = isMommy ? 'Mama' : 'the Handler';
 
-    // photoUrl may be a storage object path (post-migration 260) or a
-    // legacy public URL. For paths, download via service role from the
-    // verification-photos bucket — bypasses RLS, no signed URL needed.
-    // For URLs, fetch as before (covers legacy rows the backfill missed).
-    let imageBuffer: ArrayBuffer;
-    let mediaType: string;
-    if (/^https?:\/\//i.test(photoUrl)) {
-      const imageRes = await fetch(photoUrl);
-      if (!imageRes.ok) throw new Error(`Could not fetch image: HTTP ${imageRes.status}`);
-      imageBuffer = await imageRes.arrayBuffer();
-      mediaType = imageRes.headers.get('content-type') || 'image/jpeg';
-    } else {
-      const { data: blob, error: dlError } = await supabase.storage
-        .from('verification-photos')
-        .download(photoUrl);
-      if (dlError || !blob) throw new Error(`Could not download image: ${dlError?.message ?? 'unknown'}`);
-      imageBuffer = await blob.arrayBuffer();
-      mediaType = blob.type || 'image/jpeg';
+    // Download only the validated, user-owned object from the private bucket.
+    const { data: blob, error: dlError } = await supabase.storage
+      .from('verification-photos')
+      .download(photoUrl);
+    if (dlError || !blob) throw new Error(`Could not download image: ${dlError?.message ?? 'unknown'}`);
+
+    const allowedImageTypes = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+    const mediaType = blob.type.toLowerCase();
+    const maxImageBytes = 10 * 1024 * 1024;
+    if (!allowedImageTypes.has(mediaType)) {
+      return res.status(415).json({ error: 'Unsupported image type' });
+    }
+    if (blob.size > maxImageBytes) {
+      return res.status(413).json({ error: 'Image exceeds 10 MB limit' });
+    }
+    const imageBuffer = await blob.arrayBuffer();
+    if (imageBuffer.byteLength > maxImageBytes) {
+      return res.status(413).json({ error: 'Image exceeds 10 MB limit' });
     }
     const base64 = Buffer.from(imageBuffer).toString('base64');
 

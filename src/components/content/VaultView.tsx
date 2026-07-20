@@ -12,7 +12,7 @@ import { useBambiMode } from '../../context/BambiModeContext';
 import { useAuth } from '../../context/AuthContext';
 import { VaultSwipe } from './VaultSwipe';
 import { SignedMedia } from '../common/SignedMedia';
-import { browseVaultItems, getPendingVaultItems } from '../../lib/content-pipeline';
+import { browseVaultItems, getPendingVaultItems } from '../../lib/content-pipeline/vault';
 import type { VaultItem } from '../../types/content-pipeline';
 import { navigate } from '../../navigation/store';
 

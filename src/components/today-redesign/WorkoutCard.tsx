@@ -13,7 +13,10 @@ interface Exercise {
   reps?: string | number;
   weight?: string;
   notes?: string;
+  phase?: 'warmup' | 'main' | 'cooldown';
 }
+
+const PHASE_LABELS: Record<string, string> = { warmup: 'Warmup', main: 'Main work', cooldown: 'Cooldown' };
 
 interface Prescription {
   id: string;
@@ -60,10 +63,16 @@ export function WorkoutCard() {
       completed_at: new Date().toISOString(),
       completion_notes: note || null,
     }).eq('id', today.id);
+    // Completing the prescription IS today's movement — credit the fitness
+    // streak too (RPC is idempotent per day) so one tap feeds both ledgers.
+    if (user?.id) {
+      await supabase.rpc('fitness_log_session', { p_user: user.id }).then(() => {}, () => {});
+    }
     setSubmitting(false);
     setNote('');
     load();
     window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'workout', id: today.id } }));
+    window.dispatchEvent(new Event('fitness-logged'));
   };
 
   const isDone = today.status === 'completed';
@@ -104,22 +113,41 @@ export function WorkoutCard() {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
-        {exList.map((ex, i) => (
-          <div key={i} style={{
-            fontSize: 11.5, color: '#f2e9e6',
-            padding: '6px 9px', background: '#0f0a0e',
-            border: '1px solid #2b1d29', borderRadius: 5,
-            display: 'flex', gap: 8,
-          }}>
-            <span style={{ fontWeight: 600, flex: 1 }}>{ex.name}</span>
-            {ex.sets != null && (
-              <span style={{ color: '#edaec5' }}>
-                {ex.sets}×{ex.reps ?? '—'}
-                {ex.weight && ` @ ${ex.weight}`}
-              </span>
-            )}
-          </div>
-        ))}
+        {exList.map((ex, i) => {
+          const firstOfPhase = ex.phase && (i === 0 || exList[i - 1].phase !== ex.phase);
+          return (
+            <div key={i}>
+              {firstOfPhase && (
+                <div style={{
+                  fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.1em',
+                  color: 'var(--protocol-text-muted)', fontWeight: 700, margin: '6px 2px 4px',
+                }}>
+                  {PHASE_LABELS[ex.phase!] ?? ex.phase}
+                </div>
+              )}
+              <div style={{
+                fontSize: 11.5, color: '#f2e9e6',
+                padding: '6px 9px', background: '#0f0a0e',
+                border: '1px solid #2b1d29', borderRadius: 5,
+              }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <span style={{ fontWeight: 600, flex: 1 }}>{ex.name}</span>
+                  {ex.sets != null && (
+                    <span style={{ color: '#edaec5' }}>
+                      {ex.sets}×{ex.reps ?? '—'}
+                      {ex.weight && ` @ ${ex.weight}`}
+                    </span>
+                  )}
+                </div>
+                {ex.notes && (
+                  <div style={{ fontSize: 10.5, color: 'var(--protocol-text-muted)', marginTop: 3 }}>
+                    {ex.notes}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {!isDone ? (

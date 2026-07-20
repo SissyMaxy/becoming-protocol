@@ -6,7 +6,7 @@
  */
 
 import { supabase } from '../supabase';
-import type { GinaChannel } from './ladder-engine';
+import { getAllChannelStates, GINA_CHANNELS, type GinaChannel } from './ladder-engine';
 
 // ============================================
 // MEASUREMENT TYPES
@@ -294,7 +294,6 @@ export async function getChannelMeasurementScore(
 export async function generateMasterComposite(
   userId: string
 ): Promise<MasterCompositeData> {
-  const { getAllChannelStates, GINA_CHANNELS } = await import('./ladder-engine');
   const states = await getAllChannelStates(userId);
 
   const channelScores: Record<string, number> = {};

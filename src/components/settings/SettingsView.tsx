@@ -1,7 +1,7 @@
 // Settings View
 // Main settings page for the app
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import {
   Activity,
   ChevronLeft,
@@ -50,7 +50,6 @@ import { ProfileView } from './ProfileView';
 import { MommyVoiceSettings } from './MommyVoiceSettings';
 import { TimeRatchetsSettings } from './TimeRatchetsSettings';
 import { ReminderSettingsPanel } from '../reminders';
-import { HandlerDashboard } from '../handler-dashboard';
 import { TaskUploadSettings } from './TaskUploadSettings';
 import { DataExportView } from './DataExportView';
 import { AppearanceSettings } from './AppearanceSettings';
@@ -73,6 +72,8 @@ import { PhaseProgressPanel } from '../identity/PhaseProgressPanel';
 import { WeeklyRecapSettings } from './WeeklyRecapSettings';
 import { EgoDeconstructionSettings } from './EgoDeconstructionSettings';
 import { navigate } from '../../navigation/store';
+
+const HandlerDashboard = lazy(() => import('../handler-dashboard').then((m) => ({ default: m.HandlerDashboard })));
 
 const DIFFICULTY_LEVELS = [
   { id: 'gentle', label: 'Gentle', desc: 'Lighter load, longer timers' },
@@ -1389,7 +1390,9 @@ export function SettingsView({ onBack, onEditIntake, onOpenDossierQuiz, onOpenDo
 
         {/* Handler Dashboard - Debug Mode Only */}
         {activeSection === 'handler' && isDebugMode && (
-          <HandlerDashboard onBack={() => setActiveSection('main')} />
+          <Suspense fallback={<div className="p-6 text-sm text-protocol-text-muted">Loading dashboard...</div>}>
+            <HandlerDashboard onBack={() => setActiveSection('main')} />
+          </Suspense>
         )}
 
         {/* Corruption Dashboard - Debug Mode Only */}

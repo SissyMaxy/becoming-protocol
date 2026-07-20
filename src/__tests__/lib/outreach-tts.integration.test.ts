@@ -39,7 +39,7 @@ beforeAll(async () => {
 
   // Pin to the live Handler API user so the test sits in a known persona
   // context. We restore the original state in afterAll.
-  userId = '8c69b9c8-34eb-4147-9fec-3c1a5bc74b6f';
+  userId = process.env.INTEGRATION_TEST_USER_ID!;
 
   const { data } = await supabase.from('user_state')
     .select('handler_persona, prefers_mommy_voice')

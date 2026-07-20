@@ -28,16 +28,6 @@ export async function detectWakeFromWhoop(
   const noData: WakeDetectionResult = { awake: true, whoopAvailable: false };
 
   try {
-    // Check if Whoop is connected
-    const { data: tokenRow } = await supabase
-      .from('whoop_tokens')
-      .select('id')
-      .eq('user_id', userId)
-      .is('disconnected_at', null)
-      .maybeSingle();
-
-    if (!tokenRow) return noData;
-
     const today = new Date().toISOString().split('T')[0];
 
     // Fetch today's Whoop metrics

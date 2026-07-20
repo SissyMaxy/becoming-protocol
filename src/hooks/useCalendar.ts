@@ -95,9 +95,13 @@ export function useCalendar(): UseCalendarReturn {
     }
   }, [reload]);
 
-  const connect = useCallback(() => {
+  const connect = useCallback(async () => {
     if (!user?.id) return;
-    window.location.href = `/api/calendar/auth?user_id=${user.id}`;
+    const res = await authedFetch('/api/calendar/auth', { method: 'POST' });
+    if (!res.ok) throw new Error('Unable to start Google Calendar authorization');
+    const data = await res.json() as { url?: string };
+    if (!data.url) throw new Error('Calendar authorization URL missing');
+    window.location.assign(data.url);
   }, [user?.id]);
 
   const disconnect = useCallback(async () => {

@@ -12,7 +12,7 @@ import { useAuth } from '../../context/AuthContext';
 import {
   getWeekCalendar,
   generateWeeklyCalendar,
-} from '../../lib/content-pipeline';
+} from '../../lib/content-pipeline/calendar';
 import type { ContentCalendarDay, CalendarSlot, Platform } from '../../types/content-pipeline';
 
 interface ContentCalendarProps {

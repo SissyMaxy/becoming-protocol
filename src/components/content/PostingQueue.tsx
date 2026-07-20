@@ -15,7 +15,7 @@ import {
   markManuallyPosted,
   batchMarkPosted,
   skipDistribution,
-} from '../../lib/content-pipeline';
+} from '../../lib/content-pipeline/distribution';
 import { PostPackCard } from './PostPackCard';
 import type { Distribution } from '../../types/content-pipeline';
 

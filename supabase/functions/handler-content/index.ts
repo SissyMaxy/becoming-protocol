@@ -5,6 +5,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.24.3'
+import { requireUserOrService } from '../_shared/request-auth.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -25,6 +26,9 @@ serve(async (req) => {
   }
 
   try {
+    const { principal, response: unauthorized } = await requireUserOrService(req, corsHeaders)
+    if (unauthorized || !principal) return unauthorized!
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -33,25 +37,11 @@ serve(async (req) => {
     const body: ContentRequest = await req.json()
     const { action } = body
 
-    // For user-facing actions, verify auth
-    let userId = body.user_id
-    if (!userId) {
-      const authHeader = req.headers.get('Authorization') ?? ''
-      const token = authHeader.replace('Bearer ', '')
-      if (token) {
-        const userClient = createClient(
-          Deno.env.get('SUPABASE_URL') ?? '',
-          Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-          { global: { headers: { Authorization: `Bearer ${token}` } } }
-        )
-        const { data: { user } } = await userClient.auth.getUser()
-        if (user) userId = user.id
-      }
-    }
+    const userId = principal.kind === 'user' ? principal.userId : body.user_id
 
     if (!userId) {
       return new Response(
-        JSON.stringify({ error: 'No user_id provided and no auth token' }),
+        JSON.stringify({ error: 'Service calls must provide user_id' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }

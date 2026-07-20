@@ -12,6 +12,7 @@
 import { supabase } from '../supabase';
 import { getHiddenParam } from './hidden-operations';
 import { logTriggerDeployment, detectTriggerPhrases } from './trigger-deployment-logger';
+import { queueOutreachMessage } from './proactive-outreach';
 
 // ============================================
 // TYPES
@@ -275,7 +276,6 @@ export async function fireActivation(userId: string, activationId: string): Prom
 
     // Send paired message if present
     if (activation.paired_message) {
-      const { queueOutreachMessage } = await import('./proactive-outreach');
       await queueOutreachMessage(
         userId,
         activation.paired_message,

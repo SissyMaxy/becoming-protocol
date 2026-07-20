@@ -68,7 +68,7 @@ export async function handleTranscribe(req: VercelRequest, res: VercelResponse) 
     const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}` },
-      body: form as unknown as BodyInit,
+      body: form as unknown as RequestInit['body'],
     });
 
     if (!resp.ok) {

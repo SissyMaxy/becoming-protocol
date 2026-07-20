@@ -44,8 +44,7 @@ interface BedtimeLockProps {
   prefersVoice?: boolean;
   chastityEnabled?: boolean;
   onClose: () => void;
-  /** Fired once the ritual actually completes (never on skip) — the
-   * sleep-cue TMR player (§2.4) hangs off this, not off onClose. */
+  /** Fired once the ritual actually completes (never on skip). */
   onCompleted?: () => void;
 }
 

@@ -1,39 +1,30 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { randomUUID } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { encryptToken, decryptToken } from '../../src/lib/calendar/crypto';
+import { createOAuthState, verifyOAuthState } from '../_lib/oauth-state.js';
 
 const WHOOP_API = 'https://api.prod.whoop.com/developer';
 
 // Whoop refresh tokens are AES-256-GCM encrypted at rest (same scheme as
 // calendar/outreach). WHOOP_TOKEN_KEY is a 32-byte secret, base64-encoded.
-// If the key is unset (legacy deploy) we fall back to plaintext so we never
-// brick the happy path — but the callback always encrypts when the key exists.
+// Missing key material fails closed; plaintext token storage is not supported.
 function whoopTokenKey(): string {
-  return process.env.WHOOP_TOKEN_KEY || '';
+  const key = process.env.WHOOP_TOKEN_KEY || '';
+  if (!key) throw new Error('WHOOP_TOKEN_KEY is required');
+  return key;
 }
 
-// Decrypt a stored refresh token. Rows written before encryption was enabled
-// (or when no key is configured) are stored plaintext; decrypt failures fall
-// back to treating the stored value as plaintext so existing connections keep
-// refreshing.
-async function decryptRefreshToken(stored: string | null | undefined): Promise<string> {
-  const raw = stored || '';
-  const key = whoopTokenKey();
-  if (!raw || !key) return raw;
-  try {
-    return await decryptToken(raw, key);
-  } catch {
-    return raw; // legacy plaintext row
-  }
+// Decrypt a stored token. Legacy plaintext rows are invalidated by migration
+// 671 and must reconnect rather than silently weakening storage guarantees.
+async function decryptWhoopToken(stored: string | null | undefined): Promise<string> {
+  if (!stored) throw new Error('Whoop token missing');
+  return decryptToken(stored, whoopTokenKey());
 }
 
-// Encrypt a refresh token for storage when a key is configured; otherwise
-// store plaintext (legacy behaviour) so an unconfigured deploy still works.
-async function encryptRefreshToken(plaintext: string): Promise<string> {
-  const key = whoopTokenKey();
-  if (!plaintext || !key) return plaintext;
-  return encryptToken(plaintext, key);
+// Encrypt a token before every database write.
+async function encryptWhoopToken(plaintext: string): Promise<string> {
+  if (!plaintext) throw new Error('Whoop token missing');
+  return encryptToken(plaintext, whoopTokenKey());
 }
 
 const SPORT_NAMES: Record<number, string> = {
@@ -43,12 +34,58 @@ const SPORT_NAMES: Record<number, string> = {
   82: 'Dance', 84: 'Stretching',
 };
 
+interface WhoopTokenResponse {
+  access_token: string;
+  refresh_token?: string;
+  expires_in?: number;
+  scope?: string;
+}
+
+interface WhoopScore {
+  recovery_score?: number;
+  hrv_rmssd_milli?: number;
+  resting_heart_rate?: number;
+  spo2_percentage?: number;
+  skin_temp_celsius?: number;
+  sleep_performance_percentage?: number;
+  sleep_consistency_percentage?: number;
+  sleep_efficiency_percentage?: number;
+  respiratory_rate?: number;
+  strain?: number;
+  kilojoule?: number;
+  average_heart_rate?: number;
+  max_heart_rate?: number;
+  distance_meter?: number;
+  stage_summary?: {
+    total_in_bed_time_milli?: number;
+    total_rem_sleep_time_milli?: number;
+    total_slow_wave_sleep_time_milli?: number;
+    total_light_sleep_time_milli?: number;
+    total_awake_time_milli?: number;
+    disturbance_count?: number;
+  };
+  sleep_needed?: { need_from_sleep_debt_milli?: number };
+}
+
+interface WhoopRecord {
+  id?: string | number;
+  start?: string;
+  end?: string;
+  sport_id?: number;
+  weight_kilogram?: number;
+  score?: WhoopScore;
+}
+
+interface WhoopListResponse {
+  records?: WhoopRecord[];
+}
+
 // ============================================
 // ACTION: auth
 // ============================================
 
-function handleAuth(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'GET') {
+async function handleAuth(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
@@ -62,16 +99,28 @@ function handleAuth(req: VercelRequest, res: VercelResponse) {
       hasRedirectUri: !!redirectUri,
     });
   }
-
-  // User ID passed as query param from the client
-  const userId = req.query.user_id;
-  if (!userId) {
-    return res.status(400).json({ error: 'user_id query param required' });
+  try {
+    whoopTokenKey();
+  } catch {
+    return res.status(500).json({ error: 'Whoop token encryption not configured' });
   }
 
+  // User ID passed as query param from the client
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  if (!supabaseUrl || !serviceKey) return res.status(500).json({ error: 'Supabase not configured' });
+  const supabase = createClient(supabaseUrl, serviceKey);
+  const auth = req.headers.authorization;
+  if (!auth?.startsWith('Bearer ')) return res.status(401).json({ error: 'Not authenticated' });
+  const { data: { user }, error } = await supabase.auth.getUser(auth.slice(7));
+  if (error || !user) return res.status(401).json({ error: 'Not authenticated' });
+
   // State = "userId:randomUUID" — embeds user identity for the callback
-  const nonce = randomUUID();
-  const state = `${userId}:${nonce}`;
+  const { state, cookieValue } = createOAuthState(
+    user.id,
+    'whoop',
+    process.env.OAUTH_STATE_SECRET || '',
+  );
 
   const params = new URLSearchParams({
     response_type: 'code',
@@ -82,8 +131,8 @@ function handleAuth(req: VercelRequest, res: VercelResponse) {
   });
 
   // Store state in cookie for CSRF validation
-  res.setHeader('Set-Cookie', `whoop_oauth_state=${state}; HttpOnly; Secure; SameSite=Lax; Max-Age=600; Path=/`);
-  res.redirect(302, `https://api.prod.whoop.com/oauth/oauth2/auth?${params.toString()}`);
+  res.setHeader('Set-Cookie', `whoop_oauth_state=${cookieValue}; HttpOnly; Secure; SameSite=Lax; Max-Age=600; Path=/api/whoop`);
+  return res.status(200).json({ url: `https://api.prod.whoop.com/oauth/oauth2/auth?${params.toString()}` });
 }
 
 // ============================================
@@ -109,25 +158,14 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
   // query-param state alone — an attacker who crafts a state can otherwise
   // bind their Whoop account (or steal a code) onto the victim's user_id.
   const storedState = req.cookies?.whoop_oauth_state;
-  if (!storedState) {
-    return res.redirect(302, `${appUrl}?whoop=error&reason=missing_state_cookie`);
-  }
-
-  const cookieParts = String(storedState).split(':');
-  const queryParts = String(state).split(':');
-  if (
-    cookieParts.length !== 2 ||
-    queryParts.length !== 2 ||
-    !cookieParts[1] ||
-    cookieParts[1] !== queryParts[1] ||
-    cookieParts[0] !== queryParts[0]
-  ) {
-    return res.redirect(302, `${appUrl}?whoop=error&reason=state_mismatch`);
-  }
-
-  const userId: string | null = cookieParts[0] || null;
+  const userId = verifyOAuthState(
+    storedState,
+    String(state),
+    'whoop',
+    process.env.OAUTH_STATE_SECRET || '',
+  );
   if (!userId) {
-    return res.redirect(302, `${appUrl}?whoop=error&reason=no_user_id`);
+    return res.redirect(302, `${appUrl}?whoop=error&reason=state_mismatch`);
   }
 
   // Exchange code for tokens
@@ -149,7 +187,7 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
     return res.redirect(302, `${appUrl}?whoop=error&reason=token_exchange_failed`);
   }
 
-  const tokens = await tokenRes.json();
+  const tokens = await tokenRes.json() as WhoopTokenResponse;
   const expiresAt = new Date(Date.now() + (tokens.expires_in || 3600) * 1000);
 
   // Use service role to bypass RLS
@@ -164,12 +202,13 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
   const supabase = createClient(supabaseUrl, serviceKey);
 
   // Encrypt the refresh token at rest (the long-lived secret).
-  const refreshEnc = await encryptRefreshToken(tokens.refresh_token || '');
+  const accessEnc = await encryptWhoopToken(tokens.access_token || '');
+  const refreshEnc = await encryptWhoopToken(tokens.refresh_token || '');
 
   // Upsert tokens
   const { error: dbError } = await supabase.from('whoop_tokens').upsert({
     user_id: userId,
-    access_token: tokens.access_token,
+    access_token: accessEnc,
     refresh_token: refreshEnc,
     expires_at: expiresAt.toISOString(),
     scopes: tokens.scope?.split(' ') || [],
@@ -184,7 +223,7 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
   }
 
   // Clear CSRF cookie and redirect to app root with success param
-  res.setHeader('Set-Cookie', 'whoop_oauth_state=; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Path=/');
+  res.setHeader('Set-Cookie', 'whoop_oauth_state=; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Path=/api/whoop');
   res.redirect(302, `${appUrl}?whoop=connected`);
 }
 
@@ -194,7 +233,7 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
 
 /**
  * Consolidated Whoop data router.
- * POST /api/whoop/sync with body.action = 'sync' | 'disconnect' | 'session-poll'
+ * POST /api/whoop/sync with body.action = 'status' | 'sync' | 'disconnect' | 'session-poll'
  * Default (no action) = sync.
  */
 async function handleSync(req: VercelRequest, res: VercelResponse) {
@@ -205,6 +244,8 @@ async function handleSync(req: VercelRequest, res: VercelResponse) {
   const { action } = (req.body || {}) as { action?: string };
 
   switch (action) {
+    case 'status':
+      return handleStatus(req, res);
     case 'disconnect':
       return handleDisconnect(req, res);
     case 'session-poll':
@@ -213,6 +254,26 @@ async function handleSync(req: VercelRequest, res: VercelResponse) {
     default:
       return handleSyncFetch(req, res);
   }
+}
+
+async function handleStatus(req: VercelRequest, res: VercelResponse) {
+  const supabase = createClient(
+    process.env.SUPABASE_URL || '',
+    process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+  );
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).json({ error: 'No token' });
+  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+  if (authError || !user) return res.status(401).json({ error: 'Invalid token' });
+
+  const { data, error } = await supabase
+    .from('whoop_tokens')
+    .select('connected_at')
+    .eq('user_id', user.id)
+    .is('disconnected_at', null)
+    .maybeSingle();
+  if (error) return res.status(500).json({ error: 'Unable to read Whoop status' });
+  return res.status(200).json({ connected: !!data });
 }
 
 // ============================================
@@ -243,11 +304,11 @@ async function handleSyncFetch(req: VercelRequest, res: VercelResponse) {
 
     if (!tokenRow) return res.status(200).json({ connected: false });
 
-    let accessToken = tokenRow.access_token;
+    let accessToken = await decryptWhoopToken(tokenRow.access_token);
 
     // Refresh if expired
     if (new Date(tokenRow.expires_at) <= new Date(Date.now() + 60000)) {
-      const refreshToken = await decryptRefreshToken(tokenRow.refresh_token);
+      const refreshToken = await decryptWhoopToken(tokenRow.refresh_token);
       const refreshRes = await fetch('https://api.prod.whoop.com/oauth/oauth2/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -267,15 +328,15 @@ async function handleSyncFetch(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json({ connected: false, reason: 'token_expired' });
       }
 
-      const newTokens = await refreshRes.json();
+      const newTokens = await refreshRes.json() as WhoopTokenResponse;
       accessToken = newTokens.access_token;
 
       const newRefreshEnc = newTokens.refresh_token
-        ? await encryptRefreshToken(newTokens.refresh_token)
+        ? await encryptWhoopToken(newTokens.refresh_token)
         : tokenRow.refresh_token;
 
       await supabase.from('whoop_tokens').update({
-        access_token: newTokens.access_token,
+        access_token: await encryptWhoopToken(newTokens.access_token),
         refresh_token: newRefreshEnc,
         expires_at: new Date(Date.now() + (newTokens.expires_in || 3600) * 1000).toISOString(),
         updated_at: new Date().toISOString(),
@@ -387,8 +448,8 @@ async function handleSyncFetch(req: VercelRequest, res: VercelResponse) {
         avgHR: c.score.average_heart_rate,
         maxHR: c.score.max_heart_rate,
       } : null,
-      workouts: w.map((wk: any) => ({
-        sport: SPORT_NAMES[wk.sport_id] || 'Activity',
+      workouts: w.map((wk) => ({
+        sport: wk.sport_id != null ? (SPORT_NAMES[wk.sport_id] || 'Activity') : 'Activity',
         strain: wk.score?.strain || 0,
         durationMinutes: wk.start && wk.end ? Math.round((new Date(wk.end).getTime() - new Date(wk.start).getTime()) / 60000) : 0,
         avgHR: wk.score?.average_heart_rate || 0,
@@ -462,11 +523,11 @@ async function handleSessionPoll(req: VercelRequest, res: VercelResponse) {
 
     if (!tokenRow) return res.status(400).json({ error: 'whoop_auth_expired' });
 
-    let accessToken = tokenRow.access_token;
+    let accessToken = await decryptWhoopToken(tokenRow.access_token);
 
     // Refresh if expired
     if (new Date(tokenRow.expires_at) <= new Date(Date.now() + 60000)) {
-      const refreshToken = await decryptRefreshToken(tokenRow.refresh_token);
+      const refreshToken = await decryptWhoopToken(tokenRow.refresh_token);
       const refreshRes = await fetch('https://api.prod.whoop.com/oauth/oauth2/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -483,15 +544,15 @@ async function handleSessionPoll(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json({ error: 'whoop_auth_expired' });
       }
 
-      const newTokens = await refreshRes.json();
+      const newTokens = await refreshRes.json() as WhoopTokenResponse;
       accessToken = newTokens.access_token;
 
       const newRefreshEnc = newTokens.refresh_token
-        ? await encryptRefreshToken(newTokens.refresh_token)
+        ? await encryptWhoopToken(newTokens.refresh_token)
         : tokenRow.refresh_token;
 
       await supabase.from('whoop_tokens').update({
-        access_token: newTokens.access_token,
+        access_token: await encryptWhoopToken(newTokens.access_token),
         refresh_token: newRefreshEnc,
         expires_at: new Date(Date.now() + (newTokens.expires_in || 3600) * 1000).toISOString(),
         updated_at: new Date().toISOString(),
@@ -507,7 +568,7 @@ async function handleSessionPoll(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ error: 'no_active_cycle' });
     }
 
-    const cycleData = await cycleRes.json();
+    const cycleData = await cycleRes.json() as WhoopListResponse;
     const cycle = cycleData?.records?.[0];
 
     if (!cycle?.score) {
@@ -563,12 +624,12 @@ async function handleSessionPoll(req: VercelRequest, res: VercelResponse) {
 // SHARED: Whoop API helper
 // ============================================
 
-async function whoopGet(token: string, path: string) {
+async function whoopGet(token: string, path: string): Promise<WhoopListResponse | null> {
   const resp = await fetch(`${WHOOP_API}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!resp.ok) return null;
-  return resp.json();
+  return resp.json() as Promise<WhoopListResponse>;
 }
 
 // ============================================

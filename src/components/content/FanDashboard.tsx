@@ -15,7 +15,7 @@ import {
   getFanInteractions,
   approveInteractionResponse,
   getTopFans,
-} from '../../lib/content-pipeline';
+} from '../../lib/content-pipeline/fans';
 import { getCuratedPraise } from '../../lib/content/fan-interaction-processor';
 import type { FanInteraction, FanProfile } from '../../types/content-pipeline';
 

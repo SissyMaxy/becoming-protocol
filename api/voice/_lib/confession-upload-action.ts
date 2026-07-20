@@ -55,7 +55,7 @@ async function transcribeWithWhisper(buf: Buffer, contentType: string): Promise<
   const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
-    body: form as unknown as BodyInit,
+    body: form as unknown as RequestInit['body'],
   });
   if (!resp.ok) {
     const errText = await resp.text().catch(() => '');

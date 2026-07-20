@@ -1,77 +1,98 @@
-/**
- * body-program — the pure, deterministic workout-program day computer that
- * the home surface (BodyProgramCard) renders. Locks the cycle, the weekly
- * progression, and the pre-start kickoff so the engine can't silently drift.
- */
+// Mommy-led body program — deterministic weekly split, progression, proof, and
+// in-voice commands that never leak telemetry or carve-out language.
+
 import { describe, it, expect } from 'vitest';
-import { bodyProgramDay, bodyOrderForTarget } from '../../lib/body-program';
+import { bodyProgramDay, bodyOrderForTarget, type BodyOrder } from '../../lib/body-program';
+import { assertMommyOrderBite } from '../../lib/mommy-orders';
 
-const START = '2026-07-16'; // a Thursday; the cycle is anchored to day 0, not weekday
+const START = '2026-07-14';
+const day = (iso: string): BodyOrder => bodyProgramDay(START, iso);
 
-// day 0 of the program (program_start itself)
-const day = (n: number) => {
-  const d = new Date(Date.parse(`${START}T00:00:00Z`) + n * 86_400_000);
-  return d.toISOString().slice(0, 10);
-};
-
-describe('bodyProgramDay — the 7-day cycle', () => {
-  it('before start → the baseline kickoff (progress shot)', () => {
-    const o = bodyProgramDay(START, day(-1));
-    expect(o.dayIndex).toBe(-1);
+describe('body program — the weekly split', () => {
+  it('before the start date, issues the baseline kickoff (mirror shot due)', () => {
+    const o = day('2026-07-13');
+    expect(o.dayIndex).toBeLessThan(0);
     expect(o.kind).toBe('measure');
-    expect(o.sessionName).toBe('Baseline');
     expect(o.proofKind).toBe('photo');
+    expect(o.command.toLowerCase()).toContain('tomorrow you start');
   });
 
-  it('maps each cycle day to the right session', () => {
-    expect(bodyProgramDay(START, day(0)).sessionName).toBe('Lower A');
-    expect(bodyProgramDay(START, day(0)).kind).toBe('train');
-    expect(bodyProgramDay(START, day(1)).kind).toBe('fuel');
-    expect(bodyProgramDay(START, day(2)).sessionName).toBe('Lower B');
-    expect(bodyProgramDay(START, day(3)).kind).toBe('fuel');
-    expect(bodyProgramDay(START, day(4)).sessionName).toBe('Glute focus');
-    expect(bodyProgramDay(START, day(5)).kind).toBe('rest');
-    expect(bodyProgramDay(START, day(6)).kind).toBe('fuel'); // week 1 sunday = fuel (biweekly measure)
-  });
-
-  it('train days carry the prescribed blocks and a timer proof', () => {
-    const o = bodyProgramDay(START, day(0));
-    expect(o.blocks.length).toBeGreaterThanOrEqual(3);
-    expect(o.blocks[0].move).toMatch(/hip thrust/i);
+  it('day 0 is Lower A — a train day with timer proof', () => {
+    const o = day('2026-07-14');
+    expect(o.kind).toBe('train');
+    expect(o.sessionName).toBe('Lower A');
     expect(o.proofKind).toBe('timer');
+    expect(o.blocks[0].move).toBe('Hip thrusts');
   });
 
-  it('the second Sunday is a progress-shot measure day', () => {
-    // week 2 sunday = dayIndex 13 (week 2, cycleDay 6) → measure
-    const o = bodyProgramDay(START, day(13));
-    expect(o.weekIndex).toBe(2);
-    expect(o.kind).toBe('measure');
+  it('runs 3 train / 3 fuel / 1 rest across the cycle', () => {
+    const kinds = ['2026-07-14', '2026-07-15', '2026-07-16', '2026-07-17', '2026-07-18', '2026-07-19', '2026-07-20']
+      .map((d) => day(d).kind);
+    expect(kinds.filter((k) => k === 'train')).toHaveLength(3);   // Lower A / B / Glute
+    expect(kinds.filter((k) => k === 'fuel')).toHaveLength(3);
+    expect(kinds.filter((k) => k === 'rest')).toHaveLength(1);
+  });
+
+  it('rest day is on Mommy\'s orders and needs no proof', () => {
+    const o = day('2026-07-19');
+    expect(o.kind).toBe('rest');
+    expect(o.proofKind).toBe('none');
+    expect(o.command.toLowerCase()).toMatch(/rest today/);
+  });
+
+  it('drops a progress-shot measure day every second Sunday', () => {
+    const wk1sun = day('2026-07-20'); // week 1 cycle-day 6 → fuel
+    const wk2sun = day('2026-07-27'); // week 2 cycle-day 6 → measure
+    expect(wk1sun.kind).toBe('fuel');
+    expect(wk2sun.kind).toBe('measure');
+    expect(wk2sun.proofKind).toBe('photo');
   });
 });
 
-describe('weekly progression climbs', () => {
-  it('sets go 3 → 4 by week 3 and reps ranges open up', () => {
-    const w1 = bodyProgramDay(START, day(0)).blocks[0].prescription;   // week 1 Lower A hip thrust
-    const w3 = bodyProgramDay(START, day(14)).blocks[0].prescription;  // week 3 Lower A hip thrust
-    expect(w1).toMatch(/3 × 10–12/);
-    expect(w3).toMatch(/4 × 12–15/);
+describe('body program — progression climbs', () => {
+  it('weeks 1–2 are 3 sets, week 3+ is 4 sets', () => {
+    expect(day('2026-07-14').blocks[0].prescription).toContain('3 × '); // week 1
+    expect(day('2026-07-28').blocks[0].prescription).toContain('4 × '); // week 3 Lower A
   });
 
   it('week 1 is bodyweight; later weeks add load', () => {
-    expect(bodyProgramDay(START, day(0)).blocks[0].prescription).toMatch(/bodyweight/i);
-    expect(bodyProgramDay(START, day(14)).blocks[0].prescription).toMatch(/more than last week/i);
+    expect(day('2026-07-14').blocks[0].prescription.toLowerCase()).toContain('bodyweight');
+    expect(day('2026-07-28').blocks[0].prescription.toLowerCase()).toMatch(/more than last week|add a little/);
   });
 });
 
-describe('bodyOrderForTarget — the reconditioning-target seam', () => {
-  it('returns the day order for a body_conditioning target', () => {
-    const o = bodyOrderForTarget({ program: 'body_conditioning', program_start: START }, day(0));
+describe('body program — target integration seam', () => {
+  it('returns today\'s order for a body-conditioning target', () => {
+    const o = bodyOrderForTarget(
+      { program: 'body_conditioning', split: 'lower_led_3x', program_start: START },
+      '2026-07-14',
+    );
     expect(o?.sessionName).toBe('Lower A');
   });
 
   it('returns null for a non-body target or missing start', () => {
-    expect(bodyOrderForTarget({ program: 'something_else', program_start: START }, day(0))).toBeNull();
-    expect(bodyOrderForTarget({ program: 'body_conditioning' }, day(0))).toBeNull();
-    expect(bodyOrderForTarget(null, day(0))).toBeNull();
+    expect(bodyOrderForTarget({ program: 'reconditioning' }, '2026-07-14')).toBeNull();
+    expect(bodyOrderForTarget({ program: 'body_conditioning' }, '2026-07-14')).toBeNull();
+    expect(bodyOrderForTarget(null, '2026-07-14')).toBeNull();
+  });
+});
+
+describe('body program — in-voice, no telemetry, no carve-outs', () => {
+  const sampleDays = [
+    '2026-07-13', '2026-07-14', '2026-07-16', '2026-07-18', '2026-07-19', '2026-07-20', '2026-07-27', '2026-07-28',
+  ];
+
+  it('no command leaks a "day N" / /10 telemetry token', () => {
+    for (const d of sampleDays) {
+      const c = day(d).command;
+      expect(c).not.toMatch(/\bday\s+\d/i);
+      expect(c).not.toMatch(/\d+\s*\/\s*10/);
+    }
+  });
+
+  it('every command commands (passes the mommy-order bite guard)', () => {
+    for (const d of sampleDays) {
+      expect(assertMommyOrderBite(day(d).command)).toEqual({ ok: true });
+    }
   });
 });

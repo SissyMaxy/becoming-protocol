@@ -49,12 +49,11 @@ jobs:
       - name: TypeScript build (tsc -b + vite build)
         run: npm run build
 
-      - name: TypeScript api/ surface (fails on NEW errors beyond baseline)
+      - name: TypeScript api/ surface (zero errors)
         run: npm run ci:typecheck-api
 
       - name: ESLint (informational — pre-existing 264 issues; new errors should be triaged)
         run: npm run lint
-        continue-on-error: true
 
       - name: Unit tests (vitest)
         run: npm run test:run

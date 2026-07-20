@@ -230,7 +230,7 @@ export const BAMBI_GRADIENTS = {
   glow: 'shadow-[0_0_30px_rgba(196,132,122,0.4)]',
 
   // Sparkle overlay
-  sparkleOverlay: 'bg-[url("/sparkles.png")] bg-repeat opacity-10',
+  sparkleOverlay: 'bg-[radial-gradient(circle,currentColor_1px,transparent_1px)] bg-[length:18px_18px] opacity-10',
 };
 
 // ============================================

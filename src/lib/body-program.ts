@@ -10,7 +10,7 @@
 // the adaptive pool-picker lacks — a real Mon/Wed/Fri split that progresses.
 //
 // Copy rules honored: sensory not telemetric (no "day N", no /10), <=1 pet name,
-// no three-beat chants. Backed by the body reconditioning target.
+// no three-beat chants. Backed by the body reconditioning target (mig 670).
 
 export type BodyDayKind = 'train' | 'fuel' | 'rest' | 'measure';
 
@@ -45,7 +45,7 @@ export interface BodyProgramConfig {
  * Today's mommy-led body order for a reconditioning target, or null if the
  * target isn't a body-conditioning program. This is the integration seam the
  * order pipeline (recon orchestrator / Focus surface) calls: it reads the
- * program_start stored on the target and returns the day's order.
+ * program_start stored on the target (mig 670) and returns the day's order.
  */
 export function bodyOrderForTarget(
   indicatorConfig: BodyProgramConfig | null | undefined,

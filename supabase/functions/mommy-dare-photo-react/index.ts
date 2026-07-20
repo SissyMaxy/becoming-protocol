@@ -12,6 +12,7 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { DOMMY_MOMMY_CHARACTER, mommyVoiceCleanup, isMommyPersona } from '../_shared/dommy-mommy.ts'
 import { logAuthority } from '../_shared/life-as-woman.ts'
+import { requireUserOrService } from '../_shared/request-auth.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -26,20 +27,18 @@ YOUR JOB right now: the girl just sent Mama a proof photo of a public dare she c
 const REFUSAL_RE = /\b(?:I'?m sorry|I apologize|I can'?t|I cannot|I won'?t|unable to|against (?:my|the) (?:guidelines|policies)|take on that persona|not (?:going|willing) to (?:role[-\s]?play|adopt))\b/i
 const isRefusal = (t: string) => !!t && (REFUSAL_RE.test(t) || (t.length < 160 && /\b(persona|role[-\s]?play)\b/i.test(t)))
 
-async function loadImage(supabase: SupabaseClient, photoUrl: string): Promise<{ base64: string; mediaType: string } | null> {
+async function loadImage(supabase: SupabaseClient, objectPath: string): Promise<{ base64: string; mediaType: string } | null> {
   try {
-    let buffer: ArrayBuffer; let mediaType: string
-    if (/^https?:\/\//i.test(photoUrl)) {
-      const r = await fetch(photoUrl)
-      if (!r.ok) return null
-      buffer = await r.arrayBuffer()
-      mediaType = r.headers.get('content-type') || 'image/jpeg'
-    } else {
-      const { data: blob, error } = await supabase.storage.from('verification-photos').download(photoUrl)
-      if (error || !blob) return null
-      buffer = await blob.arrayBuffer()
-      mediaType = blob.type || 'image/jpeg'
-    }
+    const { data: blob, error } = await supabase.storage.from('verification-photos').download(objectPath)
+    if (error || !blob) return null
+
+    const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp'])
+    const mediaType = blob.type.toLowerCase()
+    const maxBytes = 10 * 1024 * 1024
+    if (!allowedTypes.has(mediaType) || blob.size > maxBytes) return null
+
+    const buffer = await blob.arrayBuffer()
+    if (buffer.byteLength > maxBytes) return null
     // base64 encode
     const bytes = new Uint8Array(buffer)
     let binary = ''
@@ -93,7 +92,7 @@ async function callOpenRouterVision(base64: string, mediaType: string, userText:
   } catch { return '' }
 }
 
-async function react(supabase: SupabaseClient, userId: string, assignmentId: string, photoArtifactId?: string): Promise<{ status: string }> {
+async function react(supabase: SupabaseClient, userId: string, assignmentId: string): Promise<{ status: string }> {
   // Persona check.
   const { data: us } = await supabase.from('user_state').select('handler_persona').eq('user_id', userId).maybeSingle()
   if (!isMommyPersona((us as { handler_persona?: string } | null)?.handler_persona)) return { status: 'persona_off' }
@@ -107,13 +106,19 @@ async function react(supabase: SupabaseClient, userId: string, assignmentId: str
   if (assignment.mommy_reaction_text) return { status: 'already_reacted' }
 
   // Resolve the photo object path from verification_photos.
-  const photoId = photoArtifactId || assignment.verification_artifact_id
+  const photoId = assignment.verification_artifact_id
   if (!photoId) return { status: 'no_photo' }
   const { data: photo } = await supabase.from('verification_photos')
-    .select('photo_url, media_type').eq('id', photoId).maybeSingle()
+    .select('photo_url, media_type').eq('id', photoId).eq('user_id', userId).maybeSingle()
   const photoRow = photo as { photo_url?: string; media_type?: string } | null
   if (!photoRow?.photo_url) return { status: 'photo_row_missing' }
   if (photoRow.media_type && photoRow.media_type !== 'photo' && photoRow.media_type !== 'image') return { status: 'not_an_image' }
+  if (
+    !photoRow.photo_url.startsWith(`${userId}/`) ||
+    photoRow.photo_url.includes('..') ||
+    photoRow.photo_url.includes('\\') ||
+    /^https?:\/\//i.test(photoRow.photo_url)
+  ) return { status: 'invalid_photo_path' }
 
   const img = await loadImage(supabase, photoRow.photo_url)
   if (!img) return { status: 'image_unreadable' }
@@ -134,7 +139,7 @@ async function react(supabase: SupabaseClient, userId: string, assignmentId: str
   // Store + deliver.
   await supabase.from('public_dare_assignments').update({
     mommy_reaction_text: reaction, mommy_reaction_at: new Date().toISOString(),
-  }).eq('id', assignmentId)
+  }).eq('id', assignmentId).eq('user_id', userId)
 
   const { data: outreach } = await supabase.from('handler_outreach_queue').insert({
     user_id: userId,
@@ -163,11 +168,15 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return new Response(JSON.stringify({ ok: false, error: 'POST only' }), { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
-  const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '')
-  let body: { user_id?: string; assignment_id?: string; photo_artifact_id?: string } = {}
-  try { body = await req.json() } catch { /* */ }
-  if (!body.user_id || !body.assignment_id) return new Response(JSON.stringify({ ok: false, error: 'user_id and assignment_id required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+  const { principal, response: authError } = await requireUserOrService(req, corsHeaders)
+  if (authError || !principal) return authError!
 
-  const result = await react(supabase, body.user_id, body.assignment_id, body.photo_artifact_id)
+  const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '')
+  let body: { user_id?: string; assignment_id?: string } = {}
+  try { body = await req.json() } catch { /* */ }
+  const userId = principal.kind === 'user' ? principal.userId : body.user_id
+  if (!userId || !body.assignment_id) return new Response(JSON.stringify({ ok: false, error: 'user and assignment_id required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+
+  const result = await react(supabase, userId, body.assignment_id)
   return new Response(JSON.stringify({ ok: true, ...result }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 })

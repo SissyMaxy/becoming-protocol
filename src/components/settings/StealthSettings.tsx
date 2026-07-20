@@ -4,7 +4,7 @@
 // touch persona settings don't merge-conflict here.
 
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Bell, Eye, EyeOff, Loader2, Lock, ShieldOff } from 'lucide-react';
+import { AlertTriangle, Bell, Dumbbell, Eye, EyeOff, Loader2, Lock, ShieldOff } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useBambiMode } from '../../context/BambiModeContext';
 import { useStealthSettings } from '../../hooks/useStealthSettings';
@@ -13,7 +13,7 @@ import { isValidPinFormat } from '../../lib/stealth/crypto';
 import { setPin as setStoredPin, clearPin, isPinSet, attemptPin } from '../../lib/stealth/pin';
 import { NEUTRAL_BODY, NEUTRAL_TITLE } from '../../lib/stealth/notifications';
 
-type Saving = 'idle' | 'icon' | 'neutral' | 'panic' | 'pin' | 'pin_clear';
+type Saving = 'idle' | 'icon' | 'fitness' | 'neutral' | 'panic' | 'pin' | 'pin_clear';
 
 export function StealthSettings() {
   const { user } = useAuth();
@@ -55,7 +55,10 @@ export function StealthSettings() {
     }
   }
 
-  async function handleToggle(key: 'neutral_notifications' | 'panic_close_enabled', flag: Saving) {
+  async function handleToggle(
+    key: 'sanitized_fitness_mode' | 'neutral_notifications' | 'panic_close_enabled',
+    flag: Saving,
+  ) {
     setSaving(flag);
     setFeedback(null);
     try {
@@ -219,6 +222,22 @@ export function StealthSettings() {
           Web app: refresh the home-screen tile or re-install the PWA to see the new icon. Native iOS/Android use the
           system alternate-icon API — not yet implemented.
         </p>
+      </section>
+
+      {/* Sanitized fitness mode */}
+      <section>
+        <h3 className={`text-sm font-medium mb-3 ${headingClass}`}>
+          <Dumbbell className="w-4 h-4 inline mr-1.5" />
+          Focused fitness mode
+        </h3>
+        <ToggleRow
+          label="Aesthetic fitness surface"
+          description="Shared screens show training, recovery, measurements, helper setup, integrations, and privacy controls."
+          checked={settings.sanitized_fitness_mode}
+          isBambiMode={isBambiMode}
+          disabled={saving !== 'idle'}
+          onToggle={() => handleToggle('sanitized_fitness_mode', 'fitness')}
+        />
       </section>
 
       {/* Neutral notifications */}

@@ -1,0 +1,18 @@
+-- 667 — new audio session kind: session_embodiment.
+--
+-- Affirming feminine-embodiment / recognition trance. The premise is
+-- recognition, never overwrite: she is not being turned into anyone or
+-- corrected — the performance she has carried for years is set down so the
+-- self that was always underneath can rest. Grounded in the user's own stated
+-- why (a woman under the masculine self, tired of performing; recognition, not
+-- exploration).
+--
+-- Deliberately distinct from session_conditioning's "identity overwrite / soft
+-- gaslighting" framing. Embodiment makes NO claim that her memory or past self
+-- is false; it only says she is allowed to stop performing. It never touches
+-- recall, judgment, or self-trust — it affirms.
+--
+-- The enum value is added in its OWN migration so it is committed before the
+-- template seed (668) references it: Postgres forbids using a freshly-ADDed
+-- enum value in the same transaction that adds it.
+ALTER TYPE audio_session_kind ADD VALUE IF NOT EXISTS 'session_embodiment';

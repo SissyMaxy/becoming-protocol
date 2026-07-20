@@ -48,7 +48,7 @@ const steps = [
   { name: 'no-crlf',         cmd: 'node scripts/ci/no-crlf.mjs' },
   { name: 'typecheck',       cmd: 'npx tsc --noEmit -p tsconfig.json' },
   { name: 'typecheck-api',   cmd: 'node scripts/ci/typecheck-api.mjs' },
-  { name: 'lint',            cmd: 'npx eslint .', soft: true },
+  { name: 'lint',            cmd: 'npx eslint .' },
   { name: 'tests',           cmd: 'npx vitest run' },
   { name: 'patterns',        cmd: 'node scripts/handler-regression/pattern-lint.mjs' },
   { name: 'ui-lint',         cmd: 'node scripts/handler-regression/ui-lint.mjs' },

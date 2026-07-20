@@ -21,8 +21,8 @@ import { DropPortal } from './DropPortal';
 import { LovenseHealthBanner } from './LovenseHealthBanner';
 import { BecomingHero } from './BecomingHero';
 import { FocusMode } from './FocusMode';
-import { BodyProgramCard } from './BodyProgramCard';
 import { FitnessTrackerCard } from './FitnessTrackerCard';
+import { WorkoutCard } from './WorkoutCard';
 import { CollapsibleGroup } from './CollapsibleGroup';
 import { SideQuestCard } from './SideQuestCard';
 import { BambiPlaylistCard } from './BambiPlaylistCard';
@@ -77,10 +77,12 @@ export function TodayView(_props: TodayViewProps) {
       </div>
       <BecomingHero />
       <FocusMode onViewPlan={() => navigate('plan')} />
-      {/* The real workout engine — today's prescribed, progressive session,
-          front and center. FitnessTrackerCard stays below as the daily
-          movement tap / side-quest currency. */}
-      <BodyProgramCard />
+      {/* Today's prescribed routine, on the default surface. It previously
+          lived only inside Build your body / Plan (and at the bottom of the
+          focus ranking), so the daily prescription was invisible from home. */}
+      <div className="px-3 md:px-4 pt-2">
+        <WorkoutCard />
+      </div>
       <FitnessTrackerCard />
       <div className="px-3 md:px-4 pt-0.5">
         <CollapsibleGroup id="more_with_mommy" label="More with Mommy" tone="var(--protocol-accent)" defaultOpen={false} hint="side quest · your files · dossier">

@@ -3,6 +3,13 @@
 // Connects the Handler decision engine to Claude API for personalized coaching
 
 import Anthropic from 'npm:@anthropic-ai/sdk@0.24.0';
+import { requireUserOrService } from '../_shared/request-auth.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
 const anthropic = new Anthropic({
   apiKey: Deno.env.get('ANTHROPIC_API_KEY')!
@@ -241,17 +248,23 @@ function buildContextMessage(
 Deno.serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response('ok', {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-      }
-    });
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const { user_id, request_type, user_state, prefill, context } = await req.json() as CoachRequest;
+    const { principal, response: unauthorized } = await requireUserOrService(req, corsHeaders);
+    if (unauthorized || !principal) return unauthorized!;
+
+    const body = await req.json() as CoachRequest;
+    const user_id = principal.kind === 'user' ? principal.userId : body.user_id;
+    const { request_type, user_state, prefill, context } = body;
+
+    if (principal.kind === 'user' && body.user_id !== principal.userId) {
+      return new Response(JSON.stringify({ error: 'Forbidden' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // Validate required fields
     if (!user_id || !request_type || !user_state || !prefill) {
@@ -261,7 +274,7 @@ Deno.serve(async (req: Request) => {
         }),
         {
           status: 400,
-          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       );
     }
@@ -304,8 +317,8 @@ Deno.serve(async (req: Request) => {
       }),
       {
         headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*'
+          ...corsHeaders,
+          'Content-Type': 'application/json'
         }
       }
     );
@@ -320,8 +333,8 @@ Deno.serve(async (req: Request) => {
       {
         status: 500,
         headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*'
+          ...corsHeaders,
+          'Content-Type': 'application/json'
         }
       }
     );

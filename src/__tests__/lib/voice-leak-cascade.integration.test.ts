@@ -22,7 +22,7 @@ const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const SKIP = !SUPABASE_URL || !SERVICE_KEY;
 const describeIntegration = SKIP ? describe.skip : describe;
 
-const HANDLER_USER_ID = '8c69b9c8-34eb-4147-9fec-3c1a5bc74b6f';
+const HANDLER_USER_ID = process.env.INTEGRATION_TEST_USER_ID!;
 
 let supabase: SupabaseClient;
 const insertedLeakIds: string[] = [];

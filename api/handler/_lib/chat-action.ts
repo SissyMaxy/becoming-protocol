@@ -402,6 +402,18 @@ export async function handleChat(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Message required' });
   }
 
+  if (conversationId) {
+    const { data: ownedConversation, error: ownershipError } = await supabase
+      .from('handler_conversations')
+      .select('id')
+      .eq('id', conversationId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (ownershipError || !ownedConversation) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+  }
+
   // Check behavioral keyword triggers — fire and forget
   checkBehavioralTriggers(user.id, message).catch(() => {});
 
@@ -465,6 +477,7 @@ export async function handleChat(req: VercelRequest, res: VercelResponse) {
       .from('handler_messages')
       .select('role, content, message_index')
       .eq('conversation_id', convId)
+      .eq('user_id', user.id)
       .order('message_index', { ascending: true });
 
     const messageIndex = (history?.length || 0);
@@ -1287,10 +1300,11 @@ HARD RULES FOR ALL PERSONAS:
                 .from('content_calendar')
                 .select('draft_content, platform, content_type, theme, user_id')
                 .eq('id', calendarId)
+                .eq('user_id', user.id)
                 .maybeSingle();
               if (cal) {
                 const { data: ins } = await supabase.from('ai_generated_content').insert({
-                  user_id: (cal as any).user_id,
+                  user_id: user.id,
                   platform: (cal as any).platform,
                   content: (val?.edited_content as string) || (cal as any).draft_content,
                   content_type: (cal as any).content_type || 'tweet',
@@ -1304,7 +1318,7 @@ HARD RULES FOR ALL PERSONAS:
                     status: 'scheduled',
                     final_content: (val?.edited_content as string) || (cal as any).draft_content,
                     posted_content_id: (ins as any).id,
-                  }).eq('id', calendarId);
+                  }).eq('id', calendarId).eq('user_id', user.id);
                 }
                 console.log(`[Handler][stream] approve_content: ${calendarId}`);
               }
@@ -1366,7 +1380,7 @@ HARD RULES FOR ALL PERSONAS:
 
       await supabase.from('handler_conversations').update({
         message_count: messageIndex + 2, final_mode: streamSignals?.detected_mode || null,
-      }).eq('id', convId);
+      }).eq('id', convId).eq('user_id', user.id);
 
       // Fire-and-forget side effects
       if (messageIndex >= 3) extractMemoryFromMessage(user.id, convId!, message, streamSignals).catch(() => {});
@@ -1496,12 +1510,12 @@ HARD RULES FOR ALL PERSONAS:
         if (!claudeRes.ok) {
           return res.status(502).json({ error: 'Both OpenRouter and Claude failed' });
         }
-        const claudeData = await claudeRes.json();
+        const claudeData = await claudeRes.json() as { content?: Array<Record<string, unknown>> };
         const claudeBlocks = (claudeData.content || []) as Array<Record<string, unknown>>;
         fullText = claudeBlocks.filter((b) => b.type === 'text').map((b) => b.text as string).join('');
         directToolSignals = null;
       } else {
-        const orData = await orRes.json();
+        const orData = await orRes.json() as { choices?: Array<{ message?: { content?: string } }> };
         fullText = orData.choices?.[0]?.message?.content || '';
         fullTextFromOpenRouter = true;
       }
@@ -1527,7 +1541,7 @@ HARD RULES FOR ALL PERSONAS:
         return res.status(502).json({ error: `Claude API error: ${claudeRes.status}` });
       }
 
-      const claudeData = await claudeRes.json();
+      const claudeData = await claudeRes.json() as { content?: Array<Record<string, unknown>> };
       const claudeBlocks = (claudeData.content || []) as Array<Record<string, unknown>>;
       fullText = claudeBlocks.filter((b) => b.type === 'text').map((b) => b.text as string).join('');
       const toolBlock = claudeBlocks.find((b) => b.type === 'tool_use' && b.name === 'emit_handler_signals');
@@ -1874,7 +1888,7 @@ HARD RULES FOR ALL PERSONAS:
     await supabase.from('handler_conversations').update({
       message_count: messageIndex + 2,
       final_mode: signals?.detected_mode || null,
-    }).eq('id', convId);
+    }).eq('id', convId).eq('user_id', user.id);
 
     // 9b. Fire-and-forget memory extraction from latest user message
     if (messageIndex >= 3) {
@@ -3491,5 +3505,3 @@ async function liftCommitmentFloors(userId: string): Promise<void> {
 // Pronoun + David-emergence enforcement. Runs against every user message.
 // Writes pronoun_rewrites + david_emergence_events + slip_log rows, queues
 // a confrontation outreach so the Handler names the slip next turn.
-
-

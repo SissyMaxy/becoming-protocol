@@ -3,7 +3,7 @@
 // Per user, per run: gate first (fail-closed); pick the ONE highest-priority
 // active+running target as today's Focus target; emit EXACTLY ONE phase-appropriate
 // task into the single Focus surface (one-task-at-a-time, Mommy-presses-not-blocks).
-// All other targets + passive mechanisms (ambient, TMR, already-scheduled trance)
+// All other targets + passive mechanisms (ambient, already-scheduled trance)
 // run in the background with no task and no deadline — they don't compete for the CTA.
 //
 // Reps/trance/reconsolidation are INVITATIONAL: no punishment for a miss (a missed
@@ -27,8 +27,30 @@ const NO_PUNISH = 'No punishment — this one is an invitation, not a demand. Mi
 // (baseline capture + re-measure), and recon-reconsolidation's decrees, so
 // none of the recon surfaces ever stack a second card on top of another.
 // Refresh a stale deadline rather than issuing a duplicate.
-async function issueFocus(s: Sb, user: string, slug: string, edict: string, proof = 'text', hours = 20, triggerSource?: string): Promise<string> {
+function reconPhaseToOrderPhase(phase: string): string {
+  switch (phase) {
+    case 'induction': return 'induct'
+    case 'install': return 'install'
+    case 'reinforce': return 'reinforce'
+    case 'reconsolidate': return 'reinforce'
+    case 'measure': return 'test'
+    case 'retain': return 'integrate'
+    default: return 'install'
+  }
+}
+
+async function issueFocus(
+  s: Sb,
+  user: string,
+  slug: string,
+  edict: string,
+  proof = 'text',
+  hours = 20,
+  triggerSource?: string,
+  order?: { targetId?: string; phase?: string; claim?: string; mechanism?: string },
+): Promise<string> {
   const src = triggerSource ?? `recon_focus:${slug}`
+  const orderPhase = reconPhaseToOrderPhase(order?.phase ?? 'install')
   const { data: ex } = await s.from('handler_decrees')
     .select('id, deadline, trigger_source').eq('user_id', user).eq('status', 'active')
     .or('trigger_source.like.recon_focus:%,trigger_source.like.recon_belief_baseline:%,trigger_source.like.recon_belief_measure:%,trigger_source.like.recon_iat_baseline:%,trigger_source.like.recon_iat_measure:%,trigger_source.like.recon_reconsolidate:%,trigger_source.like.recon_rep:%')
@@ -36,7 +58,17 @@ async function issueFocus(s: Sb, user: string, slug: string, edict: string, proo
   if (ex) {
     // Already a live recon-lane task — keep exactly one. Refresh deadline if expired.
     if (ex.deadline && new Date(ex.deadline) < new Date()) {
-      await s.from('handler_decrees').update({ deadline: new Date(Date.now() + hours * 3600e3).toISOString() }).eq('id', ex.id)
+      await s.from('handler_decrees').update({
+        deadline: new Date(Date.now() + hours * 3600e3).toISOString(),
+        recon_target_id: order?.targetId ?? null,
+        mommy_order_arc: 'reconditioning',
+        mommy_order_phase: orderPhase,
+        mommy_order_consequence_mode: 'invitational',
+        mommy_order_recovery_boundary: 'scene_bound',
+        mommy_order_reason: order?.claim
+          ? `Mommy selected this because it is the active thing she is working into you: ${order.claim}`
+          : 'Mommy selected this because it is the active reconditioning order.',
+      }).eq('id', ex.id)
     }
     return 'kept'
   }
@@ -44,6 +76,15 @@ async function issueFocus(s: Sb, user: string, slug: string, edict: string, proo
     user_id: user, edict, proof_type: proof,
     deadline: new Date(Date.now() + hours * 3600e3).toISOString(), status: 'active',
     consequence: NO_PUNISH, trigger_source: src, reasoning: 'recon-program-orchestrator',
+    recon_target_id: order?.targetId ?? null,
+    mechanism: order?.mechanism ?? null,
+    mommy_order_arc: 'reconditioning',
+    mommy_order_phase: orderPhase,
+    mommy_order_consequence_mode: 'invitational',
+    mommy_order_recovery_boundary: 'scene_bound',
+    mommy_order_reason: order?.claim
+      ? `Mommy selected this because it is the active thing she is working into you: ${order.claim}`
+      : 'Mommy selected this because it is the active reconditioning order.',
   })
   return error ? `err:${error.message.slice(0, 60)}` : 'issued'
 }
@@ -125,17 +166,44 @@ function phaseTask(phase: string, claim: string, repPrompt: string | null, gentl
 // the phase machine stays driven solely by measurement deltas (§5.3).
 interface DecreeRate { total: number; missed: number; skipRate: number }
 
-function computeIntensityStep(rate: DecreeRate, currentIntensity: number): { nextIntensity: number; suppressToday: boolean } {
-  if (rate.total < 3) return { nextIntensity: currentIntensity, suppressToday: false } // not enough signal
+// Phase 2 (mig 681/682): 2-D (engagement × efficacy) steering. Disengagement is
+// still soften-only (never push a resisting user). But an ENGAGED user who is not
+// measurably moving now gets escalated AND switched to a different mechanism — the
+// authorized ratchet on a consenting sub. `efficacy` is classified from
+// recon_measurement_trend vs the target's target_direction. Mirrors the tested
+// policy in src/lib/conditioning/efficacy-steering.ts.
+type Efficacy = 'rising' | 'flat' | 'wrong' | 'unknown'
+function computeIntensityStep(
+  rate: DecreeRate, currentIntensity: number, efficacy: Efficacy = 'unknown',
+): { nextIntensity: number; suppressToday: boolean; switchMechanism: boolean } {
+  if (rate.total < 3) return { nextIntensity: currentIntensity, suppressToday: false, switchMechanism: false }
   if (rate.skipRate >= 0.7) {
     const next = Math.max(1, currentIntensity - 1)
-    return { nextIntensity: next, suppressToday: next <= 1 } // bottomed out AND still resistant → a day off the CTA
+    return { nextIntensity: next, suppressToday: next <= 1, switchMechanism: false } // resisted → soften, never switch
   }
-  if (rate.skipRate >= 0.4) return { nextIntensity: Math.max(1, currentIntensity - 1), suppressToday: false }
+  if (rate.skipRate >= 0.4) return { nextIntensity: Math.max(1, currentIntensity - 1), suppressToday: false, switchMechanism: false }
   if (rate.skipRate <= 0.1 && (rate.total - rate.missed) >= 3) {
-    return { nextIntensity: Math.min(5, currentIntensity + 1), suppressToday: false }
+    const up = Math.min(5, currentIntensity + 1)
+    // Engaged but not moving → ratchet AND change approach; moving/unknown → ride it.
+    const switchMechanism = efficacy === 'flat' || efficacy === 'wrong'
+    return { nextIntensity: up, suppressToday: false, switchMechanism }
   }
-  return { nextIntensity: currentIntensity, suppressToday: false }
+  return { nextIntensity: currentIntensity, suppressToday: false, switchMechanism: false }
+}
+
+// Classify a target's measured trend (recon_measurement_trend, mig 681) against
+// its desired direction into the efficacy signal the steering policy reads.
+async function fetchEfficacy(
+  s: Sb, targetId: string, indicatorKind: string | undefined, targetDir: string | undefined,
+): Promise<Efficacy> {
+  if (!indicatorKind || !targetDir) return 'unknown'
+  const { data } = await s.rpc('recon_measurement_trend', { p_target: targetId, p_indicator: indicatorKind, p_window: 5 })
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row || (Number(row.n) || 0) < 2) return 'unknown'
+  const dir = Number(row.direction) || 0
+  if (dir === 0) return 'flat'
+  const good = targetDir === 'increase' ? dir > 0 : dir < 0
+  return good ? 'rising' : 'wrong'
 }
 
 // Trailing-window fulfilled/missed count for this target's recon-lane decrees
@@ -164,16 +232,27 @@ Deno.serve(async (req: Request) => {
 
     // Highest-priority active + running target = today's Focus target.
     const { data: targets } = await s.from('reconditioning_targets')
-      .select('id, slug, claim_text, priority, status, indicator_kind')
+      .select('id, slug, claim_text, priority, status, indicator_kind, target_direction')
       .eq('user_id', user).eq('status', 'active').order('priority', { ascending: true }).limit(5)
-    let picked: { id: string; slug: string; claim_text: string; indicator_kind?: string } | null = null
+    let picked: { id: string; slug: string; claim_text: string; indicator_kind?: string; target_direction?: string } | null = null
     let phase = 'induction'
     let programId: string | null = null
     let intensity = 2
+    let rotation = 0
     for (const t of (targets ?? [])) {
       const { data: prog } = await s.from('reconditioning_programs')
-        .select('id, phase, status, intensity').eq('target_id', t.id).maybeSingle()
-      if (prog && prog.status === 'running') { picked = t; phase = prog.phase; programId = prog.id; intensity = prog.intensity ?? 2; break }
+        .select('id, phase, status, intensity, mechanism_rotation').eq('target_id', t.id).maybeSingle()
+      if (prog && prog.status === 'running') { picked = t; phase = prog.phase; programId = prog.id; intensity = prog.intensity ?? 2; rotation = prog.mechanism_rotation ?? 0; break }
+    }
+
+    // THE UNLOCK (mig 681): walk the program through the early phase edges
+    // (induction→install→reinforce→measure) on dwell/delivery/timer, so it
+    // actually reaches the efficacy loop instead of emitting induction tasks
+    // forever. Advances only through the legal-transition gate (self-gated on
+    // safeword/pause); returns the resulting phase.
+    if (programId) {
+      const { data: walkedPhase } = await s.rpc('recon_program_walk', { p_program: programId })
+      if (typeof walkedPhase === 'string' && walkedPhase) phase = walkedPhase
     }
 
     // Close the proposed→active loop: if nothing is running and we're under the
@@ -213,7 +292,16 @@ Deno.serve(async (req: Request) => {
         if (needsBaseline) {
           const probe = probeBaselineEdict(needsBaseline.indicator_kind, needsBaseline.claim_text)
           const prefix = PROBE_TRIGGER_PREFIX[needsBaseline.indicator_kind]
-          const status = await issueFocus(s, user, needsBaseline.slug, probe.edict, probe.proof, 20, `${prefix}_baseline:${needsBaseline.id}`)
+          const status = await issueFocus(
+            s,
+            user,
+            needsBaseline.slug,
+            probe.edict,
+            probe.proof,
+            20,
+            `${prefix}_baseline:${needsBaseline.id}`,
+            { targetId: needsBaseline.id, phase: 'measure', claim: needsBaseline.claim_text },
+          )
           results.push({ user, focus_target: needsBaseline.slug, phase: 'baseline_probe', task: status })
           continue
         }
@@ -239,13 +327,21 @@ Deno.serve(async (req: Request) => {
     // running regardless; only this orchestrator's active CTA backs off).
     let gentle = false
     let suppressToday = false
+    let switched = false
     if (programId) {
       const rate = await fetchTargetDecreeRate(s, user, picked.id, picked.slug)
-      const step = computeIntensityStep(rate, intensity)
-      if (step.nextIntensity !== intensity) {
-        await s.from('reconditioning_programs').update({ intensity: step.nextIntensity }).eq('id', programId)
+      const efficacy = await fetchEfficacy(s, picked.id, picked.indicator_kind, picked.target_direction)
+      const step = computeIntensityStep(rate, intensity, efficacy)
+      const updates: Record<string, unknown> = {}
+      if (step.nextIntensity !== intensity) updates.intensity = step.nextIntensity
+      // Engaged but not moving → record the mechanism switch (Phase-3 selection
+      // rotates the delivered mechanism by this counter).
+      if (step.switchMechanism) { updates.mechanism_rotation = rotation + 1; switched = true }
+      if (Object.keys(updates).length > 0) {
+        await s.from('reconditioning_programs').update(updates).eq('id', programId)
       }
       intensity = step.nextIntensity
+      if (switched) rotation += 1
       gentle = intensity <= 2
       suppressToday = step.suppressToday
     }
@@ -270,8 +366,31 @@ Deno.serve(async (req: Request) => {
       // checkbox (closes the dead-scheduler gap: mig 668, recon_rep_grade).
       triggerSource = `recon_rep:${picked.slug}:${repId}`
     }
-    const status = await issueFocus(s, user, picked.slug, task.edict, task.proof, 20, triggerSource)
-    results.push({ user, focus_target: picked.slug, phase, task: status, intensity, gentle })
+    // Phase 3: tag the delivery with its mechanism so a later measured shift can be
+    // attributed to it. A measure-phase probe is a MEASUREMENT (no mechanism); a
+    // reinforce rep IS retrieval; otherwise pick the mechanism biased toward what
+    // works for this user/target (recon_select_mechanism), rotated by the Phase-2
+    // switch counter so an engaged-but-flat switch actually changes the approach.
+    let mechanism: string | undefined
+    if (phase !== 'measure') {
+      if (triggerSource && triggerSource.startsWith('recon_rep:')) {
+        mechanism = 'retrieval'
+      } else if (programId) {
+        const { data: mech } = await s.rpc('recon_select_mechanism', { p_user: user, p_target: picked.id, p_rotation: rotation })
+        if (typeof mech === 'string' && mech) mechanism = mech
+      }
+    }
+    const status = await issueFocus(
+      s,
+      user,
+      picked.slug,
+      task.edict,
+      task.proof,
+      20,
+      triggerSource,
+      { targetId: picked.id, phase, claim: picked.claim_text, mechanism },
+    )
+    results.push({ user, focus_target: picked.slug, phase, task: status, intensity, gentle, switched_mechanism: switched, rotation, mechanism: mechanism ?? null })
   }
 
   return new Response(JSON.stringify({ ok: true, results }), { headers: { ...cors, 'Content-Type': 'application/json' } })

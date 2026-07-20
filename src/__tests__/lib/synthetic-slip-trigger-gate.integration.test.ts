@@ -29,7 +29,7 @@ const SKIP = !SUPABASE_URL || !SERVICE_KEY;
 const describeIntegration = SKIP ? describe.skip : describe;
 
 let supabase: SupabaseClient;
-const userId = '8c69b9c8-34eb-4147-9fec-3c1a5bc74b6f';
+const userId = process.env.INTEGRATION_TEST_USER_ID!;
 let originalPersona: string | null = null;
 const insertedSlipIds: string[] = [];
 const insertedConfessionIds: string[] = [];

@@ -45,6 +45,13 @@ export async function createCaptureVaultItem(
     durationSeconds?: number;
   }
 ): Promise<string | null> {
+  // Evidence→content flywheel (Phase 5): a faceless workout / physical-practice /
+  // body proof is progress-photo content. Tag it so the shoot/multiplication route
+  // picks it up, and stamp it faceless (Art. II item 4). Non-audio only.
+  const isEvidence = /\b(body|exercise|workout|physical|physical_practice)\b/i.test(context.domain ?? '')
+    && context.mediaType !== 'audio';
+  const tags = ['auto-capture', context.captureType];
+  if (isEvidence) tags.push('progress_photo');
   return addToVault(userId, {
     media_url: mediaUrl,
     media_type: context.mediaType,
@@ -52,8 +59,9 @@ export async function createCaptureVaultItem(
     source_task_id: context.taskId,
     capture_context: context.capturePrompt,
     auto_captured: true,
+    ...(isEvidence ? { face_visible: false } : {}),
     domain: context.domain,
-    tags: ['auto-capture', context.captureType],
+    tags,
     file_size_bytes: context.fileSizeBytes,
     duration_seconds: context.durationSeconds,
   });

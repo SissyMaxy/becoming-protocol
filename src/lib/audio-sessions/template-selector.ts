@@ -10,6 +10,7 @@ export type AudioSessionKind =
   | 'session_edge'
   | 'session_goon'
   | 'session_conditioning'
+  | 'session_embodiment'
   | 'session_freestyle'
   | 'session_denial'
   | 'primer_posture'
@@ -58,6 +59,7 @@ export const KIND_AFFECT_BIAS: Record<AudioSessionKind, string[]> = {
   session_edge: ['aching', 'restless'],
   session_goon: ['hungry', 'delighted'],
   session_conditioning: ['patient', 'watching'],
+  session_embodiment: ['patient', 'indulgent'],
   session_freestyle: ['delighted', 'amused'],
   session_denial: ['possessive', 'restless'],
   primer_posture: ['patient'],

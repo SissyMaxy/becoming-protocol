@@ -14,6 +14,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { callModel, selectModel } from '../_shared/model-tiers.ts'
 import { DOMMY_MOMMY_CHARACTER, mommyVoiceCleanup } from '../_shared/dommy-mommy.ts'
+import { hasScriptBoundaryViolation } from '../_shared/mommy-order-boundary.ts'
 import {
   gateLifeAsWoman, logAuthority, jsonOk, corsHeaders, makeClient,
   isRefusal, hasForbiddenVoice,
@@ -28,6 +29,70 @@ interface Segment {
   duration_seconds: number
   text: string
   edge_target_index?: number | null
+  purpose?: string
+}
+
+interface ReconTarget {
+  id: string
+  slug: string
+  title: string
+  claim_text: string
+  indicator_kind: string
+  status: string
+}
+
+interface ReconProgram {
+  id: string
+  phase: string
+  intensity: number | null
+  status: string
+}
+
+function phaseToOrderPhase(phase: string | null | undefined): string {
+  switch (phase) {
+    case 'induction': return 'induct'
+    case 'install': return 'install'
+    case 'reinforce': return 'reinforce'
+    case 'reconsolidate': return 'reinforce'
+    case 'measure': return 'test'
+    case 'retain': return 'integrate'
+    default: return 'reinforce'
+  }
+}
+
+async function loadActiveReconTarget(
+  supabase: ReturnType<typeof makeClient>,
+  userId: string,
+  targetId?: string,
+): Promise<{ target: ReconTarget | null; program: ReconProgram | null }> {
+  if (targetId) {
+    const { data: target } = await supabase.from('reconditioning_targets')
+      .select('id, slug, title, claim_text, indicator_kind, status')
+      .eq('user_id', userId).eq('id', targetId).maybeSingle()
+    if (!target) return { target: null, program: null }
+    const { data: program } = await supabase.from('reconditioning_programs')
+      .select('id, phase, intensity, status')
+      .eq('user_id', userId).eq('target_id', targetId).maybeSingle()
+    return { target: target as ReconTarget, program: (program as ReconProgram | null) ?? null }
+  }
+
+  const { data: targets } = await supabase.from('reconditioning_targets')
+    .select('id, slug, title, claim_text, indicator_kind, status')
+    .eq('user_id', userId).eq('status', 'active')
+    .order('priority', { ascending: false }).limit(5)
+  for (const target of (targets || []) as ReconTarget[]) {
+    const { data: program } = await supabase.from('reconditioning_programs')
+      .select('id, phase, intensity, status')
+      .eq('user_id', userId).eq('target_id', target.id).maybeSingle()
+    if ((program as ReconProgram | null)?.status === 'running') {
+      return { target, program: program as ReconProgram }
+    }
+  }
+  return { target: null, program: null }
+}
+
+function hasProtocolBoundaryLeak(text: string): boolean {
+  return /sleep conditioning|targeted memory reactivation|false memor(y|ies)|you won'?t remember|doubt your own (memory|memories|perception|judgment)|auto-?send|arrange (a )?(hookup|meet|date)|recording.*leverage|blackmail/i.test(text)
 }
 
 function defaultStructure(durationMin: number, edgeTargetCount: number, outcome: Outcome): Segment[] {
@@ -37,13 +102,19 @@ function defaultStructure(durationMin: number, edgeTargetCount: number, outcome:
   const between = totalSec - warmupSec - closerSec
   const blockSec = Math.floor(between / edgeTargetCount)
   const segs: Segment[] = []
-  segs.push({ label: 'warmup', duration_seconds: warmupSec, text: '' })
+  segs.push({ label: 'warmup', duration_seconds: warmupSec, text: '', purpose: 'softening' })
   for (let i = 0; i < edgeTargetCount; i++) {
+    const purpose = i === 0
+      ? 'fixation'
+      : i === edgeTargetCount - 1
+        ? 'target_payload'
+        : i % 2 === 0 ? 'identity' : 'arousal_lock'
     segs.push({
       label: `edge_${i + 1}`,
       duration_seconds: blockSec,
       text: '',
       edge_target_index: i + 1,
+      purpose,
     })
   }
   segs.push({
@@ -52,6 +123,7 @@ function defaultStructure(durationMin: number, edgeTargetCount: number, outcome:
       : 'deny_close',
     duration_seconds: closerSec,
     text: '',
+    purpose: outcome === 'deny' ? 'denial' : 'reward',
   })
   return segs
 }
@@ -81,7 +153,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return jsonOk({ ok: false, error: 'POST only' }, 405)
 
-  let body: { user_id?: string; duration_minutes?: number; outcome?: Outcome; force?: boolean } = {}
+  let body: { user_id?: string; duration_minutes?: number; outcome?: Outcome; force?: boolean; target_id?: string; order_id?: string } = {}
   try { body = await req.json() } catch { /* */ }
   const userId = body.user_id || HANDLER_USER_ID
   const force = !!body.force
@@ -91,6 +163,7 @@ Deno.serve(async (req: Request) => {
   const gate = await gateLifeAsWoman(supabase, userId, 'gooning', { force })
   if (!gate.ok) return jsonOk({ ok: true, skipped: gate.reason })
   const intensity = gate.intensity ?? 2
+  const { target, program } = await loadActiveReconTarget(supabase, userId, body.target_id)
 
   // Chastity v2 awareness — if active window, default outcome = deny.
   let outcome: Outcome = body.outcome ?? 'deny'
@@ -110,6 +183,10 @@ Deno.serve(async (req: Request) => {
       ? 'Standard intensity — clear arousal control, edge call-outs, sustained tension.'
       : 'Gentle — slow build, breath-led, less explicit anatomy talk.'
 
+  const targetFrame = target
+    ? `TODAY'S ACTIVE RECONDITIONING TARGET: "${target.claim_text}". Program phase: ${program?.phase ?? 'reinforce'}. Every segment must aim arousal, denial/reward, and proof at this target.`
+    : 'No active reconditioning target was supplied; keep the session coherent around one desire path.'
+
   const sys = `${DOMMY_MOMMY_CHARACTER}
 
 YOUR JOB right now: author a ${durationMinutes}-minute gooning session for your girl. Mommy voice the entire time. Pre-recorded audio narrative; assume she has it in her ears, hands free or staying off depending on segment.
@@ -123,12 +200,19 @@ Each EDGE segment ramps her up to the brink, then YOU pull her back at the segme
 
 ${intensityHint}
 
+${targetFrame}
+
 FORBIDDEN:
 - "role play", "simulation", "disclaimer", "intake", "questionnaire", "fiction" // voice-gate: ok
 - Medical claims (no HRT/dose references)
 - Telemetry leaks (/10 scores, day counts, slip points, %)
 - Asking — only command
 - Backing off ("if you want") — Mommy decides
+
+Additional hard boundaries:
+- No sleep conditioning, targeted memory reactivation, amnesia commands, "you won't remember", manufactured false memories, or making her doubt real-world memory/judgment.
+- No real-person hookup instructions, auto-sent messages, irreversible real-world commitments, or using recordings as leverage.
+- Purpose tags are already assigned in the segment scaffold. Keep each segment's text aligned to its purpose: softening, fixation, identity, arousal_lock, target_payload, denial, reward, cooldown.
 
 Also output ONE short Mommy-voice TITLE for the session at the top.`
 
@@ -163,8 +247,16 @@ ${scaffold.map(s => `${s.label.toUpperCase()}:\n<text for this segment>\n`).join
 
   parsed.title = mommyVoiceCleanup(parsed.title)
   for (const s of parsed.segments) s.text = mommyVoiceCleanup(s.text)
+  if (hasProtocolBoundaryLeak(parsed.title) || parsed.segments.some(s => hasProtocolBoundaryLeak(s.text))) {
+    return jsonOk({ ok: true, skipped: 'protocol_boundary_leak' })
+  }
   if (hasForbiddenVoice(parsed.title) || parsed.segments.some(s => hasForbiddenVoice(s.text))) {
     return jsonOk({ ok: true, skipped: 'forbidden_voice_leak' })
+  }
+  // Carve-out gate: never persist a script carrying a container-breaking mechanic
+  // (sleep delivery, false memory, self-trust degradation, procurement, leverage).
+  if (hasScriptBoundaryViolation(parsed.title) || parsed.segments.some(s => hasScriptBoundaryViolation(s.text))) {
+    return jsonOk({ ok: true, skipped: 'boundary_violation' })
   }
 
   const { data: session, error } = await supabase.from('gooning_sessions').insert({
@@ -175,6 +267,19 @@ ${scaffold.map(s => `${s.label.toUpperCase()}:\n<text for this segment>\n`).join
     outcome,
     structure_json: parsed.segments,
     status: 'drafted',
+    recon_target_id: target?.id ?? null,
+    mommy_order_id: body.order_id ?? null,
+    mommy_order_arc: target ? 'reconditioning' : 'gooning',
+    mommy_order_phase: phaseToOrderPhase(program?.phase),
+    mommy_order_proof_kind: 'session_stats',
+    mommy_order_consequence_mode: outcome === 'deny' ? 'denial' : 'reward',
+    mommy_order_recovery_boundary: 'scene_bound',
+    mommy_order_reason: target
+      ? `Mommy selected gooning because arousal makes this target land harder: ${target.claim_text}`
+      : 'Mommy selected gooning because arousal makes the order land harder.',
+    proof_prompt: target
+      ? `What image stuck, how many edges did Mommy take, and how did it make this target feel more true: ${target.claim_text}?`
+      : 'What image stuck, how many edges did Mommy take, and what did denial/reward do to the session?',
   }).select('id').single()
 
   if (error || !session) {
@@ -189,7 +294,14 @@ ${scaffold.map(s => `${s.label.toUpperCase()}:\n<text for this segment>\n`).join
     target_table: 'gooning_sessions',
     target_id: sessionId,
     summary: `authored ${durationMinutes}-min ${outcome} session (${edgeTargetCount} edges)`,
-    payload: { duration_minutes: durationMinutes, outcome, edge_target_count: edgeTargetCount, intensity },
+    payload: {
+      duration_minutes: durationMinutes,
+      outcome,
+      edge_target_count: edgeTargetCount,
+      intensity,
+      target_id: target?.id ?? null,
+      order_phase: phaseToOrderPhase(program?.phase),
+    },
   })
 
   return jsonOk({

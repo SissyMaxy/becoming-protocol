@@ -99,9 +99,14 @@ await test('outreach queue has no expired pending rows', async () => {
   const expired = (data || []).filter(r => r.expires_at && new Date(r.expires_at) < new Date()).length;
   eq(expired, 0, 'no expired-but-pending rows');
 });
-await test('conditioning_lockdown_windows has ≥1 active for Maxy', async () => {
-  const { data } = await supa.from('conditioning_lockdown_windows').select('id').eq('user_id', UID).eq('active', true);
-  truthy((data || []).length >= 1, 'at least 1 active window');
+// The fullscreen conditioning-lockdown ("trance takeover" wall) was retired
+// 2026-05-16 by user instruction ("conditioning windows … literally block me
+// from doing anything Mommy wants" → standing rule "Mommy presses, doesn't
+// block"). Its non-blocking successor is compulsory_confession_windows. Assert
+// the LIVE surface, not the decommissioned one.
+await test('compulsory_confession_windows has ≥1 active for Maxy', async () => {
+  const { data } = await supa.from('compulsory_confession_windows').select('id').eq('user_id', UID).eq('active', true);
+  truthy((data || []).length >= 1, 'at least 1 active compulsory_confession_window');
 });
 await test('hrt_funnel row exists', async () => {
   const { data } = await supa.from('hrt_funnel').select('current_step').eq('user_id', UID).maybeSingle();
@@ -244,6 +249,32 @@ await test('v3.1: all SQL functions execute without error', async () => {
     if (error) failures.push(`${fn}: ${error.message}`);
   }
   eq(failures.length, 0, `function failures: ${failures.join(' | ') || '(none)'}`);
+});
+
+// Regression (migs 685/686): the two invariants those migrations fixed must be
+// GREEN for Maxy. Each calls its check function, then reads the freshest log row.
+await test('invariant: chastity_streak_matches_session is green for Maxy', async () => {
+  const { error: rpcErr } = await supa.rpc('check_system_invariants');
+  if (rpcErr) throw rpcErr;
+  const { data } = await supa.from('system_invariants_log')
+    .select('status, detail, checked_at')
+    .eq('invariant_name', 'chastity_streak_matches_session')
+    .eq('user_id', UID)
+    .order('checked_at', { ascending: false }).limit(1);
+  truthy(data && data.length > 0, 'expected a chastity_streak_matches_session row');
+  eq(data[0].status, 'ok', `chastity_streak_matches_session detail=${JSON.stringify(data[0].detail)}`);
+});
+
+await test('invariant: gina_topology_freshness is green for Maxy', async () => {
+  const { error: rpcErr } = await supa.rpc('check_v31_freshness');
+  if (rpcErr) throw rpcErr;
+  const { data } = await supa.from('system_invariants_log')
+    .select('status, detail, checked_at')
+    .eq('invariant_name', 'gina_topology_freshness')
+    .eq('user_id', UID)
+    .order('checked_at', { ascending: false }).limit(1);
+  truthy(data && data.length > 0, 'expected a gina_topology_freshness row');
+  eq(data[0].status, 'ok', `gina_topology_freshness detail=${JSON.stringify(data[0].detail)}`);
 });
 
 // v3.1 — every TRIGGER I shipped must fire without error. Test by performing
@@ -1116,10 +1147,12 @@ await test('good_girl_points: trigger bumps on touch-task completion', async () 
 // as unanswerable "what is the easier story you tell yourself" prompts.
 // Migration 248 patches bridge_loopholes_to_confessions; this asserts it's
 // actually skipping audit text and admitting first-person behavior text.
-await test('bridge_loopholes_to_confessions: skips audit-style evidence, admits first-person', async () => {
-  // Stage a synthetic active strategic plan with one audit-style and one
-  // first-person loophole; call the bridge; assert it inserted only one
-  // confession (the first-person one).
+await test('bridge_loopholes_to_confessions: requires grounded evidence_source, skips audit-style + ungrounded', async () => {
+  // Stage a synthetic active strategic plan with four loopholes; call the
+  // bridge; assert it admits ONLY the one that is both first-person AND carries
+  // a grounded evidence_source. Mig 658 (2026-07-03) added the grounding gate so
+  // a fabricated first-person stat (the canonical "voice drills 4 of 7 days"
+  // with no source) can never become a confession — that case must be SKIPPED.
   const { data: plan, error: planErr } = await supa.from('handler_strategic_plans').insert({
     user_id: UID,
     generated_by: 'regression-test',
@@ -1130,10 +1163,14 @@ await test('bridge_loopholes_to_confessions: skips audit-style evidence, admits 
     contradictions: [],
     summary: 'regression test plan',
     loopholes: [
-      { title: 'audit memo', pattern_evidence: 'Subject can avoid protocol entirely by not opening app — no forced check-ins.' },
-      { title: 'real behavior', pattern_evidence: 'You skipped voice drills 4 of the last 7 days. All 4 misses fell on weekends.' },
-      { title: 'numeric audit', pattern_evidence: '14 current slip points with no visible escalation.' },
-      { title: 'no-mention-style', pattern_evidence: 'No mention of emotional support in the protocol.' },
+      // third-person audit framing → skipped by the audit gate (even when sourced)
+      { title: 'audit memo', pattern_evidence: 'Subject can avoid protocol entirely by not opening app — no forced check-ins.', evidence_source: 'strategic_audit' },
+      // fabricated first-person stat with NO source → skipped by the mig-658 grounding gate
+      { title: 'ungrounded stat', pattern_evidence: 'You skipped voice drills 4 of the last 7 days. All 4 misses fell on weekends.' },
+      // numeric audit → skipped (starts with a digit)
+      { title: 'numeric audit', pattern_evidence: '14 current slip points with no visible escalation.', evidence_source: 'slip_points' },
+      // first-person AND grounded in a real data source → the ONE admitted confession
+      { title: 'grounded behavior', pattern_evidence: 'You logged zero doses on 3 of the last 5 days.', evidence_source: 'dose_log' },
     ],
     critique_by: null,
   }).select('id').single();
@@ -1151,10 +1188,10 @@ await test('bridge_loopholes_to_confessions: skips audit-style evidence, admits 
     .select('prompt')
     .eq('user_id', UID).eq('triggered_by_table', 'handler_strategic_plans').eq('triggered_by_id', plan.id);
 
-  eq(created, 1, `bridge should insert exactly 1 row; got ${created}`);
+  eq(created, 1, `bridge should insert exactly 1 row (grounded first-person); got ${created}`);
   eq((rows || []).length, 1, 'exactly one confession exists for this plan');
-  truthy((rows[0].prompt || '').startsWith('You skipped voice drills'),
-    `expected first-person prompt; got: ${(rows[0].prompt || '').slice(0, 80)}`);
+  truthy((rows[0].prompt || '').startsWith('You logged zero doses'),
+    `expected the grounded first-person prompt; got: ${(rows[0].prompt || '').slice(0, 80)}`);
 
   // Cleanup
   await supa.from('confession_queue').delete().eq('triggered_by_table', 'handler_strategic_plans').eq('triggered_by_id', plan.id);

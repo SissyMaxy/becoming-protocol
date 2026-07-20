@@ -74,15 +74,25 @@ export function useWhoop(): UseWhoopReturn {
     }
 
     async function checkConnection() {
-      const { data } = await supabase
-        .from('whoop_tokens')
-        .select('connected_at, disconnected_at')
-        .eq('user_id', user!.id)
-        .is('disconnected_at', null)
-        .maybeSingle();
-
-      setIsConnected(!!data);
-      setIsLoading(false);
+      try {
+        const session = await supabase.auth.getSession();
+        const token = session.data.session?.access_token;
+        if (!token) return;
+        const response = await fetch('/api/whoop/sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ action: 'status' }),
+        });
+        const result = response.ok
+          ? await response.json() as { connected?: boolean }
+          : { connected: false };
+        setIsConnected(result.connected === true);
+      } finally {
+        setIsLoading(false);
+      }
     }
 
     checkConnection();
@@ -106,9 +116,19 @@ export function useWhoop(): UseWhoopReturn {
     }
   }, []);
 
-  const connect = useCallback(() => {
+  const connect = useCallback(async () => {
     if (!user?.id) return;
-    window.location.href = `/api/whoop/auth?user_id=${user.id}`;
+    const session = await supabase.auth.getSession();
+    const token = session.data.session?.access_token;
+    if (!token) throw new Error('not authenticated');
+    const res = await fetch('/api/whoop/auth', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Unable to start Whoop authorization');
+    const data = await res.json() as { url?: string };
+    if (!data.url) throw new Error('Whoop authorization URL missing');
+    window.location.assign(data.url);
   }, [user?.id]);
 
   const disconnect = useCallback(async () => {

@@ -74,6 +74,7 @@ const CommunityLog = lazy(() => import('../components/community').then((m) => ({
 
 const LettersArchiveView = lazy(() => import('../components/letters').then((m) => ({ default: m.LettersArchiveView })));
 const LifeAsWomanView = lazy(() => import('../components/life-as-woman').then((m) => ({ default: m.LifeAsWomanView })));
+const AmbientWindow = lazy(() => import('../components/ambient/AmbientWindow').then((m) => ({ default: m.AmbientWindow })));
 const KinkQuizView = lazy(() => import('../components/kink-quiz').then((m) => ({ default: m.KinkQuizView })));
 const WorkoutSessionPage = lazy(() => import('../components/exercise').then((m) => ({ default: m.WorkoutSessionPage })));
 const HerWorldPage = lazy(() => import('../components/collections').then((m) => ({ default: m.HerWorldPage })));
@@ -103,7 +104,7 @@ export type ViewId =
   | 'force' | 'wardrobe' | 'trajectory' | 'mommy-dossier' | 'identity'
   | 'verification-vault' | 'community-queue' | 'community-list'
   | 'community-log' | 'letters' | 'dossier' | 'recaps' | 'recap-detail'
-  | 'life-as-woman';
+  | 'life-as-woman' | 'ambient';
 
 /** Old menuSubView ids that no longer exist, and where they land now. */
 export const VIEW_ALIASES: Record<string, ViewId | null> = {
@@ -217,6 +218,23 @@ export const VIEW_REGISTRY: Record<ViewId, ViewDef> = {
     chrome: 'bare',
     hashPaths: ['/plan'],
     render: (ctx) => <PlanView onBack={ctx.onBack} />,
+  },
+
+  // The always-on companion surface. 'bare' + self-framed because it renders a
+  // window, not a page — and it deep-links so it can be opened straight into a
+  // small browser window kept at the edge of the screen.
+  ambient: {
+    frame: 'self',
+    chrome: 'bare',
+    hashPaths: ['/ambient'],
+    menu: {
+      heading: 'Your becoming',
+      label: 'Keep her with you',
+      description: 'Three channels in the corner of your screen while you work. She talks the whole time.',
+      icon: Sparkles,
+      color: 'rose',
+    },
+    render: (ctx) => <AmbientWindow onBack={ctx.onBack} />,
   },
 
   // ── Your becoming ─────────────────────────────────────────────────────────

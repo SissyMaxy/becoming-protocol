@@ -12,7 +12,9 @@ import {
   Loader2, Eye, Heart, MessageSquare, Clock,
 } from 'lucide-react';
 import { useContentPipeline } from '../../hooks/useContentPipeline';
-import { getCalendar, getDistributionHistory, getTopFans, getFanCount } from '../../lib/content-pipeline';
+import { getCalendar } from '../../lib/content-pipeline/calendar';
+import { getDistributionHistory } from '../../lib/content-pipeline/distribution';
+import { getTopFans, getFanCount } from '../../lib/content-pipeline/fans';
 import { useAuth } from '../../context/AuthContext';
 import { PerformanceLogInput } from '../content/PerformanceLogInput';
 import type {

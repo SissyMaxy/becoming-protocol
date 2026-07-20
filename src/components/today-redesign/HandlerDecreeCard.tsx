@@ -10,6 +10,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useSurfaceRenderTracking } from '../../lib/surface-render-hooks';
 import { PhotoUploadWidget } from '../verification/PhotoUploadWidget';
 import { arousalToPhrase } from '../../lib/persona/dommy-mommy';
+import { parsePhysicalTrigger, isPrepTrigger } from '../../lib/conditioning/physical-practice';
 
 interface Decree {
   id: string;
@@ -31,6 +32,7 @@ const PROOF_LABEL: Record<string, string> = {
   voice_pitch_sample: 'voice drill',
   device_state: 'device',
   belief_slider: 'rate it',
+  comfort_slider: 'how easy',
   assoc_latency: 'tap test',
   arousal_debrief: 'debrief',
   none: '—',
@@ -106,6 +108,8 @@ export function HandlerDecreeCard() {
   const [sliders, setSliders] = useState<Record<string, number>>({});
   // 0-10 canonical scale (arousalToPhrase), distinct from belief_slider's 0-100.
   const [arousalSliders, setArousalSliders] = useState<Record<string, number>>({});
+  // 0-10 comfort/flinch rating for physical-practice drills (mig 680).
+  const [comfort, setComfort] = useState<Record<string, number>>({});
   // decree id -> performance.now() timestamp of the IAT-lite reveal, for
   // latency measurement; absent = not yet revealed for that card.
   const [iatShownAt, setIatShownAt] = useState<Record<string, number>>({});
@@ -133,6 +137,14 @@ export function HandlerDecreeCard() {
   const fulfill = async (id: string) => {
     const note = (notes[id] || '').trim();
     setSubmittingId(id);
+    // Physical-practice prep step (bottoming rung 0): completing the ritual
+    // attestation unlocks size progression (mig 680 prep gate).
+    const decree = items.find(d => d.id === id);
+    if (user?.id && isPrepTrigger(decree?.trigger_source ?? null)) {
+      await supabase.from('physical_practice_progress')
+        .update({ prep_attested_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq('user_id', user.id).eq('track', 'bottoming');
+    }
     await supabase.from('handler_decrees').update({
       status: 'fulfilled',
       fulfilled_at: new Date().toISOString(),
@@ -142,6 +154,38 @@ export function HandlerDecreeCard() {
     setNotes(n => { const c = { ...n }; delete c[id]; return c; });
     load();
     window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'decree', id } }));
+  };
+
+  // Physical-practice drill: log the comfort rating, advance the ladder, fulfill.
+  const submitComfort = async (decree: Decree) => {
+    const parsed = parsePhysicalTrigger(decree.trigger_source);
+    if (!user?.id || !parsed) return;
+    setSubmittingId(decree.id);
+    const rating = comfort[decree.id] ?? 7;
+    const { data: rung } = await supabase.from('physical_practice_rungs')
+      .select('id').eq('track', parsed.track).eq('rung_order', parsed.rungOrder).maybeSingle();
+    const rungId = (rung as { id?: string } | null)?.id;
+    // Record the drill first — a failed write must never masquerade as a burned-
+    // down rung with no comfort data behind it.
+    if (rungId) {
+      const { error } = await supabase.from('physical_practice_log').insert({
+        user_id: user.id, rung_id: rungId, track: parsed.track,
+        rung_order: parsed.rungOrder, comfort_rating: rating,
+      });
+      if (error) {
+        console.error('[HandlerDecreeCard] physical practice log failed:', error.message);
+        setSubmittingId(null);
+        return;
+      }
+      await supabase.rpc('advance_physical_practice', { p_user: user.id, p_track: parsed.track });
+    }
+    await supabase.from('handler_decrees').update({
+      status: 'fulfilled', fulfilled_at: new Date().toISOString(),
+    }).eq('id', decree.id);
+    setSubmittingId(null);
+    setComfort(c => { const n = { ...c }; delete n[decree.id]; return n; });
+    load();
+    window.dispatchEvent(new CustomEvent('td-task-changed', { detail: { source: 'decree_comfort', id: decree.id } }));
   };
 
   const submitBelief = async (decree: Decree) => {
@@ -325,6 +369,31 @@ export function HandlerDecreeCard() {
                 </div>
                 <button
                   onClick={() => submitBelief(d)}
+                  disabled={submittingId === d.id}
+                  style={{
+                    padding: '7px 14px', borderRadius: 5, border: 'none',
+                    background: '#e6bd80', color: '#1f1008', fontWeight: 600,
+                    fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  {submittingId === d.id ? '…' : 'Tell Mommy'}
+                </button>
+              </div>
+            ) : d.proof_type === 'comfort_slider' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <input
+                  type="range" min={0} max={10}
+                  value={comfort[d.id] ?? 7}
+                  onChange={e => setComfort(c => ({ ...c, [d.id]: Number(e.target.value) }))}
+                  disabled={submittingId === d.id}
+                  style={{ width: '100%' }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9.5, color: '#9c8590', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <span>still hard</span>
+                  <span>easy now</span>
+                </div>
+                <button
+                  onClick={() => submitComfort(d)}
                   disabled={submittingId === d.id}
                   style={{
                     padding: '7px 14px', borderRadius: 5, border: 'none',

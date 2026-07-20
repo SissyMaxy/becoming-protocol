@@ -3,6 +3,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requireSharedSecret } from '../_shared/request-auth.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -36,6 +37,14 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
+  const unauthorized = requireSharedSecret(
+    req,
+    'LOVENSE_CALLBACK_SECRET',
+    'x-lovense-callback-secret',
+    'callback_secret',
+    corsHeaders,
+  )
+  if (unauthorized) return unauthorized
 
   try {
     const supabase = createClient(
@@ -44,7 +53,7 @@ serve(async (req) => {
     )
 
     const callback = await req.json() as LovenseCallback
-    console.log('Lovense callback received:', JSON.stringify(callback, null, 2))
+    console.log('Lovense callback received for configured user')
 
     // Validate callback has required fields
     if (!callback.uid || !callback.toys) {
@@ -121,7 +130,6 @@ serve(async (req) => {
 
     // Execute all updates and log results
     const results = await Promise.all(updates)
-    console.log('Database update results:', JSON.stringify(results, null, 2))
 
     // Check for errors in any update
     for (const result of results) {

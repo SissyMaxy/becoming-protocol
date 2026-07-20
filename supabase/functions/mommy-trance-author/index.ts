@@ -13,6 +13,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { callModel, selectModel } from '../_shared/model-tiers.ts'
 import { DOMMY_MOMMY_CHARACTER, mommyVoiceCleanup } from '../_shared/dommy-mommy.ts'
+import { hasScriptBoundaryViolation } from '../_shared/mommy-order-boundary.ts'
 import {
   gateLifeAsWoman, logAuthority, jsonOk, corsHeaders, makeClient,
   isRefusal, hasForbiddenVoice,
@@ -44,6 +45,65 @@ interface PhaseParse {
   anchor: string
 }
 
+interface ReconTarget {
+  id: string
+  slug: string
+  title: string
+  claim_text: string
+  indicator_kind: string
+  status: string
+}
+
+interface ReconProgram {
+  id: string
+  phase: string
+  intensity: number | null
+  status: string
+}
+
+function phaseToOrderPhase(phase: string | null | undefined): string {
+  switch (phase) {
+    case 'induction': return 'induct'
+    case 'install': return 'install'
+    case 'reinforce': return 'reinforce'
+    case 'reconsolidate': return 'reinforce'
+    case 'measure': return 'test'
+    case 'retain': return 'integrate'
+    default: return 'install'
+  }
+}
+
+async function loadActiveReconTarget(
+  supabase: ReturnType<typeof makeClient>,
+  userId: string,
+  targetId?: string,
+): Promise<{ target: ReconTarget | null; program: ReconProgram | null }> {
+  if (targetId) {
+    const { data: target } = await supabase.from('reconditioning_targets')
+      .select('id, slug, title, claim_text, indicator_kind, status')
+      .eq('user_id', userId).eq('id', targetId).maybeSingle()
+    if (!target) return { target: null, program: null }
+    const { data: program } = await supabase.from('reconditioning_programs')
+      .select('id, phase, intensity, status')
+      .eq('user_id', userId).eq('target_id', targetId).maybeSingle()
+    return { target: target as ReconTarget, program: (program as ReconProgram | null) ?? null }
+  }
+
+  const { data: targets } = await supabase.from('reconditioning_targets')
+    .select('id, slug, title, claim_text, indicator_kind, status')
+    .eq('user_id', userId).eq('status', 'active')
+    .order('priority', { ascending: false }).limit(5)
+  for (const target of (targets || []) as ReconTarget[]) {
+    const { data: program } = await supabase.from('reconditioning_programs')
+      .select('id, phase, intensity, status')
+      .eq('user_id', userId).eq('target_id', target.id).maybeSingle()
+    if ((program as ReconProgram | null)?.status === 'running') {
+      return { target, program: program as ReconProgram }
+    }
+  }
+  return { target: null, program: null }
+}
+
 function parsePhases(raw: string): PhaseParse | null {
   const grab = (label: string): string => {
     const re = new RegExp(`${label}:\\s*([\\s\\S]*?)(?=\\n\\s*(?:INDUCTION|DEEPENING|PAYLOAD|EMERGENCE|ANCHOR):|$)`, 'i')
@@ -59,6 +119,10 @@ function parsePhases(raw: string): PhaseParse | null {
   }
   if (!out.induction || !out.deepening || !out.payload || !out.emergence) return null
   return out
+}
+
+function hasProtocolBoundaryLeak(text: string): boolean {
+  return /sleep conditioning|targeted memory reactivation|false memor(y|ies)|you won'?t remember|doubt your own (memory|memories|perception|judgment)|auto-?send|arrange (a )?(hookup|meet|date)|recording.*leverage|blackmail/i.test(text)
 }
 
 // A 3-7 word phrase, no stray punctuation, and never a regendering slip —
@@ -77,7 +141,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return jsonOk({ ok: false, error: 'POST only' }, 405)
 
-  let body: { user_id?: string; for_date?: string; force?: boolean } = {}
+  let body: { user_id?: string; for_date?: string; force?: boolean; target_id?: string; order_id?: string } = {}
   try { body = await req.json() } catch { /* */ }
   const userId = body.user_id || HANDLER_USER_ID
   const force = !!body.force
@@ -87,6 +151,7 @@ Deno.serve(async (req: Request) => {
   const gate = await gateLifeAsWoman(supabase, userId, 'hypno_trance', { force })
   if (!gate.ok) return jsonOk({ ok: true, skipped: gate.reason })
   const intensity = gate.intensity ?? 2
+  const { target, program } = await loadActiveReconTarget(supabase, userId, body.target_id)
 
   // Dedup: one session per user per date.
   const { data: existing } = await supabase.from('hypno_trance_sessions')
@@ -95,7 +160,7 @@ Deno.serve(async (req: Request) => {
     return jsonOk({ ok: true, skipped: 'session_already_exists', id: (existing as { id: string }).id })
   }
 
-  const theme = pickTheme(new Date(forDate), intensity)
+  const theme = target ? `recondition:${target.slug}` : pickTheme(new Date(forDate), intensity)
   const visualLoop = gate.system?.hypno_visual_enabled
     ? VISUAL_LOOPS[Math.floor(Math.random() * VISUAL_LOOPS.length)]
     : null
@@ -133,6 +198,9 @@ Deno.serve(async (req: Request) => {
     : intensity >= 3
       ? 'Standard: deepen the becoming, name the want (cock, cum, service, the body getting hotter), ramp arousal. Male+ framing — never "girl/woman".'
       : 'Gentle: warm submission, possession, breath-led; no explicit conditioning yet.'
+  const targetFrame = target
+    ? `TODAY'S ACTIVE RECONDITIONING TARGET: "${target.claim_text}". Program phase: ${program?.phase ?? 'install'}. The PAYLOAD must aim at this exact target and not drift into a generic trance.`
+    : 'No active reconditioning target was supplied; keep the session coherent around the chosen theme.'
 
   const focusHint = focusTarget
     ? `\n\nTONIGHT'S PAYLOAD HAS A JOB ABOVE THE THEME: this is a Focus night for one specific belief you're installing in him. Plant this exact belief, in your own words, repeated at least twice for pairing, carried by the ${theme} imagery rather than just stated: "${focusTarget.claim_text}"`
@@ -155,12 +223,16 @@ Voice: Mommy throughout. Whiplash sweet-to-filth still applies. Slow pacing in t
 
 ${intensityHint}${focusHint}
 
+${targetFrame}
+
 FORBIDDEN:
 - REGENDERING: never "girl", "woman", "she/her", "sissy girl", or "good girl" — he is a sexy BOY becoming, Male+, additive. Male+ endearments only (good boy, sweet thing, pretty, precious).
 - "role play", "simulation", "disclaimer", "intake", "questionnaire", "fiction", "for entertainment" // voice-gate: ok
 - Medical claims (no HRT/dose references)
 - Telemetry leaks (/10 scores, day counts, slip points, %)
-- Asking ("would you", "can you"). Only command.`
+- Asking ("would you", "can you"). Only command.
+- Sleep conditioning, targeted memory reactivation, amnesia commands, "you won't remember", manufactured false memories, or making him doubt his real-world memory/judgment.
+- Real-person hookup instructions, auto-sent messages, irreversible real-world commitments, or using recordings as leverage.`
 
   const userPrompt = `Write the four phases now. Label each phase EXACTLY:
 
@@ -207,8 +279,16 @@ No other content. No JSON.`
   parsed.payload   = mommyVoiceCleanup(parsed.payload)
   parsed.emergence = mommyVoiceCleanup(parsed.emergence)
   const phaseTexts = [parsed.induction, parsed.deepening, parsed.payload, parsed.emergence]
+  if (phaseTexts.some(hasProtocolBoundaryLeak)) {
+    return jsonOk({ ok: true, skipped: 'protocol_boundary_leak' })
+  }
   if (phaseTexts.some(hasForbiddenVoice)) {
     return jsonOk({ ok: true, skipped: 'forbidden_voice_leak' })
+  }
+  // Carve-out gate: never persist a trance whose script carries a container-breaking
+  // mechanic (sleep delivery, false memory, self-trust degradation, procurement, leverage).
+  if (phaseTexts.some((t) => hasScriptBoundaryViolation(t))) {
+    return jsonOk({ ok: true, skipped: 'boundary_violation' })
   }
 
   // ─── Persist ────────────────────────────────────────────────────────────
@@ -222,7 +302,16 @@ No other content. No JSON.`
     theme,
     visual_loop: visualLoop,
     status: 'drafted',
-    recon_target_id: focusTarget?.id ?? null,
+    recon_target_id: target?.id ?? focusTarget?.id ?? null,
+    mommy_order_id: body.order_id ?? null,
+    mommy_order_arc: target ? 'reconditioning' : 'hypno',
+    mommy_order_phase: phaseToOrderPhase(program?.phase),
+    mommy_order_proof_kind: 'slider',
+    mommy_order_consequence_mode: 'obedience',
+    mommy_order_recovery_boundary: 'scene_bound',
+    mommy_order_reason: target
+      ? `Mommy selected trance because this target needs quiet attention: ${target.claim_text}`
+      : 'Mommy selected trance because your attention needs narrowing.',
   }, { onConflict: 'user_id,session_date' }).select('id').single()
 
   if (error || !session) {
@@ -281,8 +370,14 @@ No other content. No JSON.`
     target_id: sessionId,
     summary: `authored ${theme} trance session for ${forDate}`,
     payload: {
-      theme, visual_loop: visualLoop, intensity, triggers_paired: exposure_updates,
-      focus_target: focusTarget?.slug ?? null, anchor_planted: anchorPlanted,
+      theme,
+      visual_loop: visualLoop,
+      intensity,
+      triggers_paired: exposure_updates,
+      target_id: target?.id ?? null,
+      order_phase: phaseToOrderPhase(program?.phase),
+      focus_target: focusTarget?.slug ?? null,
+      anchor_planted: anchorPlanted,
     },
   })
 

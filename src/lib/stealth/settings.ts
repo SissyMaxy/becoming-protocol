@@ -9,7 +9,7 @@ export async function loadStealthSettings(userId: string): Promise<StealthSettin
     .maybeSingle();
   if (error) {
     console.warn('[stealth] loadStealthSettings failed:', error);
-    return { ...DEFAULT_STEALTH_SETTINGS };
+    throw new Error(`loadStealthSettings: ${error.message}`);
   }
   const raw = (data as { stealth_settings?: Partial<StealthSettings> } | null)?.stealth_settings;
   return { ...DEFAULT_STEALTH_SETTINGS, ...(raw || {}) };

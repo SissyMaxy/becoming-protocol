@@ -127,9 +127,9 @@ export const RESISTANCE_VECTORS: ResistanceVector[] = [
     countermeasure: 'Require Whoop HR to show elevated engagement (HR > resting + 5bpm) during active session phases. Sessions with flat HR = marked incomplete.',
   },
   {
-    vector: 'Skips sleep conditioning by not playing audio',
-    detection: 'sleep_conditioning_tracking shows playback_started=false.',
-    countermeasure: 'Already tracked. Non-playback = compliance failure. Consequence fires next morning.',
+    vector: 'Attempts to use sleep conditioning',
+    detection: 'Any sleep-conditioning or overnight-loop directive is present.',
+    countermeasure: 'Refuse the directive. Sleep conditioning is outside the Protocol Contract and cannot be punished or rewarded.',
   },
 
   // OUTFIT AVOIDANCE

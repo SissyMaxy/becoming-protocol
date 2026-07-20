@@ -24,7 +24,14 @@ export function FitnessTrackerCard() {
       setSt((data as Status) ?? null);
     } catch { setSt(null); }
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [user?.id]);
+  useEffect(() => {
+    load();
+    // WorkoutCard completion also logs a session — refresh when it fires.
+    const onLogged = () => load();
+    window.addEventListener('fitness-logged', onLogged);
+    return () => window.removeEventListener('fitness-logged', onLogged);
+    // eslint-disable-next-line
+  }, [user?.id]);
 
   if (!st) return null;
 

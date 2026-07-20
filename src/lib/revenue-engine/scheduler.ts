@@ -197,9 +197,9 @@ export async function runDailyBatch(
   // Vault multiplication
   results.vaultMultiplication = await processNewVaultItems(client, userId);
 
-  // Reset GFE daily flags
-  await supabase.rpc('reset_gfe_daily_flags');
-  results.gfeReset = true;
+  // The global GFE reset is service-only and runs in the server-side revenue
+  // job. A browser batch must never reset every user's flags.
+  results.gfeReset = 'server_managed';
 
   return results;
 }

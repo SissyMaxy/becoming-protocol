@@ -7,8 +7,10 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+  type AudioSessionKind,
   type AudioSessionTemplate,
   clampTierByPhase,
+  KIND_AFFECT_BIAS,
   resolveAffectForKind,
   selectTemplate,
   substitutePlaceholders,
@@ -198,5 +200,50 @@ describe('resolveAffectForKind', () => {
   it('uses primer default for primer kinds', () => {
     expect(resolveAffectForKind('primer_posture', null)).toBe('patient');
     expect(resolveAffectForKind('primer_universal', 'hungry')).toBe('patient');
+  });
+});
+
+describe('session_embodiment — recognition kind', () => {
+  it('has a non-empty affect bias (both selector copies must define it)', () => {
+    expect(KIND_AFFECT_BIAS.session_embodiment).toBeDefined();
+    expect(KIND_AFFECT_BIAS.session_embodiment.length).toBeGreaterThan(0);
+  });
+
+  it('every kind in the union has an affect-bias entry', () => {
+    // Guards against adding a kind to the type but forgetting the bias map —
+    // the edge fn resolves voice via KIND_AFFECT_BIAS, so a gap = a render crash.
+    const kinds: AudioSessionKind[] = [
+      'session_edge', 'session_goon', 'session_conditioning', 'session_embodiment',
+      'session_freestyle', 'session_denial',
+      'primer_posture', 'primer_gait', 'primer_sitting', 'primer_hands',
+      'primer_fullbody', 'primer_universal',
+    ];
+    for (const k of kinds) {
+      expect(KIND_AFFECT_BIAS[k], `missing affect bias for ${k}`).toBeTruthy();
+    }
+  });
+
+  it('resolves a tender default affect, honoring today when it matches', () => {
+    expect(resolveAffectForKind('session_embodiment', null)).toBe('patient');
+    expect(resolveAffectForKind('session_embodiment', 'indulgent')).toBe('indulgent');
+    expect(resolveAffectForKind('session_embodiment', 'hungry')).toBe('patient');
+  });
+
+  it('selects an embodiment template and respects phase gating', () => {
+    const gentle = T({ id: 'emb-g', kind: 'session_embodiment', intensity_tier: 'gentle', phase_min: 1 });
+    const firm = T({ id: 'emb-f', kind: 'session_embodiment', intensity_tier: 'firm', phase_min: 2 });
+    // phase-1 user asking for firm gets clamped to the gentle recognition session
+    const r1 = selectTemplate([gentle, firm], {
+      kind: 'session_embodiment', currentPhase: 1, todayAffect: null,
+      requestedTier: 'firm', recentTemplateIds: [],
+    });
+    expect(r1?.template.id).toBe('emb-g');
+    expect(r1?.tier).toBe('gentle');
+    // phase-2 user gets the firm one
+    const r2 = selectTemplate([gentle, firm], {
+      kind: 'session_embodiment', currentPhase: 2, todayAffect: null,
+      requestedTier: 'firm', recentTemplateIds: [],
+    });
+    expect(r2?.template.id).toBe('emb-f');
   });
 });
