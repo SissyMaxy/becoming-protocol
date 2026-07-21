@@ -236,6 +236,43 @@ export function bodyProgramDay(startISO: string, todayISO: string): BodyOrder {
   }
 }
 
+// ── Looking ahead — the split is never a mystery ────────────────────────────
+// A fuel/rest day must still show what's coming: the card names the next
+// training session and its moves so "what exercises do I do" always has a
+// visible answer (visible-before-anything doctrine).
+
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+function addDaysISO(iso: string, n: number): string {
+  const t = Date.parse(`${iso.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(t)) return iso;
+  return new Date(t + n * MS_PER_DAY).toISOString().slice(0, 10);
+}
+
+/** Main-work move names for an order (skips warm-up/cooldown). */
+export function mainMoves(order: BodyOrder): string[] {
+  return order.blocks.filter(b => !b.phase || b.phase === 'main').map(b => b.move);
+}
+
+export interface UpcomingTrain {
+  order: BodyOrder;
+  /** 1 = tomorrow. */
+  inDays: number;
+  weekdayName: string;
+}
+
+/** The next train day after today (the split guarantees one within 7 days). */
+export function nextTrainOrder(startISO: string, todayISO: string): UpcomingTrain {
+  for (let i = 1; i <= 7; i++) {
+    const d = addDaysISO(todayISO, i);
+    const o = bodyProgramDay(startISO, d);
+    if (o.kind === 'train') {
+      return { order: o, inDays: i, weekdayName: WEEKDAY_NAMES[weekdayOf(d)] };
+    }
+  }
+  return { order: bodyProgramDay(startISO, todayISO), inDays: 0, weekdayName: '' };
+}
+
 // ── Minimum-viable workout — the low-recovery downshift ────────────────────
 // On a wrecked day (strap recovery in the red) the full session is the thing
 // that gets skipped entirely. Ten bridges is small enough that it can't be

@@ -17,6 +17,8 @@ import { loadBodyProgramTarget, loadTodayRecovery, todayLocalISO } from '../lib/
 interface Result {
   order: BodyOrder | null;
   started: boolean;      // program is active
+  /** program_start (YYYY-MM-DD) — lets surfaces look ahead (nextTrainOrder). */
+  programStart: string | null;
   loading: boolean;
   reload: () => void;
 }
@@ -25,6 +27,7 @@ export function useBodyOrderToday(): Result {
   const { user } = useAuth();
   const [order, setOrder] = useState<BodyOrder | null>(null);
   const [started, setStarted] = useState(false);
+  const [programStart, setProgramStart] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -39,9 +42,11 @@ export function useBodyOrderToday(): Result {
         }
       }
       setOrder(today);
+      setProgramStart(target.config.program_start);
       setStarted(true);
     } else {
       setOrder(null);
+      setProgramStart(null);
       setStarted(false);
     }
     setLoading(false);
@@ -49,5 +54,5 @@ export function useBodyOrderToday(): Result {
 
   useEffect(() => { load(); }, [load]);
 
-  return { order, started, loading, reload: load };
+  return { order, started, programStart, loading, reload: load };
 }

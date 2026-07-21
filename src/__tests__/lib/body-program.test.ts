@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   bodyProgramDay, bodyOrderForTarget, minimumViableOrder, MVW_RECOVERY_FLOOR,
+  nextTrainOrder, mainMoves,
   type BodyOrder,
 } from '../../lib/body-program';
 import { assertMommyOrderBite } from '../../lib/mommy-orders';
@@ -130,6 +131,29 @@ describe('body program — minimum-viable downshift', () => {
 
   it('exposes the WHOOP red-zone floor as the trigger threshold', () => {
     expect(MVW_RECOVERY_FLOOR).toBe(34);
+  });
+});
+
+describe('body program — the next session is always visible', () => {
+  it('from a Tuesday fuel day, next training is Lower B tomorrow', () => {
+    const next = nextTrainOrder(START, '2026-07-14');
+    expect(next.order.sessionName).toBe('Lower B');
+    expect(next.inDays).toBe(1);
+    expect(next.weekdayName).toBe('Wednesday');
+  });
+
+  it('from Saturday rest, next training is Lower A on Monday', () => {
+    const next = nextTrainOrder(START, '2026-07-18');
+    expect(next.order.sessionName).toBe('Lower A');
+    expect(next.inDays).toBe(2);
+    expect(next.weekdayName).toBe('Monday');
+  });
+
+  it('mainMoves lists the working lifts, not warm-up or cooldown', () => {
+    const moves = mainMoves(bodyProgramDay(START, '2026-07-13'));
+    expect(moves).toContain('Hip thrusts');
+    expect(moves).not.toContain('Pulse raiser');
+    expect(moves).not.toContain('Pigeon pose');
   });
 });
 
