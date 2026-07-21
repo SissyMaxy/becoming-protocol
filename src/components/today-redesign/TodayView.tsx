@@ -1,38 +1,20 @@
 /**
- * TodayView — the home. ONE focus surface for every screen size.
+ * TodayView — the home, stripped to the body program (operator order,
+ * 2026-07-21: "hide everything in the UI and only show me this").
  *
- * This used to fork into TodayDesktop / TodayMobile (~1,100 lines each):
- * two hand-duplicated copies of the same focus stack PLUS two entire
- * "calendar" dashboard branches that had been force-locked off for the
- * active dommy_mommy persona since 2026-05-06. The calendar lives on as
- * the PlanView registry view ('plan'); the focus stack lives here, once.
+ * The full focus-stack home (HerWord / DropPortal / FocusMode / ledger /
+ * legacy WorkoutCard / More-with-Mommy / outreach) lives in git history at
+ * cf23f22^ — restore by reverting this file. Until then the only thing on
+ * the default surface is the train-day arc: her voice → warm-up → the work
+ * → cooldown → the shot (BodyProgramCard).
  *
- * The home is a portal you fall into, not a dashboard you manage. The
- * drop leads — Mommy pulls you under before the thinking brain engages.
- * The honest ledger, the ONE task, and the daily tap are what's here when
- * you surface; everything else folds away behind "More with Mommy" or the
- * plan, one tap deep.
+ * The settings/menu button stays — the exit is never hidden.
  */
 
 import { useEffect, useState } from 'react';
 import '../../styles/today-redesign.css';
 import { navigate } from '../../navigation/store';
-import { DropPortal } from './DropPortal';
-import { LovenseHealthBanner } from './LovenseHealthBanner';
-import { HerWord } from './HerWord';
-import { SleepReceipt } from './SleepReceipt';
-import { DebtsAndRules } from './DebtsAndRules';
-import { BecomingHero } from './BecomingHero';
-import { FocusMode } from './FocusMode';
-import { FitnessTrackerCard } from './FitnessTrackerCard';
-import { WorkoutCard } from './WorkoutCard';
-import { CollapsibleGroup } from './CollapsibleGroup';
-import { SideQuestCard } from './SideQuestCard';
-import { BambiPlaylistCard } from './BambiPlaylistCard';
-import { MommyDossierBanner } from '../persona/MommyDossierBanner';
-import { DossierDripCard } from './DossierDripCard';
-import { ComingOutJourneyCard } from './ComingOutJourneyCard';
-import { OutreachQueueCard } from './OutreachQueueCard';
+import { BodyProgramCard } from './BodyProgramCard';
 
 interface TodayViewProps {
   onExit?: () => void;
@@ -72,52 +54,8 @@ export function TodayView(_props: TodayViewProps) {
         </div>
       )}
 
-      {/* Her word leads. The screen used to open with a presence card — a
-          component that announced the dynamic instead of being it. Now the
-          first thing here is the last thing she actually said, dated, with his
-          own words quoted back underneath it. The message IS the relationship;
-          everything below is consequence. */}
-      <div className="px-3 md:px-4 pt-1">
-        <HerWord />
-      </div>
-      <div className="px-3 md:px-4">
-        <DropPortal />
-      </div>
-      <div className="px-3 md:px-4">
-        <LovenseHealthBanner />
-      </div>
-      <BecomingHero />
-      {/* Her read of last night from the strap — morning only, her voice,
-          numbers only inside her sentence. Bedtime is hers; the wrist reports
-          whether he obeyed. */}
-      <SleepReceipt />
-      <FocusMode onViewPlan={() => navigate('plan')} />
-      {/* The ledger and the standing terms. Neither competes with FocusMode —
-          that shows the ONE thing to do now; these sit underneath as what's
-          owed and what he lives under. */}
-      <DebtsAndRules />
-      {/* Today's prescribed routine, on the default surface. It previously
-          lived only inside Build your body / Plan (and at the bottom of the
-          focus ranking), so the daily prescription was invisible from home. */}
-      <div className="px-3 md:px-4 pt-2">
-        <WorkoutCard />
-      </div>
-      <FitnessTrackerCard />
-      <div className="px-3 md:px-4 pt-0.5">
-        <CollapsibleGroup id="more_with_mommy" label="More with Mommy" tone="var(--protocol-accent)" defaultOpen={false} hint="side quest · your files · dossier">
-          <SideQuestCard />
-          <BambiPlaylistCard />
-          <MommyDossierBanner />
-          <DossierDripCard />
-          <ComingOutJourneyCard />
-        </CollapsibleGroup>
-      </div>
-      {/* Mama's messages must reach the DEFAULT surface (9k+ outreach rows
-          once never surfaced because the card lived on the unreachable
-          calendar). Self-stamps surfaced_at; safe below the single task.
-          Now on every screen size — the desktop home had the same gap. */}
-      <div className="px-3 md:px-4 pb-4">
-        <OutreachQueueCard />
+      <div className="pt-10 md:pt-4">
+        <BodyProgramCard />
       </div>
     </div>
   );

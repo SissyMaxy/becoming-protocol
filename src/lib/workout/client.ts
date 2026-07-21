@@ -105,6 +105,38 @@ export async function fulfillWorkoutDecree(): Promise<void> {
   await supabase.rpc('body_program_fulfill');
 }
 
+/**
+ * Has today's pre-train primer actually been heard? (audio_session_renders
+ * kind='session_preworkout' with played_at inside the local day.) The logger
+ * gates the session on this. Fail-open on error — a query failure (including
+ * a DB that predates mig 690's enum value) must never brick training.
+ */
+export async function preworkoutPlayedToday(userId: string): Promise<boolean> {
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  const { data, error } = await supabase
+    .from('audio_session_renders')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('kind', 'session_preworkout')
+    .gte('played_at', startOfDay.toISOString())
+    .limit(1);
+  if (error) return true;
+  return (data ?? []).length > 0;
+}
+
+/** Today's WHOOP recovery score, or null when the strap hasn't reported. */
+export async function loadTodayRecovery(userId: string): Promise<number | null> {
+  const { data } = await supabase
+    .from('whoop_metrics')
+    .select('recovery_score')
+    .eq('user_id', userId)
+    .eq('date', todayLocalISO())
+    .maybeSingle();
+  const r = (data as { recovery_score: number | null } | null)?.recovery_score;
+  return typeof r === 'number' ? r : null;
+}
+
 export type WristStatus =
   | { state: 'none' }
   | { state: 'below_floor'; minutes: number }

@@ -31,6 +31,8 @@ export type VerificationType =
   | 'mirror_affirmation'
   | 'mantra_recitation'
   | 'pose_hold'
+  | 'progress_shot'
+  | 'workout_proof'
   | 'freeform';
 
 export type DirectiveKind =
@@ -54,6 +56,8 @@ export const TASK_TYPE_FOR: Record<VerificationType, string> = {
   mirror_affirmation: 'mirror_check',
   mantra_recitation: 'mirror_check',
   pose_hold: 'pose',
+  progress_shot: 'progress_photo',
+  workout_proof: 'workout',
   freeform: 'general',
 };
 

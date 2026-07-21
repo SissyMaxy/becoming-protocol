@@ -43,6 +43,19 @@ serve(async req => {
 
       if (existing) continue
 
+      // Body-program users get their session from the mommy-led weekday split
+      // (body-program.ts + mig 681/682) — don't prescribe a second workout.
+      const { data: bodyProgram } = await supa
+        .from('reconditioning_targets')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .eq('indicator_config->>program', 'body_conditioning')
+        .limit(1)
+        .maybeSingle()
+
+      if (bodyProgram) continue
+
       // Get Whoop recovery
       const { data: whoop } = await supa
         .from('whoop_metrics')
