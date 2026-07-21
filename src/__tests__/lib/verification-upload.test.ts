@@ -21,16 +21,19 @@ import {
 
 describe('TASK_TYPE_FOR map', () => {
   it('maps every verification_type the UI exposes to a known task_type', () => {
-    const expectedTaskTypes = ['outfit', 'mirror_check', 'pose', 'general'];
+    // Every value must have a prompt in analyze-photo-action.ts
+    // (HANDLER_TASK_PROMPTS / MOMMY_TASK_PROMPTS).
+    const expectedTaskTypes = ['outfit', 'mirror_check', 'pose', 'general', 'progress_photo', 'workout'];
     for (const value of Object.values(TASK_TYPE_FOR)) {
       expect(expectedTaskTypes).toContain(value);
     }
   });
 
-  it('covers all six taxonomy values', () => {
+  it('covers all eight taxonomy values', () => {
     expect(Object.keys(TASK_TYPE_FOR).sort()).toEqual([
       'freeform', 'mantra_recitation', 'mirror_affirmation',
-      'pose_hold', 'posture_check', 'wardrobe_acquisition',
+      'pose_hold', 'posture_check', 'progress_shot',
+      'wardrobe_acquisition', 'workout_proof',
     ]);
   });
 });

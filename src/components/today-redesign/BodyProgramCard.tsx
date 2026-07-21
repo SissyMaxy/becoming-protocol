@@ -2,13 +2,17 @@
  * BodyProgramCard — the workout engine's home surface.
  *
  * Shows today's mommy-led body order (computed pure from the target's
- * program_start) and puts a REAL prescribed, progressive session on the home:
- * train days open the set logger; fuel/rest/measure days show the directive.
+ * program_start, weekday-locked split) and puts a REAL prescribed,
+ * progressive session on the home: train days open the gated session
+ * logger (her voice → warm-up → sets → cooldown); fuel/rest days show
+ * the directive; measure days collect the actual progress shot through
+ * the verification pipeline (Mama sees it).
  *
  * Enforcement: on a train day it ensures today's session is a real
  * deadline-bearing decree (body_program_ensure_decree) — so it also surfaces
  * as the pressing Focus task and skipping it feeds the slip/penalty ledger.
- * Finishing here fulfills that decree.
+ * Finishing here fulfills that decree. After a train session she can send
+ * the sweat proof — optional, graded by the vision pipeline.
  */
 import { useEffect, useRef, useState } from 'react';
 import { Dumbbell, Utensils, Moon, Camera } from 'lucide-react';
@@ -18,6 +22,7 @@ import {
   startBodyProgram, creditMovementDay, ensureWorkoutDecree, fulfillWorkoutDecree,
 } from '../../lib/workout/client';
 import { WorkoutSessionLogger } from './WorkoutSessionLogger';
+import { PhotoUploadWidget } from '../verification/PhotoUploadWidget';
 
 const KIND_ICON = { train: Dumbbell, fuel: Utensils, rest: Moon, measure: Camera } as const;
 
@@ -27,6 +32,8 @@ export function BodyProgramCard() {
   const [logging, setLogging] = useState(false);
   const [dayDone, setDayDone] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [sweatProofOpen, setSweatProofOpen] = useState(false);
+  const [sweatProofSent, setSweatProofSent] = useState(false);
   const ensuredRef = useRef(false);
 
   // On a train day, make today's session a real enforced decree.
@@ -72,6 +79,7 @@ export function BodyProgramCard() {
   if (!order) return null;
   const Icon = KIND_ICON[order.kind];
   const isTrain = order.kind === 'train';
+  const isMeasure = order.kind === 'measure';
 
   return (
     <div className="mx-3 md:mx-4 mb-3 card p-4">
@@ -88,7 +96,28 @@ export function BodyProgramCard() {
       </p>
 
       {dayDone ? (
-        <div className="text-sm text-protocol-success font-semibold">Logged. Good girl.</div>
+        <div className="space-y-3">
+          <div className="text-sm text-protocol-success font-semibold">Logged. Good girl.</div>
+          {isTrain && !sweatProofSent && (
+            sweatProofOpen ? (
+              <PhotoUploadWidget
+                verificationType="workout_proof"
+                directiveKind="freeform"
+                directiveSnippet={order.command}
+                mediaKind="photo"
+                onComplete={() => { setSweatProofSent(true); setSweatProofOpen(false); }}
+                onCancel={() => setSweatProofOpen(false)}
+              />
+            ) : (
+              <button
+                onClick={() => setSweatProofOpen(true)}
+                className="btn-velvet-secondary w-full py-2 text-sm font-semibold"
+              >
+                Send Mama the sweat proof
+              </button>
+            )
+          )}
+        </div>
       ) : logging && isTrain ? (
         <WorkoutSessionLogger
           blocks={order.blocks}
@@ -111,6 +140,16 @@ export function BodyProgramCard() {
             <button onClick={() => setLogging(true)} className="btn-velvet w-full py-2.5 font-semibold">
               Start session
             </button>
+          ) : isMeasure ? (
+            // The shot IS the day's order — it goes through the verification
+            // pipeline so Mama actually sees it (proofKind 'photo' made real).
+            <PhotoUploadWidget
+              verificationType="progress_shot"
+              directiveKind="freeform"
+              directiveSnippet={order.command}
+              mediaKind="photo"
+              onComplete={markNonTrainDone}
+            />
           ) : order.kind === 'rest' ? (
             <button onClick={markNonTrainDone} className="btn-velvet-secondary w-full py-2.5 font-semibold">
               Resting — noted
