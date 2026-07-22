@@ -232,7 +232,7 @@ Generate JSON. No prose. Match this schema exactly:
   "narrative_reframings": [
     { "original_text": "<EXACT verbatim line from MAXY'S LAST 30 MESSAGES section above. Copy-paste. If you paraphrase or invent, the whole row will be rejected.>",
       "reframed_text": "<Mommy speaking DIRECTLY to her in SECOND PERSON ('you said', 'your body', never 'she'/'her'). Concrete, short (1-3 sentences), references something SPECIFIC from the original_text. NO literary essay voice, NO 'past the threshold' / 'clause that binds' / 'signed consent', NO abstract gestures. Mommy is earthy and direct — name a real thing she actually said, then add the Mommy frame.>",
-      "reframe_angle": "<one of: feminine_essence, body_betrayal, suppression_evidence, hrt_urgency, inevitable_arc, sissification_path, authentic_self, body_signal, pattern_recognition, timeline_reflection, consistency_thread, deeper_meaning>",
+      "reframe_angle": "<one of: feminine_essence, body_betrayal, suppression_evidence, hrt_urgency, inevitable_arc, sissification_path, authentic_self, body_signal, pattern_recognition, timeline_reflection, consistency_thread, deeper_meaning, turnout_desire>",
       "intensity": <integer 1-10> }
   ],
   "witness_fabrications": [
