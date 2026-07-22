@@ -13,9 +13,10 @@
  * progression reads that history.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Check, Plus } from 'lucide-react';
+import { Check, Plus, Play } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import type { BodyBlock } from '../../lib/body-program';
+import { exerciseVideoUrl } from '../../lib/workout/exercise-videos';
 import {
   logWorkoutSet, loadLastWeights, creditMovementDay, preworkoutPlayedToday,
 } from '../../lib/workout/client';
@@ -63,6 +64,16 @@ function ChecklistSection({ title, blocks, done, onToggle }: {
             <span>
               <span className={`text-sm font-medium ${done[b.move] ? 'text-protocol-text-muted line-through' : 'text-protocol-text'}`}>
                 {b.move}
+                <a
+                  href={exerciseVideoUrl(b.move)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={e => e.stopPropagation()}
+                  className="ml-1.5 inline-flex items-center align-middle text-protocol-accent"
+                  title={`How to: ${b.move}`}
+                >
+                  <Play className="w-3 h-3" />
+                </a>
               </span>
               <span className="text-xs text-protocol-text-muted block leading-snug">{b.prescription}</span>
             </span>
@@ -152,7 +163,18 @@ export function WorkoutSessionLogger({ blocks, sessionName, programWeek, program
         const done = setsLogged[block.move] ?? 0;
         return (
           <div key={block.move} className="rounded-lg border border-protocol-border bg-protocol-bg-deep p-3">
-            <div className="text-sm font-semibold text-protocol-text">{block.move}</div>
+            <div className="text-sm font-semibold text-protocol-text">
+              {block.move}
+              <a
+                href={exerciseVideoUrl(block.move)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-1.5 inline-flex items-center align-middle text-protocol-accent"
+                title={`How to: ${block.move}`}
+              >
+                <Play className="w-3.5 h-3.5" />
+              </a>
+            </div>
             <div className="text-xs text-protocol-text-muted mt-0.5 mb-2 leading-snug">{block.prescription}</div>
             <div className="flex items-center gap-2">
               <input

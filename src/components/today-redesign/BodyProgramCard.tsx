@@ -15,10 +15,11 @@
  * the sweat proof — optional, graded by the vision pipeline.
  */
 import { useEffect, useRef, useState } from 'react';
-import { Dumbbell, Utensils, Moon, Camera } from 'lucide-react';
+import { Dumbbell, Utensils, Moon, Camera, Play } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useBodyOrderToday } from '../../hooks/useBodyOrderToday';
 import { mainMoves, nextTrainOrder } from '../../lib/body-program';
+import { exerciseVideoUrl } from '../../lib/workout/exercise-videos';
 import {
   startBodyProgram, creditMovementDay, ensureWorkoutDecree, fulfillWorkoutDecree, todayLocalISO,
 } from '../../lib/workout/client';
@@ -160,7 +161,16 @@ export function BodyProgramCard() {
           <div className="space-y-1.5 mb-3">
             {order.blocks.map(b => (
               <div key={b.move} className="text-sm">
-                <span className="text-protocol-text font-medium">{b.move}</span>
+                <a
+                  href={exerciseVideoUrl(b.move)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-protocol-text font-medium underline decoration-dotted decoration-protocol-accent/50 underline-offset-2 inline-flex items-center gap-1"
+                  title={`How to: ${b.move}`}
+                >
+                  {b.move}
+                  <Play className="w-3 h-3 text-protocol-accent shrink-0" />
+                </a>
                 <span className="text-protocol-text-muted"> — {b.prescription}</span>
               </div>
             ))}
