@@ -24,6 +24,7 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { mommyVoiceCleanup, PET_NAMES } from '../_shared/dommy-mommy.ts'
 import { checkSafewordGate, logAuthority, checkHookupSettings } from '../_shared/safeword-gate.ts'
+import { renderPreMeetClarityCheck } from '../_shared/meet-safety-core.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -169,7 +170,11 @@ Deno.serve(async (req: Request) => {
   }
   prepBlocks.push(safetyLines.join('\n'))
 
-  const message = mommyVoiceCleanup(prepBlocks.join('\n\n'))
+  // The pre-meet clarity beat LEADS the card, in PLAIN voice — deliberately NOT
+  // routed through mommyVoiceCleanup. The consent + safety core breaks scene before
+  // a real meet; Mommy's prep commentary follows the separator. Protective, never
+  // authorizing: it hands the go/no-go decision back to the user, clear-headed.
+  const message = `${renderPreMeetClarityCheck()}\n\n———\n\n${mommyVoiceCleanup(prepBlocks.join('\n\n'))}`
 
   // Create the hookup_debriefs row in pending state so the debrief fn
   // has a target window.
