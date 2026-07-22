@@ -22,8 +22,8 @@ import {
   BaseModule,
   type ContextTier,
   type PriorityAction,
-} from '../module-interface';
-import type { ProtocolEvent } from '../event-bus';
+} from '../module-interface.js';
+import type { ProtocolEvent } from '../event-bus.js';
 
 // ============================================
 // TYPES

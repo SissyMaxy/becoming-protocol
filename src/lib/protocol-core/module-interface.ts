@@ -10,7 +10,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { EventBus, ProtocolEvent, EventCategory } from './event-bus';
+import type { EventBus, ProtocolEvent, EventCategory } from './event-bus.js';
 
 // ============================================
 // CONTEXT TIERS

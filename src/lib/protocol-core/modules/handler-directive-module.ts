@@ -23,7 +23,7 @@
  * to the injected helper and never altered.
  */
 
-import { BaseModule, type ContextTier } from '../module-interface';
+import { BaseModule, type ContextTier } from '../module-interface.js';
 
 /**
  * The api/ executors the directive loop delegates to. Injected because a
