@@ -57,6 +57,84 @@ async function purgeProbePollution(probeTag) {
   }));
 }
 
+// handler-autonomous went async (mig 337): the entrypoint enqueues a
+// background_jobs row and returns 202. To test its EFFECTS the suite must
+// drive the queue itself — enqueue, then invoke job-worker until our specific
+// job completes. The prod drainer cron (job-worker-drain-1min, mig 696) may
+// also pick the job up between polls; both paths count as completion.
+async function runComplianceCheck() {
+  const r = await fetch(`${SUPABASE_URL}/functions/v1/handler-autonomous`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'compliance_check' }),
+  });
+  eq(r.status, 202, 'compliance_check accepted');
+  const { job_id } = await r.json();
+  truthy(job_id, 'enqueue returned a job_id');
+
+  // Time-bounded, not iteration-bounded: a single drain invocation can run up
+  // to the worker's 120s overall budget when the queue is deep, and other
+  // priority-7 jobs may be claimed ahead of ours. If OUR job is already
+  // claimed, some worker (ours or the prod cron's) is running it — wait
+  // instead of piling on another drain.
+  const deadline = Date.now() + 5 * 60_000;
+  while (Date.now() < deadline) {
+    const { data: job } = await supa.from('background_jobs')
+      .select('claimed_at, completed_at, failed_at, error')
+      .eq('id', job_id).maybeSingle();
+    if (job?.completed_at) return;
+    if (job?.failed_at) throw new Error(`compliance_check job failed: ${job.error}`);
+    if (job?.claimed_at) {
+      await new Promise(res => setTimeout(res, 4000));
+      continue;
+    }
+    await fetch(`${SUPABASE_URL}/functions/v1/job-worker`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ max_jobs: 10 }),
+    });
+  }
+  const { data: last } = await supa.from('background_jobs')
+    .select('completed_at, failed_at, error')
+    .eq('id', job_id).maybeSingle();
+  if (last?.completed_at) return;
+  if (last?.failed_at) throw new Error(`compliance_check job failed: ${last.error}`);
+  throw new Error('compliance_check job did not complete within 5 minutes');
+}
+
+// Penalty Preview Rail (mig 601): every consequence is fail-closed on an
+// obligations row that was genuinely surfaced, past grace. File + surface a
+// probe cost for a fixture row the way production does. An auto-filed row may
+// already exist (decrees get one on insert) — clear it first so exactly one
+// surfaced row gates the penalty.
+async function surfaceObligation(sourceTable, sourceId, label) {
+  await supa.from('obligations').delete()
+    .eq('source_table', sourceTable).eq('source_id', sourceId);
+  const { error } = await supa.from('obligations').insert({
+    user_id: UID,
+    source_table: sourceTable,
+    source_id: sourceId,
+    kind: sourceTable === 'handler_decrees' ? 'decree' : 'commitment',
+    ask_copy: label,
+    penalty_copy: 'consequence per fixture',
+    deadline: new Date(Date.now() - 60_000).toISOString(),
+    grace_minutes: 0,
+    status: 'filed',
+    surfaced_at: new Date(Date.now() - 2 * 3600_000).toISOString(),
+    surfaced_via: 'regression_probe',
+    created_by: 'regression_probe',
+  });
+  if (error) throw error;
+}
+
+// The enforcement gate is live user state (safeword latch / pause) and the
+// suite must NEVER flip it — the cord is untouchable. Tests read it and
+// assert whichever behavior is correct for the world they actually ran in.
+async function enforcementGateMode() {
+  const { data } = await supa.rpc('enforcement_gate', { p_user: UID });
+  return (Array.isArray(data) ? data[0]?.mode : data?.mode) ?? 'paused';
+}
+
 // Snapshot baseline so we can detect deltas
 async function getBaseline() {
   const [state, implants, reframings, safewords, doseLog, queue] = await Promise.all([
@@ -445,42 +523,51 @@ await test('missed-decree outreach: no quote when no linked confession', async (
   }).select('id').single();
   if (error) throw error;
 
-  // Pre-seed a visibility outreach so the missed-decree code path doesn't
-  // suppress the slip+outreach via the visibility-before-penalized rule.
-  // Production decrees are typically delivered via a prior outreach; tests
-  // need to simulate that.
-  await supa.from('handler_outreach_queue').insert({
-    user_id: UID,
-    message: `Probe visibility marker for decree ${decree.id}`,
-    urgency: 'low',
-    trigger_reason: `probe_visibility:${decree.id}`,
-    scheduled_for: new Date(Date.now() - 120_000).toISOString(),
-    expires_at: new Date(Date.now() + 3 * 3600000).toISOString(),
-    source: 'regression_probe_visibility',
-  });
+  // Penalty Preview Rail (mig 601): the missed-decree slip + outreach fire
+  // only when an obligations row for the decree was genuinely surfaced, past
+  // grace, with the enforcement gate active. Surface the cost the way
+  // production does (the old "visibility marker" outreach pre-seed targeted
+  // the pre-601 ilike heuristic and gates nothing anymore).
+  await surfaceObligation('handler_decrees', decree.id, `${probeTag} probe decree`);
+  const gateMode = await enforcementGateMode();
 
   try {
-    const r = await fetch(`${SUPABASE_URL}/functions/v1/handler-autonomous`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'compliance_check' }),
-    });
-    eq(r.status, 200, 'compliance_check responded');
+    await runComplianceCheck();
 
-    // Assert the outreach row for this decree has no fake-receipt suffix
     const { data: outreach } = await supa.from('handler_outreach_queue')
       .select('message')
       .eq('user_id', UID)
       .eq('trigger_reason', `decree_missed:${decree.id}`)
       .limit(1)
       .maybeSingle();
-    truthy(outreach, 'outreach row created');
-    const msg = outreach.message || '';
-    truthy(!/that mouth talked|you said:/i.test(msg), `no fabricated receipt in message: "${msg.slice(0, 200)}"`);
+    if (gateMode === 'active') {
+      // Assert the outreach row for this decree has no fake-receipt suffix
+      truthy(outreach, 'outreach row created');
+      const msg = outreach.message || '';
+      truthy(!/that mouth talked|you said:/i.test(msg), `no fabricated receipt in message: "${msg.slice(0, 200)}"`);
+    } else {
+      // Safeword latch / pause: NO penalty may fire — decree still marked
+      // missed, but slip + outreach stay suppressed.
+      truthy(!outreach, `gate ${gateMode}: decree_missed outreach suppressed`);
+      const { count: slips } = await supa.from('slip_log')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', UID).eq('source_table', 'handler_decrees').eq('source_id', decree.id);
+      eq(slips ?? 0, 0, `gate ${gateMode}: no slip fired`);
+    }
+    const { data: after } = await supa.from('handler_decrees').select('status').eq('id', decree.id).maybeSingle();
+    if (gateMode === 'active') {
+      eq(after?.status, 'missed', 'decree marked missed');
+    } else {
+      // On pause, the triage stack auto-cancels active decrees (mig 494)
+      // before the miss path can see them — both terminal states are correct
+      // pause semantics; what matters is no penalty fired (asserted above).
+      truthy(after?.status === 'missed' || after?.status === 'cancelled',
+        `gate ${gateMode}: decree terminal without penalty (got ${after?.status})`);
+    }
   } finally {
     // Cleanup
     await supa.from('handler_outreach_queue').delete().eq('trigger_reason', `decree_missed:${decree.id}`);
-    await supa.from('handler_outreach_queue').delete().eq('trigger_reason', `probe_visibility:${decree.id}`);
+    await supa.from('obligations').delete().eq('source_table', 'handler_decrees').eq('source_id', decree.id);
     await supa.from('slip_log').delete().eq('source_id', decree.id);
     await supa.from('handler_decrees').delete().eq('id', decree.id);
     await purgeProbePollution(probeTag);
@@ -517,24 +604,12 @@ await test('missed-decree outreach: quotes the linked confession when present', 
   }).select('id').single();
   if (cErr) throw cErr;
 
-  // Pre-seed a visibility outreach (see sibling test above for why).
-  await supa.from('handler_outreach_queue').insert({
-    user_id: UID,
-    message: `Probe visibility marker for decree ${decree.id}`,
-    urgency: 'low',
-    trigger_reason: `probe_visibility:${decree.id}`,
-    scheduled_for: new Date(Date.now() - 120_000).toISOString(),
-    expires_at: new Date(Date.now() + 3 * 3600000).toISOString(),
-    source: 'regression_probe_visibility',
-  });
+  // Surface the cost through the Penalty Preview Rail (see sibling test).
+  await surfaceObligation('handler_decrees', decree.id, `${probeTag} probe decree`);
+  const gateMode = await enforcementGateMode();
 
   try {
-    const r = await fetch(`${SUPABASE_URL}/functions/v1/handler-autonomous`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'compliance_check' }),
-    });
-    eq(r.status, 200, 'compliance_check responded');
+    await runComplianceCheck();
 
     const { data: outreach } = await supa.from('handler_outreach_queue')
       .select('message')
@@ -542,13 +617,17 @@ await test('missed-decree outreach: quotes the linked confession when present', 
       .eq('trigger_reason', `decree_missed:${decree.id}`)
       .limit(1)
       .maybeSingle();
-    truthy(outreach, 'outreach row created');
-    const msg = outreach.message || '';
-    truthy(msg.includes(QUOTE_TEXT.slice(0, 80)), `linked-confession quote present in message: "${msg.slice(0, 220)}"`);
+    if (gateMode === 'active') {
+      truthy(outreach, 'outreach row created');
+      const msg = outreach.message || '';
+      truthy(msg.includes(QUOTE_TEXT.slice(0, 80)), `linked-confession quote present in message: "${msg.slice(0, 220)}"`);
+    } else {
+      truthy(!outreach, `gate ${gateMode}: decree_missed outreach suppressed`);
+    }
   } finally {
     await purgeProbePollution(probeTag);
     await supa.from('handler_outreach_queue').delete().eq('trigger_reason', `decree_missed:${decree.id}`);
-    await supa.from('handler_outreach_queue').delete().eq('trigger_reason', `probe_visibility:${decree.id}`);
+    await supa.from('obligations').delete().eq('source_table', 'handler_decrees').eq('source_id', decree.id);
     await supa.from('confession_queue').delete().eq('id', conf.id);
     await supa.from('slip_log').delete().eq('source_id', decree.id);
     await supa.from('handler_decrees').delete().eq('id', decree.id);
@@ -673,41 +752,47 @@ await test('commitment enforcement: denial +Nd pushes unlock, not denial_day', a
   }).select('id').single();
   if (insErr) throw insErr;
 
+  // Penalty Preview Rail (mig 601): EVERY consequence clause is gated on an
+  // obligations row that was genuinely surfaced, past grace, with the
+  // enforcement gate active. File + surface the cost the way production does,
+  // so the penalty path is exercised for real rather than silently skipped.
+  await surfaceObligation('handler_commitments', commit.id, 'denial extension assertion fixture');
+  const gateMode = await enforcementGateMode();
+
   try {
     // Trigger compliance_check (runs enforceCommitments across all users; ours is the new pending one)
-    const r = await fetch(`${SUPABASE_URL}/functions/v1/handler-autonomous`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'compliance_check' }),
-    });
-    eq(r.status, 200, 'compliance_check responded');
+    await runComplianceCheck();
 
     // Confirm our commitment got marked missed (so we know enforceCommitments ran on it)
     const { data: after } = await supa.from('handler_commitments').select('status').eq('id', commit.id).maybeSingle();
     eq(after?.status, 'missed', 'commitment marked missed');
 
-    // Side-effect leak guard: enforceCommitments must NOT have queued an
-    // outreach for this synthetic commitment (no prior user-visible
-    // notification existed for it; visibility gate should short-circuit
-    // outreach + slip insertion).
-    const { count: outreachLeak } = await supa.from('handler_outreach_queue')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', UID).eq('trigger_reason', `commitment_missed:${commit.id}`);
-    eq(outreachLeak ?? 0, 0, 'no leaked outreach for invisible test commitment');
-
-    const { count: slipLeak } = await supa.from('slip_log')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', UID).eq('source_table', 'handler_commitments').eq('source_id', commit.id);
-    eq(slipLeak ?? 0, 0, 'no leaked slip_log row for invisible test commitment');
-
-    // The actual invariants
+    // THE invariant, true in every gate mode: denial_day is a derived
+    // "days since last_release" counter and must never be mutated.
     const { data: post } = await supa.from('user_state')
       .select('denial_day, chastity_scheduled_unlock_at')
       .eq('user_id', UID).maybeSingle();
     eq(post.denial_day, baseDenialDay, `denial_day unchanged (was ${baseDenialDay})`);
+
     const baseMs = baseUnlock ? Date.parse(baseUnlock) : 0;
     const postMs = post.chastity_scheduled_unlock_at ? Date.parse(post.chastity_scheduled_unlock_at) : 0;
-    truthy(postMs > baseMs, 'chastity_scheduled_unlock_at advanced');
+
+    if (gateMode === 'active') {
+      // Surfaced + past grace + gate active → the denial extension lands on
+      // the unlock target (the semantically correct knob).
+      truthy(postMs > baseMs, `chastity_scheduled_unlock_at advanced (gate ${gateMode})`);
+    } else {
+      // Safeword latch or pause → NO consequence may fire, on any knob.
+      eq(postMs, baseMs, `gate ${gateMode}: unlock untouched`);
+      const { count: outreachLeak } = await supa.from('handler_outreach_queue')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', UID).eq('trigger_reason', `commitment_missed:${commit.id}`);
+      eq(outreachLeak ?? 0, 0, `gate ${gateMode}: no outreach fired`);
+      const { count: slipLeak } = await supa.from('slip_log')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', UID).eq('source_table', 'handler_commitments').eq('source_id', commit.id);
+      eq(slipLeak ?? 0, 0, `gate ${gateMode}: no slip fired`);
+    }
   } finally {
     // Cleanup: delete test commitment + any side-effect rows, roll the
     // unlock change back. Belt-and-suspenders: even though the visibility
@@ -717,6 +802,8 @@ await test('commitment enforcement: denial +Nd pushes unlock, not denial_day', a
       .eq('user_id', UID).eq('trigger_reason', `commitment_missed:${commit.id}`);
     await supa.from('slip_log').delete()
       .eq('user_id', UID).eq('source_table', 'handler_commitments').eq('source_id', commit.id);
+    await supa.from('obligations').delete()
+      .eq('source_table', 'handler_commitments').eq('source_id', commit.id);
     await supa.from('handler_commitments').delete().eq('id', commit.id);
     // Restore both unlock_at AND chastity_locked. The enforce path flips
     // chastity_locked=true on a denial extension, which can leave the

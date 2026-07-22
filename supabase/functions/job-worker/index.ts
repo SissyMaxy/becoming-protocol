@@ -24,11 +24,14 @@ const corsHeaders = {
 
 // Per-job hard cap. Handlers that exceed this are abandoned and the job is
 // failed-with-error. Hard rule: a single job never blocks the worker.
-const PER_JOB_TIMEOUT_MS = 25_000
+// 60s, not 25s: a real compliance_check run was measured timing out at 25s
+// (2026-07-22, first drain after the queue restore) — the heavy handlers need
+// the headroom, and the overall budget below still bounds the invocation.
+const PER_JOB_TIMEOUT_MS = 60_000
 
 // Overall worker run budget. We always return well under Supabase's 150s cap
 // even if the queue is full and each job takes the full per-job timeout.
-const OVERALL_BUDGET_MS = 30_000
+const OVERALL_BUDGET_MS = 120_000
 
 // Default batch size if the caller doesn't pass max_jobs.
 const DEFAULT_MAX_JOBS = 5
