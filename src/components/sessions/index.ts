@@ -13,7 +13,6 @@ export { SessionCompletionFlow } from './SessionCompletionFlow';
 
 // Legacy Components
 export { EdgeSession } from './EdgeSession';
-export { GooningSession } from './GooningSession';
 export { SessionLauncher } from './SessionLauncher';
 
 // Handler v2 Integration

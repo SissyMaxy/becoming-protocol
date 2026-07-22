@@ -123,6 +123,9 @@ export async function startGoonSession(
   // Scale phase timing based on target duration
   const durationScale = targetDuration / 45; // 45 min is default
 
+  // Learned preference bias (WS2): confident preferred themes float first.
+  const preferredThemes = await loadPreferredThemes(userId);
+
   // Build playlist for all three phases
   const playlist: GoonPlaylistItem[] = [];
 
@@ -141,7 +144,8 @@ export async function startGoonSession(
       userId,
       phase,
       fantasyLevel,
-      intensityMultiplier
+      intensityMultiplier,
+      preferredThemes
     );
 
     for (const item of phaseContent) {
@@ -194,13 +198,55 @@ export async function startGoonSession(
 }
 
 /**
- * Select content for a goon phase with escalating fantasy levels.
+ * Stable re-sort: content whose category is one of the user's learned
+ * preferred themes floats to the front, order otherwise preserved. Pure +
+ * non-breaking — an empty preference set is the identity sort.
+ */
+export function biasByPreference<T extends { category?: string | null }>(
+  items: T[],
+  preferredThemes: Set<string>
+): T[] {
+  if (preferredThemes.size === 0) return items;
+  return items
+    .map((item, idx) => ({ item, idx, pref: item.category && preferredThemes.has(item.category.toLowerCase()) ? 0 : 1 }))
+    .sort((a, b) => (a.pref - b.pref) || (a.idx - b.idx))
+    .map((x) => x.item);
+}
+
+/**
+ * Pull the user's learned preferred themes from erotic_preference_profile
+ * (mig 198). Returns lowercased category strings only when the correlation
+ * has enough confidence to be worth biasing on; otherwise an empty set.
+ */
+export async function loadPreferredThemes(userId: string): Promise<Set<string>> {
+  const { data } = await supabase
+    .from('erotic_preference_profile')
+    .select('top_themes, correlation_confidence')
+    .eq('user_id', userId)
+    .maybeSingle();
+  const confidence = Number(data?.correlation_confidence ?? 0);
+  if (!data || confidence <= 0) return new Set();
+  const raw = data.top_themes;
+  const themes = Array.isArray(raw) ? raw : [];
+  const out = new Set<string>();
+  for (const t of themes) {
+    const s = typeof t === 'string' ? t : (t && typeof t === 'object' && 'theme' in t ? String((t as { theme: unknown }).theme) : '');
+    if (s) out.add(s.toLowerCase());
+  }
+  return out;
+}
+
+/**
+ * Select content for a goon phase with escalating fantasy levels. When the
+ * user has a confident erotic-preference profile, content matching a preferred
+ * theme is ordered first (WS2 — the loop feeding back into content choice).
  */
 export async function getGoonPhaseContent(
   userId: string,
   phase: GoonPhase,
   fantasyLevel: number,
-  intensityMultiplier: number
+  intensityMultiplier: number,
+  preferredThemes: Set<string> = new Set()
 ): Promise<Pick<GoonPlaylistItem, 'contentId' | 'fantasyLevel' | 'intensity'>[]> {
   const config = PHASE_CONFIG[phase];
 
@@ -214,7 +260,7 @@ export async function getGoonPhaseContent(
   // Real column is `intensity` (not `intensity_level`).
   const { data: content, error } = await supabase
     .from('content_curriculum')
-    .select('id, intensity, fantasy_level, media_type')
+    .select('id, intensity, fantasy_level, media_type, category')
     .eq('user_id', userId)
     .gte('intensity', minIntensity)
     .lte('intensity', maxIntensity)
@@ -231,19 +277,19 @@ export async function getGoonPhaseContent(
     // Fallback — fetch whatever is available at any intensity
     const { data: fallback } = await supabase
       .from('content_curriculum')
-      .select('id, intensity, fantasy_level')
+      .select('id, intensity, fantasy_level, category')
       .eq('user_id', userId)
       .order('intensity', { ascending: phase === 'build' })
       .limit(getPhaseContentCount(phase));
 
-    return (fallback || []).map((item) => ({
+    return biasByPreference(fallback || [], preferredThemes).map((item) => ({
       contentId: item.id,
       fantasyLevel: item.fantasy_level || fantasyLevel,
       intensity: item.intensity || minIntensity,
     }));
   }
 
-  return content.map((item) => ({
+  return biasByPreference(content, preferredThemes).map((item) => ({
     contentId: item.id,
     fantasyLevel: item.fantasy_level || fantasyLevel,
     intensity: item.intensity || minIntensity,
@@ -260,6 +306,19 @@ export async function endGoonSession(
   // Stop device
   deactivateSessionDevice().catch(() => {});
 
+  // Edges are now authoritative from session_edge_events (mig 695) — each
+  // "edged" tap and each denial cycle writes a timestamped row during the
+  // session. Tally them here instead of trusting a manual post-session count;
+  // fall back to the passed metric only if no events landed.
+  const { count: edgeEventCount } = await supabase
+    .from('session_edge_events')
+    .select('id', { count: 'exact', head: true })
+    .eq('session_id', sessionId);
+  const talliedEdges = typeof edgeEventCount === 'number' && edgeEventCount > 0
+    ? edgeEventCount
+    : metrics.edgeCount;
+  const resolvedMetrics: GoonSessionMetrics = { ...metrics, edgeCount: talliedEdges };
+
   // conditioning_sessions_v2 has no `metrics`/`device_active` columns —
   // fold the session metrics into `phases` and map heart-rate/arousal
   // onto the real estimate fields.
@@ -271,7 +330,7 @@ export async function endGoonSession(
 
   const mergedPhases = {
     ...((existing?.phases as Record<string, unknown> | null) ?? {}),
-    metrics,
+    metrics: resolvedMetrics,
   };
 
   const { error } = await supabase

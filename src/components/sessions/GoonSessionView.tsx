@@ -34,13 +34,16 @@ import {
   startGoonSession,
   endGoonSession,
   type GoonPhase,
-  type GoonPlaylistItem,
   type GoonSessionMetrics,
 } from '../../lib/conditioning/goon-session';
 import {
   transitionSessionPhase,
   deactivateSessionDevice,
 } from '../../lib/conditioning/session-device';
+import { useGoonCycleEngine } from '../../hooks/useGoonCycleEngine';
+import { logSessionEdge } from '../../lib/conditioning/session-edge';
+import { logHypnoPlay } from '../../lib/audio-sessions/log-play';
+import { renderAudioSession } from '../../lib/audio-sessions/client';
 import { supabase } from '../../lib/supabase';
 
 // ============================================
@@ -113,7 +116,8 @@ export function GoonSessionView({ onBack, prescribedDuration }: GoonSessionViewP
 
   // Live session state
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [playlist, setPlaylist] = useState<GoonPlaylistItem[]>([]);
+  // Playlist is persisted server-side (content_sequence); the client no longer
+  // renders it — the cycle engine drives the live surface (WS2).
   const [elapsed, setElapsed] = useState(0);
   const [currentPhase, setCurrentPhase] = useState<GoonPhase>('build');
   const [deviceActive, setDeviceActive] = useState(false);
@@ -123,12 +127,39 @@ export function GoonSessionView({ onBack, prescribedDuration }: GoonSessionViewP
 
   // Summary inputs
   const [peakArousal, setPeakArousal] = useState(3);
-  const [edgeCount, setEdgeCount] = useState(0);
   const [deviceUsed, setDeviceUsed] = useState(false);
+
+  // Live cycle-engine measurement (WS2)
+  const [liveEdges, setLiveEdges] = useState(0);
+  const [renderUrl, setRenderUrl] = useState<string | null>(null);
+  const renderIdRef = useRef<string | null>(null);
+  const playStartedAtRef = useRef<string>('');
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Refs
   const startMsRef = useRef(0);
   const phaseRef = useRef<GoonPhase>('build');
+
+  // Each denial cycle is one auto-edge; each manual "edged" tap is another.
+  // Both write a biometric-tagged session_edge_events row (mig 695) that
+  // endGoonSession tallies — no manual post-session count.
+  const logEdge = useCallback((source: 'button' | 'denial_cycle') => {
+    setLiveEdges((n) => n + 1);
+    void logSessionEdge({
+      userId: user?.id ?? '',
+      sessionId,
+      source,
+      hr: bioLatest?.avg_heart_rate ?? null,
+      arousalEstimate: userState.arousalLevel || null,
+    });
+  }, [user?.id, sessionId, bioLatest, userState.arousalLevel]);
+
+  const cycle = useGoonCycleEngine({
+    active: viewPhase === 'live',
+    intensityMultiplier,
+    bioTrend,
+    onDenialCycle: () => logEdge('denial_cycle'),
+  });
 
   // Load user denial/arousal state
   useEffect(() => {
@@ -199,12 +230,6 @@ export function GoonSessionView({ onBack, prescribedDuration }: GoonSessionViewP
     }
   }, [elapsed, viewPhase, phaseBoundaries, intensityMultiplier]);
 
-  // Current playlist items for active phase
-  const currentPlaylistItems = useMemo(
-    () => playlist.filter((item) => item.phase === currentPhase),
-    [playlist, currentPhase]
-  );
-
   // Formatted elapsed
   const mins = Math.floor(elapsed / 60);
   const secs = elapsed % 60;
@@ -224,7 +249,6 @@ export function GoonSessionView({ onBack, prescribedDuration }: GoonSessionViewP
     try {
       const result = await startGoonSession(user.id, selectedDuration);
       setSessionId(result.sessionId);
-      setPlaylist(result.playlist);
       startMsRef.current = Date.now();
       phaseRef.current = 'build';
       setCurrentPhase('build');
@@ -237,6 +261,20 @@ export function GoonSessionView({ onBack, prescribedDuration }: GoonSessionViewP
 
       // Start biometric polling
       startPolling(result.sessionId);
+
+      // Play today's goon-family render inline; log the play on end (WS2).
+      setLiveEdges(0);
+      renderIdRef.current = null;
+      setRenderUrl(null);
+      playStartedAtRef.current = new Date().toISOString();
+      renderAudioSession({ userId: user.id, kind: 'session_goon' })
+        .then((r) => {
+          if (r.ok) {
+            renderIdRef.current = r.renderId;
+            setRenderUrl(r.audioUrl);
+          }
+        })
+        .catch(() => { /* render is best-effort; session runs regardless */ });
 
       setViewPhase('live');
     } catch (err) {
@@ -265,7 +303,9 @@ export function GoonSessionView({ onBack, prescribedDuration }: GoonSessionViewP
 
     const metrics: GoonSessionMetrics = {
       peakArousal,
-      edgeCount,
+      // Edges come from session_edge_events now; endGoonSession re-tallies from
+      // the rows, so pass the live count as a fallback only.
+      edgeCount: liveEdges,
       deviceUsed,
       averageHeartRate: bioLatest?.avg_heart_rate,
       peakHeartRate: bioLatest?.max_heart_rate,
@@ -277,15 +317,30 @@ export function GoonSessionView({ onBack, prescribedDuration }: GoonSessionViewP
       console.error('[GoonSessionView] Failed to end session:', err);
     }
 
+    // Log the render play into hypno_plays (feeds the preference loop).
+    if (renderIdRef.current && user?.id) {
+      void logHypnoPlay({
+        userId: user.id,
+        renderId: renderIdRef.current,
+        sessionId,
+        startedAt: playStartedAtRef.current || undefined,
+        endedAt: new Date().toISOString(),
+        peakArousal,
+        peakHr: bioLatest?.max_heart_rate ?? null,
+        edgesDuringPlay: liveEdges,
+      });
+    }
+
     // Reset
     setSessionId(null);
-    setPlaylist([]);
     setElapsed(0);
     setPeakArousal(3);
-    setEdgeCount(0);
+    setLiveEdges(0);
+    setRenderUrl(null);
+    renderIdRef.current = null;
     setDeviceUsed(false);
     setViewPhase('idle');
-  }, [sessionId, peakArousal, edgeCount, deviceUsed, bioLatest]);
+  }, [sessionId, peakArousal, liveEdges, deviceUsed, bioLatest, user?.id]);
 
   // ============================================
   // RENDER — IDLE
@@ -597,58 +652,67 @@ export function GoonSessionView({ onBack, prescribedDuration }: GoonSessionViewP
           })}
         </div>
 
-        {/* Current content item */}
-        {currentPlaylistItems.length > 0 && (
-          <div
-            className={`mx-4 p-3 rounded-xl mb-3 ${
-              isBambiMode
-                ? 'bg-pink-100/60 border border-pink-200'
-                : 'bg-red-900/20 border border-red-700/20'
+        {/* Cycle engine — affirmation wash, micro-phase, denial counter (WS2).
+            Replaces the opaque playlist dump. */}
+        <div
+          className={`mx-4 p-4 rounded-xl mb-3 text-center ${
+            isBambiMode
+              ? 'bg-pink-100/60 border border-pink-200'
+              : 'bg-red-900/20 border border-red-700/20'
+          }`}
+        >
+          <p
+            className={`text-[10px] uppercase tracking-wider font-semibold mb-2 ${
+              isBambiMode ? 'text-pink-400' : 'text-red-500'
             }`}
           >
-            <p
-              className={`text-[10px] uppercase tracking-wider font-semibold mb-1 ${
-                isBambiMode ? 'text-pink-400' : 'text-red-500'
-              }`}
+            {cycle.phase === 'idle' ? 'Beginning' : cycle.phase}
+          </p>
+          <p
+            className={`text-base font-light italic min-h-[1.5rem] transition-opacity ${
+              isBambiMode ? 'text-pink-700' : 'text-red-200'
+            }`}
+          >
+            {cycle.currentAffirmation || '…'}
+          </p>
+          <div className="flex items-center justify-center gap-4 mt-3">
+            <span
+              className={`text-[10px] ${isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'}`}
             >
-              Playlist ({currentPlaylistItems.length} items)
-            </p>
-            {currentPlaylistItems.slice(0, 3).map((item, i) => (
-              <div
-                key={item.contentId}
-                className={`flex items-center justify-between py-1 ${
-                  i > 0
-                    ? isBambiMode
-                      ? 'border-t border-pink-200/50'
-                      : 'border-t border-red-700/10'
-                    : ''
-                }`}
-              >
-                <span
-                  className={`text-xs truncate ${
-                    i === 0
-                      ? isBambiMode
-                        ? 'text-pink-700 font-medium'
-                        : 'text-red-300 font-medium'
-                      : isBambiMode
-                        ? 'text-pink-400'
-                        : 'text-red-500'
-                  }`}
-                >
-                  {i === 0 ? 'Now: ' : ''}
-                  {item.contentId.slice(0, 8)}...
-                </span>
-                <span
-                  className={`text-[10px] ${
-                    isBambiMode ? 'text-pink-400' : 'text-red-500'
-                  }`}
-                >
-                  {'●'.repeat(Math.min(5, Math.round(item.intensity / 20)))}
-                  {'○'.repeat(5 - Math.min(5, Math.round(item.intensity / 20)))}
-                </span>
-              </div>
-            ))}
+              denials <strong className="font-mono">{cycle.denials}</strong>
+            </span>
+            <span
+              className={`text-[10px] ${isBambiMode ? 'text-pink-400' : 'text-protocol-text-muted'}`}
+            >
+              edges <strong className="font-mono">{liveEdges}</strong>
+            </span>
           </div>
+        </div>
+
+        {/* Edged button — one tap = one session_edge_events row */}
+        <div className="px-4 mb-4">
+          <button
+            onClick={() => logEdge('button')}
+            className={`w-full py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-colors ${
+              isBambiMode
+                ? 'bg-pink-500 text-white hover:bg-pink-600 active:bg-pink-700'
+                : 'bg-red-600 text-white hover:bg-red-700 active:bg-red-800'
+            }`}
+          >
+            <ChevronUp className="w-4 h-4" />
+            I edged
+          </button>
+        </div>
+
+        {/* Inline goon render — best-effort; loops under the cycle */}
+        {renderUrl && (
+          <audio
+            ref={audioRef}
+            src={renderUrl}
+            autoPlay
+            loop
+            className="hidden"
+          />
         )}
 
         {/* Biometrics + Device row */}
@@ -944,7 +1008,8 @@ export function GoonSessionView({ onBack, prescribedDuration }: GoonSessionViewP
             </div>
           </div>
 
-          {/* Edge count */}
+          {/* Edge count — auto-tallied from session_edge_events during the
+              session (WS2). Read-only; no manual counting. */}
           <div
             className={`p-4 rounded-xl ${
               isBambiMode
@@ -952,42 +1017,21 @@ export function GoonSessionView({ onBack, prescribedDuration }: GoonSessionViewP
                 : 'bg-protocol-surface border border-protocol-border'
             }`}
           >
-            <p
-              className={`text-xs font-semibold mb-3 ${
-                isBambiMode ? 'text-pink-600' : 'text-red-300'
-              }`}
-            >
-              Edge Count
-            </p>
-            <div className="flex items-center justify-center gap-4">
-              <button
-                onClick={() => setEdgeCount(Math.max(0, edgeCount - 1))}
-                disabled={edgeCount === 0}
-                className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg font-bold transition-colors disabled:opacity-30 ${
-                  isBambiMode
-                    ? 'bg-pink-100 text-pink-600 hover:bg-pink-200'
-                    : 'bg-red-900/20 text-red-400 hover:bg-red-900/30'
+            <div className="flex items-center justify-between">
+              <p
+                className={`text-xs font-semibold ${
+                  isBambiMode ? 'text-pink-600' : 'text-red-300'
                 }`}
               >
-                -
-              </button>
+                Edges (auto-counted)
+              </p>
               <span
-                className={`text-3xl font-mono font-semibold w-12 text-center ${
+                className={`text-3xl font-mono font-semibold ${
                   isBambiMode ? 'text-pink-700' : 'text-red-300'
                 }`}
               >
-                {edgeCount}
+                {liveEdges}
               </span>
-              <button
-                onClick={() => setEdgeCount(edgeCount + 1)}
-                className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg font-bold transition-colors ${
-                  isBambiMode
-                    ? 'bg-pink-100 text-pink-600 hover:bg-pink-200'
-                    : 'bg-red-900/20 text-red-400 hover:bg-red-900/30'
-                }`}
-              >
-                +
-              </button>
             </div>
           </div>
 
