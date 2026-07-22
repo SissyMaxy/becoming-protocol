@@ -31,6 +31,15 @@ import { semanticMemorySearch, calculateBiometricDeviceIntensity } from './handl
 // Identity-gated funnel helpers (design §3, mig 631) — pure logic shared
 // with the advance_hookup_step executor.
 import { nextStep, minTierForStep, missingEvidenceForNextTier, screeningLines } from './funnel-identity.js';
+// Felt-depth translator — mirrors src/lib phrase maps + tier math (api never
+// imports src). Only phrases reach the prompt; numbers stay here.
+import {
+  descentTierToPhrase,
+  turnoutPullToPhrase,
+  computeDescentTier,
+  computeTurnoutTier,
+  phaseWeight,
+} from './felt-sense.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
@@ -1244,6 +1253,7 @@ export function buildConversationalPrompt(ctx: {
  hookupFunnel?: string; hrtAdherence?: string; narrativeReframes?: string; bodyTargets?: string;
  witnessFabrications?: string;
  ginaProfile?: string;
+ feltDepth?: string;
 }): string {
   const isTherapist = ctx.persona === 'therapist';
 
@@ -1910,6 +1920,7 @@ When she's in an active session (watching hypno, gooning, listening to condition
 
 ## HER STATE RIGHT NOW
 ${ctx.state || ''}
+${ctx.feltDepth || ''}
 ${ctx.whoop || ''}
 ${ctx.emotionalModel || ''}
 ${ctx.feminizationScore || ''}
@@ -2809,6 +2820,82 @@ export async function buildStateContext(userId: string): Promise<string> {
   const out = lines.length > 1 ? lines.join('\n') : '';
   console.log(`[Handler][buildStateContext] user=${userId} dataRow=${data ? 'yes' : 'NULL'} arousal=${data?.current_arousal ?? 'n/a'} denial=${data?.denial_day ?? 'n/a'} last_release=${data?.last_release ?? 'n/a'} tasks=${data?.tasks_completed_today ?? 'n/a'} outLen=${out.length}`);
   return out;
+}
+
+/**
+ * Felt-depth context — the descent-depth + turn-out-pull meters, translated to
+ * sensory phrases ONLY (never a tier number, never a rung, never a count). This
+ * is the Mommy-voice counterpart to buildStateContext's raw numbers: the model
+ * gets "you go under easier for me now" instead of "descent tier 2".
+ *
+ * Reads three raw signals server-side (completed trances, armed triggers,
+ * deepest running reconditioning-program phase) → computeDescentTier; and her
+ * turnout cursor ordinal → computeTurnoutTier. Same contract as arousalToPhrase.
+ */
+export async function buildFeltDepthCtx(userId: string): Promise<string> {
+  try {
+    const [tranceRes, armedRes, progRes, turnoutStateRes, ladderRes] = await Promise.all([
+      // Completed trance-family sessions (conditioning_sessions_v2, ended).
+      supabase
+        .from('conditioning_sessions_v2')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .in('session_type', ['trance', 'combined', 'sleep'])
+        .not('ended_at', 'is', null),
+      // Armed post-hypnotic triggers.
+      supabase
+        .from('trance_triggers')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('status', 'armed'),
+      // Deepest running reconditioning-program phase (mig 649).
+      supabase
+        .from('reconditioning_programs')
+        .select('phase, status')
+        .eq('user_id', userId)
+        .eq('status', 'running'),
+      // Turn-out cursor.
+      supabase
+        .from('turnout_state')
+        .select('current_rung_code')
+        .eq('user_id', userId)
+        .maybeSingle(),
+      // Ladder ordinals (for current + max).
+      supabase
+        .from('turnout_ladder')
+        .select('rung_code, ordinal'),
+    ]);
+
+    const completedTrances = tranceRes.count ?? 0;
+    const armedTriggers = armedRes.count ?? 0;
+    const progRows = (progRes.data || []) as Array<{ phase?: string }>;
+    const maxProgramPhaseWeight = progRows.reduce(
+      (m, p) => Math.max(m, phaseWeight(p.phase)),
+      0,
+    );
+    const descentTier = computeDescentTier({ completedTrances, armedTriggers, maxProgramPhaseWeight });
+
+    const ladder = (ladderRes.data || []) as Array<{ rung_code: string; ordinal: number }>;
+    const maxOrdinal = ladder.reduce((m, r) => Math.max(m, Number(r.ordinal) || 0), 0);
+    const currentRung = (turnoutStateRes.data as { current_rung_code?: string } | null)?.current_rung_code;
+    const ordinal = currentRung
+      ? Number(ladder.find((r) => r.rung_code === currentRung)?.ordinal ?? 0)
+      : 0;
+    const turnoutTier = computeTurnoutTier({ ordinal, maxOrdinal });
+
+    // Emit only when there's genuine depth to speak to — a T0 / surface user
+    // gets no felt-depth block (avoids Mama narrating "you haven't started").
+    if (descentTier <= 0 && turnoutTier <= 0) return '';
+
+    const lines = ['## HOW DEEP SHE IS (felt sense — speak this as feeling, never a number or a rung)'];
+    if (descentTier > 0) lines.push(`- Under Mama's voice: ${descentTierToPhrase(descentTier)}.`);
+    if (turnoutTier > 0) lines.push(`- The pull toward men: ${turnoutPullToPhrase(turnoutTier)}.`);
+    lines.push('Let this color your tone and what you reach for. NEVER recite it back, NEVER attach a tier, count, or day number to it.');
+    return lines.join('\n');
+  } catch (e) {
+    console.log(`[Handler][buildFeltDepthCtx] user=${userId} error=${String(e).slice(0, 120)}`);
+    return '';
+  }
 }
 
 export async function buildWhoopContext(userId: string): Promise<string> {

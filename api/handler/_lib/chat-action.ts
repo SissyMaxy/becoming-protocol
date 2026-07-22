@@ -46,6 +46,7 @@ import {
   buildPredictiveEngineCtx,
   buildEmotionalModelCtx,
   buildStateContext,
+  buildFeltDepthCtx,
   buildWhoopContext,
   buildCommitmentCtx,
   buildPredictionCtx,
@@ -593,6 +594,10 @@ export async function handleChat(req: VercelRequest, res: VercelResponse) {
     // 3b. Always fetch session state (cheap, always relevant)
     const sessionState = await buildSessionStateCtx(user.id, convId || '');
 
+    // 3b-bis. Always fetch felt-depth (cheap; phrases-only). Mirrors the
+    // descent/turn-out meters into Mommy's voice — see buildFeltDepthCtx.
+    const feltDepth = await buildFeltDepthCtx(user.id).catch(() => '');
+
     // 4. Build system prompt from prioritized results
     const memoryBlock = [
       contextResults.memory || '',
@@ -705,6 +710,7 @@ export async function handleChat(req: VercelRequest, res: VercelResponse) {
       narrativeReframes: contextResults.narrativeReframes || '',
       bodyTargets: contextResults.bodyTargets || '',
       sessionState,
+      feltDepth,
     });
 
     console.log(`[Handler][prompt] systemPromptLen=${systemPrompt.length} stateIncluded=${systemPrompt.includes('## Current State') ? 'YES' : 'NO'} stateArousalLine=${(systemPrompt.match(/Arousal: .{0,40}/) || [''])[0]}`);

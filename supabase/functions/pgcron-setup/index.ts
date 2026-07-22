@@ -162,6 +162,17 @@ const JOBS: CronJob[] = [
     fn: 'recon-self-ref-scorer',
     body: `jsonb_build_object('trigger','pg_cron')`,
   },
+  {
+    // Efficacy adaptation (Phase 4, migs 681-684): reads each active target's
+    // measured efficacy + mechanism rotation; a stuck target (flat/wrong after
+    // every mechanism tried) gets a floor-gated WISH into mommy_code_wishes.
+    // Fn + efficacy_adaptation_log existed but were never scheduled — this
+    // closes the measurement→adaptation loop. Gated fail-closed. 04:10 UTC.
+    name: 'efficacy-adaptation-daily',
+    schedule: '10 4 * * *',
+    fn: 'efficacy-adaptation',
+    body: `jsonb_build_object('trigger','pg_cron')`,
+  },
 ]
 
 function jobSql(j: CronJob, key: string): string {
