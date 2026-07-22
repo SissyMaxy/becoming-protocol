@@ -115,8 +115,58 @@ Deno.serve(async (req: Request) => {
     decisions.push({ target: t.slug, action, efficacy, rotation, wish_id: wishId })
   }
 
-  return json({ ok: true, decisions })
+  // ── Session-conductor weight adaptation (WS5) ──
+  // Join recent conductor decisions × their offer outcome → a bounded EMA nudge
+  // to session_conductor_weights. A played/accepted offer nudges its kind up; an
+  // expired-unplayed offer nudges it down. Closes the pick→measured→weights loop.
+  const conductorWeights = await adaptConductorWeights(s, userId, body.dry_run === true)
+
+  return json({ ok: true, decisions, conductor_weights: conductorWeights })
 })
+
+// deno-lint-ignore no-explicit-any
+async function adaptConductorWeights(s: any, userId: string, dryRun: boolean): Promise<Array<Record<string, unknown>>> {
+  const ALPHA = 0.3           // EMA recency weight
+  const FLOOR = 0.1, CEIL = 1.0
+  const out: Array<Record<string, unknown>> = []
+  try {
+    // Offers decided in the last 30 days that have already resolved (completed
+    // or expired). "played" = accepted_at or completed_at set.
+    const sinceIso = new Date(Date.now() - 30 * 86_400_000).toISOString()
+    const { data: offers } = await s.from('audio_session_offers')
+      .select('kind, accepted_at, completed_at, expires_at, created_at')
+      .eq('user_id', userId)
+      .gte('created_at', sinceIso)
+    const nowMs = Date.now()
+    // Aggregate an outcome signal per kind (0..1).
+    const byKind = new Map<string, { obs: number[] }>()
+    for (const o of (offers || []) as Array<{ kind: string; accepted_at: string | null; completed_at: string | null; expires_at: string }>) {
+      const resolved = o.completed_at != null || o.accepted_at != null || new Date(o.expires_at).getTime() < nowMs
+      if (!resolved) continue
+      const played = o.completed_at != null || o.accepted_at != null
+      if (!byKind.has(o.kind)) byKind.set(o.kind, { obs: [] })
+      byKind.get(o.kind)!.obs.push(played ? 1 : 0)
+    }
+    for (const [kind, { obs }] of byKind.entries()) {
+      if (obs.length === 0) continue
+      const signal = obs.reduce((a, b) => a + b, 0) / obs.length // fraction played
+      const { data: cur } = await s.from('session_conductor_weights')
+        .select('weight').eq('user_id', userId).eq('kind', kind).maybeSingle()
+      const prev = cur ? Number((cur as { weight: number }).weight) : 0.5
+      const next = Math.max(FLOOR, Math.min(CEIL, ALPHA * signal + (1 - ALPHA) * prev))
+      out.push({ kind, prev: Math.round(prev * 100) / 100, next: Math.round(next * 100) / 100, samples: obs.length })
+      if (!dryRun) {
+        await s.from('session_conductor_weights').upsert(
+          { user_id: userId, kind, weight: next, updated_at: new Date().toISOString() },
+          { onConflict: 'user_id,kind' },
+        )
+      }
+    }
+  } catch (e) {
+    console.error('[efficacy-adaptation] conductor weight step failed:', String(e).slice(0, 140))
+  }
+  return out
+}
 
 function json(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })

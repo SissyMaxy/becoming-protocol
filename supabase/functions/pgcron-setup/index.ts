@@ -76,11 +76,14 @@ const JOBS: CronJob[] = [
     body: `jsonb_build_object('trigger','pg_cron')`,
   },
   {
-    // Self-voice goon loop (mig 642): daily self-echo offer built from her own
-    // voice_progress_samples. Gated fail-closed on conditioning_gate('goon').
-    name: 'goon-voice-loop-daily',
-    schedule: '15 3 * * *',
-    fn: 'goon-voice-loop',
+    // Session conductor (WS5): daily heartbeat that scores every audio-session
+    // kind from her state and surfaces ONE state-fit offer. Replaces the
+    // always-goon goon-voice-loop-daily — the conductor delegates to
+    // goon-voice-loop when it picks goon, so the self-echo path survives; the
+    // standalone fn stays for the peak-arousal caller. Gated fail-closed. 03:20 UTC.
+    name: 'session-conductor-daily',
+    schedule: '20 3 * * *',
+    fn: 'session-conductor',
     body: `jsonb_build_object('trigger','daily')`,
   },
   {
