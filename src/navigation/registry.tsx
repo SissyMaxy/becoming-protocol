@@ -79,6 +79,7 @@ const KinkQuizView = lazy(() => import('../components/kink-quiz').then((m) => ({
 const WorkoutSessionPage = lazy(() => import('../components/exercise').then((m) => ({ default: m.WorkoutSessionPage })));
 const HerWorldPage = lazy(() => import('../components/collections').then((m) => ({ default: m.HerWorldPage })));
 const GoonSessionView = lazy(() => import('../components/sessions/GoonSessionView').then((m) => ({ default: m.GoonSessionView })));
+const CockwarmingSessionView = lazy(() => import('../components/sessions/CockwarmingSessionView').then((m) => ({ default: m.CockwarmingSessionView })));
 const ContentCapture = lazy(() => import('../components/content/ContentCapture').then((m) => ({ default: m.ContentCapture })));
 const PostingQueue = lazy(() => import('../components/content/PostingQueue').then((m) => ({ default: m.PostingQueue })));
 const ContentCalendar = lazy(() => import('../components/content/ContentCalendar').then((m) => ({ default: m.ContentCalendar })));
@@ -97,6 +98,7 @@ export type ViewId =
   | 'protocol-analytics' | 'handler-autonomous' | 'exercise' | 'her-world'
   | 'vault-swipe' | 'vault-permissions' | 'vault-browser' | 'content-dashboard'
   | 'cam-session' | 'hypno-session' | 'hypno-learning' | 'goon-session'
+  | 'cockwarming-session'
   | 'content-capture' | 'content-queue' | 'content-calendar' | 'content-fans'
   | 'content-polls' | 'content-revenue' | 'content-settings'
   | 'conditioning-library' | 'social-dashboard' | 'witnesses' | 'case_file'
@@ -529,6 +531,7 @@ export const VIEW_REGISTRY: Record<ViewId, ViewDef> = {
     render: (ctx) => <HypnoDashboard onBack={ctx.onBack} />,
   },
   'goon-session': { frame: 'self', render: (ctx) => <GoonSessionView onBack={ctx.onBack} /> },
+  'cockwarming-session': { frame: 'self', render: (ctx) => <CockwarmingSessionView onBack={ctx.onBack} /> },
   'social-dashboard': {
     frame: 'self',
     hashPaths: ['/social-dashboard', '/socials'],

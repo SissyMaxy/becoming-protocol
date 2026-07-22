@@ -1,0 +1,11 @@
+-- 697 — new audio session kind: session_cockwarming.
+--
+-- Cockwarming (mig 507 realized, WS3): a sustained-holding trance played DURING
+-- the practice drill. Cock-as-pacifier conditioning — different from the goon
+-- climb (session_goon) and generic hypnosis. The discipline is stillness and
+-- holding, not edging; the trance paces the hold.
+--
+-- The enum value is added in its OWN migration so it is committed before the
+-- template seed (699) references it: Postgres forbids using a freshly-ADDed
+-- enum value in the same transaction that adds it. (Mirrors mig 667.)
+ALTER TYPE audio_session_kind ADD VALUE IF NOT EXISTS 'session_cockwarming';

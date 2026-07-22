@@ -1,8 +1,8 @@
-// Types for the 011 physical practice ladder (oral + bottoming drill tracks).
-// snake_case DbXxx mirrors the supabase-js row shape (mig 680); camel PhysicalXxx
-// is the app shape. Mappers below.
+// Types for the 011 physical practice ladder (oral + bottoming + warming tracks).
+// snake_case DbXxx mirrors the supabase-js row shape (mig 680, warming added
+// mig 698); camel PhysicalXxx is the app shape. Mappers below.
 
-export type PhysicalTrack = 'oral' | 'bottoming';
+export type PhysicalTrack = 'oral' | 'bottoming' | 'warming';
 export type PhysicalProgressStatus = 'active' | 'paused' | 'complete';
 
 export interface DbPhysicalRung {

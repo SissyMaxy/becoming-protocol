@@ -89,8 +89,8 @@ const HYPNOSIS_DELIVERY = [
 const REFUSAL_RE = /^\s*(i'?m not going to|i (can'?t|cannot|won'?t)\b|i'?m not able to|i (won'?t|will not) (write|create|help)|i need to (decline|step)|sorry,? but|as an ai\b|i have to pass)/i
 
 const VALID_KINDS = new Set<AudioSessionKind>([
-  'session_edge', 'session_goon', 'session_conditioning', 'session_embodiment',
-  'session_freestyle', 'session_denial', 'session_preworkout',
+  'session_edge', 'session_goon', 'session_cockwarming', 'session_conditioning',
+  'session_embodiment', 'session_freestyle', 'session_denial', 'session_preworkout',
   'primer_posture', 'primer_gait', 'primer_sitting', 'primer_hands',
   'primer_fullbody', 'primer_universal',
 ])

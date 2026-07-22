@@ -128,7 +128,7 @@ export function drillCopyViolation(text: string): string | null {
 export function parsePhysicalTrigger(
   triggerSource: string | null | undefined,
 ): { track: PhysicalTrack; rungOrder: number } | null {
-  const m = /^physical_practice:(oral|bottoming):(\d+)$/.exec(triggerSource ?? '');
+  const m = /^physical_practice:(oral|bottoming|warming):(\d+)$/.exec(triggerSource ?? '');
   if (!m) return null;
   return { track: m[1] as PhysicalTrack, rungOrder: Number(m[2]) };
 }
