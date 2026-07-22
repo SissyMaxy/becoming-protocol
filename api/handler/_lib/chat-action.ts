@@ -18,6 +18,7 @@ import {
   buildCurrentTimeBlock,
   buildFeminineSelfOverlayBlock,
   buildBehavioralTriggersCtx,
+  buildFeltDepthCtx,
   buildMilestonesCtx,
   buildHandlerDesiresCtx,
   buildInvestmentTrackerCtx,
@@ -490,7 +491,15 @@ export async function handleChat(req: VercelRequest, res: VercelResponse) {
 
     // Map block names to their fetcher functions
     const contextFetchers: Record<string, () => Promise<string>> = {
-      state: () => buildStateContext(user.id),
+      state: async () => {
+        // Append her felt-sense depth (descent + turn-out pull) onto the state
+        // block — phrases only, never numbers (buildFeltDepthCtx enforces).
+        const [s, felt] = await Promise.all([
+          buildStateContext(user.id),
+          buildFeltDepthCtx(user.id),
+        ]);
+        return felt ? `${s}\n\n${felt}` : s;
+      },
       whoop: () => buildWhoopContext(user.id),
       commitments: () => buildCommitmentCtx(user.id),
       predictions: () => buildPredictionCtx(user.id),
