@@ -121,6 +121,18 @@ const JOBS: CronJob[] = [
     body: `jsonb_build_object('trigger','pg_cron')`,
   },
   {
+    // Efficacy P4 (mig 684): the autonomous-adaptation driver. Reads each active
+    // target's trend + steering (set by recon-program-orchestrator at 02:00),
+    // and on engaged-but-flat-after-all-mechanisms enqueues a floor-gated wish
+    // into mommy_code_wishes + logs to efficacy_adaptation_log. Self-gates on
+    // ladder + safeword. Runs AFTER the 02:00 orchestrator so it sees the day's
+    // steering. 04:10 UTC. (Was complete in code but never scheduled — dark P4.)
+    name: 'efficacy-adaptation-daily',
+    schedule: '10 4 * * *',
+    fn: 'efficacy-adaptation',
+    body: `jsonb_build_object('trigger','pg_cron')`,
+  },
+  {
     // Reconsolidation: authors 'opened' sessions + fires the micro-rep INSIDE the
     // ~2h labile window — so it MUST run at least hourly (window/2). Gated.
     name: 'recon-reconsolidation-hourly',

@@ -15,6 +15,10 @@
 import { createClient } from '@supabase/supabase-js';
 import { looksLikeRefusal } from './handler-parse.js';
 import {
+  phaseWeight, computeDescentTier, descentTierToPhrase,
+  computeTurnoutTier, turnoutPullToPhrase,
+} from './felt-sense.js';
+import {
   amendmentsCache,
   AMENDMENTS_TTL_MS,
   voiceExemplarCache,
@@ -338,6 +342,60 @@ export async function buildBehavioralTriggersCtx(userId: string): Promise<string
     }
     lines.push('');
     lines.push('These fire AUTOMATICALLY when detected in her messages. You can install new ones via directive.');
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Felt-sense depth — how deep she's gone (trance/reconditioning) and how far a
+ * man has pulled her (turn-out ladder), translated to sensory phrases Mommy can
+ * be spoken to WITH. Never emits the tier number, a raw count, or a day-count —
+ * only the phrase (same telemetry-free contract as arousalToPhrase). Wires the
+ * two src/ meters that had zero production callers (mirrored in felt-sense.ts,
+ * since api/ cannot import src/).
+ */
+export async function buildFeltDepthCtx(userId: string): Promise<string> {
+  try {
+    const [trancesRes, armedRes, programsRes, turnoutRes] = await Promise.all([
+      supabase.from('hypno_trance_sessions').select('id', { count: 'exact', head: true })
+        .eq('user_id', userId).eq('status', 'completed'),
+      supabase.from('trance_triggers').select('id', { count: 'exact', head: true })
+        .eq('user_id', userId).eq('status', 'armed'),
+      supabase.from('reconditioning_programs').select('phase, status')
+        .eq('user_id', userId).eq('status', 'running'),
+      supabase.from('turnout_state').select('current_rung_code, enabled, retired_at')
+        .eq('user_id', userId).maybeSingle(),
+    ]);
+
+    const completedTrances = trancesRes.count ?? 0;
+    const armedTriggers = armedRes.count ?? 0;
+    const maxProgramPhaseWeight = ((programsRes.data ?? []) as Array<{ phase: string }>)
+      .reduce((mx, p) => Math.max(mx, phaseWeight(p.phase)), 0);
+
+    const descentTier = computeDescentTier({ completedTrances, armedTriggers, maxProgramPhaseWeight });
+
+    // Turn-out pull: only when the ladder is enabled and not retired.
+    const ts = turnoutRes.data as { current_rung_code?: string; enabled?: boolean; retired_at?: string | null } | null;
+    let turnoutTier = 0;
+    if (ts?.enabled && !ts.retired_at && ts.current_rung_code) {
+      const [curRes, maxRes] = await Promise.all([
+        supabase.from('turnout_ladder').select('ordinal').eq('rung_code', ts.current_rung_code).maybeSingle(),
+        supabase.from('turnout_ladder').select('ordinal').order('ordinal', { ascending: false }).limit(1).maybeSingle(),
+      ]);
+      const ordinal = (curRes.data as { ordinal?: number } | null)?.ordinal ?? 0;
+      const maxOrdinal = (maxRes.data as { ordinal?: number } | null)?.ordinal ?? 0;
+      turnoutTier = computeTurnoutTier({ ordinal, maxOrdinal });
+    }
+
+    // Only surface a depth signal when there's something to say.
+    if (descentTier <= 0 && turnoutTier <= 0) return '';
+
+    const lines = ['## HER DEPTH RIGHT NOW (felt-sense only — speak these as sensation, NEVER as a number, count, or day-tally)'];
+    if (descentTier > 0) lines.push(`- Descent: ${descentTierToPhrase(descentTier)}`);
+    if (turnoutTier > 0) lines.push(`- Turn-out pull: ${turnoutPullToPhrase(turnoutTier)}`);
+    lines.push('These are how deep the conditioning has taken her — weave the FEELING into your voice when it fits. Do not recite them as a status readout.');
     return lines.join('\n');
   } catch {
     return '';
