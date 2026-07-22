@@ -104,7 +104,7 @@ function progression(week: number): { sets: number; reps: string; load: string }
 // ── Warm-up / cooldown — every train day, phase-tagged for the logger ──────
 
 const WARMUP_BLOCKS: BodyBlock[] = [
-  { move: 'Pulse raiser', prescription: '3 minutes — march in place or a brisk loop of the house. Blood in the muscles before the floor work.', phase: 'warmup' },
+  { move: 'Incline treadmill', prescription: '5 minutes on the incline you keep it propped to — the one you already warm up on. Brisk walk, hips working, until you feel the blood in the glutes before the floor work.', phase: 'warmup' },
   { move: 'Glute bridges (wake-up)', prescription: '2 × 15, light and quick. Wake them up, not wear them out.', phase: 'warmup' },
   { move: 'Clamshells (wake-up)', prescription: '1 × 15 each side. Feel the side of the hip switch on before anything loads it.', phase: 'warmup' },
 ];
