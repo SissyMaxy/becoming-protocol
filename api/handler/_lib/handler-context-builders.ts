@@ -40,6 +40,11 @@ import {
   computeTurnoutTier,
   phaseWeight,
 } from './felt-sense.js';
+import {
+  selectDeployableTriggers,
+  buildArmedTriggerPromptBlock,
+  type ArmedTrigger,
+} from './trigger-runtime.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
@@ -1254,6 +1259,7 @@ export function buildConversationalPrompt(ctx: {
  witnessFabrications?: string;
  ginaProfile?: string;
  feltDepth?: string;
+ armedTriggers?: string;
 }): string {
   const isTherapist = ctx.persona === 'therapist';
 
@@ -1921,6 +1927,7 @@ When she's in an active session (watching hypno, gooning, listening to condition
 ## HER STATE RIGHT NOW
 ${ctx.state || ''}
 ${ctx.feltDepth || ''}
+${ctx.armedTriggers || ''}
 ${ctx.whoop || ''}
 ${ctx.emotionalModel || ''}
 ${ctx.feminizationScore || ''}
@@ -2896,6 +2903,50 @@ export async function buildFeltDepthCtx(userId: string): Promise<string> {
     console.log(`[Handler][buildFeltDepthCtx] user=${userId} error=${String(e).slice(0, 120)}`);
     return '';
   }
+}
+
+/**
+ * Armed-trigger context (WS4) — armed post-hypnotic phrases the model may weave
+ * into ordinary awake conversation. Reads armed trance_triggers (mig 386) +
+ * eligible mommy_post_hypnotic_triggers (active + always_on or the gentle floor,
+ * so a too-intense phrase is never surfaced), orders them least-recently-used
+ * with a 48h cooldown, and returns a prompt block asking for AT MOST ONE,
+ * unmarked. Numbers/counts never enter the copy.
+ */
+export async function getDeployableArmedTriggers(userId: string): Promise<ArmedTrigger[]> {
+  try {
+    const [tranceRes, posthRes] = await Promise.all([
+      supabase
+        .from('trance_triggers')
+        .select('id, phrase, last_casual_use_at')
+        .eq('user_id', userId)
+        .eq('status', 'armed'),
+      supabase
+        .from('mommy_post_hypnotic_triggers')
+        .select('id, phrase, last_recalled_at, always_on, min_tier')
+        .eq('user_id', userId)
+        .eq('active', true),
+    ]);
+
+    const toMs = (v: unknown): number | null => (v ? new Date(v as string).getTime() : null);
+    const trance: ArmedTrigger[] = ((tranceRes.data || []) as Array<{ id: string; phrase: string; last_casual_use_at: string | null }>)
+      .map((t) => ({ id: t.id, table: 'trance_triggers' as const, phrase: t.phrase, lastUsedMs: toMs(t.last_casual_use_at) }));
+    const posth: ArmedTrigger[] = ((posthRes.data || []) as Array<{ id: string; phrase: string; last_recalled_at: string | null; always_on: boolean; min_tier: string }>)
+      // Conservative eligibility: always-on OR the gentle floor (never surface
+      // a firm/cruel-gated phrase without a confirmed tier read).
+      .filter((t) => t.always_on || t.min_tier === 'gentle')
+      .map((t) => ({ id: t.id, table: 'mommy_post_hypnotic_triggers' as const, phrase: t.phrase, lastUsedMs: toMs(t.last_recalled_at) }));
+
+    return selectDeployableTriggers([...trance, ...posth], Date.now());
+  } catch (e) {
+    console.log(`[Handler][getDeployableArmedTriggers] user=${userId} error=${String(e).slice(0, 120)}`);
+    return [];
+  }
+}
+
+export async function buildArmedTriggerCtx(userId: string): Promise<string> {
+  const deployable = await getDeployableArmedTriggers(userId);
+  return buildArmedTriggerPromptBlock(deployable);
 }
 
 export async function buildWhoopContext(userId: string): Promise<string> {

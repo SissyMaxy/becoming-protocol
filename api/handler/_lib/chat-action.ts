@@ -105,7 +105,15 @@ import {
   buildHrtAcquisitionCtx,
   buildBodyControlCtx,
   buildPhaseProgressCtx,
+  getDeployableArmedTriggers,
 } from './handler-context-builders.js';
+import {
+  buildArmedTriggerPromptBlock,
+  detectDeployedPhrases,
+  scoreRecall,
+  RECALL_WINDOW_MS,
+  RECALL_THRESHOLD,
+} from './trigger-runtime.js';
 // Stage 7 (batch 2): runtime analyzers + executors extracted into
 // ./handler-runtime.ts (behavior-identical; see that file).
 import {
@@ -598,6 +606,48 @@ export async function handleChat(req: VercelRequest, res: VercelResponse) {
     // descent/turn-out meters into Mommy's voice — see buildFeltDepthCtx.
     const feltDepth = await buildFeltDepthCtx(user.id).catch(() => '');
 
+    // 3b-ter. Armed post-hypnotic phrases (WS4) — the list drives BOTH the
+    // prompt instruction and the post-response deployment detection.
+    const deployableTriggers = await getDeployableArmedTriggers(user.id).catch(() => []);
+    const armedTriggers = buildArmedTriggerPromptBlock(deployableTriggers);
+
+    // 3b-quater. Recall scoring (WS4): if an armed phrase was deployed to her
+    // in the last 30 min and is still unscored, score THIS incoming message as
+    // its recall and update the source trigger's stats. Server-side only —
+    // never surfaced, never a count in copy.
+    try {
+      const since = new Date(Date.now() - RECALL_WINDOW_MS).toISOString();
+      const { data: pending } = await supabase
+        .from('armed_trigger_deployments')
+        .select('id, trigger_table, trigger_id, deployed_at')
+        .eq('user_id', user.id)
+        .is('scored_at', null)
+        .eq('channel', 'chat')
+        .gte('deployed_at', since)
+        .order('deployed_at', { ascending: false })
+        .limit(5);
+      const nowMs = Date.now();
+      for (const dep of (pending || []) as Array<{ id: string; trigger_table: string; trigger_id: string; deployed_at: string }>) {
+        const latencyMs = nowMs - new Date(dep.deployed_at).getTime();
+        const score = scoreRecall({ reply: message, latencyMs, embodiedWords: EMBODIED_WORDS });
+        await supabase.from('armed_trigger_deployments')
+          .update({ recall_score: score, scored_at: new Date().toISOString() })
+          .eq('id', dep.id);
+        if (score >= RECALL_THRESHOLD && dep.trigger_table === 'mommy_post_hypnotic_triggers') {
+          const { data: cur } = await supabase
+            .from('mommy_post_hypnotic_triggers')
+            .select('recall_count')
+            .eq('id', dep.trigger_id)
+            .maybeSingle();
+          await supabase.from('mommy_post_hypnotic_triggers')
+            .update({ recall_count: ((cur?.recall_count as number) || 0) + 1, last_recalled_at: new Date().toISOString() })
+            .eq('id', dep.trigger_id);
+        }
+      }
+    } catch {
+      // Recall scoring is non-critical.
+    }
+
     // 4. Build system prompt from prioritized results
     const memoryBlock = [
       contextResults.memory || '',
@@ -711,6 +761,7 @@ export async function handleChat(req: VercelRequest, res: VercelResponse) {
       bodyTargets: contextResults.bodyTargets || '',
       sessionState,
       feltDepth,
+      armedTriggers,
     });
 
     console.log(`[Handler][prompt] systemPromptLen=${systemPrompt.length} stateIncluded=${systemPrompt.includes('## Current State') ? 'YES' : 'NO'} stateArousalLine=${(systemPrompt.match(/Arousal: .{0,40}/) || [''])[0]}`);
@@ -1761,6 +1812,33 @@ HARD RULES FOR ALL PERSONAS:
       }
     } catch {
       // Trigger weaving is non-critical — use original response on any failure
+    }
+
+    // 7b-bis. Detect + log armed-trigger deployments (WS4). Any armed phrase
+    // that actually landed in the reply is recorded and (for trance_triggers)
+    // its casual-use timestamp stamped — feeding the 48h cooldown + nightly
+    // recall EMA. Awake text she consciously reads; no counts in copy.
+    try {
+      const deployed = detectDeployedPhrases(finalResponse, deployableTriggers);
+      if (deployed.length > 0) {
+        const nowIso = new Date().toISOString();
+        await supabase.from('armed_trigger_deployments').insert(
+          deployed.map((t) => ({
+            user_id: user.id,
+            trigger_table: t.table,
+            trigger_id: t.id,
+            phrase: t.phrase,
+            channel: 'chat',
+            deployed_at: nowIso,
+          })),
+        );
+        const tranceIds = deployed.filter((t) => t.table === 'trance_triggers').map((t) => t.id);
+        if (tranceIds.length) {
+          await supabase.from('trance_triggers').update({ last_casual_use_at: nowIso }).in('id', tranceIds);
+        }
+      }
+    } catch {
+      // Deployment logging is non-critical.
     }
 
     // 7b2. Resolve media references in response (P11.7)

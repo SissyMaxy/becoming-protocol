@@ -173,6 +173,15 @@ const JOBS: CronJob[] = [
     fn: 'efficacy-adaptation',
     body: `jsonb_build_object('trigger','pg_cron')`,
   },
+  {
+    // Armed-trigger recall EMA (WS4, mig 700): fades dead phrases + reinforces
+    // winners from armed_trigger_deployments recall scores, and expires stale
+    // unscored deployments. Server-side measurement only. Gated. 04:40 UTC.
+    name: 'trigger-recall-scorer-daily',
+    schedule: '40 4 * * *',
+    fn: 'trigger-recall-scorer',
+    body: `jsonb_build_object('trigger','pg_cron')`,
+  },
 ]
 
 function jobSql(j: CronJob, key: string): string {
