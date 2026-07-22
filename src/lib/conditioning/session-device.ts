@@ -49,6 +49,15 @@ const SESSION_PATTERNS: Record<string, {
   'combined:audio_transition': { pattern: 'gentle_wave', intensity: 6 },
   'combined:handler_custom': { pattern: 'heartbeat', intensity: 8 },
 
+  // Plug training arc (plug_orgasm track, mig 701) — phases driven by
+  // src/lib/conditioning/plug-session.ts on timers.
+  'plug:settle': { intensity: 4, durationSec: 0 },
+  'plug:steady': { intensity: 5, durationSec: 0 },
+  'plug:wave': { pattern: 'gentle_wave', intensity: 6 },
+  'plug:build': { pattern: 'building', intensity: 8 },
+  'plug:edge': { pattern: 'edge_tease', intensity: 14 },
+  'plug:push': { pattern: 'denial_pulse', intensity: 16 },
+
   // Morning ritual — brief pulse
   'morning:ritual': { intensity: 5, durationSec: 10 },
 
