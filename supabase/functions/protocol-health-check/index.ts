@@ -127,6 +127,12 @@ const GENERATORS: GeneratorSpec[] = [
   // presence-only). Conditional: self-gates on master+recondition+safeword,
   // and rolls existing active decrees instead of writing new rows.
   { name: 'physical_practice_prescriber', function_name: 'physical-practice-prescriber', expected_cadence_minutes: 1440, edge_function: true, conditional: true },
+  // Autonomous outreach generator (cron restored mig 700 after it silently
+  // vanished mid-May — dead ~2 months, undetected precisely because it was
+  // never registered here). Writes handler_outreach_queue (shared) →
+  // presence-only; conditional because every generator inside self-gates on
+  // its own dedup window.
+  { name: 'handler_outreach_auto', function_name: 'handler-outreach-auto', expected_cadence_minutes: 60, edge_function: true, conditional: true },
 ];
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
