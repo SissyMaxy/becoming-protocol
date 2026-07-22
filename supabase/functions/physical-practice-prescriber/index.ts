@@ -21,8 +21,8 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 const HANDLER_USER = '8c69b9c8-34eb-4147-9fec-3c1a5bc74b6f'
-const TRACKS = ['oral', 'bottoming'] as const
-const START_RUNG: Record<string, number> = { oral: 1, bottoming: 0 }
+const TRACKS = ['oral', 'bottoming', 'plug_orgasm'] as const
+const START_RUNG: Record<string, number> = { oral: 1, bottoming: 0, plug_orgasm: 1 }
 const NO_PUNISH = 'No punishment — Mommy just resets the pairing and we practice it again.'
 
 // The no-real-person invariant (Art. II item 3) is guaranteed at the SEED: every
