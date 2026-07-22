@@ -169,12 +169,16 @@ await test('outreach queue has no expired pending rows', async () => {
   // trigger firing and mark_expired_outreach running, which made this test
   // flake against the shared DB. The invariant we care about is "no row that
   // could still fire is past its expires_at deadline".
+  // 10-minute tolerance: expire_outreach_queue sweeps every 5 min, so a row
+  // can legitimately sit expired-but-unswept for up to one sweep interval.
+  // The invariant is "the sweep is alive", not "zero rows mid-window".
   const { data } = await supa.from('handler_outreach_queue')
     .select('id, expires_at')
     .eq('user_id', UID)
     .is('delivered_at', null)
     .in('status', ['pending', 'queued', 'scheduled']);
-  const expired = (data || []).filter(r => r.expires_at && new Date(r.expires_at) < new Date()).length;
+  const staleCutoff = Date.now() - 10 * 60_000;
+  const expired = (data || []).filter(r => r.expires_at && new Date(r.expires_at).getTime() < staleCutoff).length;
   eq(expired, 0, 'no expired-but-pending rows');
 });
 // The fullscreen conditioning-lockdown ("trance takeover" wall) was retired
@@ -499,10 +503,14 @@ await test('check_david_suppression: returns no current failures', async () => {
   eq((data || []).length, 0, `david_suppression has ${(data || []).length} fail buckets (expect 0)`);
 });
 
-// Edge function sanity
-await test('handler-outreach-auto is live (HTTP 200)', async () => {
+// Edge function sanity. The fn is service-role-gated (requireServiceRole), so
+// an unauthenticated POST returning a clean 401 IS the liveness proof: the
+// module loaded and the handler ran the auth gate. A module-load death returns
+// 5xx/crash instead (the FUNCTION_INVOCATION_FAILED class). Probing without
+// auth also means the probe never triggers the generator's side effects.
+await test('handler-outreach-auto is live (clean 401 = alive)', async () => {
   const r = await fetch(`${SUPABASE_URL}/functions/v1/handler-outreach-auto`, { method: 'POST' });
-  eq(r.status, 200, 'edge function responds');
+  eq(r.status, 401, 'auth gate answered (module alive, no side effects)');
 });
 
 // Receipt-stitching: missed-decree outreach quotes a confession ONLY when
