@@ -154,6 +154,7 @@ async function checkGenerator(g: GeneratorSpec): Promise<CheckResult[]> {
     const dateCol = g.output_table === 'cock_conditioning_events' ? 'assigned_at'
                   : g.output_table === 'wardrobe_prescriptions' ? 'assigned_at'
                   : g.output_table === 'body_metrics' ? 'measured_at'
+                  : g.output_table === 'recon_measurements' ? 'captured_at'
                   : 'created_at';
     const { count, error: qErr } = await supabase.from(g.output_table).select('id', { count: 'exact', head: true }).gte(dateCol, since);
     if (qErr) results.push({ component: g.name, severity: 'warning', event_kind: 'query_error', message: `Output query failed: ${qErr.message}`, context_data: { table: g.output_table } });
