@@ -7,7 +7,7 @@
 // All calls take a fresh access token. Refresh logic is the caller's job —
 // we surface 401s as `TokenExpiredError` so callers know to refresh & retry.
 
-import { GOOGLE_OAUTH_TOKEN_URL, GOOGLE_OAUTH_REVOKE_URL } from './oauth';
+import { GOOGLE_OAUTH_TOKEN_URL, GOOGLE_OAUTH_REVOKE_URL } from './oauth.js';
 
 const CAL_API = 'https://www.googleapis.com/calendar/v3';
 

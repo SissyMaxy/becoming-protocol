@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import { encryptToken, decryptToken } from '../../src/lib/calendar/crypto';
+import { encryptToken, decryptToken } from '../../src/lib/calendar/crypto.js';
 import { createOAuthState, verifyOAuthState } from '../_lib/oauth-state.js';
 
 const WHOOP_API = 'https://api.prod.whoop.com/developer';
