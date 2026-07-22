@@ -14,12 +14,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import { createOAuthState, verifyOAuthState } from '../_lib/oauth-state.js';
-import { encryptToken, decryptToken } from '../../src/lib/calendar/crypto';
+import { encryptToken, decryptToken } from '../../src/lib/calendar/crypto.js';
 import {
   buildAuthUrl,
   GOOGLE_OAUTH_SCOPES,
   DEFAULT_DEDICATED_CALENDAR_NAME,
-} from '../../src/lib/calendar/oauth';
+} from '../../src/lib/calendar/oauth.js';
 import {
   exchangeAuthCode,
   refreshAccessToken,
@@ -28,7 +28,7 @@ import {
   deleteCalendar,
   deleteEvent,
   TokenExpiredError,
-} from '../../src/lib/calendar/google-client';
+} from '../../src/lib/calendar/google-client.js';
 
 function env(name: string, ...fallbacks: string[]): string {
   for (const k of [name, ...fallbacks]) {
