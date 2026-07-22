@@ -416,6 +416,8 @@
   "supabase/migrations/675_reframe_deck_retrieval_feed.sql::insert-without-on-conflict::INSERT INTO recon_rep_schedule ... ; (no ON CONFLICT)",
   "supabase/migrations/678_turnout_escape_cost_purge.sql::insert-without-on-conflict::INSERT INTO turnout_events ... ; (no ON CONFLICT)",
   "supabase/migrations/679_turnout_arousal_debrief.sql::insert-without-on-conflict::INSERT INTO turnout_rung_debriefs ... ; (no ON CONFLICT)",
+  "supabase/migrations/703_conditioning_experiment_registry.sql::insert-without-on-conflict::INSERT INTO conditioning_experiment_verdicts ... ; (no ON CONFLICT)",
+  "supabase/migrations/703_conditioning_experiment_registry.sql::insert-without-on-conflict::INSERT INTO mommy_supervisor_log ... ; (no ON CONFLICT)",
   "supabase/migrations/apply_1_tables.sql::insert-without-on-conflict::INSERT INTO supabase_migrations ... ; (no ON CONFLICT)",
   "supabase/migrations/catchup_031_037.sql::alter-table-add-column-needs-if-not-exists::ALTER TABLE mood_checkins ADD COLUMN triggered_by TEXT;",
   "supabase/migrations/catchup_031_037.sql::alter-table-add-column-needs-if-not-exists::ALTER TABLE user_state ADD COLUMN consecutive_survival_days INTEGER DEFAULT 0;",

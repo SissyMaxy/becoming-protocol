@@ -104,7 +104,10 @@ function progression(week: number): { sets: number; reps: string; load: string }
 // ── Warm-up / cooldown — every train day, phase-tagged for the logger ──────
 
 const WARMUP_BLOCKS: BodyBlock[] = [
-  { move: 'Incline treadmill', prescription: '5 minutes on the incline you keep it propped to — the one you already warm up on. Brisk walk, hips working, until you feel the blood in the glutes before the floor work.', phase: 'warmup' },
+  // Matches her actual practice (2026-07-22): 10-15 min at ~2.6-2.7 mph is
+  // what she already does to get a sweat going — prescribe the real routine,
+  // not an invented one.
+  { move: 'Incline treadmill', prescription: '10 to 15 minutes on the incline you keep it propped to, around 2.6 or 2.7 — your usual pace. Walk until the sweat starts and you feel the blood in the glutes, then come down to the floor work.', phase: 'warmup' },
   { move: 'Glute bridges (wake-up)', prescription: '2 × 15, light and quick. Wake them up, not wear them out.', phase: 'warmup' },
   { move: 'Clamshells (wake-up)', prescription: '1 × 15 each side. Feel the side of the hip switch on before anything loads it.', phase: 'warmup' },
 ];
