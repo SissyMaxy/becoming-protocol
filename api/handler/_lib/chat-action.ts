@@ -106,6 +106,7 @@ import {
   buildBodyControlCtx,
   buildPhaseProgressCtx,
   getDeployableArmedTriggers,
+  buildTurnoutSceneCtx,
 } from './handler-context-builders.js';
 import {
   buildArmedTriggerPromptBlock,
@@ -611,6 +612,9 @@ export async function handleChat(req: VercelRequest, res: VercelResponse) {
     const deployableTriggers = await getDeployableArmedTriggers(user.id).catch(() => []);
     const armedTriggers = buildArmedTriggerPromptBlock(deployableTriggers);
 
+    // 3b-quinquies. Turn-out scene overlay (WS6) — "you are the man", when open.
+    const turnoutScene = await buildTurnoutSceneCtx(user.id).catch(() => '');
+
     // 3b-quater. Recall scoring (WS4): if an armed phrase was deployed to her
     // in the last 30 min and is still unscored, score THIS incoming message as
     // its recall and update the source trigger's stats. Server-side only —
@@ -762,6 +766,7 @@ export async function handleChat(req: VercelRequest, res: VercelResponse) {
       sessionState,
       feltDepth,
       armedTriggers,
+      turnoutScene,
     });
 
     console.log(`[Handler][prompt] systemPromptLen=${systemPrompt.length} stateIncluded=${systemPrompt.includes('## Current State') ? 'YES' : 'NO'} stateArousalLine=${(systemPrompt.match(/Arousal: .{0,40}/) || [''])[0]}`);

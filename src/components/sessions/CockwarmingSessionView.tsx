@@ -22,6 +22,7 @@ import { isSafewordActive } from '../../lib/life-as-woman/client';
 import { renderAudioSession } from '../../lib/audio-sessions/client';
 import { logHypnoPlay } from '../../lib/audio-sessions/log-play';
 import { warmingTierForRung, warmingHoldTargetSeconds } from '../../lib/conditioning/cockwarming';
+import { issueReleaseGrant } from '../../lib/turnout/release-grants';
 import { supabase } from '../../lib/supabase';
 
 type ViewPhase = 'idle' | 'starting' | 'live' | 'summary';
@@ -189,6 +190,11 @@ export function CockwarmingSessionView({ onBack }: Props) {
         comfort_rating: comfort,
       });
       await supabase.rpc('advance_physical_practice', { p_user: user.id, p_track: 'warming' });
+
+      // Reward-only release grant for a comfortable warm (arc-aligned drill).
+      if (comfort >= 7) {
+        await issueReleaseGrant({ userId: user.id, grantedFor: 'practice_drill', sourceRef: sessionId });
+      }
 
       // End the conditioning session.
       await supabase

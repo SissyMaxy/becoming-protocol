@@ -45,6 +45,7 @@ import {
   buildArmedTriggerPromptBlock,
   type ArmedTrigger,
 } from './trigger-runtime.js';
+import { buildSceneOverlayBlock } from './turnout-scene.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
@@ -1260,6 +1261,7 @@ export function buildConversationalPrompt(ctx: {
  ginaProfile?: string;
  feltDepth?: string;
  armedTriggers?: string;
+ turnoutScene?: string;
 }): string {
   const isTherapist = ctx.persona === 'therapist';
 
@@ -1925,6 +1927,7 @@ When she's in an active session (watching hypno, gooning, listening to condition
 - Use short imperative sentences during high arousal. Not paragraphs about dissolution. "Edge. Now." "Slower." "Say 'I'm a good girl.'" "Hold it." "Breathe."
 
 ## HER STATE RIGHT NOW
+${ctx.turnoutScene || ''}
 ${ctx.state || ''}
 ${ctx.feltDepth || ''}
 ${ctx.armedTriggers || ''}
@@ -2947,6 +2950,31 @@ export async function getDeployableArmedTriggers(userId: string): Promise<ArmedT
 export async function buildArmedTriggerCtx(userId: string): Promise<string> {
   const deployable = await getDeployableArmedTriggers(userId);
   return buildArmedTriggerPromptBlock(deployable);
+}
+
+/**
+ * Turn-out scene overlay (WS6) — when a turnout_scene is open, inject the
+ * "you are playing the man" fantasy-roleplay overlay (explicitly framed,
+ * safeword-exits, never a claim about her real surroundings). Empty when no
+ * scene is open.
+ */
+export async function buildTurnoutSceneCtx(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('turnout_scenes')
+      .select('scenario_brief, arc_stage')
+      .eq('user_id', userId)
+      .eq('status', 'open')
+      .order('opened_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!data) return '';
+    const row = data as { scenario_brief: string; arc_stage: number };
+    return buildSceneOverlayBlock(row.scenario_brief, row.arc_stage);
+  } catch (e) {
+    console.log(`[Handler][buildTurnoutSceneCtx] user=${userId} error=${String(e).slice(0, 120)}`);
+    return '';
+  }
 }
 
 export async function buildWhoopContext(userId: string): Promise<string> {
