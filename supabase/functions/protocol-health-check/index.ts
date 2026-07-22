@@ -133,6 +133,10 @@ const GENERATORS: GeneratorSpec[] = [
   // presence-only; conditional because every generator inside self-gates on
   // its own dedup window.
   { name: 'handler_outreach_auto', function_name: 'handler-outreach-auto', expected_cadence_minutes: 60, edge_function: true, conditional: true },
+  // Experiment registry weekly review (mig 703) — SQL fn on pg_cron Mondays;
+  // verdicts land in conditioning_experiment_verdicts. Conditional: quiet
+  // weeks (no experiment due) are healthy.
+  { name: 'conditioning_experiment_review', function_name: 'conditioning_experiment_review', expected_cadence_minutes: 10080, output_table: 'conditioning_experiment_verdicts', conditional: true },
 ];
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
