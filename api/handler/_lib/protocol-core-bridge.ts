@@ -11,13 +11,19 @@
  * and (b) give later stages ONE place to build the bus / registry / AI layer
  * server-side. Do not wire it into chat-action.ts until Stage 4's flagged canary.
  */
+// LAZY value imports only (see functions below). The Vercel build compiles
+// this per-file to ESM ("type": "module") WITHOUT rewriting extensionless
+// specifiers — a static `from '../../../src/lib/protocol-core/event-bus'`
+// throws ERR_MODULE_NOT_FOUND at module load and takes down the WHOLE
+// /api/handler dispatcher (chat + analyze-photo + meta-frame-reveal died
+// exactly this way, 2026-07-21). Value imports therefore happen inside the
+// functions, with explicit .js specifiers; type imports are erased at
+// compile and safe to keep static.
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { EventBus } from '../../../src/lib/protocol-core/event-bus';
-import { ModuleRegistry } from '../../../src/lib/protocol-core/module-interface';
-import { createAILayer, type AILayer } from '../../../src/lib/protocol-core/ai-layer';
-import { CoercionModule } from '../../../src/lib/protocol-core/modules/coercion-module';
-import { HandlerNotesModule } from '../../../src/lib/protocol-core/modules/handler-notes-module';
-import { HandlerDirectiveModule } from '../../../src/lib/protocol-core/modules/handler-directive-module';
+import type { EventBus } from '../../../src/lib/protocol-core/event-bus.js';
+import type { ModuleRegistry } from '../../../src/lib/protocol-core/module-interface.js';
+import type { AILayer } from '../../../src/lib/protocol-core/ai-layer.js';
+import type { HandlerDirectiveModule } from '../../../src/lib/protocol-core/modules/handler-directive-module.js';
 
 export interface ProtocolCoreServer {
   bus: EventBus;
@@ -43,10 +49,14 @@ export function isProtocolCoreFlowEnabled(flow: string): boolean {
 }
 
 /** Build a service-role-backed protocol-core for a given user (server-side). */
-export function createServerProtocolCore(
+export async function createServerProtocolCore(
   userId: string,
   opts: { persistEvents?: boolean } = {},
-): ProtocolCoreServer {
+): Promise<ProtocolCoreServer> {
+  const [{ EventBus }, { ModuleRegistry }] = await Promise.all([
+    import('../../../src/lib/protocol-core/event-bus.js'),
+    import('../../../src/lib/protocol-core/module-interface.js'),
+  ]);
   const db = createClient(
     process.env.SUPABASE_URL || '',
     process.env.SUPABASE_SERVICE_ROLE_KEY || '',
@@ -77,7 +87,10 @@ export async function runComplianceRewardPulse(
   visibleText: string,
 ): Promise<boolean> {
   try {
-    const core = createServerProtocolCore(userId, { persistEvents: false });
+    const [core, { CoercionModule }] = await Promise.all([
+      createServerProtocolCore(userId, { persistEvents: false }),
+      import('../../../src/lib/protocol-core/modules/coercion-module.js'),
+    ]);
     const coercion = new CoercionModule();
     await coercion.initialize(core.bus, core.db);
     // emit() awaits its handlers, so the directive insert completes before this
@@ -103,7 +116,10 @@ export async function runHandlerNoteSave(
   conversationId: string,
 ): Promise<void> {
   try {
-    const core = createServerProtocolCore(userId, { persistEvents: false });
+    const [core, { HandlerNotesModule }] = await Promise.all([
+      createServerProtocolCore(userId, { persistEvents: false }),
+      import('../../../src/lib/protocol-core/modules/handler-notes-module.js'),
+    ]);
     const notes = new HandlerNotesModule();
     await notes.initialize(core.bus, core.db);
     await core.bus.emit({
@@ -130,6 +146,10 @@ export async function buildHandlerDirectiveModule(
   db: SupabaseClient,
   userId: string,
 ): Promise<HandlerDirectiveModule> {
+  const [{ EventBus }, { HandlerDirectiveModule }] = await Promise.all([
+    import('../../../src/lib/protocol-core/event-bus.js'),
+    import('../../../src/lib/protocol-core/modules/handler-directive-module.js'),
+  ]);
   const bus = new EventBus({ db, persistEvents: false });
   bus.setUserId(userId);
   const mod = new HandlerDirectiveModule();
@@ -138,11 +158,12 @@ export async function buildHandlerDirectiveModule(
 }
 
 /** Build the budgeted AI layer (service-role-backed) for a user. */
-export function createServerAILayer(
+export async function createServerAILayer(
   userId: string,
   db: SupabaseClient,
   apiKey: string | null,
   dailyBudgetCents = 150,
 ): Promise<AILayer> {
+  const { createAILayer } = await import('../../../src/lib/protocol-core/ai-layer.js');
   return createAILayer(userId, apiKey, dailyBudgetCents, db);
 }

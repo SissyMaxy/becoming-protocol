@@ -10,8 +10,8 @@
  * failure to keep the inline "non-critical, never throws" contract.
  */
 
-import { BaseModule, type ContextTier } from '../module-interface';
-import type { ProtocolEvent } from '../event-bus';
+import { BaseModule, type ContextTier } from '../module-interface.js';
+import type { ProtocolEvent } from '../event-bus.js';
 
 interface HandlerNotesModuleState {
   notesThisSession: number;
