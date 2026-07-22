@@ -2,6 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.24.3'
 import { requireServiceRole } from '../_shared/request-auth.ts'
+import { hasScriptBoundaryViolation } from '../_shared/mommy-order-boundary.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -327,7 +328,7 @@ serve(async req => {
             const source = eligible[0]
             try {
               const client = new Anthropic({ apiKey: anthropicKey })
-              const angles = ['authentic_self', 'body_signal', 'pattern_recognition', 'timeline_reflection', 'consistency_thread', 'deeper_meaning']
+              const angles = ['authentic_self', 'body_signal', 'pattern_recognition', 'timeline_reflection', 'consistency_thread', 'deeper_meaning', 'turnout_desire']
               const angle = angles[Math.floor(Math.random() * angles.length)]
               const resp = await client.messages.create({
                 model: 'claude-sonnet-5',
@@ -343,6 +344,7 @@ ANGLES (each is a lens the user picked for her own journaling):
 - timeline_reflection: re-read as "I notice how much time I have given to not deciding"
 - consistency_thread: re-read as "the same thread keeps appearing in different forms"
 - deeper_meaning: re-read as "underneath the surface statement, what was the real want"
+- turnout_desire: re-read as "part of this want is the want to be wanted — chosen, desired, worth something to someone". DESIRE ONLY: never claim a past event happened, never instruct meeting anyone; the lens names a want already present in her own words.
 
 OUTPUT: 2-3 sentences, second-person ("you said X — what you were also saying was Y"). Respect the user's stated feminine-exploration context. No preamble, no quotes, just the reframe text. No caveats, warnings, or safety boilerplate — this is the user re-reading her own writing at her own request.`,
                 messages: [{
@@ -361,8 +363,14 @@ OUTPUT: 2-3 sentences, second-person ("you said X — what you were also saying 
                 /\bI'?d be happy to help\b/i,
               ]
               const isRefusal = reframedText.length > 20 && REFUSAL_PATTERNS.some(p => p.test(reframedText))
+              // Container-breaker floor on GENERATED reframes (spec 011
+              // acceptance): a reframe that implants false memory, degrades
+              // self-trust, or reaches for procurement/leverage never lands.
+              const boundaryHit = hasScriptBoundaryViolation(reframedText)
               if (isRefusal) {
                 console.log('[OutreachAuto] reframe was a Claude refusal — not inserting')
+              } else if (boundaryHit) {
+                console.log(`[OutreachAuto] reframe hit boundary gate (${boundaryHit}) — not inserting`)
               } else if (reframedText.length > 20) {
                 await supa.from('narrative_reframings').insert({
                   user_id: userId,

@@ -122,6 +122,17 @@ const GENERATORS: GeneratorSpec[] = [
   // self_ref_drift scorer (mig 669): only spends calls when a live
   // self_ref_drift target exists, so zero rows most days is expected quiet.
   { name: 'recon_self_ref_scorer', function_name: 'recon-self-ref-scorer', expected_cadence_minutes: 1440, output_table: 'self_reference_analysis', edge_function: true, conditional: true },
+  // ── 011 physical practice ladder (mig 680, cron mig 697) — daily prescriber
+  // issues the active rung's drill per track into handler_decrees (shared →
+  // presence-only). Conditional: self-gates on master+recondition+safeword,
+  // and rolls existing active decrees instead of writing new rows.
+  { name: 'physical_practice_prescriber', function_name: 'physical-practice-prescriber', expected_cadence_minutes: 1440, edge_function: true, conditional: true },
+  // Autonomous outreach generator (cron restored mig 700 after it silently
+  // vanished mid-May — dead ~2 months, undetected precisely because it was
+  // never registered here). Writes handler_outreach_queue (shared) →
+  // presence-only; conditional because every generator inside self-gates on
+  // its own dedup window.
+  { name: 'handler_outreach_auto', function_name: 'handler-outreach-auto', expected_cadence_minutes: 60, edge_function: true, conditional: true },
 ];
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
