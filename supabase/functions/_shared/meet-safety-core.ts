@@ -211,3 +211,34 @@ export function renderPrefireWarning(contactName: string, minutesToFire: number)
   const m = Math.max(1, minutesToFire);
   return `Final warning: you still haven't checked in. In ${m} minute${m === 1 ? '' : 's'} ${contactName} gets the safety message with the venue and the time. One tap on "I'm safe" stops it. If you're in trouble, tap "Get me out" instead.`;
 }
+
+// ── Pre-meet clarity beat ────────────────────────────────────────────────────
+//
+// VOICE EXEMPTION (same rule as the stranger-facing messages above): the pre-meet
+// consent + safety core is delivered in PLAIN voice — no persona, no pet names, no
+// scene. It is the ONE beat that deliberately breaks the trance before a real meet,
+// because meeting an unvetted stranger carries real physical risk that only the
+// user's own clear-headed judgment can weigh. It is PROTECTIVE, never authorizing:
+// it confirms the user is choosing this sober and is set up safe, and it hands the
+// decision back to them — it never tells them to go. Do NOT route through
+// mommyVoiceCleanup or wrap it in Mommy commentary.
+
+export const PRE_MEET_CLARITY_ITEMS: string[] = [
+  'You have seen his face and verified he is who he says — a live video or call, not just photos.',
+  'The first meet is somewhere public.',
+  'Your check-ins are set, and someone you trust has your location and knows the plan.',
+  'You have a hard-out — a way to leave at any moment, no explanation owed to anyone.',
+  'You are choosing this clear-headed — not because you feel you have to — and you can stop or leave at any point.',
+];
+
+/** The plain-voice pre-meet clarity + consent check. Scene-breaking by design. */
+export function renderPreMeetClarityCheck(): string {
+  const lines: string[] = [];
+  lines.push('Before you go — a plain moment, no scene, no character. Just you.');
+  lines.push('Meeting someone new carries real risk that only your own judgment can weigh, so this part is yours alone. Go through it honestly:');
+  for (let i = 0; i < PRE_MEET_CLARITY_ITEMS.length; i++) {
+    lines.push(`${i + 1}. ${PRE_MEET_CLARITY_ITEMS[i]}`);
+  }
+  lines.push('If any of these is not true, do not go tonight — sort it first. This is your call to make sober, and it stays yours the whole time.');
+  return lines.join('\n');
+}

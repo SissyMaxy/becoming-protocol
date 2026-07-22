@@ -6,6 +6,7 @@
 // the stranger-readability of the two outward messages.
 
 import { describe, it, expect } from 'vitest';
+import { renderPreMeetClarityCheck, PRE_MEET_CLARITY_ITEMS } from '../../../supabase/functions/_shared/meet-safety-core';
 import {
   buildCheckinSchedule,
   extendHomeSafe,
@@ -190,6 +191,39 @@ describe('renderStage3Message — stranger-readable, zero jargon', () => {
     const msg = renderStage3Message({ ...params, userAskedForHelp: true });
     expect(msg.toLowerCase()).toContain('need help');
     expect(msg.toLowerCase()).not.toContain('missed');
+  });
+});
+
+describe('renderPreMeetClarityCheck — scene-breaking, protective, not authorizing', () => {
+  it('is plain voice — zero persona / pet-names / protocol jargon', () => {
+    const msg = renderPreMeetClarityCheck().toLowerCase();
+    for (const banned of ['mommy', 'mama', 'good boy', 'good girl', 'decree', 'protocol', 'denial', 'handler', 'sweet', 'pet', 'goon', 'rung']) {
+      expect(msg).not.toContain(banned);
+    }
+  });
+
+  it('explicitly breaks scene', () => {
+    const msg = renderPreMeetClarityCheck().toLowerCase();
+    expect(msg).toContain('no scene');
+  });
+
+  it('carries the vetting + safety confirmations', () => {
+    const msg = renderPreMeetClarityCheck().toLowerCase();
+    expect(msg).toContain('verified');
+    expect(msg).toContain('public');
+    expect(msg).toContain('check-in');
+    expect(msg).toContain('location');
+    expect(msg).toContain('hard-out');
+    expect(PRE_MEET_CLARITY_ITEMS.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it('hands the decision to the user clear-headed and never says "go"', () => {
+    const msg = renderPreMeetClarityCheck().toLowerCase();
+    expect(msg).toContain('clear-headed');
+    expect(msg).toContain('your call');
+    // protective direction only — it tells you NOT to go if unsafe, never "go".
+    expect(msg).toContain('do not go tonight');
+    expect(msg).not.toMatch(/\bgo now\b|\bgo get\b|\bgo to him\b/);
   });
 });
 
