@@ -11,6 +11,8 @@ import { useSurfaceRenderTracking } from '../../lib/surface-render-hooks';
 import { PhotoUploadWidget } from '../verification/PhotoUploadWidget';
 import { arousalToPhrase } from '../../lib/persona/dommy-mommy';
 import { parsePhysicalTrigger, isPrepTrigger } from '../../lib/conditioning/physical-practice';
+import { parsePlugRung } from '../../lib/conditioning/plug-session';
+import { PlugSessionPlayer } from './PlugSessionPlayer';
 
 interface Decree {
   id: string;
@@ -381,6 +383,9 @@ export function HandlerDecreeCard() {
               </div>
             ) : d.proof_type === 'comfort_slider' ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {parsePlugRung(d.trigger_source) !== null && (
+                  <PlugSessionPlayer rung={parsePlugRung(d.trigger_source)!} />
+                )}
                 <input
                   type="range" min={0} max={10}
                   value={comfort[d.id] ?? 7}
