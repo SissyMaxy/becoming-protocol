@@ -188,7 +188,11 @@ export function PhotoUploadWidget({
         onComplete?.({ photoId: row.id, analysis: confirmText, reviewState: 'pending' });
       }
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
+      // Supabase storage/postgrest errors are plain objects with .message —
+      // String(e) renders "[object Object]". Always dig the message out.
+      const msg = e instanceof Error ? e.message
+        : (typeof e === 'object' && e !== null && 'message' in e) ? String((e as { message: unknown }).message)
+        : String(e);
       setError(msg);
       setStage('error');
     }
@@ -212,6 +216,8 @@ export function PhotoUploadWidget({
     : verificationType === 'mirror_affirmation' ? 'Mirror selfie. Face visible.'
     : verificationType === 'mantra_recitation' ? 'Face visible while you say it.'
     : verificationType === 'pose_hold' ? 'Hold the pose. Show the whole pose.'
+    : verificationType === 'progress_shot' ? 'Back to the mirror, leggings on, full body. Same angle every time.'
+    : verificationType === 'workout_proof' ? 'Right after the session — the flush, the sweat, the mat in frame.'
     : 'Whatever you want Mama to see.';
 
   return (
