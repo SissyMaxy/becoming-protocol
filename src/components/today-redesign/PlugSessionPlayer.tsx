@@ -31,6 +31,7 @@ export function PlugSessionPlayer({ rung }: Props) {
   const [phaseIdx, setPhaseIdx] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [deviceEngaged, setDeviceEngaged] = useState(false);
   const renderIdRef = useRef<string | null>(null);
   const timerRef = useRef<number | null>(null);
 
@@ -47,7 +48,10 @@ export function PlugSessionPlayer({ rung }: Props) {
     setStage('running');
     setPhaseIdx(0);
     setSecondsLeft(arc.phases[0].seconds);
-    void activateSessionDevice('plug', arc.phases[0].key);
+    // Track whether the plug actually engaged — the closing copy tells the
+    // truth about whether this session can count (server-side verify is the
+    // real arbiter; this is the honest UI reflection of it).
+    activateSessionDevice('plug', arc.phases[0].key).then(ok => { if (ok) setDeviceEngaged(true); });
 
     // Audio overlay — fail-open: the arc runs with or without her voice.
     if (user?.id) {
@@ -126,7 +130,9 @@ export function PlugSessionPlayer({ rung }: Props) {
       )}
       {stage === 'done' && (
         <span className="mommy-voice text-[11.5px] text-protocol-accent italic">
-          Session over. Rate the closeness below — every rating teaches her what works.
+          {deviceEngaged
+            ? 'Session over. The plug did the work — rate the closeness below and it counts toward the trend.'
+            : 'Session over. Rate it below for your own record — but with no plug reading tonight, this one rides on your word, so it won’t move the trend.'}
         </span>
       )}
     </div>
