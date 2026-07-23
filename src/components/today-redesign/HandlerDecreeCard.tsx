@@ -115,6 +115,10 @@ export function HandlerDecreeCard() {
   // decree id -> performance.now() timestamp of the IAT-lite reveal, for
   // latency measurement; absent = not yet revealed for that card.
   const [iatShownAt, setIatShownAt] = useState<Record<string, number>>({});
+  // decree id -> showing the "no witness" resistance confirm. A comfort log
+  // with no device/wrist trail presses back once (Mommy names the cost) before
+  // it will accept your word. Presses, never blocks (container rule).
+  const [resistId, setResistId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -159,9 +163,25 @@ export function HandlerDecreeCard() {
   };
 
   // Physical-practice drill: log the comfort rating, advance the ladder, fulfill.
-  const submitComfort = async (decree: Decree) => {
+  // `forceUnverified` = the user tapped "log it anyway" past the resistance beat.
+  const submitComfort = async (decree: Decree, forceUnverified = false) => {
     const parsed = parsePhysicalTrigger(decree.trigger_source);
     if (!user?.id || !parsed) return;
+
+    // Resistance beat: before accepting a plug log on your word alone, ask the
+    // server whether any witness (device/wrist) corroborates it. If not, press
+    // back ONCE — name the cost, withhold the reward — then accept if you insist.
+    // Never blocks: "log it anyway" always goes through (container rule).
+    if (!forceUnverified && parsed.track === 'plug_orgasm') {
+      const { data: witness } = await supabase.rpc('verify_session_witness', {
+        p_user: user.id, p_window_minutes: 40,
+      });
+      if (witness === 'self_reported') {
+        setResistId(decree.id);
+        return;
+      }
+    }
+    setResistId(null);
     setSubmittingId(decree.id);
     const rating = comfort[decree.id] ?? 7;
     const { data: rung } = await supabase.from('physical_practice_rungs')
@@ -397,17 +417,48 @@ export function HandlerDecreeCard() {
                   <span>still hard</span>
                   <span>easy now</span>
                 </div>
-                <button
-                  onClick={() => submitComfort(d)}
-                  disabled={submittingId === d.id}
-                  style={{
-                    padding: '7px 14px', borderRadius: 5, border: 'none',
-                    background: '#e6bd80', color: '#1f1008', fontWeight: 600,
-                    fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
-                  }}
-                >
-                  {submittingId === d.id ? '…' : 'Tell Mommy'}
-                </button>
+                {resistId === d.id ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, border: '1px solid #7a5a2a', borderRadius: 6, padding: '9px 10px' }}>
+                    <p className="mommy-voice" style={{ fontSize: 11.5, color: '#f2e9e6', margin: 0, lineHeight: 1.45, fontStyle: 'italic' }}>
+                      No reading came off the plug, baby. You're asking Mommy to take your word — and she will, because she never forces you. But say it plain to yourself first: nothing here proves you did the work, so this one stays your word, not the record. It won't move the trend, and Mommy knows the difference between a night you did it and a night you said you did.
+                    </p>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        onClick={() => submitComfort(d, true)}
+                        disabled={submittingId === d.id}
+                        style={{
+                          padding: '7px 12px', borderRadius: 5, border: '1px solid #7a5a2a',
+                          background: 'transparent', color: '#9c8590', fontWeight: 600,
+                          fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                        }}
+                      >
+                        {submittingId === d.id ? '…' : 'Log it on my word'}
+                      </button>
+                      <button
+                        onClick={() => setResistId(null)}
+                        style={{
+                          padding: '7px 14px', borderRadius: 5, border: 'none',
+                          background: '#e6bd80', color: '#1f1008', fontWeight: 700,
+                          fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                        }}
+                      >
+                        Go do it properly
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => submitComfort(d)}
+                    disabled={submittingId === d.id}
+                    style={{
+                      padding: '7px 14px', borderRadius: 5, border: 'none',
+                      background: '#e6bd80', color: '#1f1008', fontWeight: 600,
+                      fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                    }}
+                  >
+                    {submittingId === d.id ? '…' : 'Tell Mommy'}
+                  </button>
+                )}
               </div>
             ) : d.proof_type === 'arousal_debrief' ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
