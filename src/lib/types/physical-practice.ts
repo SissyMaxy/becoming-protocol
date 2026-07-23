@@ -2,7 +2,7 @@
 // snake_case DbXxx mirrors the supabase-js row shape (mig 680); camel PhysicalXxx
 // is the app shape. Mappers below.
 
-export type PhysicalTrack = 'oral' | 'bottoming';
+export type PhysicalTrack = 'oral' | 'bottoming' | 'plug_orgasm';
 export type PhysicalProgressStatus = 'active' | 'paused' | 'complete';
 
 export interface DbPhysicalRung {
