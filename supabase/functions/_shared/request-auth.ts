@@ -26,6 +26,15 @@ export async function authenticateRequest(req: Request): Promise<RequestPrincipa
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   if (constantTimeEqual(token, serviceRoleKey)) return { kind: 'service' }
 
+  // Cron/internal shared secret (mig 706). The platform-injected
+  // SUPABASE_SERVICE_ROLE_KEY is a value the DB/cron side cannot reproduce
+  // (rotated out of the project key set, and SUPABASE_-prefixed secrets are
+  // platform-locked), so pg_cron authenticates with a secret WE control:
+  // invoke_edge_function reads it from supabase_vault and sends it here.
+  // Purely additive — the real service_role check above still stands.
+  const cronSecret = Deno.env.get('CRON_SHARED_SECRET') ?? ''
+  if (cronSecret && constantTimeEqual(token, cronSecret)) return { kind: 'service' }
+
   const url = Deno.env.get('SUPABASE_URL') ?? ''
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
   if (!url || !anonKey) return null
